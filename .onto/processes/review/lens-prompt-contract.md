@@ -209,8 +209,8 @@ Lens markdown output 은 아래 section 구조를 따른다. Section 수준 구�
 3. no-issue case 라면 rationale
 4. `### Newly Learned`
 5. `### Applied Learnings`
-6. `### Domain Constraints Used` — 검증에 사용한 domain rule 의 durable provenance 기록 (domain-document-backed lenses 만 해당, axiology 제외). 각 항목은 `{source_doc, source_version_or_snapshot_id, anchor}` 형식이다
-7. `### Domain Context Assumptions` — 검증에 사용한 비형식적 domain usage-context 가정 기록 (해당 시)
+6. `### Domain Constraints Used` — 검증에 사용한 domain rule 의 durable provenance 기록 (domain-document-backed lenses 만 해당, axiology 제외). 본문은 YAML list 이며, 각 항목은 `{source_doc, source_version_or_snapshot_id, anchor}` object 형식이다. `session_domain=none` 또는 domain document 미사용 시 정확히 `[]` 를 쓴다
+7. `### Domain Context Assumptions` — 검증에 사용한 비형식적 domain usage-context 가정 기록 (해당 시). 본문은 YAML string list 이며, 없으면 정확히 `[]` 를 쓴다
 
 ### 8.2 Enforced Fields
 

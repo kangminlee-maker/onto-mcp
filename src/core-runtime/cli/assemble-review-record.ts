@@ -132,18 +132,8 @@ function extractYamlFence(sectionText: string): string {
   return (match?.[1] ?? trimmed).trim();
 }
 
-function isEmptyListSection(sectionText: string): boolean {
-  const normalized = sectionText
-    .trim()
-    .toLowerCase()
-    .replace(/[.`]/g, "");
-  return ["", "[]", "none", "- none", "n/a", "- n/a"].includes(normalized);
-}
-
 function parseYamlList(sectionText: string, label: string): unknown[] {
-  if (isEmptyListSection(sectionText)) return [];
   const source = extractYamlFence(sectionText);
-  if (isEmptyListSection(source)) return [];
   let parsed: unknown;
   try {
     parsed = YAML.parse(source);
@@ -152,22 +142,8 @@ function parseYamlList(sectionText: string, label: string): unknown[] {
       `Invalid YAML list in ${label}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  if (parsed === null || parsed === undefined) return [];
-  if (
-    typeof parsed === "string" &&
-    ["none", "n/a"].includes(parsed.trim().toLowerCase())
-  ) {
-    return [];
-  }
   if (!Array.isArray(parsed)) {
     throw new Error(`Expected YAML list in ${label}.`);
-  }
-  if (
-    parsed.length === 1 &&
-    typeof parsed[0] === "string" &&
-    ["none", "n/a"].includes(parsed[0].trim().toLowerCase())
-  ) {
-    return [];
   }
   return parsed;
 }
@@ -315,7 +291,7 @@ async function deriveSharedPhenomenonSummary(
     "Shared Phenomenon Classification",
     "Shared Phenomena",
   ]);
-  if (section === null || isEmptyListSection(section)) return [];
+  if (section === null) return [];
   return parseYamlList(section, "synthesis Shared Phenomenon Summary").map(
     parseSharedPhenomenonSummaryItem,
   );

@@ -37,10 +37,10 @@ function renderLensOutput(unitId: string, packetPath: string): string {
 - prompt packet: \`${packetPath}\`
 
 ### Domain Constraints Used
-- none
+[]
 
 ### Domain Context Assumptions
-- none
+[]
 `;
 }
 

@@ -107,6 +107,40 @@ ${state.filesystem_scope.effective_allowed_roots
 - filesystem guarantee: ${state.filesystem_scope.guarantee_level}`;
 }
 
+export function renderLensOutputSchemaGate(sessionDomain: string): string {
+  const isDomainless =
+    sessionDomain.length === 0 ||
+    sessionDomain === "none" ||
+    sessionDomain === "@-";
+  const constraintsExample = isDomainless
+    ? "[]"
+    : [
+        '- source_doc: ".onto/domains/{domain}/{domain-file}.md"',
+        '  source_version_or_snapshot_id: "{session snapshot or document version}"',
+        '  anchor: "{section heading, rule id, or stable line anchor}"',
+      ].join("\n");
+
+  return `## Machine-Parsed Output Schema Gate
+The review record assembler reads the two provenance sections below as YAML.
+Allowed content for these sections is only valid YAML list content.
+
+Use this exact shape:
+
+\`\`\`markdown
+### Domain Constraints Used
+${constraintsExample}
+
+### Domain Context Assumptions
+[]
+\`\`\`
+
+Rules:
+- For \`session_domain=none\`, \`session_domain=@-\`, or no domain document usage, write exactly \`[]\` under \`### Domain Constraints Used\`.
+- For informal domain/context assumptions, write a YAML list of strings under \`### Domain Context Assumptions\`.
+- Each \`Domain Constraints Used\` item must be an object with these required fields: \`source_doc\`, \`source_version_or_snapshot_id\`, \`anchor\`.
+- These headings may be \`###\` or \`##\`, but their body must remain valid YAML list content.`;
+}
+
 const DEFAULT_MAX_EMBED_LINES = 300;
 
 // Core role IDs derived from .onto/authority/core-lens-registry.yaml (single source of truth)
@@ -477,6 +511,9 @@ ${binding.resolved_target_scope.resolved_refs
 - If you find an issue, state what, why, and how to fix it.
 - If you find no issue, state why it is correct.
 - Write your result to: ${toRelativePath(seat.output_path, projectRoot)}
+
+${renderLensOutputSchemaGate(binding.resolved_session_domain)}
+
 ${renderDomainDocumentRefsSection(seat.lens_id, resolvedDomainDir, domainAllFiles, projectRoot)}
 ${renderLearningSection(learningsByAgent.get(seat.lens_id)?.items ?? [])}
 ${extractEnabled ? renderNewlyLearnedInstructions(learningDomain) : ""}

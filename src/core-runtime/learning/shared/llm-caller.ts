@@ -981,10 +981,10 @@ function callMockProvider(
       "(none — mock executor)",
       "",
       "## Domain Constraints Used",
-      "(none — mock executor)",
+      "[]",
       "",
       "## Domain Context Assumptions",
-      "Mock executor returned this output for test purposes via ONTO_LLM_MOCK=1.",
+      '- "Mock executor returned this output for test purposes via ONTO_LLM_MOCK=1."',
       "",
     ].join("\n");
   } else if (

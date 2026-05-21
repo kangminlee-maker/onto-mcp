@@ -527,10 +527,10 @@ async function callMockToolLoop(
     "(none — mock executor)",
     "",
     "## Domain Constraints Used",
-    "(none — mock executor)",
+    "[]",
     "",
     "## Domain Context Assumptions",
-    "Mock tool-loop returned this output via ONTO_LLM_MOCK=1.",
+    '- "Mock tool-loop returned this output via ONTO_LLM_MOCK=1."',
     "",
   ].join("\n");
 
