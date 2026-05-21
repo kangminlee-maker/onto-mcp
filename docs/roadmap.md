@@ -5,7 +5,7 @@
 - Existing TS `onto` runtime is preserved.
 - `.onto` YAML/MD assets remain the language-neutral contract.
 - New repo direction is TS core + MCP-native tool surface.
-- `ouroboros-harness` work is evidence and conformance input, not the main
+- External adapter experiments are evidence and conformance input, not the main
   product path.
 
 ## Stage 1 — Core API Facade
@@ -49,7 +49,7 @@ Done when:
 
 Done when:
 
-- Python parity code in `ouroboros-harness` is either archived, converted into
+- External parity prototype code is either archived, converted into
   conformance fixtures, or replaced by provider tests.
 - User-facing docs describe MCP tool usage as the primary integration path.
 - Any new remote repository is configured intentionally; old local repos remain

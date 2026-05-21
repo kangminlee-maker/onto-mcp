@@ -283,7 +283,7 @@ A full grep across `cowork/` (48 repos) found this exact pattern in only 3 sourc
 - `cowork/onto-prototype/processes/onboard.md:161`
 - `cowork/onto-prototype/commands/review.md:22`
 
-Other repositories that use `${CLAUDE_PLUGIN_ROOT}` (`ouroboros`, `oh-my-claudecode`) reference their own plugin's `scripts/` files, which is the **correct** use of the variable. Only the cross-plugin pattern was broken.
+Other repositories that use `${CLAUDE_PLUGIN_ROOT}` reference their own plugin's `scripts/` files, which is the **correct** use of the variable. Only the cross-plugin pattern was broken.
 
 ### Resolution
 

@@ -11,7 +11,7 @@ platform integration toward an MCP-native tool surface.
 .onto YAML/MD contracts
         -> TS core runtime
         -> MCP tools
-        -> execution providers: codex, claude, ouroboros, local/mock
+        -> execution providers: codex, claude, local/mock, future hosts
 ```
 
 Key docs:
@@ -21,8 +21,8 @@ Key docs:
 - `docs/architecture/mcp-native-tool-surface.md`
 - `docs/roadmap.md`
 
-The previous ouroboros addon work is evidence and conformance input, not the
-main product path.
+Previous external adapter experiments are evidence and conformance input, not
+the main product path.
 
 ## Host Compatibility Matrix
 

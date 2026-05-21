@@ -179,7 +179,7 @@ core 제품화 계층은 TypeScript다.
 - `src/core-api/`는 기존 runtime을 library처럼 부르는 facade다.
 - `src/mcp/`는 tool schema와 server surface만 소유한다.
 - `src/providers/`는 host별 실행 능력만 소유한다.
-- Python/ouroboros 연동은 provider evidence 또는 conformance harness로만 취급한다.
+- External host integration은 provider evidence 또는 conformance harness로만 취급한다.
 
 기준 문서:
 
@@ -196,7 +196,7 @@ core 제품화 계층은 TypeScript다.
 3. `맥락 격리 추론 단위`를 유지
 4. `리뷰 기록 (ReviewRecord)`를 actual primary artifact로 도입
 5. TS core API를 정리한 뒤 MCP tool surface로 노출
-6. provider contract로 Codex / Claude / ouroboros / local 실행 차이를 흡수
+6. provider contract로 Codex / Claude / local / future host 실행 차이를 흡수
 
 새 작업은 항상 아래 질문으로 시작한다.
 

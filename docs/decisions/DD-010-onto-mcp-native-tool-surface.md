@@ -8,10 +8,9 @@
 
 `onto`의 장기 제품 방향은 **TS core + MCP-native tool surface**이다.
 
-`ouroboros` addon 결합은 `onto`의 제품 중심 경로가 아니다. Stage 7
-`onto.review_panel`과 Slice A-I `review-parity` 작업은 독립 관점 리뷰,
-artifact compatibility, cross-process deliberation 요구를 검증한 증거와
-conformance harness로 보존한다.
+외부 adapter 결합은 `onto`의 제품 중심 경로가 아니다. 이전 adapter
+실험은 독립 관점 리뷰, artifact compatibility, cross-process
+deliberation 요구를 검증한 증거와 conformance harness로만 보존한다.
 
 ## User-Facing Goal
 
@@ -52,8 +51,8 @@ onto MCP server
 execution providers
   - codex
   - claude
-  - ouroboros
   - local/mock
+  - future hosts
 ```
 
 ## Boundary Rules
@@ -64,7 +63,7 @@ execution providers
   semantics.
 - Providers execute capabilities only: independent contexts, persistent agents,
   cross-process messaging, concurrency, timeout, and artifact collection.
-- Python addon code must not accumulate new canonical `onto` semantics. It may
+- External adapter code must not accumulate new canonical `onto` semantics. It may
   remain as conformance tests, bridge code, or optional provider proof.
 
 ## Provider Capability Contract
@@ -91,14 +90,12 @@ This keeps platform-specific work bounded. A provider does not decide what
 
 ## Consequences
 
-- Do not bind a concrete host/plugin/messaging backend to the Python Slice I
+- Do not bind a concrete host/plugin/messaging backend to an external adapter
   dispatcher as the next product step.
 - Reclassify Slice A-I as evidence for the MCP/provider contract and as a
   compatibility test bed.
 - Next implementation should happen in or around the TS `onto` runtime:
   exported core API first, then MCP server, then provider adapters.
-- Ouroboros can still become a provider later, but it is not the architectural
-  center.
 
 ## Next Work
 

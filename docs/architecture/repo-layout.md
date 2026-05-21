@@ -40,8 +40,8 @@ docs/architecture/
 /Users/kangmin/cowork/onto
   Upstream/local reference clone for the pre-reset TS runtime.
 
-/Users/kangmin/cowork/ouroboros-harness
-  Evidence/prototype workspace for Stage 7 and Slice A-I parity experiments.
+/Users/kangmin/cowork/onto-mcp
+  Primary workspace for MCP-native product work.
 ```
 
 ## Rule Of Thumb
@@ -49,5 +49,5 @@ docs/architecture/
 - Product semantics go in `.onto/` contracts and `src/core-runtime/`.
 - Tool-call UX goes in `src/mcp/`.
 - Host-specific execution goes in `src/providers/`.
-- Python or ouroboros integration should be treated as provider evidence, not
-  the canonical `onto` implementation.
+- External host integration should be treated as provider evidence, not the
+  canonical `onto` implementation.
