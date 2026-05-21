@@ -1,0 +1,9 @@
+# Written by `onto install` — edit with `onto config edit` or
+# re-run `onto install --reconfigure`. Full key reference:
+# .onto/processes/configuration.md
+output_language: ko
+review:
+  subagent:
+    provider: codex
+subagent_llm:
+  provider: codex

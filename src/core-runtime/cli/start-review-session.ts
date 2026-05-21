@@ -17,7 +17,7 @@ import {
   type ExtractMode,
 } from "../learning/shared/mode.js";
 import { resolveOntoHome } from "../discovery/onto-home.js";
-import { resolveOrthogonalConfigChain } from "../discovery/config-chain.js";
+import { resolveOrthogonalSettingsChain } from "../discovery/settings-chain.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -34,7 +34,7 @@ function requireString(
  *
  * Resolution priority:
  *   1. `ONTO_LEARNING_EXTRACT_MODE` env var (if set and non-empty)
- *   2. `.onto/config.yml` `learning_extract_mode` field (if env var not set)
+ *   2. `.onto/settings.json` `learning_extract_mode` field (if env var not set)
  *   3. default `"disabled"` (via validateExtractMode)
  *
  * Exception-boundary contract:
@@ -45,18 +45,18 @@ function requireString(
  *     resolveOntoHome. The resolver's own hard-error contract is NOT
  *     swallowed — a mis-configured installation root surfaces as a
  *     startup error, not a silent default.
- *   - Only a `.onto/config.yml` read or parse failure (file missing,
+ *   - Only a `.onto/settings.json` read or parse failure (file missing,
  *     malformed YAML, unreadable due to permissions, etc.) is caught
  *     and falls through to the default. The reasoning: a missing or
  *     malformed config file should not block session startup, because
  *     env var + default is a complete stable baseline that does not
- *     depend on config.yml being present.
+ *     depend on settings.json being present.
  *
  * Empty-env-var normalization: an env var set to the empty string is
  * treated identically to an unset env var. Without this, the empty string
  * would pass the nullish check in the final `??` and be forwarded to the
  * validator, which then throws "Invalid ONTO_LEARNING_EXTRACT_MODE: ''"
- * instead of allowing config.yml to supply the value.
+ * instead of allowing settings.json to supply the value.
  *
  * Exported for direct testing. `startReviewSession` is the only production
  * caller.
@@ -81,17 +81,17 @@ export async function resolveReviewSessionExtractMode(
       typeof ontoHomeFlag === "string" ? ontoHomeFlag : undefined,
     );
     // ONLY the config read path is best-effort. A missing or malformed
-    // .onto/config.yml must not block session startup because env var +
+    // .onto/settings.json must not block session startup because env var +
     // default is a complete baseline.
     //
-    // Uses `resolveOrthogonalConfigChain` (not `resolveConfigChain`):
+    // Uses `resolveOrthogonalSettingsChain`:
     // `learning_extract_mode` is an orthogonal field with no provider-
     // profile coupling, so we skip atomic profile adoption and config-shape
     // deprecation gates that would otherwise fire for configs missing
     // a provider profile entirely (a legitimate state for fixtures or
     // orthogonal-only use cases).
     try {
-      const config = await resolveOrthogonalConfigChain(ontoHome, projectRoot);
+      const config = await resolveOrthogonalSettingsChain(ontoHome, projectRoot);
       configExtractMode = config.learning_extract_mode;
     } catch {
       // best-effort: config read/parse failure falls through to default
@@ -125,7 +125,7 @@ export async function startReviewSession(
   const sessionRoot = path.join(projectRoot, ".onto", "review", sessionId);
 
   // Phase 2: Validate + persist extract mode (R4-IA2, single validator, fail-fast)
-  // Resolution: env var > config.yml > default. See resolveReviewSessionExtractMode.
+  // Resolution: env var > settings.json > default. See resolveReviewSessionExtractMode.
   const extractMode = await resolveReviewSessionExtractMode(argv, projectRoot);
   const sessionMetadataPath = path.join(sessionRoot, "session-metadata.yaml");
   const sessionMetadata = await readYamlDocument<ReviewSessionMetadata>(

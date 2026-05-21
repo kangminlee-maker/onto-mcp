@@ -114,7 +114,7 @@ authoring 단계에서 생성되는 candidate의 형상이다.
 1. `review/build`를 `entrypoint` family로 읽는다.
 2. learning 관련 논의는 `scope`, `structural_role`, `lifecycle_status` 축으로 재정리한다.
 3. promotion/feedback/domain update 같은 기존 process 용어는 later `learn/govern` productization 과정에서 재분류한다.
-4. `codex mode`, `agent teams`, `subagent fallback` 같은 execution wording은 host/runtime execution profile로 분리해서 다룬다.
+4. `codex mode`, `agent teams`, `worker fallback` 같은 execution wording은 host/runtime execution profile로 분리해서 다룬다.
 
 ---
 

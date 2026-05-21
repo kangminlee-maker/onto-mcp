@@ -38,10 +38,10 @@ ALLOWED=(
 
 # Exact-match single files. Use this list (instead of ALLOWED) when a single
 # tracked file under `.onto/` does not belong to a structural subdirectory.
-# Added 2026-04-22: `.onto/config.yml` is tracked as a dogfooding canonical
+# Added 2026-05-22: `.onto/settings.json` is tracked as the project settings
 # reference (other onto-X repos still ignore it locally — repo-scoped policy).
 ALLOWED_FILES=(
-  ".onto/config.yml"
+  ".onto/settings.json"
 )
 
 # Ephemeral subdirs are ignored via .gitignore (see repo root) and never
@@ -208,13 +208,13 @@ run_self_test() {
   fi
 
   # Case 4: exact-match single-file allowlist (ALLOWED_FILES path).
-  # Verifies that single-file entries (e.g. `.onto/config.yml`) match
+  # Verifies that single-file entries (e.g. `.onto/settings.json`) match
   # without falling under the prefix/* logic. Regression target: someone
   # removing the ALLOWED_FILES loop or merging it into ALLOWED would
-  # accidentally match `.onto/config.yml/foo` (a non-existent sub-path)
-  # while rejecting `.onto/config.yml` itself.
+  # accidentally match `.onto/settings.json/foo` (a non-existent sub-path)
+  # while rejecting `.onto/settings.json` itself.
   local -a exact_paths=(
-    ".onto/config.yml"
+    ".onto/settings.json"
   )
   echo "[self-test] Case 4 (expect PASS): exact-match single-file allowlist"
   local case4_out

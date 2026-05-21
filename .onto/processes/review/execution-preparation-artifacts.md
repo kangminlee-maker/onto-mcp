@@ -81,7 +81,7 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
 ```yaml
 session_id: 20260404-a1b2c3d4
 entrypoint: review
-execution_realization: subagent
+execution_realization: worker
 host_runtime: codex
 review_mode: full
 created_at: 2026-04-04T15:20:00+09:00

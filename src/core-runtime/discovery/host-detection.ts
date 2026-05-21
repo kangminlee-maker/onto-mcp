@@ -5,7 +5,7 @@
  * It replaces 3 duplicated detection functions previously in
  * bootstrap-review-binding.ts, prepare-review-session.ts, and review-invoke.ts.
  *
- * # Two-axis LLM model
+ * # Runtime LLM model
  *
  * onto distinguishes two LLM roles:
  *
@@ -13,31 +13,28 @@
  *    (lens selection, synthesize). Currently bound to the host runtime
  *    (Claude Code session, Codex CLI session, or standalone TS process).
  *
- * 2. **Subagent LLM (per-lens executor)** — runs the actual lens reasoning
+ * 2. **Worker LLM (per-lens executor)** — runs the actual lens reasoning
  *    work for each of the 9 review lenses. Can be the SAME or DIFFERENT
  *    LLM than the main LLM. Resolution is independent of host detection.
  *
  * This module covers Axis 1 (host runtime / main LLM environment) only.
- * Axis 2 (subagent LLM provider) is handled by `learning/shared/llm-caller.ts`
- * for background tasks; review-time subagent provider is set per execution
- * realization (TeamCreate / Agent tool / codex exec / direct LLM call).
+ * Axis 2 is handled by settings and provider-specific execution code.
  *
  * # Detection priority (highest to lowest)
  *
  *   1. ONTO_HOST_RUNTIME env var (explicit override; e.g. "standalone")
- *   2. ontoConfig.host_runtime in .onto/config.yml (project override)
- *   3. CLAUDECODE=1 / CLAUDE_PROJECT_DIR
+ *   2. CLAUDECODE=1 / CLAUDE_PROJECT_DIR
  *      → "claude" (Claude Code session detected)
- *   4. CODEX_THREAD_ID / CODEX_CI → "codex" (Codex CLI session detected)
- *   5. codex binary on PATH + ~/.codex/auth.json → "codex" (codex available)
- *   6. None of the above → "standalone" (TS process; no host LLM)
+ *   3. CODEX_THREAD_ID / CODEX_CI → "codex" (Codex CLI session detected)
+ *   4. codex binary on PATH + ~/.codex/auth.json → "codex" (codex available)
+ *   5. None of the above → "standalone" (TS process; no host LLM)
  *
  * # Capability matrix per host
  *
  * | Host        | hasTeamCreate | hasAgentSpawn | hasCodexExec | Notes |
  * |-------------|---------------|---------------|--------------|-------|
  * | claude      | true          | true          | (auxiliary)  | Full Claude Code tool suite |
- * | codex       | false         | false         | true         | codex exec ephemeral subprocess |
+ * | codex       | false         | false         | true         | Codex worker |
  * | standalone  | false         | false         | false        | Pure TS; LLM via direct SDK/HTTP |
  *
  * Capability detection is environmental — `claude` host always reports
@@ -61,7 +58,7 @@ export type DetectedHostRuntime = "claude" | "codex" | "standalone";
  * Capabilities available within the detected host runtime.
  *
  * - `hasTeamCreate`: Claude Code's TeamCreate tool (nested team spawning)
- * - `hasAgentSpawn`: Claude Code's Agent tool (flat subagent spawning)
+ * - `hasAgentSpawn`: Claude Code's Agent tool
  * - `hasCodexExec`: codex binary on PATH + ~/.codex/auth.json present
  * - `hasAnthropicApiKey`: ANTHROPIC_API_KEY env var
  * - `hasOpenAiApiKey`: OPENAI_API_KEY env var (or ~/.codex/auth.json field)
@@ -193,8 +190,8 @@ export function detectOpenAiApiKey(): boolean {
  *   the host runtime — only `claude` host has them.
  * - Inference capabilities (hasAnthropicApiKey, hasOpenAiApiKey,
  *   hasCodexExec) are environmental — detected independently of the host.
- * The host runtime determines what orchestration is possible; subagent
- * provider selection happens elsewhere.
+ * The host runtime determines what orchestration is possible; worker provider
+ * selection happens elsewhere.
  */
 export function detectHostCapabilities(hostRuntime: DetectedHostRuntime): HostCapabilities {
   return {

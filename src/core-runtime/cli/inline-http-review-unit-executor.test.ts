@@ -36,7 +36,7 @@ beforeEach(() => {
   mkdirSync(ontoHome, { recursive: true });
   mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
   writeFileSync(
-    path.join(projectRoot, ".onto", "config.yml"),
+    path.join(projectRoot, ".onto", "settings.json"),
     [
       "llm:",
       "  auth: oauth",

@@ -14,7 +14,7 @@ function makeEntry(overrides: Partial<ReviewLogEntry> = {}): ReviewLogEntry {
     review_target_refs: ["src/foo.ts"],
     request_text: "mock request",
     review_mode: "full",
-    execution_realization: "subagent",
+    execution_realization: "worker",
     host_runtime: "codex",
     execution_status: "completed",
     total_duration_ms: 100000,

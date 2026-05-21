@@ -1,0 +1,25 @@
+{
+  "output_language": "ko",
+  "domains": [],
+  "review_mode": "full",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}

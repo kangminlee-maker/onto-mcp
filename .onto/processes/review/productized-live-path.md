@@ -192,23 +192,19 @@ canonical requirement:
 6. lens dispatch는 병렬 실행이 기본이다
 7. realization에 동시 실행 제한이 있으면 bounded parallel dispatch를 사용하고, slot이 비면 다음 pending lens를 즉시 투입한다
 
-가능한 realization:
+현재 repo-local TS bounded path에서 연결된 `ReviewExecutionProfile` mode는 아래다.
 
-- Agent Teams teammate
-- subagent
-- `MCP`로 분리된 `LLM`
-- 독립 background agent
-- external model worker
+- `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
+- `nested-workers`: worker teamlead가 nested worker lens를 실행한다.
 
-현재 repo-local TS bounded path에서 연결된 execution profile은 아래다.
+worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 
-- `subagent + codex`
-- `subagent + claude`
-- `agent-teams + claude`
+- `codex`: host-bound OAuth 또는 Codex worker path.
+- `direct_call`: `api_key` 또는 `local` provider path.
+- `mock`: `ONTO_LLM_MOCK=1` 또는 explicit test override.
 
-현재 지원하지 않는 execution profile:
-
-- `agent-teams + codex`
+Claude host의 Agent tool dispatch는 같은 semantic을 따르되, TypeScript runner가
+해당 host 도구를 직접 보장하지 않는다.
 
 중요한 점은 host-specific naming이 아니라:
 
@@ -222,12 +218,9 @@ packet materialization만 단독으로 디버깅해야 할 때는 아래 내부 
 
 - `npm run review:materialize-prompt-packets -- ...`
 
-현재 TS bounded runner의 기본 병렬성:
-
-- `subagent` → `max_concurrent_lenses = 3`
-- `agent-teams` → `max_concurrent_lenses = 9`
-
-필요하면 `--max-concurrent-lenses`로 override할 수 있다.
+현재 TS bounded runner의 병렬성은 `--max-concurrent-lenses`가 있으면 그 값을
+우선 사용하고, 없으면 `review.execution.max_concurrent_workers` 또는 executor
+기본값을 사용한다.
 
 ### 3.7 통제된 lens 숙의 (Controlled Lens Deliberation)
 

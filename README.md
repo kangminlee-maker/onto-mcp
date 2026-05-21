@@ -29,35 +29,48 @@ the main product path.
 `review` runs through the TypeScript core and is exposed through the MCP tool surface.
 The LLM selection surface is intentionally small:
 
-```yaml
-llm:
-  auth: oauth          # oauth | api_key | local
-  provider: openai     # openai | anthropic | grok | lmstudio
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 Supported mappings:
 
 | auth | provider | Runtime provider |
 |---|---|---|
-| `oauth` | `openai` | Codex CLI subprocess |
+| `oauth` | `openai` | host-bound Codex worker |
 | `api_key` | `openai` | OpenAI API |
 | `api_key` | `anthropic` | Anthropic API |
 | `api_key` | `grok` | xAI/Grok OpenAI-style API |
 | `local` | `lmstudio` | LM Studio OpenAI-style endpoint |
 
-Unsupported combinations fail during config/materialization instead of being translated silently.
+Unsupported combinations fail during settings/profile resolution instead of being translated silently.
 
 Review execution shape is configured separately:
 
-```yaml
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
+```json
+{
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  }
+}
 ```
 
 Quick test (mock LLM):
@@ -131,7 +144,7 @@ Designed with inspiration from ontology structures, applicable across domains re
 
 Two install paths are supported. They are not mutually exclusive — you can install the Claude Code plugin for in-session slash commands and also install the npm CLI for terminal usage.
 
-Runtime config is project-local in `.onto/config.yml`. Use `config.yml.example` or `.onto/processes/configuration.md` as the active key contract.
+Runtime config is project-local in `.onto/settings.json`. Use `settings.example.json` or `.onto/processes/configuration.md` as the active key contract.
 
 ### Path A — Claude Code plugin (marketplace)
 
@@ -154,24 +167,31 @@ onto config validate
 
 ### Minimal Config
 
-```yaml
-output_language: ko
-
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
-
-lens_agent_teams_mode: false
-review_mode: core-axis
-
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "output_language": "ko",
+  "review_mode": "core-axis",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 ## Update
@@ -185,7 +205,7 @@ Or if installed via git clone:
 cd "${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}" && git pull
 ```
 
-After an update, run `onto config validate` to verify the active `.onto/config.yml` surface.
+After an update, run `onto config validate` to verify the active `.onto/settings.json` surface.
 
 When upgrading from a previous version, run the migration since the global data path has changed:
 
@@ -201,7 +221,7 @@ If the learning storage structure has changed (3-path to 2-path + axis tag):
 Migration targets:
 - `~/.claude/agent-memory/` to `~/.onto/` (global learnings and domain documents)
 - `.claude/sessions/` to `.onto/` (project session data)
-- `domain:` + `secondary_domains:` → `domains:` unordered set in `.onto/config.yml`
+- `domain:` + `secondary_domains:` → `domains:` unordered set in `.onto/settings.json`
 
 ## Domain Document Installation (Optional)
 
@@ -255,38 +275,45 @@ Each process execution selects a single **session domain**. Three ways to specif
 
 `--domain` and `--no-domain` are mutually exclusive.
 
-Project domains and review execution axes are declared in `.onto/config.yml`:
+Project domains and review execution shape are declared in `.onto/settings.json`:
 
-```yaml
-# Canonical as of Review UX Redesign (2026-04-21). See design doc:
-# development-records/evolve/20260420-review-execution-ux-redesign.md
-domains:
-  - software-engineering
-  - ontology
-output_language: ko
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "domains": ["software-engineering", "ontology"],
+  "output_language": "ko",
+  "review_mode": "core-axis",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 `domains:` is an unordered set — order does not matter, no domain has priority over another. Domains can also be selected per session without pre-declaring them.
 
 The `review:` block declares the host/runtime execution shape. The `llm:` block declares the model switcher. Setup tools:
 
-- `onto config show` — current state + preview the derived topology
-- `onto config edit` — interactive stepwise setup
+- `onto config show` — current state + preview the derived execution profile
+- `onto config validate` — parse and validate active settings
+- `onto config use main-workers` — main coordinates review; workers run lens units
+- `onto config use nested-workers` — worker teamlead coordinates nested lens workers
 - `onto config set <key> <value>` — single-field mutation
-- `onto onboard --re-detect` — re-run environment probes + regenerate `review:` block
-
-Design-integrity audit: `development-records/audit/20260421-shape-pipeline-audit.md`.
 
 ## Agent Configuration
 
@@ -307,20 +334,23 @@ Archival role material is preserved under `development-records/archive/`. The ca
 
 ## LLM Provider Configuration
 
-The model switcher has one canonical seat: `.onto/config.yml` → `llm:`.
+The model switcher has one canonical seat: `.onto/settings.json` → `llm:`.
 
-```yaml
-llm:
-  auth: api_key      # api_key | oauth | local
-  provider: openai   # openai | anthropic | grok | lmstudio
-  model: gpt-5.4
-  effort: high
-  base_url: https://api.openai.com/v1
+```json
+{
+  "llm": {
+    "auth": "api_key",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high",
+    "base_url": "https://api.openai.com/v1"
+  }
+}
 ```
 
 Rules:
 
-- `openai + oauth` runs through Codex CLI.
+- `openai + oauth` runs through the host-bound Codex worker path.
 - `openai + api_key` uses OpenAI API.
 - `anthropic + api_key` uses Anthropic API.
 - `grok + api_key` uses the xAI/Grok OpenAI-style API.
@@ -329,13 +359,23 @@ Rules:
 
 Review execution remains a separate shape:
 
-```yaml
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
+```json
+{
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  }
+}
 ```
 
 `learn` and `govern` still need a dedicated design pass before they are moved onto this MCP-native surface.

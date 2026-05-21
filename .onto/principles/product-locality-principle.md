@@ -55,7 +55,7 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 | 리뷰 세션 | `{product}/.onto/review/` | 세션 데이터 + `.latest-session` 포인터 포함 |
 | promote 세션 | `{product}/.onto/sessions/promote/` | 항상 product-local |
 | 학습 (creation) | `{product}/.onto/learnings/` | product 에 먼저 기록. 디렉토리 없으면 생성 |
-| 설정 | `{product}/.onto/config.yml` | product 별. `.layout-version.yaml` 포함 |
+| 설정 | `{product}/.onto/settings.json` | product 별. `.layout-version.yaml` 포함 |
 
 새 데이터 종류 추가 시 이 테이블에 등록해야 한다. 등록 전 기본 경로는 `{product}/.onto/{feature}/`다.
 

@@ -1,6 +1,6 @@
 # Individual Query Mode
 
-> Asks a question to a single agent from a specific perspective. Executed via Agent tool (subagent) without Agent Teams.
+> Asks a question to a single agent from a specific perspective. Executed via Agent tool (worker) without Agent Teams.
 > Related: If multiple perspectives are needed, run a team review via `/onto:review`. If learnings accumulate, promotion is possible via `.onto/processes/learn/promote.md`.
 
 ### 0. Domain Selection

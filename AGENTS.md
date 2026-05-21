@@ -116,9 +116,10 @@ DO:
 
 현재 wired execution profile:
 
-- `subagent + codex`
-- `subagent + claude`
-- `agent-teams + claude`
+- `main-workers` + Codex worker
+- `main-workers` + direct-call provider
+- `main-workers` + mock executor
+- `nested-workers` + Codex worker bridge
 
 기준 문서:
 

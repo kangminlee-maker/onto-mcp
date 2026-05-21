@@ -5,20 +5,17 @@
  *
  * Executes a single bounded review unit (lens or synthesize) by directly
  * calling an LLM HTTP endpoint (Anthropic / OpenAI / Grok / LM Studio)
- * from the TS process, instead of delegating to a host runtime
- * (Claude Code TeamCreate / codex exec subprocess).
+ * from the TS process.
  *
  * # When to use
  *
  * - **standalone host**: TS process invocation with no Claude Code or Codex
  *   CLI session — direct LLM call is the only option.
- * - **cross-host combinations**: Codex CLI main + Anthropic SDK subagent; etc.
+ * - **direct provider combinations**: any supported API-key/local provider.
  *
  * # Inline content mode (Phase 2 design decision)
  *
- * Unlike Claude TeamCreate (which spawns a tool-equipped subagent that
- * fetches files on demand) or codex exec (which has its own tool ecosystem),
- * a direct HTTP LLM call has NO tools available. Therefore the executor
+ * A direct HTTP LLM call has no host tools available. Therefore the executor
  * must inline all needed context into the prompt:
  *
  * - Materialized input (target content): already inline in the prompt packet
@@ -41,7 +38,7 @@
  *
  * Reuses `learning/shared/llm-caller.ts` resolution:
  *   1. --provider flag (caller-explicit)
- *   2. `.onto/config.yml` `llm` switcher
+ *   2. `.onto/settings.json` `llm` switcher
  *   3. explicit provider validation
  *
  * The `host_runtime` reported in the JSON output reflects the resolved
@@ -68,6 +65,10 @@ import { embedInlineContext } from "../review/inline-context-embedder.js";
 import { parsePacketBoundaryPolicy } from "../review/packet-boundary-policy.js";
 import { parseParticipatingLensPaths } from "../review/participating-lens-paths.js";
 import { auditCitations, type CitationAuditResult } from "../review/citation-audit.js";
+import {
+  assertNoRetiredConfigFiles,
+  projectSettingsPath,
+} from "../discovery/settings-chain.js";
 import { stripWrappingCodeFence } from "./strip-wrapping-code-fence.js";
 
 function requireString(
@@ -337,7 +338,7 @@ function parseToolMode(raw: unknown): ToolModeRequest {
 
 /**
  * Map a resolved provider to the tool-loop driver's provider enum. Returns
- * `null` for `codex` because the codex CLI subprocess path has its own
+ * `null` for `codex` because the Codex worker path has its own
  * agentic scaffold and isn't routed through callLlmWithTools — auto mode
  * should fall back to inline in that case.
  */
@@ -354,18 +355,16 @@ function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | nu
 }
 
 async function loadOntoConfig(projectRoot: string): Promise<LearningProviderConfigInputs> {
-  const configPath = path.join(projectRoot, ".onto", "config.yml");
+  await assertNoRetiredConfigFiles(projectRoot);
+  const configPath = projectSettingsPath(projectRoot);
   try {
-    const text = await fs.readFile(configPath, "utf8");
-    // Lightweight YAML parse via dynamic import to avoid adding a dep just
-    // for executor. yaml is already a transitive dep through other modules.
-    const yaml = await import("yaml");
-    const parsed = yaml.parse(text);
+    const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
     if (parsed && typeof parsed === "object") {
       return parsed as LearningProviderConfigInputs;
     }
-  } catch {
-    // Missing config is fine — caller-explicit flags or env vars take over.
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
+    throw error;
   }
   return {};
 }
@@ -485,11 +484,11 @@ export async function runInlineHttpReviewUnitExecutorCli(
     cliOverrides,
   });
 
-  // Review Recovery PR-1 (R1 observability symmetry): each executor subprocess
+  // Review Recovery PR-1 (R1 observability symmetry): each executor process
   // emits `[plan:executor]` once at startup so the parent's `[plan]` lines and
-  // the subprocess's LLM-call lines are stitchable into a single stderr trace.
-  // Before PR-1, the subprocess boundary was a blind spot: the parent resolved
-  // a provider, but the subprocess could silently re-resolve differently and
+  // the executor's LLM-call lines are stitchable into a single stderr trace.
+  // Before PR-1, the process boundary was a blind spot: the parent resolved
+  // a provider, but the child could silently re-resolve differently and
   // operators had no way to see it.
   process.stderr.write(
     `[plan:executor] kind=inline-http unit_id=${unitId} provider=${
@@ -502,7 +501,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
   const requestedToolMode = parseToolMode(values["tool-mode"]);
 
   // Determine which Tier the auto/native paths should attempt. codex provider
-  // routes through subprocess and bypasses callLlmWithTools entirely — auto
+  // bypasses callLlmWithTools entirely — auto
   // collapses to inline there.
   const toolLoopProvider = asToolLoopProvider(llmPartial.provider);
   if (requestedToolMode === "native" && toolLoopProvider === null) {
@@ -643,7 +642,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     const modelForLoop = llmPartial.model_id ?? llmPartial.models_per_provider?.[toolLoopProvider];
     if (!modelForLoop) {
       throw new Error(
-        `tool-native mode requires a model id (set --model, OntoConfig.${toolLoopProvider}.model, or OntoConfig.model).`,
+        `tool-native mode requires a model id (set --model or .onto/settings.json llm.model).`,
       );
     }
     try {

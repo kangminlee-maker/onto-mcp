@@ -303,7 +303,7 @@ npm run review:prepare-session -- \
   --resolved-target-ref "{resolved target ref}" \
   --domain-final-value "{final domain or none}" \
   --domain-selection-mode "{selection mode}" \
-  --execution-realization "{subagent|agent-teams}" \
+  --execution-realization "{worker|host-team}" \
   --host-runtime "{codex|claude}" \
   --review-mode "{core-axis|full}" \
   --lens-id "{lens id}" \
@@ -339,7 +339,7 @@ npm run review:bootstrap-binding -- \
   --domain-recommendation "{recommended domain token}" \
   --domain-final-value "{final domain or none}" \
   --domain-selection-mode "{selection mode}" \
-  --execution-realization "{subagent|agent-teams}" \
+  --execution-realization "{worker|host-team}" \
   --host-runtime "{codex|claude}" \
   --review-mode "{core-axis|full}" \
   --lens-id "{lens id}" ...
@@ -481,36 +481,36 @@ The team lead will deliver lens result paths once the review lenses complete the
 
 #### Step 2 — Example realization: Codex Mode Variation
 
-Codex 모드에서는 TeamCreate를 생략한다. 대신 각 review lens를 `codex:codex-rescue` subagent_type의 Agent tool로 생성한다. 이 경우에도 canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
+Codex 모드에서는 TeamCreate를 생략한다. 대신 각 review lens를 `codex:codex-rescue` worker_type의 Agent tool로 생성한다. 이 경우에도 canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
 
 **Sub-step 2.3 — Team creation**: 생략. TeamCreate/TeamDelete를 사용하지 않는다.
 
 **Sub-step 2.4 — Create all reviewer Agents**: 모든 review lens Agent를 **단일 메시지에서 동시에** 호출하되, 각각 `run_in_background: true`로 설정한다.
-- 각 Agent의 `subagent_type`: `"codex:codex-rescue"`
+- 각 Agent의 `worker_type`: `"codex:codex-rescue"`
 - 각 Agent의 프롬프트: `process.md`의 **Codex Reviewer Prompt Template** 사용
 - core-axis 모드: 고정 6 lens (axiology / coverage / evolution / logic / semantics / structure) Codex task로 생성. (Step 1.5 dynamic selection 활성 시 2-6 lens + axiology)
 - 전원 모드(full): 8명 전원 Codex task로 생성
 - `synthesize`는 이 단계에서 생성하지 않는다 (메인 프로세스 Step 3에서 별도 실행)
 - `codex.model`/`codex.effort` 전달: process.md "Model and effort" 섹션 참조
-- 세션 메타데이터에 `execution_realization: subagent`, `host_runtime: codex` 기록
+- 세션 메타데이터에 `execution_realization: worker`, `host_runtime: codex` 기록
 
 `synthesize`의 초기 prompt 대신: 팀 리드가 모든 백그라운드 task 완료를 대기한다.
 
 Task Directives는 Agent Teams 모드와 **동일한 내용**을 사용한다. 차이점은 프롬프트 래핑(Codex Reviewer Prompt Template)과 실행 런타임뿐이다.
 
-#### Step 2 — Example realization: Direct Subagent Variation (claude)
+#### Step 2 — Example realization: Direct Worker Variation (claude)
 
-`execution_realization: subagent` + `host_runtime: claude` 경로다. 각 review lens를 `general-purpose` subagent_type의 Agent tool로 생성한다. canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
+`execution_realization: worker` + `host_runtime: claude` 경로다. 각 review lens를 `general-purpose` worker_type의 Agent tool로 생성한다. canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
 
 **Sub-step 2.3 — Team creation**: 생략. TeamCreate/TeamDelete를 사용하지 않는다.
 
 **Sub-step 2.4 — Create all reviewer Agents**: 모든 review lens Agent를 **단일 메시지에서 동시에** 호출하되, 각각 `run_in_background: true`로 설정한다.
-- 각 Agent의 `subagent_type`: `"general-purpose"`
+- 각 Agent의 `worker_type`: `"general-purpose"`
 - 각 Agent의 프롬프트: `process.md`의 **Teammate Initial Prompt Template**을 baseline으로 사용하되, self-loading이 불가하므로 팀 리드가 agent definition + learning file + domain document + communication learning + task directives + session path를 직접 inline한다.
 - core-axis 모드: 고정 6 lens (axiology / coverage / evolution / logic / semantics / structure) 생성. (Step 1.5 dynamic selection 활성 시 2-6 lens + axiology)
 - 전원 모드(full): 8명 전원 생성
 - `synthesize`는 이 단계에서 생성하지 않는다 (메인 프로세스 Step 3에서 별도 실행)
-- 세션 메타데이터에 `execution_realization: subagent`, `host_runtime: claude` 기록
+- 세션 메타데이터에 `execution_realization: worker`, `host_runtime: claude` 기록
 
 `synthesize`의 초기 prompt 대신: 팀 리드가 모든 백그라운드 task 완료를 대기한다.
 
@@ -525,7 +525,7 @@ Round 1에서 에이전트 에러 발생 시:
 1. **감지**: 다른 에이전트가 전원 응답을 완료한 시점에 아직 응답하지 않은 에이전트,
    또는 에러를 보고한 에이전트를 감지한다.
 
-2. **재시도**: §3 dispatch 표 (Synthesize 단계)의 dispatch 메커니즘과 동일한 채널을 사용한다. agent-teams는 SendMessage 재요청, subagent 계열은 동일 프롬프트로 Agent tool re-spawn. `subagent_type` 값은 §3 표가 단일 source다 (drift 방지를 위해 본 단계에서 재나열하지 않는다). 재시도 메시지/프롬프트에 원래 Task Directives + 파일 경로를 포함한다.
+2. **재시도**: §3 dispatch 표 (Synthesize 단계)의 dispatch 메커니즘과 동일한 채널을 사용한다. host-team는 SendMessage 재요청, worker 계열은 동일 프롬프트로 Agent tool re-spawn. `worker_type` 값은 §3 표가 단일 source다 (drift 방지를 위해 본 단계에서 재나열하지 않는다). 재시도 메시지/프롬프트에 원래 Task Directives + 파일 경로를 포함한다.
 
 3. **종료 조건**: 2회 재시도 후에도 실패하면 graceful degradation 적용.
    해당 에이전트를 제외하고 합의 분모를 조정.
@@ -547,15 +547,15 @@ Synthesize 단계의 dispatch 메커니즘은 `execution_realization` × `host_r
 
 | `execution_realization` | `host_runtime` | Dispatch 메커니즘 | Deliberation 처리 | Synthesize 실패 정책 |
 |---|---|---|---|---|
-| `agent-teams` | `claude` | SendMessage to `synthesize` teammate | synthesize 전에 controlled lens deliberation 완료 | 1회 SendMessage 재요청; 실패 시 `process-halting-with-partial-result` |
-| `subagent` | `claude` | Agent tool with `subagent_type: "general-purpose"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
-| `subagent` | `codex` | Agent tool with `subagent_type: "codex:codex-rescue"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
+| `host-team` | `claude` | SendMessage to `synthesize` teammate | synthesize 전에 controlled lens deliberation 완료 | 1회 SendMessage 재요청; 실패 시 `process-halting-with-partial-result` |
+| `worker` | `claude` | Agent tool with `worker_type: "general-purpose"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
+| `worker` | `codex` | Agent tool with `worker_type: "codex:codex-rescue"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
 
-본 표의 discriminator는 binding artifact의 `resolved_execution_realization` + `resolved_host_runtime` 두 필드와 1:1 대응한다 (별도 enum이 아니다). 2축의 카르테시안 곱 중 `agent-teams + codex` 조합은 현재 unsupported다 — `.onto/processes/review/productized-live-path.md` §3.6 참조.
+본 표의 discriminator는 binding artifact의 `resolved_execution_realization` + `resolved_host_runtime` 두 필드와 1:1 대응한다 (별도 enum이 아니다). 2축의 카르테시안 곱 중 `host-team + codex` 조합은 현재 unsupported다 — `.onto/processes/review/productized-live-path.md` §3.6 참조.
 
 **Audit observability rule**: 모든 경로는 `deliberation.md`를 산출한다. `synthesis.md`는 그 결과를 소비하고 보존적으로 최종 review output을 작성한다.
 
-이하 본 절은 `agent-teams` 경로의 SendMessage 전달 콘텐츠를 정의한다. **Since the original text is preserved in the files, the team lead does not include the original text in the message.**
+이하 본 절은 `host-team` 경로의 SendMessage 전달 콘텐츠를 정의한다. **Since the original text is preserved in the files, the team lead does not include the original text in the message.**
 
 SendMessage content to deliver to the synthesize stage:
 

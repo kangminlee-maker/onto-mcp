@@ -1,481 +1,345 @@
-/**
- * Review UX Redesign P5 — `onto config` interactive CLI.
- *
- * # What this module is
- *
- * The entry point for the `onto config` subcommand tree:
- *
- *   - `onto config`                      (alias for `show`)
- *   - `onto config show`                 detailed current state + derivation preview
- *   - `onto config set <key> <value>`    single-field mutation
- *   - `onto config edit`                 interactive stepwise prompts
- *   - `onto config re-detect`            re-run environment probes, show diff
- *   - `onto config validate`             validator + derivation preview (no write)
- *
- * # Why it exists
- *
- * Design doc §6 defines this surface as the principal's control panel for
- * the `review:` axis block. Without a dedicated CLI, every change requires
- * hand-editing YAML — error-prone for the discriminated-union semantics of
- * `SubagentSpec` and the cross-field constraints validated at runtime.
- *
- * # How it relates
- *
- * - Reuses P4's detection (`detectReviewAxes`) and write (`writeReviewBlock`).
- * - Reuses P1's validator (`validateReviewConfig`).
- * - Reuses P2's derivation (`previewTopologyDerivation` via the new preview
- *   helper which wraps `deriveTopologyShape` + `shapeToTopologyId`).
- * - Registered in `src/cli.ts` as the `"config"` subcommand.
- */
-
-import readline from "node:readline/promises";
+import fs from "node:fs/promises";
 import path from "node:path";
 
-import type {
-  OntoReviewConfig,
-  SubagentSpec,
-  TeamleadSpec,
-} from "../discovery/config-chain.js";
-import { resolveOrthogonalConfigChain } from "../discovery/config-chain.js";
 import {
-  validateReviewConfig,
-  type ValidationError,
-} from "../review/review-config-validator.js";
-import { detectReviewAxes } from "../onboard/detect-review-axes.js";
-import { writeReviewBlock } from "../onboard/write-review-block.js";
-import { previewTopologyDerivation, renderPreview } from "./onto-config-preview.js";
-import { applySet, SUPPORTED_SET_PATHS } from "./onto-config-key-path.js";
+  assertNoRetiredConfigFiles,
+  defaultReviewExecution,
+  projectSettingsPath,
+  resolveSettingsChain,
+  type OntoSettings,
+  type ReviewExecutionSettings,
+  type ReviewExecutionMode,
+  type ReviewWorkerSeat,
+} from "../discovery/settings-chain.js";
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
+const SUPPORTED_SET_PATHS = [
+  "llm.auth",
+  "llm.provider",
+  "llm.model",
+  "llm.effort",
+  "llm.base_url",
+  "llm.api_key_env",
+  "review.execution.mode",
+  "review.execution.teamlead.seat",
+  "review.execution.lens.seat",
+  "review.execution.max_concurrent_workers",
+  "output_language",
+  "review_mode",
+] as const;
 
-/**
- * Main dispatcher for `onto config`. Called from `src/cli.ts`.
- *
- * Returns the exit code. All STDERR/STDOUT IO happens here; subcommand
- * helpers return data to this function which renders it.
- */
+type SupportedSetPath = (typeof SUPPORTED_SET_PATHS)[number];
+
 export async function handleConfigCli(
   ontoHome: string,
   argv: string[],
 ): Promise<number> {
-  const sub = argv[0] ?? "show";
-  const subArgv = argv.slice(1);
-
+  const subcommand = argv[0] ?? "show";
+  const args = argv.slice(1);
   const projectRoot = process.cwd();
 
-  switch (sub) {
-    case "show":
-      return handleShow(ontoHome, projectRoot);
-    case "set":
-      return handleSet(projectRoot, subArgv);
-    case "edit":
-      return handleEdit(projectRoot);
-    case "re-detect":
-      return handleRedetect(ontoHome, projectRoot);
-    case "validate":
-      return handleValidate(ontoHome, projectRoot);
-    case "--help":
-    case "-h":
-      printHelp();
-      return 0;
-    default:
-      console.error(
-        `error: unknown subcommand "${sub}". Run \`onto config --help\` for usage.`,
-      );
-      return 1;
+  try {
+    switch (subcommand) {
+      case "show":
+        return handleShow(ontoHome, projectRoot);
+      case "validate":
+        return handleValidate(ontoHome, projectRoot);
+      case "set":
+        return handleSet(ontoHome, projectRoot, args);
+      case "use":
+        return handleUse(ontoHome, projectRoot, args);
+      case "--help":
+      case "-h":
+        printHelp();
+        return 0;
+      default:
+        throw new Error(`Unknown settings subcommand: ${subcommand}`);
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    return 1;
   }
 }
 
 function printHelp(): void {
-  const lines = [
-    "onto config — manage the review axis block in .onto/config.yml",
-    "",
-    "Usage:",
-    "  onto config                  show current state + derivation preview (alias for `show`)",
-    "  onto config show             detailed current state + preview",
-    "  onto config set <key> <val>  mutate a single axis field",
-    "  onto config edit             interactive stepwise prompts",
-    "  onto config re-detect        re-run environment probes, show diff",
-    "  onto config validate         run validator + preview (no write)",
-    "",
-    "Supported `set` paths:",
-    ...SUPPORTED_SET_PATHS.map((p) => `  - ${p}`),
-    "",
-    "External teamlead specs (teamlead.model = {provider, model_id, effort})",
-    "require `onto config edit` — `set` only accepts `teamlead.model main`.",
-  ];
-  console.log(lines.join("\n"));
+  console.log(
+    [
+      "onto config - inspect or edit .onto/settings.json",
+      "",
+      "Usage:",
+      "  onto config show",
+      "  onto config validate",
+      "  onto config set <path> <value>",
+      "  onto config use main-workers",
+      "  onto config use nested-workers",
+      "",
+      "Supported set paths:",
+      ...SUPPORTED_SET_PATHS.map((keyPath) => `  - ${keyPath}`),
+    ].join("\n"),
+  );
 }
-
-// ---------------------------------------------------------------------------
-// show
-// ---------------------------------------------------------------------------
 
 async function handleShow(
   ontoHome: string,
   projectRoot: string,
 ): Promise<number> {
-  try {
-    const merged = await resolveOrthogonalConfigChain(ontoHome, projectRoot);
-    const review = merged.review ?? {};
-    const detection = detectReviewAxes().detected;
-
-    console.log(renderShow(review, detection, projectRoot));
-
-    const validation = validateReviewConfig(review);
-    if (!validation.ok) {
-      console.log("");
-      console.log("## Validation errors");
-      for (const err of validation.errors) {
-        console.log(`  - ${err.path}: ${err.message}`);
-      }
-      return 1;
-    }
-
-    console.log("");
-    console.log(
-      renderPreview(
-        previewTopologyDerivation(validation.config, {
-          claudeHost: detection.host === "claude-code",
-          codexSessionActive: detection.host === "codex-cli",
-          experimentalAgentTeams: detection.agent_teams_available,
-          lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
-        }),
-      ),
-    );
-    return 0;
-  } catch (err) {
-    console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
-    return 1;
-  }
-}
-
-function renderShow(
-  review: OntoReviewConfig,
-  detection: ReturnType<typeof detectReviewAxes>["detected"],
-  projectRoot: string,
-): string {
-  const lines: string[] = [];
-  lines.push(`# onto config — ${path.join(projectRoot, ".onto", "config.yml")}`);
-  lines.push("");
-  lines.push("## Current review axes");
-  lines.push("");
-  lines.push(`  teamlead.model:          ${renderTeamlead(review.teamlead)}`);
-  lines.push(`  subagent:                ${renderSubagent(review.subagent)}`);
-  lines.push(
-    `  max_concurrent_lenses:   ${review.max_concurrent_lenses ?? "(default)"}`,
-  );
-  lines.push(
-    `  lens_deliberation:       ${review.lens_deliberation ?? "controlled-lens-deliberation (default)"}`,
-  );
-  lines.push("");
-  lines.push("## Detected environment");
-  lines.push("");
-  lines.push(`  host:                    ${detection.host}`);
-  lines.push(`  agent_teams_available:   ${detection.agent_teams_available}`);
-  lines.push(`  codex_available:         ${detection.codex_available}`);
-  return lines.join("\n");
-}
-
-function renderTeamlead(teamlead: TeamleadSpec | undefined): string {
-  if (!teamlead) return "main (default)";
-  if (teamlead.model === "main") return "main";
-  const m = teamlead.model;
-  const effort = m.effort ? `, effort=${m.effort}` : "";
-  return `{provider=${m.provider}, model_id=${m.model_id}${effort}}`;
-}
-
-function renderSubagent(subagent: SubagentSpec | undefined): string {
-  if (!subagent) return "main-native (default)";
-  if (subagent.provider === "main-native") return "main-native";
-  const effort = subagent.effort ? `, effort=${subagent.effort}` : "";
-  return `{provider=${subagent.provider}, model_id=${subagent.model_id}${effort}}`;
-}
-
-// ---------------------------------------------------------------------------
-// set
-// ---------------------------------------------------------------------------
-
-async function handleSet(
-  projectRoot: string,
-  argv: string[],
-): Promise<number> {
-  // N2: require exactly two positional args. Previous `rest.join(" ")` relax
-  // accepted `onto config set foo a b c` as `value="a b c"` — surprising UX
-  // given that no supported path takes a space-containing value in practice.
-  // Values that legitimately contain spaces (e.g. quoted effort strings) are
-  // still received as a single argv slot because the shell already split them.
-  if (argv.length !== 2) {
-    console.error(
-      "error: `onto config set` requires exactly <key> and <value>. " +
-        "Quote values that contain spaces. Run `onto config --help` for usage.",
-    );
-    return 1;
-  }
-  const [key, value] = argv as [string, string];
-
-  try {
-    const configPath = path.join(projectRoot, ".onto", "config.yml");
-    const merged = await readProjectReviewBlock(configPath);
-    const mutation = applySet(merged, key, value);
-    if (!mutation.ok) {
-      console.error(`error: ${mutation.error}`);
-      return 1;
-    }
-    return writeAndReport(configPath, mutation.config, [`${key} = ${value}`]);
-  } catch (err) {
-    console.error(`error: ${err instanceof Error ? err.message : String(err)}`);
-    return 1;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// edit (interactive)
-// ---------------------------------------------------------------------------
-
-async function handleEdit(projectRoot: string): Promise<number> {
-  if (!process.stdin.isTTY) {
-    console.error(
-      "error: `onto config edit` requires an interactive TTY. " +
-        "Use `onto config set` or `onto config` to inspect/modify non-interactively.",
-    );
-    return 1;
-  }
-
-  const configPath = path.join(projectRoot, ".onto", "config.yml");
-  const current = await readProjectReviewBlock(configPath);
-  const lensAgentTeamsMode = await readProjectLensAgentTeamsMode(configPath);
-  const detection = detectReviewAxes().detected;
-
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  const changes: string[] = [];
-  let working: OntoReviewConfig = structuredClone(current);
-
-  try {
-    console.log(renderShow(working, detection, projectRoot));
-    console.log("");
-    console.log("Enter key=value to update, `validate` to preview, `save` to write, `quit` to abort.");
-    console.log(`Supported keys: ${SUPPORTED_SET_PATHS.join(", ")}`);
-
-    while (true) {
-      const line = (await rl.question("> ")).trim();
-      if (line.length === 0) continue;
-      if (line === "quit" || line === "q") {
-        console.log("No changes written.");
-        return 0;
-      }
-      if (line === "save" || line === "s") {
-        break;
-      }
-      if (line === "validate" || line === "v") {
-        const validation = validateReviewConfig(working);
-        if (!validation.ok) {
-          for (const err of validation.errors) {
-            console.log(`  - ${err.path}: ${err.message}`);
-          }
-          continue;
-        }
-        console.log(
-          renderPreview(
-            previewTopologyDerivation(validation.config, {
-              claudeHost: detection.host === "claude-code",
-              codexSessionActive: detection.host === "codex-cli",
-              experimentalAgentTeams: detection.agent_teams_available,
-              lensAgentTeamsMode,
-            }),
-          ),
-        );
-        continue;
-      }
-      const eq = line.indexOf("=");
-      if (eq < 0) {
-        console.log("format: <key>=<value> (e.g. subagent.provider=codex)");
-        continue;
-      }
-      const key = line.slice(0, eq).trim();
-      const value = line.slice(eq + 1).trim();
-      const mutation = applySet(working, key, value);
-      if (!mutation.ok) {
-        console.log(`  error: ${mutation.error}`);
-        continue;
-      }
-      working = mutation.config;
-      changes.push(`${key}=${value}`);
-      console.log(`  ok: ${key}=${value}`);
-    }
-  } finally {
-    rl.close();
-  }
-
-  if (changes.length === 0) {
-    console.log("No changes to save.");
-    return 0;
-  }
-  return writeAndReport(configPath, working, changes);
-}
-
-// ---------------------------------------------------------------------------
-// re-detect
-// ---------------------------------------------------------------------------
-
-async function handleRedetect(
-  ontoHome: string,
-  projectRoot: string,
-): Promise<number> {
-  const merged = await resolveOrthogonalConfigChain(ontoHome, projectRoot);
-  const review = merged.review ?? {};
-  const detection = detectReviewAxes().detected;
-
-  console.log("## Re-detected environment");
-  console.log("");
-  console.log(`  host:                    ${detection.host}`);
-  console.log(`  agent_teams_available:   ${detection.agent_teams_available}`);
-  console.log(`  codex_available:         ${detection.codex_available}`);
-
-  const validation = validateReviewConfig(review);
-  if (!validation.ok) {
-    console.log("");
-    console.log("Note: current review block is invalid; cannot preview derivation.");
-    return 0;
-  }
-  console.log("");
-  console.log(
-    renderPreview(
-      previewTopologyDerivation(validation.config, {
-        claudeHost: detection.host === "claude-code",
-        codexSessionActive: detection.host === "codex-cli",
-        experimentalAgentTeams: detection.agent_teams_available,
-        lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
-      }),
-    ),
-  );
-  console.log("");
-  console.log(
-    "Note: re-detect is read-only. Use `onto config edit` or `onto config set` to apply changes.",
-  );
+  const settings = await resolveSettingsChain(ontoHome, projectRoot);
+  console.log(JSON.stringify({
+    settings_path: projectSettingsPath(projectRoot),
+    settings,
+  }, null, 2));
   return 0;
 }
-
-// ---------------------------------------------------------------------------
-// validate (write-free)
-// ---------------------------------------------------------------------------
 
 async function handleValidate(
   ontoHome: string,
   projectRoot: string,
 ): Promise<number> {
-  const merged = await resolveOrthogonalConfigChain(ontoHome, projectRoot);
-  const review = merged.review ?? {};
-  const detection = detectReviewAxes().detected;
-
-  const validation = validateReviewConfig(review);
-  if (!validation.ok) {
-    console.log("## Validation errors");
-    console.log("");
-    for (const err of validation.errors) {
-      console.log(`  - ${err.path}: ${err.message}`);
-    }
-    return 1;
-  }
-  console.log("## Validation: ok");
-  console.log("");
-  console.log(
-    renderPreview(
-      previewTopologyDerivation(validation.config, {
-        claudeHost: detection.host === "claude-code",
-        codexSessionActive: detection.host === "codex-cli",
-        experimentalAgentTeams: detection.agent_teams_available,
-        lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
-      }),
-    ),
-  );
+  await resolveSettingsChain(ontoHome, projectRoot);
+  console.log(JSON.stringify({
+    ok: true,
+    settings_path: projectSettingsPath(projectRoot),
+  }, null, 2));
   return 0;
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
+async function handleSet(
+  ontoHome: string,
+  projectRoot: string,
+  argv: string[],
+): Promise<number> {
+  if (argv.length !== 2) {
+    throw new Error("onto config set requires <path> and <value>.");
+  }
+  const [keyPath, rawValue] = argv as [string, string];
+  if (!SUPPORTED_SET_PATHS.includes(keyPath as SupportedSetPath)) {
+    throw new Error(
+      `Unsupported settings path: ${keyPath}. Supported: ${SUPPORTED_SET_PATHS.join(", ")}`,
+    );
+  }
 
-/**
- * Read the project-level `.onto/config.yml` and return its `review` block
- * (or an empty object if absent/invalid). Bypasses `resolveConfigChain` so
- * the writer acts on the project file, not the merged home+project view.
- */
-async function readProjectReviewBlock(
-  configPath: string,
-): Promise<OntoReviewConfig> {
+  const settings = await readProjectSettings(projectRoot);
+  setValue(settings, keyPath as SupportedSetPath, rawValue);
+  await writeProjectSettings(projectRoot, settings);
+  await resolveSettingsChain(ontoHome, projectRoot);
+  console.log(JSON.stringify({
+    ok: true,
+    changed: keyPath,
+    settings_path: projectSettingsPath(projectRoot),
+  }, null, 2));
+  return 0;
+}
+
+async function handleUse(
+  ontoHome: string,
+  projectRoot: string,
+  argv: string[],
+): Promise<number> {
+  const mode = argv[0];
+  if (mode !== "main-workers" && mode !== "nested-workers") {
+    throw new Error("onto config use supports main-workers or nested-workers.");
+  }
+
+  const settings = await readProjectSettings(projectRoot);
+  const execution = settings.review?.execution ?? defaultReviewExecution();
+  settings.review = {
+    ...(settings.review ?? { execution }),
+    execution: {
+      ...execution,
+      mode,
+      teamlead: {
+        ...(execution.teamlead ?? { llm: "inherit" }),
+        seat: mode === "main-workers" ? "main" : "worker",
+      },
+      lens: {
+        ...(execution.lens ?? { llm: "inherit" }),
+        seat: "worker",
+      },
+      deliberation: "controlled-lens-deliberation",
+    },
+  };
+
+  const maxConcurrent = readOption(argv.slice(1), "max-concurrent-workers");
+  if (maxConcurrent !== undefined) {
+    settings.review.execution.max_concurrent_workers =
+      parsePositiveInteger(maxConcurrent, "--max-concurrent-workers");
+  }
+
+  await writeProjectSettings(projectRoot, settings);
+  await resolveSettingsChain(ontoHome, projectRoot);
+  console.log(JSON.stringify({
+    ok: true,
+    mode,
+    settings_path: projectSettingsPath(projectRoot),
+  }, null, 2));
+  return 0;
+}
+
+async function readProjectSettings(projectRoot: string): Promise<OntoSettings> {
+  await assertNoRetiredConfigFiles(projectRoot);
+  const settingsPath = projectSettingsPath(projectRoot);
   try {
-    const fs = await import("node:fs");
-    if (!fs.existsSync(configPath)) {
+    const raw = await fs.readFile(settingsPath, "utf8");
+    return JSON.parse(raw) as OntoSettings;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {};
     }
-    const raw = fs.readFileSync(configPath, "utf8");
-    const { parse } = await import("yaml");
-    const doc = parse(raw) as { review?: unknown } | null;
-    if (!doc || typeof doc !== "object") return {};
-    if (doc.review === undefined) return {};
-    const validation = validateReviewConfig(doc.review);
-    if (validation.ok) return validation.config;
-    // N1: surface the invalid state before proceeding. Without this the set /
-    // edit flows would silently start from an empty config, overwriting
-    // partially-typed garbage on next save with no operator awareness.
-    process.stderr.write(
-      "[onto:config] warning: existing review block in config is invalid — starting from empty state\n",
+    throw new Error(
+      `Failed to read ${settingsPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
     );
-    for (const err of validation.errors) {
-      process.stderr.write(`  - ${err.path}: ${err.message}\n`);
-    }
-    return {};
-  } catch {
-    return {};
   }
 }
 
-async function readProjectLensAgentTeamsMode(configPath: string): Promise<boolean> {
-  try {
-    const fs = await import("node:fs");
-    if (!fs.existsSync(configPath)) return false;
-    const raw = fs.readFileSync(configPath, "utf8");
-    const { parse } = await import("yaml");
-    const doc = parse(raw) as { lens_agent_teams_mode?: unknown } | null;
-    return Boolean(doc && typeof doc === "object" && doc.lens_agent_teams_mode === true);
-  } catch {
-    return false;
+async function writeProjectSettings(
+  projectRoot: string,
+  settings: OntoSettings,
+): Promise<void> {
+  const settingsPath = projectSettingsPath(projectRoot);
+  await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+  await fs.writeFile(
+    settingsPath,
+    `${JSON.stringify(settings, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function setValue(
+  settings: OntoSettings,
+  keyPath: SupportedSetPath,
+  rawValue: string,
+): void {
+  switch (keyPath) {
+    case "llm.auth":
+      settings.llm = { ...(settings.llm ?? {}), auth: parseAuth(rawValue) };
+      return;
+    case "llm.provider":
+      settings.llm = { ...(settings.llm ?? {}), provider: parseProvider(rawValue) };
+      return;
+    case "llm.model":
+      settings.llm = { ...(settings.llm ?? {}), model: requireNonEmpty(rawValue, keyPath) };
+      return;
+    case "llm.effort":
+      settings.llm = { ...(settings.llm ?? {}), effort: requireNonEmpty(rawValue, keyPath) };
+      return;
+    case "llm.base_url":
+      settings.llm = { ...(settings.llm ?? {}), base_url: requireNonEmpty(rawValue, keyPath) };
+      return;
+    case "llm.api_key_env":
+      settings.llm = { ...(settings.llm ?? {}), api_key_env: requireNonEmpty(rawValue, keyPath) };
+      return;
+    case "review.execution.mode":
+      ensureExecution(settings).mode = parseMode(rawValue);
+      normalizeExecutionSeats(settings);
+      return;
+    case "review.execution.teamlead.seat":
+      ensureExecution(settings).teamlead = {
+        ...ensureExecution(settings).teamlead,
+        seat: parseSeat(rawValue),
+      };
+      return;
+    case "review.execution.lens.seat":
+      ensureExecution(settings).lens = {
+        ...ensureExecution(settings).lens,
+        seat: parseSeat(rawValue),
+      };
+      return;
+    case "review.execution.max_concurrent_workers":
+      ensureExecution(settings).max_concurrent_workers =
+        parsePositiveInteger(rawValue, keyPath);
+      return;
+    case "output_language":
+      settings.output_language = requireNonEmpty(rawValue, keyPath);
+      return;
+    case "review_mode":
+      if (rawValue !== "core-axis" && rawValue !== "full") {
+        throw new Error("review_mode must be core-axis or full.");
+      }
+      settings.review_mode = rawValue;
+      return;
   }
 }
 
-function writeAndReport(
-  configPath: string,
-  next: OntoReviewConfig,
-  changes: string[],
-): number {
-  const validation = validateReviewConfig(next);
-  if (!validation.ok) {
-    console.error("error: the resulting config is invalid — write aborted.");
-    for (const e of validation.errors) {
-      console.error(`  - ${e.path}: ${e.message}`);
-    }
-    return 1;
+function ensureExecution(settings: OntoSettings): ReviewExecutionSettings {
+  const execution = settings.review?.execution ?? defaultReviewExecution();
+  settings.review = {
+    ...(settings.review ?? { execution }),
+    execution,
+  };
+  return settings.review.execution;
+}
+
+function normalizeExecutionSeats(settings: OntoSettings): void {
+  const execution = ensureExecution(settings);
+  execution.teamlead = {
+    ...execution.teamlead,
+    seat: execution.mode === "main-workers" ? "main" : "worker",
+  };
+  execution.lens = {
+    ...execution.lens,
+    seat: "worker",
+  };
+}
+
+function parseAuth(rawValue: string): "api_key" | "oauth" | "local" {
+  if (rawValue === "api_key" || rawValue === "oauth" || rawValue === "local") {
+    return rawValue;
   }
-  const result = writeReviewBlock(configPath, validation.config);
-  if (!result.ok) {
-    console.error("error: write failed");
-    for (const e of (result as { errors: ValidationError[] }).errors) {
-      console.error(`  - ${e.path}: ${e.message}`);
-    }
-    return 1;
+  throw new Error("llm.auth must be api_key, oauth, or local.");
+}
+
+function parseProvider(rawValue: string): "openai" | "anthropic" | "grok" | "lmstudio" {
+  if (
+    rawValue === "openai" ||
+    rawValue === "anthropic" ||
+    rawValue === "grok" ||
+    rawValue === "lmstudio"
+  ) {
+    return rawValue;
   }
-  console.log("## Saved");
-  console.log("");
-  for (const c of changes) console.log(`  - ${c}`);
-  console.log("");
-  console.log(`  path: ${result.path}`);
-  if (result.created) console.log("  created: true");
-  if (result.replacedExistingBlock) console.log("  replaced_existing_block: true");
-  return 0;
+  throw new Error("llm.provider must be openai, anthropic, grok, or lmstudio.");
+}
+
+function parseMode(rawValue: string): ReviewExecutionMode {
+  if (rawValue === "main-workers" || rawValue === "nested-workers") {
+    return rawValue;
+  }
+  throw new Error("review.execution.mode must be main-workers or nested-workers.");
+}
+
+function parseSeat(rawValue: string): ReviewWorkerSeat {
+  if (rawValue === "main" || rawValue === "worker") {
+    return rawValue;
+  }
+  throw new Error("review execution seat must be main or worker.");
+}
+
+function parsePositiveInteger(rawValue: string, label: string): number {
+  if (!/^\d+$/.test(rawValue)) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+  const value = Number.parseInt(rawValue, 10);
+  if (value < 1) {
+    throw new Error(`${label} must be >= 1.`);
+  }
+  return value;
+}
+
+function requireNonEmpty(rawValue: string, label: string): string {
+  if (rawValue.length === 0) {
+    throw new Error(`${label} cannot be empty.`);
+  }
+  return rawValue;
+}
+
+function readOption(argv: string[], name: string): string | undefined {
+  const token = `--${name}`;
+  const index = argv.indexOf(token);
+  if (index < 0) return undefined;
+  const value = argv[index + 1];
+  if (!value || value.startsWith("--")) {
+    throw new Error(`${token} requires a value.`);
+  }
+  return value;
 }

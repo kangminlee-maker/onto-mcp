@@ -26,28 +26,19 @@ import {
 } from "../review/review-artifact-utils.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { resolveOntoHome } from "../discovery/onto-home.js";
-import { resolveConfigChain, type OntoConfig } from "../discovery/config-chain.js";
+import { resolveSettingsChain, type OntoConfig } from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
-import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
-import { resolveExecutionPlan } from "../review/execution-plan-resolver.js";
 import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import {
-  resolveExecutionTopology,
-  type ExecutionTopology,
-} from "../review/execution-topology-resolver.js";
-import {
-  EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES,
-  hasStandaloneLensExecutor,
-  mapTopologyToExecutorConfig,
-  toCoordinatorTopologyDescriptor,
-  type CoordinatorTopologyDescriptor,
-} from "./topology-executor-mapping.js";
+  resolveReviewExecutionProfile,
+  type ReviewExecutionProfile,
+} from "../review/review-execution-profile.js";
 import { assessComplexity, selectLenses } from "./complexity-assessment.js";
 
 /**
  * Executor realization for review unit execution.
  *
- * - "codex":           codex CLI subprocess (codex-review-unit-executor.ts)
+ * - "codex":           Codex worker executor (codex-review-unit-executor.ts)
  * - "mock":            in-process deterministic stub (mock-review-unit-executor.ts)
  * - "ts_inline_http":  TS process directly calls LLM HTTP endpoint (Phase 2 of host
  *                      runtime decoupling). Selected automatically when
@@ -60,7 +51,7 @@ type ReviewMode = "core-axis" | "full";
 type BoundaryDecisionAction = "approve_external_boundary" | "rerun_target" | "cancel";
 
 // PrepareOnlyResult is imported from artifact-types.ts (canonical type authority)
-// OntoConfig is imported from discovery/config-chain.ts (single source of truth)
+// OntoConfig is the runtime settings type exported by settings-chain.ts.
 
 interface HostFacingPositionals {
   target?: string;
@@ -96,8 +87,15 @@ interface ResolvedReviewInvokeInputs {
 interface ReviewInvokeRouteSummary {
   combined_entrypoint: "review:invoke";
   bounded_invoke_steps: string[];
-  execution_realization: "subagent" | "agent-teams" | "ts_inline_http";
+  execution_realization: "worker" | "host-team" | "direct-call";
   host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  review_execution_profile: {
+    mode: ReviewExecutionProfile["mode"];
+    teamlead_seat: ReviewExecutionProfile["teamlead"]["seat"];
+    lens_seat: ReviewExecutionProfile["lens"]["seat"];
+    worker_executor: ReviewExecutionProfile["worker_executor"];
+    deliberation: ReviewExecutionProfile["deliberation"];
+  };
   review_mode: ReviewMode;
   max_concurrent_lenses: number;
   concurrency_strategy: "bounded_parallel";
@@ -255,6 +253,50 @@ function inferExecutorRealization(
   return "custom";
 }
 
+function applyExecutorOverrideToProfile(
+  profile: ReviewExecutionProfile,
+  argv: string[],
+): ReviewExecutionProfile {
+  const explicitRealization = readSingleOptionValueFromArgv(
+    argv,
+    "executor-realization",
+  );
+  if (explicitRealization === "mock") {
+    return {
+      ...profile,
+      worker_executor: "mock",
+      host: "standalone",
+      trace: [...profile.trace, "worker executor overridden by --executor-realization=mock"],
+    };
+  }
+  if (explicitRealization === "codex") {
+    return {
+      ...profile,
+      worker_executor: "codex",
+      host: "codex",
+      trace: [...profile.trace, "worker executor overridden by --executor-realization=codex"],
+    };
+  }
+  if (explicitRealization === "ts_inline_http") {
+    return {
+      ...profile,
+      worker_executor: "direct_call",
+      host: profile.provider ?? profile.host,
+      trace: [
+        ...profile.trace,
+        "worker executor overridden by --executor-realization=ts_inline_http",
+      ],
+    };
+  }
+  return profile;
+}
+
+function executionRealizationForProfile(
+  profile: ReviewExecutionProfile,
+): ResolvedExecutionProfile["execution_realization"] {
+  return profile.worker_executor === "direct_call" ? "direct-call" : "worker";
+}
+
 function stripOptionsFromArgv(
   argv: string[],
   optionNames: string[],
@@ -370,7 +412,7 @@ function appendExecutorModelArgs(
 /**
  * Append canonical llm switcher fields as inline-http executor CLI flags.
  */
-function appendSubagentLlmArgs(
+function appendDirectCallLlmArgs(
   config: ReviewUnitExecutorConfig,
   ontoConfig?: OntoConfig,
 ): ReviewUnitExecutorConfig {
@@ -392,25 +434,10 @@ function appendSubagentLlmArgs(
   return { bin: config.bin, args };
 }
 
-// ---------------------------------------------------------------------------
-// Execution realization resolution
-//
-// Decides whether `onto review` should run in this process or hand off to the
-// Claude host via `onto coordinator start`. Four inputs matter:
-//
-//   - explicit CLI `--codex` flag                        → self (codex path)
-//   - env ONTO_HOST_RUNTIME override                     → explicit override
-//   - auto detection (CLAUDECODE=1 / codex on PATH /
-//       llm switcher)                                     → concrete path
-//   - review axis topology                                → spawn shape
-//
-// The review axis block is the canonical topology seat.
-// Authority: .onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization
-// ---------------------------------------------------------------------------
-
 export interface ResolvedExecutionProfile {
-  execution_realization: "subagent" | "agent-teams" | "ts_inline_http";
+  execution_realization: "worker" | "host-team" | "direct-call";
   host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  review_execution_profile: ReviewExecutionProfile;
 }
 
 export type ExecutionProfileResolution =
@@ -422,49 +449,35 @@ export type ExecutionRealizationHandoff =
   | { type: "coordinator_start"; profile: ResolvedExecutionProfile }
   | { type: "no_host" };
 
-/** Returns true when the current process is inside a Claude Code review host. */
-export function detectClaudeCodeHost(): boolean {
-  return process.env.CLAUDECODE === "1";
+function toArtifactExecutionRealization(
+  profile: ReviewExecutionProfile,
+): ResolvedExecutionProfile["execution_realization"] {
+  if (profile.worker_executor === "direct_call" || profile.worker_executor === "mock") {
+    return "direct-call";
+  }
+  return profile.host === "claude" ? "host-team" : "worker";
 }
 
-/** Returns true when codex CLI execution is available. */
-export function detectCodexAvailable(): boolean {
-  return detectCodexBinaryAvailable();
-}
-
-/**
- * Resolves the (execution_realization, host_runtime) profile.
- *
- * This function is a thin adapter over `resolveExecutionPlan` in
- * `src/core-runtime/review/execution-plan-resolver.ts` — the unified resolver
- * that also governs provider identity, retry policy, and `[plan]` observability.
- *
- * Semantic normalization: mock is projected to standalone for the artifact
- * schema; real providers are recorded as the concrete runtime selected by the
- * canonical llm switcher.
- */
 export function resolveExecutionProfile(args: {
   explicitCodex: boolean;
   ontoConfig: OntoConfig;
 }): ExecutionProfileResolution {
-  const resolution = resolveExecutionPlan({
+  const resolution = resolveReviewExecutionProfile({
     explicitCodex: args.explicitCodex,
-    ontoConfig: args.ontoConfig,
+    settings: args.ontoConfig,
   });
   if (resolution.type === "no_host") {
     return { type: "no_host" };
   }
-  const plan = resolution.plan;
-
-  let host_runtime: ResolvedExecutionProfile["host_runtime"] =
-    plan.host_runtime === "mock" ? "standalone" : plan.host_runtime;
-
-  const execution_realization: ResolvedExecutionProfile["execution_realization"] =
-    plan.execution_realization === "mock" ? "ts_inline_http" : plan.execution_realization;
+  const profile = resolution.profile;
 
   return {
     type: "resolved",
-    profile: { execution_realization, host_runtime },
+    profile: {
+      execution_realization: toArtifactExecutionRealization(profile),
+      host_runtime: profile.host,
+      review_execution_profile: profile,
+    },
   };
 }
 
@@ -474,7 +487,7 @@ export function resolveExecutionProfile(args: {
  *   already calling this internally; don't emit handoff JSON, just record the
  *   profile into session artifacts)
  * - prepareOnly=false + resolved Claude → "coordinator_start" (emit handoff)
- * - resolved codex → "self" (self-execute via codex subprocess)
+ * - resolved codex → "self" (execute via Codex worker)
  * - resolved standalone → "self" (self-execute via ts_inline_http)
  * - no_host → "no_host"
  */
@@ -501,61 +514,25 @@ export function resolveExecutionRealizationHandoff(args: {
 function buildNoHostDetectedError(): Error {
   return new Error(
     [
-      "Review execution realization을 해소할 수 없습니다.",
-      "현재 host 감지 결과: Claude Code 세션 아님(CLAUDECODE unset), codex CLI 미설치 또는 ~/.codex/auth.json 부재, llm switcher 미설정.",
+      "ReviewExecutionProfile을 해소할 수 없습니다.",
+      "현재 설정과 실행 환경에서 사용 가능한 worker 경로를 찾지 못했습니다.",
       "",
       "다음 중 한 가지로 해결하세요:",
-      "  1. Claude Code 세션에서 `onto review` 재실행 (CLAUDECODE=1 감지 시 coordinator-start 안내)",
-      "  2. codex CLI 설치 + `codex login` 후 재실행",
-      "  3. `--codex` 플래그로 codex path 강제 (auth·binary 있어야 성공)",
-      "  4. `.onto/config.yml` 에 `review:` block 추가 (`.onto/processes/configuration.md` 참고)",
-      "  5. `.onto/config.yml` 에 llm: { auth, provider, model } 설정",
-      "  6. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
+      "  1. `.onto/settings.json` 에 llm: { auth: api_key, provider, model } 설정",
+      "  2. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
+      "  3. OpenAI OAuth는 Codex worker가 필요하므로 codex 설치와 로그인을 확인",
+      "  4. 테스트 실행은 --executor-realization mock 사용",
     ].join("\n"),
   );
 }
 
-/**
- * Resolve a coordinator topology descriptor from OntoConfig for handoff
- * payload inclusion. The resolver is the sole authority for whether a review
- * topology can run in the current environment.
- */
-export function tryResolveTopologyForHandoff(
-  ontoConfig: OntoConfig | undefined,
-  cached?: ExecutionTopology | null,
-): CoordinatorTopologyDescriptor | null {
-  if (ontoConfig === undefined) return null;
-  if (cached !== undefined) {
-    return cached === null ? null : toCoordinatorTopologyDescriptor(cached);
-  }
-  const resolution = resolveExecutionTopology({ ontoConfig });
-  if (resolution.type !== "resolved") return null;
-  return toCoordinatorTopologyDescriptor(resolution.topology);
-}
-
 function emitCoordinatorStartHandoff(args: {
-  preferredRealization: "subagent" | "agent-teams" | "ts_inline_http";
+  preferredRealization: "worker" | "host-team" | "direct-call";
   requestedTarget: string;
   requestText: string;
-  topology?: CoordinatorTopologyDescriptor | null;
+  reviewExecutionProfile: ReviewExecutionProfile;
 }): void {
-  // Shell-escape: wrap in double quotes and escape embedded double quotes/backslashes.
   const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  // preferred: plan-time recommendation based on onto's resolution policy
-  //   (typically agent-teams nested when TeamCreate is expected to be available).
-  // actual:    deferred — determined by subject session at TeamCreate attempt time.
-  //   onto child process cannot introspect the subject session's capability.
-  //   coordinator-state-machine then records the realized path into session
-  //   artifacts (binding.yaml / execution-plan.yaml / session-metadata.yaml).
-  //
-  // P9.3 (2026-04-21): the `topology` field is populated for every
-  // review invocation — `tryResolveTopologyForHandoff` always attempts
-  // axis-first resolution and the resolver's universal `main_native`
-  // degrade keeps a viable topology reachable whenever a Claude or
-  // Codex host is present. The coordinator state machine consumes
-  // `topology.id` / `topology.teamlead_location` /
-  // `topology.lens_spawn_mechanism` as authoritative, replacing the
-  // prior preferred_realization heuristic.
   const payload: {
     handoff: "coordinator-start";
     host_runtime: "claude";
@@ -563,14 +540,14 @@ function emitCoordinatorStartHandoff(args: {
     actual_realization: "deferred_to_subject_session";
     requested_target: string;
     request_text: string;
-    topology?: CoordinatorTopologyDescriptor;
+    review_execution_profile: ReviewExecutionProfile;
     next_action: {
       cli: string;
       orchestration_guidance: {
         preferred: string;
         alternate: string;
         recording_note: string;
-        topology_note?: string;
+        profile_note: string;
       };
     };
   } = {
@@ -580,61 +557,22 @@ function emitCoordinatorStartHandoff(args: {
     actual_realization: "deferred_to_subject_session",
     requested_target: args.requestedTarget,
     request_text: args.requestText,
+    review_execution_profile: args.reviewExecutionProfile,
     next_action: {
       cli: `onto coordinator start ${q(args.requestedTarget)} ${q(args.requestText)}`,
       orchestration_guidance: {
         preferred:
-          "TeamCreate로 coordinator subagent를 nested spawn, coordinator가 Agent tool로 9 lens + synthesize subagent 추가 nested spawn (canonical path = agent_teams_claude).",
+          "teamlead가 제한된 context를 보존하며 worker lens들을 조율한다.",
         alternate:
-          "TeamCreate 비가용 환경에서는 주체자 세션이 Agent tool로 lens subagent를 직접 spawn 가능 (canonical path = subagent_claude). coordinator state machine은 양쪽 모두 수용.",
+          "host가 nested worker orchestration을 제공하지 않으면 main-workers 경로로 재실행한다.",
         recording_note:
-          "주체자가 실제 선택한 realization은 coordinator-state-machine이 session artifact(binding.yaml 등)에 기록. 본 handoff payload의 preferred_realization은 plan-time 권장이지 actual truth가 아님.",
+          "실제 실행 profile은 session artifact와 review-run-manifest에 기록한다.",
+        profile_note:
+          `mode=${args.reviewExecutionProfile.mode}, teamlead=${args.reviewExecutionProfile.teamlead.seat}, lens=${args.reviewExecutionProfile.lens.seat}, worker_executor=${args.reviewExecutionProfile.worker_executor}`,
       },
     },
   };
-  if (args.topology) {
-    payload.topology = args.topology;
-    payload.next_action.orchestration_guidance.topology_note =
-      `Resolver 가 topology="${args.topology.id}" 를 선택했습니다. ` +
-      `세부 도출 경로 (axis-first / main_native degrade) 는 STDERR ` +
-      `\`[topology]\` trace 를 참고하세요. ` +
-      `teamlead_location="${args.topology.teamlead_location}", ` +
-      `lens_spawn_mechanism="${args.topology.lens_spawn_mechanism}", ` +
-      `deliberation_channel="${args.topology.deliberation_channel}". ` +
-      `preferred/alternate 힌트 대신 이 topology 를 canonical 로 따르세요.`;
-  }
   console.log(JSON.stringify(payload, null, 2));
-}
-
-/**
- * Attempt topology-first executor selection.
- * Returns an executor only when the resolved topology names a standalone
- * lens executor. Claude-host topologies are routed by coordinator handoff.
- */
-export function tryTopologyDerivedExecutor(
-  ontoConfig: OntoConfig | undefined,
-  ontoHome: string | undefined,
-  cached?: ExecutionTopology | null,
-): ReviewUnitExecutorConfig | null {
-  if (ontoConfig === undefined) return null;
-  if (!ontoHome) return null;
-  let topology: ExecutionTopology;
-  if (cached !== undefined) {
-    if (cached === null) return null;
-    topology = cached;
-  } else {
-    const resolution = resolveExecutionTopology({ ontoConfig });
-    if (resolution.type !== "resolved") return null;
-    topology = resolution.topology;
-  }
-  if (!hasStandaloneLensExecutor(topology)) return null;
-  if (!EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(topology.id)) return null;
-  const base = mapTopologyToExecutorConfig(topology, ontoHome);
-  process.stderr.write(
-    `[plan:executor] topology=${topology.id} bin=${base.bin} ` +
-      `args[0]=${base.args[0] ?? "(none)"}\n`,
-  );
-  return base;
 }
 
 function resolveExecutorConfig(
@@ -642,7 +580,7 @@ function resolveExecutorConfig(
   optionPrefix: "" | "synthesize-",
   ontoConfig?: OntoConfig,
   ontoHome?: string,
-  cachedTopology?: ExecutionTopology | null,
+  reviewExecutionProfile?: ReviewExecutionProfile,
 ): ReviewUnitExecutorConfig {
   const optionPrefixLabel = optionPrefix.length > 0 ? optionPrefix : "";
   const explicitBin = readSingleOptionValueFromArgv(
@@ -680,29 +618,35 @@ function resolveExecutorConfig(
   ) {
     throw new Error(
       `Unsupported --${optionPrefixLabel}executor-realization: ${explicitRealization}. ` +
-        `Supported values: codex, mock, ts_inline_http. Claude host runs (agent_teams_claude / subagent_claude) are routed via coordinator-start handoff when CLAUDECODE=1 is detected. See .onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization.`,
+        "Supported values: codex, mock, ts_inline_http.",
     );
   }
 
-  const topologyDerived = tryTopologyDerivedExecutor(
-    ontoConfig,
-    ontoHome,
-    cachedTopology,
-  );
-  if (topologyDerived) {
-    const withSubagent = appendSubagentLlmArgs(topologyDerived, ontoConfig);
-    return appendExecutorModelArgs(withSubagent, argv, ontoConfig);
+  const profile = reviewExecutionProfile;
+  if (profile?.worker_executor === "mock") {
+    return buildExecutorConfigFromRealization("mock", ontoHome);
+  }
+  if (profile?.worker_executor === "direct_call") {
+    return appendDirectCallLlmArgs(
+      buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
+      ontoConfig,
+    );
+  }
+  if (profile?.worker_executor === "codex") {
+    return appendExecutorModelArgs(
+      buildExecutorConfigFromRealization("codex", ontoHome),
+      argv,
+      ontoConfig,
+    );
   }
 
   // Auto-select ts_inline_http executor when the canonical llm switcher
   // selects an API-key or local provider.
-  // Precedence: this check comes AFTER explicit --executor-realization
-  // (CLI flag wins) and topology-first dispatch, so explicit choices always win.
   const selection = normalizeLlmModelSwitcher(ontoConfig?.llm);
   const hasExternalProvider =
     selection !== null && selection !== undefined && selection.provider !== "codex";
   if (hasExternalProvider) {
-    return appendSubagentLlmArgs(
+    return appendDirectCallLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
       ontoConfig,
     );
@@ -716,16 +660,7 @@ function resolveExecutorConfig(
 }
 
 async function readOntoConfig(projectRoot: string): Promise<OntoConfig> {
-  const configPath = path.join(projectRoot, ".onto", "config.yml");
-  if (!(await fileExists(configPath))) {
-    return {};
-  }
-  const raw = await readYamlDocument<Record<string, unknown>>(configPath);
-  if (raw === null || typeof raw !== "object") {
-    console.warn(`[onto] Warning: ${configPath} is not a valid YAML object. Using defaults.`);
-    return {};
-  }
-  return raw as OntoConfig;
+  return resolveSettingsChain("", projectRoot);
 }
 
 function parseHostFacingPositionals(positionals: string[]): HostFacingPositionals {
@@ -922,8 +857,6 @@ function collectConfiguredDomainTokens(ontoConfig: OntoConfig): string[] {
     }
   };
 
-  pushToken(ontoConfig.domain);
-  pushTokenList(ontoConfig.secondary_domains);
   pushTokenList(ontoConfig.domains);
   return collected;
 }
@@ -1574,16 +1507,12 @@ function resolveMaxConcurrentLenses(
     return parsed;
   }
 
-  const configValue = ontoConfig.max_concurrent_lenses;
-  if (
-    (typeof configValue === "string" && configValue.length > 0) ||
-    typeof configValue === "number"
-  ) {
-    const parsed = Number.parseInt(String(configValue), 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      throw new Error(`Invalid .onto/config.yml max_concurrent_lenses: ${configValue}`);
+  const configValue = ontoConfig.review?.execution?.max_concurrent_workers;
+  if (typeof configValue === "number") {
+    if (!Number.isFinite(configValue) || configValue < 1) {
+      throw new Error(`Invalid .onto/settings.json review.execution.max_concurrent_workers: ${configValue}`);
     }
-    return parsed;
+    return configValue;
   }
 
   return 9;
@@ -1687,7 +1616,7 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     readSingleOptionValueFromArgv(argv, "project-root") ?? ".",
   );
   const ontoConfig = ontoHome
-    ? await resolveConfigChain(ontoHome, projectRoot)
+    ? await resolveSettingsChain(ontoHome, projectRoot)
     : await readOntoConfig(projectRoot);
   const resolvedInvokeInputs = await resolveReviewInvokeInputs(
     argv,
@@ -1750,7 +1679,7 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
  * The execution_realization / host_runtime in the returned result mirror the
  * values that were written into the prepared session artifacts (via
  * setup.executionProfile). This closes the artifact seam gap where Claude-path
- * runs were previously recorded as `subagent + codex` regardless of host.
+ * runs were previously recorded with the wrong host-bound worker identity.
  */
 export async function reviewPrepareOnly(argv: string[]): Promise<PrepareOnlyResult> {
   const setup = await resolveReviewInvokeSetup(argv);
@@ -1773,11 +1702,6 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
 
   const setup = await resolveReviewInvokeSetup(argv);
 
-  // Auto-resolve execution realization before starting a session. When the
-  // resolution points at the Claude host, we don't start a session here — we
-  // emit a handoff JSON that tells the subject session to invoke
-  // `onto coordinator start`, which owns Claude-host preparation itself.
-  // See design record §3.2.
   const handoff = resolveExecutionRealizationHandoff({
     explicitCodex,
     prepareOnly,
@@ -1788,12 +1712,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   }
 
   if (handoff.type === "coordinator_start") {
-    const topologyDescriptor = tryResolveTopologyForHandoff(setup.ontoConfig);
     emitCoordinatorStartHandoff({
       preferredRealization: handoff.profile.execution_realization,
       requestedTarget: setup.resolvedInvokeInputs.requestedTarget,
       requestText: setup.resolvedInvokeInputs.requestText,
-      topology: topologyDescriptor,
+      reviewExecutionProfile: handoff.profile.review_execution_profile,
     });
     return 0;
   }
@@ -1858,26 +1781,15 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     }
   }
 
-  // Resolve topology once and thread it through dispatch.
-  const codexExecutionRequested = setup.executionProfile.host_runtime === "codex";
-  const cachedTopologyResolution = resolveExecutionTopology({
-    ontoConfig: setup.ontoConfig,
-    ...(codexExecutionRequested
-      ? {
-          claudeHost: false,
-          codexExecutionRequested: true,
-        }
-      : {}),
-  });
-  const cachedTopology: ExecutionTopology | null =
-    cachedTopologyResolution.type === "resolved"
-      ? cachedTopologyResolution.topology
-      : null;
   const hasExplicitExecutorOverride =
     readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
     readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
+  const effectiveReviewExecutionProfile = applyExecutorOverrideToProfile(
+    setup.executionProfile.review_execution_profile,
+    argv,
+  );
 
   const resolvedRequestText = setup.resolvedInvokeInputs.requestText;
   const defaultExecutorConfig = resolveExecutorConfig(
@@ -1885,18 +1797,19 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "",
     setup.ontoConfig,
     setup.ontoHome,
-    cachedTopology,
+    hasExplicitExecutorOverride
+      ? undefined
+      : setup.executionProfile.review_execution_profile,
   );
   const synthesizeExecutorConfig = resolveExecutorConfig(
     argv,
     "synthesize-",
     setup.ontoConfig,
     setup.ontoHome,
-    cachedTopology,
+    hasExplicitExecutorOverride
+      ? undefined
+      : setup.executionProfile.review_execution_profile,
   );
-
-  const topologyForDispatch: ExecutionTopology | undefined =
-    hasExplicitExecutorOverride ? undefined : cachedTopology ?? undefined;
 
   const promptExecutionResult = await executeReviewPromptExecution({
     projectRoot: resolvedProjectRoot,
@@ -1908,11 +1821,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       JSON.stringify(defaultExecutorConfig.args)
       ? {}
       : { synthesizeExecutorConfig }),
-    ...(topologyForDispatch ? { topology: topologyForDispatch } : {}),
+    reviewExecutionProfile: effectiveReviewExecutionProfile,
     ontoConfig: setup.ontoConfig,
   });
 
-  const completeSessionResult = await completeReviewSession([
+  await completeReviewSession([
     "--project-root",
     resolvedProjectRoot,
     "--session-root",
@@ -1926,12 +1839,24 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "review:run-prompt-execution",
     "review:complete-session",
   ] as const;
-  const routeProfile: ResolvedExecutionProfile = setup.executionProfile;
+  const routeProfile: ResolvedExecutionProfile = {
+    ...setup.executionProfile,
+    execution_realization: executionRealizationForProfile(effectiveReviewExecutionProfile),
+    host_runtime: effectiveReviewExecutionProfile.host,
+    review_execution_profile: effectiveReviewExecutionProfile,
+  };
   const routeSummary: ReviewInvokeRouteSummary = {
     combined_entrypoint: "review:invoke",
     bounded_invoke_steps: [...boundedInvokeSteps],
     execution_realization: routeProfile.execution_realization,
     host_runtime: routeProfile.host_runtime,
+    review_execution_profile: {
+      mode: routeProfile.review_execution_profile.mode,
+      teamlead_seat: routeProfile.review_execution_profile.teamlead.seat,
+      lens_seat: routeProfile.review_execution_profile.lens.seat,
+      worker_executor: routeProfile.review_execution_profile.worker_executor,
+      deliberation: routeProfile.review_execution_profile.deliberation,
+    },
     review_mode: setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: setup.maxConcurrentLenses,
     concurrency_strategy: "bounded_parallel",
@@ -1943,10 +1868,44 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     reviewSummary.binding?.review_record_path ?? path.join(sessionRoot, "review-record.yaml");
   const executionResultPath =
     reviewSummary.binding?.execution_result_path ?? path.join(sessionRoot, "execution-result.yaml");
+  const reviewRunManifestPath = path.join(sessionRoot, "review-run-manifest.yaml");
+  const participatingLensIds =
+    reviewSummary.reviewRecord?.participating_lens_ids ??
+    promptExecutionResult.participating_lens_ids;
+  const degradedLensIds =
+    reviewSummary.reviewRecord?.degraded_lens_ids ??
+    promptExecutionResult.degraded_lens_ids;
+  const recordStatus = reviewSummary.reviewRecord?.record_status ?? null;
+  const deliberationStatus =
+    reviewSummary.reviewRecord?.deliberation_status ?? null;
+  const executionSummary = {
+    status: recordStatus,
+    deliberation_status: deliberationStatus,
+    review_mode: setup.resolvedInvokeInputs.reviewMode,
+    lens: {
+      participating_count: participatingLensIds.length,
+      degraded_count: degradedLensIds.length,
+      participating_lens_ids: participatingLensIds,
+      degraded_lens_ids: degradedLensIds,
+    },
+    executor: {
+      max_concurrent_lenses: setup.maxConcurrentLenses,
+      realization: inferExecutorRealization(defaultExecutorConfig),
+      profile: routeSummary.review_execution_profile,
+    },
+  };
+  const artifactRefs = {
+    session_root: sessionRoot,
+    final_output: finalOutputPath,
+    review_record: reviewRecordPath,
+    execution_result: executionResultPath,
+    review_run_manifest: reviewRunManifestPath,
+  };
 
   console.log(
     JSON.stringify(
       {
+        summary: executionSummary,
         entrypoint_plan: {
           entrypoint: "review",
           target: setup.resolvedInvokeInputs.requestedTarget,
@@ -1963,27 +1922,25 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
           review_mode: setup.resolvedInvokeInputs.reviewMode,
         },
         route_summary: routeSummary,
+        artifacts: artifactRefs,
         review_result: {
           session_root: sessionRoot,
           final_output_path: finalOutputPath,
           review_record_path: reviewRecordPath,
           execution_result_path: executionResultPath,
-          record_status: reviewSummary.reviewRecord?.record_status ?? null,
-          deliberation_status:
-            reviewSummary.reviewRecord?.deliberation_status ?? null,
-          participating_lens_ids:
-            reviewSummary.reviewRecord?.participating_lens_ids ??
-            promptExecutionResult.participating_lens_ids,
-          degraded_lens_ids:
-            reviewSummary.reviewRecord?.degraded_lens_ids ??
-            promptExecutionResult.degraded_lens_ids,
+          review_run_manifest_path: reviewRunManifestPath,
+          record_status: recordStatus,
+          deliberation_status: deliberationStatus,
+          participating_lens_ids: participatingLensIds,
+          degraded_lens_ids: degradedLensIds,
+          summary: executionSummary,
         },
-        session_root: sessionRoot,
         bounded_invoke_steps: [...boundedInvokeSteps],
-        prompt_execution_result: promptExecutionResult,
-        complete_session_result: completeSessionResult,
-        max_concurrent_lenses: setup.maxConcurrentLenses,
-        executor_realization: inferExecutorRealization(defaultExecutorConfig),
+        completion: {
+          status: recordStatus,
+          final_output_path: finalOutputPath,
+          review_record_path: reviewRecordPath,
+        },
       },
       null,
       2,

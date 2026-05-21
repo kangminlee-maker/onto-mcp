@@ -342,8 +342,8 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 | Realization | Deliberation 경로 |
 |---|---|
 | Agent Teams teammate | SendMessage transport |
-| subagent (Claude Code Agent tool) | bounded deliberation packet |
-| `subagent + codex` | bounded deliberation packet |
+| worker (Claude Code Agent tool) | bounded deliberation packet |
+| `worker + codex` | bounded deliberation packet |
 | MCP provider adapter | bounded deliberation packet |
 | external model worker | bounded deliberation packet |
 

@@ -318,7 +318,7 @@ effective_boundary_state:
 - environment-enforced
 
 현재 productization 단계에서는
-`subagent + prompt-declared boundary`로 먼저 작동을 확인할 수 있다.
+`worker + prompt-declared boundary`로 먼저 작동을 확인할 수 있다.
 
 하지만 설계 자체는
 나중에 더 강한 enforcement로 승격될 수 있어야 한다.
@@ -496,12 +496,12 @@ interface는 특정 host command에 묶이면 안 된다.
 예:
 
 ```yaml
-execution_realization: subagent
+execution_realization: worker
 host_runtime: codex
 ```
 
 ```yaml
-execution_realization: agent-teams
+execution_realization: host-team
 host_runtime: claude
 ```
 

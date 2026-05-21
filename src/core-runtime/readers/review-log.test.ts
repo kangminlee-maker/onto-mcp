@@ -13,7 +13,7 @@ function makeExecResult(overrides: Record<string, unknown> = {}) {
   return {
     session_id: "20260413-aaa00001",
     session_root: "/mock/.onto/review/20260413-aaa00001",
-    execution_realization: "subagent",
+    execution_realization: "worker",
     host_runtime: "codex",
     review_mode: "full",
     execution_status: "completed",
@@ -381,7 +381,7 @@ function makeLogEntry(
     review_target_refs: target_refs,
     request_text: "test review",
     review_mode: "full",
-    execution_realization: "subagent",
+    execution_realization: "worker",
     host_runtime: "codex",
     execution_status: "completed",
     total_duration_ms,

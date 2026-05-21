@@ -166,7 +166,7 @@ runtime infrastructure는 커지는데 실제 실행은 작동하지 않는 상�
 
 가능한 realization 예:
 
-- `subagent`
+- `worker`
 - `Agent Teams teammate`
 - `MCP`로 분리된 `LLM`
 - `external model worker`

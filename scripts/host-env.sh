@@ -43,20 +43,20 @@
 #   onto_env_claude_host CMD…
 #       Claude Code session WITHOUT Agent Teams. Sets CLAUDECODE=1 and
 #       strips codex signals + CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS so
-#       the resolver derives a non-teams Claude topology
-#       (cc-main-agent-subagent / cc-main-codex-subprocess).
+#       the resolver derives a main-workers style Claude path when the
+#       host provides that worker surface.
 #
 #   onto_env_claude_teams_host CMD…
 #       Claude Code session WITH Agent Teams (CLAUDE_CODE_EXPERIMENTAL_
 #       AGENT_TEAMS=1 inherited from the parent env). Sets CLAUDECODE=1
 #       and strips codex signals only — agent-teams flag is preserved.
-#       For cc-teams-* topologies.
+#       For nested host-team style execution.
 #
 #   onto_env_plain_terminal CMD…
 #       Plain terminal (no Claude Code session, no codex CLI session).
 #       Strips ALL host signals (CLAUDE_* and CODEX_*). Used by
-#       codex-nested-subprocess where the outer process is "host-less"
-#       and codex runs as a child subprocess only.
+#       nested-workers Codex execution where the outer worker is not tied
+#       to a Claude or Codex host session.
 #
 # Each function:
 #   - takes the child command as positional args (no shell expansion of

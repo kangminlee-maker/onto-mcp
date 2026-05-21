@@ -1,23 +1,23 @@
 ---
 as_of: 2026-04-18
 status: active
-functional_area: codex-nested-topology-operator-setup
+functional_area: codex-nested-execution profile-operator-setup
 purpose: |
-  Topology `codex-nested-subprocess` (sketch v3 §3.1 codex-A) 를 주체자가
-  로컬 환경에서 실행할 때 필요한 codex CLI sandbox 설정을 설명. 이 topology
-  는 outer codex 가 `codex exec` subprocess 를 nested 로 spawn 하므로,
+  Execution profile `codex-nested-worker process` (sketch v3 §3.1 codex-A) 를 주체자가
+  로컬 환경에서 실행할 때 필요한 codex CLI sandbox 설정을 설명. 이 execution profile
+  는 outer codex 가 `codex exec` worker process 를 nested 로 spawn 하므로,
   default seatbelt sandbox 가 nested 호출을 차단하지 않도록 구성 필요.
 source_refs:
   executor: "src/core-runtime/cli/codex-nested-teamlead-executor.ts"
-  sketch_v3: "development-records/evolve/20260418-execution-topology-priority-sketch.md §3.1, §9"
+  sketch_v3: "development-records/evolve/20260418-execution-execution profile-priority-sketch.md §3.1, §9"
   pr_c: "PR implementing codex-A spawn orchestration (2026-04-18)"
 ---
 
-# Codex Nested Topology — Sandbox Setup
+# Codex Nested Execution profile — Sandbox Setup
 
 ## 1. 이 문서가 설명하는 것
 
-Onto review 가 topology `codex-nested-subprocess` 를 선택하면 실행 stack 은
+Onto review 가 execution profile `codex-nested-worker process` 를 선택하면 실행 stack 은
 다음과 같다:
 
 ```
@@ -67,7 +67,7 @@ onto 를 실행하는지** 에 따라 달라질 수 있다:
 - **Claude Code 세션 안에서 `onto review` 실행**: Claude Code 의 Bash tool
   이 자식 프로세스 sandbox 를 제어한다. Default 설정에서 `codex exec` 호출은
   문제없이 동작 (2026-04-18 §9 실측 검증).
-- **Codex CLI 세션 안에서 `onto review` 실행** (topology codex-A vs codex-B 선택
+- **Codex CLI 세션 안에서 `onto review` 실행** (execution profile codex-A vs codex-B 선택
   영향): Outer codex 가 부모 codex session 안에서 실행되면 nested 재귀 구조
   가 된다. sketch v3 §9 실측 기준 가능하지만 sandbox 환경 변수
   (`CODEX_SANDBOX` 등) 가 restrictive 로 주입된 경우 막힐 수 있다.
@@ -99,14 +99,14 @@ sandbox 제약으로 실패했을 가능성. `outer_stderr` 에 `sandbox` 또는
 
 - `model` / `reasoning_effort` 를 상향. (예: `high` → `xhigh` 로 승격)
 - Outer codex 의 stdout 전체를 artifact 로 수집해 실제 응답 확인. 필요시
-  prompt 를 개선하거나 topology 를 `cc-main-codex-subprocess` (flat) 로
+  prompt 를 개선하거나 execution profile 를 `cc-main-codex-worker process` (flat) 로
   폴백.
 
 ### 3.4 `child.kill(SIGKILL)` 이 발생하고 `timed_out: true`
 
 → Outer codex 가 timeout_ms 내에 완료하지 못함. 기본 10분.
 
-대응: `timeout_ms` 를 상향 (예: 30분) 또는 lens 개수를 줄이거나 topology
+대응: `timeout_ms` 를 상향 (예: 30분) 또는 lens 개수를 줄이거나 execution profile
 를 병렬성 높은 variant 로 변경.
 
 ## 4. 실행 환경 체크리스트
@@ -117,13 +117,13 @@ sandbox 제약으로 실패했을 가능성. `outer_stderr` 에 `sandbox` 또는
       가 exit 0 으로 응답
 - [ ] 동일 환경에서 `echo 'echo inner' | codex exec --sandbox danger-full-access
       --skip-git-repo-check --ephemeral -` 이 inner codex 를 spawn 하고 exit 0
-- [ ] `.onto/config.yml` 에 `execution_topology_priority:
-      [codex-nested-subprocess]` 지정 (또는 default priority 로 도달)
+- [ ] `.onto/settings.json` 에 `execution_execution profile_priority:
+      [codex-nested-worker process]` 지정 (또는 default priority 로 도달)
 
 ## 5. 참고
 
-- Sketch v3 §3.1 codex-A 토폴로지 설계: `development-records/evolve/20260418-execution-topology-priority-sketch.md`
+- Sketch v3 §3.1 codex-A 토폴로지 설계: `development-records/evolve/20260418-execution-execution profile-priority-sketch.md`
 - 2026-04-18 실측 기록 (sketch v3 §9): outer/inner session ID 독립, 둘 다 exit 0
-- PR-A foundation (resolver): `src/core-runtime/review/execution-topology-resolver.ts`
-- PR-B executor mapping: `src/core-runtime/cli/topology-executor-mapping.ts`
+- PR-A foundation (resolver): `src/core-runtime/review/execution-execution profile-resolver.ts`
+- PR-B executor mapping: `src/core-runtime/cli/execution profile-executor-mapping.ts`
 - PR-C executor (이 문서의 대상): `src/core-runtime/cli/codex-nested-teamlead-executor.ts`

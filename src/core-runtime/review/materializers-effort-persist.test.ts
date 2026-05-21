@@ -29,7 +29,7 @@ async function writeConfig(
 ): Promise<void> {
   const dir = path.join(projectRoot, ".onto");
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, "config.yml"), yaml, "utf8");
+  await fs.writeFile(path.join(dir, "settings.json"), yaml, "utf8");
 }
 
 function commonParams(projectRoot: string) {
@@ -40,7 +40,7 @@ function commonParams(projectRoot: string) {
     resolvedTargetRefs: [path.join(projectRoot, "src/foo.ts")],
     domainFinalValue: "software-engineering",
     domainSelectionMode: "auto",
-    executionRealization: "subagent" as const,
+    executionRealization: "worker" as const,
     hostRuntime: "codex" as const,
     reviewMode: "core-axis" as const,
     resolvedLensIds: ["structure"],
@@ -101,7 +101,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     expect(md.resolved_llm_plan?.model).toBe("claude-sonnet-4-6");
   });
 
-  it("omits resolved_llm_plan field when config.yml is missing", async () => {
+  it("omits resolved_llm_plan field when settings.json is missing", async () => {
     const { sessionMetadataPath } =
       await bootstrapInvocationBindingArtifacts(commonParams(tmp));
 
@@ -109,7 +109,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     expect(md.resolved_llm_plan).toBeUndefined();
   });
 
-  it("omits resolved_llm_plan field when config.yml has no LLM fields", async () => {
+  it("omits resolved_llm_plan field when settings.json has no LLM fields", async () => {
     // Fixture writes an orthogonal-only field so the config YAML is
     // non-empty but carries no LLM profile information.
     await writeConfig(tmp, "output_language: en\n");

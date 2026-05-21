@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# review-pr.sh — PR review via codex-main-subprocess + full 9-lens.
+# review-pr.sh — PR review via nested-workers Codex profile + full 9-lens.
 #
 # Deterministic wrapper. The purpose is to remove LLM-level command
-# assembly (diff generation, env unset list, config block, executor
+# assembly (diff generation, env unset list, settings block, executor
 # paths, flag choices) that is otherwise error-prone on every run
 # (e.g. `--no-watch` accidentally inherited from smoke-script copy).
 # The subject principal only picks a git ref range; everything else
@@ -24,20 +24,19 @@
 #
 # Fixed behaviour (not overridable here — edit the script if you
 # truly need a different setup rather than ad-hoc assembly):
-#   - Topology:         codex-nested-subprocess
-#                       (teamlead is an external codex spawn, NOT host main —
+#   - Profile:          nested-workers
+#                       (teamlead is an external Codex worker, not host main —
 #                        deterministic across machines. CODEX_THREAD_ID set,
 #                        CLAUDE* unset → non-handoff path so review-invoke
 #                        reaches the watcher call site too.)
 #   - Review mode:      full (9 lens)
-#   - Teamlead:         codex / gpt-5.4 / high  (axis-block pinned)
-#   - Subagent:         codex / gpt-5.4 / high  (axis-block pinned)
+#   - Teamlead:         OpenAI OAuth via Codex worker / gpt-5.4 / high
+#   - Lens worker:      OpenAI OAuth via Codex worker / gpt-5.4 / high
 #   - Model rationale:  pinning model_id + effort removes machine-local default
 #                       drift — same wrapper invocation = same model on any
-#                       reviewer's machine. Mirrors this repo's tracked
-#                       .onto/config.yml (PR #187, dogfooding consistency).
+#                       reviewer's machine.
 #   - Watcher:          ENABLED (iTerm2 / tmux / Apple Terminal auto-detected)
-#   - Project root:     isolated tmp (config.yml + target diff only)
+#   - Project root:     isolated tmp (settings.json + target diff only)
 #   - Onto home:        this repo (authority / roles / lens registry)
 #   - Session artifact: preserved on success so round1/*.md + synthesis.md
 #                       remain inspectable
@@ -109,28 +108,47 @@ DIFF_BYTES=$(wc -c < "${DIFF_FILE}" | tr -d " ")
 DIFF_LINES=$(wc -l < "${DIFF_FILE}" | tr -d " ")
 echo "target diff: ${DIFF_BYTES} bytes, ${DIFF_LINES} lines (${REF})" >&2
 
-# Pinned model/effort (PR #188 deterministic refinement). Both teamlead
-# and subagent are external codex spawns with fixed model_id + effort,
-# so the wrapper produces the same review on any reviewer's machine
-# regardless of host codex env defaults. Topology resolves to
-# codex-nested-subprocess. Single source of truth for these values is
-# this repo's tracked `.onto/config.yml` (kept in sync intentionally).
-PIN_PROVIDER="codex"
+# Pinned model/effort. Both teamlead and lens worker use the same Codex-backed
+# OpenAI OAuth selection so the wrapper produces the same review on any
+# reviewer's machine regardless of local Codex defaults.
+PIN_PROVIDER="openai"
 PIN_MODEL_ID="gpt-5.4"
 PIN_EFFORT="high"
 
-cat > "${REVIEW_DIR}/.onto/config.yml" <<EOF
-review:
-  teamlead:
-    model:
-      provider: ${PIN_PROVIDER}
-      model_id: ${PIN_MODEL_ID}
-      effort: ${PIN_EFFORT}
-  subagent:
-    provider: ${PIN_PROVIDER}
-    model_id: ${PIN_MODEL_ID}
-    effort: ${PIN_EFFORT}
-review_mode: full
+cat > "${REVIEW_DIR}/.onto/settings.json" <<EOF
+{
+  "review_mode": "full",
+  "review": {
+    "execution": {
+      "mode": "nested-workers",
+      "teamlead": {
+        "seat": "worker",
+        "llm": {
+          "auth": "oauth",
+          "provider": "${PIN_PROVIDER}",
+          "model": "${PIN_MODEL_ID}",
+          "effort": "${PIN_EFFORT}"
+        }
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": {
+          "auth": "oauth",
+          "provider": "${PIN_PROVIDER}",
+          "model": "${PIN_MODEL_ID}",
+          "effort": "${PIN_EFFORT}"
+        }
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "${PIN_PROVIDER}",
+    "model": "${PIN_MODEL_ID}",
+    "effort": "${PIN_EFFORT}"
+  }
+}
 EOF
 
 # Commit sha / intent for traceability in review-record. Record the

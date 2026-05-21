@@ -86,13 +86,13 @@ describe("scanLocal", () => {
     it("ontology YAML 이 전혀 없어도 files 배열에 직접 파일들을 나열한다", () => {
       writeFileSync(join(TMP, "README.md"), "# project\n");
       writeFileSync(join(TMP, "service.ts"), "export const x = 1;\n");
-      writeFileSync(join(TMP, "config.yaml"), "key: value\n");
+      writeFileSync(join(TMP, "settings.json"), "key: value\n");
 
       const result = scanLocal({ type: "add-dir", path: TMP });
 
       // lens 가 grounding 에 쓸 수 있는 최소 signal: 파일 경로 + content_hash
       const paths = result.files.map((f) => f.path).sort();
-      expect(paths).toEqual(["README.md", "config.yaml", "service.ts"]);
+      expect(paths).toEqual(["README.md", "settings.json", "service.ts"]);
       expect(Object.keys(result.content_hashes).length).toBe(1);
     });
 

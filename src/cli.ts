@@ -732,7 +732,7 @@ async function main(): Promise<number> {
 
     case "install":
       console.error(
-        "[onto] `onto install` is retired while the active llm switcher is being simplified. Edit .onto/config.yml directly or use `onto config`.",
+        "[onto] `onto install` is retired while the active llm switcher is being simplified. Edit .onto/settings.json directly or use `onto config`.",
       );
       return 1;
 

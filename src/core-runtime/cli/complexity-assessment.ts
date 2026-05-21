@@ -24,10 +24,10 @@
  *
  * # LLM provider
  *
- * Uses the canonical `llm` switcher from `.onto/config.yml`.
+ * Uses the canonical `llm` switcher from `.onto/settings.json`.
  */
 
-import type { OntoConfig } from "../discovery/config-chain.js";
+import type { OntoConfig } from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   callLlm,

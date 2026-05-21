@@ -8,8 +8,8 @@ Check the project-local environment:
 
 | Check | Source | Result |
 |---|---|---|
-| Project config | `{project}/.onto/config.yml` | exists / missing |
-| Domains | `.onto/config.yml` `domains:` | list / none |
+| Project config | `{project}/.onto/settings.json` | exists / missing |
+| Domains | `.onto/settings.json` `domains:` | list / none |
 | Project learnings | `{project}/.onto/learnings/` | exists / missing |
 | Codex CLI | `codex --version` | available / missing |
 | API keys | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `GROK_API_KEY` | available / missing |
@@ -19,29 +19,34 @@ Report the diagnosis before making changes.
 
 ## 2. Project Config
 
-Create or update `.onto/config.yml` with the active key surface:
+Create or update `.onto/settings.json` with the active key surface:
 
-```yaml
-output_language: ko
-
-domains:
-  - ontology
-
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
-
-lens_agent_teams_mode: false
-review_mode: core-axis
-
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "output_language": "ko",
+  "domains": ["ontology"],
+  "review_mode": "core-axis",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 Validation source: `.onto/processes/configuration.md`.
@@ -55,14 +60,13 @@ If no domain is selected, review runs with methodology-only lens standards.
 
 ## 4. Review Execution
 
-Use `review:` for orchestration:
+Use `review.execution` for review coordination:
 
-- `teamlead.model: main` keeps coordination in the host session.
-- `subagent.provider: main-native` uses the host-native isolated execution unit.
-- `subagent.provider: codex` uses Codex subprocess execution.
-- `lens_deliberation: controlled-lens-deliberation` is required for review.
-- `lens_agent_teams_mode: true` selects Agent Teams transport when the host
-  exposes it; the semantic remains controlled lens deliberation.
+- `mode: main-workers` keeps coordination in main and sends lens judgments to workers.
+- `mode: nested-workers` sends teamlead coordination and lens judgments to workers.
+- `teamlead.seat` must match the chosen mode.
+- `lens.seat` is `worker`.
+- `deliberation: controlled-lens-deliberation` is required for review.
 
 Unsupported values stop configuration validation.
 
@@ -72,7 +76,7 @@ Use `llm:` for model access:
 
 | auth | provider | Runtime path |
 |---|---|---|
-| `oauth` | `openai` | Codex CLI subprocess |
+| `oauth` | `openai` | host-bound Codex worker |
 | `api_key` | `openai` | OpenAI API |
 | `api_key` | `anthropic` | Anthropic API |
 | `api_key` | `grok` | xAI/Grok OpenAI-compatible API |
@@ -86,7 +90,7 @@ Return:
 
 | Item | Result |
 |---|---|
-| `.onto/config.yml` | created / updated / unchanged |
+| `.onto/settings.json` | created / updated / unchanged |
 | Domains | selected list / none |
 | Review mode | `core-axis` / `full` |
 | Deliberation | `controlled-lens-deliberation` |

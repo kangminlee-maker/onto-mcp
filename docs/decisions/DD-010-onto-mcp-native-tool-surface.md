@@ -39,7 +39,7 @@ onto.prepare_review(target, intent, ...)
 TS onto core
   - lens/domain selection
   - prompt packet materialization
-  - topology and execution plan
+  - execution profile and execution plan
   - synthesis and ReviewRecord assembly
         |
         v
@@ -102,7 +102,7 @@ lens-deliberation result, then synthesize consumption of `deliberation.md`.
 ## Next Work
 
 1. Inventory TS `onto` review APIs that can become library calls instead of CLI
-   subprocess calls.
+   worker calls.
 2. Define MCP tool schemas and result shapes.
 3. Map current `.onto` YAML/MD and TS runtime artifacts to those tool schemas.
 4. Define provider conformance tests using mock/local provider first.

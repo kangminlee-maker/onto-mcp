@@ -5,7 +5,7 @@
  *
  * Scope:
  *   Direct tests for resolveReviewSessionExtractMode — the helper that
- *   picks an extract mode from (env var > config.yml > default). The
+ *   picks an extract mode from (env var > settings.json > default). The
  *   helper is exercised in isolation so the rest of startReviewSession
  *   (prepare + materialize + metadata I/O) does not need fixture setup.
  *
@@ -16,7 +16,7 @@
  *   the config file under test. The `--onto-home` argv flag forces the
  *   resolver to use the fake ontoHome instead of walking up from the
  *   test's script directory (which would find the real repo and pick up
- *   the repo's live config.yml).
+ *   the repo's live settings.json).
  *
  * Dual-layout coverage (Phase 3+):
  *   The main test block runs under `describe.each(["legacy", "phase3"])`.
@@ -84,7 +84,7 @@ export interface MakeFakeOntoHomeOptions {
   layout?: RolesLayout;
   /** Which authority-directory layout to create. Default: "phase6". */
   authorityLayout?: AuthorityLayout;
-  /** When set, writes `.onto/config.yml` with `learning_extract_mode: <value>`. */
+  /** When set, writes `.onto/settings.json` with `learning_extract_mode: <value>`. */
   homeConfigExtractMode?: string;
 }
 
@@ -110,7 +110,7 @@ function makeFakeOntoHome(
   if (homeConfigExtractMode !== undefined) {
     fs.mkdirSync(path.join(dir, ".onto"), { recursive: true });
     fs.writeFileSync(
-      path.join(dir, ".onto", "config.yml"),
+      path.join(dir, ".onto", "settings.json"),
       `learning_extract_mode: ${homeConfigExtractMode}\n`,
       "utf8",
     );
@@ -120,10 +120,10 @@ function makeFakeOntoHome(
 
 /**
  * Build a projectRoot tmpdir. When `configExtractMode` is provided,
- * writes .onto/config.yml with that value. When `configExtractMode`
+ * writes .onto/settings.json with that value. When `configExtractMode`
  * is the sentinel `"<MISSING_FIELD>"`, writes a config with other
  * fields but NO `learning_extract_mode` key. When `configExtractMode`
- * is undefined, writes NO config.yml at all.
+ * is undefined, writes NO settings.json at all.
  */
 function makeProjectRoot(
   prefix: string,
@@ -133,14 +133,14 @@ function makeProjectRoot(
   if (configExtractMode === "<MISSING_FIELD>") {
     fs.mkdirSync(path.join(dir, ".onto"), { recursive: true });
     fs.writeFileSync(
-      path.join(dir, ".onto", "config.yml"),
+      path.join(dir, ".onto", "settings.json"),
       "output_language: en\n", // some other field, no learning_extract_mode
       "utf8",
     );
   } else if (configExtractMode !== undefined) {
     fs.mkdirSync(path.join(dir, ".onto"), { recursive: true });
     fs.writeFileSync(
-      path.join(dir, ".onto", "config.yml"),
+      path.join(dir, ".onto", "settings.json"),
       `learning_extract_mode: ${configExtractMode}\n`,
       "utf8",
     );
@@ -224,11 +224,11 @@ describe.each<RolesLayout>(["phase3"])(
       });
     });
 
-    // E-SRS-5 — env var unset + project has NO .onto/config.yml file at all
+    // E-SRS-5 — env var unset + project has NO .onto/settings.json file at all
     //           → readConfigAt returns {}, resolver falls through to default.
     it("E-SRS-5 no project config file defaults to disabled", async () => {
       const ontoHome = makeFakeOntoHome("e-srs-5-home", { layout });
-      const projectRoot = makeProjectRoot("e-srs-5-proj"); // no config.yml
+      const projectRoot = makeProjectRoot("e-srs-5-proj"); // no settings.json
       const argv = ["--onto-home", ontoHome];
       await withEnvExtractMode(undefined, async () => {
         const mode = await resolveReviewSessionExtractMode(argv, projectRoot);
@@ -317,7 +317,7 @@ describe.each<RolesLayout>(["phase3"])(
       });
     });
 
-    // E-SRS-11 — env unset + project has MALFORMED .onto/config.yml (invalid
+    // E-SRS-11 — env unset + project has MALFORMED .onto/settings.json (invalid
     //            YAML that fails to parse) → resolver swallows the read/parse
     //            failure and falls through to default "disabled". Pins the
     //            narrowed try/catch contract: only config read/parse is
@@ -330,7 +330,7 @@ describe.each<RolesLayout>(["phase3"])(
       // Write syntactically invalid YAML. `yaml` parser will throw on the
       // unclosed flow mapping / mismatched indentation below.
       fs.writeFileSync(
-        path.join(projectRoot, ".onto", "config.yml"),
+        path.join(projectRoot, ".onto", "settings.json"),
         "learning_extract_mode: [unterminated\n  : : : not valid yaml\n",
         "utf8",
       );

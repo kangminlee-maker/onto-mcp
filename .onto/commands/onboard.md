@@ -12,8 +12,9 @@ Then execute the onboarding process.
 
 The result must use the active config surface:
 
-- `review.subagent.provider: main-native | codex`
-- `review.lens_deliberation: controlled-lens-deliberation`
-- `lens_agent_teams_mode: true | false`
+- `review.execution.mode: main-workers | nested-workers`
+- `review.execution.teamlead.seat: main | worker`
+- `review.execution.lens.seat: worker`
+- `review.execution.deliberation: controlled-lens-deliberation`
 - `llm.auth: oauth | api_key | local`
 - `llm.provider: openai | anthropic | grok | lmstudio`

@@ -50,8 +50,8 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 6. `prompt-packets/teamlead.deliberation.prompt.md`
 7. `prompt-packets/synthesize.prompt.md`
 8. executor realization
-   - `subagent`
-   - `agent-teams`
+   - `worker`
+   - `host-team`
    - `MCP` 분리 `LLM`
    - `external model worker`
 9. host runtime
@@ -130,13 +130,13 @@ npm run review:run-prompt-execution -- \
   --executor-arg=--
 ```
 
-Claude host 경로(`agent_teams_claude` nested orchestration 또는 `subagent_claude` flat orchestration)는 `onto coordinator start`를 통한 coordinator state machine으로 실행되며, `review:run-prompt-execution`을 거치지 않는다. 두 Claude host canonical path는 동일한 state machine을 공유하며 caller의 orchestration 패턴(TeamCreate nested vs Agent-tool flat)만 다르다 — 상세는 `.onto/processes/review/nested-spawn-coordinator-contract.md` §2.1.
+Claude host 경로(`host_team_claude` nested orchestration 또는 `worker_claude` flat orchestration)는 `onto coordinator start`를 통한 coordinator state machine으로 실행되며, `review:run-prompt-execution`을 거치지 않는다. 두 Claude host canonical path는 동일한 state machine을 공유하며 caller의 orchestration 패턴(TeamCreate nested vs Agent-tool flat)만 다르다 — 상세는 `.onto/processes/review/nested-spawn-coordinator-contract.md` §2.1.
 
 현재 구현에서 CLI runner를 통해 실행되는 execution profile:
 
-- `subagent + codex` (Codex CLI 경로)
+- `worker + codex` (Codex CLI 경로)
 
-`agent-teams + claude`는 coordinator state machine이 직접 Agent tool로 dispatch하며, CLI runner를 호출하지 않는다.
+`host-team + claude`는 coordinator state machine이 직접 Agent tool로 dispatch하며, CLI runner를 호출하지 않는다.
 
 현재 기본 병렬성:
 

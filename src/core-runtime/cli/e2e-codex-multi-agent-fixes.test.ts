@@ -4,7 +4,7 @@
  * Run: `npx vitest run src/core-runtime/cli/e2e-codex-multi-agent-fixes.test.ts`
  *
  * Covers:
- *   B. OntoConfig llm model switcher (config-chain.ts)
+ *   B. OntoSettings llm model switcher (settings-chain.ts)
  *   C. appendExecutorModelArgs llm precedence (review-invoke.ts)
  *   D. Synthesize retry (run-review-prompt-execution.ts)
  *   E. Coordinator agent prompt — Write tool removed (coordinator-state-machine.ts)
@@ -16,8 +16,8 @@
  *   execution-plan.yaml and mock prompt packets.
  *
  * Fixture strategy:
- *   Config fixtures declare the current `review:` axis block shape so
- *   profile ownership is explicit and parser behavior stays deterministic.
+ *   Settings fixtures declare the current `review.execution` shape so profile
+ *   ownership is explicit and parser behavior stays deterministic.
  */
 
 import { describe, it, afterAll } from "vitest";
@@ -26,7 +26,11 @@ import fsAsync from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { resolveConfigChain } from "../discovery/config-chain.js";
+import {
+  projectSettingsPath,
+  resolveSettingsChain,
+  userSettingsPath,
+} from "../discovery/settings-chain.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -133,6 +137,22 @@ function writeYaml(filePath: string, data: Record<string, unknown>): void {
   fs.writeFileSync(filePath, lines.join("").replace(/: \n/g, ":\n").replace(/: (\S)/g, ": $1") + "\n", "utf8");
 }
 
+function writeJson(filePath: string, data: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+}
+
+async function withHomeDir<T>(homeDir: string, fn: () => Promise<T>): Promise<T> {
+  const originalHome = process.env.HOME;
+  process.env.HOME = homeDir;
+  try {
+    return await fn();
+  } finally {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+  }
+}
+
 /** Cleanup directory, ignoring errors. */
 function rmDir(dir: string): void {
   try {
@@ -147,20 +167,25 @@ function trackCleanup(dir: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// B. OntoConfig llm model switcher (config-chain.ts)
+// B. OntoSettings llm model switcher (settings-chain.ts)
 // ---------------------------------------------------------------------------
 
-describe("B. config-chain llm model switcher", () => {
-  it("B-1: llm switcher parsed from project config", async () => {
+describe("B. settings-chain llm model switcher", () => {
+  it("B-1: llm switcher parsed from project settings", async () => {
     const homeDir = trackCleanup(makeTmpDir("b1h"));
     const projDir = trackCleanup(makeTmpDir("b1p"));
-    fs.mkdirSync(path.join(projDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(projDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\nllm:\n  auth: oauth\n  provider: openai\n  model: gpt-5.4\n  effort: xhigh\n",
-      "utf8",
-    );
-    const config = await resolveConfigChain(homeDir, projDir);
+    writeJson(projectSettingsPath(projDir), {
+      review: {
+        execution: {
+          mode: "main-workers",
+          teamlead: { seat: "main", llm: "inherit" },
+          lens: { seat: "worker", llm: "inherit" },
+          deliberation: "controlled-lens-deliberation",
+        },
+      },
+      llm: { auth: "oauth", provider: "openai", model: "gpt-5.4", effort: "xhigh" },
+    });
+    const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
     assertEqual(config.llm?.auth, "oauth", "llm.auth parsed");
     assertEqual(config.llm?.provider, "openai", "llm.provider parsed");
     assertEqual(config.llm?.model, "gpt-5.4", "llm.model parsed");
@@ -170,19 +195,31 @@ describe("B. config-chain llm model switcher", () => {
   it("B-2: project llm switcher overrides home", async () => {
     const homeDir = trackCleanup(makeTmpDir("b2h"));
     const projDir = trackCleanup(makeTmpDir("b2p"));
-    fs.mkdirSync(path.join(homeDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(homeDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\nllm:\n  auth: oauth\n  provider: openai\n  model: gpt-5.3\n  effort: high\n",
-      "utf8",
-    );
-    fs.mkdirSync(path.join(projDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(projDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\nllm:\n  auth: oauth\n  provider: openai\n  model: gpt-5.4\n  effort: xhigh\n",
-      "utf8",
-    );
-    const config = await resolveConfigChain(homeDir, projDir);
+    await withHomeDir(homeDir, async () => {
+      writeJson(userSettingsPath(), {
+        review: {
+          execution: {
+            mode: "main-workers",
+            teamlead: { seat: "main", llm: "inherit" },
+            lens: { seat: "worker", llm: "inherit" },
+            deliberation: "controlled-lens-deliberation",
+          },
+        },
+        llm: { auth: "oauth", provider: "openai", model: "gpt-5.3", effort: "high" },
+      });
+      writeJson(projectSettingsPath(projDir), {
+        review: {
+          execution: {
+            mode: "main-workers",
+            teamlead: { seat: "main", llm: "inherit" },
+            lens: { seat: "worker", llm: "inherit" },
+            deliberation: "controlled-lens-deliberation",
+          },
+        },
+        llm: { auth: "oauth", provider: "openai", model: "gpt-5.4", effort: "xhigh" },
+      });
+    });
+    const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
     assertEqual(config.llm?.model, "gpt-5.4", "project llm.model wins");
     assertEqual(config.llm?.effort, "xhigh", "project llm.effort wins");
   });
@@ -190,14 +227,24 @@ describe("B. config-chain llm model switcher", () => {
   it("B-3: review block coexists with llm switcher", async () => {
     const homeDir = trackCleanup(makeTmpDir("b3h"));
     const projDir = trackCleanup(makeTmpDir("b3p"));
-    fs.mkdirSync(path.join(projDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(projDir, ".onto", "config.yml"),
-      "review:\n  teamlead:\n    model: main\n  subagent:\n    provider: main-native\n  lens_deliberation: controlled-lens-deliberation\nllm:\n  auth: api_key\n  provider: anthropic\n  model: claude-sonnet-4-6\n  effort: medium\n",
-      "utf8",
-    );
-    const config = await resolveConfigChain(homeDir, projDir);
-    assertEqual(config.review?.subagent?.provider, "main-native", "review parsed");
+    writeJson(projectSettingsPath(projDir), {
+      review: {
+        execution: {
+          mode: "main-workers",
+          teamlead: { seat: "main", llm: "inherit" },
+          lens: { seat: "worker", llm: "inherit" },
+          deliberation: "controlled-lens-deliberation",
+        },
+      },
+      llm: {
+        auth: "api_key",
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        effort: "medium",
+      },
+    });
+    const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
+    assertEqual(config.review?.execution.mode, "main-workers", "review execution parsed");
     assertEqual(config.llm?.provider, "anthropic", "llm.provider parsed");
     assertEqual(config.llm?.model, "claude-sonnet-4-6", "llm.model parsed");
   });
@@ -205,26 +252,35 @@ describe("B. config-chain llm model switcher", () => {
   it("B-4: missing llm switcher -> undefined", async () => {
     const homeDir = trackCleanup(makeTmpDir("b4h"));
     const projDir = trackCleanup(makeTmpDir("b4p"));
-    fs.mkdirSync(path.join(projDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(projDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\n",
-      "utf8",
-    );
-    const config = await resolveConfigChain(homeDir, projDir);
+    writeJson(projectSettingsPath(projDir), {
+      review: {
+        execution: {
+          mode: "main-workers",
+          teamlead: { seat: "main", llm: "inherit" },
+          lens: { seat: "worker", llm: "inherit" },
+          deliberation: "controlled-lens-deliberation",
+        },
+      },
+    });
+    const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
     assertEqual(config.llm, undefined, "llm absent -> undefined");
   });
 
   it("B-5: empty llm switcher -> empty object", async () => {
     const homeDir = trackCleanup(makeTmpDir("b5h"));
     const projDir = trackCleanup(makeTmpDir("b5p"));
-    fs.mkdirSync(path.join(projDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(projDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\nllm: {}\n",
-      "utf8",
-    );
-    const config = await resolveConfigChain(homeDir, projDir);
+    writeJson(projectSettingsPath(projDir), {
+      review: {
+        execution: {
+          mode: "main-workers",
+          teamlead: { seat: "main", llm: "inherit" },
+          lens: { seat: "worker", llm: "inherit" },
+          deliberation: "controlled-lens-deliberation",
+        },
+      },
+      llm: {},
+    });
+    const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
     assert(config.llm !== undefined, "llm namespace exists");
     assertEqual(config.llm?.model, undefined, "llm.model undefined");
     assertEqual(config.llm?.effort, undefined, "llm.effort undefined");
@@ -233,14 +289,20 @@ describe("B. config-chain llm model switcher", () => {
   it("B-6: home llm switcher used when project has no config", async () => {
     const homeDir = trackCleanup(makeTmpDir("b6h"));
     const projDir = trackCleanup(makeTmpDir("b6p"));
-    fs.mkdirSync(path.join(homeDir, ".onto"), { recursive: true });
-    fs.writeFileSync(
-      path.join(homeDir, ".onto", "config.yml"),
-      "review:\n  subagent:\n    provider: main-native\nllm:\n  auth: oauth\n  provider: openai\n  model: gpt-5.3\n  effort: high\n",
-      "utf8",
-    );
-    // No .onto/config.yml in project
-    const config = await resolveConfigChain(homeDir, projDir);
+    const config = await withHomeDir(homeDir, async () => {
+      writeJson(userSettingsPath(), {
+        review: {
+          execution: {
+            mode: "main-workers",
+            teamlead: { seat: "main", llm: "inherit" },
+            lens: { seat: "worker", llm: "inherit" },
+            deliberation: "controlled-lens-deliberation",
+          },
+        },
+        llm: { auth: "oauth", provider: "openai", model: "gpt-5.3", effort: "high" },
+      });
+      return resolveSettingsChain(homeDir, projDir);
+    });
     assertEqual(config.llm?.model, "gpt-5.3", "home llm.model used");
     assertEqual(config.llm?.effort, "high", "home llm.effort used");
   });
@@ -394,6 +456,12 @@ describe("D. Synthesize retry", () => {
     const round1Root = path.join(sessionRoot, "round1");
     const deliberationRoot = path.join(sessionRoot, "deliberation");
     const deliberationRound1Root = path.join(deliberationRoot, "round1");
+    const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
+    const findingRelationGraphPath = path.join(sessionRoot, "finding-relation-graph.yaml");
+    const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
+    const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
+    const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
+    const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
     fs.mkdirSync(packetRoot, { recursive: true });
     fs.mkdirSync(round1Root, { recursive: true });
     fs.mkdirSync(deliberationRound1Root, { recursive: true });
@@ -415,9 +483,9 @@ describe("D. Synthesize retry", () => {
     await writeYamlDocument(
       path.join(sessionRoot, "execution-plan.yaml"),
       {
-        session_id: `e2e-${prefix}`,
+        session_id: path.basename(sessionRoot),
         session_root: sessionRoot,
-        execution_realization: "subagent",
+        execution_realization: "worker",
         host_runtime: "codex",
         review_mode: "core-axis",
         interpretation_artifact_path: path.join(sessionRoot, "interpretation.yaml"),
@@ -425,7 +493,16 @@ describe("D. Synthesize retry", () => {
         session_metadata_path: path.join(sessionRoot, "session-metadata.yaml"),
         execution_preparation_root: path.join(sessionRoot, "execution-preparation"),
         round1_root: round1Root,
-        lens_execution_seats: [],
+        lens_execution_seats: [
+          {
+            lens_id: "logic",
+            output_path: path.join(round1Root, "logic.md"),
+          },
+          {
+            lens_id: "pragmatics",
+            output_path: path.join(round1Root, "pragmatics.md"),
+          },
+        ],
         prompt_packets_root: packetRoot,
         lens_prompt_packet_seats: [
           {
@@ -437,6 +514,38 @@ describe("D. Synthesize retry", () => {
             lens_id: "pragmatics",
             packet_path: path.join(packetRoot, "pragmatics.prompt.md"),
             output_path: path.join(round1Root, "pragmatics.md"),
+          },
+        ],
+        issue_artifact_prompt_packet_seats: [
+          {
+            artifact_id: "finding-ledger",
+            packet_path: path.join(packetRoot, "finding-ledger.prompt.md"),
+            output_path: findingLedgerPath,
+          },
+          {
+            artifact_id: "finding-relation-graph",
+            packet_path: path.join(packetRoot, "finding-relation-graph.prompt.md"),
+            output_path: findingRelationGraphPath,
+          },
+          {
+            artifact_id: "issue-ledger",
+            packet_path: path.join(packetRoot, "issue-ledger.prompt.md"),
+            output_path: issueLedgerPath,
+          },
+          {
+            artifact_id: "issue-stance-matrix",
+            packet_path: path.join(packetRoot, "issue-stance-matrix.prompt.md"),
+            output_path: issueStanceMatrixPath,
+          },
+          {
+            artifact_id: "deliberation-plan",
+            packet_path: path.join(packetRoot, "deliberation-plan.prompt.md"),
+            output_path: deliberationPlanPath,
+          },
+          {
+            artifact_id: "problem-framing",
+            packet_path: path.join(packetRoot, "problem-framing.prompt.md"),
+            output_path: problemFramingPath,
           },
         ],
         lens_deliberation_prompt_packet_seats: [
@@ -457,6 +566,12 @@ describe("D. Synthesize retry", () => {
         ),
         synthesize_prompt_packet_path: path.join(packetRoot, "synthesize.prompt.md"),
         synthesis_output_path: synthesizeOutputPath,
+        finding_ledger_path: findingLedgerPath,
+        finding_relation_graph_path: findingRelationGraphPath,
+        issue_ledger_path: issueLedgerPath,
+        issue_stance_matrix_path: issueStanceMatrixPath,
+        deliberation_plan_path: deliberationPlanPath,
+        problem_framing_path: problemFramingPath,
         deliberation_mode: "controlled-lens-deliberation",
         deliberation_root_path: deliberationRoot,
         deliberation_output_path: path.join(sessionRoot, "deliberation.md"),
@@ -489,9 +604,34 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const unitId = args[args.indexOf("--unit-id") + 1];
 const unitKind = args[args.indexOf("--unit-kind") + 1];
+const sessionRoot = args[args.indexOf("--session-root") + 1];
+const sessionId = path.basename(sessionRoot);
 const outputPath = args[args.indexOf("--output-path") + 1];
+function issueArtifactOutput(artifactId) {
+  if (artifactId === "finding-ledger") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    severity: low\\nvalidation:\\n  unaddressable_findings: []\\n";
+  }
+  if (artifactId === "finding-relation-graph") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nrelations: []\\nsingleton_findings:\\n  - finding_id: finding-001\\n    reason: mock singleton\\n";
+  }
+  if (artifactId === "issue-ledger") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    severity: low\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
+  }
+  if (artifactId === "issue-stance-matrix") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    stances:\\n      - lens_id: logic\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/logic.md]\\n      - lens_id: pragmatics\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/pragmatics.md]\\nvalidation:\\n  missing_stances: []\\n";
+  }
+  if (artifactId === "deliberation-plan") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nplanned_issues: []\\nskipped_issues:\\n  - issue_id: issue-001\\n    reason: no material conflict\\n";
+  }
+  if (artifactId === "problem-framing") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
+  }
+  throw new Error("unsupported issue artifact: " + artifactId);
+}
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-const output = unitKind === "synthesize"
+const output = unitKind === "issue_artifact"
+  ? issueArtifactOutput(unitId)
+  : unitKind === "synthesize"
   ? "---\\ndeliberation_status: performed\\n---\\n# Synthesize\\nResult.\\n"
   : unitKind === "deliberation" && unitId === "controlled-deliberation"
     ? "---\\ndeliberation_status: performed\\n---\\n# Controlled Deliberation\\nResult.\\n"
@@ -516,9 +656,32 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const unitKind = args[args.indexOf("--unit-kind") + 1];
 const unitId = args[args.indexOf("--unit-id") + 1];
+const sessionRoot = args[args.indexOf("--session-root") + 1];
+const sessionId = path.basename(sessionRoot);
 const outputPath = args[args.indexOf("--output-path") + 1];
 const counterPath = ${JSON.stringify(counterPath)};
 const mode = ${JSON.stringify(mode)};
+function issueArtifactOutput(artifactId) {
+  if (artifactId === "finding-ledger") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    severity: low\\nvalidation:\\n  unaddressable_findings: []\\n";
+  }
+  if (artifactId === "finding-relation-graph") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nrelations: []\\nsingleton_findings:\\n  - finding_id: finding-001\\n    reason: mock singleton\\n";
+  }
+  if (artifactId === "issue-ledger") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    severity: low\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
+  }
+  if (artifactId === "issue-stance-matrix") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    stances:\\n      - lens_id: logic\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/logic.md]\\n      - lens_id: pragmatics\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/pragmatics.md]\\nvalidation:\\n  missing_stances: []\\n";
+  }
+  if (artifactId === "deliberation-plan") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nplanned_issues: []\\nskipped_issues:\\n  - issue_id: issue-001\\n    reason: no material conflict\\n";
+  }
+  if (artifactId === "problem-framing") {
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
+  }
+  throw new Error("unsupported issue artifact: " + artifactId);
+}
 if (unitKind === "synthesize") {
   let count = 0;
   try { count = parseInt(fs.readFileSync(counterPath, "utf8").trim(), 10); } catch {}
@@ -530,7 +693,9 @@ if (unitKind === "synthesize") {
   }
 }
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-const output = unitKind === "synthesize"
+const output = unitKind === "issue_artifact"
+  ? issueArtifactOutput(unitId)
+  : unitKind === "synthesize"
   ? "---\\ndeliberation_status: performed\\n---\\n# Synthesize\\nResult.\\n"
   : unitKind === "deliberation" && unitId === "controlled-deliberation"
     ? "---\\ndeliberation_status: performed\\n---\\n# Controlled Deliberation\\nResult.\\n"

@@ -25,27 +25,35 @@ TypeScript core.
 
 ## Configuration
 
-```yaml
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  max_concurrent_lenses: 6
-  lens_deliberation: controlled-lens-deliberation
-
-lens_agent_teams_mode: false
-
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "max_concurrent_workers": 6,
+      "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
-- `review.subagent.provider`: `main-native` or `codex`.
-- `review.lens_deliberation`: `controlled-lens-deliberation`.
-- `lens_agent_teams_mode`: use Agent Teams transport when the host exposes it.
+- `review.execution.mode`: `main-workers` or `nested-workers`.
+- `review.execution.deliberation`: `controlled-lens-deliberation`.
+- `review.execution.max_concurrent_workers`: optional positive worker cap.
 - `llm.auth`: `oauth`, `api_key`, or `local`.
 - `llm.provider`: `openai`, `anthropic`, `grok`, or `lmstudio`.
 

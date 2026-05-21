@@ -1,6 +1,6 @@
 # Onto Help
 
-Read `{project}/.onto/config.yml` to check `output_language:` and render this
+Read `{project}/.onto/settings.json` to check `output_language:` and render this
 reference in the configured language.
 
 ## Core Workflow
@@ -56,8 +56,7 @@ Active config contract:
 
 Key blocks:
 
-- `review:` selects orchestration.
-- `lens_agent_teams_mode:` selects Agent Teams transport when available.
+- `review.execution:` selects review coordination and worker seats.
 - `llm:` selects auth/provider/model.
 
 ## More Info

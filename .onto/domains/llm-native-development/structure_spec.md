@@ -158,11 +158,11 @@ return_type: Description of what the tool returns (structure, possible error sta
 
 If any of these fields is missing, the agent cannot reliably determine when or how to use the tool.
 
-### Multi-Agent Topology
+### Multi-Agent Execution profile
 
-When a system uses multiple agents, the coordination topology must be explicitly chosen and documented:
+When a system uses multiple agents, the coordination execution profile must be explicitly chosen and documented:
 
-| Topology | Structure | When to Use |
+| Execution profile | Structure | When to Use |
 |----------|-----------|-------------|
 | Hub-spoke (orchestrator-workers) | One orchestrator agent delegates tasks to specialized worker agents | Tasks are decomposable into independent subtasks with clear boundaries |
 | Peer-to-peer | Agents communicate directly with each other, no central coordinator | Agents have equal authority and need to negotiate or collaborate |

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
-import type { OntoConfig } from "../discovery/config-chain.js";
+import type { OntoConfig } from "../discovery/settings-chain.js";
 import type {
   DeliberationStatus,
   EffectiveBoundaryState,
@@ -34,7 +35,7 @@ import {
   validateIssueArtifactOnDisk,
   writeIssueArtifactPromptPacket,
 } from "../review/issue-artifact-runtime.js";
-import type { ExecutionTopology } from "../review/execution-topology-resolver.js";
+import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import {
   buildLensControlledDeliberationPrompt,
   buildTeamleadControlledDeliberationPrompt,
@@ -387,8 +388,110 @@ async function readStructuredDeliberationStatus(
 async function writeExecutionResultArtifact(
   executionPlan: ReviewExecutionPlan,
   artifact: ReviewExecutionResultArtifact,
+  reviewExecutionProfile?: ReviewExecutionProfile,
 ): Promise<void> {
   await writeYamlDocument(executionPlan.execution_result_path, artifact);
+  await writeReviewRunManifest(executionPlan, artifact, reviewExecutionProfile);
+}
+
+async function optionalFileDigest(filePath: string): Promise<string | null> {
+  if (!(await fileExists(filePath))) return null;
+  const content = await fs.readFile(filePath);
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+async function unitManifestEntry(
+  result: ReviewUnitExecutionResult,
+): Promise<Record<string, unknown>> {
+  return {
+    unit_id: result.unit_id,
+    unit_kind: result.unit_kind,
+    packet_path: result.packet_path,
+    packet_sha256: await optionalFileDigest(result.packet_path),
+    output_path: result.output_path,
+    output_sha256: await optionalFileDigest(result.output_path),
+    status: result.status,
+    started_at: result.started_at,
+    completed_at: result.completed_at,
+    duration_ms: result.duration_ms,
+    timestamp_provenance: result.timestamp_provenance ?? "unknown",
+    failure_message: result.failure_message ?? null,
+  };
+}
+
+async function writeReviewRunManifest(
+  executionPlan: ReviewExecutionPlan,
+  artifact: ReviewExecutionResultArtifact,
+  reviewExecutionProfile?: ReviewExecutionProfile,
+): Promise<void> {
+  const synthesizeResult = artifact.synthesize_execution_result ?? null;
+  const manifestPath = path.join(executionPlan.session_root, "review-run-manifest.yaml");
+  const unitResults = [
+    ...artifact.lens_execution_results,
+    ...(artifact.issue_artifact_execution_results ?? []),
+    ...(artifact.deliberation_execution_results ?? []),
+    ...(synthesizeResult ? [synthesizeResult] : []),
+  ];
+  const workerUnits = [];
+  for (const result of unitResults) {
+    workerUnits.push(await unitManifestEntry(result));
+  }
+  await writeYamlDocument(manifestPath, {
+    schema_version: "1",
+    session_id: executionPlan.session_id,
+    created_at: artifact.execution_completed_at,
+    review_execution_profile: reviewExecutionProfile
+      ? {
+          mode: reviewExecutionProfile.mode,
+          teamlead: reviewExecutionProfile.teamlead,
+          lens: reviewExecutionProfile.lens,
+          deliberation: reviewExecutionProfile.deliberation,
+          worker_executor: reviewExecutionProfile.worker_executor,
+          host: reviewExecutionProfile.host,
+          provider: reviewExecutionProfile.provider ?? null,
+          auth: reviewExecutionProfile.auth ?? null,
+          model: reviewExecutionProfile.model ?? null,
+          effort: reviewExecutionProfile.effort ?? null,
+          base_url: reviewExecutionProfile.base_url ?? null,
+          trace: reviewExecutionProfile.trace,
+        }
+      : null,
+    artifact_refs: {
+      session_metadata: executionPlan.session_metadata_path,
+      interpretation: executionPlan.interpretation_artifact_path,
+      binding: executionPlan.binding_output_path,
+      execution_plan: path.join(executionPlan.session_root, "execution-plan.yaml"),
+      execution_result: executionPlan.execution_result_path,
+      final_output: executionPlan.final_output_path,
+      review_record: executionPlan.review_record_path,
+      synthesis_output: executionPlan.synthesis_output_path,
+      deliberation_output: executionPlan.deliberation_output_path,
+      finding_ledger: executionPlan.finding_ledger_path,
+      finding_relation_graph: executionPlan.finding_relation_graph_path,
+      issue_ledger: executionPlan.issue_ledger_path,
+      issue_stance_matrix: executionPlan.issue_stance_matrix_path,
+      problem_framing: executionPlan.problem_framing_path,
+    },
+    worker_units: workerUnits,
+    synthesis_provenance: {
+      synthesis_executed: artifact.synthesis_executed,
+      synthesis_output_path: executionPlan.synthesis_output_path,
+      synthesis_output_sha256: await optionalFileDigest(executionPlan.synthesis_output_path),
+      deliberation_status: artifact.deliberation_status ?? null,
+      deliberation_output_path: executionPlan.deliberation_output_path,
+      deliberation_output_sha256: await optionalFileDigest(executionPlan.deliberation_output_path),
+      participating_lens_ids: artifact.participating_lens_ids,
+      degraded_lens_ids: artifact.degraded_lens_ids,
+      issue_artifact_refs: {
+        finding_ledger: executionPlan.finding_ledger_path,
+        finding_relation_graph: executionPlan.finding_relation_graph_path,
+        issue_ledger: executionPlan.issue_ledger_path,
+        issue_stance_matrix: executionPlan.issue_stance_matrix_path,
+        deliberation_plan: executionPlan.deliberation_plan_path,
+        problem_framing: executionPlan.problem_framing_path,
+      },
+    },
+  });
 }
 
 async function resetExecutionOutputs(
@@ -854,20 +957,7 @@ export async function executeReviewPromptExecution(
     defaultExecutorConfig: ReviewUnitExecutorConfig;
     synthesizeExecutorConfig?: ReviewUnitExecutorConfig;
     maxConcurrentLenses?: number;
-    /**
-     * When `topology.id === "codex-nested-subprocess"`, the lens dispatch
-     * phase is handled by `executeReviewViaCodexNested`
-     * instead of the per-lens worker pool — one outer codex teamlead
-     * + nested inner codex per lens. Synthesize step continues through
-     * the regular per-unit dispatch (uses `synthesizeExecutorConfig`).
-     *
-     * When undefined or any other topology id: per-lens worker pool behavior.
-     */
-    topology?: ExecutionTopology;
-    /**
-     * OntoConfig for codex-nested dispatch (model / reasoning_effort
-     * forwarded to outer codex teamlead). Ignored for non-nested paths.
-     */
+    reviewExecutionProfile?: ReviewExecutionProfile;
     ontoConfig?: OntoConfig;
   },
 ): Promise<ReviewPromptExecutionResult> {
@@ -1032,22 +1122,20 @@ export async function executeReviewPromptExecution(
     }
   }
 
-  // codex-nested-subprocess topology bypasses the per-lens
-  // worker pool. One outer codex teamlead is spawned, which in
-  // turn spawns nested codex per lens inside its own shell. Outcomes from the
-  // bridge are mapped into the same `executionOutcomes[]` shape so the post-
-  // dispatch code (halt check, synthesize, result artifact) stays identical.
-  if (params.topology?.id === "codex-nested-subprocess") {
+  if (
+    params.reviewExecutionProfile?.mode === "nested-workers" &&
+    params.reviewExecutionProfile.worker_executor === "codex"
+  ) {
     console.log(
-      `[review runner] topology=codex-nested-subprocess → outer codex teamlead dispatch (bypasses per-lens worker pool)`,
+      "[review runner] mode=nested-workers worker_executor=codex",
     );
     await appendExecutionProgress(
       executionPlan.error_log_path,
-      "runner topology dispatch: codex-nested-subprocess",
+      "runner profile dispatch: nested-workers",
       [
-        `teamlead_location: ${params.topology.teamlead_location}`,
-        `lens_spawn_mechanism: ${params.topology.lens_spawn_mechanism}`,
-        `transport_rank: ${params.topology.transport_rank}`,
+        `teamlead_seat: ${params.reviewExecutionProfile.teamlead.seat}`,
+        `lens_seat: ${params.reviewExecutionProfile.lens.seat}`,
+        `worker_executor: ${params.reviewExecutionProfile.worker_executor}`,
         `planned_lens_count: ${lensDispatches.length}`,
       ],
     );
@@ -1091,7 +1179,7 @@ export async function executeReviewPromptExecution(
           reported?.status === "fail" && reported.error
             ? reported.error
             : nestedResult.halt_reason ??
-              "codex-nested dispatch failed (output missing or orchestrator rejected)";
+              "nested worker dispatch failed (output missing or orchestrator rejected)";
         const failure: ExecutionFailure = {
           unit_id: dispatch.unit_id,
           unit_kind: dispatch.unit_kind,
@@ -1188,7 +1276,7 @@ export async function executeReviewPromptExecution(
         .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
         .map(toUnitExecutionResult),
       synthesize_execution_result: null,
-    });
+    }, params.reviewExecutionProfile);
     return {
       session_root: sessionRoot,
       executed_lens_count: successfulLensDispatches.length,
@@ -1416,7 +1504,7 @@ export async function executeReviewPromptExecution(
       synthesize_execution_result: synthesizeOutcome
         ? toUnitExecutionResult(synthesizeOutcome)
         : null,
-    });
+    }, params.reviewExecutionProfile);
     return {
       session_root: sessionRoot,
       executed_lens_count: successfulLensDispatches.length,
@@ -1489,7 +1577,7 @@ export async function executeReviewPromptExecution(
     synthesize_execution_result: synthesizeOutcome
       ? toUnitExecutionResult(synthesizeOutcome)
       : null,
-  });
+  }, params.reviewExecutionProfile);
 
   return {
     session_root: sessionRoot,

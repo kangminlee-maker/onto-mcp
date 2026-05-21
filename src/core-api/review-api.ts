@@ -47,9 +47,11 @@ export interface ReviewRunResult {
   finalOutputPath: string;
   reviewRecordPath: string;
   executionResultPath: string;
+  reviewRunManifestPath: string;
   deliberationStatus?: string | null;
   participatingLensIds: string[];
   degradedLensIds: string[];
+  summary?: unknown;
 }
 
 export interface ReviewStatus {
@@ -71,6 +73,7 @@ export interface ReviewResult {
   sessionRoot: string;
   reviewRecord: ReviewRecord;
   finalOutputPath: string;
+  reviewRunManifestPath: string;
   finalOutputText?: string;
 }
 
@@ -213,10 +216,12 @@ function isReviewInvokeShape(value: unknown): value is {
     final_output_path: string;
     review_record_path: string;
     execution_result_path: string;
+    review_run_manifest_path?: string;
     record_status: "completed" | "completed_with_degradation" | "halted_partial" | null;
     deliberation_status?: string | null;
     participating_lens_ids?: string[];
     degraded_lens_ids?: string[];
+    summary?: unknown;
   };
 } {
   if (value === null || typeof value !== "object") return false;
@@ -231,6 +236,7 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
     binding: path.join(sessionRoot, "binding.yaml"),
     execution_plan: path.join(sessionRoot, "execution-plan.yaml"),
     execution_result: path.join(sessionRoot, "execution-result.yaml"),
+    review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
     error_log: path.join(sessionRoot, "error-log.md"),
     final_output: path.join(sessionRoot, "final-output.md"),
     review_record: path.join(sessionRoot, "review-record.yaml"),
@@ -296,9 +302,13 @@ export function createOntoReviewCoreApi(
         finalOutputPath: result.final_output_path,
         reviewRecordPath: result.review_record_path,
         executionResultPath: result.execution_result_path,
+        reviewRunManifestPath:
+          result.review_run_manifest_path ??
+          path.join(path.resolve(result.session_root), "review-run-manifest.yaml"),
         deliberationStatus: result.deliberation_status ?? null,
         participatingLensIds: result.participating_lens_ids ?? [],
         degradedLensIds: result.degraded_lens_ids ?? [],
+        ...(result.summary !== undefined ? { summary: result.summary } : {}),
       };
     },
 
@@ -358,6 +368,7 @@ export function createOntoReviewCoreApi(
         sessionRoot: resolvedSessionRoot,
         reviewRecord,
         finalOutputPath,
+        reviewRunManifestPath: path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         ...(finalOutputText !== undefined ? { finalOutputText } : {}),
       };
     },

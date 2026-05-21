@@ -55,8 +55,8 @@ Verifies that the system's connection to LLMs is reliable, replaceable, and expl
   - Inference path: logic_rules.md 'Operations Logic' → incident response for LLM-specific failures; dependency_rules.md 'External Dependency Management' → Model API Dependencies
   - Verification criteria: PASS if retry logic, meaningful error messages, and graceful degradation exist. FAIL if API errors cause crashes or silent failures
 
-- **CQ-M08** [P3] When multiple models are orchestrated, is the orchestration topology documented?
-  - Inference path: structure_spec.md 'Agent Architecture Structure' → Multi-Agent Topology; domain_scope.md 'Model Integration' → multi-model orchestration
+- **CQ-M08** [P3] When multiple models are orchestrated, is the orchestration execution profile documented?
+  - Inference path: structure_spec.md 'Agent Architecture Structure' → Multi-Agent Execution profile; domain_scope.md 'Model Integration' → multi-model orchestration
   - Verification criteria: PASS if multi-model pattern is documented with roles, routing logic, data flow. FAIL if undocumented
 
 ---
@@ -189,9 +189,9 @@ Verifies that agent architecture, tool integration, and multi-agent coordination
   - Inference path: logic_rules.md 'Agentic Systems Logic' → agent must resume from checkpoint without re-execution
   - Verification criteria: PASS if progress record tracks completed/current/remaining steps. FAIL if interruption requires full restart
 
-- **CQ-A07** [P2] When multiple agents are used, is the coordination topology documented?
-  - Inference path: structure_spec.md 'Agent Architecture Structure' → Multi-Agent Topology → must be documented with rationale
-  - Verification criteria: PASS if topology, roles, communication patterns documented. FAIL if undocumented
+- **CQ-A07** [P2] When multiple agents are used, is the coordination execution profile documented?
+  - Inference path: structure_spec.md 'Agent Architecture Structure' → Multi-Agent Execution profile → must be documented with rationale
+  - Verification criteria: PASS if execution profile, roles, communication patterns documented. FAIL if undocumented
 
 - **CQ-A08** [P2] Is the agent tool count within the recommended limit (< 20)?
   - Inference path: structure_spec.md 'Quantitative Thresholds' → < 20 tools per agent
@@ -413,7 +413,7 @@ Tests boundary conditions and failure modes not covered by standard verification
   - Verification criteria: PASS if cost monitoring detects anomalies and alerts before overrun. FAIL if not detected until billing cycle
 
 - **CQ-XE07** [P3] What happens when multiple agents produce contradictory outputs?
-  - Inference path: logic_rules.md 'Agentic Systems Logic' → termination conditions; structure_spec.md 'Agent Architecture Structure' → Multi-Agent Topology
+  - Inference path: logic_rules.md 'Agentic Systems Logic' → termination conditions; structure_spec.md 'Agent Architecture Structure' → Multi-Agent Execution profile
   - Verification criteria: PASS if conflict resolution mechanism exists (orchestrator, voting, confidence). FAIL if no mechanism
 
 ---

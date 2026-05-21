@@ -99,11 +99,11 @@ SESSION_ROOT="$(cd "$SESSION_ROOT" && pwd)"
 ERROR_LOG="$SESSION_ROOT/error-log.md"
 FINAL_OUTPUT="$SESSION_ROOT/final-output.md"
 SESSION_ID="$(basename "$SESSION_ROOT")"
-# Real-time outer codex stream (codex-nested-subprocess topology only).
+# Real-time outer codex stream (nested-workers Codex path only).
 # spawn-watcher/teamlead-executor tee the outer codex stdout into this
 # file as it emits; open in a side pane with `tail -f` to see live
 # reasoning / tool calls / ENV-BEFORE / ENV-AFTER / summary sentinel.
-# The file is absent for non-nested topologies (cc-* / codex-main-*).
+# The file is absent for other execution profiles.
 NESTED_OUTER_STDOUT="$SESSION_ROOT/nested-outer-stdout.log"
 
 # ANSI colors (only if TTY)
@@ -164,13 +164,9 @@ print_header() {
     [ -n "${profile:-}" ]    && echo "  Profile: ${C_DIM}${profile}${C_RESET}"
   fi
   echo "${C_CYAN}════════════════════════════════════════════════════════════════${C_RESET}"
-  # Nested-only hint: gate strictly on the outer stream file itself
-  # (not on execution-plan.yaml which exists for every topology). 3rd
-  # self-review CC1 guard: earlier `-f || -e execution-plan.yaml` gate
-  # emitted the hint for non-nested sessions too, where the file never
-  # materializes.
+  # Nested-only hint: gate strictly on the outer stream file itself.
   if [ -f "$NESTED_OUTER_STDOUT" ]; then
-    echo "  ${C_DIM}Outer codex live stream (nested topology only):${C_RESET}"
+    echo "  ${C_DIM}Outer codex live stream (nested-workers only):${C_RESET}"
     echo "  ${C_DIM}  tail -f '${NESTED_OUTER_STDOUT}'${C_RESET}"
     echo "${C_CYAN}════════════════════════════════════════════════════════════════${C_RESET}"
   fi

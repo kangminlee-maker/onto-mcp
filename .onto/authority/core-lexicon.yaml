@@ -483,7 +483,7 @@ provisional_terms:
         passive availability) | standalone (TS process, no host LLM).
         priority order:
           1. ONTO_HOST_RUNTIME env var (explicit override)
-          2. config.host_runtime in .onto/config.yml
+          2. config.host_runtime in .onto/settings.json
           3. CLAUDECODE / CLAUDE_PROJECT_DIR → claude
           4. CODEX_THREAD_ID / CODEX_CI → codex
           5. codex binary on PATH + ~/.codex/auth.json → codex
@@ -495,30 +495,30 @@ provisional_terms:
         - "src/core-runtime/discovery/host-detection.ts (canonical seat)"
         - "src/core-runtime/discovery/host-detection.test.ts (24 unit tests)"
       notes:
-        - "Phase 1: detection + capability matrix + override mechanism 만 구현. Phase 2 에서 host_runtime: standalone 시 main_llm/subagent_llm 직접 호출 wire."
+        - "Phase 1: detection + capability matrix + override mechanism 만 구현. Phase 2 에서 host_runtime: standalone 시 main_llm/worker_llm 직접 호출 wire."
         - "host capability (hasTeamCreate, hasAgentSpawn) 는 host_runtime 에 종속 — claude 만 true. LLM provider capability (hasAnthropicApiKey, hasOpenAiApiKey, hasLiteLlmEndpoint, hasCodexExec) 는 환경 독립적 — host 와 무관하게 detection 됨."
 
-    main_subagent_llm_axis:
-      term_id: main_subagent_llm_axis
+    main_worker_llm_axis:
+      term_id: main_worker_llm_axis
       lifecycle_status: seed
       registered_by: "Phase 1 host-decoupling (2026-04-17)"
       registered_date: "2026-04-17"
       definition_draft: >
         review 실행에서 LLM 역할을 두 축으로 분리하는 모델.
           - main LLM (orchestrator): 세션을 진행하고 lens 선택·synthesize 같은 메타 추론 수행
-          - subagent LLM (per-lens executor): 9개 lens 의 실제 reasoning 수행
+          - worker LLM (per-lens executor): 9개 lens 의 실제 reasoning 수행
         두 LLM 은 같을 수도, 다를 수도 있다. Phase 1 에서는 두 축 모두 host_runtime 에 묶여 있으나
-        (main = host LLM, subagent = host 가 spawn하는 instance), Phase 2 에서 독립 configurable
+        (main = host LLM, worker = host 가 spawn하는 instance), Phase 2 에서 독립 configurable
         로 wire 한다.
-        예: OpenAI OAuth main path + Codex subprocess / Anthropic API direct call /
+        예: OpenAI OAuth main path + Codex worker / Anthropic API direct call /
         LM Studio local endpoint.
-        없으면 host_runtime 단일 축이 main 과 subagent 결정을 모두 묶어버려, cross-host 조합이
+        없으면 host_runtime 단일 축이 main 과 worker 결정을 모두 묶어버려, cross-host 조합이
         type 차원에서 표현 불가능.
       evidence:
         - ".onto/processes/configuration.md §llm (canonical model switcher)"
         - "src/core-runtime/review/execution-plan-resolver.ts (review-time LLM execution plan resolver)"
       notes:
-        - "Phase 1: schema + 문서화만. Phase 2: subagent_llm 직접 호출 (ts_inline_http) 구현."
+        - "Phase 1: schema + 문서화만. Phase 2: worker_llm 직접 호출 (direct-call) 구현."
         - "Phase 2 결정 1 (inline content vs function-calling loop): inline content mode 우선 — 8B 모델은 function-calling 신뢰도 낮음. function-calling loop 는 Phase 3."
         - "Phase 2 결정 2 (standalone main 시 LLM 호출 여부): TS process 가 별도 LLM 호출하여 lens 선택 + synthesize 수행 — 단순 dispatcher 가 아닌 별도 main LLM 사용."
 
@@ -826,10 +826,10 @@ entities:
           values: ["cli_flag", "env", "project_config", "onto_home_config"]
     execution_rules_ref:
       provider_resolution: "src/core-runtime/learning/shared/llm-caller.ts:resolveProvider"
-      config_schema: "src/core-runtime/discovery/config-chain.ts:OntoConfig"
+      config_schema: "src/core-runtime/discovery/settings-chain.ts:OntoConfig"
     notes:
       - "구현 인스턴스 예: LM Studio local endpoint (openai wire-format). 벤더 이름은 lexicon에 직접 넣지 않는다"
-      - "codex CLI OAuth 경로와 구별됨 — OAuth 토큰은 chatgpt.com 백엔드 전용이라 프록시 wire-format으로 접근 불가. subprocess spawn이 필요하며 이는 LlmBillingMode=subscription 경로로 별도 분류된다"
+      - "codex CLI OAuth 경로와 구별됨 — OAuth 토큰은 chatgpt.com 백엔드 전용이라 프록시 wire-format으로 접근 불가. Codex worker 실행이 필요하며 이는 LlmBillingMode=subscription 경로로 별도 분류된다"
 
   LlmBillingMode:
     canonical_label: "LlmBillingMode"
@@ -860,7 +860,7 @@ entities:
   LlmAgentSpawnRealization:
     canonical_label: "LlmAgentSpawnRealization"
     korean_label: "LLM 에이전트 생성 실현"
-    definition: "review agentic 작업에서 lens reasoning unit을 어떤 기제로 spawn하고 누가 orchestration하는가를 규정하는 축. execution_realization × host_runtime 2-axis의 세 유효 조합(agent_teams_claude, subagent_claude, subagent_codex)에 대한 의미론적 seat — codex 조합은 billing_source rail에 따라 subagent_codex_oauth / subagent_codex_apikey 두 instance로 세분화된다."
+    definition: "review agentic 작업에서 lens reasoning unit을 어떤 기제로 spawn하고 누가 orchestration하는가를 규정하는 축. execution_realization × host_runtime 2-axis의 세 유효 조합(host_team_claude, worker_claude, worker_codex)에 대한 의미론적 seat — codex 조합은 billing_source rail에 따라 worker_codex_oauth / worker_codex_apikey 두 instance로 세분화된다."
     core_value: "이 개념이 없으면 2-axis 조합의 의미가 타입 정의에만 존재해, '세 조합이 왜 서로 다른가'를 설명하는 rank-1 자리가 없다. 특히 orchestrator 소재·context 비용·billing source의 차이가 운영 의사결정 근거인데 authority에 부재"
     attributes:
       shared: []
@@ -868,9 +868,9 @@ entities:
         orchestration_locus:
           definition: "lens dispatch와 state 전이를 담당하는 주체의 소재"
           values:
-            coordinator_subagent: "main이 TeamCreate로 spawn한 별도 subagent가 orchestration 담당"
+            coordinator_worker: "main이 TeamCreate로 spawn한 별도 worker가 orchestration 담당"
             main_session: "주체자 세션 자체가 Agent tool 호출로 orchestration"
-            subprocess: "외부 CLI (codex 등)가 자체 orchestration"
+            external_worker: "외부 worker가 자체 orchestration"
         context_cost:
           definition: "메인 세션 context 소비 특성"
           values:
@@ -884,45 +884,45 @@ entities:
             openai_account: "~/.codex/auth.json API-key mode의 OpenAI 계정이 지불"
             local_or_self_hosted: "로컬 모델 또는 자체 호스팅 (외부 지불 없음)"
     instances:
-      agent_teams_claude:
-        execution_realization: "agent-teams"
+      host_team_claude:
+        execution_realization: "host-team"
         host_runtime: "claude"
-        orchestration_locus: "coordinator_subagent"
+        orchestration_locus: "coordinator_worker"
         context_cost: "independent"
         billing_source: "claude_code_subscription"
         notes: "`onto coordinator start` + 주체자의 TeamCreate + nested Agent tool. 주체자 메인 context 거의 무소비."
-      subagent_claude:
-        execution_realization: "subagent"
+      worker_claude:
+        execution_realization: "worker"
         host_runtime: "claude"
         orchestration_locus: "main_session"
         context_cost: "orchestration_only"
         billing_source: "claude_code_subscription"
-        notes: "주체자가 TeamCreate 없이 Agent tool을 직접 사용해 lens subagent를 flat spawn. 같은 coordinator-state-machine.ts 재활용. 주체자 context가 orchestration에 사용되지만 lens reasoning은 독립 subagent context."
-      subagent_codex_oauth:
-        execution_realization: "subagent"
+        notes: "주체자가 TeamCreate 없이 Agent tool을 직접 사용해 lens worker를 flat spawn. 같은 coordinator-state-machine.ts 재활용. 주체자 context가 orchestration에 사용되지만 lens reasoning은 독립 worker context."
+      worker_codex_oauth:
+        execution_realization: "worker"
         host_runtime: "codex"
-        orchestration_locus: "subprocess"
+        orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "chatgpt_account"
         notes: "`onto review --codex` 경로 + ~/.codex/auth.json이 chatgpt OAuth mode (auth_mode=chatgpt 또는 tokens.access_token). codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
-      subagent_codex_apikey:
-        execution_realization: "subagent"
+      worker_codex_apikey:
+        execution_realization: "worker"
         host_runtime: "codex"
-        orchestration_locus: "subprocess"
+        orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "openai_account"
-        notes: "`onto review --codex` 경로 + ~/.codex/auth.json이 API-key mode (OPENAI_API_KEY 필드 존재). codex CLI가 api.openai.com 사용. 과금 모드 분류는 LlmBillingMode.per_token 참조. 타입 space에서는 subagent_codex_oauth와 동일한 (subagent, codex) 조합이지만 billing_source rail이 다르므로 별도 instance."
+        notes: "`onto review --codex` 경로 + ~/.codex/auth.json이 API-key mode (OPENAI_API_KEY 필드 존재). codex CLI가 api.openai.com 사용. 과금 모드 분류는 LlmBillingMode.per_token 참조. 타입 space에서는 worker_codex_oauth와 동일한 (worker, codex) 조합이지만 billing_source rail이 다르므로 별도 instance."
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"
-      state_machine: "src/core-runtime/cli/coordinator-state-machine.ts (agent_teams_claude + subagent_claude 공용)"
-      codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts (subagent_codex_* 전용)"
+      state_machine: "src/core-runtime/cli/coordinator-state-machine.ts (host_team_claude + worker_claude 공용)"
+      codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts (worker_codex_* 전용)"
       design_record: "development-records/plan/20260415T1700-execution-realization-priority-design.md"
     notes:
-      - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/config.yml` 의 `review.subagent.provider`, `review.teamlead.model`, `llm` switcher."
+      - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/settings.json` 의 `review.worker.provider`, `review.teamlead.model`, `llm` switcher."
       - "Provider resolution 축(LlmBillingMode, LlmCompatibleProxy)과 직교 — background task의 단일-턴 API call 경로와 review의 agentic 실행 경로는 서로 영향 주지 않음"
       - "Local model access is represented by `llm.auth: local` + `llm.provider: lmstudio`. Review orchestration remains selected by the `review:` block."
-      - "TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 nested(agent_teams_claude) vs flat(subagent_claude) 최종 선택은 주체자 세션의 판단. onto는 handoff JSON의 orchestration_guidance로 힌트만 제공"
+      - "TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 nested(host_team_claude) vs flat(worker_claude) 최종 선택은 주체자 세션의 판단. onto는 handoff JSON의 orchestration_guidance로 힌트만 제공"
 
   # -------------------------------------------------------------------------
   # Framework v1.0 entities (§8.1, §8.6) — scope axis + Tier 1/2 types
@@ -1131,64 +1131,45 @@ terms:
     term_status: "active"
     definition: "A reasoning unit that does not share main-context state, consumes contract-bounded input, and produces contract-bounded output independently."
     legacy_aliases:
-      - alias: "subagent"
-        context: "Prototype files sometimes use 'subagent' to mean any context-isolated unit, not just the execution_realization value."
+      - alias: "worker"
+        context: "Prototype files sometimes use 'worker' to mean any context-isolated unit, not just the execution_realization value."
     notes:
-      - "Typical realizations include an Agent Teams teammate, a subagent, an MCP-isolated LLM, or an external model worker."
+      - "Typical realizations include an Agent Teams teammate, a worker, an MCP-isolated LLM, or an external model worker."
       - "The canonical concept is the context-isolated reasoning property, not a specific host implementation."
-  - term_id: "execution_realization"
-    canonical_label: "execution_realization"
-    korean_label: "실행 실현 방식"
-    axis: "execution_profile"
-    term_status: "retired"
-    definition: "Canonical structural realization used to execute context-isolated review units."
-    allowed_values:
-      - "subagent"
-      - "agent-teams"
-    notes:
-      - "**Deprecated 2026-04-21 (Review UX Redesign P1 #152).** Superseded by `review_execution_config` (the `review:` axis block). `subagent` ≡ user choice of `review.subagent.provider`; `agent-teams` ≡ Claude host + `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` auto-detected."
-      - "`subagent` and `agent-teams` are structural realizations, not host runtime names."
-      - "'subagent' as execution_realization value refers to a specific structural realization. context_isolated_reasoning_unit의 legacy_alias 'subagent'는 다른 개념(context isolation property 전체)을 가리킨다. 둘은 다른 axis에 속한다."
-  - term_id: "host_runtime"
-    canonical_label: "host_runtime"
-    korean_label: "호스트 런타임"
-    axis: "execution_profile"
-    term_status: "retired"
-    definition: "Concrete host environment that runs a chosen execution realization."
-    allowed_values:
-      - "codex"
-      - "claude"
-    notes:
-      - "**Deprecated 2026-04-21 (Review UX Redesign P1 #152).** Superseded by runtime host detection (`detectClaudeCodeEnvSignal` / `detectCodexEnvSignal`) + optional override via `review.teamlead.model`."
-      - "`codex` and `claude` are host runtimes, not canonical execution realizations."
-      - "Provider-specific direct calls belong to the `llm` switcher. Host runtime names stay limited to actual execution hosts."
-  - term_id: "review_execution_config"
-    canonical_label: "OntoReviewConfig"
+  - term_id: "review_execution_profile"
+    canonical_label: "ReviewExecutionProfile"
     korean_label: "리뷰 실행 설정"
     axis: "execution_profile"
     term_status: "active"
-    definition: "User-facing 6-axis config block (`review:`) declared in `.onto/config.yml`. Runtime derives one `topology_shape` from these axes and dispatches the review session accordingly."
+    definition: "Runtime-resolved review execution descriptor derived from `.onto/settings.json` `review.execution`, the LLM switcher, and host capability signals."
+    allowed_modes:
+      - "main-workers"
+      - "nested-workers"
+    seats:
+      - "main"
+      - "worker"
     notes:
-      - "Review UX Redesign P1 (#152, 2026-04-20). Replaces user-facing exposure of sketch v3's `execution_topology_priority` array."
-      - "Axes: `teamlead.model` (host session 'main' or external spec) / `subagent.provider` (main-native | codex) / `subagent.model_id` / `subagent.effort` / `max_concurrent_lenses` / `lens_deliberation` (controlled-lens-deliberation)."
-      - "Type source: `src/core-runtime/discovery/config-chain.ts` — `OntoReviewConfig` interface + discriminated-union `SubagentSpec`. Validator: `src/core-runtime/review/review-config-validator.ts`."
-  - term_id: "topology_shape"
-    canonical_label: "TopologyShape"
-    korean_label: "토폴로지 형상"
+      - "`main-workers`: main teamlead, worker lens units."
+      - "`nested-workers`: worker teamlead, nested worker lens units."
+      - "Type source: `src/core-runtime/review/review-execution-profile.ts`."
+  - term_id: "review_execution_settings"
+    canonical_label: "ReviewExecutionSettings"
+    korean_label: "리뷰 실행 설정 파일 구조"
     axis: "execution_profile"
     term_status: "active"
-    definition: "Internal classification derived by runtime from `review_execution_config` + environment signals. One of 6 canonical values, each mapping to one or more `TopologyId` catalog entries."
-    allowed_values:
-      - "main_native"
-      - "main_foreign"
-      - "main-teams_native"
-      - "main-teams_foreign"
-      - "main-teams_deliberation"
-      - "ext-teamlead_native"
+    definition: "Project/user settings shape under `.onto/settings.json` `review.execution`."
+    allowed_keys:
+      - "mode"
+      - "teamlead.seat"
+      - "teamlead.llm"
+      - "lens.seat"
+      - "lens.llm"
+      - "deliberation"
+      - "max_concurrent_workers"
     notes:
-      - "Review UX Redesign P2 (#153, 2026-04-21). Not user-facing — `topology_shape` is the runtime-internal dispatch key, decoupled from the 10-value `TopologyId` catalog that executor mappings index on."
-      - "Derivation: `src/core-runtime/review/topology-shape-derivation.ts:deriveTopologyShape` (pure, env-signal-aware). Mapping to `TopologyId`: `src/core-runtime/review/shape-to-topology-id.ts`."
-      - "`main-teams_deliberation` selects the Agent Teams transport for the same controlled lens deliberation semantic. Other shapes still produce controlled deliberation through runtime artifacts before synthesize."
+      - "Type source: `src/core-runtime/discovery/settings-chain.ts`."
+      - "Unknown keys fail settings loading."
+      - "`deliberation` is `controlled-lens-deliberation`."
   - term_id: "lens_prompt_contract"
     canonical_label: "LensPromptContract"
     korean_label: "lens 프롬프트 계약"

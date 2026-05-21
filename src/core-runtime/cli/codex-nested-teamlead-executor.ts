@@ -3,22 +3,15 @@
  *
  * # What this module is
  *
- * Realizes the topology `codex-nested-subprocess` (sketch v3 §3.1, option
- * codex-A): a single outer `codex exec` subprocess is spawned by the onto
- * TS main as the **teamlead**, and that outer codex itself invokes
- * `codex exec` via shell for each lens packet — one nested codex per
- * lens. The entire lens execution stack therefore runs inside codex
- * space; onto TS only bootstraps the outer codex and parses the
- * consolidated result report.
+ * Runs the `nested-workers` Codex path: a single outer `codex exec` worker is
+ * started by onto TS main as the teamlead, and that outer Codex process invokes
+ * `codex exec` for each lens packet.
  *
  * # Why it exists
  *
- * The existing `codex-review-unit-executor.ts` spawns one codex per lens
- * from the TS process (topology `cc-main-codex-subprocess` or
- * `codex-main-subprocess`). The nested variant delegates the per-lens
- * scheduling decisions to an outer codex teamlead — letting the codex
- * model reason about ordering / dependency / retry using its own
- * context, rather than TS-level concurrency primitives alone.
+ * The main-workers path starts one Codex worker per lens from the TS process.
+ * The nested-workers variant delegates per-lens scheduling decisions to an
+ * outer Codex teamlead.
  *
  * Sketch v3 §9 recorded the live validation (2026-04-18, codex
  * v0.120.0): outer+inner session ids are independent, both exit 0,
@@ -30,33 +23,21 @@
  *
  * # How it relates
  *
- * - `resolveExecutionTopology()` selects `codex-nested-subprocess` when
- *   an external codex teamlead is requested and `codexAvailable` is satisfied.
- * - `mapTopologyToExecutorConfig()` does not map this topology
- *   to a standalone per-lens binary — `codex-nested-subprocess` needs this
- *   orchestrator specifically, not a per-lens executor path, because
- *   the per-lens dispatch happens INSIDE the outer codex, not from TS.
- * - `executeReviewPromptExecution()` (run-review-prompt-execution.ts)
- *   branches on `topology.id === "codex-nested-subprocess"` to route here.
+ * - `ReviewExecutionProfile.mode === "nested-workers"` selects this path.
+ * - `executeReviewPromptExecution()` branches on that profile.
  *
  * # Scope
  *
- * This PR provides the **orchestrator seat** and its unit tests.
- * Integration into `executeReviewPromptExecution` (replacing the per-lens
- * loop with one outer-codex invocation for the nested topology) is
- * handled by the nested-dispatch branch.
+ * This module provides the nested worker orchestration seat.
  * Deliverables:
  *   - `runCodexNestedTeamlead(args)` function
  *   - Prompt template building
  *   - Outer codex stdout parser
  *   - Error classification (outer failure vs inner-lens failure vs
  *     parse failure)
- *   - Sandbox setup documentation (docs/codex-nested-topology-sandbox.md)
- *
  * # Design reference
  *
- * - Sketch v3 §3.1 codex-A, §9 실측 검증
- * - Nested codex validation notes under `development-records/`
+ * - Nested Codex validation notes under `development-records/`
  */
 
 import { spawn } from "node:child_process";
@@ -187,7 +168,7 @@ export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): stri
   // job is to run a literal bash script — not to reason about dispatch
   // strategy. Descriptive prompts ("invoke nested codex for each lens...")
   // led outer to treat the task as a lens-execution assignment and use its
-  // own file-edit tools instead of spawning `codex exec` subprocesses. By
+  // own file-edit tools instead of starting nested Codex workers. By
   // handing outer a literal script with a single action ("pipe to bash"),
   // the interpretation freedom that caused the earlier 10-minute stall is
   // removed.
@@ -432,7 +413,7 @@ interface SpawnOuterCodexResult {
 }
 
 /**
- * Spawn the outer codex subprocess with the orchestration prompt on
+ * Start the outer Codex worker with the orchestration prompt on
  * stdin. Isolated from `runCodexNestedTeamlead` so tests can stub it.
  */
 export async function spawnOuterCodex(
@@ -446,7 +427,7 @@ export async function spawnOuterCodex(
     /** `-c model_reasoning_effort=<value>` override. Absent → TOML default. */
     reasoning_effort?: string;
     /**
-     * Optional path to tee outer codex stdout into as the subprocess
+     * Optional path to tee outer codex stdout into as the worker
      * emits data. When set, each stdout chunk is appended to this file
      * in real time so a `tail -f` watcher pane can render progress as
      * it happens. The in-memory `stdout` string is still returned for
@@ -458,7 +439,7 @@ export async function spawnOuterCodex(
     stream_stderr_path?: string;
   },
 ): Promise<SpawnOuterCodexResult> {
-  // Outer codex must respect `.onto/config.yml` overrides (model / effort) —
+  // Outer Codex must respect `.onto/settings.json` model / effort settings —
   // otherwise it inherits `~/.codex/config.toml` defaults (often `xhigh`),
   // which can drastically inflate outer teamlead runtime and hit the
   // orchestration timeout before inner lens dispatch even begins.
@@ -558,7 +539,7 @@ function awaitStreamFinish(stream: fs.WriteStream | null): Promise<void> {
 }
 
 /**
- * Run the codex-nested-subprocess topology for the given lens packet set.
+ * Run the nested-workers Codex path for the given lens packet set.
  *
  * Errors are classified, not thrown:
  *   - Outer codex spawn failure (ENOENT) → throws

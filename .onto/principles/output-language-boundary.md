@@ -102,7 +102,7 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 - 본 블록은 **복사 주입** 방식이다. 문구 변경이 필요하면 본 §7 이 canonical seat 이므로 여기서 수정 후 전 사용처에 전파한다. Template 변수화 (`{language_policy_block}`) 는 Phase 2 번역 로직 도입 시점에 고려 (현재는 lint가 정적 문자열을 요구).
 
 현재 주입된 위치 (2026-04-17 기준):
-- `process.md` — Teammate Initial Prompt / Codex Reviewer Prompt / Subagent Fallback Synthesize Prompt / Codex Review Synthesize Prompt (4 템플릿)
+- `process.md` — Teammate Initial Prompt / Codex Reviewer Prompt / Worker Synthesize Prompt / Codex Review Synthesize Prompt (4 템플릿)
 - `.onto/processes/reconstruct.md` — Explorer / Adjudicator / Synthesize (3 프롬프트)
 - `.onto/processes/review/lens-prompt-contract.md` §10 Example Prompt Skeleton
 - `.onto/processes/review/synthesize-prompt-contract.md` §7 Example Prompt Skeleton

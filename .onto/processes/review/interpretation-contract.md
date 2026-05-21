@@ -225,7 +225,7 @@ prompt-backed path에서는 이 중 interpretation 결과를
 가능한 realization 예:
 
 - Agent Teams teammate
-- subagent
+- worker
 - `MCP`로 분리된 `LLM`
 - 독립 background agent
 - external model worker

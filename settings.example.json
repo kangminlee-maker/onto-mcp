@@ -1,0 +1,29 @@
+{
+  "output_language": "en",
+  "domains": [
+    "software-engineering"
+  ],
+  "review_mode": "full",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation",
+      "max_concurrent_workers": 9
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  },
+  "learning_extract_mode": "disabled"
+}

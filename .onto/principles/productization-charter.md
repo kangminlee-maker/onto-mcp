@@ -228,7 +228,7 @@ fail-close posture를 유지한다.
 
 즉 `review`가 candidate/provisional/promotion을 직접 먹는 구조로 되돌아가면 안 된다.
 
-### 6.6 host-native invocation을 유지한다
+### 6.6 host invocation을 유지한다
 
 주체자는 shell 인자를 기억하지 않아도 되어야 한다.
 
@@ -351,17 +351,17 @@ canonical execution profile은 아래 두 축으로 표현한다.
 
 기본 매핑은 아래다.
 
-- `codex` host runtime → `subagent`
-- `claude` host runtime → `agent-teams`
+- `codex` host runtime → `worker`
+- `claude` host runtime → `host-team`
 
 하지만 이건 절대 우선순위나 품질 위계가 아니다.
 주체자가 명시적으로 설정하면 그것이 우선한다.
 
 즉 현재 채택된 원칙은:
 
-- `codex` 환경에서 `subagent`가 기본
-- `claude` 환경에서 `agent-teams`가 기본
-- `claude` 환경에서도 `subagent`를 선택할 수 있음
+- `codex` 환경에서 `worker`가 기본
+- `claude` 환경에서 `host-team`가 기본
+- `claude` 환경에서도 `worker`를 선택할 수 있음
 
 이다.
 

@@ -160,7 +160,7 @@ describe("resolveExecutionRealizationHandoff", () => {
   it("E1b prepare-only on Claude host → self with Claude profile (artifact seam)", () => {
     // coordinator-state-machine calls reviewPrepareOnly(--prepare-only) from within
     // a Claude Code session; it must receive the Claude profile so prepared session
-    // artifacts get recorded as agent-teams+claude, not subagent+codex. This is the
+    // artifacts get recorded as host-team+claude, not worker+codex. This is the
     // artifact seam fix (review consensus #1, 2026-04-16).
     process.env.CLAUDECODE = "1";
     const out = resolveExecutionRealizationHandoff({
@@ -171,11 +171,11 @@ describe("resolveExecutionRealizationHandoff", () => {
     expect(out.type).toBe("self");
     if (out.type === "self") {
       expect(out.profile.host_runtime).toBe("claude");
-      expect(out.profile.execution_realization).toBe("agent-teams");
+      expect(out.profile.execution_realization).toBe("host-team");
     }
   });
 
-  it("E2 env ONTO_HOST_RUNTIME=claude → coordinator_start with agent-teams default", () => {
+  it("E2 env ONTO_HOST_RUNTIME=claude → coordinator_start with host-team default", () => {
     process.env.ONTO_HOST_RUNTIME = "claude";
     const out = resolveExecutionRealizationHandoff({
       explicitCodex: false,
@@ -184,7 +184,7 @@ describe("resolveExecutionRealizationHandoff", () => {
     });
     expect(out.type).toBe("coordinator_start");
     if (out.type === "coordinator_start") {
-      expect(out.profile.execution_realization).toBe("agent-teams");
+      expect(out.profile.execution_realization).toBe("host-team");
     }
   });
 
@@ -201,7 +201,7 @@ describe("resolveExecutionRealizationHandoff", () => {
     }
   });
 
-  it("E3 auto + CLAUDECODE=1 → coordinator_start with agent-teams", () => {
+  it("E3 auto + CLAUDECODE=1 → coordinator_start with host-team", () => {
     process.env.CLAUDECODE = "1";
     const out = resolveExecutionRealizationHandoff({
       explicitCodex: false,
@@ -210,7 +210,7 @@ describe("resolveExecutionRealizationHandoff", () => {
     });
     expect(out.type).toBe("coordinator_start");
     if (out.type === "coordinator_start") {
-      expect(out.profile.execution_realization).toBe("agent-teams");
+      expect(out.profile.execution_realization).toBe("host-team");
     }
   });
 
@@ -252,7 +252,7 @@ describe("resolveExecutionRealizationHandoff", () => {
       });
       expect(out.type).toBe("coordinator_start");
       if (out.type === "coordinator_start") {
-        expect(out.profile.execution_realization).toBe("agent-teams");
+        expect(out.profile.execution_realization).toBe("host-team");
       }
     } finally {
       fs.rmSync(binDir, { recursive: true, force: true });

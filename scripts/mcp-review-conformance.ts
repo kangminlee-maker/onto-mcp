@@ -18,9 +18,11 @@ interface ReviewRunStructured {
   finalOutputPath: string;
   reviewRecordPath: string;
   executionResultPath: string;
+  reviewRunManifestPath: string;
   deliberationStatus?: string | null;
   participatingLensIds: string[];
   degradedLensIds: string[];
+  summary?: unknown;
 }
 
 interface ToolCallResult {
@@ -144,9 +146,11 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(typeof result.finalOutputPath === "string", "finalOutputPath missing.");
   assert(typeof result.reviewRecordPath === "string", "reviewRecordPath missing.");
   assert(typeof result.executionResultPath === "string", "executionResultPath missing.");
+  assert(typeof result.reviewRunManifestPath === "string", "reviewRunManifestPath missing.");
   assert(result.deliberationStatus === "performed", "deliberationStatus must be performed.");
   assert(Array.isArray(result.participatingLensIds), "participatingLensIds missing.");
   assert(Array.isArray(result.degradedLensIds), "degradedLensIds missing.");
+  assert(result.summary !== undefined, "summary missing.");
   return result as ReviewRunStructured;
 }
 
@@ -214,8 +218,31 @@ async function main(): Promise<void> {
     await assertFile(structured.finalOutputPath, "final output");
     await assertFile(structured.reviewRecordPath, "review record");
     await assertFile(structured.executionResultPath, "execution result");
+    await assertFile(structured.reviewRunManifestPath, "review run manifest");
 
     const sessionRoot = path.resolve(structured.sessionRoot);
+    const reviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto.review_result",
+      arguments: { sessionRoot },
+    }), "tools/call onto.review_result"));
+    const reviewResultStructured = reviewResultTool.structuredContent as
+      | { reviewRunManifestPath?: unknown; reviewRecord?: unknown; finalOutputText?: unknown }
+      | undefined;
+    assert(
+      reviewResultStructured &&
+        typeof reviewResultStructured.reviewRunManifestPath === "string" &&
+        reviewResultStructured.reviewRunManifestPath === structured.reviewRunManifestPath,
+      "onto.review_result must expose reviewRunManifestPath.",
+    );
+    assert(
+      reviewResultStructured.reviewRecord !== undefined,
+      "onto.review_result must expose ReviewRecord.",
+    );
+    assert(
+      typeof reviewResultStructured.finalOutputText === "string",
+      "onto.review_result must expose finalOutputText.",
+    );
+
     const deliberationPath = path.join(sessionRoot, "deliberation.md");
     const synthesisPath = path.join(sessionRoot, "synthesis.md");
     await assertFile(deliberationPath, "controlled deliberation output");
@@ -231,6 +258,39 @@ async function main(): Promise<void> {
         (unit) => unit.unit_id === "controlled-deliberation" && unit.unit_kind === "deliberation",
       ),
       "execution-result must include controlled-deliberation unit.",
+    );
+
+    const reviewRunManifest = await readYaml<{
+      review_execution_profile?: { mode?: string; worker_executor?: string; deliberation?: string };
+      worker_units?: Array<{ unit_id?: string; packet_sha256?: string; output_sha256?: string; status?: string }>;
+      synthesis_provenance?: { deliberation_status?: string };
+    }>(structured.reviewRunManifestPath);
+    assert(
+      reviewRunManifest.review_execution_profile?.mode === "main-workers",
+      "review-run-manifest must record ReviewExecutionProfile mode.",
+    );
+    assert(
+      reviewRunManifest.review_execution_profile?.worker_executor === "mock",
+      "review-run-manifest must record mock worker executor.",
+    );
+    assert(
+      reviewRunManifest.review_execution_profile?.deliberation === "controlled-lens-deliberation",
+      "review-run-manifest must record controlled deliberation.",
+    );
+    assert(
+      Array.isArray(reviewRunManifest.worker_units) &&
+        reviewRunManifest.worker_units.some(
+          (unit) =>
+            unit.unit_id === "controlled-deliberation" &&
+            typeof unit.packet_sha256 === "string" &&
+            typeof unit.output_sha256 === "string" &&
+            unit.status === "completed",
+        ),
+      "review-run-manifest must preserve controlled-deliberation worker hashes.",
+    );
+    assert(
+      reviewRunManifest.synthesis_provenance?.deliberation_status === "performed",
+      "review-run-manifest synthesis provenance must record performed deliberation.",
     );
 
     const reviewRecord = await readYaml<{

@@ -1,0 +1,102 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  projectSettingsPath,
+  resolveSettingsChain,
+  userSettingsPath,
+} from "./settings-chain.js";
+
+let scratchRoot = "";
+let originalHome: string | undefined;
+
+function writeJson(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
+}
+
+describe("resolveSettingsChain", () => {
+  beforeEach(() => {
+    scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-settings-"));
+    originalHome = process.env.HOME;
+    process.env.HOME = path.join(scratchRoot, "home");
+    fs.mkdirSync(process.env.HOME, { recursive: true });
+  });
+
+  afterEach(() => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
+    fs.rmSync(scratchRoot, { recursive: true, force: true });
+  });
+
+  it("merges user defaults and project settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      output_language: "ko",
+      domains: ["software-engineering"],
+      llm: { auth: "oauth", provider: "openai", model: "gpt-5.4" },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      domains: ["ontology"],
+      review_mode: "full",
+      review: {
+        execution: {
+          mode: "main-workers",
+          max_concurrent_workers: 4,
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.output_language).toBe("ko");
+    expect(settings.domains).toEqual(["ontology"]);
+    expect(settings.review_mode).toBe("full");
+    expect(settings.llm?.model).toBe("gpt-5.4");
+    expect(settings.review?.execution.mode).toBe("main-workers");
+    expect(settings.review?.execution.teamlead.seat).toBe("main");
+    expect(settings.review?.execution.lens.seat).toBe("worker");
+    expect(settings.review?.execution.max_concurrent_workers).toBe(4);
+  });
+
+  it("fails loudly when retired YAML config exists", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    fs.mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
+    fs.writeFileSync(path.join(projectRoot, ".onto", `config.${"yml"}`), "review_mode: full\n");
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Retired onto config file detected",
+    );
+  });
+
+  it("rejects old review axis keys in settings.json", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      review: {
+        teamlead: { model: "main" },
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Invalid onto settings",
+    );
+  });
+
+  it("validates nested-workers seat constraints", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      review: {
+        execution: {
+          mode: "nested-workers",
+          teamlead: { seat: "main" },
+          lens: { seat: "worker" },
+        },
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "nested-workers requires review.execution.teamlead.seat=worker",
+    );
+  });
+});

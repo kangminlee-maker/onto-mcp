@@ -26,7 +26,12 @@ import {
   type LlmModelSwitcherConfig,
 } from "../llm/model-switcher.js";
 import {
+  assertNoRetiredConfigFiles,
+  projectSettingsPath,
+} from "../discovery/settings-chain.js";
+import {
   ensureDirectory,
+  fileExists,
   isoNow,
   normalizeDomainValue,
   renderReviewTargetMaterializedInput,
@@ -89,7 +94,7 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
 }
 
 /**
- * Load {projectRoot}/.onto/config.yml into the narrow subset used by
+ * Load {projectRoot}/.onto/settings.json into the narrow subset used by
  * the canonical LLM switcher. Missing file → {}.
  *
  * Inline-http executor 의 loadOntoConfig 와 동일 패턴. 본 bootstrap 은 CLI
@@ -98,16 +103,12 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
 async function loadOntoConfigForPlan(
   projectRoot: string,
 ): Promise<{ llm?: LlmModelSwitcherConfig }> {
-  const configPath = path.join(projectRoot, ".onto", "config.yml");
-  try {
-    const text = await fs.readFile(configPath, "utf8");
-    const yaml = await import("yaml");
-    const parsed = yaml.parse(text);
-    if (parsed && typeof parsed === "object") {
-      return parsed as { llm?: LlmModelSwitcherConfig };
-    }
-  } catch {
-    // Missing or malformed config → empty plan. Non-fatal.
+  await assertNoRetiredConfigFiles(projectRoot);
+  const configPath = projectSettingsPath(projectRoot);
+  if (!(await fileExists(configPath))) return {};
+  const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
+  if (parsed && typeof parsed === "object") {
+    return parsed as { llm?: LlmModelSwitcherConfig };
   }
   return {};
 }

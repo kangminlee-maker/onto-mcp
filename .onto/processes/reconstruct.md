@@ -384,7 +384,7 @@ Creates a team (`onto-reconstruct`) via TeamCreate.
 #### 1.0 Team Composition
 
 Creates the following agents as teammates:
-- **explorer**: Dedicated source traverser. Recommended to use Explore-type subagent.
+- **explorer**: Dedicated source traverser. Recommended to use Explore-type worker.
 - **Lenses (N, per process.md agent table)**: Analysis agents that do not directly traverse the source. Same role definitions as review (`.onto/roles/{lens-id}.md`), operating in reconstruct mode.
 - **synthesize**: Integrator that composes resolved material into unified output. Not an independent lens.
 
@@ -696,7 +696,7 @@ Information convergence = number of new facts in Explorer's reported delta = 0
 >
 > **Semantics lens full failure (Round N participation)**: If the semantics lens fails to deliver its round-level label+epsilon output, this IS a graceful degradation case per the general lens failure rule (responding lenses denominator adjusted for convergence). The Tier 1/Tier 2 semantic identity logic is orthogonal to the lens's round-level participation.
 
-**Build-time configuration** (all keys resolved from `{project}/.onto/config.yml`):
+**Build-time configuration** (all keys resolved from `{project}/.onto/settings.json`):
 
 This section enumerates the reconstruct-specific keys. Definitions, valid
 values, defaults, and the full resolution chain (onto-home → project → CLI
@@ -705,7 +705,7 @@ values, defaults, and the full resolution chain (onto-home → project → CLI
 reference.
 
 ```yaml
-# {project}/.onto/config.yml — reconstruct-relevant keys
+# {project}/.onto/settings.json — reconstruct-relevant keys
 output_language: en           # principal-facing output language only. Agent prompts, wip.yml, session-log, and all internal artifacts stay in English regardless of this setting. Translation occurs only at Runtime Coordinator render seats registered in `.onto/authority/external-render-points.yaml`. See `.onto/principles/output-language-boundary.md`.
 
 semantic_identity:
@@ -1586,7 +1586,7 @@ entries:
 `config_malformed` (phase_0):
 ```
 [HALT: config_malformed at phase_0]
-Config file /path/to/.onto/config.yml failed to parse.
+Settings file /path/to/.onto/settings.json failed to parse.
 YAML error: {parser_message}
 Fix the config file and re-run. No session state was written (halt fires before Phase 1).
 ```
@@ -1636,10 +1636,10 @@ Either delete the session directory and start a new reconstruct, or repair the a
 
 | Code | Level | Phase | Trigger |
 |---|---|---|---|
-| `config_malformed` | halt | phase_0 | YAML parser throws on config.yml |
+| `config_malformed` | halt | phase_0 | JSON parser throws on settings.json |
 | `config_type_invalid` | warning | phase_0 | Config key has wrong type; default substituted |
 | `config_out_of_range` | warning | phase_0 | Numeric config key outside valid range; default substituted |
-| `config_unknown_key_ignored` | warning | phase_0 | Unrecognized key in config.yml (any nesting level), excluding reserved user-extension namespaces (`x-*` keys at any level, or nested under top-level `custom:`) which are ignored silently without warning |
+| `config_unknown_key_ignored` | warning | phase_0 | Unrecognized key in settings.json (any nesting level), excluding reserved user-extension namespaces (`x-*` keys at any level, or nested under top-level `custom:`) which are ignored silently without warning |
 | `phase_3_5_invariant_violation` | halt | phase_4 | Bug-guard detects `resolution: pending` with no Phase 3 pending items to re-render (Runtime bug) |
 | `phase_reentry_bound_exhausted` | halt | phase_4 | Re-entry count reached `max_phase4_reentries` with `resolution: pending` still remaining (Runtime defect — Phase 3.5 failed to terminalize across N re-entries) |
 | `explorer_failure` | halt | phase_1 | Explorer fails (irreplaceable; see Error handling section) |

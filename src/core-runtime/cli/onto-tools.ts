@@ -17,7 +17,7 @@
  *
  * Phase 3-2 introduces tool-native execution: instead of inlining everything,
  * we expose a small read-only API and let the LLM ask for what it needs. This
- * matches how Claude Code / Codex CLI subagents already work, but using
+ * matches how worker contexts already work, but using
  * onto-owned tools that the TS process executes — so the same review pipeline
  * can drive any function-calling-capable LLM (Anthropic, OpenAI, Qwen 30B+,
  * etc.) without depending on a host-provided tool ecosystem.
@@ -435,7 +435,7 @@ function optionalPositive(value: unknown): number | undefined {
 // ---------------------------------------------------------------------------
 
 /**
- * The default tool set exposed to subagent LLMs. Order matters only for
+ * The default tool set exposed to worker LLMs. Order matters only for
  * prompt formatting (some providers list tools in declaration order in the
  * system message) — keep the most-used tools first.
  */

@@ -251,7 +251,7 @@ LLM 기능에서는 다음 자산을 코드와 동급으로 취급한다.
 
 예:
 
-- subagent
+- worker
 - Agent Teams teammate
 - MCP로 분리된 LLM
 - external model worker
@@ -274,7 +274,7 @@ LLM 기능에서는 다음 자산을 코드와 동급으로 취급한다.
 즉 runtime만으로 semantic drift를 막을 수 없는 영역은,
 맥락 격리 추론 단위를 통해 기능적으로 보완하는 것이 맞다.
 
-중요한 것은 특정 구현(subagent, Agent Teams teammate)이 아니라
+중요한 것은 특정 구현(worker, Agent Teams teammate)이 아니라
 그들이 구현하던 **맥락 격리 추론 단위**라는 원칙을 보존하는 것이다.
 host realization이 달라도 `맥락 비공유 + 계약 입력/출력 + 독립 판단` 속성이 유지되어야 한다.
 

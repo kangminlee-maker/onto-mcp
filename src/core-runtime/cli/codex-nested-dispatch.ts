@@ -3,8 +3,8 @@
  *
  * # What this module is
  *
- * The bridge between review session artifacts (execution-plan.yaml +
- * lens packet paths) and the codex-nested teamlead orchestrator.
+ * The bridge between review session artifacts and the nested Codex worker
+ * orchestrator.
  * It reads the execution plan, constructs the
  * `NestedLensDispatchInput`, invokes `runCodexNestedTeamlead`, and
  * classifies per-lens outcomes into the
@@ -17,23 +17,16 @@
  * intentionally decoupled from onto's session artifacts so it can be
  * unit-tested without filesystem fixtures. This bridge adds the integration that the
  * runner (`runReviewInvokeCli`) can branch into when the resolved
- * topology is `codex-nested-subprocess`.
+ * profile mode is `nested-workers`.
  *
  * Keeping this seat **separate** from `executeReviewPromptExecution`
- * (which uses per-lens subprocess spawning) preserves the existing
- * review flow for all other topologies — codex-nested-subprocess is
- * architecturally different (one outer teamlead codex, N nested inner
- * codexes) and does not fit the per-lens executor loop.
+ * (which uses the per-lens worker loop) preserves the existing review flow
+ * for main-workers mode.
  *
  * # How it relates
  *
- * - `resolveExecutionTopology()` selects the topology id.
- * - `tryResolveTopologyForHandoff()` surfaces it to the
- *   coordinator; for non-claude topologies it also flows through
- *   `runReviewInvokeCli` directly.
- * - `executeReviewViaCodexNested()` (here) handles the nested-dispatch
- *   execution phase — the equivalent of `executeReviewPromptExecution`
- *   for the nested topology.
+ * - `ReviewExecutionProfile.mode` selects whether this bridge is used.
+ * - `executeReviewViaCodexNested()` handles the nested worker execution phase.
  * - `completeReviewSession()` downstream consumes the result to compile
  *   the final review record.
  *
@@ -51,13 +44,13 @@
  *
  * # Design reference
  *
- * - Sketch v3 §3.1 option codex-A
- * - Nested codex validation notes under `development-records/`
+ * - Nested Codex validation notes under `development-records/`
  */
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { OntoConfig } from "../discovery/config-chain.js";
+import type { OntoConfig } from "../discovery/settings-chain.js";
+import type { ReviewLlmRef } from "../discovery/settings-chain.js";
 import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
@@ -166,66 +159,52 @@ async function archiveWriteIfMissing(targetPath: string, content: string): Promi
 }
 
 // ---------------------------------------------------------------------------
-// Spawn-config resolution
+// Worker setting resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the `model` / `effort` to pass to the codex-nested orchestrator.
- *
- * # Single knob, deliberate
- *
- * The orchestrator's `runCodexNestedTeamlead` currently accepts ONE
- * `{ model, reasoning_effort }` pair and applies it to both the outer
- * codex teamlead AND every inner codex lens subprocess. For the
- * `codex-nested-subprocess` topology this is by design: the shape is
- * `ext-teamlead_native` (external codex teamlead + nested codex lens),
- * so teamlead and subagent ARE the same provider. Splitting the knob
- * would be possible (separate `outer_*` / `inner_*` inputs), but
- * would create four config-shape combinations that need to agree or
- * error, for no empirical benefit observed in any current topology.
- *
- * # Resolution priority (highest first)
- *
- *   1. `review.subagent` when `provider === "codex"` — the P2
- *      canonical location for the spawn target's config. In
- *      `ext-teamlead_native` this single seat steers both outer and
- *      inner codex.
- *   2. `review.teamlead.model` when it is an explicit
- *      `{ provider: "codex" }` spec.
- *   3. `llm.auth=oauth + llm.provider=openai` — canonical model switcher
- *      for Codex OAuth.
- *
- * # Why P2 moved it + why this bridge exists
- *
- * Returns `{}` when nothing resolves — caller omits both fields from
- * the orchestrator input (codex picks its own defaults).
+ * Resolve the `model` / `effort` to pass to the nested Codex orchestrator.
+ * Returns `{}` when nothing resolves; Codex then picks its configured defaults.
  */
 export function resolveCodexSpawnConfig(
   config: OntoConfig,
 ): { model?: string; effort?: string } {
-  const sub = config.review?.subagent;
-  if (sub && sub.provider === "codex") {
-    return {
-      ...(sub.model_id ? { model: sub.model_id } : {}),
-      ...(sub.effort ? { effort: sub.effort } : {}),
-    };
+  const execution = config.review?.execution;
+  const inherited = config.llm;
+  const teamleadConfig =
+    execution?.teamlead.llm && execution.teamlead.llm !== "inherit"
+      ? codexConfigFromRef(execution.teamlead.llm, inherited)
+      : null;
+  const lensConfig =
+    execution?.lens.llm && execution.lens.llm !== "inherit"
+      ? codexConfigFromRef(execution.lens.llm, inherited)
+      : null;
+  if (teamleadConfig && lensConfig && !sameSpawnConfig(teamleadConfig, lensConfig)) {
+    throw new Error(
+      "nested-workers codex execution currently requires matching teamlead/lens llm settings.",
+    );
   }
-  const tl = config.review?.teamlead?.model;
-  if (tl && tl !== "main" && tl.provider === "codex") {
-    return {
-      ...(tl.model_id ? { model: tl.model_id } : {}),
-      ...(tl.effort ? { effort: tl.effort } : {}),
-    };
-  }
+  return teamleadConfig ?? lensConfig ?? codexConfigFromRef("inherit", inherited) ?? {};
+}
 
-  const selection = normalizeLlmModelSwitcher(config.llm);
-  if (selection?.provider === "codex") {
-    return {
-      ...(selection.model_id ? { model: selection.model_id } : {}),
-      ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
-    };
-  }
-  return {};
+function codexConfigFromRef(
+  ref: ReviewLlmRef | undefined,
+  inherited: OntoConfig["llm"],
+): { model?: string; effort?: string } | null {
+  const llm = ref === undefined || ref === "inherit" ? inherited : ref;
+  const selection = normalizeLlmModelSwitcher(llm);
+  if (selection?.provider !== "codex") return null;
+  return {
+    ...(selection.model_id ? { model: selection.model_id } : {}),
+    ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
+  };
+}
+
+function sameSpawnConfig(
+  left: { model?: string; effort?: string },
+  right: { model?: string; effort?: string },
+): boolean {
+  return left.model === right.model && left.effort === right.effort;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,16 +212,15 @@ export function resolveCodexSpawnConfig(
 // ---------------------------------------------------------------------------
 
 /**
- * Execute a review via the codex-nested topology. Reads the execution
+ * Execute a review via the nested Codex worker path. Reads the execution
  * plan from `sessionRoot/execution-plan.yaml`, dispatches all lens
- * packets through one outer codex teamlead + inner codex per lens, and
+ * packets through one outer Codex teamlead plus one inner Codex worker per lens, and
  * classifies outcomes into participating / degraded lens sets.
  *
  * An orchestrator `status: "ok"` is NOT sufficient for `participating` —
  * the output file must exist AND be non-empty. This guards against the
- * outer codex reporting success when the inner codex silently failed to
- * write its `-o` output (a codex CLI quirk documented in §9 of
- * `docs/codex-nested-topology-sandbox.md`).
+ * outer Codex reporting success when an inner worker failed to write its
+ * `-o` output.
  *
  * Injection:
  *   - `runImpl`: replace the orchestrator (default: `runCodexNestedTeamlead`)

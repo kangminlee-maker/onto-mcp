@@ -250,7 +250,7 @@ interpretation_ref: .onto/review/20260404-a1b2c3d4/interpretation.yaml
 binding_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 domain_final_selection_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 resolved_review_mode: full
-resolved_execution_realization: subagent
+resolved_execution_realization: worker
 resolved_host_runtime: codex
 resolved_lens_ids:
   - logic

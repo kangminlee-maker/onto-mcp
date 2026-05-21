@@ -111,7 +111,7 @@ describe("buildNestedTeamleadPrompt", () => {
     // Regression guard for the descriptive→literal rewrite. Earlier prompts
     // asked outer to "invoke nested codex for each lens", which outer
     // interpreted as a self-assignment (using its own file-edit tools) and
-    // never spawned nested subprocesses. The literal-script formulation
+    // never spawned nested workeres. The literal-script formulation
     // removes that interpretation latitude — outer's only action is to
     // pipe the block below to bash.
     const prompt = buildNestedTeamleadPrompt({ lenses: LENSES });
@@ -324,7 +324,7 @@ describe("runCodexNestedTeamlead", () => {
 
   it("forwards model and reasoning_effort to outer codex spawn options", async () => {
     // Regression: outer codex previously inherited ~/.codex/config.toml
-    // defaults (e.g. xhigh effort), ignoring .onto/config.yml overrides and
+    // defaults (e.g. xhigh effort), ignoring .onto/settings.json overrides and
     // causing orchestration timeouts. The input fields must reach the
     // spawn callsite so the CLI can add `-c model_reasoning_effort=…` and
     // `-m <model>` args.

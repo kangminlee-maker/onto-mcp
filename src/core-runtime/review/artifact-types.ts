@@ -2,33 +2,16 @@ import type { FrameworkScope } from "../learning/shared/scope.js";
 
 export type ReviewEntrypoint = "review";
 export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
-/**
- * Execution realization for review lens / synthesize unit.
- * - "subagent":      single bounded execution unit (codex exec, claude Agent tool flat,
- *                     or TS process direct LLM call)
- * - "agent-teams":   nested team spawning (Claude Code TeamCreate; claude host only)
- * - "ts_inline_http": TS process directly calls an LLM endpoint. Inline content mode:
- *                     domain docs and target are embedded in the prompt rather than
- *                     fetched via tool calls. Suitable for hosts without their own
- *                     tool ecosystem (standalone CLI). See
- *                     `src/core-runtime/cli/inline-http-review-unit-executor.ts`.
- */
-export type ReviewExecutionRealization = "subagent" | "agent-teams" | "ts_inline_http";
+export type ReviewExecutionRealization = "worker" | "host-team" | "direct-call";
 /**
  * Host runtime for review execution.
- * - "codex":      codex CLI subprocess (subagent + codex canonical combination)
- * - "claude":     Claude Code host session (both agent_teams_claude and subagent_claude
- *                 combinations; subject session chooses nested vs flat orchestration
- *                 based on its TeamCreate availability)
- * - "anthropic":  Anthropic SDK direct call from TS process. Phase 2 wires this as
- *                 `ts_inline_http + anthropic`. Subagent provider for "Claude Code main
- *                 + Anthropic SDK subagent" cross-host combinations.
- * - "openai":     OpenAI SDK direct call. Wires as `ts_inline_http + openai`.
+ * - "codex":      Codex host-bound worker path.
+ * - "claude":     Claude host session.
+ * - "anthropic":  Anthropic SDK direct call from TS process.
+ * - "openai":     OpenAI SDK direct call.
  * - "grok":       xAI/Grok OpenAI-style API via TS process direct HTTP.
  * - "lmstudio":   Local LM Studio OpenAI-style endpoint.
- * - "standalone": TS process orchestrates with no host LLM (Phase 2 partial; main
- *                 LLM provider read from `main_llm` config in `.onto/config.yml`).
- * See .onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization for semantic definitions.
+ * - "standalone": TS process orchestrates with no host LLM.
  */
 export type ReviewHostRuntime =
   | "codex"
@@ -518,24 +501,7 @@ export interface CoordinatorStateFile {
   halt_reason: string | null;
   error_message: string | null;
   transitions: CoordinatorStateTransition[];
-  /**
-   * Realization self-reported by the orchestrator (e.g. Claude Code
-   * session, coordinator subagent). Recorded on first `coordinator next`
-   * call that carries `--orchestrator-reported-realization <value>`.
-   *
-   * Distinct from `resolved_execution_realization` in `binding.yaml`
-   * (which records plan-time preference from the resolver). This field
-   * records what the caller actually did — closing the gap observed in
-   * development-records/benchmark/20260418-topology-smoke-full-e2e-results.md §"주목할 관찰 1".
-   *
-   * Values are free-form strings. Examples:
-   *   - `claude-agent-tool-flat` (주체자가 Agent tool 로 flat spawn)
-   *   - `claude-teamcreate-nested` (TeamCreate 로 coordinator + nested spawn)
-   *   - `codex-subprocess` (codex CLI subprocess per lens)
-   *
-   * Absent when orchestrator did not self-report. Idempotent — first
-   * value wins, subsequent calls with different values are ignored.
-   */
+  /** Realization self-reported by the caller-side orchestrator. */
   orchestrator_reported_realization?: string;
 }
 
@@ -552,21 +518,7 @@ export interface CoordinatorStartResult {
   session_root: string;
   request_text: string;
   agents: CoordinatorAgentInstruction[];
-  /**
-   * Maximum number of lens agents the orchestrator (caller) may dispatch
-   * in parallel in a single batch. Orchestrator must split `agents[]` into
-   * batches of this size, dispatch each batch, wait for all agents in the
-   * batch to complete, then dispatch the next batch.
-   *
-   * Value resolution order (P9.2, 2026-04-21):
-   *   1. `review.max_concurrent_lenses` (Axis C) in the project config.
-   *   2. The resolved topology's catalog default (TOPOLOGY_CATALOG entry
-   *      in `execution-topology-resolver.ts`).
-   *
-   * Zero/negative override values are ignored and the catalog default
-   * applies instead. The previous `execution_topology_overrides` map
-   * was removed when `OntoConfig.execution_topology_overrides` retired.
-   */
+  /** Maximum number of lens workers the orchestrator may dispatch in parallel. */
   max_concurrent_lenses: number;
 }
 

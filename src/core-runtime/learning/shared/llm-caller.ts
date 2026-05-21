@@ -3,7 +3,7 @@
  *
  * Canonical provider resolution:
  *   1. Caller-explicit: callLlm(..., { provider }) — one provider only.
- *   2. `llm.auth=oauth + llm.provider=openai` — codex CLI subprocess.
+ *   2. `llm.auth=oauth + llm.provider=openai` — Codex worker.
  *   3. `llm.auth=api_key` — OpenAI / Anthropic / Grok API key from env.
  *   4. `llm.auth=local + llm.provider=lmstudio` — local OpenAI-style endpoint.
  *
@@ -153,7 +153,7 @@ export interface LlmCallResult {
   input_tokens: number;
   output_tokens: number;
   model_id: string;
-  /** Actual endpoint hit (audit trail). SDK/subprocess providers each fill their own sentinel. */
+  /** Actual endpoint hit (audit trail). SDK and worker providers each fill their own sentinel. */
   effective_base_url?: string;
   /** Declarative billing classification for audit output. */
   declared_billing_mode?: "subscription" | "per_token" | "local";
@@ -175,7 +175,7 @@ const DEFAULT_MAX_RETRIES = 1;
 
 interface ResolvedProvider {
   provider: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
-  apiKey: string;           // For codex: unused (subprocess uses ~/.codex auth); filled with sentinel.
+  apiKey: string;           // For codex: unused; filled with sentinel.
   baseUrl?: string;         // For OpenAI-style providers.
 }
 
@@ -277,14 +277,14 @@ function explicitProviderMissingCredentialError(
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),
     `명시적 provider override를 사용하려면 ${envVar}를 export하세요.`,
-    "또는 .onto/config.yml 의 llm block 을 현재 credential에 맞게 수정하세요.",
+    "또는 .onto/settings.json 의 llm block 을 현재 credential에 맞게 수정하세요.",
   ].join("\n");
 }
 
 function missingProviderSelectionError(): string {
   return [
     "LLM provider가 지정되지 않았습니다.",
-    "`.onto/config.yml`에 `llm` 블록을 추가하거나 호출부에서 provider를 명시하세요:",
+    "`.onto/settings.json`에 `llm` 블록을 추가하거나 호출부에서 provider를 명시하세요:",
     "  llm:",
     "    auth: oauth | api_key | local",
     "    provider: openai | anthropic | grok | lmstudio",
@@ -308,7 +308,7 @@ function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio
     [
       `provider=${provider} 경로는 model 지정이 필요합니다. 하드코딩된 기본 모델은 제거되었습니다.`,
       "다음 중 한 가지로 설정하세요:",
-      "  1. .onto/config.yml 의 `llm.model: <model-id>`",
+      "  1. .onto/settings.json 의 `llm.model: <model-id>`",
       "  3. 호출부에서 LlmCallConfig.model_id 인자 전달 (런타임 override)",
       "(codex provider는 model 미지정 시 codex CLI가 자체 기본값을 사용하므로 이 메시지의 대상이 아닙니다.)",
     ].join("\n"),
@@ -452,7 +452,7 @@ async function callOpenAI(
 // ---------------------------------------------------------------------------
 
 /**
- * Invoke `codex exec --ephemeral -` as a subprocess for a single-turn
+ * Invoke `codex exec --ephemeral -` as a Codex worker for a single-turn
  * prompt → text response. Uses the host's codex CLI authentication
  * (chatgpt OAuth via ~/.codex/auth.json), which routes through chatgpt.com's
  * backend — cannot be reached via the OpenAI SDK.
@@ -548,7 +548,7 @@ async function callCodexCli(
           "",
           `지정된 모델 "${requested}"이 현재 ChatGPT 계정의 codex allowlist에 없습니다.`,
           "다음 중 한 가지로 해결하세요:",
-          "  1. .onto/config.yml 의 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
+          "  1. .onto/settings.json 의 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
           "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인",
           "  3. `codex login` 으로 API-key 모드로 전환 (per-token 과금, 더 넓은 모델 범위)",
         ].join("\n"),

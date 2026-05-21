@@ -58,10 +58,7 @@ function requireReviewMode(value: string): ReviewMode {
 function requireExecutionRealization(
   value: string,
 ): ReviewExecutionRealization {
-  if (value === "subagent" || value === "agent-teams" || value === "codex") {
-    return value === "codex" ? "subagent" : value;
-  }
-  if (value === "ts_inline_http") {
+  if (value === "worker" || value === "host-team" || value === "direct-call") {
     return value;
   }
   throw new Error(`Invalid execution realization: ${value}`);
@@ -122,7 +119,9 @@ function resolveHostRuntime(
       ? requireExecutionRealization(executionRealizationValue)
       : undefined;
   if (normalizedExecutionRealization) {
-    return normalizedExecutionRealization === "subagent" ? "codex" : "claude";
+    if (normalizedExecutionRealization === "worker") return "codex";
+    if (normalizedExecutionRealization === "host-team") return "claude";
+    return "standalone";
   }
 
   return detectHostRuntimeFromEnvironment() ?? "codex";
@@ -140,12 +139,14 @@ function resolveExecutionRealization(
     return requireExecutionRealization(executionRealizationValue);
   }
   if (hasOptionFlag(argv, "codex")) {
-    return "subagent";
+    return "worker";
   }
   if (hasOptionFlag(argv, "claude")) {
-    return "agent-teams";
+    return "host-team";
   }
-  return hostRuntime === "codex" ? "subagent" : "agent-teams";
+  if (hostRuntime === "codex") return "worker";
+  if (hostRuntime === "claude") return "host-team";
+  return "direct-call";
 }
 
 function requireMaterializedInputKind(

@@ -1,9 +1,9 @@
-# Configuration — onto project config.yml
+# Configuration — onto settings.json
 
 **Authority**: rank 5 (functional contract).
-**Type source**: `src/core-runtime/discovery/config-chain.ts`.
+**Type source**: `src/core-runtime/discovery/settings-chain.ts`.
 
-This document defines the active `.onto/config.yml` surface used by the
+This document defines the active `.onto/settings.json` surface used by the
 productized TypeScript runtime.
 
 ---
@@ -12,11 +12,11 @@ productized TypeScript runtime.
 
 | Path | Role |
 |---|---|
-| `{project}/.onto/config.yml` | project-local config |
-| `{onto-home}/.onto/config.yml` | optional installation-level defaults |
+| `{project}/.onto/settings.json` | project-local settings |
+| `~/.onto/settings.json` | optional user defaults |
 
-Project config wins over home config for scalar keys. Arrays are replaced by
-the project value, except `excluded_names`, which is merged.
+Project settings win over user settings for scalar keys. `excluded_names` is
+merged so user-level ignores remain in effect.
 
 ---
 
@@ -40,31 +40,49 @@ the project value, except `excluded_names`, which is merged.
   - `core-axis`: axiology, coverage, evolution, logic, semantics, structure.
   - `full`: all canonical review lenses.
 
-### `review`
+### `review.execution`
 
-Review execution shape. This block selects orchestration shape, not the LLM
-provider API.
+Review execution shape. This block selects where coordination and lens work run.
+It does not select the provider API.
 
-```yaml
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  max_concurrent_lenses: 6
-  lens_deliberation: controlled-lens-deliberation
+```json
+{
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation",
+      "max_concurrent_workers": 6
+    }
+  }
+}
 ```
 
 Fields:
 
 | Key | Values | Meaning |
 |---|---|---|
-| `teamlead.model` | `main` or `{provider: codex, model_id, effort?}` | who coordinates review execution |
-| `subagent.provider` | `main-native` or `codex` | how individual review units are executed |
-| `subagent.model_id` | string | required when `subagent.provider: codex` |
-| `subagent.effort` | string | optional provider-specific reasoning effort |
-| `max_concurrent_lenses` | positive integer | review unit concurrency cap |
-| `lens_deliberation` | `controlled-lens-deliberation` | lens positions are re-evaluated in bounded contexts before synthesize |
+| `mode` | `main-workers`, `nested-workers` | execution shape |
+| `teamlead.seat` | `main`, `worker` | who coordinates the review |
+| `teamlead.llm` | `inherit` or `llm` object | teamlead model selection |
+| `lens.seat` | `worker` | where lens judgments run |
+| `lens.llm` | `inherit` or `llm` object | lens model selection |
+| `deliberation` | `controlled-lens-deliberation` | required review deliberation semantic |
+| `max_concurrent_workers` | positive integer | review unit concurrency cap |
+
+Valid shapes:
+
+| mode | teamlead seat | lens seat | Behavior |
+|---|---|---|---|
+| `main-workers` | `main` | `worker` | main coordinates; isolated workers run lens units. |
+| `nested-workers` | `worker` | `worker` | a worker teamlead coordinates nested isolated lens workers. |
 
 `controlled-lens-deliberation` is the review semantic. Each participating lens
 first produces an isolated judgment, then re-evaluates its position against the
@@ -72,23 +90,27 @@ other lens outputs in a bounded context. A teamlead-controlled step writes
 `deliberation.md`; synthesize consumes that artifact and does not create a new
 resolution channel.
 
-### `lens_agent_teams_mode`
+CLI setup shortcuts:
 
-- Purpose: opt into the Agent Teams transport for controlled lens deliberation
-  when the host exposes that tool surface.
-- Value: `true` or `false`.
-- The semantic remains `controlled-lens-deliberation` when this is absent.
+| Command | Result |
+|---|---|
+| `onto config use main-workers` | main coordinates review; lens units run as isolated workers |
+| `onto config use nested-workers` | worker teamlead coordinates nested isolated lens workers |
+| `onto config set review.execution.max_concurrent_workers 6` | set the project concurrency cap |
 
 ### `llm`
 
 Canonical model switcher.
 
-```yaml
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 Fields:
@@ -100,54 +122,61 @@ Fields:
 | `model` | provider model id |
 | `effort` | optional reasoning effort |
 | `base_url` | optional OpenAI-compatible endpoint URL |
+| `api_key_env` | optional environment variable name for API key lookup |
 
 Supported mappings:
 
 | auth | provider | Runtime path |
 |---|---|---|
-| `oauth` | `openai` | Codex CLI subprocess |
+| `oauth` | `openai` | host-bound Codex worker |
 | `api_key` | `openai` | OpenAI API |
 | `api_key` | `anthropic` | Anthropic API |
 | `api_key` | `grok` | xAI/Grok OpenAI-compatible API |
 | `local` | `lmstudio` | LM Studio OpenAI-compatible endpoint |
 
-Unsupported combinations stop execution during config/materialization.
+Unsupported combinations stop execution during settings/profile resolution.
 
 ---
 
 ## 3. Canonical Example
 
-```yaml
-output_language: ko
-
-domains:
-  - ontology
-
-review:
-  teamlead:
-    model: main
-  subagent:
-    provider: main-native
-  lens_deliberation: controlled-lens-deliberation
-
-lens_agent_teams_mode: false
-review_mode: core-axis
-
-llm:
-  auth: oauth
-  provider: openai
-  model: gpt-5.4
-  effort: high
+```json
+{
+  "output_language": "ko",
+  "domains": ["ontology"],
+  "review_mode": "core-axis",
+  "review": {
+    "execution": {
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "deliberation": "controlled-lens-deliberation",
+      "max_concurrent_workers": 6
+    }
+  },
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.4",
+    "effort": "high"
+  }
+}
 ```
 
 ---
 
 ## 4. Validation Policy
 
-- Unknown top-level keys stop config loading.
-- Invalid `review` values stop topology derivation.
-- Unsupported `llm` mappings stop materialization.
+- Unknown top-level keys stop settings loading.
+- Invalid `review.execution` values stop profile derivation.
+- Unsupported `llm` mappings stop runtime preparation.
 - Missing required artifacts stop review completion.
 
-`learn` and `govern` MCP configuration is intentionally left for a separate
-design pass.
+`learn` and `govern` MCP settings are intentionally left for a separate design
+pass.

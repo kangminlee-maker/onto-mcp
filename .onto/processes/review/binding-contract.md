@@ -47,7 +47,7 @@ closed-world validation에 가깝다.
 1. `검토 해석 (InvocationInterpretation)` 출력
 2. 현재 project root
 3. 실제 filesystem 상태
-4. `.onto/config.yml`
+4. `.onto/settings.json`
 5. host execution capability
    - Claude plugin
    - Codex CLI availability
@@ -154,7 +154,7 @@ domain_final_selection:
   final_value: ontology
   selection_mode: user_confirmed_recommendation
 resolved_session_domain: ontology
-resolved_execution_realization: agent-teams
+resolved_execution_realization: host-team
 resolved_host_runtime: claude
 resolved_review_mode: full
 resolved_lens_set:

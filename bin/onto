@@ -24,7 +24,7 @@ function findProjectRoot(startDir) {
   let dir = startDir;
   while (true) {
     if (
-      fs.existsSync(path.join(dir, ".onto", "config.yml")) ||
+      fs.existsSync(path.join(dir, ".onto", "settings.json")) ||
       fs.existsSync(path.join(dir, ".git")) ||
       fs.existsSync(path.join(dir, "package.json"))
     ) {

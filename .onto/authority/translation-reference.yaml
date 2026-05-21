@@ -147,7 +147,7 @@ concepts:
     en: "individual query"
     definition: >
       A process where a single verification agent answers a question from
-      its specialized perspective. Uses Agent tool (subagent), not Agent Teams.
+      its specialized perspective. Uses Agent tool (worker), not Agent Teams.
       Simpler than team review; no Philosopher synthesis.
     relations:
       - executed_by: "verification agent (single)"
@@ -302,11 +302,11 @@ concepts:
   - ko: "프로젝트 도메인"
     en: "project domains"
     definition: >
-      The set of domains declared in config.yml under the domains: key.
+      The set of domains declared in settings.json under the domains: key.
       An unordered set — [A, B] and [B, A] are identical. Declares
       which domains are relevant to the project, not which one is primary.
     relations:
-      - declared_in: "config.yml domains:"
+      - declared_in: "settings.json domains:"
       - subset_of: "global domains"
       - used_in: "Domain Selection Flow (display order: project section)"
     disambiguation: >
@@ -500,11 +500,11 @@ concepts:
     en: "domain determination"
     definition: >
       The process of identifying which domain(s) apply to a project.
-      Checks config.yml first, then CLAUDE.md, supports multiple domains
+      Checks settings.json first, then CLAUDE.md, supports multiple domains
       (primary + secondary), and asks the user if no declaration is found.
     relations:
       - performed_during: "onboarding | team review (Context Gathering)"
-      - reads_from: ".onto/config.yml | CLAUDE.md"
+      - reads_from: ".onto/settings.json | CLAUDE.md"
       - determines: "domain document path"
     disambiguation: >
       Not 'domain detection' (implies automated inference only).
@@ -573,11 +573,11 @@ concepts:
       Not 'iteration' (round implies a structured phase with defined inputs
       and outputs, not arbitrary repetition). Not 'cycle' (too generic).
 
-  - ko: "fallback (subagent mode)"
+  - ko: "fallback (worker mode)"
     en: "fallback"
     definition: >
       The degraded execution mode when TeamCreate fails. Uses Agent tool
-      (subagent) instead of Agent Teams. Process purpose and output format
+      (worker) instead of Agent Teams. Process purpose and output format
       remain identical, but deliberation (direct SendMessage between
       teammates) is skipped. Team lead must include all context directly
       in each Agent tool call since self-loading is not possible.

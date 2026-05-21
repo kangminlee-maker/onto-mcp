@@ -62,7 +62,7 @@ Present the promotion plan for user approval:
 | Source | ~/.onto/drafts/{domain}/ |
 | Destination | ~/.onto/domains/{domain}/ |
 | Files to move | {count} (8 domain files + feedback-log.md if present) |
-| config.yml update | Add `{domain}` to `domains:` list (if not already present) |
+| settings.json update | Add `{domain}` to `domains:` list (if not already present) |
 
 Proceed with promotion?
 ```
@@ -74,9 +74,9 @@ Upon user approval, execute the following:
 1. **Move directory**: `~/.onto/drafts/{domain}/` → `~/.onto/domains/{domain}/`
    - This includes `feedback-log.md` if it exists — the feedback history travels with the domain.
 
-2. **Update config.yml**: Add `{domain}` to the `domains:` list in `{product}/.onto/config.yml`.
+2. **Update settings.json**: Add `{domain}` to the `domains:` list in `{product}/.onto/settings.json`.
    - **Idempotent**: If `{domain}` is already in the list, do not add a duplicate entry.
-   - If `config.yml` or `domains:` key does not exist, inform the user that manual configuration may be needed.
+   - If `settings.json` or `domains:` key does not exist, inform the user that manual configuration may be needed.
 
 ### 5. Completion Report
 
@@ -88,7 +88,7 @@ Upon user approval, execute the following:
 | Domain | {domain} |
 | New location | ~/.onto/domains/{domain}/ |
 | Files moved | {count} |
-| config.yml | {updated / already contained / not found} |
+| settings.json | {updated / already contained / not found} |
 
 The domain is now established and will be available for selection in review sessions.
 ```

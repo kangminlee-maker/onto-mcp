@@ -53,7 +53,7 @@ ${packetText}
 `;
 }
 
-async function runCodexSubagent(
+async function runCodexWorker(
   projectRoot: string,
   boundedPrompt: string,
   outputPath: string,
@@ -96,7 +96,7 @@ async function runCodexSubagent(
   // Real-time tee to disk: each codex stdout/stderr chunk is appended to
   // the running log under the lens output directory so a watcher pane
   // can `tail -f` it live. The in-memory buffers remain for final error
-  // reporting. Stream path mirrors the codex-nested topology pattern
+  // reporting. Stream path mirrors the nested worker pattern
   // (hidden filename, sessionRoot/round1/.<lens>.running.log). The
   // lifecycle — rename on failure / rm on success — happens after the
   // child exits, below.
@@ -159,8 +159,7 @@ async function runCodexSubagent(
   if (exitCode !== 0) {
     // Failure path — persist running log for post-hoc inspection at a
     // stable path (renaming from .running.log to .nested-stderr.log
-    // mirrors the codex-nested convention so downstream tooling sees a
-    // single "per-lens failure trace" filename regardless of topology).
+    // keeps a single per-lens failure trace filename).
     try {
       const nestedErrPath = path.join(outputDir, `.${unitId}.nested-stderr.log`);
       fsSync.renameSync(runningLogPath, nestedErrPath);
@@ -173,7 +172,7 @@ async function runCodexSubagent(
     throw new Error(
       combinedMessage.length > 0
         ? combinedMessage
-        : `codex subagent executor exited with code ${exitCode}`,
+        : `Codex worker executor exited with code ${exitCode}`,
     );
   }
 
@@ -193,7 +192,7 @@ async function runCodexSubagent(
   if (!outputExists || outputSize === 0) {
     const normalizedOutput = stdout.trim();
     if (normalizedOutput.length === 0) {
-      throw new Error("Codex subagent executor produced no output (neither -o file nor stdout).");
+      throw new Error("Codex worker executor produced no output (neither -o file nor stdout).");
     }
     await fs.writeFile(outputPath, `${normalizedOutput}\n`, "utf8");
   }
@@ -232,7 +231,7 @@ export async function runCodexReviewUnitExecutorCli(
   // NOT go through callLlm — it spawns `codex exec` directly — so the PR-1
   // [model-call] logs in llm-caller.ts cover the background-task path only.
   // This single startup emit gives parent-process log correlators a breadcrumb
-  // for the lens-execution codex subprocess too, so a 5-lens review produces
+  // for the lens-execution Codex worker too, so a 5-lens review produces
   // one [plan:executor] line per lens regardless of provider identity.
   process.stderr.write(
     `[plan:executor] kind=codex unit_id=${unitId} model=${
@@ -257,7 +256,7 @@ export async function runCodexReviewUnitExecutorCli(
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
-  await runCodexSubagent(
+  await runCodexWorker(
     projectRoot,
     boundedPrompt,
     outputPath,
@@ -280,7 +279,7 @@ export async function runCodexReviewUnitExecutorCli(
         unit_kind: unitKind,
         packet_path: packetPath,
         output_path: outputPath,
-        realization: "subagent",
+        realization: "worker",
         host_runtime: "codex",
       },
       null,

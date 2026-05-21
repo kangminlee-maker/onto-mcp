@@ -178,7 +178,7 @@ describe("spawnWatcherPane — ontoHome fallback", () => {
 
   it("finds watcher script in ontoHome when projectRoot has none", () => {
     // Regression guard for 2026-04-22 self-review finding: scripts/review-pr.sh
-    // puts config.yml + target.diff in an isolated tmp project-root that has
+    // puts settings.json + target.diff in an isolated tmp project-root that has
     // no scripts/ subdirectory. Without ontoHome fallback the watcher would
     // silently degrade to `watcher script not found` and emit the manual-hint
     // branch instead of the intended dry-run detection.

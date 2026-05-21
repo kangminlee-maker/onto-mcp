@@ -221,7 +221,7 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 
 - "Referential integrity" (does A point to B?) and "semantic consistency" (are A's contents compatible with B's contents?) are separate verification layers
 
-- "Distributed" and "scalable" are independent properties. Distribution is a topology decision; scalability is a capacity property
+- "Distributed" and "scalable" are independent properties. Distribution is an execution profile decision; scalability is a capacity property
 
 - "Eventual consistency" does not mean "inconsistent." It guarantees convergence. The term describes convergence behavior, not data quality
 

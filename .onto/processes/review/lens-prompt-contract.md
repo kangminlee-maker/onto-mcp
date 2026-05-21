@@ -66,7 +66,7 @@
 가능한 realization 예:
 
 - Agent Teams teammate
-- subagent
+- worker
 - `MCP`로 분리된 `LLM`
 - external model worker
 

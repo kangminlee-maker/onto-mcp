@@ -56,7 +56,7 @@ function buildPlan(
   return {
     session_id: "pr-h-test",
     session_root: sessionRoot,
-    execution_realization: "subagent",
+    execution_realization: "worker",
     host_runtime: "codex",
     review_mode: "core-axis",
     interpretation_artifact_path: path.join(sessionRoot, "interpretation.yaml"),
@@ -241,7 +241,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBeUndefined();
   });
 
-  it("reads model/effort from review.subagent", async () => {
+  it("reads model/effort from lens llm settings", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -250,7 +250,20 @@ describe("executeReviewViaCodexNested — forwarding", () => {
         sessionRoot: fixture.sessionRoot,
         ontoConfig: {
           review: {
-            subagent: { provider: "codex", model_id: "gpt-sub", effort: "medium" },
+            execution: {
+              mode: "nested-workers",
+              teamlead: { seat: "worker", llm: "inherit" },
+              lens: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-sub",
+                  effort: "medium",
+                },
+              },
+              deliberation: "controlled-lens-deliberation",
+            },
           },
         },
       },
@@ -261,7 +274,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("medium");
   });
 
-  it("reads model/effort from review.teamlead.model when external codex teamlead", async () => {
+  it("reads model/effort from teamlead llm settings", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -270,7 +283,20 @@ describe("executeReviewViaCodexNested — forwarding", () => {
         sessionRoot: fixture.sessionRoot,
         ontoConfig: {
           review: {
-            teamlead: { model: { provider: "codex", model_id: "gpt-tl", effort: "high" } },
+            execution: {
+              mode: "nested-workers",
+              teamlead: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-tl",
+                  effort: "high",
+                },
+              },
+              lens: { seat: "worker", llm: "inherit" },
+              deliberation: "controlled-lens-deliberation",
+            },
           },
         },
       },
@@ -281,7 +307,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("high");
   });
 
-  it("review.subagent wins over llm OpenAI OAuth selection", async () => {
+  it("actor llm wins over inherited OpenAI OAuth selection", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -290,7 +316,20 @@ describe("executeReviewViaCodexNested — forwarding", () => {
         sessionRoot: fixture.sessionRoot,
         ontoConfig: {
           review: {
-            subagent: { provider: "codex", model_id: "gpt-sub", effort: "medium" },
+            execution: {
+              mode: "nested-workers",
+              teamlead: { seat: "worker", llm: "inherit" },
+              lens: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-sub",
+                  effort: "medium",
+                },
+              },
+              deliberation: "controlled-lens-deliberation",
+            },
           },
           llm: {
             auth: "oauth",
@@ -307,9 +346,8 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("medium");
   });
 
-  it("review.subagent with provider=main-native leaves selection to llm switcher", async () => {
-    // main-native subagent is not a codex provider, so the resolver reads
-    // the llm switcher when it resolves to Codex OAuth.
+  it("inherited lens llm leaves selection to llm switcher", async () => {
+    // The nested worker path reads the llm switcher when actor llm refs inherit.
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -318,7 +356,12 @@ describe("executeReviewViaCodexNested — forwarding", () => {
         sessionRoot: fixture.sessionRoot,
         ontoConfig: {
           review: {
-            subagent: { provider: "main-native" },
+            execution: {
+              mode: "nested-workers",
+              teamlead: { seat: "worker", llm: "inherit" },
+              lens: { seat: "worker", llm: "inherit" },
+              deliberation: "controlled-lens-deliberation",
+            },
           },
           llm: {
             auth: "oauth",
