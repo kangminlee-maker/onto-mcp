@@ -3,7 +3,7 @@
   "version": "0.2.2",
   "description": "Ontology-as-Code productization core — 9-lens review, domain knowledge management, deterministic state enforcement",
   "onto_release_channel": "beta",
-  "onto_release_label": "onto-harness",
+  "onto_release_label": "onto-mcp-local-reset",
   "type": "module",
   "bin": {
     "onto": "./bin/onto"

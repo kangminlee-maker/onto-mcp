@@ -7,9 +7,9 @@
 
 ## 1. Position
 
-이 레포는 `onto` 프로토타입을 보존하면서 `ontology as code` 기준으로 서비스화하는 전환 레포다.
+이 레포는 `onto` 프로토타입을 보존하면서 `ontology as code` 기준으로 서비스화하는 전환 레포다. 현재 제품 방향은 TS core를 유지하고 Codex/Claude/기타 host가 호출할 수 있는 MCP-native tool surface를 추가하는 것이다.
 
-- reference prototype + prompt-backed reference execution source + productization target
+- reference prototype + prompt-backed reference execution source + TS product core + MCP tool surface
 
 ---
 
@@ -19,13 +19,13 @@
 
 | 순위 | 파일 | 폴더 |
 |---|---|---|
-| 1 | [core-lexicon.yaml](/Users/kangmin/cowork/onto/.onto/authority/core-lexicon.yaml) | .onto/authority/ |
-| 2 | [ontology-as-code-guideline.md](/Users/kangmin/cowork/onto/.onto/principles/ontology-as-code-guideline.md) | .onto/principles/ |
-| 2 | [llm-native-development-guideline.md](/Users/kangmin/cowork/onto/.onto/principles/llm-native-development-guideline.md) | .onto/principles/ |
-| 2 | [product-locality-principle.md](/Users/kangmin/cowork/onto/.onto/principles/product-locality-principle.md) | .onto/principles/ |
-| 3 | [productization-charter.md](/Users/kangmin/cowork/onto/.onto/principles/productization-charter.md) | .onto/principles/ |
-| 4 | [llm-runtime-interface-principles.md](/Users/kangmin/cowork/onto/.onto/principles/llm-runtime-interface-principles.md) | .onto/principles/ |
-| 4 | [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto/.onto/principles/ontology-as-code-naming-charter.md) | .onto/principles/ |
+| 1 | [core-lexicon.yaml](/Users/kangmin/cowork/onto-mcp/.onto/authority/core-lexicon.yaml) | .onto/authority/ |
+| 2 | [ontology-as-code-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-guideline.md) | .onto/principles/ |
+| 2 | [llm-native-development-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-native-development-guideline.md) | .onto/principles/ |
+| 2 | [product-locality-principle.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/product-locality-principle.md) | .onto/principles/ |
+| 3 | [productization-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/productization-charter.md) | .onto/principles/ |
+| 4 | [llm-runtime-interface-principles.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-runtime-interface-principles.md) | .onto/principles/ |
+| 4 | [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-naming-charter.md) | .onto/principles/ |
 
 ### 폴더 구조
 
@@ -37,17 +37,17 @@
 
 `review` 작업 시 추가로 읽을 문서:
 
-1. [productized-live-path.md](/Users/kangmin/cowork/onto/.onto/processes/review/productized-live-path.md)
-2. [nested-spawn-coordinator-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/nested-spawn-coordinator-contract.md)
-3. [lens-registry.md](/Users/kangmin/cowork/onto/.onto/processes/review/lens-registry.md)
-4. [interpretation-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/interpretation-contract.md)
-5. [binding-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/binding-contract.md)
-6. [lens-prompt-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/lens-prompt-contract.md)
-7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/synthesize-prompt-contract.md)
-8. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto/.onto/processes/review/execution-preparation-artifacts.md)
-9. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/prompt-execution-runner-contract.md)
-10. [record-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/record-contract.md)
-11. [record-field-mapping.md](/Users/kangmin/cowork/onto/.onto/processes/review/record-field-mapping.md)
+1. [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
+2. [nested-spawn-coordinator-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/nested-spawn-coordinator-contract.md)
+3. [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
+4. [interpretation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/interpretation-contract.md)
+5. [binding-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/binding-contract.md)
+6. [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
+7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
+8. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
+9. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
+10. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+11. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
 
 ---
 
@@ -64,8 +64,8 @@
 
 ## 4. Canonical Terms
 
-개념 SSOT: [core-lexicon.yaml](/Users/kangmin/cowork/onto/.onto/authority/core-lexicon.yaml)
-이름 규칙: [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto/.onto/principles/ontology-as-code-naming-charter.md)
+개념 SSOT: [core-lexicon.yaml](/Users/kangmin/cowork/onto-mcp/.onto/authority/core-lexicon.yaml)
+이름 규칙: [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-naming-charter.md)
 
 자주 쓰는 개념:
 
@@ -121,9 +121,9 @@ DO NOT:
 
 기준 문서:
 
-- [lens-registry.md](/Users/kangmin/cowork/onto/.onto/processes/review/lens-registry.md)
-- [lens-prompt-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/lens-prompt-contract.md)
-- [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/synthesize-prompt-contract.md)
+- [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
+- [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
+- [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
 
 ---
 
@@ -141,9 +141,9 @@ DO NOT:
 
 관련 문서:
 
-- [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto/.onto/processes/review/execution-preparation-artifacts.md)
-- [record-contract.md](/Users/kangmin/cowork/onto/.onto/processes/review/record-contract.md)
-- [record-field-mapping.md](/Users/kangmin/cowork/onto/.onto/processes/review/record-field-mapping.md)
+- [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
+- [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+- [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
 
 ---
 
@@ -158,17 +158,45 @@ core 제품화 계층은 TypeScript다.
 - `npm run review:run-prompt-execution -- ...`
 - `npm run review:complete-session -- ...`
 
-관련 설정: [package.json](/Users/kangmin/cowork/onto/package.json), [tsconfig.json](/Users/kangmin/cowork/onto/tsconfig.json)
+관련 설정: [package.json](/Users/kangmin/cowork/onto-mcp/package.json), [tsconfig.json](/Users/kangmin/cowork/onto-mcp/tsconfig.json)
 
 ---
 
-## 9. Current Priority
+## 9. MCP-Native Boundary
+
+장기 interface는 host별 slash command가 아니라 MCP tool call이다.
+
+```text
+.onto YAML/MD contracts
+        -> TS core runtime
+        -> MCP tool surface
+        -> provider adapters
+```
+
+경계:
+
+- `.onto/`와 `src/core-runtime/`이 `onto` 의미론을 소유한다.
+- `src/core-api/`는 기존 runtime을 library처럼 부르는 facade다.
+- `src/mcp/`는 tool schema와 server surface만 소유한다.
+- `src/providers/`는 host별 실행 능력만 소유한다.
+- Python/ouroboros 연동은 provider evidence 또는 conformance harness로만 취급한다.
+
+기준 문서:
+
+- [DD-010](/Users/kangmin/cowork/onto-mcp/docs/decisions/DD-010-onto-mcp-native-tool-surface.md)
+- [repo-layout.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/repo-layout.md)
+- [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
+
+---
+
+## 10. Current Priority
 
 1. `검토 (review)`의 `제품화된 실시간 경로`를 canonical execution truth로 정착
 2. `9개 lens + synthesize` 구조를 실제 실행 truth로 정착
 3. `맥락 격리 추론 단위`를 유지
 4. `리뷰 기록 (ReviewRecord)`를 actual primary artifact로 도입
-5. 그 뒤에 한 경계씩 runtime 구현으로 치환
+5. TS core API를 정리한 뒤 MCP tool surface로 노출
+6. provider contract로 Codex / Claude / ouroboros / local 실행 차이를 흡수
 
 새 작업은 항상 아래 질문으로 시작한다.
 

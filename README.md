@@ -2,6 +2,28 @@
 
 A multi-host LLM-driven runtime that performs multi-perspective verification of logical systems (9-lens review + synthesize) and reconstructs ontologies from analysis targets. Runs as a Claude Code plugin, a Codex CLI subagent, or a standalone CLI process.
 
+## Current Direction: MCP-Native Onto
+
+This local reset treats the TS `onto` runtime as the product core and moves
+platform integration toward an MCP-native tool surface.
+
+```text
+.onto YAML/MD contracts
+        -> TS core runtime
+        -> MCP tools
+        -> execution providers: codex, claude, ouroboros, local/mock
+```
+
+Key docs:
+
+- `docs/decisions/DD-010-onto-mcp-native-tool-surface.md`
+- `docs/architecture/repo-layout.md`
+- `docs/architecture/mcp-native-tool-surface.md`
+- `docs/roadmap.md`
+
+The previous ouroboros addon work is evidence and conformance input, not the
+main product path.
+
 ## Host Compatibility Matrix
 
 | Host runtime | Detection signal | Main LLM (orchestrator) | Subagent LLM (per-lens) | Status |
