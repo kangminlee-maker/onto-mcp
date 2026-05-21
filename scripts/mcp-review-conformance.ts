@@ -233,11 +233,38 @@ async function main(): Promise<void> {
       "execution-result must include controlled-deliberation unit.",
     );
 
-    const reviewRecord = await readYaml<{ deliberation_result_ref?: string }>(structured.reviewRecordPath);
+    const reviewRecord = await readYaml<{
+      deliberation_result_ref?: string;
+      lens_output_schema_version?: number;
+      per_lens_provenance?: Record<string, {
+        domain_constraints_used?: unknown;
+        domain_context_assumptions?: unknown;
+      }>;
+      shared_phenomenon_summary?: unknown;
+    }>(structured.reviewRecordPath);
     assert(
       typeof reviewRecord.deliberation_result_ref === "string" &&
         path.resolve(reviewRecord.deliberation_result_ref) === deliberationPath,
       "review-record deliberation_result_ref must point to deliberation.md.",
+    );
+    assert(
+      reviewRecord.lens_output_schema_version === 2,
+      "review-record lens_output_schema_version must be 2.",
+    );
+    assert(
+      reviewRecord.per_lens_provenance !== undefined &&
+        structured.participatingLensIds.every((lensId) => {
+          const provenance = reviewRecord.per_lens_provenance?.[lensId];
+          return (
+            Array.isArray(provenance?.domain_constraints_used) &&
+            Array.isArray(provenance?.domain_context_assumptions)
+          );
+        }),
+      "review-record must include per_lens_provenance for every participating lens.",
+    );
+    assert(
+      Array.isArray(reviewRecord.shared_phenomenon_summary),
+      "review-record shared_phenomenon_summary must be an array.",
     );
 
     const deliberationFrontmatter = parseMarkdownFrontmatter<{ deliberation_status?: string }>(

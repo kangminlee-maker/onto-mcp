@@ -383,6 +383,30 @@ export interface ReviewExecutionResultArtifact {
   synthesize_execution_result?: ReviewUnitExecutionResult | null;
 }
 
+export interface ReviewLensDomainConstraint {
+  source_doc: string;
+  source_version_or_snapshot_id: string;
+  anchor: string;
+}
+
+export interface ReviewLensProvenance {
+  domain_constraints_used: ReviewLensDomainConstraint[] | null;
+  domain_context_assumptions: string[] | null;
+}
+
+export type SharedPhenomenonClaimRelation =
+  | "corroboration"
+  | "disagreement"
+  | "partial overlap"
+  | "dedup";
+
+export interface SharedPhenomenonSummaryEntry {
+  target: string;
+  evidence_anchor: string;
+  participating_lens_ids: string[];
+  claim_relation: SharedPhenomenonClaimRelation;
+}
+
 export interface DirectoryListingOptions {
   excluded_names: string[];
   max_depth: number;
@@ -418,14 +442,17 @@ export interface ReviewRecord {
   materialized_input_ref: string;
   context_candidate_assembly_ref: string;
   lens_result_refs: Record<string, string>;
+  lens_output_schema_version: number;
   participating_lens_ids: string[];
   excluded_lens_ids: string[];
   degraded_lens_ids: string[];
   degradation_notes_ref?: string | null;
+  per_lens_provenance: Record<string, ReviewLensProvenance>;
   synthesis_result_ref: string;
   deliberation_status: DeliberationStatus;
   deliberation_result_ref: string;
   final_output_ref: string;
+  shared_phenomenon_summary: SharedPhenomenonSummaryEntry[];
 }
 
 // ─────────────────────────────────────────────

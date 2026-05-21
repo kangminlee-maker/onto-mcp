@@ -163,9 +163,11 @@ team lead는 아래 순서로 `review-record.yaml`을 assemble한다.
 2. `binding.yaml`의 ref와 resolved fields를 기록
 3. execution-preparation artifact ref를 기록
 4. 실제 존재하는 `round1/*.md`를 lens id별로 매핑
-5. `deliberation.md`와 `synthesis.md`를 기록
-6. `final-output.md` ref를 기록
-7. `error-log.md`가 있으면 degraded/deliberation status를 조정한다
+5. 각 lens output의 schema v2 provenance section을 `per_lens_provenance`로 구조화한다
+6. `deliberation.md`와 `synthesis.md`를 기록한다
+7. `synthesis.md`의 shared phenomenon section이 있으면 `shared_phenomenon_summary`로 구조화한다
+8. `final-output.md` ref를 기록
+9. `error-log.md`가 있으면 degraded/deliberation status를 조정한다
 
 중요:
 
@@ -246,5 +248,5 @@ final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 다음 단계는 아래다.
 
 1. degraded case source를 `error-log.md` 외의 structured artifact로 더 명확히 분리한다
-2. TS aggregate assembler를 이 mapping의 canonical writer로 유지한다
-3. host command path가 assembler를 직접 호출하게 연결한다
+2. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
+3. host command path와 MCP path가 같은 `ReviewRecord` validation을 공유하게 한다

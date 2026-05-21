@@ -35,6 +35,12 @@ function renderLensOutput(unitId: string, packetPath: string): string {
 
 ### Applied Learnings
 - prompt packet: \`${packetPath}\`
+
+### Domain Constraints Used
+- none
+
+### Domain Context Assumptions
+- none
 `;
 }
 

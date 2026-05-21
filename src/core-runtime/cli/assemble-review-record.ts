@@ -4,12 +4,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import YAML from "yaml";
 import type {
   CoordinatorStateFile,
   InvocationBindingArtifact,
+  ReviewLensDomainConstraint,
+  ReviewLensProvenance,
   ReviewExecutionResultArtifact,
   ReviewRecord,
   ReviewRecordStatus,
+  SharedPhenomenonClaimRelation,
+  SharedPhenomenonSummaryEntry,
 } from "../review/artifact-types.js";
 import {
   fileExists,
@@ -20,6 +25,15 @@ import {
   writeYamlDocument,
 } from "../review/review-artifact-utils.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
+
+const LENS_OUTPUT_SCHEMA_VERSION = 2;
+
+const SHARED_PHENOMENON_RELATIONS = new Set<SharedPhenomenonClaimRelation>([
+  "corroboration",
+  "disagreement",
+  "partial overlap",
+  "dedup",
+]);
 
 function requireString(
   value: string | boolean | undefined,
@@ -60,6 +74,250 @@ async function detectDeliberationStatus(
   }
   throw new Error(
     `Review execution result must declare deliberation_status=performed for session ${executionResult.session_id}.`,
+  );
+}
+
+async function assertSynthesisDeliberationPerformed(
+  synthesisPath: string,
+): Promise<void> {
+  const synthesisText = await fs.readFile(synthesisPath, "utf8");
+  const parsed = parseMarkdownFrontmatter<{ deliberation_status?: string }>(
+    synthesisText,
+  );
+  if (parsed.metadata?.deliberation_status !== "performed") {
+    throw new Error(
+      `synthesis.md must declare frontmatter deliberation_status: performed: ${synthesisPath}`,
+    );
+  }
+}
+
+function normalizeHeadingTitle(title: string): string {
+  return title
+    .replace(/[`*_]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function extractMarkdownSection(
+  markdownText: string,
+  acceptedTitles: string[],
+): string | null {
+  const accepted = new Set(acceptedTitles.map(normalizeHeadingTitle));
+  const body = parseMarkdownFrontmatter<unknown>(markdownText).body;
+  const lines = body.split(/\r?\n/u);
+  let start = -1;
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(#{1,6})\s+(.+?)\s*#*\s*$/u.exec(lines[index] ?? "");
+    if (!match?.[2]) continue;
+    if (accepted.has(normalizeHeadingTitle(match[2]))) {
+      start = index + 1;
+      break;
+    }
+  }
+  if (start < 0) return null;
+  let end = lines.length;
+  for (let index = start; index < lines.length; index += 1) {
+    if (/^#{1,6}\s+/u.test(lines[index] ?? "")) {
+      end = index;
+      break;
+    }
+  }
+  return lines.slice(start, end).join("\n").trim();
+}
+
+function extractYamlFence(sectionText: string): string {
+  const trimmed = sectionText.trim();
+  const match = /```(?:ya?ml)?\s*\n([\s\S]*?)\n```/iu.exec(trimmed);
+  return (match?.[1] ?? trimmed).trim();
+}
+
+function isEmptyListSection(sectionText: string): boolean {
+  const normalized = sectionText
+    .trim()
+    .toLowerCase()
+    .replace(/[.`]/g, "");
+  return ["", "[]", "none", "- none", "n/a", "- n/a"].includes(normalized);
+}
+
+function parseYamlList(sectionText: string, label: string): unknown[] {
+  if (isEmptyListSection(sectionText)) return [];
+  const source = extractYamlFence(sectionText);
+  if (isEmptyListSection(source)) return [];
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(source);
+  } catch (error: unknown) {
+    throw new Error(
+      `Invalid YAML list in ${label}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (parsed === null || parsed === undefined) return [];
+  if (
+    typeof parsed === "string" &&
+    ["none", "n/a"].includes(parsed.trim().toLowerCase())
+  ) {
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Expected YAML list in ${label}.`);
+  }
+  if (
+    parsed.length === 1 &&
+    typeof parsed[0] === "string" &&
+    ["none", "n/a"].includes(parsed[0].trim().toLowerCase())
+  ) {
+    return [];
+  }
+  return parsed;
+}
+
+function requireRecord(value: unknown, label: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Expected object item in ${label}.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function requireNonEmptyString(
+  value: unknown,
+  label: string,
+): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Expected non-empty string for ${label}.`);
+  }
+  return value.trim();
+}
+
+function parseDomainConstraints(
+  sectionText: string,
+  lensId: string,
+): ReviewLensDomainConstraint[] {
+  return parseYamlList(sectionText, `${lensId} Domain Constraints Used`).map(
+    (item, index) => {
+      const record = requireRecord(
+        item,
+        `${lensId} Domain Constraints Used[${index}]`,
+      );
+      return {
+        source_doc: requireNonEmptyString(
+          record.source_doc,
+          `${lensId}.domain_constraints_used[${index}].source_doc`,
+        ),
+        source_version_or_snapshot_id: requireNonEmptyString(
+          record.source_version_or_snapshot_id,
+          `${lensId}.domain_constraints_used[${index}].source_version_or_snapshot_id`,
+        ),
+        anchor: requireNonEmptyString(
+          record.anchor,
+          `${lensId}.domain_constraints_used[${index}].anchor`,
+        ),
+      };
+    },
+  );
+}
+
+function parseStringList(
+  sectionText: string,
+  label: string,
+): string[] {
+  return parseYamlList(sectionText, label).map((item, index) =>
+    requireNonEmptyString(item, `${label}[${index}]`),
+  );
+}
+
+async function deriveLensProvenance(
+  lensResultPathsById: Record<string, string>,
+  participatingLensIds: string[],
+): Promise<Record<string, ReviewLensProvenance>> {
+  const perLensProvenance: Record<string, ReviewLensProvenance> = {};
+  for (const lensId of participatingLensIds) {
+    const lensResultPath = lensResultPathsById[lensId];
+    if (!lensResultPath) {
+      throw new Error(`Missing lens result path for participating lens: ${lensId}`);
+    }
+    const lensText = await fs.readFile(lensResultPath, "utf8");
+    const constraintsSection = extractMarkdownSection(lensText, [
+      "Domain Constraints Used",
+    ]);
+    const assumptionsSection = extractMarkdownSection(lensText, [
+      "Domain Context Assumptions",
+    ]);
+    if (constraintsSection === null) {
+      throw new Error(
+        `Lens output schema v${LENS_OUTPUT_SCHEMA_VERSION} requires "Domain Constraints Used": ${lensResultPath}`,
+      );
+    }
+    if (assumptionsSection === null) {
+      throw new Error(
+        `Lens output schema v${LENS_OUTPUT_SCHEMA_VERSION} requires "Domain Context Assumptions": ${lensResultPath}`,
+      );
+    }
+    perLensProvenance[lensId] = {
+      domain_constraints_used: parseDomainConstraints(constraintsSection, lensId),
+      domain_context_assumptions: parseStringList(
+        assumptionsSection,
+        `${lensId} Domain Context Assumptions`,
+      ),
+    };
+  }
+  return perLensProvenance;
+}
+
+function parseSharedPhenomenonSummaryItem(
+  item: unknown,
+  index: number,
+): SharedPhenomenonSummaryEntry {
+  const record = requireRecord(item, `shared_phenomenon_summary[${index}]`);
+  const claimRelation = requireNonEmptyString(
+    record.claim_relation,
+    `shared_phenomenon_summary[${index}].claim_relation`,
+  );
+  if (!SHARED_PHENOMENON_RELATIONS.has(claimRelation as SharedPhenomenonClaimRelation)) {
+    throw new Error(
+      `Invalid shared_phenomenon_summary[${index}].claim_relation: ${claimRelation}`,
+    );
+  }
+  const participatingLensIds = record.participating_lens_ids;
+  if (
+    !Array.isArray(participatingLensIds) ||
+    participatingLensIds.length < 2
+  ) {
+    throw new Error(
+      `shared_phenomenon_summary[${index}].participating_lens_ids must list at least two lenses.`,
+    );
+  }
+  return {
+    target: requireNonEmptyString(
+      record.target,
+      `shared_phenomenon_summary[${index}].target`,
+    ),
+    evidence_anchor: requireNonEmptyString(
+      record.evidence_anchor,
+      `shared_phenomenon_summary[${index}].evidence_anchor`,
+    ),
+    participating_lens_ids: participatingLensIds.map((lensId, lensIndex) =>
+      requireNonEmptyString(
+        lensId,
+        `shared_phenomenon_summary[${index}].participating_lens_ids[${lensIndex}]`,
+      ),
+    ),
+    claim_relation: claimRelation as SharedPhenomenonClaimRelation,
+  };
+}
+
+async function deriveSharedPhenomenonSummary(
+  synthesisPath: string,
+): Promise<SharedPhenomenonSummaryEntry[]> {
+  const synthesisText = await fs.readFile(synthesisPath, "utf8");
+  const section = extractMarkdownSection(synthesisText, [
+    "Shared Phenomenon Summary",
+    "Shared Phenomenon Classification",
+    "Shared Phenomena",
+  ]);
+  if (section === null || isEmptyListSection(section)) return [];
+  return parseYamlList(section, "synthesis Shared Phenomenon Summary").map(
+    parseSharedPhenomenonSummaryItem,
   );
 }
 
@@ -185,6 +443,7 @@ export async function runAssembleReviewRecordCli(
   );
 
   const lensResultRefs: Record<string, string> = {};
+  const lensResultPathsById: Record<string, string> = {};
   const participatingLensIds: string[] = executionResult?.participating_lens_ids
     ? [...executionResult.participating_lens_ids]
     : [];
@@ -193,10 +452,14 @@ export async function runAssembleReviewRecordCli(
       if (unitResult.status !== "completed") {
         continue;
       }
+      const lensResultPath = path.isAbsolute(unitResult.output_path)
+        ? unitResult.output_path
+        : path.join(projectRoot, unitResult.output_path);
       lensResultRefs[unitResult.unit_id] = toRelativePath(
-        unitResult.output_path,
+        lensResultPath,
         projectRoot,
       );
+      lensResultPathsById[unitResult.unit_id] = lensResultPath;
     }
   } else if (await fileExists(round1Root)) {
     const round1FilePaths = await fs.readdir(round1Root);
@@ -207,6 +470,7 @@ export async function runAssembleReviewRecordCli(
       const lensId = entryName.replace(/\.md$/u, "");
       const lensResultPath = path.join(round1Root, entryName);
       lensResultRefs[lensId] = toRelativePath(lensResultPath, projectRoot);
+      lensResultPathsById[lensId] = lensResultPath;
       participatingLensIds.push(lensId);
     }
   }
@@ -223,6 +487,13 @@ export async function runAssembleReviewRecordCli(
   const updatedAtSource = executionResult
     ? Date.parse(executionResult.execution_completed_at)
     : (await fs.stat(sessionRoot)).mtimeMs;
+  await assertSynthesisDeliberationPerformed(synthesisPath);
+  const perLensProvenance = await deriveLensProvenance(
+    lensResultPathsById,
+    participatingLensIds,
+  );
+  const sharedPhenomenonSummary =
+    await deriveSharedPhenomenonSummary(synthesisPath);
 
   const reviewRecord: ReviewRecord = {
     review_record_id: sessionId,
@@ -256,6 +527,7 @@ export async function runAssembleReviewRecordCli(
       projectRoot,
     ),
     lens_result_refs: lensResultRefs,
+    lens_output_schema_version: LENS_OUTPUT_SCHEMA_VERSION,
     participating_lens_ids: participatingLensIds,
     excluded_lens_ids: excludedLensIds,
     degraded_lens_ids: degradedLensIds,
@@ -266,10 +538,12 @@ export async function runAssembleReviewRecordCli(
       (await fileExists(errorLogPath))
       ? toRelativePath(errorLogPath, projectRoot)
       : null,
+    per_lens_provenance: perLensProvenance,
     synthesis_result_ref: toRelativePath(synthesisPath, projectRoot),
     deliberation_status: await detectDeliberationStatus(executionResult),
     deliberation_result_ref: toRelativePath(deliberationPath, projectRoot),
     final_output_ref: toRelativePath(finalOutputPath, projectRoot),
+    shared_phenomenon_summary: sharedPhenomenonSummary,
   };
 
   await writeYamlDocument(reviewRecordPath, reviewRecord);

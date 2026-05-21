@@ -303,8 +303,9 @@ shared_phenomenon_summary:
 2. `검토 고정 (InvocationBinding)` 산출물 작성
 3. execution preparation artifact 작성
 4. 각 lens가 자기 markdown output 작성
-5. `synthesize`가 `synthesis.md` 작성
-6. 마지막에 main context/team lead가 `review-record.yaml`을 assemble
+5. controlled lens deliberation이 `deliberation.md` 작성
+6. `synthesize`가 `synthesis.md` 작성
+7. 마지막에 bounded TS assembler가 `review-record.yaml`을 assemble
 
 현재 bounded runtime replacement는 아래 TS core path를 따른다.
 
@@ -338,6 +339,6 @@ npm run review:assemble-record -- \
 
 다음 단계는 아래다.
 
-1. `lens markdown output`과 `synthesis markdown output`을 `ReviewRecord` field로 매핑한다
-2. prompt-backed path에서 `review-record.yaml` field completeness를 안정화한다
-3. 이후 `ReviewRecord` aggregate assembler를 runtime으로 치환한다
+1. degraded case source를 `error-log.md` 외의 structured artifact로 더 명확히 분리한다
+2. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
+3. host command path와 MCP path가 같은 `ReviewRecord` validation을 공유하게 한다
