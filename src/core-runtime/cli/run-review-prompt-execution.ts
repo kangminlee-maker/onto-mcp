@@ -13,6 +13,7 @@ import type {
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewExecutionStatus,
+  ReviewIssueArtifactId,
   ReviewUnitKind,
   ReviewUnitExecutionResult,
 } from "../review/artifact-types.js";
@@ -25,6 +26,14 @@ import {
   readYamlDocument,
   writeYamlDocument,
 } from "../review/review-artifact-utils.js";
+import {
+  PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+  renderIssueArtifactContext,
+  renderIssueArtifactRefs,
+  resolveProblemFramingProfileRef,
+  validateIssueArtifactOnDisk,
+  writeIssueArtifactPromptPacket,
+} from "../review/issue-artifact-runtime.js";
 import type { ExecutionTopology } from "../review/execution-topology-resolver.js";
 import {
   buildLensControlledDeliberationPrompt,
@@ -390,6 +399,12 @@ async function resetExecutionOutputs(
     executionPlan.error_log_path,
     executionPlan.synthesis_output_path,
     executionPlan.deliberation_output_path,
+    executionPlan.finding_ledger_path,
+    executionPlan.finding_relation_graph_path,
+    executionPlan.issue_ledger_path,
+    executionPlan.issue_stance_matrix_path,
+    executionPlan.deliberation_plan_path,
+    executionPlan.problem_framing_path,
     executionPlan.final_output_path,
     executionPlan.teamlead_deliberation_prompt_packet_path,
     path.join(
@@ -397,6 +412,12 @@ async function resetExecutionOutputs(
       "synthesize.runtime.prompt.md",
     ),
     ...executionPlan.lens_execution_seats.map((seat) => seat.output_path),
+    ...executionPlan.issue_artifact_prompt_packet_seats.map(
+      (seat) => seat.packet_path,
+    ),
+    ...executionPlan.issue_artifact_prompt_packet_seats.map(
+      (seat) => seat.output_path,
+    ),
     ...executionPlan.lens_deliberation_prompt_packet_seats.map(
       (seat) => seat.packet_path,
     ),
@@ -554,6 +575,100 @@ function requireDeliberationSeat(
   return seat;
 }
 
+async function runIssueArtifactDispatch(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  artifactId: ReviewIssueArtifactId;
+  lensOutputPaths: string[];
+  deliberationResponsePaths?: string[];
+  deliberationOutputPath?: string;
+  problemFramingProfileRef?: string | null;
+}): Promise<ExecutionOutcome> {
+  const seat = await writeIssueArtifactPromptPacket({
+    artifactId: args.artifactId,
+    sessionId: args.executionPlan.session_id,
+    projectRoot: args.projectRoot,
+    executionPlan: args.executionPlan,
+    lensOutputPaths: args.lensOutputPaths,
+    ...(args.deliberationResponsePaths
+      ? { deliberationResponsePaths: args.deliberationResponsePaths }
+      : {}),
+    ...(args.deliberationOutputPath
+      ? { deliberationOutputPath: args.deliberationOutputPath }
+      : {}),
+    ...(args.problemFramingProfileRef !== undefined
+      ? { problemFramingProfileRef: args.problemFramingProfileRef }
+      : {}),
+  });
+  const dispatch = {
+    unit_id: args.artifactId,
+    unit_kind: "issue_artifact" as const,
+    packet_path: seat.packet_path,
+    output_path: seat.output_path,
+  };
+  const participatingLensIds = args.lensOutputPaths.map((lensPath) =>
+    path.basename(lensPath, ".md"),
+  );
+  let lastOutcome: ExecutionOutcome | null = null;
+  let lastValidationError: unknown = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (attempt > 0) {
+      await fs.appendFile(
+        seat.packet_path,
+        [
+          "",
+          "## Validation Error To Correct",
+          "The previous artifact output was rejected by the runtime validator.",
+          "Rewrite the entire YAML artifact. Preserve the same contract and quote string scalars.",
+          "",
+          "```text",
+          lastValidationError instanceof Error
+            ? lastValidationError.message
+            : String(lastValidationError),
+          "```",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+    }
+    const outcome = await runSingleDispatchWithRetries({
+      projectRoot: args.projectRoot,
+      sessionRoot: args.sessionRoot,
+      executionPlan: args.executionPlan,
+      executorConfig: args.executorConfig,
+      dispatch,
+      maxRetries: 1,
+      retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+    });
+    lastOutcome = outcome;
+    if (!outcome.success) {
+      throw new Error(
+        `Issue artifact generation failed for ${args.artifactId}: ${outcome.failure?.message ?? "unknown error"}`,
+      );
+    }
+    try {
+      await validateIssueArtifactOnDisk({
+        executionPlan: args.executionPlan,
+        artifactId: args.artifactId,
+        participatingLensIds,
+      });
+      return outcome;
+    } catch (error) {
+      lastValidationError = error;
+      await removeFileIfExists(seat.output_path);
+    }
+  }
+  throw new Error(
+    `Issue artifact validation failed for ${args.artifactId}: ${
+      lastValidationError instanceof Error
+        ? lastValidationError.message
+        : String(lastValidationError)
+    }${lastOutcome?.failure ? ` (${lastOutcome.failure.message})` : ""}`,
+  );
+}
+
 async function runControlledLensDeliberation(args: {
   projectRoot: string;
   sessionRoot: string;
@@ -561,6 +676,7 @@ async function runControlledLensDeliberation(args: {
   executorConfig: ReviewUnitExecutorConfig;
   successfulLensDispatches: ExecutionDispatchResult[];
   maxConcurrentLenses: number;
+  issueArtifactContext?: string;
 }): Promise<{
   deliberationDispatches: ExecutionDispatchResult[];
   deliberationOutcomes: ExecutionOutcome[];
@@ -573,6 +689,7 @@ async function runControlledLensDeliberation(args: {
     executorConfig,
     successfulLensDispatches,
     maxConcurrentLenses,
+    issueArtifactContext,
   } = args;
   if (executionPlan.deliberation_mode !== "controlled-lens-deliberation") {
     throw new Error(
@@ -619,6 +736,7 @@ async function runControlledLensDeliberation(args: {
       output_path: dispatch.output_path,
       own_output: ownOutput,
       other_outputs: otherOutputs,
+      ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
     });
     await fs.mkdir(path.dirname(dispatch.packet_path), { recursive: true });
     await fs.writeFile(dispatch.packet_path, `${packetText.trimEnd()}\n`, "utf8");
@@ -684,6 +802,7 @@ async function runControlledLensDeliberation(args: {
     output_path: executionPlan.deliberation_output_path,
     lens_outputs: lensOutputs,
     lens_deliberation_responses: lensDeliberationResponses,
+    ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
   });
   await fs.writeFile(
     executionPlan.teamlead_deliberation_prompt_packet_path,
@@ -1084,6 +1203,27 @@ export async function executeReviewPromptExecution(
     };
   }
 
+  const issueArtifactOutcomes: ExecutionOutcome[] = [];
+  const lensOutputPaths = successfulLensDispatches.map(
+    (dispatch) => dispatch.output_path,
+  );
+  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    issueArtifactOutcomes.push(
+      await runIssueArtifactDispatch({
+        projectRoot,
+        sessionRoot,
+        executionPlan,
+        executorConfig: defaultExecutorConfig,
+        artifactId,
+        lensOutputPaths,
+      }),
+    );
+  }
+  const issueArtifactContext = await renderIssueArtifactContext({
+    projectRoot,
+    executionPlan,
+  });
+
   const controlledDeliberation = await runControlledLensDeliberation({
     projectRoot,
     sessionRoot,
@@ -1091,7 +1231,28 @@ export async function executeReviewPromptExecution(
     executorConfig: defaultExecutorConfig,
     successfulLensDispatches,
     maxConcurrentLenses,
+    issueArtifactContext,
   });
+
+  issueArtifactOutcomes.push(
+    await runIssueArtifactDispatch({
+      projectRoot,
+      sessionRoot,
+      executionPlan,
+      executorConfig: defaultExecutorConfig,
+      artifactId: "problem-framing",
+      lensOutputPaths,
+      deliberationResponsePaths:
+        controlledDeliberation.deliberationDispatches.map(
+          (dispatch) => dispatch.output_path,
+        ),
+      deliberationOutputPath: executionPlan.deliberation_output_path,
+      problemFramingProfileRef: await resolveProblemFramingProfileRef({
+        projectRoot,
+        executionPlan,
+      }),
+    }),
+  );
 
   const synthesizePacketRuntimePath = path.join(
     executionPlan.prompt_packets_root,
@@ -1108,7 +1269,14 @@ export async function executeReviewPromptExecution(
     projectRoot,
     executionPlan,
     controlledDeliberation.deliberationDispatches,
-  )}\n${renderDegradedLensFailuresSection(
+  )}\n## Issue-Stance Closure Artifacts\n${renderIssueArtifactRefs(projectRoot, executionPlan, [
+    "finding-ledger",
+    "finding-relation-graph",
+    "issue-ledger",
+    "issue-stance-matrix",
+    "deliberation-plan",
+    "problem-framing",
+  ])}\n\n${renderDegradedLensFailuresSection(
     executionFailures.filter((failure) => failure.unit_kind === "lens"),
   )}`;
   await fs.writeFile(
@@ -1239,6 +1407,8 @@ export async function executeReviewPromptExecution(
       lens_execution_results: executionOutcomes
         .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
         .map(toUnitExecutionResult),
+      issue_artifact_execution_results:
+        issueArtifactOutcomes.map(toUnitExecutionResult),
       deliberation_execution_results: [
         ...controlledDeliberation.deliberationOutcomes,
         controlledDeliberation.teamleadOutcome,
@@ -1310,6 +1480,8 @@ export async function executeReviewPromptExecution(
     lens_execution_results: executionOutcomes
       .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
       .map(toUnitExecutionResult),
+    issue_artifact_execution_results:
+      issueArtifactOutcomes.map(toUnitExecutionResult),
     deliberation_execution_results: [
       ...controlledDeliberation.deliberationOutcomes,
       controlledDeliberation.teamleadOutcome,

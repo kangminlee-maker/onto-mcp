@@ -72,6 +72,9 @@ async function detectDeliberationStatus(
   if (executionResult.deliberation_status === "performed") {
     return "performed";
   }
+  if (executionResult.execution_status === "halted_partial") {
+    return "not_performed";
+  }
   throw new Error(
     `Review execution result must declare deliberation_status=performed for session ${executionResult.session_id}.`,
   );
@@ -384,6 +387,12 @@ export async function runAssembleReviewRecordCli(
     "context-candidate-assembly.yaml",
   );
   const synthesisPath = path.join(sessionRoot, "synthesis.md");
+  const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
+  const findingRelationGraphPath = path.join(sessionRoot, "finding-relation-graph.yaml");
+  const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
+  const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
+  const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
+  const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
   const deliberationPath = path.join(sessionRoot, "deliberation.md");
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
   const executionResultPath = path.join(sessionRoot, "execution-result.yaml");
@@ -398,8 +407,6 @@ export async function runAssembleReviewRecordCli(
     ["target snapshot", targetSnapshotPath],
     ["materialized input", materializedInputPath],
     ["context candidate assembly", contextCandidateAssemblyPath],
-    ["controlled deliberation", deliberationPath],
-    ["synthesis", synthesisPath],
     ["final output", finalOutputPath],
     ["execution result", executionResultPath],
   ] as const;
@@ -414,6 +421,24 @@ export async function runAssembleReviewRecordCli(
   const executionResult = await readYamlDocument<ReviewExecutionResultArtifact>(
     executionResultPath,
   );
+  const synthesisExecuted = executionResult.synthesis_executed === true;
+  if (synthesisExecuted) {
+    const requiredCompletedArtifacts = [
+      ["finding ledger", findingLedgerPath],
+      ["finding relation graph", findingRelationGraphPath],
+      ["issue ledger", issueLedgerPath],
+      ["issue stance matrix", issueStanceMatrixPath],
+      ["deliberation plan", deliberationPlanPath],
+      ["problem framing", problemFramingPath],
+      ["controlled deliberation", deliberationPath],
+      ["synthesis", synthesisPath],
+    ] as const;
+    for (const [label, artifactPath] of requiredCompletedArtifacts) {
+      if (!(await fileExists(artifactPath))) {
+        throw new Error(`Missing ${label} artifact: ${artifactPath}`);
+      }
+    }
+  }
   const sessionMetadata = await readYamlDocument<{ created_at?: string }>(
     sessionMetadataPath,
   );
@@ -463,13 +488,27 @@ export async function runAssembleReviewRecordCli(
   const updatedAtSource = executionResult
     ? Date.parse(executionResult.execution_completed_at)
     : (await fs.stat(sessionRoot)).mtimeMs;
-  await assertSynthesisDeliberationPerformed(synthesisPath);
+  if (synthesisExecuted) {
+    await assertSynthesisDeliberationPerformed(synthesisPath);
+  }
   const perLensProvenance = await deriveLensProvenance(
     lensResultPathsById,
     participatingLensIds,
   );
-  const sharedPhenomenonSummary =
-    await deriveSharedPhenomenonSummary(synthesisPath);
+  const sharedPhenomenonSummary = synthesisExecuted
+    ? await deriveSharedPhenomenonSummary(synthesisPath)
+    : [];
+  const problemFraming = synthesisExecuted
+    ? await readYamlDocument<Record<string, unknown>>(problemFramingPath)
+    : null;
+  if (
+    synthesisExecuted &&
+    !Array.isArray(problemFraming?.classifications)
+  ) {
+    throw new Error(
+      `problem-framing.yaml must contain classifications list: ${problemFramingPath}`,
+    );
+  }
 
   const reviewRecord: ReviewRecord = {
     review_record_id: sessionId,
@@ -515,6 +554,20 @@ export async function runAssembleReviewRecordCli(
       ? toRelativePath(errorLogPath, projectRoot)
       : null,
     per_lens_provenance: perLensProvenance,
+    ...(synthesisExecuted
+      ? {
+          finding_ledger_ref: toRelativePath(findingLedgerPath, projectRoot),
+          finding_relation_graph_ref: toRelativePath(
+            findingRelationGraphPath,
+            projectRoot,
+          ),
+          issue_ledger_ref: toRelativePath(issueLedgerPath, projectRoot),
+          issue_stance_matrix_ref: toRelativePath(issueStanceMatrixPath, projectRoot),
+          deliberation_plan_ref: toRelativePath(deliberationPlanPath, projectRoot),
+          problem_framing_ref: toRelativePath(problemFramingPath, projectRoot),
+          issue_resolution_summary: problemFraming?.classifications as unknown[],
+        }
+      : {}),
     synthesis_result_ref: toRelativePath(synthesisPath, projectRoot),
     deliberation_status: await detectDeliberationStatus(executionResult),
     deliberation_result_ref: toRelativePath(deliberationPath, projectRoot),

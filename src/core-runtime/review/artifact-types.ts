@@ -49,12 +49,16 @@ export type ReviewRecordStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
-export type DeliberationStatus = "performed";
+export type DeliberationStatus = "performed" | "not_performed";
 export type ReviewExecutionStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
-export type ReviewUnitKind = "lens" | "deliberation" | "synthesize";
+export type ReviewUnitKind =
+  | "lens"
+  | "issue_artifact"
+  | "deliberation"
+  | "synthesize";
 export type ReviewDeliberationMode = "controlled-lens-deliberation";
 export type ReviewUnitExecutionStatus = "completed" | "failed" | "skipped";
 export type ReviewTargetMaterializedInputKind =
@@ -173,6 +177,12 @@ export interface InvocationBindingArtifact {
   materialized_input_path: string;
   context_candidate_assembly_path: string;
   synthesis_output_path: string;
+  finding_ledger_path: string;
+  finding_relation_graph_path: string;
+  issue_ledger_path: string;
+  issue_stance_matrix_path: string;
+  deliberation_plan_path: string;
+  problem_framing_path: string;
   deliberation_mode: ReviewDeliberationMode;
   deliberation_root_path: string;
   deliberation_output_path: string;
@@ -198,6 +208,20 @@ export interface ReviewLensPromptPacketSeat {
   output_path: string;
 }
 
+export type ReviewIssueArtifactId =
+  | "finding-ledger"
+  | "finding-relation-graph"
+  | "issue-ledger"
+  | "issue-stance-matrix"
+  | "deliberation-plan"
+  | "problem-framing";
+
+export interface ReviewIssueArtifactPromptPacketSeat {
+  artifact_id: ReviewIssueArtifactId;
+  packet_path: string;
+  output_path: string;
+}
+
 export interface ReviewExecutionPlan {
   session_id: string;
   session_root: string;
@@ -212,10 +236,17 @@ export interface ReviewExecutionPlan {
   lens_execution_seats: ReviewLensExecutionSeat[];
   prompt_packets_root: string;
   lens_prompt_packet_seats: ReviewLensPromptPacketSeat[];
+  issue_artifact_prompt_packet_seats: ReviewIssueArtifactPromptPacketSeat[];
   lens_deliberation_prompt_packet_seats: ReviewLensPromptPacketSeat[];
   teamlead_deliberation_prompt_packet_path: string;
   synthesize_prompt_packet_path: string;
   synthesis_output_path: string;
+  finding_ledger_path: string;
+  finding_relation_graph_path: string;
+  issue_ledger_path: string;
+  issue_stance_matrix_path: string;
+  deliberation_plan_path: string;
+  problem_framing_path: string;
   deliberation_mode: ReviewDeliberationMode;
   deliberation_root_path: string;
   deliberation_output_path: string;
@@ -373,6 +404,7 @@ export interface ReviewExecutionResultArtifact {
   halt_reason?: string | null;
   error_log_path: string;
   lens_execution_results: ReviewUnitExecutionResult[];
+  issue_artifact_execution_results?: ReviewUnitExecutionResult[];
   deliberation_execution_results?: ReviewUnitExecutionResult[];
   /**
    * Per-unit result for the synthesize stage. `null` when synthesis was not
@@ -448,6 +480,13 @@ export interface ReviewRecord {
   degraded_lens_ids: string[];
   degradation_notes_ref?: string | null;
   per_lens_provenance: Record<string, ReviewLensProvenance>;
+  finding_ledger_ref?: string;
+  finding_relation_graph_ref?: string;
+  issue_ledger_ref?: string;
+  issue_stance_matrix_ref?: string;
+  deliberation_plan_ref?: string;
+  problem_framing_ref?: string;
+  issue_resolution_summary?: unknown[];
   synthesis_result_ref: string;
   deliberation_status: DeliberationStatus;
   deliberation_result_ref: string;

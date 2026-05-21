@@ -11,6 +11,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$PROJECT_ROOT"
+export PATH="$PROJECT_ROOT/bin:$PATH"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -152,8 +153,8 @@ run_expect_pass "T3: external-dir/auto-approve" \
   --executor-realization mock
 
 run_expect_pass "T4: domain-token" \
-  src/ @llm-native-development "ontology check" \
-  --executor-realization mock --review-mode core-axis
+  src/ "ontology check" \
+  --domain llm-native-development --executor-realization mock --review-mode core-axis
 
 run_expect_pass "T5: diff-range" \
   . "changes review" \
@@ -516,7 +517,7 @@ E39_OUT=$(onto info 2>&1)
 E39_EXIT=$?
 E39_ONTO_HOME=$(echo "$E39_OUT" | grep '"onto_home"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E39_EXIT -eq 0 ] && [ -n "$E39_ONTO_HOME" ] && [ -d "$E39_ONTO_HOME/roles" ]; then
+if [ $E39_EXIT -eq 0 ] && [ -n "$E39_ONTO_HOME" ] && [ -d "$E39_ONTO_HOME/.onto/roles" ]; then
   echo "  PASS  E39: onto-info (onto_home=$E39_ONTO_HOME)"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -563,7 +564,7 @@ E42_OUT=$(cd /tmp && onto info 2>&1)
 E42_EXIT=$?
 E42_ONTO_HOME=$(echo "$E42_OUT" | grep '"onto_home"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E42_EXIT -eq 0 ] && [ -n "$E42_ONTO_HOME" ] && [ -d "$E42_ONTO_HOME/roles" ]; then
+if [ $E42_EXIT -eq 0 ] && [ -n "$E42_ONTO_HOME" ] && [ -d "$E42_ONTO_HOME/.onto/roles" ]; then
   echo "  PASS  E42: onto-info-external (onto_home resolved from /tmp)"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -694,6 +695,161 @@ fi
 
 # E49: coordinator full cycle with mock lens outputs
 echo "=== E49: coordinator-full-cycle ==="
+write_e49_mock_lens_output() {
+  local output_path="$1"
+  local lens_name
+  lens_name=$(basename "$output_path" .md)
+  printf '%s\n' \
+    "# Mock ${lens_name} Review Result" \
+    "" \
+    "### Structural Inspection" \
+    "- Mock structural inspection." \
+    "" \
+    "### Finding" \
+    "- Mock finding." \
+    "" \
+    "### Why" \
+    "- Mock reason." \
+    "" \
+    "### How To Fix" \
+    "- none" \
+    "" \
+    "### Newly Learned" \
+    "- none" \
+    "" \
+    "### Applied Learnings" \
+    "- none" \
+    "" \
+    "### Domain Constraints Used" \
+    "[]" \
+    "" \
+    "### Domain Context Assumptions" \
+    "[]" \
+    > "$output_path"
+}
+write_e49_mock_lens_deliberation_output() {
+  local output_path="$1"
+  printf '%s\n' \
+    "## Re-evaluation Summary" \
+    "- mock deliberation response" \
+    "" \
+    "## Accepted From Other Lenses" \
+    "- none" \
+    "" \
+    "## Contested Points" \
+    "- none" \
+    "" \
+    "## Position Changes" \
+    "- none" \
+    "" \
+    "## Final Lens Position" \
+    "- unchanged" \
+    > "$output_path"
+}
+write_e49_mock_teamlead_deliberation_output() {
+  local output_path="$1"
+  printf '%s\n' \
+    '---' \
+    'deliberation_status: performed' \
+    '---' \
+    '' \
+    '## Consensus' \
+    '- mock deliberation' \
+    '' \
+    '## Conditional Consensus' \
+    '- none' \
+    '' \
+    '## Disagreement' \
+    '- none' \
+    '' \
+    '## Deliberation Decision' \
+    '- mock' \
+    '' \
+    '## Axiology-Proposed Additional Perspectives' \
+    '- none' \
+    '' \
+    '## Purpose Alignment Verification' \
+    '- mock' \
+    '' \
+    '## Immediate Actions Required' \
+    '- none' \
+    '' \
+    '## Recommendations' \
+    '- none' \
+    '' \
+    '## Unique Finding Tagging' \
+    '- mock' \
+    > "$output_path"
+}
+write_e49_mock_synthesis_output() {
+  local output_path="$1"
+  printf '%s\n' \
+    '---' \
+    'deliberation_status: performed' \
+    '---' \
+    '' \
+    '## Consensus' \
+    '- mock synthesis' \
+    '' \
+    '## Conditional Consensus' \
+    '- none' \
+    '' \
+    '## Disagreement' \
+    '- none' \
+    '' \
+    '## Deliberation Decision' \
+    '- mock' \
+    '' \
+    '## Axiology-Proposed Additional Perspectives' \
+    '- none' \
+    '' \
+    '## Purpose Alignment Verification' \
+    '- mock' \
+    '' \
+    '## Immediate Actions Required' \
+    '- none' \
+    '' \
+    '## Recommendations' \
+    '- none' \
+    '' \
+    '## Unique Finding Tagging' \
+    '- mock' \
+    > "$output_path"
+}
+write_e49_mock_issue_artifact_output() {
+  local output_path="$1"
+  local session_id="$2"
+  local primary_lens="$3"
+  mkdir -p "$(dirname "$output_path")"
+  case "$(basename "$output_path")" in
+    finding-ledger.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nfindings:\n  - finding_id: finding-001\n    lens_id: %s\n    source_ref: round1/%s.md#finding-1\n    target: mock-target\n    evidence_anchor: mock-anchor\n    claim: mock finding\n    proposed_action: none\n    severity: low\nvalidation:\n  unaddressable_findings: []\n' "$session_id" "$primary_lens" "$primary_lens" > "$output_path"
+      ;;
+    finding-relation-graph.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nrelations: []\nsingleton_findings:\n  - finding_id: finding-001\n    reason: mock singleton\n' "$session_id" > "$output_path"
+      ;;
+    issue-ledger.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nissues:\n  - issue_id: issue-001\n    root_cause_hypothesis: mock root\n    root_confidence: low\n    surface_finding_ids: [finding-001]\n    relation_refs: []\n    raised_by_lens_ids: [%s]\n    issue_statement: mock issue\n    proposed_action: none\n    severity: low\n    singleton_reason: mock singleton\nvalidation:\n  unclustered_finding_ids: []\n' "$session_id" "$primary_lens" > "$output_path"
+      ;;
+    issue-stance-matrix.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nissues:\n  - issue_id: issue-001\n    stances:\n' "$session_id" > "$output_path"
+      for lens_id in $E49_LENS_IDS; do
+        printf '      - lens_id: %s\n        stance: support\n        rationale: mock stance\n        root_hypothesis_position: accepts\n        severity_position: keeps\n        evidence_refs: [round1/%s.md]\n' "$lens_id" "$lens_id" >> "$output_path"
+      done
+      printf 'validation:\n  missing_stances: []\n' >> "$output_path"
+      ;;
+    deliberation-plan.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nplanned_issues: []\nskipped_issues:\n  - issue_id: issue-001\n    reason: no material conflict\n' "$session_id" > "$output_path"
+      ;;
+    problem-framing.yaml)
+      printf 'schema_version: 1\nsession_id: %s\nclassification_context:\n  common_spine_version: 1\n  session_domain: none\n  domain_profile_ref: ""\n  domain_profile_doc_type: custom:problem_framing_profile\n  domain_profile_status: not_requested\nclassifications:\n  - issue_id: issue-001\n    problem_definition: mock problem\n    issue_role: independent_issue\n    judgment_state: observed\n    impact_kind: maintainability_evolvability\n    timing_class: defer_watch\n    closure_class: watch\n    domain_axes: {}\n    rationale: mock rationale\n    related_surface_finding_ids: [finding-001]\n' "$session_id" > "$output_path"
+      ;;
+    *)
+      echo "unsupported E49 issue artifact: $output_path" >&2
+      return 1
+      ;;
+  esac
+}
 E49_START_OUT=$(onto coordinator start \
   src/core-runtime/cli/review-invoke.ts "full cycle test" \
   --executor-realization mock --review-mode core-axis \
@@ -702,36 +858,75 @@ E49_START_EXIT=$?
 E49_SESSION_ROOT=$(echo "$E49_START_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
 
 if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION_ROOT" ]; then
-  # Write mock lens outputs to satisfy validation
-  if [ -d "$E49_SESSION_ROOT/round1" ]; then
-    for f in "$E49_SESSION_ROOT/round1"/*.md; do
-      if [ ! -s "$f" ]; then
-        echo "# Mock lens output" > "$f"
-      fi
-    done
-  fi
-  # Also create outputs for all lens seats from execution plan
-  E49_OUTPUT_PATHS=$(grep 'output_path:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*output_path: //' | tr -d '"' | tr -d "'")
-  for op in $E49_OUTPUT_PATHS; do
-    if [ ! -s "$op" ]; then
-      mkdir -p "$(dirname "$op")"
-      echo "# Mock output for $(basename "$op")" > "$op"
-    fi
+  E49_SESSION_ID=$(basename "$E49_SESSION_ROOT")
+  E49_LENS_IDS=$(grep 'lens_id:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*lens_id: //' | tr -d '"' | tr -d "'" | awk '!seen[$0]++' | tr '\n' ' ')
+  E49_PRIMARY_LENS_ID=$(echo "$E49_LENS_IDS" | awk '{print $1}')
+
+  E49_LENS_OUTPUT_PATHS=$(grep 'output_path:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*output_path: //' | tr -d '"' | tr -d "'" | grep '/round1/' | grep -v '/deliberation/')
+  for op in $E49_LENS_OUTPUT_PATHS; do
+    mkdir -p "$(dirname "$op")"
+    write_e49_mock_lens_output "$op"
   done
 
-  # Step 2: next → awaiting_synthesize_dispatch
+  # Step 2: next through issue artifact agents → awaiting_deliberation
   E49_NEXT1_OUT=$(onto coordinator next \
     --session-root "$E49_SESSION_ROOT" \
     --project-root "$PROJECT_ROOT" 2>&1)
   E49_NEXT1_EXIT=$?
   E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
 
+  while [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_adjudication" ]; do
+    E49_ARTIFACT_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
+    if [ -n "$E49_ARTIFACT_OUTPUT" ]; then
+      write_e49_mock_issue_artifact_output "$E49_ARTIFACT_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
+    fi
+    E49_NEXT1_OUT=$(onto coordinator next \
+      --session-root "$E49_SESSION_ROOT" \
+      --project-root "$PROJECT_ROOT" 2>&1)
+    E49_NEXT1_EXIT=$?
+    E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
+  done
+
+  if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ]; then
+    E49_DELIBERATION_RESPONSE_PATHS=$(grep 'output_path:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*output_path: //' | tr -d '"' | tr -d "'" | grep '/deliberation/round1/')
+    for op in $E49_DELIBERATION_RESPONSE_PATHS; do
+      mkdir -p "$(dirname "$op")"
+      write_e49_mock_lens_deliberation_output "$op"
+    done
+
+    E49_NEXT1_OUT=$(onto coordinator next \
+      --session-root "$E49_SESSION_ROOT" \
+      --project-root "$PROJECT_ROOT" 2>&1)
+    E49_NEXT1_EXIT=$?
+    E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
+    E49_TEAMLEAD_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
+    if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ -n "$E49_TEAMLEAD_OUTPUT" ]; then
+      mkdir -p "$(dirname "$E49_TEAMLEAD_OUTPUT")"
+      write_e49_mock_teamlead_deliberation_output "$E49_TEAMLEAD_OUTPUT"
+      E49_NEXT1_OUT=$(onto coordinator next \
+        --session-root "$E49_SESSION_ROOT" \
+        --project-root "$PROJECT_ROOT" 2>&1)
+      E49_NEXT1_EXIT=$?
+      E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
+    fi
+
+    E49_PROBLEM_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
+    if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ "$(basename "$E49_PROBLEM_OUTPUT")" = "problem-framing.yaml" ]; then
+      write_e49_mock_issue_artifact_output "$E49_PROBLEM_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
+      E49_NEXT1_OUT=$(onto coordinator next \
+        --session-root "$E49_SESSION_ROOT" \
+        --project-root "$PROJECT_ROOT" 2>&1)
+      E49_NEXT1_EXIT=$?
+      E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
+    fi
+  fi
+
   if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_synthesize_dispatch" ]; then
     # Write mock synthesis output
     E49_SYNTH_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
     if [ -n "$E49_SYNTH_OUTPUT" ]; then
       mkdir -p "$(dirname "$E49_SYNTH_OUTPUT")"
-      echo "# Mock synthesis output" > "$E49_SYNTH_OUTPUT"
+      write_e49_mock_synthesis_output "$E49_SYNTH_OUTPUT"
     fi
 
     # Step 3: next → completed

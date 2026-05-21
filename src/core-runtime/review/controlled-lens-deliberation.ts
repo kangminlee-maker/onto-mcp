@@ -20,6 +20,7 @@ export function buildLensControlledDeliberationPrompt(args: {
   output_path: string;
   own_output: LensOutputForDeliberation;
   other_outputs: LensOutputForDeliberation[];
+  issue_artifact_context?: string;
 }): string {
   const otherBlocks = args.other_outputs
     .map((other) =>
@@ -47,10 +48,14 @@ ${fencedBlock(`${args.lens_id} primary output (${args.own_output.output_path})`,
 ## Other Participating Lens Outputs
 ${otherBlocks || "(none)"}
 
+## Issue Artifact Context
+${args.issue_artifact_context?.trim() || "(none)"}
+
 ## Task
 Re-evaluate your lens position against the other lens outputs.
 
 - Identify where another lens changes, strengthens, or weakens your conclusion.
+- Use the issue artifact context to focus on root-cause issue clusters and planned contested points.
 - Identify direct disagreements and state whether your lens concedes, narrows,
   or maintains its position.
 - Preserve evidence limitations explicitly.
@@ -76,6 +81,7 @@ export function buildTeamleadControlledDeliberationPrompt(args: {
   output_path: string;
   lens_outputs: LensOutputForDeliberation[];
   lens_deliberation_responses: LensDeliberationResponseForTeamlead[];
+  issue_artifact_context?: string;
 }): string {
   const primaryBlocks = args.lens_outputs
     .map((lens) => fencedBlock(`${lens.lens_id} primary output (${lens.output_path})`, lens.content))
@@ -110,10 +116,15 @@ ${primaryBlocks}
 ## Lens Deliberation Responses
 ${responseBlocks}
 
+## Issue Artifact Context
+${args.issue_artifact_context?.trim() || "(none)"}
+
 ## Task
 Resolve contested points when the lens deliberation responses provide enough
 reason to converge. Preserve unresolved disagreement when the responses do not
 justify convergence. Do not invent a new lens perspective.
+Use the issue artifact context as the root-cause issue frame; preserve issue IDs
+and planned contested points when they are present.
 
 ## Required Frontmatter
 Start the output with:

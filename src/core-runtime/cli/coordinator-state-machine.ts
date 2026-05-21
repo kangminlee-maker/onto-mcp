@@ -22,6 +22,7 @@ import type {
   CoordinatorStartResult,
   CoordinatorNextResult,
   ReviewExecutionPlan,
+  ReviewIssueArtifactId,
 } from "../review/artifact-types.js";
 import { ALLOWED_TRANSITIONS } from "../review/artifact-types.js";
 import fs from "node:fs/promises";
@@ -47,6 +48,13 @@ import {
   type LensOutputForDeliberation,
   type LensDeliberationResponseForTeamlead,
 } from "../review/controlled-lens-deliberation.js";
+import {
+  PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+  renderIssueArtifactContext,
+  resolveProblemFramingProfileRef,
+  validateIssueArtifactOnDisk,
+  writeIssueArtifactPromptPacket,
+} from "../review/issue-artifact-runtime.js";
 
 // ─────────────────────────────────────────────
 // Derived constants
@@ -77,7 +85,7 @@ Rules:
 - Do not recursively follow reference chains beyond the files explicitly listed in the packet unless the packet requires it.
 - Do not use web research when the packet says web research is denied.
 - Do not read outside the allowed filesystem scope described in the packet.
-- Produce only the final markdown content for the canonical output path.
+- Produce only the final content for the canonical output path.
 - Do not wrap the answer in code fences.
 - Do not add commentary before or after the markdown.
 - Do not modify repository files yourself.
@@ -192,22 +200,28 @@ function buildSynthesizeAgentInstruction(
 async function readLensOutputsForDeliberation(
   executionPlan: ReviewExecutionPlan,
 ): Promise<LensOutputForDeliberation[]> {
-  return Promise.all(
-    executionPlan.lens_prompt_packet_seats.map(async (seat) => {
-      if (!(await fileExists(seat.output_path))) {
-        throw new Error(`Missing lens output for deliberation: ${seat.output_path}`);
-      }
-      const content = await fs.readFile(seat.output_path, "utf8");
-      if (content.trim().length === 0) {
-        throw new Error(`Empty lens output for deliberation: ${seat.output_path}`);
-      }
-      return {
+  const lensOutputs: LensOutputForDeliberation[] = [];
+  for (const seat of executionPlan.lens_prompt_packet_seats) {
+    if (!(await fileExists(seat.output_path))) {
+      continue;
+    }
+    const content = await fs.readFile(seat.output_path, "utf8");
+    if (content.trim().length === 0) {
+      continue;
+    }
+    lensOutputs.push({
         lens_id: seat.lens_id,
         output_path: seat.output_path,
         content,
-      };
-    }),
-  );
+    });
+  }
+  const minimumParticipating = executionPlan.minimum_participating_lenses ?? 2;
+  if (lensOutputs.length < minimumParticipating) {
+    throw new Error(
+      `Fewer than ${minimumParticipating} participating lens outputs are available for deliberation.`,
+    );
+  }
+  return lensOutputs;
 }
 
 function requireDeliberationSeat(
@@ -225,6 +239,7 @@ function requireDeliberationSeat(
 
 async function buildLensDeliberationAgentInstructions(
   executionPlan: ReviewExecutionPlan,
+  projectRoot: string,
 ): Promise<CoordinatorAgentInstruction[]> {
   if (executionPlan.deliberation_mode !== "controlled-lens-deliberation") {
     throw new Error(
@@ -232,6 +247,10 @@ async function buildLensDeliberationAgentInstructions(
     );
   }
   const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  const issueArtifactContext = await renderIssueArtifactContext({
+    projectRoot,
+    executionPlan,
+  });
   const lensOutputById = new Map(
     lensOutputs.map((lensOutput) => [lensOutput.lens_id, lensOutput]),
   );
@@ -247,6 +266,7 @@ async function buildLensDeliberationAgentInstructions(
       other_outputs: lensOutputs.filter(
         (candidate) => candidate.lens_id !== lensOutput.lens_id,
       ),
+      issue_artifact_context: issueArtifactContext,
     });
     await fs.mkdir(path.dirname(seat.packet_path), { recursive: true });
     await fs.writeFile(seat.packet_path, `${packetText.trimEnd()}\n`, "utf8");
@@ -271,8 +291,13 @@ async function buildLensDeliberationAgentInstructions(
 
 async function buildTeamleadDeliberationAgentInstruction(
   executionPlan: ReviewExecutionPlan,
+  projectRoot: string,
 ): Promise<CoordinatorAgentInstruction> {
   const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  const issueArtifactContext = await renderIssueArtifactContext({
+    projectRoot,
+    executionPlan,
+  });
   const responses: LensDeliberationResponseForTeamlead[] = [];
   for (const lensOutput of lensOutputs) {
     const seat = requireDeliberationSeat(executionPlan, lensOutput.lens_id);
@@ -298,6 +323,7 @@ async function buildTeamleadDeliberationAgentInstruction(
     output_path: executionPlan.deliberation_output_path,
     lens_outputs: lensOutputs,
     lens_deliberation_responses: responses,
+    issue_artifact_context: issueArtifactContext,
   });
   await fs.writeFile(
     executionPlan.teamlead_deliberation_prompt_packet_path,
@@ -316,6 +342,160 @@ async function buildTeamleadDeliberationAgentInstruction(
     output_path: executionPlan.deliberation_output_path,
     packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
   };
+}
+
+async function hasNonEmptyFile(filePath: string): Promise<boolean> {
+  if (!(await fileExists(filePath))) return false;
+  const text = await fs.readFile(filePath, "utf8");
+  return text.trim().length > 0;
+}
+
+async function getParticipatingLensRefs(
+  executionPlan: ReviewExecutionPlan,
+): Promise<{ lensIds: string[]; outputPaths: string[] }> {
+  const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  return {
+    lensIds: lensOutputs.map((lensOutput) => lensOutput.lens_id),
+    outputPaths: lensOutputs.map((lensOutput) => lensOutput.output_path),
+  };
+}
+
+async function validatePreDeliberationIssueArtifacts(args: {
+  executionPlan: ReviewExecutionPlan;
+  participatingLensIds: string[];
+}): Promise<void> {
+  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    await validateIssueArtifactOnDisk({
+      executionPlan: args.executionPlan,
+      artifactId,
+      participatingLensIds: args.participatingLensIds,
+    });
+  }
+}
+
+async function buildIssueArtifactAgentInstruction(args: {
+  executionPlan: ReviewExecutionPlan;
+  projectRoot: string;
+  artifactId: ReviewIssueArtifactId;
+  lensOutputPaths: string[];
+  deliberationResponsePaths?: string[];
+  deliberationOutputPath?: string;
+  problemFramingProfileRef?: string | null;
+}): Promise<CoordinatorAgentInstruction> {
+  const seat = await writeIssueArtifactPromptPacket({
+    artifactId: args.artifactId,
+    sessionId: args.executionPlan.session_id,
+    projectRoot: args.projectRoot,
+    executionPlan: args.executionPlan,
+    lensOutputPaths: args.lensOutputPaths,
+    ...(args.deliberationResponsePaths
+      ? { deliberationResponsePaths: args.deliberationResponsePaths }
+      : {}),
+    ...(args.deliberationOutputPath
+      ? { deliberationOutputPath: args.deliberationOutputPath }
+      : {}),
+    ...(args.problemFramingProfileRef !== undefined
+      ? { problemFramingProfileRef: args.problemFramingProfileRef }
+      : {}),
+  });
+  return {
+    lens_id: args.artifactId,
+    description: `Issue closure artifact: ${args.artifactId}`,
+    prompt: buildAgentPrompt(
+      args.artifactId,
+      "issue_artifact",
+      seat.packet_path,
+      seat.output_path,
+    ),
+    output_path: seat.output_path,
+    packet_path: seat.packet_path,
+  };
+}
+
+async function buildNextPreDeliberationIssueArtifactAgent(args: {
+  executionPlan: ReviewExecutionPlan;
+  projectRoot: string;
+}): Promise<CoordinatorAgentInstruction | null> {
+  const { lensIds, outputPaths } = await getParticipatingLensRefs(
+    args.executionPlan,
+  );
+  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    const seat = args.executionPlan.issue_artifact_prompt_packet_seats.find(
+      (candidate) => candidate.artifact_id === artifactId,
+    );
+    if (!seat) {
+      throw new Error(`Missing issue artifact prompt seat: ${artifactId}`);
+    }
+    if (!(await hasNonEmptyFile(seat.output_path))) {
+      return buildIssueArtifactAgentInstruction({
+        executionPlan: args.executionPlan,
+        projectRoot: args.projectRoot,
+        artifactId,
+        lensOutputPaths: outputPaths,
+      });
+    }
+    await validateIssueArtifactOnDisk({
+      executionPlan: args.executionPlan,
+      artifactId,
+      participatingLensIds: lensIds,
+    });
+  }
+  return null;
+}
+
+async function readLensDeliberationResponsePaths(
+  executionPlan: ReviewExecutionPlan,
+): Promise<string[]> {
+  const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  const paths: string[] = [];
+  for (const lensOutput of lensOutputs) {
+    const seat = requireDeliberationSeat(executionPlan, lensOutput.lens_id);
+    if (!(await hasNonEmptyFile(seat.output_path))) {
+      throw new Error(`Missing lens deliberation response: ${seat.output_path}`);
+    }
+    paths.push(seat.output_path);
+  }
+  return paths;
+}
+
+async function buildProblemFramingAgentIfNeeded(args: {
+  executionPlan: ReviewExecutionPlan;
+  projectRoot: string;
+}): Promise<CoordinatorAgentInstruction | null> {
+  const { lensIds, outputPaths } = await getParticipatingLensRefs(
+    args.executionPlan,
+  );
+  await validatePreDeliberationIssueArtifacts({
+    executionPlan: args.executionPlan,
+    participatingLensIds: lensIds,
+  });
+  const problemFramingSeat = args.executionPlan.issue_artifact_prompt_packet_seats.find(
+    (candidate) => candidate.artifact_id === "problem-framing",
+  );
+  if (!problemFramingSeat) {
+    throw new Error("Missing issue artifact prompt seat: problem-framing");
+  }
+  if (await hasNonEmptyFile(problemFramingSeat.output_path)) {
+    await validateIssueArtifactOnDisk({
+      executionPlan: args.executionPlan,
+      artifactId: "problem-framing",
+      participatingLensIds: lensIds,
+    });
+    return null;
+  }
+  return buildIssueArtifactAgentInstruction({
+    executionPlan: args.executionPlan,
+    projectRoot: args.projectRoot,
+    artifactId: "problem-framing",
+    lensOutputPaths: outputPaths,
+    deliberationResponsePaths:
+      await readLensDeliberationResponsePaths(args.executionPlan),
+    deliberationOutputPath: args.executionPlan.deliberation_output_path,
+    problemFramingProfileRef: await resolveProblemFramingProfileRef({
+      projectRoot: args.projectRoot,
+      executionPlan: args.executionPlan,
+    }),
+  });
 }
 
 // ─────────────────────────────────────────────
@@ -448,6 +628,7 @@ export async function coordinatorNext(
           sessionRoot,
           "--project-root",
           projectRoot,
+          "--validate-lenses-only",
         ]);
 
         if (result.halt) {
@@ -466,20 +647,43 @@ export async function coordinatorNext(
         const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
           path.join(sessionRoot, "execution-plan.yaml"),
         );
-        const deliberationAgents =
-          await buildLensDeliberationAgentInstructions(executionPlan);
+        const issueArtifactAgent =
+          await buildNextPreDeliberationIssueArtifactAgent({
+            executionPlan,
+            projectRoot,
+          });
 
         applyTransition(
           stateFile,
           "validating_lenses",
-          "awaiting_deliberation",
+          "awaiting_adjudication",
         );
+        if (!issueArtifactAgent) {
+          const deliberationAgents =
+            await buildLensDeliberationAgentInstructions(
+              executionPlan,
+              projectRoot,
+            );
+          applyTransition(
+            stateFile,
+            "awaiting_adjudication",
+            "awaiting_deliberation",
+          );
+          await writeStateFile(sessionRoot, stateFile);
+          return {
+            state: "awaiting_deliberation",
+            session_root: sessionRoot,
+            agents: deliberationAgents,
+            participating_lens_ids: result.participating_lens_ids,
+            degraded_lens_ids: result.degraded_lens_ids,
+          };
+        }
         await writeStateFile(sessionRoot, stateFile);
 
         return {
-          state: "awaiting_deliberation",
+          state: "awaiting_adjudication",
           session_root: sessionRoot,
-          agents: deliberationAgents,
+          ...(issueArtifactAgent ? { agent: issueArtifactAgent } : {}),
           participating_lens_ids: result.participating_lens_ids,
           degraded_lens_ids: result.degraded_lens_ids,
         };
@@ -664,9 +868,50 @@ export async function coordinatorNext(
     }
 
     case "awaiting_adjudication": {
-      throw new Error(
-        "Adjudication dispatch is not yet implemented. Build-mode pipeline extension (W-B-05).",
-      );
+      try {
+        const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
+          path.join(sessionRoot, "execution-plan.yaml"),
+        );
+        const issueArtifactAgent =
+          await buildNextPreDeliberationIssueArtifactAgent({
+            executionPlan,
+            projectRoot,
+          });
+        if (issueArtifactAgent) {
+          return {
+            state: "awaiting_adjudication",
+            session_root: sessionRoot,
+            agent: issueArtifactAgent,
+          };
+        }
+
+        const deliberationAgents =
+          await buildLensDeliberationAgentInstructions(executionPlan, projectRoot);
+        applyTransition(
+          stateFile,
+          "awaiting_adjudication",
+          "awaiting_deliberation",
+        );
+        await writeStateFile(sessionRoot, stateFile);
+        return {
+          state: "awaiting_deliberation",
+          session_root: sessionRoot,
+          agents: deliberationAgents,
+        };
+      } catch (error) {
+        const diskState = await readStateFile(sessionRoot);
+        diskState.error_message =
+          error instanceof Error ? error.message : String(error);
+        if (diskState.current_state === "awaiting_adjudication") {
+          applyTransition(diskState, "awaiting_adjudication", "failed");
+        }
+        await writeStateFile(sessionRoot, diskState);
+        return {
+          state: "failed",
+          session_root: sessionRoot,
+          error_message: diskState.error_message,
+        };
+      }
     }
 
     case "awaiting_deliberation": {
@@ -679,7 +924,22 @@ export async function coordinatorNext(
           return {
             state: "awaiting_deliberation",
             session_root: sessionRoot,
-            agent: await buildTeamleadDeliberationAgentInstruction(executionPlan),
+            agent: await buildTeamleadDeliberationAgentInstruction(
+              executionPlan,
+              projectRoot,
+            ),
+          };
+        }
+
+        const problemFramingAgent = await buildProblemFramingAgentIfNeeded({
+          executionPlan,
+          projectRoot,
+        });
+        if (problemFramingAgent) {
+          return {
+            state: "awaiting_deliberation",
+            session_root: sessionRoot,
+            agent: problemFramingAgent,
           };
         }
 

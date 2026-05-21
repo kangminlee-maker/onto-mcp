@@ -181,14 +181,15 @@ export async function runRenderReviewFinalOutputCli(
   const executionPlan = (await fileExists(executionPlanPath))
     ? await readYamlDocument<ReviewExecutionPlan>(executionPlanPath)
     : null;
-  if (!(await fileExists(deliberationPath))) {
+  const synthesisExecuted = executionResult?.synthesis_executed === true;
+  if (synthesisExecuted && !(await fileExists(deliberationPath))) {
     throw new Error(`Missing controlled deliberation artifact: ${deliberationPath}`);
   }
-  if (!(await fileExists(synthesisPath))) {
+  if (synthesisExecuted && !(await fileExists(synthesisPath))) {
     throw new Error(`Missing synthesize result artifact: ${synthesisPath}`);
   }
   const sourcePath = synthesisPath;
-  const sourceText = await fs.readFile(sourcePath, "utf8");
+  const sourceText = synthesisExecuted ? await fs.readFile(sourcePath, "utf8") : "";
   const sessionDate = (sessionMetadata.created_at ?? "").slice(0, 10);
   const participatingLensCount =
     executionResult?.participating_lens_ids.length ??
@@ -275,8 +276,11 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Review mode: ${bindingArtifact.resolved_review_mode}
 - Execution realization: ${bindingArtifact.resolved_execution_realization}${orchestratorReportedRealization ? ` (orchestrator reported: ${orchestratorReportedRealization})` : ""}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
-- Controlled deliberation: \`${toRelativePath(deliberationPath, projectRoot)}\`
-- Source artifact: \`${toRelativePath(sourcePath, projectRoot)}\`
+- Finding ledger: \`${toRelativePath(bindingArtifact.finding_ledger_path, projectRoot)}\`
+- Issue ledger: \`${toRelativePath(bindingArtifact.issue_ledger_path, projectRoot)}\`
+- Problem framing: \`${toRelativePath(bindingArtifact.problem_framing_path, projectRoot)}\`
+- Controlled deliberation: ${synthesisExecuted ? `\`${toRelativePath(deliberationPath, projectRoot)}\`` : "not performed"}
+- Source artifact: ${synthesisExecuted ? `\`${toRelativePath(sourcePath, projectRoot)}\`` : "not produced"}
 - Execution status: ${executionStatus}
 
 ${renderConsensusHeading(

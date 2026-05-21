@@ -58,7 +58,7 @@
   <h2>Implemented Surface</h2>
   <table>
     <tr><th>Tool</th><th>동작</th><th>완료 산출물</th></tr>
-    <tr><td><code>onto.review</code></td><td>lens 실행, controlled deliberation, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>deliberation.md</code>, <code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
+    <tr><td><code>onto.review</code></td><td>lens 실행, issue closure artifact 생성, controlled deliberation, problem framing, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>finding-ledger.yaml</code>, <code>issue-ledger.yaml</code>, <code>problem-framing.yaml</code>, <code>deliberation.md</code>, <code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
     <tr><td><code>onto.prepare_review</code></td><td>세션과 prompt packet을 준비한다.</td><td><code>execution-plan.yaml</code>, <code>execution-preparation/</code></td></tr>
     <tr><td><code>onto.review_status</code></td><td>세션 상태와 artifact 경로를 읽는다.</td><td>structured status</td></tr>
     <tr><td><code>onto.review_result</code></td><td>ReviewRecord와 최종 출력문을 읽는다.</td><td>structured result</td></tr>
@@ -81,7 +81,7 @@
     <div class="card"><strong>MCP boundary</strong><span class="status">Active</span><br><code>src/mcp</code>는 schema와 stdio server만 소유한다.</div>
     <div class="card"><strong>Review semantics</strong><span class="status">Active</span><br><code>src/core-runtime</code>와 <code>.onto</code> 문서가 review 의미론을 소유한다.</div>
     <div class="card"><strong>Controlled deliberation</strong><span class="status">Active</span><br>현재는 participating lens가 제한 context에서 재평가하고 teamlead 결과를 <code>deliberation.md</code>에 기록한다.</div>
-    <div class="card"><strong>Root issue target</strong><span class="decision">Design</span><br>다음 target은 finding relation graph로 root-cause issue를 만든 뒤 stance, deliberation, common spine + domain profile problem framing을 수행한다.</div>
+    <div class="card"><strong>Issue closure artifacts</strong><span class="status">Active</span><br>finding ledger, relation graph, issue ledger, stance matrix, deliberation plan, problem framing을 prompt-backed runtime step으로 생성하고 검증한다.</div>
     <div class="card"><strong>Codex path</strong><span class="status">Active</span><br><code>--codex</code>, Codex host, Codex-selected execution은 <code>codex-main-subprocess</code>로 수렴한다.</div>
     <div class="card"><strong>Core API</strong><span class="status">Active</span><br><code>src/core-api</code>는 기존 runtime을 library처럼 호출한다.</div>
     <div class="card"><strong>Fail loud</strong><span class="status">Active</span><br>config, executor, deliberation mode가 맞지 않으면 즉시 에러로 드러낸다.</div>
@@ -92,7 +92,7 @@
   <h2>Scope Boundaries</h2>
   <table>
     <tr><th>Area</th><th>현재 seat</th><th>다음 설계 질문</th></tr>
-    <tr><td><code>review</code></td><td>MCP surface 구현됨. 9개 lens + controlled deliberation + synthesize + ReviewRecord 경로가 TS runner에 연결됨.</td><td><code>finding-ledger.yaml</code>, <code>finding-relation-graph.yaml</code>, <code>issue-ledger.yaml</code>, <code>problem-framing.yaml</code>, domain <code>problem_framing_profile.md</code> 기반 v2 closure를 구현한다.</td></tr>
+    <tr><td><code>review</code></td><td>MCP surface 구현됨. lens + issue closure artifacts + controlled deliberation + problem framing + synthesize + ReviewRecord 경로가 TS runner에 연결됨.</td><td>남은 질문은 issue별 lens response를 별도 구조화 파일로 분리할지, 현재 <code>deliberation.md</code> 중심 구조를 유지할지이다.</td></tr>
     <tr><td><code>learn</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>학습 산출물의 authority seat와 tool schema를 먼저 정한다.</td></tr>
     <tr><td><code>govern</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>principle 승격/검증 workflow를 MCP tool 단위로 나눈다.</td></tr>
     <tr><td><code>reconstruct</code></td><td>제품 방향에 포함. domain 문서를 함께 사용한다.</td><td>구현물에서 ontology seed를 역산하는 artifact contract를 정의한다.</td></tr>

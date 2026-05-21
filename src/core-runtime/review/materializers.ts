@@ -320,6 +320,15 @@ export async function bootstrapInvocationBindingArtifacts(
     "context-candidate-assembly.yaml",
   );
   const synthesisOutputPath = path.join(sessionRoot, "synthesis.md");
+  const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
+  const findingRelationGraphPath = path.join(
+    sessionRoot,
+    "finding-relation-graph.yaml",
+  );
+  const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
+  const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
+  const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
+  const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
   const deliberationOutputPath = path.join(sessionRoot, "deliberation.md");
   const executionResultPath = path.join(sessionRoot, "execution-result.yaml");
   const errorLogPath = path.join(sessionRoot, "error-log.md");
@@ -330,6 +339,12 @@ export async function bootstrapInvocationBindingArtifacts(
     ...params.resolvedLensIds.map((lensId) =>
       path.join(deliberationRound1Root, `${lensId}-deliberation.md`),
     ),
+    findingLedgerPath,
+    findingRelationGraphPath,
+    issueLedgerPath,
+    issueStanceMatrixPath,
+    deliberationPlanPath,
+    problemFramingPath,
     synthesisOutputPath,
     deliberationOutputPath,
   ];
@@ -404,6 +419,12 @@ export async function bootstrapInvocationBindingArtifacts(
     materialized_input_path: materializedInputPath,
     context_candidate_assembly_path: contextCandidateAssemblyPath,
     synthesis_output_path: synthesisOutputPath,
+    finding_ledger_path: findingLedgerPath,
+    finding_relation_graph_path: findingRelationGraphPath,
+    issue_ledger_path: issueLedgerPath,
+    issue_stance_matrix_path: issueStanceMatrixPath,
+    deliberation_plan_path: deliberationPlanPath,
+    problem_framing_path: problemFramingPath,
     deliberation_mode: "controlled-lens-deliberation",
     deliberation_root_path: deliberationRootPath,
     deliberation_output_path: deliberationOutputPath,
@@ -439,6 +460,38 @@ export async function bootstrapInvocationBindingArtifacts(
       packet_path: path.join(promptPacketsRoot, `${lensId}.prompt.md`),
       output_path: path.join(round1Root, `${lensId}.md`),
     })),
+    issue_artifact_prompt_packet_seats: [
+      {
+        artifact_id: "finding-ledger",
+        packet_path: path.join(promptPacketsRoot, "finding-ledger.prompt.md"),
+        output_path: findingLedgerPath,
+      },
+      {
+        artifact_id: "finding-relation-graph",
+        packet_path: path.join(promptPacketsRoot, "finding-relation-graph.prompt.md"),
+        output_path: findingRelationGraphPath,
+      },
+      {
+        artifact_id: "issue-ledger",
+        packet_path: path.join(promptPacketsRoot, "issue-ledger.prompt.md"),
+        output_path: issueLedgerPath,
+      },
+      {
+        artifact_id: "issue-stance-matrix",
+        packet_path: path.join(promptPacketsRoot, "issue-stance-matrix.prompt.md"),
+        output_path: issueStanceMatrixPath,
+      },
+      {
+        artifact_id: "deliberation-plan",
+        packet_path: path.join(promptPacketsRoot, "deliberation-plan.prompt.md"),
+        output_path: deliberationPlanPath,
+      },
+      {
+        artifact_id: "problem-framing",
+        packet_path: path.join(promptPacketsRoot, "problem-framing.prompt.md"),
+        output_path: problemFramingPath,
+      },
+    ],
     lens_deliberation_prompt_packet_seats: params.resolvedLensIds.map((lensId) => ({
       lens_id: lensId,
       packet_path: path.join(promptPacketsRoot, `${lensId}.deliberation.prompt.md`),
@@ -450,6 +503,12 @@ export async function bootstrapInvocationBindingArtifacts(
     ),
     synthesize_prompt_packet_path: path.join(promptPacketsRoot, "synthesize.prompt.md"),
     synthesis_output_path: synthesisOutputPath,
+    finding_ledger_path: findingLedgerPath,
+    finding_relation_graph_path: findingRelationGraphPath,
+    issue_ledger_path: issueLedgerPath,
+    issue_stance_matrix_path: issueStanceMatrixPath,
+    deliberation_plan_path: deliberationPlanPath,
+    problem_framing_path: problemFramingPath,
     deliberation_mode: "controlled-lens-deliberation",
     deliberation_root_path: deliberationRootPath,
     deliberation_output_path: deliberationOutputPath,

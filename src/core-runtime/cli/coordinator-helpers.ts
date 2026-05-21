@@ -34,6 +34,10 @@ import {
   writeYamlDocument,
   parseMarkdownFrontmatter,
 } from "../review/review-artifact-utils.js";
+import {
+  ISSUE_ARTIFACT_IDS,
+  renderIssueArtifactContext,
+} from "../review/issue-artifact-runtime.js";
 
 function toRelativePath(absolutePath: string, projectRoot: string): string {
   return path.relative(projectRoot, absolutePath);
@@ -143,6 +147,7 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
       "session-root": { type: "string" },
       "project-root": { type: "string", default: "." },
       "require-deliberation": { type: "boolean", default: false },
+      "validate-lenses-only": { type: "boolean", default: false },
     },
     strict: true,
     allowPositionals: false,
@@ -152,6 +157,7 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
   const sessionRoot = path.resolve(requireString(values["session-root"], "session-root"));
   const projectRoot = path.resolve(requireString(values["project-root"], "project-root"));
   const requireDeliberation = Boolean(values["require-deliberation"]);
+  const validateLensesOnly = Boolean(values["validate-lenses-only"]);
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   const errorLogPath = executionPlan.error_log_path ?? path.join(sessionRoot, "error-log.md");
@@ -189,6 +195,16 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
     return {
       halt: true,
       halt_reason: haltReason,
+      participating_lens_ids: participating,
+      degraded_lens_ids: degraded.map((d) => d.lens_id),
+      runtime_packet_path: undefined,
+    };
+  }
+
+  if (validateLensesOnly) {
+    return {
+      halt: false,
+      halt_reason: undefined,
       participating_lens_ids: participating,
       degraded_lens_ids: degraded.map((d) => d.lens_id),
       runtime_packet_path: undefined,
@@ -233,12 +249,22 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
         "",
       ].join("\n")
     : "";
+  const issueArtifactSection = [
+    "",
+    "## Issue-Stance Closure Artifact Context",
+    await renderIssueArtifactContext({
+      projectRoot,
+      executionPlan,
+      artifactIds: ISSUE_ARTIFACT_IDS,
+    }),
+    "",
+  ].join("\n");
 
   const runtimePacketPath = path.join(
     executionPlan.prompt_packets_root ?? path.join(sessionRoot, "prompt-packets"),
     "synthesize.runtime.prompt.md",
   );
-  const enrichedText = `${synthesizePacketText.trimEnd()}\n\n## Runtime Participating Lens Outputs\n${lensRefsSection}\n${deliberationSection}\n${degradedSection}`;
+  const enrichedText = `${synthesizePacketText.trimEnd()}\n\n## Runtime Participating Lens Outputs\n${lensRefsSection}\n${deliberationSection}\n${issueArtifactSection}${degradedSection}`;
   await fs.writeFile(runtimePacketPath, enrichedText.trimEnd() + "\n", "utf8");
 
   return {
@@ -573,6 +599,42 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     "synthesize.runtime.prompt.md",
   );
 
+  const issueArtifactDispatchAt = findTransitionAt(
+    stateFile,
+    "awaiting_adjudication",
+  );
+  const issueArtifactStartedAt = issueArtifactDispatchAt ?? executionStartedAt;
+  const issueArtifactResults: ReviewUnitExecutionResult[] = await Promise.all(
+    executionPlan.issue_artifact_prompt_packet_seats.map(async (seat) => {
+      const outputExists = await fileExists(seat.output_path);
+      const hasContent = outputExists
+        ? (await fs.readFile(seat.output_path, "utf8")).trim().length > 0
+        : false;
+      const mtimeIso = hasContent
+        ? await readFileMtimeIsoOrNull(seat.output_path)
+        : null;
+      const unitCompletedAt = mtimeIso ?? completedAt;
+      const provenance: UnitTimestampProvenance =
+        issueArtifactDispatchAt && mtimeIso ? "coordinator_derived" : "batch_window";
+      return {
+        unit_id: seat.artifact_id,
+        unit_kind: "issue_artifact" as const,
+        packet_path: seat.packet_path,
+        output_path: seat.output_path,
+        status: hasContent ? ("completed" as const) : ("failed" as const),
+        started_at: issueArtifactStartedAt,
+        completed_at: unitCompletedAt,
+        duration_ms: computeDurationMs(
+          issueArtifactStartedAt,
+          unitCompletedAt,
+          `issue_artifact:${seat.artifact_id}`,
+        ),
+        timestamp_provenance: provenance,
+        failure_message: hasContent ? null : "output file missing or empty",
+      };
+    }),
+  );
+
   const deliberationDispatchAt = findTransitionAt(
     stateFile,
     "awaiting_deliberation",
@@ -695,6 +757,7 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     halt_reason: haltReason,
     error_log_path: errorLogPath,
     lens_execution_results: lensResults,
+    issue_artifact_execution_results: issueArtifactResults,
     deliberation_execution_results: [
       ...lensDeliberationResults,
       ...(teamleadDeliberationResult ? [teamleadDeliberationResult] : []),

@@ -323,7 +323,7 @@ export const REVIEW_TRANSITIONS: Record<
   preparing: ["awaiting_lens_dispatch", "failed"],
   awaiting_lens_dispatch: ["validating_lenses"],
   validating_lenses: ["awaiting_adjudication", "awaiting_deliberation", "halted_partial", "failed"],
-  awaiting_adjudication: ["awaiting_synthesize_dispatch", "failed"],
+  awaiting_adjudication: ["awaiting_deliberation", "failed"],
   awaiting_deliberation: ["awaiting_synthesize_dispatch", "failed"],
   awaiting_synthesize_dispatch: ["completing"],
   completing: ["completed", "failed"],

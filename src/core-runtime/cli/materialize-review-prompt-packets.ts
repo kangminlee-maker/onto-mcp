@@ -570,7 +570,13 @@ You must preserve lens evidence and must not invent new independent perspectives
 - materialized input: ${toRelativePath(binding.materialized_input_path, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- finding ledger: ${toRelativePath(executionPlan.finding_ledger_path, projectRoot)}
+- finding relation graph: ${toRelativePath(executionPlan.finding_relation_graph_path, projectRoot)}
+- issue ledger: ${toRelativePath(executionPlan.issue_ledger_path, projectRoot)}
+- issue stance matrix: ${toRelativePath(executionPlan.issue_stance_matrix_path, projectRoot)}
+- deliberation plan: ${toRelativePath(executionPlan.deliberation_plan_path, projectRoot)}
 - controlled lens deliberation result: ${toRelativePath(executionPlan.deliberation_output_path, projectRoot)}
+- problem framing: ${toRelativePath(executionPlan.problem_framing_path, projectRoot)}
 
 ## Optional Context Inputs
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
@@ -596,13 +602,16 @@ ${(executionPlan.lens_execution_seats ?? binding.resolved_lens_set.map((lensId) 
 
 ## Execution Directives
 - Read the materialized input first, then all participating lens outputs.
+- Read all issue-stance closure artifacts before writing final classification.
 - Read the controlled lens deliberation result before classifying or rendering disagreements.
+- Preserve issue IDs, root hypotheses, common spine values, and domain axes from the issue-stance closure artifacts.
 - Prefer the smallest sufficient set of files.
 - Only read optional context inputs if the materialized input and lens outputs are not enough.
 - Do not recursively chase additional document links or reference chains found inside the target text or lens outputs.
 - Preserve consensus, axiology-proposed additional perspectives, and overlooked premises.
 - Do not invent New Perspectives yourself.
 - You are not the deliberation actor. Controlled lens deliberation already ran before this step and wrote the authoritative deliberation result.
+- You are not the problem-framing actor. problem-framing.yaml already classified issue role, judgment state, impact kind, timing, closure, and domain axes.
 - Do not resolve disagreements that the controlled deliberation result preserved as unresolved.
 - Do not override a controlled deliberation decision unless the result contradicts an explicit cited artifact; in that case preserve the contradiction in Disagreement instead of silently choosing a new answer.
 - Start the output with YAML frontmatter using this exact field:
