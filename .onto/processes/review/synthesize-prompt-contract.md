@@ -5,6 +5,7 @@
 > 기준 문서:
 > - `.onto/processes/review/lens-registry.md`
 > - `.onto/processes/review/lens-prompt-contract.md`
+> - `.onto/processes/review/issue-stance-deliberation-contract.md`
 > - `process.md`
 > - `.onto/processes/review/review.md`
 > - `.onto/authority/core-lexicon.yaml`
@@ -261,6 +262,17 @@ canonical properties:
 
 Claude Code Agent Teams에서는 이 단계가 SendMessage transport로 실현될 수 있다.
 MCP/TS runtime에서는 같은 의미론을 provider 독립 packet으로 실현한다.
+
+Issue-stance deliberation target에서는 synthesize가 추가로 아래 artifact를 소비한다.
+
+- `{session_root}/issue-ledger.yaml`
+- `{session_root}/issue-stance-matrix.yaml`
+- `{session_root}/deliberation-plan.yaml`
+- `{session_root}/deliberation.md`
+
+이 경우 synthesize는 issue status를 새로 판정하지 않는다.
+`no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason`은
+`.onto/processes/review/issue-stance-deliberation-contract.md`가 소유한다.
 
 ### 6.2 frontmatter `deliberation_status`
 

@@ -4,6 +4,7 @@
 > 목적: 현재 `onto` 메인 레포의 `검토 (review)`에서 사용하는 canonical review 구조를 고정한다.
 > 기준 문서:
 > - `.onto/authority/core-lexicon.yaml`
+> - `.onto/processes/review/issue-stance-deliberation-contract.md`
 
 ---
 
@@ -46,7 +47,7 @@
 
 | Stage ID | 한글 설명 | 책임 |
 |---|---|---|
-| `controlled-lens-deliberation` | 통제된 lens 숙의 | lens 결과를 제한 context에서 재검토하고 contested position resolution을 `deliberation.md`에 기록 |
+| `controlled-lens-deliberation` | 통제된 lens 숙의 | issue별 lens stance를 확인하고 material conflict resolution을 `deliberation.md`에 기록 |
 | `synthesize` | 종합 단계 | lens 결과와 `deliberation.md`를 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
 
 중요한 구분:

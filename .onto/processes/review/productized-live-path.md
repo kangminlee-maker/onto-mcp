@@ -14,6 +14,7 @@
 > - `.onto/processes/review/record-field-mapping.md`
 > - `.onto/processes/review/execution-preparation-artifacts.md`
 > - `.onto/processes/review/prompt-execution-runner-contract.md`
+> - `.onto/processes/review/issue-stance-deliberation-contract.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -248,6 +249,31 @@ canonical requirement:
 Claude Code Agent Teams 환경에서는 이 단계가 SendMessage transport 방식으로 실현될 수 있다.
 MCP/TS runtime에서는 같은 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
 중요한 것은 기능명이 아니라 `분리된 관점 + 제한 context + teamlead 통제 + 기록 가능한 resolution`이다.
+
+#### 3.7.1 Issue-Stance Deliberation Target
+
+다음 runtime target은 `.onto/processes/review/issue-stance-deliberation-contract.md`를 따른다.
+
+목표 구조:
+
+```text
+Round 1 lens outputs
+-> issue-ledger.yaml
+-> issue-stance-matrix.yaml
+-> deliberation-plan.yaml
+-> issue-scoped controlled deliberation
+-> deliberation.md
+-> synthesize
+```
+
+핵심 invariant:
+
+1. 모든 raised issue는 ledger에 등록된다.
+2. 모든 participating lens는 모든 issue에 대해 stance를 남긴다.
+3. material conflict가 있는 issue만 deliberation에 진입한다.
+4. deliberation은 서로 다른 입장의 이유와 stance 유지/변경 여부를 확인한다.
+5. issue별 결론은 `no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason` 중 하나다.
+6. `synthesize`는 issue status를 변경하지 않고 보존적으로 렌더링한다.
 
 ### 3.8 종합 단계 (synthesize)
 

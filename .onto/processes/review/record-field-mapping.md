@@ -9,6 +9,7 @@
 > - `.onto/processes/review/binding-contract.md`
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
+> - `.onto/processes/review/issue-stance-deliberation-contract.md`
 
 ---
 
@@ -42,6 +43,12 @@ prompt-backed reference path에서 실제로 생성되는 산출물은 대부분
 11. `final-output.md`
 12. `error-log.md` optional
 
+Issue-stance deliberation target source artifacts:
+
+13. `issue-ledger.yaml`
+14. `issue-stance-matrix.yaml`
+15. `deliberation-plan.yaml`
+
 ---
 
 ## 3. Aggregate Mapping Table
@@ -62,6 +69,15 @@ prompt-backed reference path에서 실제로 생성되는 산출물은 대부분
 | `deliberation.md` | `deliberation_result_ref` |
 | `final-output.md` | `final_output_ref` |
 | `error-log.md` | `degradation_notes_ref` |
+
+Issue-stance deliberation target mapping:
+
+| Source artifact | ReviewRecord field |
+|---|---|
+| `issue-ledger.yaml` | `issue_ledger_ref` |
+| `issue-stance-matrix.yaml` | `issue_stance_matrix_ref` |
+| `deliberation-plan.yaml` | `deliberation_plan_ref` |
+| `deliberation.md` → issue status entries | `issue_resolution_summary` |
 
 ---
 

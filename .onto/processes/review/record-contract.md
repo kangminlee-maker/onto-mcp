@@ -8,6 +8,7 @@
 > - `.onto/processes/review/binding-contract.md`
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
+> - `.onto/processes/review/issue-stance-deliberation-contract.md`
 > - `.onto/processes/review/execution-preparation-artifacts.md`
 > - `.onto/processes/review/record-field-mapping.md`
 > - `.onto/authority/core-lexicon.yaml`
@@ -195,6 +196,24 @@ degraded_lens_ids: []
 - `final_output_ref`는 주체자에게 보여주는 rendered output을 가리킨다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
 - `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없으면 (pre-v2 또는 shared phenomenon 미발생) 빈 배열이다
+
+### 4.5.1 Issue-Stance Deliberation Layer Target
+
+> Status: design target. 구현 시 `.onto/processes/review/issue-stance-deliberation-contract.md`를 따른다.
+
+Issue-stance deliberation이 구현되면 `ReviewRecord`는 상세 내용을 복붙하지 않고 아래 refs를 추가한다.
+
+- `issue_ledger_ref`
+- `issue_stance_matrix_ref`
+- `deliberation_plan_ref`
+- `issue_resolution_summary`
+
+원칙:
+
+- 모든 issue의 상세 stance와 설명은 `issue-stance-matrix.yaml`에 남긴다.
+- `ReviewRecord`는 issue별 최종 status와 lens 참여 요약만 구조화한다.
+- `deliberation_result_ref`는 계속 `deliberation.md`를 가리킨다.
+- `synthesize_result_ref`는 issue status를 변경한 source가 될 수 없다.
 
 ### 4.6 Internal Body vs Principal Summary 경계 (Cross-reference)
 
