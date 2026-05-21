@@ -1859,8 +1859,15 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   }
 
   // Resolve topology once and thread it through dispatch.
+  const codexExecutionRequested = setup.executionProfile.host_runtime === "codex";
   const cachedTopologyResolution = resolveExecutionTopology({
     ontoConfig: setup.ontoConfig,
+    ...(codexExecutionRequested
+      ? {
+          claudeHost: false,
+          codexExecutionRequested: true,
+        }
+      : {}),
   });
   const cachedTopology: ExecutionTopology | null =
     cachedTopologyResolution.type === "resolved"

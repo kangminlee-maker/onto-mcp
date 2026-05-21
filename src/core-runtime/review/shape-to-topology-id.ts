@@ -14,6 +14,7 @@
  *   - `main_native` + Claude host  → `cc-main-agent-subagent`
  *   - `main_native` + Codex host   → `codex-main-subprocess`
  *   - `main_foreign` (codex) + CC  → `cc-main-codex-subprocess`
+ *   - `main_foreign` (codex) + Codex host → `codex-main-subprocess`
  *   - `main-teams_foreign` (codex) → `cc-teams-codex-subprocess`
  *
  * # How it relates
@@ -34,7 +35,7 @@ import type { TopologyShape } from "./topology-shape-derivation.js";
 export interface ShapeMappingSignals {
   /** Claude Code session is hosting. Determines CC vs Codex branch. */
   claudeHost: boolean;
-  /** Codex CLI session is hosting (used when claudeHost is false). */
+  /** Codex CLI execution is active or explicitly requested. */
   codexSessionActive: boolean;
 }
 
@@ -70,10 +71,9 @@ export type ShapeMappingResult = ShapeMappingSuccess | ShapeMappingFailure;
  * TopologyId in the current catalog. Failure cases (post-P2):
  *   - `main_native` with neither Claude nor Codex host (plain terminal
  *     without codex OAuth — truly unreachable).
- *   - `main_foreign` with a provider that has no `cc-main-<provider>`
- *     entry in the catalog. Currently only `codex` has such an entry;
- *     non-codex LLM model selection now belongs to `llm`, not this topology
- *     axis.
+ *   - `main_foreign` with a provider that cannot be handled by the current
+ *     host. Currently only `codex` is mapped; non-codex LLM model selection
+ *     belongs to `llm`, not this topology axis.
  */
 export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult {
   const { shape, subagent_provider, signals } = input;
@@ -112,16 +112,21 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
         log("→ cc-main-codex-subprocess (Claude + main + codex lens)");
         return { ok: true, topology_id: "cc-main-codex-subprocess", trace };
       }
+      if (signals.codexSessionActive && subagent_provider === "codex") {
+        log("→ codex-main-subprocess (Codex host + codex lens)");
+        return { ok: true, topology_id: "codex-main-subprocess", trace };
+      }
       log(
         `no canonical TopologyId: main_foreign with provider=${subagent_provider} ` +
-          `requires teams mode or a different provider`,
+          `requires Claude host, Codex execution, or a different provider`,
       );
       return {
         ok: false,
         reason:
           `main_foreign shape with provider=${subagent_provider} has no canonical TopologyId. ` +
           "Either (a) enable CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 for main-teams_foreign, " +
-          "or (b) use provider=codex under Claude host for cc-main-codex-subprocess.",
+          "(b) use provider=codex under Claude host for cc-main-codex-subprocess, " +
+          "or (c) run through Codex for codex-main-subprocess.",
         trace,
       };
     }

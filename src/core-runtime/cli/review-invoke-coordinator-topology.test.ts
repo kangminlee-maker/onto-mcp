@@ -29,6 +29,8 @@ describe("tryResolveTopologyForHandoff — null paths", () => {
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
   });
   afterEach(restoreEnv);
 
@@ -55,6 +57,8 @@ describe("tryResolveTopologyForHandoff — always-on axis-first (P9.3)", () => {
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
   });
   afterEach(restoreEnv);
 
@@ -78,6 +82,8 @@ describe("tryResolveTopologyForHandoff — resolved descriptor", () => {
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
   });
   afterEach(restoreEnv);
 

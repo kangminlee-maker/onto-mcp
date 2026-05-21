@@ -26,7 +26,7 @@
  *
  *   1. ONTO_HOST_RUNTIME env var (explicit override; e.g. "standalone")
  *   2. ontoConfig.host_runtime in .onto/config.yml (project override)
- *   3. CLAUDECODE=1 / CLAUDE_PROJECT_DIR / CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS
+ *   3. CLAUDECODE=1 / CLAUDE_PROJECT_DIR
  *      → "claude" (Claude Code session detected)
  *   4. CODEX_THREAD_ID / CODEX_CI → "codex" (Codex CLI session detected)
  *   5. codex binary on PATH + ~/.codex/auth.json → "codex" (codex available)
@@ -99,11 +99,11 @@ export interface HostDetectionConfig {
 
 export const ENV_ONTO_HOST_RUNTIME = "ONTO_HOST_RUNTIME";
 
-// Claude Code signals (any one is sufficient)
+// Claude Code host signals. CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is a feature
+// flag, not proof that the current process is hosted by Claude Code.
 const CLAUDE_ENV_SIGNALS = [
   "CLAUDECODE",
   "CLAUDE_PROJECT_DIR",
-  "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
 ] as const;
 
 // Codex CLI signals (any one is sufficient)

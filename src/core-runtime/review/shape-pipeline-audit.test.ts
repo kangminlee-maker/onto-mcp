@@ -130,7 +130,7 @@ const AUDIT_MATRIX: AuditRow[] = [
     axes: {
       subagent: { provider: "main-native" },
     },
-    signals: CLAUDE_TEAMS_WITH_DELIBERATION,
+    signals: CLAUDE_TEAMS,
     expected_topology_id: "cc-teams-agent-subagent",
     expected_spawn_supported: true,
   },
@@ -149,7 +149,7 @@ const AUDIT_MATRIX: AuditRow[] = [
       subagent: { provider: "main-native" },
       lens_deliberation: "controlled-lens-deliberation",
     },
-    signals: CLAUDE_TEAMS,
+    signals: CLAUDE_TEAMS_WITH_DELIBERATION,
     expected_topology_id: "cc-teams-lens-agent-deliberation",
     expected_spawn_supported: false,
     blocked_on: "Agent Teams deliberation",

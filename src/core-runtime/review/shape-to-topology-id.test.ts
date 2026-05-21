@@ -80,9 +80,10 @@ describe("shapeToTopologyId — main_foreign mapping", () => {
     expect(r.ok).toBe(false);
   });
 
-  it("main_foreign + codex + Codex host → unsupported (main_foreign requires Claude host)", () => {
+  it("main_foreign + codex + Codex host → codex-main-subprocess", () => {
     const r = shapeToTopologyId(input("main_foreign", "codex", CODEX));
-    expect(r.ok).toBe(false);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.topology_id).toBe("codex-main-subprocess");
   });
 });
 

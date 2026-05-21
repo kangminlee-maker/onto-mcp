@@ -103,6 +103,38 @@ describe("resolveExecutionTopology — axis-first happy paths", () => {
     expect(r.topology.id).toBe("codex-main-subprocess");
   });
 
+  it("Codex host + codex subagent → codex-main-subprocess", () => {
+    const res = resolveExecutionTopology(
+      args({
+        ontoConfig: {
+          review: {
+            subagent: { provider: "codex", model_id: "gpt-5.4" },
+          },
+        },
+        codexSessionActive: true,
+        codexAvailable: true,
+      }),
+    );
+    const r = expectResolved(res);
+    expect(r.topology.id).toBe("codex-main-subprocess");
+  });
+
+  it("Codex execution request without Codex env signal → codex-main-subprocess", () => {
+    const res = resolveExecutionTopology(
+      args({
+        ontoConfig: {
+          review: {
+            subagent: { provider: "codex", model_id: "gpt-5.4" },
+          },
+        },
+        codexExecutionRequested: true,
+        codexAvailable: true,
+      }),
+    );
+    const r = expectResolved(res);
+    expect(r.topology.id).toBe("codex-main-subprocess");
+  });
+
   it("Claude + teams + native + controlled deliberation → cc-teams-lens-agent-deliberation", () => {
     const res = resolveExecutionTopology(
       args({

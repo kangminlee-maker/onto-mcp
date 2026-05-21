@@ -484,7 +484,7 @@ provisional_terms:
         priority order:
           1. ONTO_HOST_RUNTIME env var (explicit override)
           2. config.host_runtime in .onto/config.yml
-          3. CLAUDECODE / CLAUDE_PROJECT_DIR / CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS → claude
+          3. CLAUDECODE / CLAUDE_PROJECT_DIR → claude
           4. CODEX_THREAD_ID / CODEX_CI → codex
           5. codex binary on PATH + ~/.codex/auth.json → codex
           6. (none) → standalone (default)

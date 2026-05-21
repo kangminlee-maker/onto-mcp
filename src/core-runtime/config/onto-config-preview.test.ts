@@ -80,6 +80,18 @@ describe("previewTopologyDerivation — happy paths", () => {
       expect(r.topology_id).toBe("codex-main-subprocess");
     }
   });
+
+  it("Codex host + codex subagent → main_foreign / codex-main-subprocess", () => {
+    const r = previewTopologyDerivation(
+      { subagent: { provider: "codex", model_id: "gpt-5.4" } },
+      CODEX_HOST,
+    );
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.shape).toBe("main_foreign");
+      expect(r.topology_id).toBe("codex-main-subprocess");
+    }
+  });
 });
 
 describe("previewTopologyDerivation — controlled deliberation transport", () => {

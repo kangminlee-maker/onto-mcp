@@ -121,6 +121,12 @@ export interface ResolveExecutionTopologyArgs {
    * Defaults to `detectCodexEnvSignal()`.
    */
   codexSessionActive?: boolean;
+  /**
+   * Whether this invocation selected Codex execution even when the parent
+   * shell has no Codex session env. Used by `--codex`, `ONTO_HOST_RUNTIME=codex`,
+   * and auto Codex execution from the plan resolver.
+   */
+  codexExecutionRequested?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -302,7 +308,7 @@ function checkTopologyRequirements(
     }
     case "codex-main-subprocess": {
       if (!signals.codexSessionActive) {
-        return { ok: false, reason: "need Codex CLI session signal (CODEX_THREAD_ID / CODEX_CI)" };
+        return { ok: false, reason: "need Codex execution request or CLI session signal (CODEX_THREAD_ID / CODEX_CI)" };
       }
       if (!signals.codexAvailable) {
         return { ok: false, reason: "need codex binary + ~/.codex/auth.json" };
@@ -349,7 +355,9 @@ export function resolveExecutionTopology(
       args.experimentalAgentTeams ?? env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS === "1",
     lensAgentTeamsMode: args.ontoConfig.lens_agent_teams_mode === true,
     codexAvailable: args.codexAvailable ?? detectCodexBinaryAvailable(),
-    codexSessionActive: args.codexSessionActive ?? detectCodexEnvSignal(),
+    codexSessionActive:
+      (args.codexSessionActive ?? detectCodexEnvSignal()) ||
+      args.codexExecutionRequested === true,
   };
 
   log(
@@ -436,7 +444,7 @@ function buildNoTopologyReason(signals: DetectionSignals): string {
   lines.push(`  - Experimental Agent Teams:                     ${signals.experimentalAgentTeams}`);
   lines.push(`  - Lens Agent Teams mode (config):               ${signals.lensAgentTeamsMode}`);
   lines.push(`  - Codex 바이너리 + ~/.codex/auth.json:          ${signals.codexAvailable}`);
-  lines.push(`  - Codex CLI 세션 (CODEX_THREAD_ID / CODEX_CI):  ${signals.codexSessionActive}`);
+  lines.push(`  - Codex 실행 요청 / CLI 세션 (CODEX_THREAD_ID / CODEX_CI):  ${signals.codexSessionActive}`);
   lines.push("");
   lines.push("해결 방법 (한 가지 선택):");
   lines.push("  1. Claude Code 세션에서 실행");
