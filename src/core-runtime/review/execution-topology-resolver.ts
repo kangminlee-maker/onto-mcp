@@ -313,7 +313,7 @@ function checkTopologyRequirements(
       if (!signals.codexAvailable) {
         return { ok: false, reason: "need codex binary + ~/.codex/auth.json" };
       }
-      return { ok: true, reason: "codex session + codex binary both present" };
+      return { ok: true, reason: "codex execution/session + codex binary both present" };
     }
   }
 }

@@ -56,7 +56,7 @@ describe("shapeToTopologyId — main_native host branching", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toContain("Claude Code");
-      expect(r.reason).toContain("Codex CLI");
+      expect(r.reason).toContain("Codex execution");
     }
   });
 });

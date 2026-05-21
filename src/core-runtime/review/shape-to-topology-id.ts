@@ -101,8 +101,8 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
       return {
         ok: false,
         reason:
-          "main_native shape requires Claude Code or Codex CLI host session. " +
-          "Neither CLAUDECODE=1 nor CODEX_THREAD_ID detected.",
+          "main_native shape requires Claude Code host or Codex execution. " +
+          "Neither Claude host nor Codex execution was detected.",
         trace,
       };
     }
