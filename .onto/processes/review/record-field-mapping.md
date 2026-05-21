@@ -45,9 +45,12 @@ prompt-backed reference path에서 실제로 생성되는 산출물은 대부분
 
 Issue-stance deliberation target source artifacts:
 
-13. `issue-ledger.yaml`
-14. `issue-stance-matrix.yaml`
-15. `deliberation-plan.yaml`
+13. `finding-ledger.yaml`
+14. `finding-relation-graph.yaml`
+15. `issue-ledger.yaml`
+16. `issue-stance-matrix.yaml`
+17. `deliberation-plan.yaml`
+18. `problem-framing.yaml`
 
 ---
 
@@ -74,10 +77,15 @@ Issue-stance deliberation target mapping:
 
 | Source artifact | ReviewRecord field |
 |---|---|
+| `finding-ledger.yaml` | `finding_ledger_ref` |
+| `finding-relation-graph.yaml` | `finding_relation_graph_ref` |
 | `issue-ledger.yaml` | `issue_ledger_ref` |
 | `issue-stance-matrix.yaml` | `issue_stance_matrix_ref` |
 | `deliberation-plan.yaml` | `deliberation_plan_ref` |
 | `deliberation.md` → issue status entries | `issue_resolution_summary` |
+| `problem-framing.yaml` → classification context | `problem_framing_ref` source metadata |
+| `problem-framing.yaml` → common spine classification | `issue_resolution_summary.*.issue_role`, `issue_resolution_summary.*.judgment_state`, `issue_resolution_summary.*.impact_kind`, `issue_resolution_summary.*.timing_class`, `issue_resolution_summary.*.closure_class` |
+| `problem-framing.yaml` → domain axes classification | `issue_resolution_summary.*.domain_axes` |
 
 ---
 

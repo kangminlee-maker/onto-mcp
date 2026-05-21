@@ -203,15 +203,20 @@ degraded_lens_ids: []
 
 Issue-stance deliberation이 구현되면 `ReviewRecord`는 상세 내용을 복붙하지 않고 아래 refs를 추가한다.
 
+- `finding_ledger_ref`
+- `finding_relation_graph_ref`
 - `issue_ledger_ref`
 - `issue_stance_matrix_ref`
 - `deliberation_plan_ref`
+- `problem_framing_ref`
 - `issue_resolution_summary`
 
 원칙:
 
+- 모든 surface finding과 relation/root-cause 해석은 `finding-ledger.yaml`, `finding-relation-graph.yaml`, `issue-ledger.yaml`에 남긴다.
 - 모든 issue의 상세 stance와 설명은 `issue-stance-matrix.yaml`에 남긴다.
-- `ReviewRecord`는 issue별 최종 status와 lens 참여 요약만 구조화한다.
+- 공통 spine, domain profile ref, domain-specific axis 분류는 `problem-framing.yaml`에 남긴다.
+- `ReviewRecord`는 issue별 최종 status, classification, lens 참여 요약만 구조화한다.
 - `deliberation_result_ref`는 계속 `deliberation.md`를 가리킨다.
 - `synthesize_result_ref`는 issue status를 변경한 source가 될 수 없다.
 

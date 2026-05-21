@@ -1,4 +1,4 @@
-lexicon_version: "0.38.0"
+lexicon_version: "0.39.0"
 schema_version: "2"
 position: "Prototype-to-service ontology authority for the onto main repository."
 notes:
@@ -1245,6 +1245,13 @@ terms:
     definition: "A non-lens review stage that integrates lens findings into a final review result."
     notes:
       - "Homonym: 'synthesize' appears as both this concept term (axis: review_structure) and a role ID in core-lens-registry.yaml. Different axis — OaC §5 permits same token across disjoint namespaces."
+  - term_id: "problem_framing_profile"
+    canonical_label: "ProblemFramingProfile"
+    korean_label: "문제 프레이밍 프로필"
+    axis: "domain_document"
+    term_status: "active"
+    definition: "Domain document custom type that defines domain-specific axes used by review closure problem framing. It extends the review common spine and does not redefine common spine values."
+    contract_ref: ".onto/processes/review/issue-stance-deliberation-contract.md §12.2"
   - term_id: "prompt_backed_reference_path"
     canonical_label: "PromptBackedReferencePath"
     korean_label: "프롬프트 기반 기준 경로"

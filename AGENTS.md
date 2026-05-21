@@ -45,10 +45,11 @@
 6. [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
 7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
 8. [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
-9. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-10. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-11. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-12. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+9. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
+10. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
+11. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
+12. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+13. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
 
 ---
 
@@ -95,7 +96,7 @@ canonical review 구조:
 
 DO:
 - `9개 lens → controlled lens deliberation → synthesize` 구조를 따른다
-- issue-stance target에서는 모든 raised issue에 대해 모든 lens stance를 기록한 뒤 material conflict issue만 숙의한다
+- issue-stance target에서는 surface finding을 root-cause issue cluster로 묶은 뒤 모든 lens stance를 기록하고 material conflict issue만 숙의한다
 - `New Perspectives`는 `axiology`에서 제안한다
 - `deliberation.md`가 contested lens position의 resolution authority다
 - `synthesize`는 lens 결과와 `deliberation.md`를 보존적으로 종합한다
@@ -145,9 +146,14 @@ DO:
 
 issue-stance deliberation target artifact:
 
+- `finding-ledger.yaml`
+- `finding-relation-graph.yaml`
 - `issue-ledger.yaml`
 - `issue-stance-matrix.yaml`
 - `deliberation-plan.yaml`
+- `problem-framing.yaml`
+
+`problem-framing.yaml` uses a common spine owned by the review contract and optional domain axes owned by `.onto/domains/{domain}/problem_framing_profile.md`.
 
 관련 문서:
 

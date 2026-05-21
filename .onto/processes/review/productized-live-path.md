@@ -258,22 +258,29 @@ MCP/TS runtime에서는 같은 의미론을 provider 독립적인 controlled del
 
 ```text
 Round 1 lens outputs
+-> finding-ledger.yaml
+-> finding-relation-graph.yaml
 -> issue-ledger.yaml
 -> issue-stance-matrix.yaml
 -> deliberation-plan.yaml
 -> issue-scoped controlled deliberation
 -> deliberation.md
+-> common spine + domain problem framing profile
+-> problem-framing.yaml
 -> synthesize
 ```
 
 핵심 invariant:
 
-1. 모든 raised issue는 ledger에 등록된다.
-2. 모든 participating lens는 모든 issue에 대해 stance를 남긴다.
-3. material conflict가 있는 issue만 deliberation에 진입한다.
-4. deliberation은 서로 다른 입장의 이유와 stance 유지/변경 여부를 확인한다.
-5. issue별 결론은 `no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason` 중 하나다.
-6. `synthesize`는 issue status를 변경하지 않고 보존적으로 렌더링한다.
+1. 모든 surface finding은 finding ledger에 등록된다.
+2. finding 간 관계를 검토해 root-cause issue cluster를 만든다.
+3. 모든 participating lens는 모든 root-cause issue에 대해 stance를 남긴다.
+4. material conflict가 있는 issue만 deliberation에 진입한다.
+5. deliberation은 서로 다른 입장의 이유와 root-cause 해석 차이, stance 유지/변경 여부를 확인한다.
+6. issue별 결론은 `no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason` 중 하나다.
+7. review closure는 `problem-framing.yaml`에서 공통 spine과 선택된 domain profile 기반 분류를 기록한다.
+8. domain별 분류 축은 `.onto/domains/{domain}/problem_framing_profile.md`가 소유한다.
+9. `synthesize`는 issue status와 common spine/domain axes classification을 변경하지 않고 보존적으로 렌더링한다.
 
 ### 3.8 종합 단계 (synthesize)
 

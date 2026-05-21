@@ -47,7 +47,7 @@
 
 | Stage ID | 한글 설명 | 책임 |
 |---|---|---|
-| `controlled-lens-deliberation` | 통제된 lens 숙의 | issue별 lens stance를 확인하고 material conflict resolution을 `deliberation.md`에 기록 |
+| `controlled-lens-deliberation` | 통제된 lens 숙의 | root-cause issue별 lens stance를 확인하고 material conflict resolution을 `deliberation.md`에 기록 |
 | `synthesize` | 종합 단계 | lens 결과와 `deliberation.md`를 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
 
 중요한 구분:

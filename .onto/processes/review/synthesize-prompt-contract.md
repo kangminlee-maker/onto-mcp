@@ -265,14 +265,19 @@ MCP/TS runtime에서는 같은 의미론을 provider 독립 packet으로 실현�
 
 Issue-stance deliberation target에서는 synthesize가 추가로 아래 artifact를 소비한다.
 
+- `{session_root}/finding-ledger.yaml`
+- `{session_root}/finding-relation-graph.yaml`
 - `{session_root}/issue-ledger.yaml`
 - `{session_root}/issue-stance-matrix.yaml`
 - `{session_root}/deliberation-plan.yaml`
 - `{session_root}/deliberation.md`
+- `{session_root}/problem-framing.yaml`
 
 이 경우 synthesize는 issue status를 새로 판정하지 않는다.
 `no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason`은
 `.onto/processes/review/issue-stance-deliberation-contract.md`가 소유한다.
+또한 synthesize는 `problem-framing.yaml`의 common spine, timing, closure, domain axes classification을 변경하지 않는다.
+Domain-specific axes are loaded and applied before synthesize from `.onto/domains/{domain}/problem_framing_profile.md`.
 
 ### 6.2 frontmatter `deliberation_status`
 
