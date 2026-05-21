@@ -6,21 +6,13 @@
  * A policy module that enforces **atomic profile ownership** when merging
  * project `.onto/config.yml` over global `~/.onto/config.yml`:
  *
- *   - Provider-coupled fields (per-provider model blocks, subagent_llm,
- *     external_http_provider, lens_agent_teams_mode, etc.) belong to ONE
+ *   - Provider-coupled fields (`llm`, `main_llm`, `lens_agent_teams_mode`)
+ *     belong to ONE
  *     source only. Either the project owns the whole profile, or the global
  *     does — never a frankenstein merge.
  *   - Orthogonal fields (output_language, domains, review_mode, etc.) remain
  *     free to merge field-by-field because they carry no cross-provider
  *     semantics.
- *
- * # Why it exists
- *
- * The prior `resolveConfigChain` merged scalar-by-scalar with last-wins
- * semantics. When the global declared one complete profile and the project
- * declared a different provider without re-declaring the orphaned coupling,
- * the merge produced a silently incoherent profile — downstream dispatch
- * silently dropped the orphans, producing drift nobody could see.
  *
  * # How it relates
  *
@@ -28,18 +20,6 @@
  * adopted profile fields (one source, or empty when neither side declared
  * any). `resolveConfigChain()` is the single integration seat for review
  * callers.
- *
- * # P9.4 simplification (2026-04-21)
- *
- * The prior version enforced a stronger "completeness" check
- * (`validateProfileCompleteness`) that required a `review:` axis block to
- * count a profile as usable, and threw `buildBothIncompleteError` when
- * neither side was "complete". Those guards are removed in P9.4 because
- * the topology resolver's universal `main_native` degrade (P3 of the
- * Review UX Redesign track) already catches "no viable host" and emits a
- * structured `no_host` error. The adoption layer therefore only needs to
- * answer "which source owns the profile slice?", not "is that slice
- * runnable?".
  *
  * The atomic-ownership principle is preserved: `extractProfileFields`
  * still transfers PROFILE_FIELDS as a group, so frankenstein merges
@@ -57,23 +37,8 @@ import type { OntoConfig } from "./config-chain.js";
  * A single source owns the entire set per adoption cycle.
  */
 export const PROFILE_FIELDS = new Set<keyof OntoConfig>([
-  "external_http_provider",
-  "model",
-  "reasoning_effort",
-  "llm_base_url",
-  "anthropic",
-  "openai",
-  "litellm",
-  "codex",
-  "subagent_llm",
+  "llm",
   "main_llm",
-  // Sketch v3 / PR-A (2026-04-18). `lens_agent_teams_mode` is a capability
-  // declaration that must stay paired with the provider profile that
-  // claimed it — e.g. a project declaring `lens_agent_teams_mode: true`
-  // commits the whole profile to the 1-0 deliberation topology. Allowing
-  // a frankenstein merge (project declares the flag, global supplies the
-  // actual provider) would reintroduce the silent-divergence class PR-1
-  // just closed.
   "lens_agent_teams_mode",
 ]);
 
@@ -88,15 +53,11 @@ function isOrthogonalField(key: string): boolean {
 
 /**
  * SSOT predicate for "does this config declare a non-empty `review:` axis
- * block?". Post-P9.5 this is consumed only by `claimsProfileOwnership`
- * below (the atomic-adoption ownership signal). The prior
- * `legacy-field-deprecation.ts` silent-bypass gate was removed along
- * with the legacy-detection module itself in P9.5.
+ * block?". This is consumed only by `claimsProfileOwnership`
+ * below (the atomic-adoption ownership signal).
  *
  * A block counts as declared when it is a non-null object with at least
- * one key. An empty `review: {}` (YAML author wrote `review:` and forgot
- * the body) does NOT count — this mirrors the prior
- * `execution_topology_priority: []` behavior.
+ * one key. An empty `review: {}` does not count.
  *
  * Accepts either a typed `OntoConfig` or a raw `Record<string, unknown>`
  * for compatibility with callers that read YAML before typing.
@@ -117,8 +78,7 @@ export function hasReviewBlock(
 /**
  * Does this config declare ANY PROFILE_FIELDS value? Used by `adoptProfile`
  * to decide which side owns the profile slice. Returns true when at least
- * one profile field is set to a non-empty value (empty objects like
- * `anthropic: {}` written by YAML authors don't count).
+ * one profile field is set to a non-empty value.
  */
 export function hasAnyProfileField(config: OntoConfig): boolean {
   for (const field of PROFILE_FIELDS) {
@@ -139,13 +99,6 @@ export function hasAnyProfileField(config: OntoConfig): boolean {
 /**
  * Extract only profile-scoped fields from a config. Orthogonal fields are
  * dropped — this is the "profile slice" that adoption transfers atomically.
- *
- * Note: asymmetric with `hasAnyProfileField`. That predicate skips empty
- * objects (e.g. `codex: {}`) when deciding ownership, but this extractor
- * PRESERVES them in the output. Rationale: a project that opted in via
- * the review block may explicitly want an empty namespace slot (author
- * intent: "I own this namespace, leave defaults") to survive adoption
- * rather than falling back to home's populated version.
  */
 export function extractProfileFields(
   config: OntoConfig,
@@ -206,8 +159,7 @@ export type ProfileAdoption =
  * block. The axis block is orthogonal-merged (not part of the profile slice
  * itself), but its presence signals "I opted in to declaring this review
  * setup" — which is strong enough to commit that side to owning whatever
- * profile fields accompany it (even if the accompanying fields are empty
- * objects like `codex: {}` that the author left as defaults).
+ * profile fields accompany it.
  */
 function claimsProfileOwnership(config: OntoConfig): boolean {
   return hasAnyProfileField(config) || hasReviewBlock(config);
@@ -216,7 +168,7 @@ function claimsProfileOwnership(config: OntoConfig): boolean {
 /**
  * Adopt exactly one profile atomically.
  *
- * # Decision table (post-P9.4)
+ * # Decision table
  *
  *   sameRoot                              → home/project are the same file, treat as global
  *   project claims ownership              → adopt project
@@ -226,19 +178,7 @@ function claimsProfileOwnership(config: OntoConfig): boolean {
  * # What "claims ownership" means
  *
  * Either a non-empty `review:` axis block OR any PROFILE_FIELDS value.
- * See `claimsProfileOwnership` above — this is the post-P9.4 replacement
- * for the prior `validateProfileCompleteness` check.
- *
- * # Why this shape
- *
- * Pre-P9.4 the table had five cases because the layer also decided "is
- * this profile viable for review?" via `validateProfileCompleteness` /
- * `buildBothIncompleteError`. P9.3's universal `main_native` degrade
- * moved that judgment into the topology resolver, so adoption only
- * needs to answer ownership. The "touched-but-incomplete" + STDERR
- * notice branch is gone too: if the project opted in (review block
- * or any profile field), it owns the slice; the resolver handles the
- * rest.
+ * See `claimsProfileOwnership` above.
  *
  * # Atomic ownership invariant
  *
@@ -287,8 +227,7 @@ export function adoptProfile(args: ProfileAdoptionInputs): ProfileAdoption {
 
 /**
  * Merge orthogonal (non-profile) fields from home and project with last-wins
- * semantics, same as legacy behavior. `excluded_names` uses union merge
- * (historical exception preserved).
+ * semantics. `excluded_names` uses union merge.
  */
 export function mergeOrthogonalFields(
   home: OntoConfig,

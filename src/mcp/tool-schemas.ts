@@ -1,25 +1,36 @@
 import { z } from "zod";
 
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
+const ExecutorRealizationSchema = z.enum(["codex", "mock", "ts_inline_http"]);
 const DeliberationModeSchema = z.enum([
   "cross_process",
   "cross_context_reinvoke",
   "synthesizer_only",
 ]);
 
-export const OntoReviewToolInputSchema = z.object({
+const OntoReviewToolInputBaseSchema = z.object({
   target: z.string().min(1),
   intent: z.string().min(1),
   projectRoot: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
+  noDomain: z.boolean().optional(),
   reviewMode: ReviewModeSchema.optional(),
+  lensIds: z.array(z.string().min(1)).optional(),
+  maxConcurrentLenses: z.number().int().positive().optional(),
   deliberation: DeliberationModeSchema.optional(),
+  executorRealization: ExecutorRealizationSchema.optional(),
   prepareOnly: z.boolean().optional(),
 });
 
+export const OntoReviewToolInputSchema = OntoReviewToolInputBaseSchema.refine((input) => !(input.domain && input.noDomain), {
+  message: "Use either domain or noDomain, not both.",
+});
+
 export const OntoPrepareReviewToolInputSchema =
-  OntoReviewToolInputSchema.extend({
+  OntoReviewToolInputBaseSchema.extend({
     prepareOnly: z.literal(true).default(true),
+  }).refine((input) => !(input.domain && input.noDomain), {
+    message: "Use either domain or noDomain, not both.",
   });
 
 export const OntoReviewSessionInputSchema = z.object({

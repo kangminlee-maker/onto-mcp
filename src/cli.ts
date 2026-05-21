@@ -737,6 +737,11 @@ async function main(): Promise<number> {
       return handleInstallCli(ontoHome, subcommandArgv);
     }
 
+    case "mcp": {
+      const { startMcpServer } = await import("./mcp/server.js");
+      return startMcpServer();
+    }
+
     case "learn":
     case "build":
     case "ask":
@@ -776,6 +781,7 @@ async function main(): Promise<number> {
           "  health [project]            Learning pool health dashboard (default: global)",
           "  config [subcommand]         Inspect / edit onto config (show/set/edit/re-detect/validate)",
           "  install                     First-run setup (profile, providers, auth)",
+          "  mcp                         Start the MCP stdio tool server",
           "",
           "Options:",
           "  --onto-home <path>         Override onto installation directory",

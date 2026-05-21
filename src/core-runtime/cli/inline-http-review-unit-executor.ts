@@ -4,7 +4,7 @@
  * Inline-HTTP review unit executor — Phase 2 of host runtime decoupling.
  *
  * Executes a single bounded review unit (lens or synthesize) by directly
- * calling an LLM HTTP endpoint (LiteLLM proxy / Anthropic SDK / OpenAI SDK)
+ * calling an LLM HTTP endpoint (Anthropic / OpenAI / Grok / LM Studio)
  * from the TS process, instead of delegating to a host runtime
  * (Claude Code TeamCreate / codex exec subprocess).
  *
@@ -12,8 +12,7 @@
  *
  * - **standalone host**: TS process invocation with no Claude Code or Codex
  *   CLI session — direct LLM call is the only option.
- * - **cross-host combinations**: Claude Code main + LiteLLM 8B subagent;
- *   Codex CLI main + Anthropic SDK subagent; etc.
+ * - **cross-host combinations**: Codex CLI main + Anthropic SDK subagent; etc.
  *
  * # Inline content mode (Phase 2 design decision)
  *
@@ -40,13 +39,13 @@
  *
  * # Provider selection
  *
- * Reuses `learning/shared/llm-caller.ts` cost-order resolution:
+ * Reuses `learning/shared/llm-caller.ts` resolution:
  *   1. --provider flag (caller-explicit)
- *   2. OntoConfig.api_provider
- *   3. Cost-order ladder (codex OAuth → LiteLLM → Anthropic → OpenAI)
+ *   2. `.onto/config.yml` `llm` switcher
+ *   3. explicit provider validation
  *
  * The `host_runtime` reported in the JSON output reflects the resolved
- * provider (`litellm` / `anthropic` / `openai`), not the orchestrator host.
+ * provider (`anthropic` / `openai` / `grok` / `lmstudio`), not the orchestrator host.
  */
 
 import fs from "node:fs/promises";
@@ -295,7 +294,7 @@ interface ExecutorResult {
   packet_path: string;
   output_path: string;
   realization: "ts_inline_http";
-  host_runtime: "litellm" | "anthropic" | "openai" | "codex";
+  host_runtime: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
   /** Tier picked at execution time. "native" = function-calling loop; "inline" = single-turn with all context inlined. */
   tool_mode: ToolModeUsed;
   /** Resolved LLM model used. */
@@ -340,7 +339,12 @@ function parseToolMode(raw: unknown): ToolModeRequest {
  * should fall back to inline in that case.
  */
 function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | null {
-  if (provider === "anthropic" || provider === "openai" || provider === "litellm") {
+  if (
+    provider === "anthropic" ||
+    provider === "openai" ||
+    provider === "grok" ||
+    provider === "lmstudio"
+  ) {
     return provider;
   }
   return null;
@@ -377,14 +381,12 @@ async function readPacketAndEmbed(
 }
 
 function deriveHostRuntime(provider: string | undefined): ExecutorResult["host_runtime"] {
-  if (provider === "litellm") return "litellm";
   if (provider === "anthropic") return "anthropic";
   if (provider === "openai") return "openai";
+  if (provider === "grok") return "grok";
+  if (provider === "lmstudio") return "lmstudio";
   if (provider === "codex") return "codex";
-  // Fallback: cost-order auto-resolution defaults to anthropic if creds present
-  // and no explicit provider; we can't know the resolved provider here without
-  // re-running the resolver, so we use a permissive sentinel.
-  return "anthropic";
+  throw new Error("inline-http executor requires an explicit llm provider.");
 }
 
 export async function runInlineHttpReviewUnitExecutorCli(
@@ -400,7 +402,8 @@ export async function runInlineHttpReviewUnitExecutorCli(
       "packet-path": { type: "string" },
       "output-path": { type: "string" },
       // LLM provider selection (reuses llm-caller bridge)
-      provider: { type: "string" }, // anthropic | openai | litellm | codex
+      provider: { type: "string" }, // anthropic | openai | grok | lmstudio | codex
+      auth: { type: "string" },
       "llm-base-url": { type: "string" },
       model: { type: "string" },
       "reasoning-effort": { type: "string" },
@@ -447,20 +450,25 @@ export async function runInlineHttpReviewUnitExecutorCli(
       ? Number.parseInt(maxTokensRaw, 10)
       : 4096;
 
-  // Resolve LLM provider config: CLI flags → OntoConfig → cost-order ladder.
+  // Resolve LLM provider config: CLI flags → OntoConfig.
   const ontoConfig = await loadOntoConfig(projectRoot);
   const cliOverrides: LearningProviderCliOverrides = {};
   const providerValue = values.provider;
   if (
     providerValue === "anthropic" ||
     providerValue === "openai" ||
-    providerValue === "litellm" ||
+    providerValue === "grok" ||
+    providerValue === "lmstudio" ||
     providerValue === "codex"
   ) {
     cliOverrides.provider = providerValue;
   }
+  const authValue = values.auth;
+  if (authValue === "api_key" || authValue === "oauth" || authValue === "local") {
+    cliOverrides.auth = authValue;
+  }
   if (typeof values["llm-base-url"] === "string") {
-    cliOverrides.llm_base_url = values["llm-base-url"];
+    cliOverrides.base_url = values["llm-base-url"];
   }
   if (typeof values.model === "string") {
     cliOverrides.model = values.model;
@@ -488,22 +496,15 @@ export async function runInlineHttpReviewUnitExecutorCli(
     } tool_mode_request=${values["tool-mode"] ?? "auto"}\n`,
   );
 
-  // Tool-mode resolution: CLI flag > config.subagent_llm.tool_mode > "auto".
-  // We read subagent_llm tool_mode lazily so this stays a thin overlay on
-  // the existing config-load path.
-  const toolModeFromConfig =
-    typeof (ontoConfig as { subagent_llm?: { tool_mode?: unknown } }).subagent_llm?.tool_mode === "string"
-      ? ((ontoConfig as { subagent_llm: { tool_mode: string } }).subagent_llm.tool_mode as ToolModeRequest)
-      : undefined;
-  const requestedToolMode = parseToolMode(values["tool-mode"] ?? toolModeFromConfig);
+  const requestedToolMode = parseToolMode(values["tool-mode"]);
 
   // Determine which Tier the auto/native paths should attempt. codex provider
   // routes through subprocess and bypasses callLlmWithTools entirely — auto
   // collapses to inline there.
-  const toolLoopProvider = asToolLoopProvider(cliOverrides.provider);
+  const toolLoopProvider = asToolLoopProvider(llmPartial.provider);
   if (requestedToolMode === "native" && toolLoopProvider === null) {
     throw new Error(
-      `--tool-mode=native requires provider in {anthropic, openai, litellm}; got "${cliOverrides.provider ?? "(auto)"}".`,
+      `--tool-mode=native requires provider in {anthropic, openai, grok, lmstudio}; got "${llmPartial.provider ?? "(auto)"}".`,
     );
   }
 
@@ -583,7 +584,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
           packetPolicy.toolsRaw ?? "required"
         }) cannot be satisfied: ` +
           `the resolved provider (${cliOverrides.provider ?? "default-auto"}) does not support the function-calling tool loop. ` +
-          "Select a provider in {anthropic, openai, litellm} via --provider, or edit the packet to remove Tools: required.",
+          "Select a provider in {anthropic, openai, grok, lmstudio} via --provider, or edit the packet to remove Tools: required.",
       );
     }
     if (requestedToolMode === "auto") {
@@ -771,7 +772,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     packet_path: packetPath,
     output_path: outputPath,
     realization: "ts_inline_http",
-    host_runtime: deriveHostRuntime(cliOverrides.provider),
+    host_runtime: deriveHostRuntime(llmPartial.provider),
     tool_mode: toolModeUsed,
     input_tokens: inputTokensUsed,
     output_tokens: outputTokensUsed,

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>onto MCP Implementation Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #52606d;
+      --line: #d7dde4;
+      --soft: #f5f7fa;
+      --accent: #176b87;
+      --ok: #207a4c;
+      --warn: #8a5a00;
+    }
+    body {
+      margin: 28px;
+      color: var(--ink);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
+    h2 { margin: 28px 0 10px; font-size: 18px; letter-spacing: 0; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    code { padding: 1px 4px; border-radius: 4px; background: var(--soft); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .card { border: 1px solid var(--line); border-radius: 6px; padding: 14px; background: #fff; }
+    .card strong { display: block; margin-bottom: 6px; color: var(--accent); }
+    .status { color: var(--ok); font-weight: 700; }
+    .decision { color: var(--warn); font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
+    th { background: var(--soft); }
+    .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .step { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; }
+    .arrow { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>onto MCP Implementation Map</h1>
+  <p>현재 목표는 <code>onto.review</code>를 MCP tool로 호출 가능하게 만들고, 여러 lens가 분리된 context에서 병렬 검토한 뒤 synthesize 단계에서 결론을 기록하게 하는 것이다.</p>
+
+  <h2>Runtime Flow</h2>
+  <div class="flow" aria-label="runtime flow">
+    <div class="step"><code>.onto</code> authority/domain/process 문서</div>
+    <div class="arrow">→</div>
+    <div class="step"><code>src/core-runtime</code> review 실행</div>
+    <div class="arrow">→</div>
+    <div class="step"><code>src/core-api</code> library facade</div>
+    <div class="arrow">→</div>
+    <div class="step"><code>src/mcp</code> stdio tool surface</div>
+    <div class="arrow">→</div>
+    <div class="step">LLM host 또는 MCP client</div>
+  </div>
+
+  <h2>Implemented Surface</h2>
+  <table>
+    <tr><th>Tool</th><th>동작</th><th>완료 산출물</th></tr>
+    <tr><td><code>onto.review</code></td><td>lens 실행, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
+    <tr><td><code>onto.prepare_review</code></td><td>세션과 prompt packet을 준비한다.</td><td><code>execution-plan.yaml</code>, <code>execution-preparation/</code></td></tr>
+    <tr><td><code>onto.review_status</code></td><td>세션 상태와 artifact 경로를 읽는다.</td><td>structured status</td></tr>
+    <tr><td><code>onto.review_result</code></td><td>ReviewRecord와 최종 출력문을 읽는다.</td><td>structured result</td></tr>
+    <tr><td><code>onto.list_lenses</code></td><td>full/core-axis lens set을 노출한다.</td><td>lens id list</td></tr>
+    <tr><td><code>onto.list_domains</code></td><td>사용 가능한 domain pack을 노출한다.</td><td>domain id list</td></tr>
+  </table>
+
+  <h2>LLM Switcher</h2>
+  <table>
+    <tr><th>Config</th><th>Runtime path</th><th>User-facing result</th></tr>
+    <tr><td><code>auth: oauth</code> + <code>provider: openai</code></td><td><code>codex</code> subprocess</td><td>OpenAI account login을 사용한다.</td></tr>
+    <tr><td><code>auth: api_key</code> + <code>provider: openai</code></td><td>OpenAI API</td><td><code>OPENAI_API_KEY</code>가 필요하다.</td></tr>
+    <tr><td><code>auth: api_key</code> + <code>provider: anthropic</code></td><td>Anthropic API</td><td><code>ANTHROPIC_API_KEY</code>가 필요하다.</td></tr>
+    <tr><td><code>auth: api_key</code> + <code>provider: grok</code></td><td>xAI/Grok API</td><td><code>XAI_API_KEY</code> 또는 <code>GROK_API_KEY</code>가 필요하다.</td></tr>
+    <tr><td><code>auth: local</code> + <code>provider: lmstudio</code></td><td>LM Studio endpoint</td><td>local endpoint가 필요하다.</td></tr>
+  </table>
+
+  <h2>Current Decisions</h2>
+  <div class="grid">
+    <div class="card"><strong>MCP boundary</strong><span class="status">Active</span><br><code>src/mcp</code>는 schema와 stdio server만 소유한다.</div>
+    <div class="card"><strong>Review semantics</strong><span class="status">Active</span><br><code>src/core-runtime</code>와 <code>.onto</code> 문서가 review 의미론을 소유한다.</div>
+    <div class="card"><strong>Core API</strong><span class="status">Active</span><br><code>src/core-api</code>는 기존 runtime을 library처럼 호출한다.</div>
+    <div class="card"><strong>Fail loud</strong><span class="status">Active</span><br>config, executor, deliberation mode가 맞지 않으면 즉시 에러로 드러낸다.</div>
+  </div>
+
+  <h2>Scope Boundaries</h2>
+  <table>
+    <tr><th>Area</th><th>현재 seat</th><th>다음 설계 질문</th></tr>
+    <tr><td><code>review</code></td><td>MCP surface 구현됨. 9개 lens + synthesize + ReviewRecord 경로가 smoke 검증됨.</td><td>provider-backed deliberation mode의 artifact contract를 확정한다.</td></tr>
+    <tr><td><code>learn</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>학습 산출물의 authority seat와 tool schema를 먼저 정한다.</td></tr>
+    <tr><td><code>govern</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>principle 승격/검증 workflow를 MCP tool 단위로 나눈다.</td></tr>
+    <tr><td><code>reconstruct</code></td><td>제품 방향에 포함. domain 문서를 함께 사용한다.</td><td>구현물에서 ontology seed를 역산하는 artifact contract를 정의한다.</td></tr>
+    <tr><td><code>evolve</code></td><td>제품 방향에 포함. ontology 기반 설계 프로세스다.</td><td>기능 추가 설계안을 어떤 record로 남길지 정한다.</td></tr>
+  </table>
+</body>
+</html>

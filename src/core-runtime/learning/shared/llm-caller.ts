@@ -1,39 +1,13 @@
 /**
  * Background task (learn/govern/promote) LLM call wrapper.
  *
- * @deprecated Cost-order ladder is slated for replacement by a context-separation
- * based ladder (subprocess-first). Rationale: cost is environment-relative and
- * cannot serve as a universal quality axis, whereas main-context separation
- * (subprocess > external HTTP API > host nested spawn) is universally better
- * for principals regardless of billing plan. Replacement tracked in a follow-up
- * PR; observability (this file's [provider-ladder] STDERR logging) is the
- * prerequisite for safely performing that topology change.
- *
- * Cost-order provider resolution ladder (lower priority number = higher priority):
- *   1. Caller-explicit: callLlm(..., { provider }) — overrides any auto-resolution
- *   2. Config-explicit: OntoConfig.external_http_provider — user override, wins over cost-order
- *   3. codex CLI OAuth subscription (declared_billing_mode=subscription)
- *      Requires ~/.codex/auth.json chatgpt mode + codex binary on PATH.
- *      Invokes `codex exec --ephemeral -` as subprocess; OAuth token goes to
- *      chatgpt.com backend, which cannot be reached via the OpenAI SDK.
- *   4. LiteLLM (declared_billing_mode=per_token, cost_order_rank=variable)
- *      Requires llm_base_url resolved via CLI flag / env LITELLM_BASE_URL /
- *      project config / onto-home config.
- *   5. Anthropic API key — ANTHROPIC_API_KEY env (per-token)
- *   6. OpenAI per-token — OPENAI_API_KEY env, or ~/.codex/auth.json OPENAI_API_KEY field
+ * Canonical provider resolution:
+ *   1. Caller-explicit: callLlm(..., { provider }) — one provider only.
+ *   2. `llm.auth=oauth + llm.provider=openai` — codex CLI subprocess.
+ *   3. `llm.auth=api_key` — OpenAI / Anthropic / Grok API key from env.
+ *   4. `llm.auth=local + llm.provider=lmstudio` — local OpenAI-style endpoint.
  *
  *   Priority 0 (special): ONTO_LLM_MOCK=1 → in-process mock (test only)
- *
- *   Credential 전무 시 fail-fast with cost-order guidance. Host main-model
- *   delegation ("fall through to host-spawned subagent") is an execution
- *   realization axis concept and NOT part of this ladder — see
- *   development-records/plan/20260415-litellm-provider-design.md §1.0.
- *
- * Graceful fallback (§3.7 c):
- *   When codex OAuth is detected but the codex binary is absent, the resolver
- *   falls back to the next cost-order path and emits a one-time STDERR install
- *   notice. Suppressible via ONTO_SUPPRESS_CODEX_INSTALL_NOTICE=1 env or
- *   .onto/config.yml suppress_codex_install_notice: true.
  *
  * Mock provider:
  *   When ONTO_LLM_MOCK=1 is set, callLlm() routes to an in-process mock that
@@ -43,7 +17,9 @@
  *   full LLM call path without real API credentials. NEVER ship with this
  *   env var set in production — there's no real reasoning happening.
  *
- * Design: development-records/plan/20260415-litellm-provider-design.md
+ * Runtime config must reach this module through the canonical `llm` switcher
+ * or an explicit call-site override. Missing provider/model/credentials fail
+ * immediately.
  */
 
 import crypto from "node:crypto";
@@ -51,88 +27,12 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { loadCoreLensRegistry } from "../../discovery/lens-registry.js";
-
-// ---------------------------------------------------------------------------
-// LiteLLM issue log (opt-in)
-// ---------------------------------------------------------------------------
-//
-// When ONTO_LITELLM_ISSUE_LOG is set to a file path, callOpenAI appends a
-// structured entry for any SDK exception or empty response — but only when
-// invoked via the LiteLLM provider path (providerLabel === "litellm"). This
-// surfaces LiteLLM-proxied failures (timeout, 5xx, connection refused, empty
-// body) into an operator-owned log without coupling onto to a specific
-// deployment.
-//
-// Why opt-in via env var:
-//   The log path is operator-owned (e.g. llm-runtime/docs/ISSUE-LOG.md).
-//   Keeping it out of onto code preserves portability — env-var gating means
-//   unsetting disables logging entirely with no code change.
-//
-// Why only the LiteLLM path (not direct openai/anthropic/codex):
-//   Direct api.openai.com / api.anthropic.com / codex OAuth failures are
-//   unrelated to the LiteLLM runtime and would pollute the ISSUE-LOG. The
-//   provider ladder (§3.6a of the LiteLLM provider design doc) routes LiteLLM
-//   through callOpenAI with providerLabel="litellm" — that's the gate.
-
-interface LiteLLMIssueContext {
-  model_id?: string | undefined;
-  base_url?: string | undefined;
-  prompt_hash?: string | undefined;
-  status?: number | string | undefined;
-  error_name?: string | undefined;
-  error_message?: string | undefined;
-}
-
-function formatIssueTimestamp(now: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, "0");
-  return (
-    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
-    `${pad(now.getHours())}:${pad(now.getMinutes())}`
-  );
-}
-
-function renderIssueEntry(
-  title: string,
-  symptom: string,
-  ctx: LiteLLMIssueContext,
-  now: Date,
-): string {
-  const lines = [
-    "",
-    `### [${formatIssueTimestamp(now)}] ${title}`,
-    "- **모듈**: onto / LiteLLM",
-    `- **증상**: ${symptom}`,
-    `- **모델**: ${ctx.model_id ?? "—"}`,
-    `- **엔드포인트**: ${ctx.base_url ?? "—"}`,
-    `- **상태 코드**: ${ctx.status ?? "—"}`,
-    `- **에러**: ${ctx.error_name ?? "—"}${ctx.error_message ? `: ${ctx.error_message}` : ""}`,
-    `- **프롬프트 해시**: ${ctx.prompt_hash ?? "—"}`,
-    "- **임시 대응**: 자동 기록 (onto llm-caller)",
-    "- **재발 여부**: —",
-    "- **v5 후보 Action**: —",
-    "",
-  ];
-  return lines.join("\n");
-}
-
-export function logLiteLLMIssue(
-  title: string,
-  symptom: string,
-  ctx: LiteLLMIssueContext,
-): void {
-  const logPath = process.env.ONTO_LITELLM_ISSUE_LOG;
-  if (!logPath) return;
-  try {
-    fs.appendFileSync(logPath, renderIssueEntry(title, symptom, ctx, new Date()), "utf8");
-  } catch (writeErr) {
-    // Never let logging failure break the LLM call path.
-    process.stderr.write(
-      `[onto] Failed to write LiteLLM issue log to ${logPath}: ${
-        (writeErr as Error).message ?? String(writeErr)
-      }\n`,
-    );
-  }
-}
+import {
+  DEFAULT_GROK_BASE_URL,
+  DEFAULT_LMSTUDIO_BASE_URL,
+  normalizeLlmModelSwitcher,
+  type LlmModelSwitcherConfig,
+} from "../../llm/model-switcher.js";
 
 /**
  * Structural subset of ExecutionPlan that callLlm reads. Accepts either the
@@ -142,27 +42,24 @@ export function logLiteLLMIssue(
  * task seat) → review (lens seat).
  */
 export interface ResolvedPlanLike {
-  provider_identity: "anthropic" | "openai" | "litellm" | "codex" | "claude-code" | "mock";
+  provider_identity: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "claude-code" | "mock";
   model_id?: string;
   base_url?: string;
 }
 
 export interface LlmCallConfig {
-  provider: "anthropic" | "openai" | "litellm" | "codex";
+  provider: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
   model_id: string;
   max_tokens: number;
-  /** Optional base URL for litellm (OpenAI-compatible proxy) or openai custom endpoint. Ignored by codex/anthropic. */
+  /** Optional base URL for OpenAI-style providers. Ignored by codex/anthropic. */
   base_url?: string;
   /** codex-only: reasoning effort passed as `model_reasoning_effort`. Ignored by other providers. */
   reasoning_effort?: string;
   /**
    * Pre-resolved ExecutionPlan (Review Recovery PR-1, 2026-04-18).
    *
-   * When set, callLlm skips the internal cost-order `resolveProvider` ladder
-   * and dispatches directly using the plan's `provider_identity` / `model_id` /
-   * `base_url`. This is the canonical path for code that has already passed
-   * through `resolveExecutionPlan`; the legacy ladder remains as fallback for
-   * callers that have not been migrated yet.
+   * When set, callLlm dispatches directly using the plan's
+   * `provider_identity` / `model_id` / `base_url`.
    */
   plan?: ResolvedPlanLike;
   /**
@@ -176,23 +73,18 @@ export interface LlmCallConfig {
   models_per_provider?: {
     anthropic?: string;
     openai?: string;
-    litellm?: string;
+    grok?: string;
+    lmstudio?: string;
     codex?: string;
   };
 }
 
 /**
  * Minimal subset of OntoConfig that resolveLearningProviderConfig reads.
- * Kept narrow to avoid learning→discovery coupling; callers pass a shape-compatible object.
+ * Kept narrow to avoid learning→discovery coupling; callers pass the same field shape.
  */
 export interface LearningProviderConfigInputs {
-  external_http_provider?: string;
-  model?: string;
-  llm_base_url?: string;
-  codex?: { model?: string; effort?: string };
-  anthropic?: { model?: string };
-  openai?: { model?: string };
-  litellm?: { model?: string };
+  llm?: LlmModelSwitcherConfig;
 }
 
 /**
@@ -200,8 +92,9 @@ export interface LearningProviderConfigInputs {
  * Maps to the CLI-flag > env > project-config > onto-home-config precedence (D3).
  */
 export interface LearningProviderCliOverrides {
-  provider?: "anthropic" | "openai" | "litellm" | "codex";
-  llm_base_url?: string;
+  provider?: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
+  auth?: "api_key" | "oauth" | "local";
+  base_url?: string;
   model?: string;
   reasoning_effort?: string;
 }
@@ -218,7 +111,6 @@ export interface LearningProviderCliOverrides {
  * This replaces the pattern of callers building Partial<LlmCallConfig> ad-hoc, and is
  * the canonical seat where OntoConfig translates to provider resolution input.
  *
- * Design: development-records/plan/20260415-litellm-provider-design.md §3.6a
  */
 export function resolveLearningProviderConfig(args: {
   config?: LearningProviderConfigInputs;
@@ -227,33 +119,23 @@ export function resolveLearningProviderConfig(args: {
   const config = args.config ?? {};
   const cli = args.cliOverrides ?? {};
 
-  // provider: CLI > config.external_http_provider (narrowed to valid enum)
-  const configProvider = narrowProvider(config.external_http_provider);
-  const provider = cli.provider ?? configProvider;
+  const selection = normalizeLlmModelSwitcher(config.llm);
+  const provider = cli.provider ?? selection?.provider;
 
-  // model: CLI > config.{provider}.model (when provider is known) > config.model.
-  // When provider is auto-resolved (neither CLI nor config explicit), model_id is
-  // left as config.model (or undefined). The dispatch layer then looks up
-  // models_per_provider[resolved.provider] before failing fast.
-  const providerSpecific = pickProviderModel(config, provider);
-  const model_id = cli.model ?? providerSpecific ?? config.model;
+  const model_id = cli.model ?? selection?.model_id;
 
-  // base_url: CLI > env LITELLM_BASE_URL > config.llm_base_url
+  const envBaseUrl =
+    provider === "grok"
+      ? process.env.GROK_BASE_URL ?? process.env.XAI_BASE_URL
+      : provider === "lmstudio"
+        ? process.env.LMSTUDIO_BASE_URL
+        : undefined;
   const base_url =
-    cli.llm_base_url ?? process.env.LITELLM_BASE_URL ?? config.llm_base_url;
+    cli.base_url ?? envBaseUrl ?? selection?.base_url;
 
-  // reasoning_effort: CLI > config.codex.effort. codex is the only consumer so this
-  // is safe to pass through regardless of explicit-vs-auto provider path.
-  const reasoning_effort = cli.reasoning_effort ?? config.codex?.effort;
-
-  // models_per_provider: all per-provider model overrides, consumed by dispatch
-  // AFTER resolveProvider picks. This keeps OntoConfig.anthropic.model etc.
-  // working under auto-resolution too, not just explicit api_provider paths.
+  const reasoning_effort = cli.reasoning_effort ?? selection?.reasoning_effort;
   const models_per_provider: NonNullable<LlmCallConfig["models_per_provider"]> = {};
-  if (config.anthropic?.model) models_per_provider.anthropic = config.anthropic.model;
-  if (config.openai?.model) models_per_provider.openai = config.openai.model;
-  if (config.litellm?.model) models_per_provider.litellm = config.litellm.model;
-  if (config.codex?.model) models_per_provider.codex = config.codex.model;
+  if (provider && model_id) models_per_provider[provider] = model_id;
 
   const out: Partial<LlmCallConfig> = {};
   if (provider) out.provider = provider;
@@ -266,31 +148,6 @@ export function resolveLearningProviderConfig(args: {
   return out;
 }
 
-function pickProviderModel(
-  config: LearningProviderConfigInputs,
-  provider: LlmCallConfig["provider"] | undefined,
-): string | undefined {
-  switch (provider) {
-    case "codex":
-      return config.codex?.model;
-    case "anthropic":
-      return config.anthropic?.model;
-    case "openai":
-      return config.openai?.model;
-    case "litellm":
-      return config.litellm?.model;
-    default:
-      return undefined;
-  }
-}
-
-function narrowProvider(value: string | undefined): LlmCallConfig["provider"] | undefined {
-  if (value === "anthropic" || value === "openai" || value === "litellm" || value === "codex") {
-    return value;
-  }
-  return undefined;
-}
-
 export interface LlmCallResult {
   text: string;
   input_tokens: number;
@@ -298,13 +155,8 @@ export interface LlmCallResult {
   model_id: string;
   /** Actual endpoint hit (audit trail). SDK/subprocess providers each fill their own sentinel. */
   effective_base_url?: string;
-  /**
-   * Declarative billing classification used by onto's cost-order ladder.
-   * NOT a measured billing truth — e.g. LiteLLM downstream is opaque so it's
-   * recorded conservatively as per_token even if the backend is a free local
-   * model. Authority concept: .onto/authority/core-lexicon.yaml entities.LlmBillingMode.
-   */
-  declared_billing_mode?: "subscription" | "per_token";
+  /** Declarative billing classification for audit output. */
+  declared_billing_mode?: "subscription" | "per_token" | "local";
 }
 
 // Phase 3 production found 30s too tight for large audit batches (philosopher
@@ -318,28 +170,13 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
 const DEFAULT_MAX_RETRIES = 1;
 
 // ---------------------------------------------------------------------------
-// Provider resolution (cost-order)
+// Provider resolution
 // ---------------------------------------------------------------------------
-//
-// Priority (lower number = higher priority):
-//   1. Caller-explicit (config.provider argument to callLlm — handled in callLlm itself)
-//   2. Config-explicit external_http_provider (via Partial<LlmCallConfig>.provider — handled in callLlm)
-//   3. codex CLI OAuth subscription — ~/.codex/auth.json chatgpt mode + codex binary on PATH
-//   4. LiteLLM — llm_base_url resolved via config/env
-//   5. Anthropic API key — ANTHROPIC_API_KEY env
-//   6. OpenAI per-token — OPENAI_API_KEY env OR ~/.codex/auth.json OPENAI_API_KEY field
-//
-// Credential 전무 시 fail-fast. Host main-model delegation is execution realization axis,
-// not part of this ladder (see development-records/plan/20260415-litellm-provider-design.md §1.0).
 
 interface ResolvedProvider {
-  provider: "anthropic" | "openai" | "litellm" | "codex";
+  provider: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
   apiKey: string;           // For codex: unused (subprocess uses ~/.codex auth); filled with sentinel.
-  baseUrl?: string;         // For litellm; for openai/anthropic undefined.
-  /** For codex missing-binary case: telemetry to trigger the (c) graceful-fallback notice in callLlm. */
-  codexOauthPresentButBinaryMissing?: boolean;
-  /** For codex missing-binary fallback: the provider that was actually selected (for the STDERR notice). */
-  fallbackFrom?: "codex-oauth";
+  baseUrl?: string;         // For OpenAI-style providers.
 }
 
 interface CodexAuthState {
@@ -348,27 +185,11 @@ interface CodexAuthState {
 }
 
 /**
- * Cost-order ladder observability — emits a one-line STDERR log for each
- * decision point (match / skip + reason) so silent fallbacks (e.g., Codex
- * OAuth missing → LiteLLM) no longer leave principals guessing which
- * provider was selected and why.
- *
- * No suppressor env var: fallback reason is always load-bearing information
- * for principals. Tests capture via vi.spyOn(process.stderr, "write").
- */
-function emitLadderLog(line: string): void {
-  process.stderr.write(`[provider-ladder] ${line}\n`);
-}
-
-/**
  * Model-call observability — emits STDERR logs for each LLM API call, covering
  * (a) pre-call model_id + provider + max_tokens, (b) post-call usage on success,
  * (c) full SDK error fields (status / error.type / error.message / request_id)
  * on failure. Silent "Connection error." wrapping by review runner no longer
  * hides model-not-found / auth / quota / network distinctions.
- *
- * Companion to emitLadderLog: provider-ladder resolves TRANSPORT, model-call
- * resolves MODEL + surfaces SDK response detail. Two independent axes.
  */
 function emitModelCallLog(line: string): void {
   process.stderr.write(`[model-call] ${line}\n`);
@@ -394,279 +215,104 @@ function readCodexAuthState(): CodexAuthState {
   }
 }
 
-function codexBinaryOnPath(): boolean {
-  const pathEnv = process.env.PATH ?? "";
-  for (const dir of pathEnv.split(path.delimiter)) {
-    if (!dir) continue;
-    const candidate = path.join(dir, "codex");
-    if (fs.existsSync(candidate)) return true;
-  }
-  return false;
-}
-
-/**
- * Resolve the best available LLM provider by cost-order (auto-resolution).
- * Called by callLlm when no caller-explicit or config-explicit provider is set.
- *
- * Returns a ResolvedProvider with declared provider identity + credentials.
- * Throws with guidance (§3.7 d) when no provider path is viable.
- *
- * Special case: if codex OAuth is detected but binary is missing AND another
- * credential is available, we fall back to that credential path and set
- * `fallbackFrom: "codex-oauth"` so callLlm can emit the (c) notice.
- */
 function resolveProvider(
   preferred?: LlmCallConfig["provider"],
   configBaseUrl?: string,
 ): ResolvedProvider {
-  // Priority 1-2: caller-explicit / config-explicit anthropic or openai.
-  // These constrain the search to one provider; missing credential fails fast
-  // rather than silently falling through to cost-order.
-  // (codex and litellm are handled inline in callLlm before reaching here.)
+  if (preferred === undefined) {
+    throw new Error(missingProviderSelectionError());
+  }
   if (preferred === "anthropic") {
     if (process.env.ANTHROPIC_API_KEY) {
-      emitLadderLog("explicit anthropic: matched (ANTHROPIC_API_KEY env)");
       return { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY };
     }
-    emitLadderLog("explicit anthropic: ANTHROPIC_API_KEY 없음 → fail-fast");
     throw new Error(explicitProviderMissingCredentialError("anthropic"));
   }
   if (preferred === "openai") {
     if (process.env.OPENAI_API_KEY) {
-      emitLadderLog("explicit openai: matched (OPENAI_API_KEY env)");
       return { provider: "openai", apiKey: process.env.OPENAI_API_KEY };
     }
     const codexAuth = readCodexAuthState();
     if (codexAuth.openaiApiKey) {
-      emitLadderLog("explicit openai: matched (~/.codex/auth.json OPENAI_API_KEY field)");
       return { provider: "openai", apiKey: codexAuth.openaiApiKey };
     }
-    emitLadderLog("explicit openai: OPENAI_API_KEY env 없음 AND ~/.codex/auth.json OPENAI_API_KEY field 없음 → fail-fast");
     throw new Error(explicitProviderMissingCredentialError("openai"));
   }
-
-  // Auto cost-order resolution.
-  const codexAuthPath = path.join(os.homedir(), ".codex", "auth.json");
-  const codexAuthFileExists = fs.existsSync(codexAuthPath);
-  const codexAuth = readCodexAuthState();
-
-  // Priority 3: codex CLI OAuth subscription.
-  if (codexAuth.chatgptOAuth) {
-    if (codexBinaryOnPath()) {
-      emitLadderLog("step 3 codex: matched — ~/.codex/auth.json chatgpt OAuth + codex binary on PATH");
+  if (preferred === "grok") {
+    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    if (apiKey) {
       return {
-        provider: "codex",
-        apiKey: "codex-oauth",          // sentinel; unused
+        provider: "grok",
+        apiKey,
+        baseUrl: configBaseUrl ?? DEFAULT_GROK_BASE_URL,
       };
     }
-    // OAuth detected but binary missing — fall through, mark for (c) notice.
-    emitLadderLog("step 3 codex: OAuth detected in ~/.codex/auth.json but codex binary NOT on PATH → falls through to step 4-6 (will emit (c) install notice)");
-    const fallback = tryNonCodexProviders(configBaseUrl);
-    if (fallback) {
-      return { ...fallback, codexOauthPresentButBinaryMissing: true, fallbackFrom: "codex-oauth" };
-    }
-    // No other credential either — (d) with install guidance emphasized.
-    emitLadderLog("final: codex OAuth present but binary missing AND no fallback provider → throw");
-    throw new Error(buildNoProviderError({ codexOauthPresent: true, codexBinaryPresent: false }));
+    throw new Error(explicitProviderMissingCredentialError("grok"));
   }
-
-  // Codex OAuth 조건 미충족 — skip 이유 세분화
-  if (!codexAuthFileExists) {
-    emitLadderLog("step 3 codex: skipped — ~/.codex/auth.json 부재 (codex login 또는 chatgpt OAuth 필요)");
-  } else {
-    emitLadderLog("step 3 codex: skipped — ~/.codex/auth.json 존재하지만 chatgpt OAuth 조건 미충족 (auth_mode !== 'chatgpt' AND tokens.access_token 없음)");
+  if (preferred === "lmstudio") {
+    return {
+      provider: "lmstudio",
+      apiKey: "lmstudio-local",
+      baseUrl: configBaseUrl ?? process.env.LMSTUDIO_BASE_URL ?? DEFAULT_LMSTUDIO_BASE_URL,
+    };
   }
-
-  // Priority 4-6: no codex OAuth case.
-  const fallback = tryNonCodexProviders(configBaseUrl);
-  if (fallback) return fallback;
-
-  emitLadderLog("final: no provider viable (step 4-6 모두 skip) → throw");
-  throw new Error(buildNoProviderError({ codexOauthPresent: false, codexBinaryPresent: codexBinaryOnPath() }));
+  return {
+    provider: "codex",
+    apiKey: "codex-oauth",
+  };
 }
 
 function explicitProviderMissingCredentialError(
-  provider: "anthropic" | "openai",
+  provider: "anthropic" | "openai" | "grok",
 ): string {
-  const envVar = provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
+  const envVar =
+    provider === "anthropic"
+      ? "ANTHROPIC_API_KEY"
+      : provider === "openai"
+        ? "OPENAI_API_KEY"
+        : "XAI_API_KEY or GROK_API_KEY";
   return [
-    `external_http_provider=${provider} 명시적으로 선택되었으나 ${envVar}가 환경변수에 없습니다.`,
+    `llm.provider=${provider} 명시적으로 선택되었으나 ${envVar}가 환경변수에 없습니다.`,
     ...(provider === "openai"
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),
     `명시적 provider override를 사용하려면 ${envVar}를 export하세요.`,
-    "cost-order 자동 해소를 원하면 .onto/config.yml 에서 external_http_provider 를 제거하세요.",
+    "또는 .onto/config.yml 의 llm block 을 현재 credential에 맞게 수정하세요.",
   ].join("\n");
 }
 
-function tryNonCodexProviders(configBaseUrl?: string): ResolvedProvider | null {
-  // Priority 4: LiteLLM — env or config has base URL.
-  const envBase = process.env.LITELLM_BASE_URL;
-  const resolvedBaseUrl = envBase ?? configBaseUrl;
-  if (resolvedBaseUrl) {
-    const apiKey = process.env.LITELLM_API_KEY ?? "sk-litellm-placeholder";
-    const source = envBase ? "LITELLM_BASE_URL env" : "project/onto-home config llm_base_url";
-    emitLadderLog(`step 4 litellm: matched (${source} → ${resolvedBaseUrl})`);
-    return {
-      provider: "litellm",
-      apiKey,
-      baseUrl: resolvedBaseUrl,
-    };
-  }
-  emitLadderLog("step 4 litellm: skipped — LITELLM_BASE_URL env 및 config.llm_base_url 모두 없음");
-
-  // Priority 5: Anthropic API key.
-  if (process.env.ANTHROPIC_API_KEY) {
-    emitLadderLog("step 5 anthropic: matched (ANTHROPIC_API_KEY env)");
-    return {
-      provider: "anthropic",
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    };
-  }
-  emitLadderLog("step 5 anthropic: skipped — ANTHROPIC_API_KEY env 없음");
-
-  // Priority 6: OpenAI per-token — env OPENAI_API_KEY or auth.json OPENAI_API_KEY field.
-  if (process.env.OPENAI_API_KEY) {
-    emitLadderLog("step 6 openai: matched (OPENAI_API_KEY env)");
-    return {
-      provider: "openai",
-      apiKey: process.env.OPENAI_API_KEY,
-    };
-  }
-  const codexAuth = readCodexAuthState();
-  if (codexAuth.openaiApiKey) {
-    emitLadderLog("step 6 openai: matched (~/.codex/auth.json OPENAI_API_KEY field)");
-    return {
-      provider: "openai",
-      apiKey: codexAuth.openaiApiKey,
-    };
-  }
-  emitLadderLog("step 6 openai: skipped — OPENAI_API_KEY env 및 ~/.codex/auth.json OPENAI_API_KEY 모두 없음");
-
-  return null;
-}
-
-function buildNoProviderError(ctx: {
-  codexOauthPresent: boolean;
-  codexBinaryPresent: boolean;
-}): string {
-  const lines: string[] = [];
-  lines.push("background task용 LLM provider를 해소할 수 없습니다.");
-  lines.push("");
-  if (ctx.codexOauthPresent && !ctx.codexBinaryPresent) {
-    lines.push("~/.codex/auth.json에 chatgpt OAuth 자격이 있으나 codex 바이너리가 PATH에 없습니다.");
-    lines.push("이 경로는 cost-order 최상위(구독제, 호출당 한계비용 0) 이므로 가장 행동 장벽이 낮습니다:");
-    lines.push("  → codex 설치: https://github.com/openai/codex");
-    lines.push("  → 설치 후 `codex --version` 으로 PATH 인식 확인");
-    lines.push("");
-  }
-  lines.push("권장 순서(비용 낮은 순):");
-  lines.push("  1. codex OAuth 구독: ~/.codex/auth.json을 chatgpt 모드로 구성 + codex 바이너리 설치 (구독제, 한계비용 0)");
-  lines.push("  2. LiteLLM: llm_base_url을 .onto/config.yml에 설정하거나 LITELLM_BASE_URL을 export (로컬 모델 사용 시 0)");
-  lines.push("  3. Anthropic API: ANTHROPIC_API_KEY를 export (per-token 과금)");
-  lines.push("  4. OpenAI per-token: OPENAI_API_KEY를 export, 또는 ~/.codex/auth.json의 OPENAI_API_KEY 필드 (per-token 과금)");
-  return lines.join("\n");
+function missingProviderSelectionError(): string {
+  return [
+    "LLM provider가 지정되지 않았습니다.",
+    "`.onto/config.yml`에 `llm` 블록을 추가하거나 호출부에서 provider를 명시하세요:",
+    "  llm:",
+    "    auth: oauth | api_key | local",
+    "    provider: openai | anthropic | grok | lmstudio",
+    "    model: <model-id>",
+  ].join("\n");
 }
 
 /**
  * Construct a fail-fast error for api-key providers when no model is specified.
- * Used by anthropic / openai / litellm dispatch branches. codex is exempt because
+ * Used by anthropic / openai / grok / lmstudio dispatch branches. codex is exempt because
  * the codex CLI picks its own default when `-m` is omitted.
  *
  * Hardcoded DEFAULT_ANTHROPIC_MODEL / DEFAULT_OPENAI_MODEL constants were removed
  * from this module (2026-04-15): model choice is a user decision (cost / quality /
- * account compatibility) and should not be hardcoded in library code where it can
- * silently go stale or mismatch account permissions.
+ * account constraints) and should not be hardcoded in library code where it can
+ * go stale or mismatch account permissions.
  */
-function missingModelError(provider: "anthropic" | "openai" | "litellm"): Error {
-  const providerField = provider; // "anthropic" | "openai" | "litellm"
+function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio"): Error {
+  const providerField = provider;
   return new Error(
     [
       `provider=${provider} 경로는 model 지정이 필요합니다. 하드코딩된 기본 모델은 제거되었습니다.`,
       "다음 중 한 가지로 설정하세요:",
-      `  1. .onto/config.yml 의 \`${providerField}.model: <model-id>\` (해당 provider 전용)`,
-      "  2. .onto/config.yml 의 `model: <model-id>` (provider 무관 기본값)",
+      "  1. .onto/config.yml 의 `llm.model: <model-id>`",
       "  3. 호출부에서 LlmCallConfig.model_id 인자 전달 (런타임 override)",
       "(codex provider는 model 미지정 시 codex CLI가 자체 기본값을 사용하므로 이 메시지의 대상이 아닙니다.)",
     ].join("\n"),
   );
-}
-
-/** One-time STDERR install notice emitted when codex OAuth is detected but binary missing. */
-let codexInstallNoticeShown = false;
-function maybeEmitCodexInstallNotice(opts: {
-  fallbackProvider: string;
-  fallbackBillingMode: string;
-  suppress: boolean;
-}): void {
-  if (codexInstallNoticeShown || opts.suppress) return;
-  codexInstallNoticeShown = true;
-  const msg = [
-    "[onto] 구독제 cost-order 최상위 경로(codex OAuth)를 놓치고 있습니다.",
-    "~/.codex/auth.json에 chatgpt OAuth 자격이 있으나 codex 바이너리를 PATH에서 찾을 수 없습니다.",
-    "",
-    "codex를 설치하면 이 경로가 자동으로 활성화됩니다 (구독제, 호출당 한계비용 0):",
-    "  설치: https://github.com/openai/codex",
-    "  설치 후 `codex --version` 으로 PATH 인식 확인.",
-    "",
-    `지금은 다음 cost-order 경로로 폴백합니다: ${opts.fallbackProvider} (declared_billing_mode=${opts.fallbackBillingMode}).`,
-    "명시적으로 다른 provider를 쓰려면 .onto/config.yml 에 external_http_provider 를 지정하세요.",
-    "세션당 1회만 표시됩니다. `suppress_codex_install_notice: true`로 끌 수 있습니다.",
-    "",
-  ].join("\n");
-  process.stderr.write(msg);
-}
-
-/**
- * B1: one-time cost-order transition notice.
- *
- * When auto-resolution selects a newer ladder slot (codex or litellm) and the
- * user also has an API-key credential (ANTHROPIC_API_KEY / OPENAI_API_KEY /
- * auth.json OPENAI_API_KEY field), the old code path would have picked the
- * API key. Letting this transition happen silently can surprise users who
- * weren't expecting a provider switch. Emit a single STDERR notice so they
- * can opt-out explicitly by setting external_http_provider.
- *
- * Only fires when:
- *   - resolved provider is "codex" or "litellm" (cost-order newer slots)
- *   - no caller/config explicit provider was set (auto-resolution path)
- *   - an API-key alternative is present
- *
- * Suppressible via env ONTO_SUPPRESS_COST_ORDER_NOTICE=1 for CI / automation.
- */
-let costOrderTransitionNoticeShown = false;
-function maybeEmitCostOrderTransitionNotice(resolved: ResolvedProvider): void {
-  if (costOrderTransitionNoticeShown) return;
-  if (process.env.ONTO_SUPPRESS_COST_ORDER_NOTICE === "1") return;
-  if (resolved.provider !== "codex" && resolved.provider !== "litellm") return;
-
-  let wouldHaveBeen: "anthropic" | "openai" | null = null;
-  if (process.env.ANTHROPIC_API_KEY) {
-    wouldHaveBeen = "anthropic";
-  } else if (process.env.OPENAI_API_KEY) {
-    wouldHaveBeen = "openai";
-  } else {
-    const codexAuth = readCodexAuthState();
-    if (codexAuth.openaiApiKey) wouldHaveBeen = "openai";
-  }
-  if (!wouldHaveBeen) return;
-
-  costOrderTransitionNoticeShown = true;
-  const msg = [
-    `[onto] provider resolution changed by cost-order: would have used ${wouldHaveBeen} (per-token), now using ${resolved.provider} (${
-      resolved.provider === "codex" ? "subscription" : "variable; typically per-token audit"
-    }).`,
-    `기존 동작을 유지하려면 .onto/config.yml 에 \`external_http_provider: ${wouldHaveBeen}\` 를 명시하세요.`,
-    "세션당 1회만 표시됩니다. ONTO_SUPPRESS_COST_ORDER_NOTICE=1 로 끌 수 있습니다.",
-    "",
-  ].join("\n");
-  process.stderr.write(msg);
-}
-
-/** Test-only: reset module-level notice flags so each test observes fresh behavior. */
-export function __resetNoticeFlagsForTests(): void {
-  codexInstallNoticeShown = false;
-  costOrderTransitionNoticeShown = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -741,7 +387,7 @@ async function callOpenAI(
   modelId: string,
   maxTokens: number,
   baseUrl?: string,
-  providerLabel: "openai" | "litellm" = "openai",
+  providerLabel: "openai" | "grok" | "lmstudio" = "openai",
 ): Promise<LlmCallResult> {
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({
@@ -750,9 +396,6 @@ async function callOpenAI(
     timeout: DEFAULT_TIMEOUT_MS,
     maxRetries: DEFAULT_MAX_RETRIES,
   });
-
-  const promptHash = hashPrompt(systemPrompt + userPrompt);
-  const isLiteLLM = providerLabel === "litellm";
 
   emitModelCallLog(
     `${providerLabel} call: model="${modelId}" max_tokens=${maxTokens}${baseUrl ? ` base_url=${baseUrl}` : ""}`,
@@ -779,20 +422,6 @@ async function callOpenAI(
     emitModelCallLog(
       `${providerLabel} call FAILED: model="${modelId}" status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
     );
-    if (isLiteLLM) {
-      logLiteLLMIssue(
-        `LiteLLM call failed (${e.status ?? e.name ?? "unknown"})`,
-        e.message ?? String(err),
-        {
-          model_id: modelId,
-          base_url: baseUrl,
-          status: e.status,
-          error_name: e.name,
-          error_message: e.message,
-          prompt_hash: promptHash,
-        },
-      );
-    }
     throw err;
   }
 
@@ -802,28 +431,19 @@ async function callOpenAI(
 
   const text = response.choices[0]?.message?.content ?? "";
 
-  if (isLiteLLM && text === "") {
-    logLiteLLMIssue(
-      "LiteLLM returned empty content",
-      "chat.completions succeeded but message.content was empty",
-      {
-        model_id: modelId,
-        base_url: baseUrl,
-        prompt_hash: promptHash,
-      },
-    );
-  }
-
-  const defaultOpenAIBase = "https://api.openai.com/v1";
+  const defaultBase =
+    providerLabel === "grok"
+      ? DEFAULT_GROK_BASE_URL
+      : providerLabel === "lmstudio"
+        ? DEFAULT_LMSTUDIO_BASE_URL
+        : "https://api.openai.com/v1";
   return {
     text,
     input_tokens: response.usage?.prompt_tokens ?? 0,
     output_tokens: response.usage?.completion_tokens ?? 0,
     model_id: modelId,
-    effective_base_url: baseUrl ?? defaultOpenAIBase,
-    // LiteLLM downstream is opaque; record conservatively as per_token.
-    // The cost-order rank for litellm is variable (LlmBillingMode) — this field captures audit signal.
-    declared_billing_mode: "per_token",
+    effective_base_url: baseUrl ?? defaultBase,
+    declared_billing_mode: providerLabel === "lmstudio" ? "local" : "per_token",
   };
 }
 
@@ -836,8 +456,6 @@ async function callOpenAI(
  * prompt → text response. Uses the host's codex CLI authentication
  * (chatgpt OAuth via ~/.codex/auth.json), which routes through chatgpt.com's
  * backend — cannot be reached via the OpenAI SDK.
- *
- * Design: development-records/plan/20260415-litellm-provider-design.md §3.5a
  *
  * --ephemeral keeps this learning call from persisting a session file
  *   alongside review sessions. --skip-git-repo-check lets learning run
@@ -930,8 +548,8 @@ async function callCodexCli(
           "",
           `지정된 모델 "${requested}"이 현재 ChatGPT 계정의 codex allowlist에 없습니다.`,
           "다음 중 한 가지로 해결하세요:",
-          "  1. .onto/config.yml 에서 codex.model 을 제거 → codex CLI가 계정 허용 기본값을 선택",
-          "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인 후 config.codex.model 에 반영",
+          "  1. .onto/config.yml 의 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
+          "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인",
           "  3. `codex login` 으로 API-key 모드로 전환 (per-token 과금, 더 넓은 모델 범위)",
         ].join("\n"),
       );
@@ -969,7 +587,7 @@ async function callCodexCli(
 /**
  * Dispatch an LLM call using a pre-resolved ExecutionPlan shape. The plan
  * carries `provider_identity`, `model_id`, and `base_url`; credentials are
- * still read from env (ANTHROPIC_API_KEY / OPENAI_API_KEY / LITELLM_API_KEY)
+ * still read from env (ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY)
  * since secrets never enter the plan by design.
  *
  * Why credentials stay in env:
@@ -998,18 +616,6 @@ async function dispatchByPlan(
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.codex;
     return callCodexCli(systemPrompt, userPrompt, modelId, config.reasoning_effort);
   }
-  if (plan.provider_identity === "litellm") {
-    const baseUrl = plan.base_url ?? config.base_url ?? process.env.LITELLM_BASE_URL;
-    if (!baseUrl) {
-      throw new Error(
-        "ExecutionPlan.provider_identity=litellm requires base_url (plan.base_url, config.base_url, or LITELLM_BASE_URL env)",
-      );
-    }
-    const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.litellm;
-    if (!modelId) throw missingModelError("litellm");
-    const apiKey = process.env.LITELLM_API_KEY ?? "sk-litellm-placeholder";
-    return callOpenAI(systemPrompt, userPrompt, apiKey, modelId, maxTokens, baseUrl, "litellm");
-  }
   if (plan.provider_identity === "anthropic") {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
@@ -1030,6 +636,36 @@ async function dispatchByPlan(
     if (!modelId) throw missingModelError("openai");
     return callOpenAI(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
   }
+  if (plan.provider_identity === "grok") {
+    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    if (!apiKey) {
+      throw new Error(explicitProviderMissingCredentialError("grok"));
+    }
+    const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.grok;
+    if (!modelId) throw missingModelError("grok");
+    return callOpenAI(
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      modelId,
+      maxTokens,
+      plan.base_url ?? config.base_url ?? DEFAULT_GROK_BASE_URL,
+      "grok",
+    );
+  }
+  if (plan.provider_identity === "lmstudio") {
+    const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.lmstudio;
+    if (!modelId) throw missingModelError("lmstudio");
+    return callOpenAI(
+      systemPrompt,
+      userPrompt,
+      "lmstudio-local",
+      modelId,
+      maxTokens,
+      plan.base_url ?? config.base_url ?? process.env.LMSTUDIO_BASE_URL ?? DEFAULT_LMSTUDIO_BASE_URL,
+      "lmstudio",
+    );
+  }
   throw new Error(
     `dispatchByPlan: unexpected provider_identity=${String((plan as { provider_identity: unknown }).provider_identity)}`,
   );
@@ -1039,10 +675,7 @@ async function dispatchByPlan(
 // Public API
 // ---------------------------------------------------------------------------
 
-/**
- * Call LLM with automatic provider resolution.
- * Tries: ONTO_LLM_MOCK → ANTHROPIC_API_KEY → OPENAI_API_KEY → ~/.codex/auth.json
- */
+/** Call an LLM through the explicitly selected provider path. */
 export async function callLlm(
   systemPrompt: string,
   userPrompt: string,
@@ -1053,10 +686,6 @@ export async function callLlm(
     return callMockProvider(systemPrompt, userPrompt);
   }
 
-  // PR-1 plan-aware dispatch: when an ExecutionPlan is supplied, skip the
-  // internal cost-order ladder entirely and dispatch using the plan's fields.
-  // This is the canonical path after Review Recovery PR-1 (2026-04-18) — the
-  // cost-order ladder below remains as backward-compatible fallback only.
   if (config?.plan) {
     return dispatchByPlan(
       systemPrompt,
@@ -1065,7 +694,6 @@ export async function callLlm(
     );
   }
 
-  // Caller-explicit codex (priority 1) → subprocess spawn, no credential resolution.
   if (config?.provider === "codex") {
     return callCodexCli(
       systemPrompt,
@@ -1075,73 +703,50 @@ export async function callLlm(
     );
   }
 
-  // Caller-explicit litellm (priority 1) → OpenAI-compatible proxy.
-  if (config?.provider === "litellm") {
-    const baseUrl = config.base_url ?? process.env.LITELLM_BASE_URL;
-    if (!baseUrl) {
-      throw new Error(
-        "external_http_provider=litellm requires base_url (set via LlmCallConfig.base_url, env LITELLM_BASE_URL, or .onto/config.yml llm_base_url)",
-      );
-    }
-    const modelId = config.model_id ?? config.models_per_provider?.litellm;
-    if (!modelId) throw missingModelError("litellm");
-    const apiKey = process.env.LITELLM_API_KEY ?? "sk-litellm-placeholder";
+  if (config?.provider === "grok") {
+    const modelId = config.model_id ?? config.models_per_provider?.grok;
+    if (!modelId) throw missingModelError("grok");
+    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    if (!apiKey) throw new Error(explicitProviderMissingCredentialError("grok"));
     const maxTokens = config.max_tokens ?? 1024;
-    return callOpenAI(systemPrompt, userPrompt, apiKey, modelId, maxTokens, baseUrl, "litellm");
+    return callOpenAI(
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      modelId,
+      maxTokens,
+      config.base_url ?? DEFAULT_GROK_BASE_URL,
+      "grok",
+    );
   }
 
-  // Auto-resolution by cost-order (priority 3-6). config-explicit anthropic/openai
-  // flows through resolveProvider too (preferred arg filters candidates).
+  if (config?.provider === "lmstudio") {
+    const modelId = config.model_id ?? config.models_per_provider?.lmstudio;
+    if (!modelId) throw missingModelError("lmstudio");
+    const maxTokens = config.max_tokens ?? 1024;
+    return callOpenAI(
+      systemPrompt,
+      userPrompt,
+      "lmstudio-local",
+      modelId,
+      maxTokens,
+      config.base_url ?? process.env.LMSTUDIO_BASE_URL ?? DEFAULT_LMSTUDIO_BASE_URL,
+      "lmstudio",
+    );
+  }
+
   const resolved = resolveProvider(config?.provider, config?.base_url);
   const maxTokens = config?.max_tokens ?? 1024;
-
-  // Graceful-fallback notice: codex OAuth present but binary missing (§3.7 c).
-  if (resolved.codexOauthPresentButBinaryMissing) {
-    const suppress = Boolean(process.env.ONTO_SUPPRESS_CODEX_INSTALL_NOTICE);
-    maybeEmitCodexInstallNotice({
-      fallbackProvider: resolved.provider,
-      fallbackBillingMode: resolved.provider === "anthropic" || resolved.provider === "openai" ? "per_token" : "per_token",
-      suppress,
-    });
-  }
-
-  // B1: cost-order transition notice. Only fires for auto-resolution paths where
-  // the user has an API-key credential that the OLD (pre-cost-order) code would
-  // have picked but NEW code routes to codex/litellm instead.
-  if (config?.provider === undefined) {
-    maybeEmitCostOrderTransitionNotice(resolved);
-  }
-
-  // Per-provider model lookup: applied AFTER resolveProvider decides, so per-provider
-  // overrides in OntoConfig work under auto-resolution too (not just explicit paths).
   const perProviderModel = config?.models_per_provider?.[resolved.provider];
 
   switch (resolved.provider) {
     case "codex": {
-      // codex CLI picks its own default model when -m is omitted. Do NOT fall back
-      // to a hardcoded model: codex OAuth (chatgpt account) rejects many
-      // openai-native model IDs with:
-      //   "The '<model>' model is not supported when using Codex with a ChatGPT account."
-      // Order: caller model_id > config.codex.model > codex CLI default.
       const modelId = config?.model_id ?? perProviderModel;
       return callCodexCli(
         systemPrompt,
         userPrompt,
         modelId,
         config?.reasoning_effort,
-      );
-    }
-    case "litellm": {
-      const modelId = config?.model_id ?? perProviderModel;
-      if (!modelId) throw missingModelError("litellm");
-      return callOpenAI(
-        systemPrompt,
-        userPrompt,
-        resolved.apiKey,
-        modelId,
-        maxTokens,
-        resolved.baseUrl,
-        "litellm",
       );
     }
     case "anthropic": {
@@ -1153,6 +758,32 @@ export async function callLlm(
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("openai");
       return callOpenAI(systemPrompt, userPrompt, resolved.apiKey, modelId, maxTokens);
+    }
+    case "grok": {
+      const modelId = config?.model_id ?? perProviderModel;
+      if (!modelId) throw missingModelError("grok");
+      return callOpenAI(
+        systemPrompt,
+        userPrompt,
+        resolved.apiKey,
+        modelId,
+        maxTokens,
+        resolved.baseUrl ?? DEFAULT_GROK_BASE_URL,
+        "grok",
+      );
+    }
+    case "lmstudio": {
+      const modelId = config?.model_id ?? perProviderModel;
+      if (!modelId) throw missingModelError("lmstudio");
+      return callOpenAI(
+        systemPrompt,
+        userPrompt,
+        resolved.apiKey,
+        modelId,
+        maxTokens,
+        resolved.baseUrl ?? DEFAULT_LMSTUDIO_BASE_URL,
+        "lmstudio",
+      );
     }
   }
 }
@@ -1299,7 +930,6 @@ function callMockProvider(
   } else if (
     systemPrompt.startsWith("You are a semantic classifier")
   ) {
-    // Phase 2 semantic classifier (legacy compatibility).
     text = JSON.stringify({
       decision: "save",
       conflict_kind: null,
@@ -1417,9 +1047,7 @@ function callMockProvider(
         ? "```yaml\n" + synthesizeBody + "```"
         : synthesizeBody;
   } else {
-    // N-1 fail-loud: unknown prompt → throw with the prefix so tests
-    // immediately point at the prompt that drifted. The previous "ok"
-    // fallback masked drift behind a downstream JSON parse failure.
+    // Unknown prompt → throw with the prefix so tests point at the drifted prompt.
     const prefix = systemPrompt.slice(0, 80).replace(/\n/g, " ");
     return Promise.reject(
       new Error(

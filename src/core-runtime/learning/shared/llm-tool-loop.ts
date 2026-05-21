@@ -26,7 +26,7 @@
  *   any future executor that calls a tool gets the same guarantees.
  * - `inline-http-review-unit-executor.ts` is the caller: it picks tool_mode
  *   (native | inline | auto) and either invokes this driver (native/auto) or
- *   falls through to single-turn `callLlm()` (inline / auto-fallback).
+ *   calls single-turn `callLlm()` for inline mode.
  *
  * # Provider-format differences (the part that matters)
  *
@@ -55,6 +55,10 @@ import {
   BoundaryViolationError,
   findToolByName,
 } from "../../cli/onto-tools.js";
+import {
+  DEFAULT_GROK_BASE_URL,
+  DEFAULT_LMSTUDIO_BASE_URL,
+} from "../../llm/model-switcher.js";
 
 const MAX_ITERATIONS = 12;
 const MAX_TOKENS_PER_TURN = 4096;
@@ -70,13 +74,13 @@ function emitModelCallLog(line: string): void {
   process.stderr.write(`[model-call] ${line}\n`);
 }
 
-export type ToolLoopProvider = "anthropic" | "openai" | "litellm";
+export type ToolLoopProvider = "anthropic" | "openai" | "grok" | "lmstudio";
 
 export interface ToolLoopConfig {
   provider: ToolLoopProvider;
   model_id: string;
   max_tokens?: number;
-  /** For litellm and openai-compat endpoints. */
+  /** For OpenAI-style endpoints. */
   base_url?: string;
   /** Override iteration cap (default 12). */
   max_iterations?: number;
@@ -257,7 +261,7 @@ async function runAnthropicToolLoop(
 }
 
 // ---------------------------------------------------------------------------
-// OpenAI / LiteLLM loop
+// OpenAI-style loop
 // ---------------------------------------------------------------------------
 
 interface OpenAIChatMessage {
@@ -279,16 +283,25 @@ async function runOpenAIToolLoop(
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
   const { default: OpenAI } = await import("openai");
-  const isLiteLLM = config.provider === "litellm";
-  const baseURL = config.base_url ?? (isLiteLLM ? process.env.LITELLM_BASE_URL : undefined);
-  if (isLiteLLM && !baseURL) {
-    throw new Error("callLlmWithTools(litellm) requires base_url or LITELLM_BASE_URL");
-  }
-  const apiKey = isLiteLLM
-    ? (process.env.LITELLM_API_KEY ?? "sk-litellm-placeholder")
-    : process.env.OPENAI_API_KEY;
+  const baseURL =
+    config.base_url ??
+    (config.provider === "grok"
+      ? DEFAULT_GROK_BASE_URL
+      : config.provider === "lmstudio"
+        ? process.env.LMSTUDIO_BASE_URL ?? DEFAULT_LMSTUDIO_BASE_URL
+        : undefined);
+  const apiKey =
+    config.provider === "grok"
+      ? process.env.XAI_API_KEY ?? process.env.GROK_API_KEY
+      : config.provider === "lmstudio"
+        ? "lmstudio-local"
+        : process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    throw new Error("callLlmWithTools(openai) requires OPENAI_API_KEY");
+    throw new Error(
+      config.provider === "grok"
+        ? "callLlmWithTools(grok) requires XAI_API_KEY or GROK_API_KEY"
+        : "callLlmWithTools(openai) requires OPENAI_API_KEY",
+    );
   }
   const client = new OpenAI({ apiKey, baseURL });
 
@@ -314,7 +327,7 @@ async function runOpenAIToolLoop(
 
   for (let iteration = 0; iteration < cap; iteration++) {
     emitModelCallLog(
-      `${isLiteLLM ? "litellm" : "openai"} tool-loop call: model="${config.model_id}" iteration=${iteration + 1}/${cap} max_tokens=${config.max_tokens ?? MAX_TOKENS_PER_TURN} tool_count=${openaiTools.length}${baseURL ? ` base_url=${baseURL}` : ""}`,
+      `${config.provider} tool-loop call: model="${config.model_id}" iteration=${iteration + 1}/${cap} max_tokens=${config.max_tokens ?? MAX_TOKENS_PER_TURN} tool_count=${openaiTools.length}${baseURL ? ` base_url=${baseURL}` : ""}`,
     );
     let response;
     try {
@@ -333,14 +346,14 @@ async function runOpenAIToolLoop(
         request_id?: string;
       };
       emitModelCallLog(
-        `${isLiteLLM ? "litellm" : "openai"} tool-loop call FAILED: model="${config.model_id}" iteration=${iteration + 1} status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
+        `${config.provider} tool-loop call FAILED: model="${config.model_id}" iteration=${iteration + 1} status=${e.status ?? "?"} type=${e.error?.type ?? e.name ?? "?"} message="${e.error?.message ?? e.message ?? String(err)}" request_id=${e.request_id ?? "?"}`,
       );
       throw err;
     }
     totalIn += response.usage?.prompt_tokens ?? 0;
     totalOut += response.usage?.completion_tokens ?? 0;
     emitModelCallLog(
-      `${isLiteLLM ? "litellm" : "openai"} tool-loop response: model_id=${response.model ?? config.model_id} iteration=${iteration + 1} finish_reason=${response.choices[0]?.finish_reason ?? "?"} input_tokens=${response.usage?.prompt_tokens ?? 0} output_tokens=${response.usage?.completion_tokens ?? 0}`,
+      `${config.provider} tool-loop response: model_id=${response.model ?? config.model_id} iteration=${iteration + 1} finish_reason=${response.choices[0]?.finish_reason ?? "?"} input_tokens=${response.usage?.prompt_tokens ?? 0} output_tokens=${response.usage?.completion_tokens ?? 0}`,
     );
 
     const choice = response.choices[0];

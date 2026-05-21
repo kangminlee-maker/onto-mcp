@@ -1,51 +1,4 @@
-/**
- * Unified ExecutionPlan resolver — Review Recovery PR-1 (R1 + R2 + R5).
- *
- * # What this module is
- *
- * A single resolver that computes the full infrastructure-layer plan for a
- * review session: (a) which executor subprocess path to take (codex /
- * ts_inline_http / agent-teams), (b) which external LLM provider to dispatch
- * against, (c) retry policy, and (d) an observability trace of every
- * decision point.
- *
- * # Why it exists
- *
- * Prior to PR-1 there were TWO independent resolvers making overlapping
- * decisions in silence:
- *   - Layer 1 (`resolveExecutionProfile` in review-invoke.ts) decided the
- *     executor binary path from OntoConfig.host_runtime + env + host
- *     detection, producing `{execution_realization, host_runtime}`.
- *   - Layer 2 (`resolveProvider` in llm-caller.ts) decided the HTTP API
- *     provider (Anthropic / OpenAI / LiteLLM / Codex) via cost-order ladder,
- *     re-checking codex auth independently of Layer 1.
- *
- * When Layer 1 routed to `standalone / ts_inline_http` despite a valid codex
- * OAuth state, the divergence was silent — Layer 2 never saw the Layer 1
- * rationale and vice versa. Drill-down of 5 failed review runs (2026-04-17~18)
- * traced every failure to a form of this silent divergence.
- *
- * # How it relates
- *
- * `resolveExecutionPlan` is the single seat. Both legacy wrappers
- * (`resolveExecutionProfile` in review-invoke.ts, `resolveProvider` inside
- * `callLlm`) delegate here and project the subset they need, so the two
- * layers can never disagree again.
- *
- * # Scope of PR-1
- *
- * - Infrastructure transport (separation_rank + execution_realization +
- *   host_runtime + provider_identity) — R1 + R2
- * - Retry policy basic shape (timeout + attempts + backoff) — R4 per-error
- *   `classify` is deferred to PR-2
- * - Observability trace (plan_trace + `[plan]` STDERR) — R5 extension
- *
- * Deferred to PR-3: lens_dispatch budget, synthesize_strategy quorum.
- *
- * # Design reference
- *
- * `development-records/evolve/20260417-context-separation-ladder-design-sketch.md` §3.1
- */
+/** Resolves the concrete review execution plan from host signals and llm config. */
 
 import fs from "node:fs";
 import os from "node:os";
@@ -53,6 +6,9 @@ import path from "node:path";
 
 import type { OntoConfig } from "../discovery/config-chain.js";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
+import {
+  normalizeLlmModelSwitcher,
+} from "../llm/model-switcher.js";
 import type { TopologyId } from "./execution-topology-resolver.js";
 
 // ---------------------------------------------------------------------------
@@ -80,16 +36,18 @@ export type HostRuntime =
   | "codex"
   | "claude"
   | "standalone"
-  | "litellm"
   | "anthropic"
   | "openai"
+  | "grok"
+  | "lmstudio"
   | "mock";
 
 export type ProviderIdentity =
   | "codex"
   | "anthropic"
   | "openai"
-  | "litellm"
+  | "grok"
+  | "lmstudio"
   | "claude-code"
   | "mock";
 
@@ -100,24 +58,12 @@ export interface ExecutionPlan {
   provider_identity: ProviderIdentity;
   /** Chosen per-request model id; undefined when the executor picks its own (codex). */
   model_id?: string;
-  /** LiteLLM / custom OpenAI-compatible base URL when applicable. */
+  /** Base URL for OpenAI-style providers. */
   base_url?: string;
   retry_policy: RetryPolicy;
   /** Ordered list of decision points; emitted to STDERR and available for session artifacts. */
   plan_trace: string[];
-  /**
-   * Sketch v3 / PR-A (2026-04-18): reverse-mapped canonical topology id
-   * for this plan. Populated when the P0-P4 ladder's decision aligns with
-   * one of the 10 canonical topologies in
-   * `src/core-runtime/review/execution-topology-resolver.ts`; left
-   * undefined for legacy HTTP paths (standalone + anthropic/openai/litellm
-   * without Claude Code) that sketch v3 does not cover directly.
-   *
-   * This is observational in PR-A — downstream dispatch (PR-B/C/D/E)
-   * reads it to route to topology-specific spawn paths. Populating it
-   * here keeps the old P0-P4 ladder as the source of truth while
-   * progressively shifting to topology-driven dispatch.
-   */
+  /** Canonical topology id when the plan maps to a registered topology. */
   topology_id?: TopologyId;
 }
 
@@ -221,18 +167,11 @@ function readCodexAuthState(): CodexAuthState {
  *   P1f env ONTO_HOST_RUNTIME override                 — any rank
  *   P2  Auto-detected Claude Code host (CLAUDECODE=1)  — host nested spawn (S2)
  *   P3  Auto-detected codex binary + auth.json         — subprocess (S0)
- *   P4  subagent_llm / external_http_provider config   — external HTTP (S1)
+ *   P4  llm auth/provider switcher                     — external HTTP (S1) or codex OAuth
  *   Fail-fast when nothing is viable.
  *
- * Historical note: the legacy `host_runtime` / `execution_realization` /
- * `api_provider` fields that previously drove P1b-P1e config branches
- * were removed from `OntoConfig` by PR-K (2026-04-18, sketch v3 §7.4 Phase D
- * stage 3). The `review:` axis block is the canonical seat for these
- * decisions now (P9.2, 2026-04-21). Legacy YAML configs are silently
- * dropped during type narrowing (P9.5, 2026-04-21 — the prior load-time
- * `LegacyFieldRemovedError` throw was retired); such configs fall
- * through to `buildNoHostReason`'s 6-option setup guide when no viable
- * path is detected.
+ * The `review:` axis block owns topology. The `llm` switcher owns provider
+ * and auth selection. Missing viable execution input returns `no_host`.
  */
 export function resolveExecutionPlan(
   args: ResolveExecutionPlanArgs,
@@ -296,18 +235,14 @@ export function resolveExecutionPlan(
       },
     };
   }
-  if (
-    envHost === "litellm" ||
-    envHost === "anthropic" ||
-    envHost === "openai"
-  ) {
+  if (envHost === "anthropic" || envHost === "openai" || envHost === "grok" || envHost === "lmstudio") {
     log(`P1 env-override: ONTO_HOST_RUNTIME=${envHost} → ts_inline_http`);
     return resolveExternalHttpPlan(
       log,
       trace,
       retry_policy,
       args.ontoConfig,
-      { forcedProvider: envHost as "litellm" | "anthropic" | "openai" },
+      { forcedProvider: envHost as "anthropic" | "openai" | "grok" | "lmstudio" },
     );
   }
   if (envHost === "standalone") {
@@ -331,23 +266,23 @@ export function resolveExecutionPlan(
     };
   }
 
-  // P3: Auto-detected codex (S0 preferred over S1 by separation rank).
-  //
-  // Note: detectCodexBinaryAvailable checks for binary-on-PATH + auth.json file
-  // presence only — not auth content. This preserves the legacy Layer 1 judgment
-  // (review-invoke's prior detectCodexAvailable), keeping "auth.json exists" as
-  // sufficient for routing; content validation (chatgpt OAuth vs API key) stays
-  // in callCodexCli at actual invocation time, matching the layer separation
-  // the prior code established.
+  // P3: Auto-detected codex. Auth content is validated at invocation time.
   if (codexAvailable) {
     log("P3 auto: codex binary + auth.json present → subprocess");
     return resolveCodexPlan(log, trace, retry_policy, args.ontoConfig);
   }
   log("P3 auto: codex binary unavailable → skip");
 
-  // P4: subagent_llm config or external_http_provider makes ts_inline_http viable.
-  if (args.ontoConfig.subagent_llm?.provider || hasExternalHttpConfig(args.ontoConfig)) {
-    log("P4 auto: subagent_llm or external_http_provider present → ts_inline_http");
+  // P4: canonical llm switcher.
+  const llmSelection = normalizeLlmModelSwitcher(args.ontoConfig.llm);
+  if (llmSelection) {
+    if (llmSelection.provider === "codex") {
+      log("P4 llm switcher: auth=oauth provider=openai → codex subprocess");
+      return resolveCodexPlan(log, trace, retry_policy, args.ontoConfig);
+    }
+    log(
+      `P4 llm switcher: auth=${llmSelection.auth} provider=${llmSelection.provider} → ts_inline_http`,
+    );
     return resolveExternalHttpPlan(log, trace, retry_policy, args.ontoConfig);
   }
 
@@ -369,7 +304,9 @@ function resolveCodexPlan(
   retry_policy: RetryPolicy,
   config: OntoConfig,
 ): ExecutionPlanResolution {
-  const modelId = config.codex?.model ?? config.model;
+  const selection = normalizeLlmModelSwitcher(config.llm);
+  const modelId =
+    selection?.provider === "codex" ? selection.model_id : undefined;
   log(
     `codex plan: separation_rank=S0 executor=subprocess model_id=${modelId ?? "(codex default)"}`,
   );
@@ -392,13 +329,11 @@ function resolveExternalHttpPlan(
   trace: string[],
   retry_policy: RetryPolicy,
   config: OntoConfig,
-  opts?: { forcedProvider?: "litellm" | "anthropic" | "openai" },
+  opts?: { forcedProvider?: "anthropic" | "openai" | "grok" | "lmstudio" },
 ): ExecutionPlanResolution {
   const providerField = pickExternalProviderField(config, opts);
   if (!providerField.provider) {
-    log(
-      "external-http: no provider identified (external_http_provider, api_provider, subagent_llm.provider all unset)",
-    );
+    log("external-http: no provider identified (llm.provider unset)");
     return {
       type: "no_host",
       plan_trace: trace,
@@ -407,16 +342,9 @@ function resolveExternalHttpPlan(
   }
 
   const provider = providerField.provider;
-  const modelId =
-    (provider === "anthropic" && config.anthropic?.model) ||
-    (provider === "openai" && config.openai?.model) ||
-    (provider === "litellm" && config.litellm?.model) ||
-    config.subagent_llm?.model ||
-    config.model;
-  const base_url =
-    provider === "litellm"
-      ? config.llm_base_url ?? config.subagent_llm?.base_url
-      : config.subagent_llm?.base_url;
+  const selection = normalizeLlmModelSwitcher(config.llm);
+  const modelId = selection?.model_id;
+  const base_url = selection?.base_url;
 
   log(
     `external-http plan: provider=${provider} source=${providerField.source} model_id=${modelId ?? "(unresolved)"} base_url=${base_url ?? "(default)"}`,
@@ -442,38 +370,22 @@ function resolveExternalHttpPlan(
 // ---------------------------------------------------------------------------
 
 interface ProviderFieldResult {
-  provider: "anthropic" | "openai" | "litellm" | null;
+  provider: "anthropic" | "openai" | "grok" | "lmstudio" | null;
   source: string;
 }
 
 function pickExternalProviderField(
   config: OntoConfig,
-  opts?: { forcedProvider?: "litellm" | "anthropic" | "openai" },
+  opts?: { forcedProvider?: "anthropic" | "openai" | "grok" | "lmstudio" },
 ): ProviderFieldResult {
   if (opts?.forcedProvider) {
     return { provider: opts.forcedProvider, source: "forced (env ONTO_HOST_RUNTIME)" };
   }
-  const ext = narrowExternalProvider(config.external_http_provider);
-  if (ext) return { provider: ext, source: "external_http_provider" };
-  const subagent = narrowExternalProvider(config.subagent_llm?.provider);
-  if (subagent) return { provider: subagent, source: "subagent_llm.provider" };
-  return { provider: null, source: "(none)" };
-}
-
-function narrowExternalProvider(
-  value: string | undefined,
-): "anthropic" | "openai" | "litellm" | null {
-  if (value === "anthropic" || value === "openai" || value === "litellm") {
-    return value;
+  const selection = normalizeLlmModelSwitcher(config.llm);
+  if (selection && selection.provider !== "codex") {
+    return { provider: selection.provider, source: "llm" };
   }
-  return null;
-}
-
-function hasExternalHttpConfig(config: OntoConfig): boolean {
-  return (
-    Boolean(config.external_http_provider) ||
-    Boolean(config.subagent_llm?.provider)
-  );
+  return { provider: null, source: "(none)" };
 }
 
 // ---------------------------------------------------------------------------
@@ -483,24 +395,25 @@ function hasExternalHttpConfig(config: OntoConfig): boolean {
 function buildNoHostReason(): string {
   return [
     "Review execution plan을 해소할 수 없습니다.",
-    "현재 감지 결과: Claude Code 세션 아님(CLAUDECODE unset), codex 바이너리 또는 ~/.codex/auth.json 부재, subagent_llm / external_http_provider 미설정.",
+    "현재 감지 결과: Claude Code 세션 아님(CLAUDECODE unset), codex 바이너리 또는 ~/.codex/auth.json 부재, llm switcher 미설정.",
     "",
     "다음 중 한 가지로 해결하세요:",
     "  1. Claude Code 세션에서 `onto review` 재실행",
     "  2. codex CLI 설치 + `codex login` 후 재실행",
     "  3. `--codex` 플래그로 codex subprocess 강제",
     "  4. `.onto/config.yml` 에 `review:` axis block 추가 (docs/topology-migration-guide.md §7 참고)",
-    "  5. `.onto/config.yml` 에 external_http_provider: <anthropic|openai|litellm> + per-provider model 설정",
-    "  6. `ONTO_HOST_RUNTIME=standalone` env + external_http_provider config",
+    "  5. `.onto/config.yml` 에 llm: { auth, provider, model } 설정",
+    "  6. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
   ].join("\n");
 }
 
 function buildMissingExternalProviderReason(): string {
   return [
-    "External HTTP provider 미지정.",
-    "`.onto/config.yml` 에 다음 중 하나를 추가하세요:",
-    "  external_http_provider: anthropic    # 또는 openai | litellm",
-    "  # 또는",
-    "  subagent_llm: { provider: anthropic, model: <model-id> }",
+    "LLM switcher 미지정.",
+    "`.onto/config.yml` 에 llm block 을 추가하세요:",
+    "  llm:",
+    "    auth: api_key",
+    "    provider: anthropic    # 또는 openai | grok | lmstudio",
+    "    model: <model-id>",
   ].join("\n");
 }

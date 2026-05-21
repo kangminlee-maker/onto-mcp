@@ -1,0 +1,96 @@
+export type LlmAuthMode = "api_key" | "oauth" | "local";
+export type LlmProviderName = "openai" | "anthropic" | "grok" | "lmstudio";
+
+export interface LlmModelSwitcherConfig {
+  provider?: LlmProviderName;
+  auth?: LlmAuthMode;
+  model?: string;
+  base_url?: string;
+  effort?: string;
+  api_key_env?: string;
+}
+
+export type RuntimeLlmProvider =
+  | "codex"
+  | "openai"
+  | "anthropic"
+  | "grok"
+  | "lmstudio";
+
+export interface NormalizedLlmSelection {
+  provider: RuntimeLlmProvider;
+  auth: LlmAuthMode;
+  model_id?: string;
+  base_url?: string;
+  reasoning_effort?: string;
+  api_key_env?: string;
+}
+
+export const DEFAULT_GROK_BASE_URL = "https://api.x.ai/v1";
+export const DEFAULT_LMSTUDIO_BASE_URL = "http://localhost:1234/v1";
+
+export function normalizeLlmModelSwitcher(
+  config: LlmModelSwitcherConfig | undefined,
+): NormalizedLlmSelection | null {
+  if (!config || config.provider === undefined) return null;
+
+  const provider = config.provider;
+  const auth = config.auth ?? (provider === "lmstudio" ? "local" : "api_key");
+
+  if (auth === "oauth" && provider !== "openai") {
+    throw new Error(
+      `llm.auth=oauth is only supported with llm.provider=openai; got provider=${provider}.`,
+    );
+  }
+  if (auth === "local" && provider !== "lmstudio") {
+    throw new Error(
+      `llm.auth=local is only supported with llm.provider=lmstudio; got provider=${provider}.`,
+    );
+  }
+  if (provider === "lmstudio" && auth !== "local") {
+    throw new Error("llm.provider=lmstudio requires llm.auth=local.");
+  }
+  if (provider !== "lmstudio" && auth === "local") {
+    throw new Error("llm.auth=local currently requires llm.provider=lmstudio.");
+  }
+
+  const model_id = config.model;
+  const common = {
+    auth,
+    ...(model_id ? { model_id } : {}),
+    ...(config.effort ? { reasoning_effort: config.effort } : {}),
+    ...(config.api_key_env ? { api_key_env: config.api_key_env } : {}),
+  };
+
+  switch (provider) {
+    case "openai":
+      return {
+        provider: auth === "oauth" ? "codex" : "openai",
+        ...common,
+        ...(config.base_url ? { base_url: config.base_url } : {}),
+      };
+    case "anthropic":
+      if (auth !== "api_key") {
+        throw new Error("llm.provider=anthropic requires llm.auth=api_key.");
+      }
+      return {
+        provider: "anthropic",
+        ...common,
+      };
+    case "grok":
+      if (auth !== "api_key") {
+        throw new Error("llm.provider=grok requires llm.auth=api_key.");
+      }
+      return {
+        provider: "grok",
+        ...common,
+        base_url: config.base_url ?? DEFAULT_GROK_BASE_URL,
+      };
+    case "lmstudio":
+      return {
+        provider: "lmstudio",
+        ...common,
+        base_url: config.base_url ?? DEFAULT_LMSTUDIO_BASE_URL,
+      };
+  }
+}

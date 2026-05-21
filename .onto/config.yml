@@ -3,10 +3,6 @@ output_language: ko
 domains:
   -
 
-# Review execution (P1 axis block, 2026-04-20)
-# Reference: .onto/processes/configuration.md §4.5
-# Equivalent of legacy `execution_topology_priority: [codex-nested-subprocess]`
-# per src/core-runtime/review/review-config-legacy-translate.ts:legacyTopologyIdToAxes.
 review:
   teamlead:
     model:
@@ -19,8 +15,8 @@ review:
     effort: high
 review_mode: full
 
-# Background task LLM (learn / govern / promote)
-# Reference: .onto/processes/configuration.md §4.4
-codex:
+llm:
+  auth: oauth
+  provider: openai
   model: gpt-5.4
   effort: high

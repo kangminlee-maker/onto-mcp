@@ -7,8 +7,7 @@ export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
  * - "subagent":      single bounded execution unit (codex exec, claude Agent tool flat,
  *                     or TS process direct LLM call)
  * - "agent-teams":   nested team spawning (Claude Code TeamCreate; claude host only)
- * - "ts_inline_http": Phase 2 — TS process directly calls LLM HTTP endpoint (LiteLLM /
- *                     Anthropic SDK direct / OpenAI SDK direct). Inline content mode:
+ * - "ts_inline_http": TS process directly calls an LLM endpoint. Inline content mode:
  *                     domain docs and target are embedded in the prompt rather than
  *                     fetched via tool calls. Suitable for hosts without their own
  *                     tool ecosystem (standalone CLI). See
@@ -21,18 +20,24 @@ export type ReviewExecutionRealization = "subagent" | "agent-teams" | "ts_inline
  * - "claude":     Claude Code host session (both agent_teams_claude and subagent_claude
  *                 combinations; subject session chooses nested vs flat orchestration
  *                 based on its TeamCreate availability)
- * - "litellm":    LiteLLM-hosted model accessed via TS process direct HTTP. Phase 2
- *                 wires this combination as `ts_inline_http + litellm`.
  * - "anthropic":  Anthropic SDK direct call from TS process. Phase 2 wires this as
  *                 `ts_inline_http + anthropic`. Subagent provider for "Claude Code main
  *                 + Anthropic SDK subagent" cross-host combinations.
- * - "openai":     OpenAI SDK direct call (or OpenAI-compatible endpoint without
- *                 LiteLLM proxy). Phase 2 wires this as `ts_inline_http + openai`.
+ * - "openai":     OpenAI SDK direct call. Wires as `ts_inline_http + openai`.
+ * - "grok":       xAI/Grok OpenAI-style API via TS process direct HTTP.
+ * - "lmstudio":   Local LM Studio OpenAI-style endpoint.
  * - "standalone": TS process orchestrates with no host LLM (Phase 2 partial; main
  *                 LLM provider read from `main_llm` config in `.onto/config.yml`).
  * See .onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization for semantic definitions.
  */
-export type ReviewHostRuntime = "codex" | "claude" | "litellm" | "anthropic" | "openai" | "standalone";
+export type ReviewHostRuntime =
+  | "codex"
+  | "claude"
+  | "anthropic"
+  | "openai"
+  | "grok"
+  | "lmstudio"
+  | "standalone";
 export type ReviewMode = "core-axis" | "full";
 export type BoundaryAccessPolicy = "allowed" | "denied";
 export type BoundaryGuaranteeLevel =
@@ -433,7 +438,6 @@ export interface ReviewRecord {
 // ─────────────────────────────────────────────
 
 // CoordinatorStateName: canonical definition is in scope-runtime/state-machine.ts (REVIEW_STATES).
-// Imported and re-exported here for backward compatibility. W-B-02 dedup.
 import type { ReviewState } from "../scope-runtime/state-machine.js";
 export type CoordinatorStateName = ReviewState;
 
@@ -463,11 +467,10 @@ export interface CoordinatorStateFile {
    * records what the caller actually did — closing the gap observed in
    * development-records/benchmark/20260418-topology-smoke-full-e2e-results.md §"주목할 관찰 1".
    *
-   * Values are free-form strings for forward compatibility. Examples:
+   * Values are free-form strings. Examples:
    *   - `claude-agent-tool-flat` (주체자가 Agent tool 로 flat spawn)
    *   - `claude-teamcreate-nested` (TeamCreate 로 coordinator + nested spawn)
    *   - `codex-subprocess` (codex CLI subprocess per lens)
-   *   - `litellm-http` (LiteLLM endpoint 로 HTTP dispatch)
    *
    * Absent when orchestrator did not self-report. Idempotent — first
    * value wins, subsequent calls with different values are ignored.

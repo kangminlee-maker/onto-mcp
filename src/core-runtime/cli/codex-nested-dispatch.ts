@@ -63,6 +63,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { OntoConfig } from "../discovery/config-chain.js";
+import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
 import {
@@ -141,10 +142,6 @@ const defaultInspector: OutputFileInspector = async (p) => {
  * case this helper sees non-empty files and returns without writing
  * (prevents dual-writer drift — 3rd self-review U4).
  *
- * The memory-fallback path remains for:
- *   - Legacy callers that do not pass stream_*_path
- *   - Stream write failures that leave the file empty or absent
- *
  * Silently swallows write errors — an artifact write failure must not
  * mask the actual dispatch outcome. Best-effort.
  */
@@ -155,12 +152,12 @@ async function archiveOuterStreamsIfMissing(
   const stdoutPath = path.join(sessionRoot, "nested-outer-stdout.log");
   const stderrPath = path.join(sessionRoot, "nested-outer-stderr.log");
   await Promise.all([
-    fallbackWrite(stdoutPath, nestedResult.outer_stdout ?? ""),
-    fallbackWrite(stderrPath, nestedResult.outer_stderr ?? ""),
+    archiveWriteIfMissing(stdoutPath, nestedResult.outer_stdout ?? ""),
+    archiveWriteIfMissing(stderrPath, nestedResult.outer_stderr ?? ""),
   ]);
 }
 
-async function fallbackWrite(targetPath: string, content: string): Promise<void> {
+async function archiveWriteIfMissing(targetPath: string, content: string): Promise<void> {
   try {
     const stat = await fs.stat(targetPath).catch(() => null);
     if (stat && stat.size > 0) {
@@ -200,21 +197,11 @@ async function fallbackWrite(targetPath: string, content: string): Promise<void>
  *      `ext-teamlead_native` this single seat steers both outer and
  *      inner codex.
  *   2. `review.teamlead.model` when it is an explicit
- *      `{ provider: "codex" }` spec — fallback when subagent is
- *      `main-native` or absent but teamlead is an external codex.
- *   3. Legacy top-level `codex.*` — pre-P2 configs still in the wild.
- *   4. Legacy top-level `model` / `reasoning_effort` — even older shape.
+ *      `{ provider: "codex" }` spec.
+ *   3. `llm.auth=oauth + llm.provider=openai` — canonical model switcher
+ *      for Codex OAuth.
  *
  * # Why P2 moved it + why this bridge exists
- *
- * Review UX Redesign P2 moved user-facing config into `review:` axis
- * block, but `codex-nested-dispatch` initially kept reading only the
- * legacy top-level `codex.*`. When a smoke script (or real principal)
- * put `effort: medium` under `review.subagent` (the P2 canonical
- * location), it silently fell through and the nested codex ran with
- * `~/.codex/config.toml` defaults (often `xhigh`), causing outer
- * teamlead timeouts during multi-lens dispatch (2026-04-22 D-1 smoke
- * drift). This helper bridges the generation gap.
  *
  * Returns `{}` when nothing resolves — caller omits both fields from
  * the orchestrator input (codex picks its own defaults).
@@ -236,16 +223,15 @@ export function resolveCodexSpawnConfig(
       ...(tl.effort ? { effort: tl.effort } : {}),
     };
   }
-  if (config.codex?.model || config.codex?.effort) {
+
+  const selection = normalizeLlmModelSwitcher(config.llm);
+  if (selection?.provider === "codex") {
     return {
-      ...(config.codex.model ? { model: config.codex.model } : {}),
-      ...(config.codex.effort ? { effort: config.codex.effort } : {}),
+      ...(selection.model_id ? { model: selection.model_id } : {}),
+      ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
     };
   }
-  return {
-    ...(config.model ? { model: config.model } : {}),
-    ...(config.reasoning_effort ? { effort: config.reasoning_effort } : {}),
-  };
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -309,10 +295,7 @@ export async function executeReviewViaCodexNested(
     stream_stderr_path: streamStderrPath,
   });
 
-  // Archive step is the defense-in-depth fallback. Runs ONLY when the
-  // stream files are missing/empty (e.g. a legacy caller that skipped
-  // stream_*_path or a stream write failure). The normal case is a
-  // no-op so the streaming writer stays the single authority.
+  // Archive step is a no-op when streaming already produced files.
   await archiveOuterStreamsIfMissing(args.sessionRoot, nestedResult);
 
   const participating: string[] = [];

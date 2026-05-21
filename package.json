@@ -45,6 +45,7 @@
     "review:codex-unit-executor": "tsx src/core-runtime/cli/codex-review-unit-executor.ts",
     "review:inline-http-unit-executor": "tsx src/core-runtime/cli/inline-http-review-unit-executor.ts",
     "review:invoke": "tsx src/core-runtime/cli/review-invoke.ts",
+    "mcp:server": "tsx src/mcp/server.ts",
     "migrate:agent-id-rename": "bash scripts/migrate-agent-id-rename.sh",
     "review:watch": "bash scripts/onto-review-watch.sh",
     "review:render-final-output": "tsx src/core-runtime/cli/render-review-final-output.ts",

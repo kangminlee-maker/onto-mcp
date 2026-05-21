@@ -30,6 +30,7 @@ import { resolveConfigChain, type OntoConfig } from "../discovery/config-chain.j
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
 import { resolveExecutionPlan } from "../review/execution-plan-resolver.js";
+import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import {
   resolveExecutionTopology,
   type ExecutionTopology,
@@ -49,7 +50,7 @@ import { assessComplexity, selectLenses } from "./complexity-assessment.js";
  * - "mock":            in-process deterministic stub (mock-review-unit-executor.ts)
  * - "ts_inline_http":  TS process directly calls LLM HTTP endpoint (Phase 2 of host
  *                      runtime decoupling). Selected automatically when
- *                      OntoConfig.subagent_llm or OntoConfig.external_http_provider is set.
+ *                      OntoConfig.llm selects an API-key/local provider.
  *                      See `inline-http-review-unit-executor.ts`.
  */
 type ExecutorRealization = "codex" | "mock" | "ts_inline_http";
@@ -95,7 +96,7 @@ interface ReviewInvokeRouteSummary {
   combined_entrypoint: "review:invoke";
   bounded_invoke_steps: string[];
   execution_realization: "subagent" | "agent-teams" | "ts_inline_http";
-  host_runtime: "codex" | "claude" | "standalone" | "litellm" | "anthropic" | "openai";
+  host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
   review_mode: ReviewMode;
   max_concurrent_lenses: number;
   concurrency_strategy: "bounded_parallel";
@@ -180,26 +181,11 @@ function requireString(
   return value;
 }
 
-function packageManagerBin(): string {
-  return process.platform === "win32" ? "npm.cmd" : "npm";
-}
-
-// Single source for executor script names. Used by both npm-run and direct-path resolution.
 const EXECUTOR_SCRIPT_FILENAMES: Record<ExecutorRealization, string> = {
   codex: "codex-review-unit-executor",
   mock: "mock-review-unit-executor",
   ts_inline_http: "inline-http-review-unit-executor",
 };
-
-const EXECUTOR_NPM_SCRIPTS: Record<ExecutorRealization, string> = {
-  codex: "review:codex-unit-executor",
-  mock: "review:mock-unit-executor",
-  ts_inline_http: "review:inline-http-unit-executor",
-};
-
-function resolveExecutorScript(realization: ExecutorRealization): string {
-  return EXECUTOR_NPM_SCRIPTS[realization] ?? "review:mock-unit-executor";
-}
 
 function resolveDirectExecutorPath(
   realization: ExecutorRealization,
@@ -208,7 +194,6 @@ function resolveDirectExecutorPath(
   const filename = EXECUTOR_SCRIPT_FILENAMES[realization];
   if (!filename) return null;
 
-  // Prefer compiled dist/ if available
   const distPath = path.join(
     ontoHome, "dist", "core-runtime", "cli", `${filename}.js`,
   );
@@ -217,31 +202,18 @@ function resolveDirectExecutorPath(
   );
 
   if (fsSync.existsSync(distPath)) {
-    // Dev-workflow guard: when src/ has been edited since dist/ was compiled,
-    // the dist binary ships stale behaviour that silently overrides source
-    // changes. Warn on STDERR so editors of review-invoke / executor code
-    // notice the divergence immediately. Non-fatal — the dist is still used
-    // because installed deployments have no src/ and we cannot distinguish
-    // "dev repo with stale dist" from "installed package" purely from mtime.
-    try {
-      if (fsSync.existsSync(srcPath)) {
-        const distStat = fsSync.statSync(distPath);
-        const srcStat = fsSync.statSync(srcPath);
-        if (srcStat.mtimeMs > distStat.mtimeMs) {
-          process.stderr.write(
-            `[onto] WARNING: dist/${filename}.js is older than src/${filename}.ts. ` +
-              `Using the compiled version, which may not reflect your recent edits. ` +
-              `Rebuild (npm run build) or move dist/ aside to force the src/tsx path.\n`,
-          );
-        }
+    if (fsSync.existsSync(srcPath)) {
+      const distStat = fsSync.statSync(distPath);
+      const srcStat = fsSync.statSync(srcPath);
+      if (srcStat.mtimeMs > distStat.mtimeMs) {
+        throw new Error(
+          `dist/${filename}.js is older than src/${filename}.ts. Run npm run build before review execution.`,
+        );
       }
-    } catch {
-      // stat failure is non-fatal; fall through to the dist path.
     }
     return { bin: "node", scriptPath: distPath };
   }
 
-  // Dev mode: use tsx with source
   const tsxBin = path.join(ontoHome, "node_modules", ".bin", "tsx");
   if (fsSync.existsSync(srcPath) && fsSync.existsSync(tsxBin)) {
     return { bin: tsxBin, scriptPath: srcPath };
@@ -254,7 +226,6 @@ function buildExecutorConfigFromRealization(
   realization: ExecutorRealization,
   ontoHome?: string,
 ): ReviewUnitExecutorConfig {
-  // When ontoHome is available, use direct script paths (global CLI path)
   if (typeof ontoHome === "string" && ontoHome.length > 0) {
     const direct = resolveDirectExecutorPath(realization, ontoHome);
     if (direct) {
@@ -265,13 +236,22 @@ function buildExecutorConfigFromRealization(
       // positional — triggering "Unexpected argument" errors.
       return { bin: direct.bin, args: [direct.scriptPath] };
     }
+    throw new Error(`Executor script not found for realization=${realization} under ${ontoHome}.`);
   }
 
-  // Legacy npm run fallback (when invoked via npm run from onto repo)
-  return {
-    bin: packageManagerBin(),
-    args: ["run", resolveExecutorScript(realization), "--"],
-  };
+  throw new Error("ontoHome is required to resolve review executor script paths.");
+}
+
+function inferExecutorRealization(
+  config: ReviewUnitExecutorConfig,
+): ExecutorRealization | "custom" {
+  const joinedArgs = config.args.join(" ");
+  for (const [realization, filename] of Object.entries(EXECUTOR_SCRIPT_FILENAMES)) {
+    if (joinedArgs.includes(filename)) {
+      return realization as ExecutorRealization;
+    }
+  }
+  return "custom";
 }
 
 function stripOptionsFromArgv(
@@ -372,18 +352,14 @@ function appendExecutorModelArgs(
   if (isMock) return config;
 
   const args = [...config.args];
-  // Resolution: CLI flag > top-level config > codex namespace (fallback for codex mode)
-  const model =
-    readSingleOptionValueFromArgv(argv, "model") ??
-    ontoConfig?.model ??
-    ontoConfig?.codex?.model;
+  const llmSelection = normalizeLlmModelSwitcher(ontoConfig?.llm);
+  const model = readSingleOptionValueFromArgv(argv, "model") ?? llmSelection?.model_id;
   if (typeof model === "string" && model.length > 0) {
     args.push("--model", model);
   }
   const reasoningEffort =
     readSingleOptionValueFromArgv(argv, "reasoning-effort") ??
-    ontoConfig?.reasoning_effort ??
-    ontoConfig?.codex?.effort;
+    llmSelection?.reasoning_effort;
   if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
     args.push("--reasoning-effort", reasoningEffort);
   }
@@ -391,86 +367,49 @@ function appendExecutorModelArgs(
 }
 
 /**
- * Phase 2 wiring: append subagent_llm config fields as inline-http executor
- * CLI flags. Called when the auto-selection logic picks ts_inline_http based
- * on subagent_llm config or standalone host detection.
- *
- * Translates OntoConfig.subagent_llm → inline-http executor flags:
- *   subagent_llm.provider → --provider
- *   subagent_llm.model → --model
- *   subagent_llm.base_url → --llm-base-url
- *   subagent_llm.max_tokens → --max-tokens
- *   subagent_llm.embed_domain_docs → --embed-domain-docs
- *
- * Falls back to top-level `external_http_provider` / `model` / `llm_base_url`
- * when `subagent_llm` fields are unset — so a user with
- * `external_http_provider: litellm; litellm: { model: llama-8b }` (no
- * subagent_llm block) still gets a working executor.
+ * Append canonical llm switcher fields as inline-http executor CLI flags.
  */
 function appendSubagentLlmArgs(
   config: ReviewUnitExecutorConfig,
   ontoConfig?: OntoConfig,
 ): ReviewUnitExecutorConfig {
   const args = [...config.args];
-  const sub = ontoConfig?.subagent_llm;
+  const selection = normalizeLlmModelSwitcher(ontoConfig?.llm);
 
-  const provider = sub?.provider ?? ontoConfig?.external_http_provider;
-  if (typeof provider === "string" && provider.length > 0) {
-    args.push("--provider", provider);
+  if (selection && selection.provider !== "codex") {
+    args.push("--provider", selection.provider);
   }
 
-  const model = sub?.model ?? ontoConfig?.model;
-  if (typeof model === "string" && model.length > 0) {
-    args.push("--model", model);
+  if (selection?.model_id) {
+    args.push("--model", selection.model_id);
   }
 
-  const baseUrl = sub?.base_url ?? ontoConfig?.llm_base_url;
-  if (typeof baseUrl === "string" && baseUrl.length > 0) {
-    args.push("--llm-base-url", baseUrl);
-  }
-
-  const maxTokens = sub?.max_tokens;
-  if (typeof maxTokens === "number" && maxTokens > 0) {
-    args.push("--max-tokens", String(maxTokens));
-  }
-
-  if (sub?.embed_domain_docs === true) {
-    args.push("--embed-domain-docs");
-  }
-
-  const toolMode = (sub as { tool_mode?: unknown })?.tool_mode;
-  if (typeof toolMode === "string" && toolMode.length > 0) {
-    args.push("--tool-mode", toolMode);
+  if (selection?.base_url) {
+    args.push("--llm-base-url", selection.base_url);
   }
 
   return { bin: config.bin, args };
 }
 
 // ---------------------------------------------------------------------------
-// Execution realization auto-resolution (stay-in-host)
+// Execution realization resolution
 //
-// Decides whether `onto review` should run the codex CLI path itself or hand
-// off to the Claude host via `onto coordinator start`. Three inputs matter:
+// Decides whether `onto review` should run in this process or hand off to the
+// Claude host via `onto coordinator start`. Four inputs matter:
 //
 //   - explicit CLI `--codex` flag                        → self (codex path)
 //   - env ONTO_HOST_RUNTIME override                     → explicit override
 //   - auto detection (CLAUDECODE=1 / codex on PATH /
-//       external_http_provider / subagent_llm)            → stay-in-host
+//       llm switcher)                                     → concrete path
+//   - review axis topology                                → spawn shape
 //
-// Review UX Redesign seat is the `review:` axis block (see
-// `review/execution-topology-resolver.ts`); this ladder is the fallback
-// path used when the resolver cannot map to a canonical TopologyId.
-//
-// Priority rank between hosts is NOT hardcoded here — user situation varies
-// (subscription mix, context headroom, local hardware). Default policy prefers
-// the current host ecosystem; cross-host switches require explicit opt-in.
-// Design: development-records/plan/20260415T1700-execution-realization-priority-design.md
+// The review axis block is the canonical topology seat.
 // Authority: .onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization
 // ---------------------------------------------------------------------------
 
 export interface ResolvedExecutionProfile {
   execution_realization: "subagent" | "agent-teams" | "ts_inline_http";
-  host_runtime: "codex" | "claude" | "standalone" | "litellm" | "anthropic" | "openai";
+  host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
 }
 
 export type ExecutionProfileResolution =
@@ -482,25 +421,12 @@ export type ExecutionRealizationHandoff =
   | { type: "coordinator_start"; profile: ResolvedExecutionProfile }
   | { type: "no_host" };
 
-/**
- * Legacy boolean predicate. Returns true when host is detected as Claude Code.
- *
- * NOTE: signal set differs from upstream `isClaudeCodeHost()` — this preserves
- * the legacy "CLAUDECODE === '1'" check exclusively, because some review
- * call-sites rely on the narrower signal (CLAUDECODE alone) to decide whether
- * to emit a coordinator-start handoff JSON. Broadening this to all 3 Claude
- * env signals would change auto-resolution behavior for users who set
- * CLAUDE_PROJECT_DIR without the rest. See `discovery/host-detection.ts`
- * for the full multi-signal `isClaudeCodeHost()` and capability matrix.
- */
+/** Returns true when the current process is inside a Claude Code review host. */
 export function detectClaudeCodeHost(): boolean {
   return process.env.CLAUDECODE === "1";
 }
 
-/**
- * Legacy boolean predicate. Returns true when codex binary + auth.json are
- * both present. Wraps the canonical seat in `discovery/host-detection.ts`.
- */
+/** Returns true when codex CLI execution is available. */
 export function detectCodexAvailable(): boolean {
   return detectCodexBinaryAvailable();
 }
@@ -508,20 +434,13 @@ export function detectCodexAvailable(): boolean {
 /**
  * Resolves the (execution_realization, host_runtime) profile.
  *
- * As of Review Recovery PR-1 (2026-04-18) this function is a thin adapter
- * over `resolveExecutionPlan` in `src/core-runtime/review/execution-plan-resolver.ts`
- * — the unified resolver that also governs provider identity, retry policy,
- * and emits `[plan]` observability. The adapter preserves this legacy public
- * API so existing call-sites (coordinator-state-machine, session artifact
- * writers, the review-invoke-auto-resolution test suite) keep working while
- * the ts_inline_http / standalone host_runtime mapping is normalized.
+ * This function is a thin adapter over `resolveExecutionPlan` in
+ * `src/core-runtime/review/execution-plan-resolver.ts` — the unified resolver
+ * that also governs provider identity, retry policy, and `[plan]` observability.
  *
- * Semantic normalization: when the unified plan selects an external HTTP
- * path (separation_rank=S1), it sets host_runtime to the concrete provider
- * (anthropic / openai / litellm). For the historical case where the user
- * wrote `host_runtime: standalone` (or left it unset with subagent_llm
- * configured and no external_http_provider), legacy callers expect the
- * `standalone` token — we detect that case here and project it back.
+ * Semantic normalization: mock is projected to standalone for the artifact
+ * schema; real providers are recorded as the concrete runtime selected by the
+ * canonical llm switcher.
  */
 export function resolveExecutionProfile(args: {
   explicitCodex: boolean;
@@ -536,22 +455,8 @@ export function resolveExecutionProfile(args: {
   }
   const plan = resolution.plan;
 
-  // Legacy ts_inline_http surface exposes `standalone` when auto-detection
-  // landed on external-HTTP with no concrete provider name in config (env
-  // ONTO_HOST_RUNTIME=standalone or no external_http_provider). The unified
-  // plan always names the concrete provider when it can; reverse the mapping
-  // for backward compatibility with the session-artifact schema.
   let host_runtime: ResolvedExecutionProfile["host_runtime"] =
     plan.host_runtime === "mock" ? "standalone" : plan.host_runtime;
-  if (plan.execution_realization === "ts_inline_http") {
-    const envHost = process.env.ONTO_HOST_RUNTIME?.trim().toLowerCase();
-    if (
-      envHost === "standalone" ||
-      (envHost === undefined && !args.ontoConfig.external_http_provider)
-    ) {
-      host_runtime = "standalone";
-    }
-  }
 
   const execution_realization: ResolvedExecutionProfile["execution_realization"] =
     plan.execution_realization === "mock" ? "ts_inline_http" : plan.execution_realization;
@@ -596,59 +501,29 @@ function buildNoHostDetectedError(): Error {
   return new Error(
     [
       "Review execution realization을 해소할 수 없습니다.",
-      "현재 host 감지 결과: Claude Code 세션 아님(CLAUDECODE unset), codex CLI 미설치 또는 ~/.codex/auth.json 부재, subagent_llm / external_http_provider 미설정.",
+      "현재 host 감지 결과: Claude Code 세션 아님(CLAUDECODE unset), codex CLI 미설치 또는 ~/.codex/auth.json 부재, llm switcher 미설정.",
       "",
       "다음 중 한 가지로 해결하세요:",
       "  1. Claude Code 세션에서 `onto review` 재실행 (CLAUDECODE=1 감지 시 coordinator-start 안내)",
       "  2. codex CLI 설치 + `codex login` 후 재실행",
       "  3. `--codex` 플래그로 codex path 강제 (auth·binary 있어야 성공)",
       "  4. `.onto/config.yml` 에 `review:` axis block 추가 (docs/topology-migration-guide.md §7 참고)",
-      "  5. `.onto/config.yml` 에 external_http_provider + subagent_llm: { provider, model } 설정 (LiteLLM/Anthropic/OpenAI 직접 호출)",
-      "  6. `ONTO_HOST_RUNTIME=standalone` env var + `subagent_llm` config 설정",
+      "  5. `.onto/config.yml` 에 llm: { auth, provider, model } 설정",
+      "  6. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
     ].join("\n"),
   );
 }
 
 /**
  * Resolve a coordinator topology descriptor from OntoConfig for handoff
- * payload inclusion.
- *
- * # Semantics (P9.3, 2026-04-21)
- *
- * Always attempts axis-first resolution. The previous `opt-in` gate
- * (PR-G, initially `execution_topology_priority` — later bridged to
- * `config.review` in P9.2) is removed: because
- * `resolveExecutionTopology` owns a universal `main_native` degrade
- * since Review UX Redesign P3, every review invocation can safely
- * produce a topology, so every coordinator handoff can carry one.
- *
- * Returns `null` only in two terminal cases:
- *   - `ontoConfig` is `undefined` (defensive — callers always pass a
- *     resolved config, but the type allows undefined for test harness
- *     isolation).
- *   - Resolver returns `no_host` (axis + main_native degrade both
- *     failed — typically neither Claude nor Codex host reachable).
- *
- * When the topology resolves, the returned descriptor is the
- * `plan_trace`-stripped subset suitable for JSON transmission
- * (see `toCoordinatorTopologyDescriptor`).
- *
- * Note on `review: {}`: dispatch treats an empty review block the
- * same as an absent one — the resolver's main_native degrade path
- * handles both identically. Post-P9.4 config load no longer throws on
- * empty/absent profiles; post-P9.5 legacy-field detection is also
- * gone. The resolver is the sole authority on "can this review run?".
+ * payload inclusion. The resolver is the sole authority for whether a review
+ * topology can run in the current environment.
  */
 export function tryResolveTopologyForHandoff(
   ontoConfig: OntoConfig | undefined,
   cached?: ExecutionTopology | null,
 ): CoordinatorTopologyDescriptor | null {
   if (ontoConfig === undefined) return null;
-  // P9.3-m1 (2026-04-21): accept a pre-resolved topology from the caller
-  // to avoid re-emitting the `[topology]` STDERR trace for the same
-  // invocation. `cached === undefined` preserves legacy single-argument
-  // behaviour (test harness compatibility); `cached === null` is the
-  // explicit signal that the caller already resolved and got `no_host`.
   if (cached !== undefined) {
     return cached === null ? null : toCoordinatorTopologyDescriptor(cached);
   }
@@ -692,7 +567,7 @@ function emitCoordinatorStartHandoff(args: {
       cli: string;
       orchestration_guidance: {
         preferred: string;
-        fallback: string;
+        alternate: string;
         recording_note: string;
         topology_note?: string;
       };
@@ -709,7 +584,7 @@ function emitCoordinatorStartHandoff(args: {
       orchestration_guidance: {
         preferred:
           "TeamCreate로 coordinator subagent를 nested spawn, coordinator가 Agent tool로 9 lens + synthesize subagent 추가 nested spawn (canonical path = agent_teams_claude).",
-        fallback:
+        alternate:
           "TeamCreate 비가용 환경에서는 주체자 세션이 Agent tool로 lens subagent를 직접 spawn 가능 (canonical path = subagent_claude). coordinator state machine은 양쪽 모두 수용.",
         recording_note:
           "주체자가 실제 선택한 realization은 coordinator-state-machine이 session artifact(binding.yaml 등)에 기록. 본 handoff payload의 preferred_realization은 plan-time 권장이지 actual truth가 아님.",
@@ -725,49 +600,15 @@ function emitCoordinatorStartHandoff(args: {
       `teamlead_location="${args.topology.teamlead_location}", ` +
       `lens_spawn_mechanism="${args.topology.lens_spawn_mechanism}", ` +
       `deliberation_channel="${args.topology.deliberation_channel}". ` +
-      `preferred/fallback 힌트 대신 이 topology 를 canonical 로 따르세요.`;
+      `preferred/alternate 힌트 대신 이 topology 를 canonical 로 따르세요.`;
   }
   console.log(JSON.stringify(payload, null, 2));
 }
 
 /**
  * Attempt topology-first executor selection.
- *
- * # Semantics (P9.3, 2026-04-21)
- *
- * Always attempts axis-first resolution — the previous opt-in gate
- * (PR-F initially `execution_topology_priority`, bridged to
- * `config.review` in P9.2) is removed. Because the resolver owns a
- * universal `main_native` degrade since P3, every invocation can
- * safely attempt dispatch; the decision whether a standalone executor
- * binary applies is then made entirely from the resolved topology's
- * spawn mechanism.
- *
- * When the resolved topology has a standalone lens executor binary
- * (codex-subprocess or litellm-http mechanism), the mapping is
- * returned directly; the caller then applies `appendSubagentLlmArgs` /
- * `appendExecutorModelArgs` as usual.
- *
- * Returns `null` — "fall through to coordinator / other dispatch" —
- * in four cases:
- *   1. `ontoConfig` undefined (defensive — tests may inject undefined)
- *   2. `ontoHome` unavailable (required to resolve executor paths)
- *   3. Topology resolver returns `no_host` (neither Claude nor Codex
- *      host reachable — axis + main_native degrade both failed)
- *   4. Topology resolved but its mechanism has no standalone binary
- *      (claude-agent-tool → coordinator handoff is the right seat;
- *       claude-teamcreate-member → PR-D protocol; codex-nested-subprocess
- *       → PR-H dispatch branch)
- *
- * Successful dispatch emits a `[plan:executor]` STDERR line so
- * operators can verify the topology→binary mapping.
- *
- * Note on `review: {}`: same as `tryResolveTopologyForHandoff` —
- * dispatch treats an empty review block identically to an absent one
- * (main_native degrade handles both). Post-P9.5 `hasReviewBlock` is
- * consumed only by `claimsProfileOwnership` inside `config-profile.ts`
- * (the atomic-adoption ownership signal), no longer by any dispatch
- * or legacy-detection gate.
+ * Returns an executor only when the resolved topology names a standalone
+ * lens executor. Claude-host topologies are routed by coordinator handoff.
  */
 export function tryTopologyDerivedExecutor(
   ontoConfig: OntoConfig | undefined,
@@ -776,11 +617,6 @@ export function tryTopologyDerivedExecutor(
 ): ReviewUnitExecutorConfig | null {
   if (ontoConfig === undefined) return null;
   if (!ontoHome) return null;
-  // P9.3-m1 (2026-04-21): same caching contract as
-  // `tryResolveTopologyForHandoff` — `cached === undefined` preserves
-  // legacy two-argument behaviour; `cached === null` means caller
-  // already resolved and got `no_host`; `cached === ExecutionTopology`
-  // reuses the pre-resolved instance without re-running the resolver.
   let topology: ExecutionTopology;
   if (cached !== undefined) {
     if (cached === null) return null;
@@ -791,16 +627,12 @@ export function tryTopologyDerivedExecutor(
     topology = resolution.topology;
   }
   if (!hasStandaloneLensExecutor(topology)) return null;
-  try {
-    const base = mapTopologyToExecutorConfig(topology, ontoHome, ontoConfig);
-    process.stderr.write(
-      `[plan:executor] topology=${topology.id} bin=${base.bin} ` +
-        `args[0]=${base.args[0] ?? "(none)"}\n`,
-    );
-    return base;
-  } catch {
-    return null;
-  }
+  const base = mapTopologyToExecutorConfig(topology, ontoHome);
+  process.stderr.write(
+    `[plan:executor] topology=${topology.id} bin=${base.bin} ` +
+      `args[0]=${base.args[0] ?? "(none)"}\n`,
+  );
+  return base;
 }
 
 function resolveExecutorConfig(
@@ -827,10 +659,7 @@ function resolveExecutorConfig(
     );
   }
 
-  // Read the prefixed flag first, then fall back to the non-prefixed flag
-  // when running in synthesize mode. The test suite (and most operators)
-  // pass `--executor-realization mock` and expect both lens AND synthesize
-  // to honor it.
+  // Read the prefixed flag first; synthesize mode also accepts the shared flag.
   const explicitRealization =
     readSingleOptionValueFromArgv(argv, `${optionPrefixLabel}executor-realization`) ??
     (optionPrefixLabel.length > 0
@@ -853,40 +682,23 @@ function resolveExecutorConfig(
     );
   }
 
-  // P9.3 (2026-04-21): topology-first dispatch runs for every review
-  // invocation — resolver's universal `main_native` degrade guarantees
-  // a reachable topology whenever a host is present. Takes the resolved
-  // topology over the legacy `executor_realization` field that follows.
-  //
-  // Only activated when the resolved topology has a standalone binary;
-  // other cases fall through to legacy behaviour (see
-  // `tryTopologyDerivedExecutor` for the fallthrough rationale). For
-  // codex-nested-subprocess + claude-teamcreate-member the caller
-  // should branch ABOVE this function (PR-H / PR-D integrations); this
-  // resolver stays scoped to subprocess-executor dispatch.
   const topologyDerived = tryTopologyDerivedExecutor(
     ontoConfig,
     ontoHome,
     cachedTopology,
   );
   if (topologyDerived) {
-    // Topology's lens_spawn_mechanism="litellm-http" → inline-http
-    // executor needs subagent_llm / legacy provider args; codex-
-    // subprocess → codex executor needs model/reasoning-effort args.
-    // The existing append helpers handle both paths.
     const withSubagent = appendSubagentLlmArgs(topologyDerived, ontoConfig);
     return appendExecutorModelArgs(withSubagent, argv, ontoConfig);
   }
 
-  // Auto-select ts_inline_http executor when the principal has declared
-  // an external HTTP provider — either explicitly via external_http_provider,
-  // or via subagent_llm.provider for the cross-host subagent pattern.
+  // Auto-select ts_inline_http executor when the canonical llm switcher
+  // selects an API-key or local provider.
   // Precedence: this check comes AFTER explicit --executor-realization
   // (CLI flag wins) and topology-first dispatch, so explicit choices always win.
-  const subagentLlm = ontoConfig?.subagent_llm;
+  const selection = normalizeLlmModelSwitcher(ontoConfig?.llm);
   const hasExternalProvider =
-    (subagentLlm && typeof subagentLlm.provider === "string" && subagentLlm.provider.length > 0) ||
-    Boolean(ontoConfig?.external_http_provider);
+    selection !== null && selection !== undefined && selection.provider !== "codex";
   if (hasExternalProvider) {
     return appendSubagentLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
@@ -1435,13 +1247,8 @@ async function resolveReviewInvokeInputs(
     requestText = requestText.slice(0, MAX_REQUEST_TEXT_LENGTH);
   }
 
-  // Domain selection precedence (highest to lowest):
-  //   1. --requested-domain-token (internal/legacy machine-facing flag, used by CLI runners)
-  //   2. --no-domain flag (canonical user-facing, equivalent to legacy @-)
-  //   3. --domain {name} option (canonical user-facing, equivalent to legacy @{name})
-  //   4. positional @{domain} or @- (legacy short syntax — kept for backward compat;
-  //      conflicts with Claude Code's @filename mention syntax)
-  //   5. empty → triggers domain resolution (interactive selection or no-domain default)
+  // Domain selection precedence: machine token, explicit no-domain/domain
+  // flags, positional domain token, then interactive/default resolution.
   const noDomainFlag = hasOptionFlag(argv, "no-domain");
   const explicitDomainName = readSingleOptionValueFromArgv(argv, "domain");
   if (noDomainFlag && typeof explicitDomainName === "string" && explicitDomainName.length > 0) {
@@ -1470,16 +1277,18 @@ async function resolveReviewInvokeInputs(
   // Phase 3: standalone LLM-based complexity assessment (Step 1.5)
   // When no explicit review-mode or lens-id is set AND the principal is
   // running against a direct-call external HTTP provider (env override or
-  // external_http_provider config), call main_llm to assess whether
+  // canonical llm config), call main_llm to assess whether
   // core-axis review (cost-constrained Pareto-optimal core lens set from registry)
   // is appropriate vs full 9-lens.
   const envHostRuntime = process.env.ONTO_HOST_RUNTIME?.trim().toLowerCase();
   const isStandaloneHost =
     envHostRuntime === "standalone" ||
-    envHostRuntime === "litellm" ||
     envHostRuntime === "anthropic" ||
     envHostRuntime === "openai" ||
-    Boolean(ontoConfig.external_http_provider);
+    envHostRuntime === "grok" ||
+    envHostRuntime === "lmstudio" ||
+    (normalizeLlmModelSwitcher(ontoConfig.llm)?.provider !== "codex" &&
+      normalizeLlmModelSwitcher(ontoConfig.llm) !== null);
   const noExplicitMode = !readSingleOptionValueFromArgv(argv, "review-mode");
   const noExplicitLens = explicitLensIds.length === 0;
 
@@ -1503,10 +1312,11 @@ async function resolveReviewInvokeInputs(
         console.error(`[onto] Step 1.5: full review suggested (Q2: ${assessment.q2Rationale.slice(0, 80)})`);
       }
     } catch (err) {
-      // Assessment failed → default to full review (safe fallback)
-      reviewMode = "full";
-      resolvedLensIds = [...FULL_REVIEW_LENS_IDS];
-      console.error(`[onto] Step 1.5: assessment failed (${err instanceof Error ? err.message : String(err)}), defaulting to full review`);
+      throw new Error(
+        `Step 1.5 complexity assessment failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   } else {
     resolvedLensIds = explicitLensIds.length > 0
@@ -1868,23 +1678,14 @@ interface ReviewInvokeSetup {
    * Resolved execution profile that drove the startArgv's --execution-realization
    * and --host-runtime args. Downstream consumers (runReviewInvokeCli,
    * reviewPrepareOnly) use this to return artifact-consistent responses.
-   * null when resolution yielded no_host AND caller hasn't forced a fallback.
    */
-  executionProfile: ResolvedExecutionProfile | null;
+  executionProfile: ResolvedExecutionProfile;
 }
 
 async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSetup> {
   rejectRemovedFlags(argv);
   const ontoHomeFlag = readSingleOptionValueFromArgv(argv, "onto-home");
-  let ontoHome: string | undefined;
-  try {
-    ontoHome = resolveOntoHome(ontoHomeFlag);
-  } catch {
-    // When invoked via npm run (legacy path), onto home resolution from
-    // import.meta.url or CWD will succeed. If it fails, we proceed without
-    // ontoHome — executor resolution falls back to npm run scripts.
-    ontoHome = undefined;
-  }
+  const ontoHome = resolveOntoHome(ontoHomeFlag);
   const projectRoot = path.resolve(
     readSingleOptionValueFromArgv(argv, "project-root") ?? ".",
   );
@@ -1921,19 +1722,13 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
   // (review consensus #1, 2026-04-16).
   const explicitCodex = hasOptionFlag(argv, "codex");
   const profileResolution = resolveExecutionProfile({ explicitCodex, ontoConfig });
-  // Defaults when no host detected: preserve the prior hardcoded behavior so
-  // --prepare-only in a credential-less env still gets artifacts prepared and
-  // downstream fail-fast surfaces at resolveExecutorConfig. runReviewInvokeCli
-  // (non-prepareOnly) explicitly re-checks and throws earlier.
-  const executionProfile: ResolvedExecutionProfile | null =
-    profileResolution.type === "resolved" ? profileResolution.profile : null;
-  const profileForArtifacts: ResolvedExecutionProfile = executionProfile ?? {
-    execution_realization: "subagent",
-    host_runtime: "codex",
-  };
+  if (profileResolution.type === "no_host") {
+    throw buildNoHostDetectedError();
+  }
+  const executionProfile = profileResolution.profile;
   const startArgvWithProfile = appendCanonicalExecutionProfileArgs(
     normalizedStartArgv,
-    profileForArtifacts,
+    executionProfile,
   );
   const startArgv = appendDirectoryListingConfigArgs(
     startArgvWithProfile,
@@ -1964,10 +1759,7 @@ export async function reviewPrepareOnly(argv: string[]): Promise<PrepareOnlyResu
   const setup = await resolveReviewInvokeSetup(argv);
   const startResult = await startReviewSession(setup.startArgv);
   const sessionRoot = path.resolve(startResult.session_root);
-  const profile: ResolvedExecutionProfile = setup.executionProfile ?? {
-    execution_realization: "subagent",
-    host_runtime: "codex",
-  };
+  const profile: ResolvedExecutionProfile = setup.executionProfile;
   return {
     prepare_only: true,
     session_root: sessionRoot,
@@ -1999,17 +1791,6 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   }
 
   if (handoff.type === "coordinator_start") {
-    // P9.3 (2026-04-21): resolver always attempts axis-first derivation,
-    // so every coordinator handoff carries a topology descriptor (null
-    // only when the resolver itself could not find a viable host). The
-    // coordinator state machine follows it as canonical rather than
-    // inferring from preferred_realization alone.
-    //
-    // P9.3-m1 (2026-04-21): coordinator_start returns early before the
-    // prepare-only / full-dispatch split, so this branch has exactly
-    // ONE resolver consumer. No caching needed — let
-    // `tryResolveTopologyForHandoff` do its own resolve via the legacy
-    // two-argument call path.
     const topologyDescriptor = tryResolveTopologyForHandoff(setup.ontoConfig);
     emitCoordinatorStartHandoff({
       preferredRealization: handoff.profile.execution_realization,
@@ -2032,10 +1813,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
 
   if (prepareOnly) {
     const sessionRoot = path.resolve(startResult.session_root);
-    const profile: ResolvedExecutionProfile = setup.executionProfile ?? {
-      execution_realization: "subagent",
-      host_runtime: "codex",
-    };
+    const profile: ResolvedExecutionProfile = setup.executionProfile;
     const result: PrepareOnlyResult = {
       prepare_only: true,
       session_root: sessionRoot,
@@ -2083,23 +1861,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     }
   }
 
-  // P9.3-m1 (2026-04-21): resolve topology EXACTLY ONCE for the full-
-  // dispatch path and thread it to the 3 downstream consumers
-  // (resolveExecutorConfig ×2 + topologyForDispatch). Placement here
-  // (post-prepareOnly, post-watcher-spawn) is deliberate:
-  //   - The coordinator_start branch returned earlier with its own
-  //     single resolver call, so it never reaches this cache.
-  //   - The prepare-only branch also returned earlier, preserving its
-  //     prior zero-resolver-call observability (no `[topology]` STDERR
-  //     lines emitted for `onto review --prepare-only`).
-  //
-  // Staleness assumption: `setup.ontoConfig` is readonly and
-  // `process.env` is not mutated inside `runReviewInvokeCli` between
-  // this cache site and the downstream helpers, so the cached snapshot
-  // stays authoritative. A future consumer that mutates env (e.g.
-  // injecting CLAUDECODE) between here and the helpers would silently
-  // drift — keep the mutation/consumption points adjacent or re-resolve
-  // explicitly in that case.
+  // Resolve topology once and thread it through dispatch.
   const cachedTopologyResolution = resolveExecutionTopology({
     ontoConfig: setup.ontoConfig,
   });
@@ -2107,6 +1869,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     cachedTopologyResolution.type === "resolved"
       ? cachedTopologyResolution.topology
       : null;
+  const hasExplicitExecutorOverride =
+    readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
 
   const resolvedRequestText = setup.resolvedInvokeInputs.requestText;
   const defaultExecutorConfig = resolveExecutorConfig(
@@ -2124,12 +1891,8 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     cachedTopology,
   );
 
-  // P9.3-m1 (2026-04-21): reuse the cached topology instead of calling
-  // `resolveExecutionTopology` a third time. `null` corresponds to the
-  // prior `no_host` → `undefined` semantics expected by
-  // `executeReviewPromptExecution`.
   const topologyForDispatch: ExecutionTopology | undefined =
-    cachedTopology ?? undefined;
+    hasExplicitExecutorOverride ? undefined : cachedTopology ?? undefined;
 
   const promptExecutionResult = await executeReviewPromptExecution({
     projectRoot: resolvedProjectRoot,
@@ -2159,10 +1922,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "review:run-prompt-execution",
     "review:complete-session",
   ] as const;
-  const routeProfile: ResolvedExecutionProfile = setup.executionProfile ?? {
-    execution_realization: "subagent",
-    host_runtime: "codex",
-  };
+  const routeProfile: ResolvedExecutionProfile = setup.executionProfile;
   const routeSummary: ReviewInvokeRouteSummary = {
     combined_entrypoint: "review:invoke",
     bounded_invoke_steps: [...boundedInvokeSteps],
@@ -2219,14 +1979,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
         prompt_execution_result: promptExecutionResult,
         complete_session_result: completeSessionResult,
         max_concurrent_lenses: setup.maxConcurrentLenses,
-        executor_realization:
-          defaultExecutorConfig.bin === packageManagerBin()
-            ? defaultExecutorConfig.args[1] === "review:codex-unit-executor"
-              ? "codex"
-              : defaultExecutorConfig.args[1] === "review:mock-unit-executor"
-                ? "mock"
-                : "custom"
-            : "custom",
+        executor_realization: inferExecutorRealization(defaultExecutorConfig),
       },
       null,
       2,

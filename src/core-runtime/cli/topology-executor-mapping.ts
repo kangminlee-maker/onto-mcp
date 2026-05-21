@@ -1,5 +1,5 @@
 /**
- * Topology → ReviewUnitExecutor mapping — PR-B (2026-04-18).
+ * Topology → ReviewUnitExecutor mapping.
  *
  * # What this module is
  *
@@ -10,16 +10,12 @@
  *
  * # Why it exists
  *
- * PR-A established topology as the primary decision seat. PR-B wires the
- * lens spawn path: for each canonical topology id, which executor binary
- * handles per-lens reasoning?
+ * Topology is the primary decision seat. This module maps topology metadata
+ * to the executor binary for per-lens reasoning.
  *
  * The mapping is deterministic — it reads only `topology.lens_spawn_mechanism`:
  *
  *   - `codex-subprocess`          → codex-review-unit-executor.ts
- *   - `litellm-http`              → inline-http-review-unit-executor.ts
- *                                   (provider=litellm; base_url comes from
- *                                   topology context)
  *   - `claude-agent-tool`         → coordinator-start handoff path
  *                                   (no standalone executor binary; the
  *                                   Claude coordinator subagent spawns
@@ -36,7 +32,6 @@
  *   executor applies within either teamlead pattern.
  */
 
-import type { OntoConfig } from "../discovery/config-chain.js";
 import type {
   ExecutionTopology,
   LensSpawnMechanism,
@@ -45,28 +40,11 @@ import type {
 import type { ReviewUnitExecutorConfig } from "./run-review-prompt-execution.js";
 
 // ---------------------------------------------------------------------------
-// PR-B support set (widened from PR-A)
+// Direct executor support set
 // ---------------------------------------------------------------------------
 
 /**
- * Topology ids whose lens spawn path is wired as of PR-B (2026-04-18).
- *
- * Added over PR-A's 3-option set: `cc-teams-agent-subagent` (1-1),
- * `cc-teams-codex-subprocess` (1-2), `cc-teams-litellm-sessions` (3-1).
- *
- * The `cc-teams-*` variants differ from their `cc-main-*` counterparts
- * only in the teamlead layer: `cc-teams-*` expects the Claude coordinator
- * subagent to invoke `TeamCreate` for an intermediate teamlead agent who
- * then dispatches per-lens subagents; `cc-main-*` has the coordinator
- * itself dispatch lens subagents directly. The **lens executor binary
- * is identical** in both cases — PR-B's delta is therefore (a) support
- * set widening, (b) coordinator handoff enrichment so the coordinator
- * state machine knows which pattern to apply.
- *
- * Still not spawn-supported after PR-B:
- *   - `cc-teams-lens-agent-deliberation` (1-0) — PR-D (SendMessage A2A)
- *   - `codex-nested-subprocess` (codex-A)      — PR-C (outer codex teamlead)
- *   - `generic-nested-subagent` / `generic-main-subagent` — future
+ * Topology ids whose lens spawn path is wired to a direct executor.
  */
 export const PR_B_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<TopologyId>([
   "cc-main-agent-subagent",
@@ -74,7 +52,6 @@ export const PR_B_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<Topolo
   "codex-main-subprocess",
   "cc-teams-agent-subagent",
   "cc-teams-codex-subprocess",
-  "cc-teams-litellm-sessions",
 ]);
 
 /**
@@ -86,7 +63,6 @@ export const PR_B_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<Topolo
  */
 const TS_EXECUTABLE_MECHANISMS: ReadonlySet<LensSpawnMechanism> = new Set<LensSpawnMechanism>([
   "codex-subprocess",
-  "litellm-http",
 ]);
 
 /**
@@ -124,9 +100,6 @@ export class TopologyExecutorMappingError extends Error {
 // ---------------------------------------------------------------------------
 
 /**
- * Path resolution mirrors the legacy `buildExecutorConfigFromRealization`
- * pattern in review-invoke.ts — relative to `ontoHome/dist/core-runtime/cli/*`.
- *
  * Kept local (not imported from review-invoke) to avoid circular imports
  * — review-invoke.ts already imports from cli/run-review-prompt-execution,
  * and this module imports from cli/run-review-prompt-execution's type
@@ -138,15 +111,6 @@ function codexExecutorConfig(ontoHome: string): ReviewUnitExecutorConfig {
   return {
     bin: "node",
     args: [path.join(ontoHome, "dist", "core-runtime", "cli", "codex-review-unit-executor.js")],
-  };
-}
-
-function inlineHttpExecutorConfig(ontoHome: string): ReviewUnitExecutorConfig {
-  return {
-    bin: "node",
-    args: [
-      path.join(ontoHome, "dist", "core-runtime", "cli", "inline-http-review-unit-executor.js"),
-    ],
   };
 }
 
@@ -165,16 +129,11 @@ function inlineHttpExecutorConfig(ontoHome: string): ReviewUnitExecutorConfig {
  *     (`claude-agent-tool`, `claude-teamcreate-member`) —
  *     these are not subprocess executors; see `hasStandaloneLensExecutor`.
  *
- * For topologies where the subagent_llm config contributes (litellm path),
- * the returned config's args do NOT yet include subagent_llm CLI flags;
- * the caller (review-invoke's `resolveExecutorConfig` or equivalent) is
- * responsible for appending those based on OntoConfig. This module's
- * scope is mechanism→binary, not config→argv.
+ * This module's scope is mechanism→binary, not config→argv.
  */
 export function mapTopologyToExecutorConfig(
   topology: ExecutionTopology,
   ontoHome: string,
-  _ontoConfig?: OntoConfig,
 ): ReviewUnitExecutorConfig {
   if (!PR_B_SUPPORTED_TOPOLOGIES.has(topology.id)) {
     throw new TopologyExecutorMappingError(
@@ -185,8 +144,6 @@ export function mapTopologyToExecutorConfig(
   switch (topology.lens_spawn_mechanism) {
     case "codex-subprocess":
       return codexExecutorConfig(ontoHome);
-    case "litellm-http":
-      return inlineHttpExecutorConfig(ontoHome);
     case "claude-agent-tool":
       throw new TopologyExecutorMappingError(
         topology.id,

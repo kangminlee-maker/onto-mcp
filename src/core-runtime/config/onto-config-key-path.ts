@@ -71,9 +71,6 @@ export type SupportedSetPath = (typeof SUPPORTED_SET_PATHS)[number];
 const SUBAGENT_PROVIDER_VALUES: readonly SubagentProvider[] = [
   "main-native",
   "codex",
-  "anthropic",
-  "openai",
-  "litellm",
 ];
 
 const LENS_DELIBERATION_VALUES: readonly LensDeliberation[] = [
@@ -200,7 +197,7 @@ function setSubagentModelId(
     return {
       ok: false,
       error:
-        "subagent.model_id can only be set when subagent.provider is a foreign provider (codex / anthropic / openai / litellm). " +
+        "subagent.model_id can only be set when subagent.provider is codex. " +
         "Set subagent.provider first, or use `onto config edit`.",
     };
   }

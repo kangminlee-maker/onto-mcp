@@ -24,8 +24,7 @@
  *
  * # LLM provider
  *
- * Uses `main_llm` config from `.onto/config.yml`. Falls back to `subagent_llm`
- * if `main_llm` is not set. Falls back to top-level `api_provider` / `model`.
+ * Uses the canonical `llm` switcher from `.onto/config.yml`.
  */
 
 import type { OntoConfig } from "../discovery/config-chain.js";
@@ -66,29 +65,6 @@ export interface LensSelectionResult {
 // ---------------------------------------------------------------------------
 
 function resolveMainLlmConfig(ontoConfig: OntoConfig): Partial<LlmCallConfig> {
-  const mainLlm = ontoConfig.main_llm;
-
-  // Priority: main_llm > subagent_llm > top-level
-  if (mainLlm?.provider) {
-    const partial: Partial<LlmCallConfig> = {
-      provider: mainLlm.provider as LlmCallConfig["provider"],
-    };
-    if (mainLlm.model) partial.model_id = mainLlm.model;
-    if (mainLlm.base_url) partial.base_url = mainLlm.base_url;
-    if (mainLlm.max_tokens) partial.max_tokens = mainLlm.max_tokens;
-    return partial;
-  }
-
-  if (ontoConfig.subagent_llm?.provider) {
-    const partial: Partial<LlmCallConfig> = {
-      provider: ontoConfig.subagent_llm.provider as LlmCallConfig["provider"],
-    };
-    if (ontoConfig.subagent_llm.model) partial.model_id = ontoConfig.subagent_llm.model;
-    if (ontoConfig.subagent_llm.base_url) partial.base_url = ontoConfig.subagent_llm.base_url;
-    return partial;
-  }
-
-  // Fall back to top-level config (same as background tasks)
   return resolveLearningProviderConfig({ config: ontoConfig, cliOverrides: {} });
 }
 

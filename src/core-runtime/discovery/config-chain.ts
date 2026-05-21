@@ -4,55 +4,26 @@ import {
   adoptProfile,
   mergeOrthogonalFields,
 } from "./config-profile.js";
+import type { LlmModelSwitcherConfig } from "../llm/model-switcher.js";
 
 export interface OntoConfig {
-  // PR-K (2026-04-18, sketch v3 §7.4 Phase D stage 3): the five legacy
-  // provider-profile fields below were REMOVED from the OntoConfig type:
-  //   host_runtime, execution_realization, execution_mode,
-  //   executor_realization, api_provider
-  //
-  // P9.5 (2026-04-21): `legacy-field-deprecation.ts` was also removed —
-  // YAML configs that still set these fields parse into
-  // `Record<string, unknown>` at read time. The `OntoConfig` type
-  // omits them, so TypeScript consumers cannot read `config.host_runtime`
-  // (compile error). The raw values remain in the merged Record for
-  // Record-cast backward compatibility, but no production consumer
-  // reads them — the fields are inert. Users on legacy-only configs
-  // fall through to the resolver and receive `buildNoHostReason`'s
-  // 6-option setup guide when no viable host is detected (guide
-  // includes migration to the `review:` axis block).
   /**
-   * External HTTP API provider selection (sketch v2 §4.1 A).
+   * Canonical model switcher.
    *
-   * When `host_runtime: standalone` (or auto-detection lands on ts_inline_http),
-   * this field picks the external-HTTP sub-path explicitly. Unlike the legacy
-   * `api_provider`, this is scoped to the HTTP-API tier only — codex subprocess
-   * is never expressed here (use host_runtime: codex instead).
+   * Two axes only:
+   *   - auth: api_key | oauth | local
+   *   - provider: openai | anthropic | grok | lmstudio
    *
-   * Accepted values: anthropic | openai | litellm
-   *
-   * Resolution priority (execution-plan-resolver.ts):
-   *   external_http_provider > api_provider > subagent_llm.provider
+   * Runtime mapping:
+   *   - openai + oauth   → codex CLI subprocess
+   *   - openai + api_key → OpenAI API
+   *   - anthropic + api_key → Anthropic API
+   *   - grok + api_key → xAI/Grok OpenAI-style API
+   *   - lmstudio + local → local OpenAI-style endpoint
    */
-  external_http_provider?: "anthropic" | "openai" | "litellm";
-  /** LLM model to use (e.g. gpt-5.4, claude-sonnet-4-20250514) */
-  model?: string;
-  /**
-   * Base URL for LLM-compatible proxy (LiteLLM etc.).
-   * Used when api_provider="litellm" or when presence alone signals litellm selection.
-   * Resolution: CLI flag > env LITELLM_BASE_URL > this field > onto-home config.
-   */
-  llm_base_url?: string;
-  /**
-   * If codex OAuth is detected but the codex binary is missing, a one-time STDERR
-   * install guidance is emitted per session. Set true to suppress it (e.g. corporate
-   * environments where codex install is policy-blocked).
-   */
-  suppress_codex_install_notice?: boolean;
+  llm?: LlmModelSwitcherConfig;
   /** Review mode: core-axis | full */
   review_mode?: string;
-  /** Reasoning effort level passed to executor (e.g. low, medium, high, xhigh) */
-  reasoning_effort?: string;
   max_concurrent_lenses?: number | string;
   domain?: string;
   secondary_domains?: string[] | string;
@@ -71,90 +42,7 @@ export interface OntoConfig {
    * - active: extractor runs and updates {project}/.onto/learnings/{agent-id}.md
    */
   learning_extract_mode?: string;
-  /**
-   * Codex-specific overrides.
-   * Used when execution_mode is "codex" or --codex flag is set.
-   * CLI executor path: codex.model → fallback for top-level model when in codex mode.
-   * Prompt path: team lead reads codex.model / codex.effort and inserts into [Codex Configuration].
-   * Background task path (llm-caller): codex.model is passed as `-m` to `codex exec` when
-   * api_provider="codex" or when cost-order auto-resolves to codex.
-   */
-  codex?: {
-    model?: string;
-    /** Reasoning effort for codex. Maps to model_reasoning_effort in codex config. */
-    effort?: string;
-  };
-
-  /**
-   * Per-provider model overrides for background task (learn/govern/promote) LLM calls.
-   * When active provider matches one of these, its nested `model` wins over the
-   * top-level `model` field. Mirrors the existing `codex.model` pattern across all
-   * providers. Bridge: resolveLearningProviderConfig in llm-caller.ts.
-   *
-   * Precedence per provider (highest first):
-   *   CLI flag model > OntoConfig.{provider}.model > OntoConfig.model > fail-fast (api-key paths)
-   *
-   * Note: codex provider tolerates missing model (codex CLI picks its own default).
-   * anthropic / openai / litellm all require a model — fail-fast when unresolved.
-   */
-  anthropic?: { model?: string };
-  openai?: { model?: string };
-  litellm?: { model?: string };
-
-  /**
-   * Phase 2 host-decoupling: subagent LLM configuration for review unit execution.
-   *
-   * When set, `resolveExecutorConfig()` auto-selects the
-   * `inline-http-review-unit-executor` binary instead of the codex executor,
-   * passing provider/model/base_url as CLI flags to the executor.
-   *
-   * This decouples the **subagent LLM** (per-lens executor) from the
-   * **main LLM** (orchestrator host runtime). Examples:
-   *   - host_runtime: claude + subagent_llm: { provider: litellm, model: llama-8b }
-   *     → Claude Code session orchestrates; LiteLLM 8B executes lenses
-   *   - host_runtime: codex + subagent_llm: { provider: anthropic, model: claude-haiku }
-   *     → Codex CLI session orchestrates; Anthropic Haiku executes lenses
-   *   - host_runtime: standalone (no main host LLM) — auto-uses ts_inline_http
-   *     → TS process orchestrates and calls subagent_llm.provider directly
-   *
-   * Precedence: CLI --executor-bin/--executor-realization > subagent_llm
-   *   > OntoConfig.executor_realization > host-runtime default (codex/inline-http).
-   */
-  subagent_llm?: {
-    provider?: string;     // anthropic | openai | litellm | codex
-    model?: string;
-    base_url?: string;     // Required when provider=litellm
-    max_tokens?: number;
-    embed_domain_docs?: boolean;
-    /**
-     * Phase 3-2 tool-mode selector for ts_inline_http executor:
-     *   - "native": always use callLlmWithTools (Tier 1 function-calling loop).
-     *     Requires provider in {anthropic, openai, litellm} and a model that
-     *     supports tool_use / function_call. Fails fast if those preconditions
-     *     are not met.
-     *   - "inline": always use single-turn callLlm with all context inlined
-     *     (Tier 2). Use this for small models without function-call support
-     *     (e.g. Qwen3-4B-Instruct).
-     *   - "auto" (default): try Tier 1 if the resolved provider supports it,
-     *     fall back to Tier 2 if the loop returns empty / errors.
-     *
-     * Precedence: CLI --tool-mode > this field > "auto".
-     */
-    tool_mode?: "native" | "inline" | "auto";
-  };
-
-  /**
-   * Phase 2 host-decoupling: main LLM configuration for standalone host
-   * orchestration (Phase 3 wiring).
-   *
-   * Currently RESERVED — when host_runtime: claude or codex, the main LLM is
-   * the host session itself (no config needed). For host_runtime: standalone,
-   * Phase 3 will wire this to drive lens selection and synthesize meta-reasoning
-   * via TS-process direct LLM calls.
-   *
-   * Phase 2 acceptance: schema present + recognized by config parser; runtime
-   * consumption is per-task (background tasks use api_provider/model already).
-   */
+  /** Main LLM configuration for TS-owned orchestration steps. */
   main_llm?: {
     provider?: string;
     model?: string;
@@ -177,16 +65,7 @@ export interface OntoConfig {
   lens_agent_teams_mode?: boolean;
 
   /**
-   * Review UX Redesign P1 (2026-04-20) — user-facing axis block.
-   *
-   * Canonical replacement for `execution_topology_priority` + legacy
-   * provider-profile fields. User declares 6 axes (A/B/C/E/F + D auto);
-   * runtime derives topology shape. See
-   * `development-records/evolve/20260420-review-execution-ux-redesign.md`.
-   *
-   * P1 scope: schema + validator + legacy translation only. Runtime does
-   * NOT consume this field yet — P2 wires dispatch. Orthogonal (no atomic
-   * profile adoption coupling).
+   * Review execution axis block. Runtime derives topology from these fields.
    */
   review?: OntoReviewConfig;
 }
@@ -199,7 +78,7 @@ export interface OntoConfig {
 export type LensDeliberation = "synthesizer-only" | "sendmessage-a2a";
 
 /** Foreign (non-host) provider identifiers. */
-export type ForeignProvider = "codex" | "anthropic" | "openai" | "litellm";
+export type ForeignProvider = "codex";
 
 /** Subagent provider domain — host-native or foreign. */
 export type SubagentProvider = "main-native" | ForeignProvider;
@@ -236,11 +115,7 @@ export type SubagentSpec =
     };
 
 /**
- * User-facing review execution config (canonical replacement for legacy
- * `execution_topology_priority`). Every field optional — absent block means
- * "universal fallback" (teamlead=main, subagent=main-native, deliberation=
- * synthesizer-only, concurrency=provider default). Runtime derivation is
- * P2's responsibility; P1 only defines the type and validator.
+ * User-facing review execution config.
  */
 export interface OntoReviewConfig {
   teamlead?: TeamleadSpec;
@@ -260,12 +135,53 @@ async function readConfigAt(dir: string): Promise<OntoConfig> {
   if (raw === null || typeof raw !== "object") {
     return {};
   }
+  assertKnownConfigKeys(raw, configPath);
   return raw as OntoConfig;
 }
 
+const TOP_LEVEL_CONFIG_KEYS = [
+  "llm",
+  "review",
+  "review_mode",
+  "max_concurrent_lenses",
+  "domain",
+  "secondary_domains",
+  "domains",
+  "excluded_names",
+  "max_listing_depth",
+  "max_listing_entries",
+  "max_embed_lines",
+  "output_language",
+  "learning_extract_mode",
+  "main_llm",
+  "lens_agent_teams_mode",
+] as const;
+
+function assertKnownConfigKeys(
+  raw: Record<string, unknown>,
+  configPath: string,
+): void {
+  const allowed = new Set<string>(TOP_LEVEL_CONFIG_KEYS);
+  const unknown = Object.keys(raw).filter((key) => !allowed.has(key));
+  if (unknown.length === 0) return;
+  throw new Error(
+    [
+      `Unsupported .onto config key(s) in ${configPath}: ${unknown.join(", ")}`,
+      "Supported top-level keys:",
+      `  ${TOP_LEVEL_CONFIG_KEYS.join(", ")}`,
+      "LLM selection belongs under:",
+      "  llm:",
+      "    auth: oauth | api_key | local",
+      "    provider: openai | anthropic | grok | lmstudio",
+      "    model: <model-id>",
+      "    effort: high",
+      "    base_url: <optional>",
+    ].join("\n"),
+  );
+}
+
 /**
- * Orthogonal-only config chain resolver — skips atomic profile adoption
- * and legacy deprecation checks.
+ * Orthogonal-only config chain resolver.
  *
  * # What this is
  *
@@ -287,9 +203,8 @@ async function readConfigAt(dir: string): Promise<OntoConfig> {
  * # How it relates
  *
  * Same underlying `readConfigAt` + `mergeOrthogonalFields` that
- * `resolveConfigChain` uses, sequenced without the adoption/legacy
- * stages. Callers that need a full config (including profile) continue
- * to use `resolveConfigChain`.
+ * `resolveConfigChain` uses, sequenced without profile adoption.
+ * Callers that need a full config continue to use `resolveConfigChain`.
  */
 export async function resolveOrthogonalConfigChain(
   ontoHome: string,
@@ -304,13 +219,11 @@ export async function resolveOrthogonalConfigChain(
 /**
  * Config chain resolver (home + project) with atomic profile adoption.
  *
- * # Behavior (post-P9.4, 2026-04-21)
+ * # Behavior
  *
  *   - Project declares any profile fields  → project owns the profile atomically.
  *   - Project declares none, home declares some → global profile adopted silently.
- *   - Neither side declares any profile fields → empty profile returned; the
- *     topology resolver's universal `main_native` degrade decides whether a
- *     review run is actually viable and emits `no_host` when not.
+ *   - Neither side declares any profile fields → empty profile returned.
  *
  * Orthogonal fields (output_language, domains, review_mode, listing limits,
  * learning_extract_mode, etc.) continue to merge last-wins — they do not
@@ -318,22 +231,9 @@ export async function resolveOrthogonalConfigChain(
  *
  * # Why atomic adoption still runs
  *
- * Even though the "is this profile viable?" guard has moved to the topology
- * resolver, the atomic-ownership rule remains necessary: last-wins per-field
- * merge would silently produce frankenstein profiles (e.g., home's
- * `codex.model=gpt-5.4` inherited over project's `anthropic` profile).
- * `extractProfileFields` + `adoptProfile` enforce that PROFILE_FIELDS
- * transfer as a group from exactly one source.
- *
- * # P9.4 simplification
- *
- * Prior versions threw `buildBothIncompleteError` when neither side
- * declared a `review:` axis block and emitted a STDERR notice for
- * "touched-but-incomplete" projects. Both concerns are now owned by the
- * topology resolver (P9.3 universal `main_native` degrade) and this
- * function simply hands through whatever the adoption layer returned.
- *
- * Design: see `discovery/config-profile.ts` for the adoption policy details.
+ * Atomic ownership prevents mixed provider state from different config files.
+ * `extractProfileFields` + `adoptProfile` transfer PROFILE_FIELDS as a group
+ * from exactly one source.
  */
 export async function resolveConfigChain(
   ontoHome: string,
@@ -345,19 +245,6 @@ export async function resolveConfigChain(
 
   const homePath = path.join(ontoHome, ".onto", "config.yml");
   const projectPath = path.join(projectRoot, ".onto", "config.yml");
-
-  // P9.5 (2026-04-21): the legacy-field deprecation check was removed.
-  // The 5 legacy provider-profile fields (host_runtime, execution_realization,
-  // execution_mode, executor_realization, api_provider) were removed from
-  // the OntoConfig type in P9.2 (PR-K, sketch v3 §7.4 Phase D stage 3);
-  // typed code cannot read them. YAML values survive in the merged
-  // object via `mergeOrthogonalFields` (they are not in PROFILE_FIELDS)
-  // but no production consumer reads them — graceful ignore is achieved
-  // by removing all consumers rather than filtering the values. Users
-  // on legacy-only configs fall through to the resolver, which emits
-  // `buildNoHostReason` (6-option setup guide including `review:` axis
-  // block migration) — a more current version of the guidance the prior
-  // throw provided.
 
   const adoption = adoptProfile({
     home: homeConfig,

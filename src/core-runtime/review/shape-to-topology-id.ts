@@ -1,13 +1,10 @@
 /**
- * Review UX Redesign P2 — 6 shape → existing TopologyId mapping.
+ * Review topology shape → TopologyId mapping.
  *
  * # What this module is
  *
- * A pure function that converts the axis-derived `TopologyShape` (6 values)
- * plus host-context signals into one of the 10 canonical `TopologyId` values
- * used by the existing executor catalog. This is the **shim layer** — shape
- * is user-facing stable vocabulary; TopologyId is the internal dispatch
- * key held by `TOPOLOGY_CATALOG` and downstream executor mapping.
+ * A pure function that converts the axis-derived `TopologyShape` plus
+ * host-context signals into a canonical `TopologyId`.
  *
  * # Why it exists
  *
@@ -18,23 +15,12 @@
  *   - `main_native` + Codex host   → `codex-main-subprocess`
  *   - `main_foreign` (codex) + CC  → `cc-main-codex-subprocess`
  *   - `main-teams_foreign` (codex) → `cc-teams-codex-subprocess`
- *   - `main-teams_foreign` (litellm) → `cc-teams-litellm-sessions`
- *
- * Isolating this in a separate pure function:
- *   (a) makes the mapping table auditable (see tests).
- *   (b) keeps the derivation step (shape) free of host-specific knowledge.
- *   (c) allows P7 to later remove the 10 ids and replace this shim with a
- *       direct shape → executor dispatch, without changing the shape API.
  *
  * # How it relates
  *
  * - Input: `TopologyShape` (from `topology-shape-derivation.ts`) +
  *   `{claudeHost, codexSessionActive}` + optional foreign subagent provider.
- * - Output: one of 10 `TopologyId` values, or `null` when the combination
- *   has no canonical TopologyId (e.g. `main_foreign` with litellm — the
- *   existing catalog has no "cc-main-litellm" entry; only teams variant).
- * - Caller (resolver) handles `null` by falling back to legacy priority
- *   ladder in P2, or by universal main_native fallback in P3.
+ * - Output: a `TopologyId` or a failure reason.
  */
 
 import type { ForeignProvider } from "../discovery/config-chain.js";
@@ -78,7 +64,7 @@ export type ShapeMappingResult = ShapeMappingSuccess | ShapeMappingFailure;
 // ---------------------------------------------------------------------------
 
 /**
- * Map a 6-shape classification to one of the 10 canonical TopologyId values.
+ * Map a shape classification to a canonical TopologyId value.
  *
  * Returns failure when the shape + signal combination has no canonical
  * TopologyId in the current catalog. Failure cases (post-P2):
@@ -86,13 +72,8 @@ export type ShapeMappingResult = ShapeMappingSuccess | ShapeMappingFailure;
  *     without codex OAuth — truly unreachable).
  *   - `main_foreign` with a provider that has no `cc-main-<provider>`
  *     entry in the catalog. Currently only `codex` has such an entry;
- *     `litellm` / `anthropic` / `openai` are teams-only in the existing
- *     10-topology catalog.
- *   - `main-teams_foreign` with an unsupported provider (only codex/litellm
- *     mapped).
- *
- * The caller (resolver) decides the fallback strategy — P2 falls back to
- * the legacy priority ladder; P3 will wrap with universal main_native.
+ *     non-codex LLM model selection now belongs to `llm`, not this topology
+ *     axis.
  */
 export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult {
   const { shape, subagent_provider, signals } = input;
@@ -127,9 +108,6 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
     }
 
     case "main_foreign": {
-      // Existing catalog has only `cc-main-codex-subprocess` for flat-main
-      // with foreign provider. Other foreign providers (litellm/anthropic/
-      // openai) require teams mode in the current catalog.
       if (signals.claudeHost && subagent_provider === "codex") {
         log("→ cc-main-codex-subprocess (Claude + main + codex lens)");
         return { ok: true, topology_id: "cc-main-codex-subprocess", trace };
@@ -158,10 +136,6 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
         log("→ cc-teams-codex-subprocess (TeamCreate + codex lens)");
         return { ok: true, topology_id: "cc-teams-codex-subprocess", trace };
       }
-      if (subagent_provider === "litellm") {
-        log("→ cc-teams-litellm-sessions (TeamCreate + litellm lens)");
-        return { ok: true, topology_id: "cc-teams-litellm-sessions", trace };
-      }
       log(
         `no canonical TopologyId: main-teams_foreign with provider=${subagent_provider}`,
       );
@@ -169,7 +143,7 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
         ok: false,
         reason:
           `main-teams_foreign shape with provider=${subagent_provider} has no canonical TopologyId. ` +
-          "Only provider=codex or provider=litellm mapped in the current catalog.",
+          "Only provider=codex is mapped in the review topology axis. Use llm.provider for API-key/local model selection.",
         trace,
       };
     }

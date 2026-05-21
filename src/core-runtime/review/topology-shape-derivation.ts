@@ -86,8 +86,8 @@ export interface DerivedShape {
    * Foreign subagent provider when the shape carries one (main_foreign,
    * main-teams_foreign, ext-teamlead_native). `null` for native shapes.
    *
-   * The shape-to-topology-id mapper consults this to pick between codex/
-   * litellm variants of the same shape.
+   * The shape-to-topology-id mapper consults this for provider-specific
+   * codex subprocess mappings.
    */
   subagent_provider: ForeignProvider | null;
   /** Derivation trace (each line is a human-readable reasoning step). */

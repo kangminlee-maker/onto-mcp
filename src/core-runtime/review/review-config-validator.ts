@@ -55,12 +55,7 @@ export type ValidationResult =
 
 // Domain tables kept next to the validator — same file changes together with
 // schema changes, so drift between type and validator is impossible.
-const FOREIGN_PROVIDERS: readonly ForeignProvider[] = [
-  "codex",
-  "anthropic",
-  "openai",
-  "litellm",
-];
+const FOREIGN_PROVIDERS: readonly ForeignProvider[] = ["codex"];
 const SUBAGENT_PROVIDERS: readonly string[] = ["main-native", ...FOREIGN_PROVIDERS];
 const LENS_DELIBERATIONS: readonly LensDeliberation[] = [
   "synthesizer-only",
