@@ -308,11 +308,8 @@ interface RunAuditConfig {
 /**
  * Maximum items per batched LLM call.
  *
- * B-3 production found that single-batched calls with 37 items (philosopher)
- * timed out at 30s and SDK auto-retry compounded into ~90s waste. Splitting
- * into chunks of ~12 keeps each prompt and response within a comfortable
- * size window and lets per-chunk failures be isolated rather than failing
- * the whole agent.
+ * Chunking keeps each prompt and response within a bounded size window and
+ * lets per-chunk failures be isolated rather than failing the whole agent.
  */
 const AUDIT_BATCH_SIZE = 12;
 

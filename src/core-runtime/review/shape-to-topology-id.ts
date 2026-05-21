@@ -148,8 +148,8 @@ export function shapeToTopologyId(input: ShapeMappingInput): ShapeMappingResult 
       };
     }
 
-    case "main-teams_a2a": {
-      log("→ cc-teams-lens-agent-deliberation (TeamCreate + native + a2a)");
+    case "main-teams_deliberation": {
+      log("→ cc-teams-lens-agent-deliberation (TeamCreate + native + controlled deliberation)");
       return {
         ok: true,
         topology_id: "cc-teams-lens-agent-deliberation",

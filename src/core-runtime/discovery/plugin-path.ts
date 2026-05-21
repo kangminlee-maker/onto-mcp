@@ -13,9 +13,9 @@
  *
  *   1. ONTO_PLUGIN_DIR env var (explicit override)
  *   2. ~/.claude/plugins/onto/ (Claude Code install default)
- *   3. (None) → returns null; caller decides fallback (e.g. repo-relative)
+ *   3. (None) → returns null; caller decides its explicit default
  *
- * # Why no automatic repo-relative fallback
+ * # Why no automatic repo-relative default
  *
  * Repo-relative paths are correct only during local dev. In production
  * (npm-installed CLI, Claude Code plugin), the plugin lives elsewhere.
@@ -48,7 +48,7 @@ export interface PluginPathResolution {
  *
  * Returns null when no install is found. Callers in the plugin's own runtime
  * (where __dirname can locate the source) may use repo-relative paths as a
- * fallback; documentation reads should error out when this returns null.
+ * default; documentation reads should error out when this returns null.
  */
 export function resolvePluginPath(): PluginPathResolution | null {
   const envOverride = process.env[ENV_ONTO_PLUGIN_DIR];

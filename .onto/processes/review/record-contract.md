@@ -22,6 +22,7 @@
 즉:
 
 - `round1/{lens}.md`는 lens별 human-readable source layer다
+- `deliberation.md`는 controlled lens deliberation의 conflict-resolution source layer다
 - `synthesis.md`는 종합 단계의 human-readable source layer다
 - later `learn/govern`가 읽어야 하는 canonical artifact는 `ReviewRecord`다
 
@@ -65,9 +66,10 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 5. `review target materialized input`
 6. `context candidate assembly`
 7. per-lens result artifacts
-8. synthesize result artifact
-9. execution result artifact
-10. human-readable final output
+8. controlled deliberation result artifact
+9. synthesize result artifact
+10. execution result artifact
+11. human-readable final output
 
 즉 `ReviewRecord`는 자기 안에 모든 내용을 복붙하는 문서가 아니라,
 위 artifact들을 묶는 aggregate record다.
@@ -179,22 +181,17 @@ degraded_lens_ids: []
 - `final_output_ref`
 - `shared_phenomenon_summary`
 
-허용되는 `deliberation_status` 최소 값:
+허용되는 `deliberation_status` 값:
 
-- `not_needed`
 - `performed`
-- `required_but_unperformed`
 
 원칙:
 
 - `synthesis_result_ref`는 `synthesis.md`를 가리킨다
-- `deliberation_status` 결정 우선순위 (record assembler가 적용)는 다음과 같다 (`.onto/processes/review/synthesize-prompt-contract.md` §6.4 위임):
-  1. `execution-result.yaml`의 `deliberation_status` (runner-owned, 최상위)
-  2. `synthesis.md` frontmatter의 `deliberation_status` (synthesize-owned, in-process / cross-process 두 경로 모두의 primary source)
-  3. frontmatter가 부재/malformed/`required_but_unperformed`인 경우 realization-aware fallback:
-     - cross-process (`resolved_execution_realization: agent-teams`): `deliberation.md` 존재 ⇒ `performed`
-     - in-process (`resolved_execution_realization: subagent`): fallback signal 없음 ⇒ `required_but_unperformed` (failure marker)
-- `synthesis.md`는 frontmatter로 `deliberation_status`를 선언해야 한다 — 이 의무는 cross-process 경로에서도 면제되지 않는다 (deliberation.md는 supplementary signal일 뿐)
+- `deliberation_status`는 `execution-result.yaml`의 `deliberation_status`를 따른다
+- `deliberation_result_ref`는 `deliberation.md`를 가리킨다
+- `deliberation.md`는 completed review에서 필수 artifact다
+- `synthesis.md`는 frontmatter로 `deliberation_status: performed`를 선언해야 한다
 - `final_output_ref`는 주체자에게 보여주는 rendered output을 가리킨다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
 - `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없으면 (pre-v2 또는 shared phenomenon 미발생) 빈 배열이다
@@ -285,8 +282,8 @@ per_lens_provenance:
     domain_constraints_used: []
     domain_context_assumptions: []
 synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis.md
-deliberation_status: not_needed
-deliberation_result_ref: null
+deliberation_status: performed
+deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation.md
 final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 shared_phenomenon_summary:
   - target: .onto/processes/review/record-contract.md

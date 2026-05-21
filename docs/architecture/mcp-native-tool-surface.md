@@ -25,14 +25,22 @@ small set of tools instead of remembering platform-specific CLI paths.
 Providers are selected by capability and user/runtime configuration.
 
 ```text
-cross-process deliberation requested
+review requested
         |
         v
-provider has persistentAgents + crossProcessMessaging?
-        | yes                         | no
-        v                             v
-cross_process                 cross_context_reinvoke or synthesizer_only
+parallel isolated lens contexts
+        |
+        v
+controlled_lens_deliberation
+        |
+        v
+synthesize consumes deliberation.md
 ```
+
+Claude Code Agent Teams can realize the deliberation transport with
+SendMessage transport. Other MCP providers realize the same `onto` behavior by
+running bounded deliberation packets in separate contexts. `synthesize` is not
+the conflict-resolution stage.
 
 ## First Implementation Slice
 

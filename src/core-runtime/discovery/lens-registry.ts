@@ -22,7 +22,7 @@ let cached: CoreLensRegistry | null = null;
 
 function findRegistryPath(): string {
   // Walk up from this file to find {installRoot}/{.onto/,}.onto/authority/core-lens-registry.yaml.
-  // Phase 0: resolveInstallationPath handles the dual-layout fallback per ancestor.
+  // resolveInstallationPath is the single installation-resource resolver.
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   let current = __dirname;
   const root = path.parse(current).root;

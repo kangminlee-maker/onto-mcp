@@ -22,9 +22,9 @@ import type {
   TargetSnapshotManifest,
 } from "./artifact-types.js";
 import {
-  resolveLearningProviderConfig,
-  type LearningProviderConfigInputs,
-} from "../learning/shared/llm-caller.js";
+  normalizeLlmModelSwitcher,
+  type LlmModelSwitcherConfig,
+} from "../llm/model-switcher.js";
 import {
   ensureDirectory,
   isoNow,
@@ -89,22 +89,22 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
 }
 
 /**
- * Load {projectRoot}/.onto/config.yml into the narrow subset that
- * resolveLearningProviderConfig reads. Missing file → {}.
+ * Load {projectRoot}/.onto/config.yml into the narrow subset used by
+ * the canonical LLM switcher. Missing file → {}.
  *
  * Inline-http executor 의 loadOntoConfig 와 동일 패턴. 본 bootstrap 은 CLI
  * override 를 받지 않으므로 config 단독으로 plan-time 값 도출.
  */
 async function loadOntoConfigForPlan(
   projectRoot: string,
-): Promise<LearningProviderConfigInputs> {
+): Promise<{ llm?: LlmModelSwitcherConfig }> {
   const configPath = path.join(projectRoot, ".onto", "config.yml");
   try {
     const text = await fs.readFile(configPath, "utf8");
     const yaml = await import("yaml");
     const parsed = yaml.parse(text);
     if (parsed && typeof parsed === "object") {
-      return parsed as LearningProviderConfigInputs;
+      return parsed as { llm?: LlmModelSwitcherConfig };
     }
   } catch {
     // Missing or malformed config → empty plan. Non-fatal.
@@ -113,13 +113,14 @@ async function loadOntoConfigForPlan(
 }
 
 /**
- * OntoConfig subset → ResolvedLlmPlan (effort persist Option A).
+ * OntoConfig subset → ResolvedLlmPlan.
  * Returns undefined if no fields are populated (avoid empty record noise).
  */
 function derivePlanTimeLlmResolution(
-  config: LearningProviderConfigInputs,
+  config: { llm?: LlmModelSwitcherConfig },
 ): ResolvedLlmPlan | undefined {
-  const partial = resolveLearningProviderConfig({ config });
+  const partial = normalizeLlmModelSwitcher(config.llm);
+  if (partial === null) return undefined;
   const plan: ResolvedLlmPlan = {};
   if (partial.model_id) plan.model = partial.model_id;
   if (partial.reasoning_effort) plan.reasoning_effort = partial.reasoning_effort;
@@ -300,6 +301,8 @@ export async function bootstrapInvocationBindingArtifacts(
     }
   }
   const round1Root = path.join(sessionRoot, "round1");
+  const deliberationRootPath = path.join(sessionRoot, "deliberation");
+  const deliberationRound1Root = path.join(deliberationRootPath, "round1");
   const executionPreparationRoot = path.join(sessionRoot, "execution-preparation");
   const promptPacketsRoot = path.join(sessionRoot, "prompt-packets");
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
@@ -324,6 +327,9 @@ export async function bootstrapInvocationBindingArtifacts(
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
   const allowedOutputRefs = [
     ...params.resolvedLensIds.map((lensId) => path.join(round1Root, `${lensId}.md`)),
+    ...params.resolvedLensIds.map((lensId) =>
+      path.join(deliberationRound1Root, `${lensId}-deliberation.md`),
+    ),
     synthesisOutputPath,
     deliberationOutputPath,
   ];
@@ -331,6 +337,7 @@ export async function bootstrapInvocationBindingArtifacts(
   await Promise.all([
     ensureDirectory(sessionRoot),
     ensureDirectory(round1Root),
+    ensureDirectory(deliberationRound1Root),
     ensureDirectory(executionPreparationRoot),
     ensureDirectory(promptPacketsRoot),
   ]);
@@ -397,6 +404,9 @@ export async function bootstrapInvocationBindingArtifacts(
     materialized_input_path: materializedInputPath,
     context_candidate_assembly_path: contextCandidateAssemblyPath,
     synthesis_output_path: synthesisOutputPath,
+    deliberation_mode: "controlled-lens-deliberation",
+    deliberation_root_path: deliberationRootPath,
+    deliberation_output_path: deliberationOutputPath,
     execution_result_path: executionResultPath,
     error_log_path: errorLogPath,
     review_record_path: reviewRecordPath,
@@ -429,8 +439,19 @@ export async function bootstrapInvocationBindingArtifacts(
       packet_path: path.join(promptPacketsRoot, `${lensId}.prompt.md`),
       output_path: path.join(round1Root, `${lensId}.md`),
     })),
+    lens_deliberation_prompt_packet_seats: params.resolvedLensIds.map((lensId) => ({
+      lens_id: lensId,
+      packet_path: path.join(promptPacketsRoot, `${lensId}.deliberation.prompt.md`),
+      output_path: path.join(deliberationRound1Root, `${lensId}-deliberation.md`),
+    })),
+    teamlead_deliberation_prompt_packet_path: path.join(
+      promptPacketsRoot,
+      "teamlead.deliberation.prompt.md",
+    ),
     synthesize_prompt_packet_path: path.join(promptPacketsRoot, "synthesize.prompt.md"),
     synthesis_output_path: synthesisOutputPath,
+    deliberation_mode: "controlled-lens-deliberation",
+    deliberation_root_path: deliberationRootPath,
     deliberation_output_path: deliberationOutputPath,
     execution_result_path: executionResultPath,
     error_log_path: errorLogPath,

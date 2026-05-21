@@ -53,8 +53,9 @@ import type {
  *   - `main-teams_native`   : TeamCreate wrapping as teamlead (Claude only);
  *                             native lens spawn inside the team.
  *   - `main-teams_foreign`  : TeamCreate wrapping; foreign-provider lens.
- *   - `main-teams_a2a`      : TeamCreate wrapping; native lens + lens-to-lens
- *                             SendMessage deliberation channel active.
+ *   - `main-teams_deliberation`
+ *                           : TeamCreate wrapping; native lens + controlled
+ *                             deliberation transport active.
  *   - `ext-teamlead_native` : external process (currently codex) as teamlead;
  *                             that process's native subagent (nested codex).
  */
@@ -63,7 +64,7 @@ export type TopologyShape =
   | "main_foreign"
   | "main-teams_native"
   | "main-teams_foreign"
-  | "main-teams_a2a"
+  | "main-teams_deliberation"
   | "ext-teamlead_native";
 
 /**
@@ -78,6 +79,8 @@ export interface ShapeDerivationSignals {
   codexSessionActive: boolean;
   /** CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 (D axis, auto-detected). */
   experimentalAgentTeams: boolean;
+  /** Project explicitly opts into the Agent Teams deliberation transport. */
+  lensAgentTeamsMode: boolean;
 }
 
 export interface DerivedShape {
@@ -109,9 +112,8 @@ export type ShapeDerivationResult =
  *
  *   teamlead=external  → ext-teamlead_native (currently codex only)
  *
- *   teamlead=main AND lens_deliberation=sendmessage-a2a:
- *     → main-teams_a2a  (requires D=true + subagent=main-native)
- *     → error otherwise
+ *   teamlead=main AND controlled deliberation Agent Teams transport is enabled:
+ *     subagent=main-native → main-teams_deliberation
  *
  *   teamlead=main AND teams available (Claude + D=true):
  *     subagent=main-native → main-teams_native
@@ -121,9 +123,8 @@ export type ShapeDerivationResult =
  *     subagent=main-native → main_native
  *     subagent=foreign     → main_foreign
  *
- * Returns `ok=false` when a user-specified axis conflicts with the
- * environment (e.g. a2a requested but teams not available). Caller
- * decides whether to fall back (P3) or fail.
+ * Returns `ok=false` only when a user-specified axis cannot be represented
+ * by the current product surface.
  */
 export function deriveTopologyShape(
   reviewConfig: OntoReviewConfig,
@@ -173,37 +174,37 @@ export function deriveTopologyShape(
   log(
     `teams_available=${teamsAvailable} (claudeHost=${signals.claudeHost}, experimentalAgentTeams=${signals.experimentalAgentTeams})`,
   );
+  log(`lens_agent_teams_mode=${signals.lensAgentTeamsMode}`);
 
-  const wantsA2a = reviewConfig.lens_deliberation === "sendmessage-a2a";
+  const usesControlledDeliberation =
+    reviewConfig.lens_deliberation === undefined ||
+    reviewConfig.lens_deliberation === "controlled-lens-deliberation";
   log(
-    `lens_deliberation=${reviewConfig.lens_deliberation ?? "synthesizer-only(default)"}`,
+    `lens_deliberation=${reviewConfig.lens_deliberation ?? "controlled-lens-deliberation(default)"}`,
   );
 
-  // Step 4: a2a deliberation requires teams + native subagent.
-  if (wantsA2a) {
-    const violations: string[] = [];
-    if (!teamsAvailable) {
-      violations.push(
-        "lens_deliberation=sendmessage-a2a requires Claude host + CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1, but one or both are missing.",
-      );
-    }
-    if (subagent.provider !== "main-native") {
-      violations.push(
-        `lens_deliberation=sendmessage-a2a requires subagent.provider=main-native, but got '${subagent.provider}'.`,
-      );
-    }
-    if (violations.length > 0) {
-      return { ok: false, reasons: violations, trace };
-    }
-    log("shape=main-teams_a2a (teams + native + a2a)");
+  // Step 4: Agent Teams can host the controlled deliberation transport when
+  // the current environment exposes it. Other environments still use the
+  // canonical controlled deliberation prompt artifacts in the TS runner.
+  if (
+    usesControlledDeliberation &&
+    teamsAvailable &&
+    signals.lensAgentTeamsMode &&
+    subagent.provider === "main-native"
+  ) {
+    log("shape=main-teams_deliberation (teams + native + controlled deliberation transport)");
     return {
       ok: true,
       derived: {
-        shape: "main-teams_a2a",
+        shape: "main-teams_deliberation",
         subagent_provider: null,
         trace,
       },
     };
+  }
+
+  if (usesControlledDeliberation) {
+    log("controlled deliberation will be executed by the review runner transport");
   }
 
   // Step 5: teams-available branch.

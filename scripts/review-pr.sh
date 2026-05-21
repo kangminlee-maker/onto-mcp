@@ -62,7 +62,7 @@ source "${REPO_ROOT}/scripts/host-env.sh"
 
 # Extract the right-hand ref from REF. Branch-separator parsing: try
 # three-dot first (`main...HEAD` → `HEAD`), then two-dot (`main..feat/xyz`
-# → `feat/xyz`). Literal-dot fallback would corrupt refs containing a `.`
+# → `feat/xyz`). Literal-dot replacement would corrupt refs containing a `.`
 # (e.g. `main...release/1.2` naively splitting on last `.` yields `2`) —
 # fixed in 3rd self-review C2.
 if [[ "${REF}" == *...* ]]; then

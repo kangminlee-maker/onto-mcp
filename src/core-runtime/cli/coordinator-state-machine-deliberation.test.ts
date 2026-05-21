@@ -3,13 +3,9 @@
  *
  * Two invariants pinned:
  *   1. awaiting_synthesize_dispatch → completing must fail-fast when the
- *      synthesis output declares `deliberation_status:
- *      required_but_unperformed` (synthesize task failed; do not silently
- *      advance to completed).
- *   2. Reaching `awaiting_deliberation` is a wiring defect — the canonical
- *      review flow has no external deliberation agent. Error message must
- *      point the caller at the upstream transition, not at a missing
- *      implementation.
+ *      synthesis output does not declare `deliberation_status: performed`.
+ *   2. awaiting_deliberation is an active canonical state that fails loudly
+ *      when its required execution plan is absent.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -103,23 +99,19 @@ describe("coordinator-state-machine — deliberation-status guard (C-1)", () => 
     }
   });
 
-  it("fails fast when synthesis declares required_but_unperformed", async () => {
-    const sessionRoot = await makeSessionRoot("req-unperf");
+  it("fails fast when synthesis does not acknowledge controlled deliberation", async () => {
+    const sessionRoot = await makeSessionRoot("bad-status");
     sessionRoots.push(sessionRoot);
     const synthesisPath = path.join(sessionRoot, "synthesis.md");
-    await writeSynthesisOutput(synthesisPath, "required_but_unperformed");
+    await writeSynthesisOutput(synthesisPath, "unperformed");
     await writeExecutionPlan(sessionRoot, synthesisPath);
     await writeState(sessionRoot, "awaiting_synthesize_dispatch");
 
     const result = await coordinatorNext(sessionRoot, sessionRoot);
-    // completing auto-state caught the invariant violation and transitioned
-    // to failed rather than completed.
     expect(result.state).toBe("failed");
     if (result.state === "failed") {
-      expect(result.error_message).toMatch(/required_but_unperformed/);
-      expect(result.error_message).toMatch(/synthesize/i);
+      expect(result.error_message).toMatch(/deliberation_status: performed/);
     }
-    // On-disk state must not be `completed`.
     const diskRaw = await fs.readFile(
       path.join(sessionRoot, "coordinator-state.yaml"),
       "utf8",
@@ -141,30 +133,29 @@ describe("coordinator-state-machine — deliberation-status guard (C-1)", () => 
     // fixture those will fail before reaching `completed`, but the
     // key invariant for C-1 is: failure must NOT be from the
     // deliberation-status guard. Any error that *does* occur must
-    // come from a later step (not mentioning required_but_unperformed).
+    // come from a later step.
     const result = await coordinatorNext(sessionRoot, sessionRoot);
     if (result.state === "failed") {
       expect(result.error_message ?? "").not.toMatch(
-        /required_but_unperformed/,
+        /deliberation_status: performed/,
       );
     }
     // Either the run advanced to completed or failed for an unrelated
     // downstream reason — both outcomes clear the guard.
   });
 
-  it("advances normally when synthesis declares not_needed", async () => {
-    const sessionRoot = await makeSessionRoot("not-needed");
+  it("fails fast when synthesis omits controlled deliberation acknowledgement", async () => {
+    const sessionRoot = await makeSessionRoot("missing-status");
     sessionRoots.push(sessionRoot);
     const synthesisPath = path.join(sessionRoot, "synthesis.md");
-    await writeSynthesisOutput(synthesisPath, "not_needed");
+    await fs.writeFile(synthesisPath, "# Synthesis\n", "utf8");
     await writeExecutionPlan(sessionRoot, synthesisPath);
     await writeState(sessionRoot, "awaiting_synthesize_dispatch");
 
     const result = await coordinatorNext(sessionRoot, sessionRoot);
+    expect(result.state).toBe("failed");
     if (result.state === "failed") {
-      expect(result.error_message ?? "").not.toMatch(
-        /required_but_unperformed/,
-      );
+      expect(result.error_message ?? "").toMatch(/deliberation_status: performed/);
     }
   });
 });
@@ -183,11 +174,9 @@ describe("coordinator-state-machine — awaiting_deliberation invariant (C-1)", 
     sessionRoots.length = 0;
   });
 
-  it("throws a wiring-defect error (not a 'not implemented' error)", async () => {
-    const sessionRoot = await makeSessionRoot("unreachable");
+  it("fails loudly when awaiting_deliberation lacks its execution plan", async () => {
+    const sessionRoot = await makeSessionRoot("missing-plan");
     sessionRoots.push(sessionRoot);
-    // Hand-craft a state file that directly claims awaiting_deliberation.
-    // The canonical flow never produces this, but a wiring defect could.
     const now = new Date().toISOString();
     fsSync.writeFileSync(
       path.join(sessionRoot, "coordinator-state.yaml"),
@@ -204,8 +193,10 @@ describe("coordinator-state-machine — awaiting_deliberation invariant (C-1)", 
       "utf8",
     );
 
-    await expect(coordinatorNext(sessionRoot, sessionRoot)).rejects.toThrow(
-      /unreachable|wiring defect|investigate the caller/,
-    );
+    const result = await coordinatorNext(sessionRoot, sessionRoot);
+    expect(result.state).toBe("failed");
+    if (result.state === "failed") {
+      expect(result.error_message ?? "").toMatch(/execution-plan\.yaml/);
+    }
   });
 });

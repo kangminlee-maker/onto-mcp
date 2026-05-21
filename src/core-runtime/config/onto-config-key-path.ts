@@ -25,8 +25,7 @@
  * - Output: `{ ok: true, config }` or `{ ok: false, error }`.
  * - Next stage: caller feeds the returned config into `validateReviewConfig`
  *   then `writeReviewBlock`. This helper performs SHAPE coercion only;
- *   semantic constraints (e.g. `a2a` + teamlead=external) are the
- *   validator's job.
+ *   semantic constraints are the validator's job.
  */
 
 import type {
@@ -74,8 +73,7 @@ const SUBAGENT_PROVIDER_VALUES: readonly SubagentProvider[] = [
 ];
 
 const LENS_DELIBERATION_VALUES: readonly LensDeliberation[] = [
-  "synthesizer-only",
-  "sendmessage-a2a",
+  "controlled-lens-deliberation",
 ];
 
 /**

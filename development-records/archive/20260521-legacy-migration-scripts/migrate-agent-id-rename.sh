@@ -398,6 +398,6 @@ if dry; then
 else
   log "APPLY 완료."
   [ "$DO_BACKUP" -eq 1 ] && log "Backup 위치: $USER_ONTO 상위의 _backup_agent-id-rename_* 디렉토리"
-  log "다음: cd <project> && npm run review:invoke -- BLUEPRINT.md 'test' 로 정상 작동 확인"
+  log "다음: cd <project> && npm run review:invoke -- README.md 'test' 로 정상 작동 확인"
 fi
 log "========================================"

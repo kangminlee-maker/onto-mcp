@@ -16,9 +16,8 @@
  * regardless of what the packet itself declared. Real-LLM testing (2026-04-17)
  * found that lens packets declare `Boundary Policy: Filesystem: denied` but
  * tool-native mode still handed the LLM filesystem tools — the LLM then
- * called tools for a task that was supposed to be self-contained, and
- * produced a `insufficient content within boundary` fallback instead of a
- * real lens output.
+ * called tools for a task that was supposed to be self-contained, producing
+ * an unusable lens output.
  *
  * A4 — Phase 3-4 A3 benchmark (2026-04-17) showed the mirror failure: when a
  * packet's lens outputs live on disk and are NOT inlined (path-only variant),

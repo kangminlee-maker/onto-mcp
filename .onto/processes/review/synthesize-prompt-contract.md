@@ -97,7 +97,7 @@ Synthesize 내부 추론 언어 (deliberation reasoning, adjudication basis) 도
 1. 새로운 독립 관점을 추가하지 않는다
 2. lens finding을 건너뛰고 ad hoc 결론을 만들지 않는다
 3. unresolved disagreement를 묵살하지 않는다
-4. lens 간 disagreement가 있으면 §6에 따라 synthesize가 직접 deliberation을 수행한다
+4. lens 간 disagreement resolution은 synthesize 이전의 controlled lens deliberation 결과를 따른다
 5. review의 primary output을 learning candidate로 정의하지 않는다
 6. `New Perspectives`를 스스로 invent하지 않는다
 7. `Purpose Alignment Verification`은 독립 판단으로 새로 만들지 않고, `axiology` finding을 보존적으로 반영한다
@@ -114,7 +114,7 @@ Synthesize 내부 추론 언어 (deliberation reasoning, adjudication basis) 도
 
 ```yaml
 ---
-deliberation_status: not_needed | performed
+deliberation_status: performed
 participation:
   expected_lenses: [<lens_id>, ...]         # binding 이 active 로 선언한 lens id 목록
   received_lenses: [<lens_id>, ...]         # output 을 성공적으로 산출한 lens id
@@ -126,9 +126,9 @@ participation:
 
 ### 5.1 `deliberation_status` 값 규칙
 
-- `not_needed`: lens 간 disagreement가 없는 경우.
-- `performed`: synthesize가 §6에 따라 in-process deliberation을 수행하고 resolution을 기록한 경우.
-- `required_but_unperformed`: synthesize 출력에서는 사용하지 않는다. 이 값은 runner가 synthesize task 자체의 실패를 감지했을 때만 record assembler가 부여하는 failure marker다.
+완료된 synthesize output은 `performed`만 선언한다.
+
+- `performed`: synthesize 이전에 controlled lens deliberation이 실행되었고 synthesize가 그 결과를 소비한 경우.
 
 ### 5.2 Participation completeness (IA-2)
 
@@ -171,7 +171,7 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Principal Su
 
 ### 5.3 Section list (canonical taxonomy)
 
-아래는 이 contract 가 정하는 **단독 canonical section 명칭** 이다. 동의어 / legacy alias 는 §5.4 alias map 을 따르며 이 list 로 정규화한다.
+아래는 이 contract 가 정하는 **단독 canonical section 명칭** 이다. 동의어는 §5.4 alias map 을 따르며 이 list 로 정규화한다.
 
 1. consensus
 2. conditional consensus
@@ -188,9 +188,9 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Principal Su
 
 ### 5.4 Alias map (IA-3)
 
-canonical label 과 자주 drift 되는 legacy alias 쌍. synthesis output 은 canonical label 만 사용한다.
+canonical label 과 자주 drift 되는 alias 쌍. synthesis output 은 canonical label 만 사용한다.
 
-| Canonical | Legacy alias (금지) |
+| Canonical | Alias (금지) |
 |---|---|
 | `disagreement` | `contradiction`, `conflict` (lens 간 의견 차이 의미일 때) |
 | `conditional consensus` | `conditional agreement`, `conditional agreement (with stipulation)` |
@@ -198,7 +198,7 @@ canonical label 과 자주 drift 되는 legacy alias 쌍. synthesis output 은 c
 | `recommendations` | `recommended actions (non-urgent)`, `suggestions` |
 | `axiology-proposed additional perspectives` | `axiology-proposed new perspectives`, `new perspectives` (role header 제외) |
 
-legacy alias 발견 시 synthesis output 은 canonical 로 정규화한다. prompt packet materializer 는 §5.3 label 만 emit 한다.
+alias 발견 시 synthesis output 은 canonical 로 정규화한다. prompt packet materializer 는 §5.3 label 만 emit 한다.
 
 ### 5.5 Per-item provenance (IA-4)
 
@@ -244,46 +244,38 @@ aggregate primary artifact는
 
 ## 6. Deliberation Rule
 
-### 6.1 Deliberation의 두 경로
+### 6.1 Canonical Deliberation Position
 
-Review 실행 realization은 deliberation 수행 경로에 따라 두 부류로 나뉜다.
+Deliberation은 synthesize 내부 동작이 아니다.
 
-- **Cross-process deliberation**: Agent Teams 계열. teammate 간 SendMessage 채널이 존재하므로 contested point를 relevant lens teammate에게 다시 돌려 cross-process deliberation을 수행한다. 결과는 별도 `deliberation.md`에 기록될 수 있다.
-- **In-process deliberation**: cross-process lens-to-lens 메시징 채널이 없는 realization (`subagent` fallback, `subagent + codex`). synthesize가 모든 lens 결과 + materialized input을 이미 scope에 쥐고 있으므로 synthesize 자신이 deliberation actor로 in-process 수행한다.
+Review는 Round 1 lens 실행 뒤 synthesize 전에 controlled lens deliberation을 수행하고,
+그 결과를 `{session_root}/deliberation.md`에 기록한다.
 
-본 계약 §6.2는 in-process deliberation 경로의 절차를 고정한다. cross-process 경로는 `process.md`의 Agent Teams Step 4가 별도 authority다.
+canonical properties:
 
-### 6.2 In-process deliberation 수행 절차
+1. lens별 deliberation response는 fresh bounded context에서 실행된다.
+2. 각 response 입력은 자기 Round 1 출력과 다른 participating lens 출력으로 제한된다.
+3. teamlead-controlled deliberation result가 합의, 조건부 합의, 지속 이견, resolution을 기록한다.
+4. synthesize는 `deliberation.md`를 읽고 보존적으로 최종 review output을 작성한다.
+5. synthesize는 새로운 disagreement resolution을 만들지 않는다.
 
-synthesize는 in-process deliberation 경로에서 deliberation actor다. 수행 절차는 다음과 같다.
+Claude Code Agent Teams에서는 이 단계가 SendMessage transport로 실현될 수 있다.
+MCP/TS runtime에서는 같은 의미론을 provider 독립 packet으로 실현한다.
 
-1. lens 결과 전체에서 contested point를 식별한다. contested point 식별 기준은 `.onto/processes/review/shared-phenomenon-contract.md` §4의 `disagreement` 관계를 기본으로 한다. orthogonal predicate에 대한 상호 비모순 claim은 contested로 간주하지 않는다
-2. 각 contested point에 대해 contested된 lens 출력과 materialized input의 인용 evidence를 재읽는다
-3. evidence에 비추어 각 입장의 타당성을 평가하고 resolution을 도출한다
-4. resolution을 `Deliberation Decision` 섹션에 contested point별로 기록한다
-5. `Disagreement` 섹션은 원 입장을 보존한 채 유지하되, resolution이 있는 항목은 그 사실을 명시한다
-6. evidence가 부족하여 resolution을 도출할 수 없는 경우, 그 사유를 `Deliberation Decision`에 기록한다 (그 자체가 수행 결과로 간주된다 — `deliberation_status: performed`)
-7. 하나 이상의 lens 출력이 degraded 상태인 경우에도 나머지 입력으로 위 절차를 수행한다. 결여된 입력이 특정 contested point의 resolution에 핵심적이면 6단계(evidence 부족 기록)로 처리한다
+### 6.2 frontmatter `deliberation_status`
 
-### 6.3 frontmatter `deliberation_status`
+Synthesize output은 `deliberation_status: performed`를 emit해야 한다.
+이 값은 synthesize가 deliberation actor였다는 뜻이 아니라,
+synthesize가 required controlled deliberation artifact를 소비했다는 뜻이다.
 
-§5가 `deliberation_status` 값 enum의 SSOT다. 본 §6.3은 그 enum의 사용 규칙(언제 어느 값을 emit하는가)만 다루며 enum을 재정의하지 않는다.
+### 6.3 `deliberation.md` artifact 위상
 
-- `not_needed`: lens 간 contested point가 식별되지 않은 경우. 이 케이스에서도 `Deliberation Decision` 섹션은 contract §5 item 10에 따라 필수 섹션이며, 최소 `"no contested points"` 또는 동등한 명시적 서술을 기록한다
-- `performed`: §6.2 절차를 수행한 경우 (resolution 도출 또는 명시적 evidence-부족 기록 포함)
+`{session_root}/deliberation.md`는 conflict-resolution authority다.
 
-synthesize는 자신의 출력에서 `required_but_unperformed`를 emit하지 않는다. 이 값은 synthesize task 자체의 실패를 runner/record assembler가 감지했을 때만 부여되는 failure marker다.
-
-### 6.4 `deliberation.md` artifact 위상
-
-`{session_root}/deliberation.md`는 cross-process deliberation 경로 (Agent Teams Step 4)에서만 산출되는 artifact다. in-process deliberation 경로에서는 별도 파일을 산출하지 않으며, `synthesis.md` frontmatter와 Deliberation Decision 섹션이 유일한 authoritative source다. 따라서:
-
-- in-process 경로 실행 결과: `synthesis.md` frontmatter `deliberation_status` + `Deliberation Decision` 섹션이 primary
-- cross-process 경로 실행 결과: `deliberation.md` 존재가 `performed`의 primary signal이 될 수 있음
-
-cross-process 경로에서도 `synthesis.md` frontmatter는 §5에 따라 의무이며 `deliberation_status` 값은 `performed`로 설정한다 — `deliberation.md`는 그 위에 더해지는 supplementary primary signal이지 frontmatter 의무를 면제하는 대체 채널이 아니다.
-
-record assembler는 이 두 채널을 정합하게 해석해야 하며, 상세 규칙은 `.onto/processes/review/record-contract.md`가 정한다.
+- 존재하지 않으면 completed review로 assemble할 수 없다.
+- frontmatter는 `deliberation_status: performed`를 선언해야 한다.
+- `Deliberation Decision`은 contested point별로 resolved / narrowed / unresolved-with-reason을 기록한다.
+- synthesize output의 `Deliberation Decision` 섹션은 이 artifact를 보존적으로 반영한다.
 
 ---
 
@@ -305,10 +297,10 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 (.onto/principles/output-language-boundary.md).
 
 [Task Directives]
-- Read all lens result files and the materialized input.
+- Read all lens result files, the materialized input, and `{session_root}/deliberation.md`.
 - Preserve consensus and original lens positions in Disagreement.
-- When lens findings disagree, perform in-process deliberation per §6 and record per-contested-point resolutions in Deliberation Decision.
-- Set frontmatter deliberation_status to `not_needed` (no contention) or `performed` (deliberation executed).
+- Preserve the controlled deliberation decisions; do not create a new resolution inside synthesize.
+- Set frontmatter deliberation_status to `performed`.
 - Write the final synthesis output to {synthesis_output_path}.
 ```
 
@@ -332,18 +324,13 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 
 | Realization | Deliberation 경로 |
 |---|---|
-| Agent Teams teammate | Cross-process (teammate SendMessage 활용) |
-| subagent (Claude Code Agent tool) | In-process (synthesize가 수행) |
-| `subagent + codex` | In-process (synthesize가 수행) |
-| `MCP`로 분리된 `LLM` | 해당 realization adapter 배선 시점에 결정 (아래 결정 규칙) |
-| external model worker | 해당 realization adapter 배선 시점에 결정 (아래 결정 규칙) |
+| Agent Teams teammate | SendMessage transport |
+| subagent (Claude Code Agent tool) | bounded deliberation packet |
+| `subagent + codex` | bounded deliberation packet |
+| MCP provider adapter | bounded deliberation packet |
+| external model worker | bounded deliberation packet |
 
-**Realization adapter 배선 시 deliberation 경로 결정 규칙** (위 표의 마지막 두 행에 적용):
-
-- **결정 주체**: 해당 realization을 review pipeline에 연결하는 adapter 구현자 (PR author).
-- **판정 시점**: adapter PR의 binding/dispatch 코드를 작성하는 시점 — runtime 실행 중에는 결정하지 않는다.
-- **판정 signal**: realization이 lens 단위 간 inter-agent messaging primitive를 제공하면 Cross-process, 그렇지 않으면 In-process. "messaging primitive"는 lens A가 lens B에 시점-동기화된 응답 요청을 보내고 그 응답을 받을 수 있는 채널을 의미한다 (예: Agent Teams의 SendMessage). 단순 파일/큐 기반 비동기 통신은 messaging primitive로 간주하지 않는다.
-- **결정 기록 위치**: adapter PR이 본 §8 표의 해당 행을 확정 값 (Cross-process 또는 In-process)으로 갱신한다.
+모든 realization은 synthesize 전에 같은 `deliberation.md` artifact를 생성한다.
 
 ---
 
@@ -351,5 +338,5 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 
 다음 단계는 아래다.
 
-1. `lens markdown output`과 `synthesis markdown output`을 `ReviewRecord` shape로 매핑한다
-2. 이후 prompt-backed path에서 `review-record.yaml` field completeness를 안정화한다
+1. provider별 controlled deliberation conformance harness를 확장한다
+2. `learn` / `govern`의 MCP-native surface를 별도 설계한다

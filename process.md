@@ -20,7 +20,7 @@ Common definitions referenced by each process file (`.onto/processes/`).
 | Team Review | `.onto/processes/review.md` | Agent panel review (Agent Teams) | Learning -> Promotion |
 | Ontology Build | `.onto/processes/reconstruct.md` | Build ontology from analysis target (Agent Teams) | -> Transform, Review |
 | Transform | `.onto/processes/transform.md` | Raw Ontology format conversion | Build -> |
-| Learning Promotion | `.onto/processes/learn/promote.md` | Learning Quality Assurance — 승격, 큐레이션, 감사. Canonical entrypoints: `onto promote` (Phase A analyze), `onto promote --apply <session>` (Phase B mutations), `onto reclassify-insights [--apply]` (insight role reclassification), `onto migrate-session-roots` (legacy layout migration). Slash command `/onto:promote` is the prompt-backed reference path. | Review/Query -> |
+| Learning Promotion | `.onto/processes/learn/promote.md` | Learning Quality Assurance — 승격, 큐레이션, 감사. Canonical entrypoints: `onto promote` (Phase A analyze), `onto promote --apply <session>` (Phase B mutations), `onto reclassify-insights [--apply]` (insight role reclassification), `onto migrate-session-roots` (session root migration). Slash command `/onto:promote` is the prompt-backed reference path. | Review/Query -> |
 | Domain Creation | `.onto/processes/create-domain.md` | Generate seed domain documents from minimal input | -> Feedback, Review |
 | Domain Feedback | `.onto/processes/feedback.md` | Feed learnings back into domain documents | Review/Query -> |
 | Domain Promotion | `.onto/processes/learn/promote-domain.md` | Promote seed domain to established | Feedback -> |
@@ -65,10 +65,9 @@ When adding or removing an agent, all of the following files must be updated:
 | 5 | `process.md` teammate initial prompt mapping | Add/delete row |
 | 6 | `.onto/processes/review.md` review lens + synthesize file list | Add/delete path |
 | 7 | `.onto/domains/*/` | Add/delete domain document template for the agent |
-| 8 | `BLUEPRINT.md` agent section | Add/delete description |
-| 9 | `README.md` directory tree | Add/delete filename |
-| 10 | learning-rules.md | Update if learning storage rules change |
-| 11 | `.onto/processes/reconstruct.md` Agent Configuration table + Phase 1.0 Team Composition + error handling "N lenses" prose | Update lens count references and lens list |
+| 8 | `README.md` directory tree | Add/delete filename |
+| 9 | learning-rules.md | Update if learning storage rules change |
+| 10 | `.onto/processes/reconstruct.md` Agent Configuration table + Phase 1.0 Team Composition + error handling "N lenses" prose | Update lens count references and lens list |
 
 ### Touch Point Checklist for Adding/Removing Processes
 
@@ -80,9 +79,8 @@ When adding or removing a process, all of the following files must be updated:
 | 2 | `commands/{command-name}.md` | Create/delete command file |
 | 3 | `process.md` Process Map table | Add/delete row |
 | 4 | `process.md` Per-process domain resolution table | Add/delete row |
-| 5 | `BLUEPRINT.md` Processes section | Add/delete description |
-| 6 | `README.md` Commands section + directory tree | Add/delete entries |
-| 7 | learning-rules.md | Update if process affects learning storage |
+| 5 | `README.md` Commands section + directory tree | Add/delete entries |
+| 6 | learning-rules.md | Update if process affects learning storage |
 
 ### Touch Point Checklist for Adding a New `.onto/` Structural Subdirectory
 
@@ -100,7 +98,7 @@ The `onto-dir-allowlist` CI workflow (`.github/workflows/onto-dir-allowlist.yml`
 |---|---|
 | `synthesize` | Synthesizes review lens findings into consensus, disagreement, overlooked premises, and final review output |
 
-> `philosopher` has been retired as a canonical review/reconstruct pipeline role. Canonical review uses `axiology` + `synthesize`. `ask` activity is retired (§1.2). The archival lineage is preserved at `development-records/legacy/philosopher.md`.
+Canonical review uses `axiology`, controlled lens deliberation, and `synthesize`. Archival role material belongs under `development-records/archive/`.
 
 ### Domain Documents
 Each agent reads the corresponding domain documents at execution time (verified using general principles if no file exists):
@@ -156,7 +154,7 @@ Design reference: `development-records/evolve/20260329-domain-document-creation.
 
 #### Feedback Log
 
-Each domain (both `drafts/` and `domains/`) may contain a `feedback-log.md` tracking feedback session history. Created on first feedback execution via `/onto:feedback`.
+Each domain (both `drafts/` and `domains/`) may contain a `feedback-log.md` tracking feedback session records. Created on first feedback execution via `/onto:feedback`.
 
 #### Feedback Loop Rules
 
@@ -184,7 +182,7 @@ Domains use a **per-session selection** model. Each process execution selects a 
 
 #### Session domain (per process execution)
 
-1. `@{domain}` specified → verify existence (if not found → warn + re-ask, no auto-fallback) → `{session_domain}` = `{domain}`
+1. `@{domain}` specified → verify existence (if not found → warn + re-ask, no implicit substitution) → `{session_domain}` = `{domain}`
 2. `@-` specified → `{session_domain}` = empty (no-domain mode)
 3. `@{domain}` not specified → run Domain Selection Flow → set selected domain
 4. `[-]` selected → `{session_domain}` = empty (no-domain mode)
@@ -232,7 +230,7 @@ Select domain [a]: _
 The agents' default verification methodology (logical consistency, structural completeness, etc.) is based on ontological methodology. No-domain mode verifies using only this default methodology, without applying any specific domain's rule documents.
 
 - Domain document loading: skipped
-- Self-Loading: domain document line skipped (file absence graceful degradation already handles this)
+- Self-Loading: domain document line skipped
 - Learning storage: `[methodology]` tag only. No `[domain/...]` tag
 - Learning storage path: `{project}/.onto/learnings/{agent-id}.md`
 - Verification scope notice: domain-specific issues may be missed in this mode
@@ -242,10 +240,9 @@ The agents' default verification methodology (logical consistency, structural co
 `domains:` is an **unordered set**. `[A, B]` and `[B, A]` are identical. No domain has priority over another. It declares only "which domains are relevant to this project."
 
 1. config.yml `domains:` exists → project-relevant domains (unordered set)
-2. config.yml `domains:` absent + CLAUDE.md `domain:`/`agent-domain:` exists → backward-compatible fallback (converted to unordered set)
-3. config.yml `domains:` exists → CLAUDE.md domain declarations are ignored
-4. `domains: []` (empty array) = same as key absence (CLAUDE.md fallback applies)
-5. No declaration anywhere → ask during onboard, or ask at first execution
+2. config.yml `domains:` absent → no project domain set
+3. `domains: []` (empty array) = no project domain set
+4. No declaration anywhere → ask during onboard, or ask at first execution
 
 Config.yml format:
 ```yaml
@@ -253,18 +250,28 @@ domains:
   - software-engineering
   - ontology
 output_language: ko
-execution_mode: codex          # agent-teams (default) | codex
-codex:
-  model: gpt-5.4               # omit → ~/.codex/config.toml model
-  effort: xhigh                 # omit → ~/.codex/config.toml model_reasoning_effort
+review:
+  teamlead:
+    model: main
+  subagent:
+    provider: main-native
+  lens_deliberation: controlled-lens-deliberation
+llm:
+  auth: oauth
+  provider: openai
+  model: gpt-5.4
+  effort: high
 ```
 
-`execution_mode` and `codex` fields:
-- `execution_mode`: `agent-teams` (default if absent) or `codex`. Command flag `--codex` overrides this.
-- `codex.model`: Codex model to use. If omitted, falls back to `~/.codex/config.toml` `model` field. If that is also absent, uses Codex CLI default.
-- `codex.effort`: Reasoning effort level (`none` | `minimal` | `low` | `medium` | `high` | `xhigh`). Same fallback chain as `codex.model`.
+`review` and `llm` fields:
+- `review.teamlead.model`: `main` or an explicit external model spec.
+- `review.subagent.provider`: `main-native` or `codex`.
+- `review.lens_deliberation`: `controlled-lens-deliberation` for controlled lens deliberation transport.
+- `llm.auth`: `oauth`, `api_key`, or `local`.
+- `llm.provider`: `openai`, `anthropic`, `grok`, or `lmstudio`.
+- `llm.model` / `llm.effort`: model and reasoning effort passed to the active provider adapter.
 
-Old format compatibility: `domain: A` + `secondary_domains: B` → automatically converted to `domains: [A, B]` with migration guidance.
+Unsupported config keys stop execution with a parser error.
 
 #### Per-process domain resolution
 
@@ -288,7 +295,7 @@ When a target spans multiple domains, **run a separate review for each relevant 
 #### Edge cases
 
 For the complete edge case table, refer to Section 4 of `development-records/evolve/20260328-per-session-domain-selection.md`. Key behaviors:
-- Non-existent `@{domain}` → warn + re-ask (no auto-fallback)
+- Non-existent `@{domain}` → warn + re-ask
 - No config.yml + no global domains → skip selection, no-domain mode
 - Domain directory exists but 0 files → listed with "(empty — no rules)" marker
 - Mid-session domain change → finish current process, re-run with different domain
@@ -308,18 +315,18 @@ When entering a domain that meets the conditions below, agent configuration re-e
 
 Processes requiring parallel agent execution (team review, ontology build, learning promotion) use **Agent Teams** as the primary method.
 
-### Fallback Rules
+### Direct Subagent Rules
 
-When TeamCreate fails, fall back to the Agent tool (subagent) approach. The **purpose and output format** of the process remain identical, but the execution method differs:
+When the selected topology uses the Agent tool directly, the **purpose and output format** of the process remain identical, but the execution method differs:
 - Agent tool is used instead of TeamCreate/SendMessage.
 - Each Agent tool call includes the agent definition + context + task directives combined. (Since the teammate cannot self-load, the team lead includes the content directly.)
 - **File-based delivery applies identically**: Subagents also save results to files using the Write tool, and only return the path to the team lead. In review mode, `synthesize` also reads result files directly using the Read tool.
-- Cross-process lens-to-lens deliberation messaging is skipped (no SendMessage in this realization). `synthesize` still performs deliberation in-process per `.onto/processes/review/synthesize-prompt-contract.md` §6 — it re-reads contested lens outputs and the materialized input, then records resolutions in the Deliberation Decision section.
-- Content the team lead must include in each Agent tool call during fallback: agent definition + learning file (with axis tag filtering) + domain document + communication learning + task directives + **session path**. (All context must be included directly since self-loading is not possible.)
+- Controlled lens deliberation is executed through the review runtime artifacts before synthesize. `synthesize` consumes the deliberation result and does not create a new independent resolution channel.
+- Content the team lead must include in each Agent tool call: agent definition + learning file (with axis tag filtering) + domain document + communication learning + task directives + **session path**. (All context must be included directly since self-loading is not possible.)
 
 ### Codex Execution Mode
 
-When `execution_mode: codex` is set in config.yml or a `--codex` command flag is used, reviewer passes are delegated to Codex (OpenAI) via the `codex:codex-rescue` subagent type. The **purpose and output format** remain identical to Agent Teams and Subagent fallback.
+When review topology uses codex subprocess execution, reviewer passes are delegated to Codex through the runtime executor. The **purpose and output format** remain identical to Agent Teams and Direct Subagent execution.
 
 **Scope**: Currently supported for the **review** process only. Other processes behave differently:
 - **promote** — the Phase 3 CLI pipeline (`onto promote`, `onto promote --apply`, `onto reclassify-insights`) calls Anthropic / OpenAI / Codex CLI APIs directly through `src/core-runtime/learning/shared/llm-caller.ts` with automatic provider resolution. It does NOT route through the Agent Teams / Codex mode infrastructure. The `/onto:promote` slash command is a prompt-backed reference path that still uses Agent Teams.
@@ -328,16 +335,14 @@ When `execution_mode: codex` is set in config.yml or a `--codex` command flag is
 This scope will expand as Codex mode is validated in review.
 
 **Purpose and tradeoffs**:
-Codex mode delegates review passes to an external runtime (OpenAI Codex) to reduce Claude token consumption. The team lead coordination (~50-100k tokens) is the only Claude cost; all review lens passes and the synthesize stage run on Codex. Direct lens-to-lens exchange (Step 4 messaging in Agent Teams mode) is unavailable because Codex tasks are independent processes — but deliberation itself is not skipped. `synthesize` performs deliberation in-process by re-reading contested lens outputs against the materialized input and recording resolutions in the Deliberation Decision section. See `.onto/processes/review/synthesize-prompt-contract.md` §6.
+Codex mode delegates review passes to an external runtime (OpenAI Codex) to reduce Claude token consumption. The team lead coordination (~50-100k tokens) is the only Claude cost; review lens passes and the synthesize stage run on Codex. Controlled deliberation remains a runtime artifact step before synthesize. See `.onto/processes/review/synthesize-prompt-contract.md`.
 
 **Prerequisites**:
 - Codex CLI must be installed and authenticated. Verify via `/codex:setup`.
 - If Codex is unavailable at execution time → process-halting. Inform the user: "Codex CLI가 설정되지 않았습니다. `/codex:setup`을 실행하거나 Claude Code 세션에서 `onto coordinator start`로 Agent Teams 모드를 사용하세요."
 
-**Mode selection priority**:
-1. Command flag (`--codex`) → overrides config
-2. config.yml `execution_mode` → applies if no flag
-3. Neither specified → `agent-teams` (default) via `onto coordinator start`
+**Mode selection**:
+Review topology is derived from `.onto/config.yml` `review:` axes plus host/runtime signals. Invalid or unsupported combinations stop execution.
 
 **Execution model**:
 - Team lead (Claude): Context Gathering, Complexity Assessment, prompt construction, result collection, learning storage, final output delivery.
@@ -345,7 +350,7 @@ Codex mode delegates review passes to an external runtime (OpenAI Codex) to redu
 - Review synthesize stage (Codex): Result synthesis and adjudication.
 
 **Prompt delivery**:
-- Self-loading instructions are included. Codex reads domain documents and learnings via Bash (cat). Unlike Subagent fallback, the team lead does NOT inline domain documents or learnings.
+- Self-loading instructions are included. Codex reads domain documents and learnings via Bash (cat). Unlike Direct Subagent execution, the team lead does not inline domain documents or learnings.
 - The team lead DOES inline: agent definition (~14 lines), review target content, system purpose, **learning-rules.md content**. These are inlined to guarantee the core context and the learning candidate format specification.
 
 **File I/O**:
@@ -358,28 +363,24 @@ Codex mode delegates review passes to an external runtime (OpenAI Codex) to redu
 - `synthesize` is executed as a Codex task in foreground (depends on all review lens results).
 
 **Model and effort**:
-- The team lead reads config.yml `codex.model` and `codex.effort` during Context Gathering.
-- These values are inserted into the `[Codex Configuration]` section of the prompt template as the **delivery mechanism** (not merely documentation). The delivery path is:
-  1. Team lead inserts values into the prompt text (`[Codex Configuration]` section).
-  2. The `codex:codex-rescue` subagent parses these from the prompt.
-  3. The subagent converts them to CLI flags (`--model {value}`, `--effort {value}`) when invoking `codex-companion.mjs task`.
-- Note: The Agent tool's `model` parameter only accepts Claude model names (sonnet/opus/haiku) and cannot pass Codex model names. The prompt text is the only delivery path.
-- If either is absent → omit from `[Codex Configuration]` (Codex uses `~/.codex/config.toml` or its own default).
+- The runtime reads config.yml `llm.model` and `llm.effort`.
+- These values are passed through the provider adapter for the selected execution topology.
+- Unsupported provider/auth combinations stop execution.
 
-**Deliberation**: Performed by `synthesize` in-process. Lens-to-lens cross-process messaging is unavailable in Codex mode, so `synthesize` resolves contested points itself by re-reading the relevant lens outputs and the materialized input, then recording resolutions in the Deliberation Decision section. `deliberation_status` ends up `not_needed` (no contention) or `performed`. See `.onto/processes/review/synthesize-prompt-contract.md` §6.
+**Deliberation**: Performed by controlled lens deliberation artifacts before synthesize. `synthesize` consumes the deliberation output and records the final result. See `.onto/processes/review/synthesize-prompt-contract.md`.
 
-**Error handling**: Same 4-category classification as Agent Teams (process-halting / process-halting-with-partial-result / transient retry / graceful degradation). Differences:
+**Error handling**: Same 3-category classification as Agent Teams (process-halting / process-halting-with-partial-result / transient retry exhaustion). Differences:
 - Retry: re-spawn a new `codex:codex-rescue` Agent (not SendMessage).
 - Review synthesize failure: process-halting (irreplaceable role). Retry once before halting.
 
 **Comparison**:
 
-| Aspect | Agent Teams | Subagent Fallback | Codex Mode |
+| Aspect | Agent Teams | Direct Subagent | Codex Mode |
 |--------|------------|-------------------|------------|
-| Selection type | User-selectable (default) | Automatic (on TeamCreate failure) | User-selectable |
+| Selection type | Topology-selected | Topology-selected | Topology-selected |
 | Runtime | Claude (TeamCreate) | Claude (Agent tool) | Codex (codex-rescue) |
 | Self-loading | Agent performs | Team lead inlines | Hybrid (agent performs; learning-rules.md inlined) |
-| Deliberation | Cross-process lens-to-lens via SendMessage | In-process by `synthesize` (no cross-process messaging) | In-process by `synthesize` (no cross-process messaging) |
+| Deliberation | Controlled lens deliberation via SendMessage | Controlled lens deliberation artifacts | Controlled lens deliberation artifacts |
 | File I/O | Read/Write tools | Read/Write tools | Bash |
 | Team lifecycle | TeamCreate/TeamDelete | N/A | N/A |
 | Claude token usage | Full | Full | Team lead only |
@@ -388,16 +389,16 @@ Codex mode delegates review passes to an external runtime (OpenAI Codex) to redu
 
 Errors are classified into 4 categories for response:
 - **Process-halting**: Review target read failure, agent definition file read failure -> halt the process + inform the user.
-- **Process-halting-with-partial-result**: An irreplaceable role (e.g., Philosopher) fails after retry exhaustion, but intermediate results have already been collected to files. -> Halt the process, deliver collected intermediate results with explicit limitation disclosure. This applies regardless of execution mode — the determining factor is **whether intermediate artifacts exist at the point of failure**, not the execution mode.
-- **Transient error → retry**: API error (500, timeout, rate limit), agent crash during execution -> team lead retries the failed agent via SendMessage. Retry up to 2 times. If the agent fails after 2 retries, fall back to graceful degradation.
-- **Graceful degradation**: Teammate non-response/failure after retry exhaustion, learning file absence, domain document absence -> exclude the affected agent or mark as "not yet available" and continue with remaining agents. Adjusts the consensus denominator during determination.
+- **Process-halting-with-partial-result**: A required single role fails after retry exhaustion, but intermediate results have already been collected to files. -> Halt the process, deliver collected intermediate results with explicit limitation disclosure. This applies regardless of execution mode — the determining factor is **whether intermediate artifacts exist at the point of failure**, not the execution mode.
+- **Transient error → retry**: API error (500, timeout, rate limit), agent crash during execution -> team lead retries the failed agent via SendMessage. Retry up to 2 times. If the agent fails after 2 retries, halt with the collected failure evidence.
+- **Missing required artifact**: learning file absence is allowed when the lens contract marks it optional; required domain document absence halts when the selected domain declares that document as required.
 
 **Retry protocol**: When a teammate fails with a transient error:
 1. Team lead sends a retry message to the failed teammate with the original task directives and file paths.
 2. If the teammate is unresponsive (no reply after 60 seconds), team lead resends once more.
-3. After 2 failed retries, the teammate is excluded (graceful degradation) and the team lead informs the user.
+3. After 2 failed retries, halt with the collected failure evidence.
 
-**Per-process error handling extension**: If an irreplaceable single role within a process (e.g., Explorer in reconstruct, Philosopher) fails, it is classified as process-halting. This is specified in the respective process file. For irreplaceable roles, retry is attempted before halting.
+**Per-process error handling extension**: If an irreplaceable single role within a process (e.g., Explorer in reconstruct or a required coordinator) fails, it is classified as process-halting. This is specified in the respective process file. For irreplaceable roles, retry is attempted before halting.
 
 ### Team Lifecycle Management
 
@@ -412,7 +413,7 @@ ToolSearch("select:TeamCreate,SendMessage,TeamDelete")
 ```
 
 - ToolSearch succeeds → proceed to Team Creation.
-- ToolSearch fails (tools do not exist in this environment) → apply Fallback Rules (Agent tool subagent approach).
+- ToolSearch fails (tools do not exist in this environment) → stop execution and report the unavailable tool surface.
 
 This check is required **once per conversation session**. Subsequent TeamCreate calls in the same session do not need to repeat it.
 
@@ -569,15 +570,15 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 - Do not use metaphors or analogies.
 ```
 
-### Subagent Fallback Synthesize Prompt Template
+### Direct Subagent Synthesize Prompt Template
 
-Used when TeamCreate is unavailable and execution falls back to the Agent tool. The team lead resolves variables and passes this as the Agent tool's `prompt` parameter with `subagent_type: "general-purpose"` in **foreground** (not background). The dispatched subagent performs in-process deliberation per `.onto/processes/review/synthesize-prompt-contract.md` §6 — there is no cross-process Step 4 in this path.
+Used when the selected topology dispatches synthesize through the Agent tool. The team lead resolves variables and passes this as the Agent tool's `prompt` parameter with `subagent_type: "general-purpose"` in **foreground** (not background). The dispatched subagent consumes the controlled deliberation artifact produced by the runtime.
 
 Differences from the Codex Review Synthesize Prompt Template:
 - Self-loading uses the Read tool instead of Bash (`cat`).
 - File write uses the Write tool instead of shell redirect.
 - No `[Codex Configuration]` block.
-- learning-rules.md is inlined by the team lead (subagents cannot self-load it reliably during fallback).
+- learning-rules.md is inlined by the team lead when self-loading is unavailable.
 
 ```
 You are synthesize (review synthesis stage).
@@ -603,14 +604,10 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 {Review synthesize directives — lens result file paths,
  system purpose, synthesis format, adjudication rules}
 
-synthesize는 deliberation actor입니다. lens 결과 사이에 disagreement가 있으면
-contested된 lens 출력과 materialized input을 재읽어 직접 deliberation을 수행하고
-'Deliberation Decision' 섹션에 contested point별로 resolution을 기록하세요.
-Disagreement 섹션은 원 lens 입장을 보존합니다. frontmatter의 deliberation_status는
-not_needed (논쟁 없음) 또는 performed (직접 수행) 둘 중 하나만 사용하세요.
-required_but_unperformed는 synthesize 출력에서 사용하지 않습니다. 본 경로에서는
-cross-process Step 4 deliberation이 실행되지 않습니다 — synthesize의 in-process
-판단이 deliberation 결과의 유일한 authoritative source입니다.
+Read `{session path}/deliberation.md` before writing synthesis.
+Use its controlled deliberation result as the authority for contested lens
+positions. Disagreement sections preserve original lens positions; resolution
+comes from the deliberation artifact, not from a new synthesize-only channel.
 
 [Output Rules]
 - Write the final output to {session path}/synthesis.md using the Write tool.
@@ -627,7 +624,7 @@ Used when execution_mode is `codex` for the review synthesize step. The team lea
 Differences from Codex Reviewer Prompt Template:
 - Role is `synthesize` (synthesis + adjudication), not a review lens.
 - Output path is `{session path}/synthesis.md`, not `round1/{agent-id}.md`.
-- Includes in-process deliberation directive (synthesize is the deliberation actor).
+- Includes controlled deliberation consumption directive.
 - No domain document self-loading (`synthesize` has no dedicated domain document).
 
 ```
@@ -658,11 +655,10 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 {Review synthesize directives — lens result file paths,
  system purpose, synthesis format, adjudication rules}
 
-synthesize는 deliberation actor입니다. lens 결과 사이에 disagreement가 있으면
-contested된 lens 출력과 materialized input을 재읽어 직접 deliberation을 수행하고
-'Deliberation Decision' 섹션에 contested point별로 resolution을 기록하세요.
-frontmatter의 deliberation_status는 not_needed (논쟁 없음) 또는 performed (직접 수행)
-둘 중 하나만 사용하세요. required_but_unperformed는 synthesize 출력에서 사용하지 않습니다.
+`{session path}/deliberation.md`를 먼저 읽고, 그 controlled
+deliberation 결과를 contested lens position의 authority로 사용하세요.
+synthesize는 새 독립 관점을 만들지 않고 lens output과 deliberation artifact를
+보존적으로 종합합니다.
 
 [Output Rules]
 - Write the final output to {session path}/synthesis.md using shell redirect.

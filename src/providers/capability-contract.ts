@@ -1,9 +1,7 @@
 import type { ReviewUnitKind } from "../core-runtime/review/artifact-types.js";
 
 export type OntoDeliberationMode =
-  | "cross_process"
-  | "cross_context_reinvoke"
-  | "synthesizer_only";
+  | "controlled_lens_deliberation";
 
 export interface OntoProviderCapabilities {
   independentContexts: boolean;

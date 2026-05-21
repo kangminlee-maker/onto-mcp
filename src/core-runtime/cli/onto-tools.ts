@@ -420,8 +420,8 @@ async function walkAndSearch(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function clampPositive(value: unknown, fallback: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) return fallback;
+function clampPositive(value: unknown, defaultValue: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 1) return defaultValue;
   return Math.floor(value);
 }
 

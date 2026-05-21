@@ -5,8 +5,6 @@ import {
   detectHostCapabilities,
   detectClaudeCodeEnvSignal,
   detectCodexEnvSignal,
-  isClaudeCodeHost,
-  isCodexHost,
   ENV_ONTO_HOST_RUNTIME,
 } from "./host-detection.js";
 
@@ -19,7 +17,6 @@ const HOST_ENV_VARS = [
   "CODEX_CI",
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
-  "LITELLM_BASE_URL",
 ];
 
 let savedEnv: Record<string, string | undefined> = {};
@@ -164,26 +161,15 @@ describe("detectHostCapabilities — capability matrix", () => {
 
   it("LLM provider capabilities are environmental, independent of host", () => {
     process.env.ANTHROPIC_API_KEY = "sk-ant-test";
-    process.env.LITELLM_BASE_URL = "http://localhost:4000/v1";
+    process.env.OPENAI_API_KEY = "sk-openai-test";
 
     const claudeCaps = detectHostCapabilities("claude");
     const standaloneCaps = detectHostCapabilities("standalone");
 
     expect(claudeCaps.hasAnthropicApiKey).toBe(true);
-    expect(claudeCaps.hasLiteLlmEndpoint).toBe(true);
+    expect(claudeCaps.hasOpenAiApiKey).toBe(true);
     expect(standaloneCaps.hasAnthropicApiKey).toBe(true);
-    expect(standaloneCaps.hasLiteLlmEndpoint).toBe(true);
-  });
-
-  it("Cross-host LLM combo: Claude main + LiteLLM subagent (capability indicates feasible)", () => {
-    process.env.CLAUDECODE = "1";
-    process.env.LITELLM_BASE_URL = "http://localhost:4000/v1";
-
-    const result = detectHostRuntime({});
-
-    expect(result.hostRuntime).toBe("claude");
-    expect(result.capabilities.hasTeamCreate).toBe(true); // main can orchestrate
-    expect(result.capabilities.hasLiteLlmEndpoint).toBe(true); // subagent can use LiteLLM
+    expect(standaloneCaps.hasOpenAiApiKey).toBe(true);
   });
 });
 
@@ -213,31 +199,5 @@ describe("Low-level signal detectors", () => {
   it("detectCodexEnvSignal: returns true on CODEX_CI", () => {
     process.env.CODEX_CI = "1";
     expect(detectCodexEnvSignal()).toBe(true);
-  });
-});
-
-describe("Backward-compat shims", () => {
-  it("isClaudeCodeHost returns true when CLAUDECODE is set", () => {
-    process.env.CLAUDECODE = "1";
-    expect(isClaudeCodeHost({})).toBe(true);
-  });
-
-  it("isClaudeCodeHost returns false in standalone mode", () => {
-    expect(isClaudeCodeHost({})).toBe(false);
-  });
-
-  it("isCodexHost returns true when CODEX_THREAD_ID is set", () => {
-    process.env.CODEX_THREAD_ID = "x";
-    expect(isCodexHost({})).toBe(true);
-  });
-
-  it("isCodexHost returns false in standalone mode", () => {
-    expect(isCodexHost({})).toBe(false);
-  });
-
-  it("env override beats env signal in shim", () => {
-    process.env[ENV_ONTO_HOST_RUNTIME] = "standalone";
-    process.env.CLAUDECODE = "1";
-    expect(isClaudeCodeHost({})).toBe(false);
   });
 });

@@ -142,6 +142,7 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
     options: {
       "session-root": { type: "string" },
       "project-root": { type: "string", default: "." },
+      "require-deliberation": { type: "boolean", default: false },
     },
     strict: true,
     allowPositionals: false,
@@ -150,6 +151,7 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
 
   const sessionRoot = path.resolve(requireString(values["session-root"], "session-root"));
   const projectRoot = path.resolve(requireString(values["project-root"], "project-root"));
+  const requireDeliberation = Boolean(values["require-deliberation"]);
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   const errorLogPath = executionPlan.error_log_path ?? path.join(sessionRoot, "error-log.md");
@@ -207,12 +209,36 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
   const degradedSection = degraded.length > 0
     ? `\n## Degraded Lens Failures\n${degraded.map((d) => `- ${d.lens_id}: ${d.message}`).join("\n")}\n`
     : "";
+  if (requireDeliberation && !(await fileExists(executionPlan.deliberation_output_path))) {
+    throw new Error(
+      `Missing controlled deliberation result before synthesize: ${executionPlan.deliberation_output_path}`,
+    );
+  }
+  const deliberationSection = (await fileExists(executionPlan.deliberation_output_path))
+    ? [
+        "",
+        "## Controlled Lens Deliberation Result",
+        `- teamlead result: ${toRelativePath(executionPlan.deliberation_output_path, projectRoot)}`,
+        "",
+        "## Lens Deliberation Responses",
+        ...participating.map((lensId) => {
+          const seat = executionPlan.lens_deliberation_prompt_packet_seats.find(
+            (candidate) => candidate.lens_id === lensId,
+          );
+          if (!seat) {
+            throw new Error(`Missing deliberation prompt seat for lens: ${lensId}`);
+          }
+          return `- ${lensId}: ${toRelativePath(seat.output_path, projectRoot)}`;
+        }),
+        "",
+      ].join("\n")
+    : "";
 
   const runtimePacketPath = path.join(
     executionPlan.prompt_packets_root ?? path.join(sessionRoot, "prompt-packets"),
     "synthesize.runtime.prompt.md",
   );
-  const enrichedText = `${synthesizePacketText.trimEnd()}\n\n## Runtime Participating Lens Outputs\n${lensRefsSection}\n${degradedSection}`;
+  const enrichedText = `${synthesizePacketText.trimEnd()}\n\n## Runtime Participating Lens Outputs\n${lensRefsSection}\n${deliberationSection}\n${degradedSection}`;
   await fs.writeFile(runtimePacketPath, enrichedText.trimEnd() + "\n", "utf8");
 
   return {
@@ -425,7 +451,7 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     (id) => !participating.includes(id) && !degraded.includes(id),
   );
 
-  // Read deliberation status from synthesis frontmatter
+  // Controlled lens deliberation is the source of truth for deliberation status.
   let deliberationStatus: string | null = null;
   const synthesisPath = executionPlan.synthesis_output_path;
   if (synthesisExecuted && await fileExists(synthesisPath)) {
@@ -434,8 +460,22 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     deliberationStatus = parsed.metadata?.deliberation_status ?? null;
   }
   const deliberationPath = executionPlan.deliberation_output_path;
-  if (deliberationPath && await fileExists(deliberationPath)) {
-    deliberationStatus = "performed";
+  if (synthesisExecuted) {
+    if (!(await fileExists(deliberationPath))) {
+      throw new Error(`Missing controlled deliberation result: ${deliberationPath}`);
+    }
+    const deliberationText = await fs.readFile(deliberationPath, "utf8");
+    const parsed = parseMarkdownFrontmatter<{ deliberation_status?: string }>(deliberationText);
+    if (parsed.metadata?.deliberation_status !== "performed") {
+      throw new Error(
+        `Controlled deliberation result must declare deliberation_status: performed in ${deliberationPath}`,
+      );
+    }
+    if (deliberationStatus !== "performed") {
+      throw new Error(
+        `Synthesis result must declare deliberation_status: performed in ${synthesisPath}`,
+      );
+    }
   }
 
   const completedAt = isoNow();
@@ -493,15 +533,14 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
       const unitCompletedAt = mtimeIso ?? completedAt;
       // Provenance: both started_at and completed_at must come from per-unit
       // sources (state transition + mtime) for the unit to count as
-      // `coordinator_derived`. If either falls back to batch, or the unit is
-      // non-participating, we mark it `batch_fallback` so consumers don't
-      // treat batch values as per-unit measurements.
+      // `coordinator_derived`. Otherwise, the unit gets the session-level
+      // batch window marker.
       const hasPerUnitStart = Boolean(lensDispatchAt);
       const hasPerUnitEnd = isParticipating && mtimeIso !== null;
       const provenance: UnitTimestampProvenance =
         hasPerUnitStart && hasPerUnitEnd
           ? "coordinator_derived"
-          : "batch_fallback";
+          : "batch_window";
       return {
         unit_id: seat.lens_id,
         unit_kind: "lens" as const,
@@ -534,6 +573,63 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     "synthesize.runtime.prompt.md",
   );
 
+  const deliberationDispatchAt = findTransitionAt(
+    stateFile,
+    "awaiting_deliberation",
+  );
+  const deliberationStartedAt = deliberationDispatchAt ?? executionStartedAt;
+  const lensDeliberationResults: ReviewUnitExecutionResult[] = await Promise.all(
+    executionPlan.lens_deliberation_prompt_packet_seats.map(async (seat) => {
+      const outputExists = await fileExists(seat.output_path);
+      const mtimeIso = outputExists
+        ? await readFileMtimeIsoOrNull(seat.output_path)
+        : null;
+      const unitCompletedAt = mtimeIso ?? completedAt;
+      const provenance: UnitTimestampProvenance =
+        deliberationDispatchAt && mtimeIso ? "coordinator_derived" : "batch_window";
+      return {
+        unit_id: `deliberation-${seat.lens_id}`,
+        unit_kind: "deliberation" as const,
+        packet_path: seat.packet_path,
+        output_path: seat.output_path,
+        status: outputExists ? ("completed" as const) : ("failed" as const),
+        started_at: deliberationStartedAt,
+        completed_at: unitCompletedAt,
+        duration_ms: computeDurationMs(
+          deliberationStartedAt,
+          unitCompletedAt,
+          `deliberation:${seat.lens_id}`,
+        ),
+        timestamp_provenance: provenance,
+        failure_message: outputExists ? null : "output file missing or empty",
+      };
+    }),
+  );
+  const teamleadDeliberationMtimeIso = synthesisExecuted
+    ? await readFileMtimeIsoOrNull(deliberationPath)
+    : null;
+  const teamleadDeliberationResult: ReviewUnitExecutionResult | null = synthesisExecuted
+    ? {
+        unit_id: "controlled-deliberation",
+        unit_kind: "deliberation",
+        packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
+        output_path: deliberationPath,
+        status: (await fileExists(deliberationPath)) ? "completed" : "failed",
+        started_at: deliberationStartedAt,
+        completed_at: teamleadDeliberationMtimeIso ?? completedAt,
+        duration_ms: computeDurationMs(
+          deliberationStartedAt,
+          teamleadDeliberationMtimeIso ?? completedAt,
+          "controlled-deliberation",
+        ),
+        timestamp_provenance:
+          deliberationDispatchAt && teamleadDeliberationMtimeIso
+            ? "coordinator_derived"
+            : "batch_window",
+        failure_message: null,
+      }
+    : null;
+
   const synthesizeDispatchAt = findTransitionAt(
     stateFile,
     "awaiting_synthesize_dispatch",
@@ -562,7 +658,7 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
   const synthesizeProvenance: UnitTimestampProvenance =
     synthesizeDispatchAt && synthesizeMtimeIso
       ? "coordinator_derived"
-      : "batch_fallback";
+      : "batch_window";
 
   const synthesizeResult: ReviewUnitExecutionResult | null = synthesisExecuted
     ? {
@@ -599,6 +695,10 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     halt_reason: haltReason,
     error_log_path: errorLogPath,
     lens_execution_results: lensResults,
+    deliberation_execution_results: [
+      ...lensDeliberationResults,
+      ...(teamleadDeliberationResult ? [teamleadDeliberationResult] : []),
+    ],
     synthesize_execution_result: synthesizeResult,
   };
 

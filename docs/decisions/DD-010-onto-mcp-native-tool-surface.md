@@ -9,7 +9,7 @@
 `onto`의 장기 제품 방향은 **TS core + MCP-native tool surface**이다.
 
 외부 adapter 결합은 `onto`의 제품 중심 경로가 아니다. 이전 adapter
-실험은 독립 관점 리뷰, artifact compatibility, cross-process
+실험은 독립 관점 리뷰, artifact compatibility, controlled lens
 deliberation 요구를 검증한 증거와 conformance harness로만 보존한다.
 
 ## User-Facing Goal
@@ -62,7 +62,7 @@ execution providers
 - MCP server is a thin tool surface, not a second implementation of review
   semantics.
 - Providers execute capabilities only: independent contexts, persistent agents,
-  cross-process messaging, concurrency, timeout, and artifact collection.
+  controlled deliberation transport, concurrency, timeout, and artifact collection.
 - External adapter code must not accumulate new canonical `onto` semantics. It may
   remain as conformance tests, bridge code, or optional provider proof.
 
@@ -87,6 +87,8 @@ interface OntoExecutionProvider {
 
 This keeps platform-specific work bounded. A provider does not decide what
 `onto review` means; it only reports and performs what its host can execute.
+The canonical behavior is always: isolated lens contexts, controlled
+lens-deliberation result, then synthesize consumption of `deliberation.md`.
 
 ## Consequences
 

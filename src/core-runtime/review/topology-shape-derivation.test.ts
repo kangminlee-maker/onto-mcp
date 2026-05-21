@@ -11,8 +11,8 @@ import type { ShapeDerivationSignals } from "./topology-shape-derivation.js";
 //       environment signals.
 //   (2) Environment-conditional branching: same axis config produces a
 //       different shape based on teams availability.
-//   (3) A2A deliberation requires both teams availability AND native
-//       subagent; either missing → failure with detailed reason.
+//   (3) Controlled deliberation is always representable. Agent Teams is
+//       selected only when the environment exposes that transport.
 //   (4) External teamlead produces ext-teamlead_native regardless of other
 //       axes; non-codex external teamlead rejected.
 // ---------------------------------------------------------------------------
@@ -21,16 +21,25 @@ const NO_TEAMS: ShapeDerivationSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 const TEAMS_ON: ShapeDerivationSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: true,
+  lensAgentTeamsMode: false,
+};
+const TEAMS_WITH_DELIBERATION: ShapeDerivationSignals = {
+  claudeHost: true,
+  codexSessionActive: false,
+  experimentalAgentTeams: true,
+  lensAgentTeamsMode: true,
 };
 const CODEX_HOST: ShapeDerivationSignals = {
   claudeHost: false,
   codexSessionActive: true,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 
 describe("deriveTopologyShape — 6 shape happy paths", () => {
@@ -91,29 +100,17 @@ describe("deriveTopologyShape — 6 shape happy paths", () => {
     }
   });
 
-  it("main-teams_foreign: subagent=litellm + teams on", () => {
-    const r = deriveTopologyShape(
-      { subagent: { provider: "litellm", model_id: "llama-8b" } },
-      TEAMS_ON,
-    );
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.derived.shape).toBe("main-teams_foreign");
-      expect(r.derived.subagent_provider).toBe("litellm");
-    }
-  });
-
-  it("main-teams_a2a: main-native + a2a + teams on", () => {
+  it("main-teams_deliberation: main-native + controlled deliberation + teams on", () => {
     const r = deriveTopologyShape(
       {
         teamlead: { model: "main" },
         subagent: { provider: "main-native" },
-        lens_deliberation: "sendmessage-a2a",
+        lens_deliberation: "controlled-lens-deliberation",
       },
-      TEAMS_ON,
+      TEAMS_WITH_DELIBERATION,
     );
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.derived.shape).toBe("main-teams_a2a");
+    if (r.ok) expect(r.derived.shape).toBe("main-teams_deliberation");
   });
 
   it("ext-teamlead_native: teamlead=codex", () => {
@@ -156,56 +153,57 @@ describe("deriveTopologyShape — environment-conditional branching", () => {
   });
 });
 
-describe("deriveTopologyShape — a2a deliberation constraints", () => {
-  it("rejects a2a when teams not available", () => {
+describe("deriveTopologyShape — controlled deliberation transport", () => {
+  it("uses main_native when Agent Teams is not available", () => {
     const r = deriveTopologyShape(
       {
         subagent: { provider: "main-native" },
-        lens_deliberation: "sendmessage-a2a",
+        lens_deliberation: "controlled-lens-deliberation",
       },
       NO_TEAMS,
     );
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.reasons.some((s) => s.includes("AGENT_TEAMS"))).toBe(true);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.derived.shape).toBe("main_native");
+      expect(r.derived.trace.some((s) => s.includes("review runner"))).toBe(true);
     }
   });
 
-  it("rejects a2a when subagent is foreign provider", () => {
+  it("keeps codex subprocess shape when subagent is codex", () => {
     const r = deriveTopologyShape(
       {
         subagent: { provider: "codex", model_id: "gpt-5.4" },
-        lens_deliberation: "sendmessage-a2a",
+        lens_deliberation: "controlled-lens-deliberation",
       },
       TEAMS_ON,
     );
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.reasons.some((s) => s.includes("main-native"))).toBe(true);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.derived.shape).toBe("main-teams_foreign");
+      expect(r.derived.subagent_provider).toBe("codex");
     }
   });
 
-  it("rejects a2a with both violations (teams missing + foreign subagent)", () => {
+  it("uses main_foreign when both Agent Teams is absent and subagent is codex", () => {
     const r = deriveTopologyShape(
       {
         subagent: { provider: "codex", model_id: "gpt-5.4" },
-        lens_deliberation: "sendmessage-a2a",
+        lens_deliberation: "controlled-lens-deliberation",
       },
       NO_TEAMS,
     );
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.reasons.length).toBeGreaterThanOrEqual(2);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.derived.shape).toBe("main_foreign");
+      expect(r.derived.subagent_provider).toBe("codex");
     }
   });
 });
 
 describe("deriveTopologyShape — external teamlead", () => {
   it("rejects non-codex external teamlead", () => {
-    // Note: validator already rejects this at config load time, but
-    // deriveTopologyShape accepts pre-validated OntoReviewConfig so the
-    // type would allow anthropic/openai/litellm. Cast via any to bypass
-    // the TS provider union narrowing.
+    // Note: validator already rejects this at config load time. Cast via
+    // any to bypass the TS provider union narrowing.
     const r = deriveTopologyShape(
       {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

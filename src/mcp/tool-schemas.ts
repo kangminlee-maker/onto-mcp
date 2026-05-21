@@ -3,9 +3,7 @@ import { z } from "zod";
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
 const ExecutorRealizationSchema = z.enum(["codex", "mock", "ts_inline_http"]);
 const DeliberationModeSchema = z.enum([
-  "cross_process",
-  "cross_context_reinvoke",
-  "synthesizer_only",
+  "controlled_lens_deliberation",
 ]);
 
 const OntoReviewToolInputBaseSchema = z.object({

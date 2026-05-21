@@ -32,21 +32,11 @@ output_language: en           # en | ko | ja | ...
 #   - ontology
 
 # ─────────────────────────────────────────────────────────────────
-# Review execution axes — canonical as of Review UX Redesign (2026-04-21)
+# Review execution
 # ─────────────────────────────────────────────────────────────────
-# The `review:` block declares 6 user-facing axes. Runtime derives one of
-# 6 internal TopologyShapes (main_native / main_foreign / main-teams_*
-# / ext-teamlead_native) and dispatches accordingly.
-#
-# Omit `review:` entirely to use universal fallback (equivalent to
-# teamlead=main + subagent=main-native + synthesizer-only deliberation).
-#
 # Use `onto config edit` for interactive stepwise setup, or
 # `onto config set <key> <value>` for single-field mutation.
-# Use `onto config validate` to preview the derived TopologyId under
-# current host signals before running a review.
-#
-# Design doc: development-records/evolve/20260420-review-execution-ux-redesign.md
+# Use `onto config validate` before running a review.
 # Type source: src/core-runtime/discovery/config-chain.ts (OntoReviewConfig)
 #
 # review:
@@ -54,41 +44,20 @@ output_language: en           # en | ko | ja | ...
 #     model: main                   # "main" = host session (default)
 #                                   # External: {provider: codex, model_id: gpt-5.4, effort: high}
 #   subagent:
-#     provider: main-native         # main-native | codex | anthropic | openai | litellm
+#     provider: main-native         # main-native | codex
 #     # model_id: gpt-5.4           # required when provider != main-native
 #     # effort: high                # provider-specific reasoning effort
 #   # max_concurrent_lenses: 6      # provider default applies when omitted
 #                                   # codex default: 6 / main-native: num_lenses
-#                                   # litellm default: 1-2
-#   # lens_deliberation: synthesizer-only   # or sendmessage-a2a (requires teams)
+#   # lens_deliberation: controlled-lens-deliberation
 
+# Canonical model switcher
 # ─────────────────────────────────────────────────────────────────
-# Subagent LLM (background task LLM — learn / govern / promote)
-# ─────────────────────────────────────────────────────────────────
-# Still consulted by background tasks (not review execution — review
-# uses the `review.subagent` block above).
-# See .onto/processes/configuration.md §4.3 for full sub-field reference.
-#
-# subagent_llm:
-#   provider: litellm             # anthropic | openai | litellm | codex
-#   model: claude-sonnet-4-6
-#   base_url: http://localhost:4000/v1   # required when provider=litellm
-#   max_tokens: 4096
-#   tool_mode: auto               # auto | native | inline. default auto
-
-# ─────────────────────────────────────────────────────────────────
-# Background task LLM (learn / govern / promote) — optional
-# ─────────────────────────────────────────────────────────────────
-# Omit for cost-order auto-resolution: codex OAuth > LiteLLM >
-# Anthropic > OpenAI. Set explicitly to force a specific provider.
-# api_provider: anthropic         # anthropic | openai | litellm | codex
-
-# ─────────────────────────────────────────────────────────────────
-# Top-level `max_concurrent_lenses` (legacy — prefer `review.max_concurrent_lenses`)
-# ─────────────────────────────────────────────────────────────────
-# Kept for projects that haven't migrated to the `review:` block.
-# Lower for constrained environments. Local LLM with a single GPU: 1.
-# max_concurrent_lenses: 9
+# llm:
+#   auth: oauth                   # oauth | api_key | local
+#   provider: openai              # openai | anthropic | grok | lmstudio
+#   model: gpt-5.4
+#   effort: high
 
 # ─────────────────────────────────────────────────────────────────
 # Learning extraction mode — optional (default disabled)

@@ -22,7 +22,7 @@ import type { TopologyId } from "./execution-topology-resolver.js";
  * S0 Subprocess (codex CLI)           — full isolation
  * S1 External HTTP API (inline-http)  — process shared, API context independent
  * S2 Host nested spawn                — main-context shared (claude TeamCreate)
- * S3 In-process mock                  — test only
+ * S3 Local mock                       — test only
  */
 export type SeparationRank = "S0" | "S1" | "S2" | "S3";
 
@@ -401,7 +401,7 @@ function buildNoHostReason(): string {
     "  1. Claude Code 세션에서 `onto review` 재실행",
     "  2. codex CLI 설치 + `codex login` 후 재실행",
     "  3. `--codex` 플래그로 codex subprocess 강제",
-    "  4. `.onto/config.yml` 에 `review:` axis block 추가 (docs/topology-migration-guide.md §7 참고)",
+    "  4. `.onto/config.yml` 에 `review:` block 추가 (`.onto/processes/configuration.md` 참고)",
     "  5. `.onto/config.yml` 에 llm: { auth, provider, model } 설정",
     "  6. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
   ].join("\n");

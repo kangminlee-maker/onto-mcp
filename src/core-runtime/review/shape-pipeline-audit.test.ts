@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
 import type { OntoReviewConfig } from "../discovery/config-chain.js";
 import {
-  PR_A_SUPPORTED_TOPOLOGIES,
+  DIRECT_SPAWN_SUPPORTED_TOPOLOGIES,
   TOPOLOGY_CATALOG,
   resolveExecutionTopology,
   type ExecutionTopologyResolution,
   type TopologyId,
 } from "./execution-topology-resolver.js";
-import { PR_B_SUPPORTED_TOPOLOGIES } from "../cli/topology-executor-mapping.js";
+import { EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES } from "../cli/topology-executor-mapping.js";
 import { shapeToTopologyId } from "./shape-to-topology-id.js";
 import {
   deriveTopologyShape,
@@ -23,11 +23,11 @@ import {
 // TopologyShapes introduced by P1–P5. The audit answers three questions:
 //
 //   (1) Can each shape be derived from a valid OntoReviewConfig + signals?
-//   (2) Does each shape map to a canonical TopologyId in the existing 10-
+//   (2) Does each shape map to a canonical TopologyId in the existing 7-
 //       value catalog (not null, not generic-*)?
 //   (3) For each shape, what fraction of the 7-step review pipeline is
 //       currently wired for spawn-time execution vs blocked on a future
-//       PR (PR-C nested-codex, PR-D agent-teams deliberation)?
+//       implementation slice (nested codex, Agent Teams deliberation)?
 //
 // The test is **hermetic** — no real LLM calls, no spawn. Each table row
 // exercises the dispatch path (resolver + mapping + executor support set)
@@ -53,21 +53,31 @@ const CLAUDE_NO_TEAMS: ShapeDerivationSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 const CLAUDE_TEAMS: ShapeDerivationSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: true,
+  lensAgentTeamsMode: false,
+};
+const CLAUDE_TEAMS_WITH_DELIBERATION: ShapeDerivationSignals = {
+  claudeHost: true,
+  codexSessionActive: false,
+  experimentalAgentTeams: true,
+  lensAgentTeamsMode: true,
 };
 const CODEX_HOST: ShapeDerivationSignals = {
   claudeHost: false,
   codexSessionActive: true,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 const PLAIN_TERMINAL: ShapeDerivationSignals = {
   claudeHost: false,
   codexSessionActive: false,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 
 interface AuditRow {
@@ -78,10 +88,10 @@ interface AuditRow {
   signals: ShapeDerivationSignals;
   /** Canonical TopologyId this shape should map to under the signals. */
   expected_topology_id: TopologyId;
-  /** True when the topology is in PR_B_SUPPORTED_TOPOLOGIES (spawn-ready). */
+  /** True when the topology is in EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES. */
   expected_spawn_supported: boolean;
-  /** Future PR that wires the remaining spawn path (documentation-only). */
-  blocked_on?: "PR-C (ext-codex teamlead)" | "PR-D (agent-teams A2A)";
+  /** Execution surface that owns a non-mapped spawn path. */
+  blocked_on?: "nested codex teamlead" | "Agent Teams deliberation";
   /**
    * Supplementary top-level OntoConfig fields required by the resolver's
    * downstream `checkTopologyRequirements` gate for the expected topology.
@@ -120,7 +130,7 @@ const AUDIT_MATRIX: AuditRow[] = [
     axes: {
       subagent: { provider: "main-native" },
     },
-    signals: CLAUDE_TEAMS,
+    signals: CLAUDE_TEAMS_WITH_DELIBERATION,
     expected_topology_id: "cc-teams-agent-subagent",
     expected_spawn_supported: true,
   },
@@ -134,18 +144,18 @@ const AUDIT_MATRIX: AuditRow[] = [
     expected_spawn_supported: true,
   },
   {
-    shape: "main-teams_a2a",
+    shape: "main-teams_deliberation",
     axes: {
       subagent: { provider: "main-native" },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     },
     signals: CLAUDE_TEAMS,
     expected_topology_id: "cc-teams-lens-agent-deliberation",
     expected_spawn_supported: false,
-    blocked_on: "PR-D (agent-teams A2A)",
+    blocked_on: "Agent Teams deliberation",
     // Double opt-in gate — cc-teams-lens-agent-deliberation additionally
     // requires this config flag on top of CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-    // because keeping lens agents alive for A2A materially changes the
+    // because keeping lens agents alive for controlled-deliberation transport materially changes the
     // memory/latency profile (sketch v3 §3).
     config_extras: { lens_agent_teams_mode: true },
   },
@@ -158,7 +168,7 @@ const AUDIT_MATRIX: AuditRow[] = [
     signals: PLAIN_TERMINAL,
     expected_topology_id: "codex-nested-subprocess",
     expected_spawn_supported: false,
-    blocked_on: "PR-C (ext-codex teamlead)",
+    blocked_on: "nested codex teamlead",
   },
 ];
 
@@ -227,7 +237,6 @@ describe("P8 audit — stage 3: resolver end-to-end selects expected topology", 
         codexSessionActive: row.signals.codexSessionActive,
         experimentalAgentTeams: row.signals.experimentalAgentTeams,
         codexAvailable: true, // P8 audit assumes codex is present for codex-flavored shapes
-        liteLlmEndpointAvailable: false,
       });
 
       if (res.type !== "resolved") {
@@ -244,7 +253,7 @@ describe("P8 audit — stage 3: resolver end-to-end selects expected topology", 
 });
 
 // ---------------------------------------------------------------------------
-// Stage 4 — spawn-readiness (PR_B_SUPPORTED_TOPOLOGIES)
+// Stage 4 — executor mapping readiness
 // ---------------------------------------------------------------------------
 
 describe("P8 audit — stage 4: spawn-readiness per shape", () => {
@@ -252,7 +261,7 @@ describe("P8 audit — stage 4: spawn-readiness per shape", () => {
     it(`${row.shape}: spawn-supported=${row.expected_spawn_supported}${
       row.blocked_on ? ` (blocked_on=${row.blocked_on})` : ""
     }`, () => {
-      const supported = PR_B_SUPPORTED_TOPOLOGIES.has(row.expected_topology_id);
+      const supported = EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(row.expected_topology_id);
       expect(supported).toBe(row.expected_spawn_supported);
       if (!supported) {
         expect(row.blocked_on).toBeDefined();
@@ -260,60 +269,35 @@ describe("P8 audit — stage 4: spawn-readiness per shape", () => {
     });
   }
 
-  it("support sets are monotonically widening (PR_A ⊆ PR_B)", () => {
-    for (const id of PR_A_SUPPORTED_TOPOLOGIES) {
-      expect(PR_B_SUPPORTED_TOPOLOGIES.has(id)).toBe(true);
+  it("executor mapping support includes direct spawn support", () => {
+    for (const id of DIRECT_SPAWN_SUPPORTED_TOPOLOGIES) {
+      expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(id)).toBe(true);
     }
-    // PR_B strictly widens PR_A. Do not hard-code the delta — PR-C / PR-D
-    // will further widen PR_B (or introduce PR_C_SUPPORTED_TOPOLOGIES).
-    // The structural invariant (monotonic widening) is what matters here.
-    expect(PR_B_SUPPORTED_TOPOLOGIES.size).toBeGreaterThan(
-      PR_A_SUPPORTED_TOPOLOGIES.size,
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.size).toBeGreaterThan(
+      DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.size,
     );
   });
 
-  it(
-    "the 4 spawn-ready shapes cover 5 of the 6 spawn-supported TopologyIds " +
-      "(cc-teams-litellm-sessions is reachable via main-teams_foreign with provider=litellm)",
-    () => {
-      const spawnReadyIds = new Set(
-        AUDIT_MATRIX.filter((r) => r.expected_spawn_supported).map(
-          (r) => r.expected_topology_id,
-        ),
-      );
-      // main_native (Claude), main_foreign, main-teams_native, main-teams_foreign
-      expect(spawnReadyIds.size).toBe(4);
-      // litellm variant is the 5th, reached by flipping subagent.provider
-      // to litellm under main-teams_foreign (same shape, different provider).
-      const litellmRow = {
-        ...AUDIT_MATRIX.find((r) => r.shape === "main-teams_foreign")!,
-        axes: {
-          subagent: {
-            provider: "litellm" as const,
-            model_id: "llama-8b",
-          },
-        } as OntoReviewConfig,
-      };
-      const r = deriveTopologyShape(litellmRow.axes, litellmRow.signals);
-      expect(r.ok).toBe(true);
-      if (r.ok) {
-        expect(r.derived.shape).toBe("main-teams_foreign");
-        const mapping = shapeToTopologyId({
-          shape: r.derived.shape,
-          subagent_provider: r.derived.subagent_provider,
-          signals: {
-            claudeHost: litellmRow.signals.claudeHost,
-            codexSessionActive: litellmRow.signals.codexSessionActive,
-          },
-        });
-        expect(mapping.ok).toBe(true);
-        if (mapping.ok) {
-          expect(mapping.topology_id).toBe("cc-teams-litellm-sessions");
-          expect(PR_B_SUPPORTED_TOPOLOGIES.has(mapping.topology_id)).toBe(true);
-        }
-      }
-    },
-  );
+  it("spawn-ready shapes map into the spawn-supported TopologyIds", () => {
+    const spawnReadyIds = new Set(
+      AUDIT_MATRIX.filter((r) => r.expected_spawn_supported).map(
+        (r) => r.expected_topology_id,
+      ),
+    );
+    for (const id of spawnReadyIds) {
+      expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(id)).toBe(true);
+    }
+    const codexHostMapping = shapeToTopologyId({
+      shape: "main_native",
+      subagent_provider: null,
+      signals: { claudeHost: false, codexSessionActive: true },
+    });
+    expect(codexHostMapping.ok).toBe(true);
+    if (codexHostMapping.ok) {
+      expect(codexHostMapping.topology_id).toBe("codex-main-subprocess");
+      expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(codexHostMapping.topology_id)).toBe(true);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -333,7 +317,6 @@ describe("P8 audit — stage 5: pipeline step invariants (topology-agnostic step
         codexSessionActive: row.signals.codexSessionActive,
         experimentalAgentTeams: row.signals.experimentalAgentTeams,
         codexAvailable: true,
-        liteLlmEndpointAvailable: false,
       });
       if (res.type !== "resolved") {
         throw new Error(

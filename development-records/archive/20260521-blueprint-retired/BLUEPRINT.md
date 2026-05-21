@@ -58,50 +58,51 @@
 
 ### What It Is
 
-onto is a **multi-host LLM-driven runtime** that runs in three host environments:
+onto is an **MCP-native ontology runtime** with a TypeScript core and host/provider adapters:
 
-1. **Claude Code plugin** ✅ — invoked via slash commands (`/onto:review`, `/onto:reconstruct`, `/onto:evolve`, etc.) inside a Claude Code terminal session
-2. **Codex CLI subagent** ✅ — invoked via `onto review ... --codex` or as a `codex exec` subprocess from a Codex CLI session
-3. **Standalone CLI** ✅ (Phase 2 executor; ✅ binary, 📐 auto-wiring) — invoked as `npm run onto:*` or installed CLI; orchestrates lenses by calling configured LLM endpoints (LiteLLM / Anthropic SDK / OpenAI SDK direct) via `inline-http-review-unit-executor`. Auto-selection via `host_runtime: standalone` config is pending; the executor binary itself is already callable via explicit `--executor-bin` override or `npm run review:inline-http-unit-executor`.
+1. **MCP tool surface** ✅ — model-independent entrypoints that hosts can call as tools
+2. **TypeScript CLI/runtime** ✅ — invoked as `npm run review:*` or as an installed CLI
+3. **Host adapters** ✅ — Codex, Claude, and direct provider execution surfaces that preserve the same review contract
 
-The host environment is detected automatically via env signals. Override with `ONTO_HOST_RUNTIME=claude|codex|standalone`.
+The host environment is detected automatically via env signals. Provider execution is selected through the canonical `llm` switcher in `.onto/config.yml`.
 
 **Five activities** (`.onto/authority/core-lexicon.yaml#activity_enum`): `review`, `evolve`, `reconstruct`, `learn`, `govern`. Two are user-facing core capabilities below; the remaining three (evolve, learn, govern) are described at surface level in §4.4–§4.6.
 
 Two core capabilities:
 
-1. **Verification (review)** ✅: 9 independent review lenses inspect a scope-defined target, then a separate synthesize stage writes the final review result
+1. **Verification (review)** ✅: 9 independent review lenses inspect a scope-defined target, controlled lens deliberation resolves conflicts, then synthesize writes the final review result
 2. **Reconstruct** ✅: Incrementally constructs ontologies (structured domain knowledge representations) from analysis targets using integral exploration. CLI 4-step bounded path: `start → explore → complete → confirm`
 
-### Two-tier LLM model (✅ Phase 1 schema; ✅ Phase 2 subagent executor; 📐 Phase 2 auto-wiring)
+### Runtime And Model Switcher
 
-onto separates two LLM roles that can be configured independently:
+onto separates orchestration from model access:
 
-| Role | Purpose | Phase 1 binding | Phase 2 status |
-|---|---|---|---|
-| **Main LLM** | Orchestrates the session: lens selection, synthesize, meta-reasoning | Bound to host runtime (Claude / Codex / TS process) | 📐 Auto-config from `main_llm.provider` in `.onto/config.yml` (pending) |
-| **Subagent LLM** | Per-lens execution (9 parallel lens reasonings) | Bound to host runtime (TeamCreate / codex exec / direct call) | ✅ `inline-http-review-unit-executor` binary callable via explicit invocation; auto-selection via `subagent_llm.provider` config pending |
+| Layer | Purpose | Active surface |
+|---|---|---|
+| **Review orchestration** | interpret, bind, dispatch lenses, run deliberation, synthesize | `review:` block |
+| **Model access** | choose auth rail, provider, model, effort, optional base URL | `llm:` block |
 
-Cross-host combinations enabled by Phase 2 (examples):
-- Claude Code main + LiteLLM 8B subagent (cheap parallel lens execution under Claude orchestration)
-- LiteLLM 31B local main + LiteLLM 8B subagent (fully local stack)
-- Anthropic API direct main + LiteLLM 8B subagent (cloud orchestrator + local executor)
+The model switcher has three auth rails and four provider names:
+
+| Auth rail | Providers | Runtime path |
+|---|---|---|
+| `oauth` | `openai` | Codex CLI subprocess |
+| `api_key` | `openai`, `anthropic`, `grok` | direct provider API |
+| `local` | `lmstudio` | local OpenAI-compatible endpoint |
 
 ### Host capability matrix
 
-| Host | hasTeamCreate | hasAgentSpawn | hasCodexExec (env-detected) | Default subagent path |
-|---|---|---|---|---|
-| `claude` | true | true | (env-conditional) | `agent_teams_claude` (TeamCreate) |
-| `codex` | false | false | true | `subagent_codex_oauth` or `subagent_codex_apikey` |
-| `standalone` | false | false | (env-conditional) | (Phase 2) direct LLM call: anthropic / openai / litellm |
-
-`hasCodexExec`, `hasAnthropicApiKey`, `hasOpenAiApiKey`, `hasLiteLlmEndpoint` are environmental capabilities detected independently of the host. A Claude main session can use any of them as a subagent provider once Phase 2 wiring lands.
+| Host | Team transport | Subprocess transport | Direct provider transport |
+|---|---|---|---|
+| `claude` | Claude Agent Teams when enabled | Codex subprocess when configured | available through `llm` |
+| `codex` | unavailable | Codex subprocess | available through `llm` |
+| `ts` | unavailable | optional Codex subprocess | available through `llm` |
 
 ### Why It Exists
 
 Verifying from a single perspective misses problems in certain dimensions. Something logically consistent may be unqueryable in practice; something structurally complete may break when a new domain is added; something technically correct may have drifted from its original purpose.
 
-onto addresses this with **9 review lenses** that each evaluate independently from a unique verification dimension, plus a **synthesize stage** that integrates their findings into a final result.
+onto addresses this with **9 review lenses** that each evaluate independently from a unique verification dimension, a **controlled deliberation stage** that converges conflicting lens positions, and a **synthesize stage** that integrates the resolved result.
 
 ### Core Design Principles
 
@@ -127,10 +128,9 @@ Terms used throughout this document. All definitions follow `.onto/authority/cor
 | **InvocationBinding** | Runtime-owned deterministic phase that binds interpreted input into canonical requests and concrete refs |
 | **ReviewRecord** | Canonical output of review; structured lineage record consumed by later learning/governance |
 | **ContextIsolatedReasoningUnit** | A reasoning unit that does not share main-context state, consumes contract-bounded input, and produces contract-bounded output independently. Typical realizations: Agent Teams teammate, subagent, MCP-isolated LLM, external model worker |
-| **execution_realization** | (Legacy, deprecated 2026-04-21) Structural realization. Superseded by `review.subagent.provider` + teams env auto-detect |
-| **host_runtime** | (Legacy, deprecated 2026-04-21) Concrete host environment. Superseded by runtime host detection + `review.teamlead.model` override |
-| **TopologyShape** | Review UX Redesign internal classification — one of `main_native` / `main_foreign` / `main-teams_native` / `main-teams_foreign` / `main-teams_a2a` / `ext-teamlead_native`. Derived from `review:` axes + env signals. Replaces user-facing 10 `TopologyId` enumeration (P2 #153) |
-| **OntoReviewConfig** | User-facing 6-axis config block in `.onto/config.yml` (Review UX Redesign, P1 #152). Axes: teamlead / subagent / max_concurrent_lenses / lens_deliberation + per-model effort |
+| **ControlledLensDeliberation** | Bounded convergence process where lens outputs are re-evaluated by participating lenses before synthesize |
+| **TopologyShape** | Internal review dispatch classification derived from `review:` axes and env signals |
+| **OntoReviewConfig** | Active review config block in `.onto/config.yml`: teamlead / subagent / max_concurrent_lenses / lens_deliberation |
 | **LensSelectionPlan** | Interpretation-owned plan that recommends full/core-axis review and the lens set to execute |
 | **DomainFinalSelection** | Final domain value after explicit token parsing and user confirmation |
 | **DeterministicStateEnforcer** | Runtime state machine that deterministically enforces review process state transitions. States and edges defined in `.onto/authority/core-lexicon.yaml` 📐 |
@@ -139,19 +139,7 @@ Terms used throughout this document. All definitions follow `.onto/authority/cor
 | **seed** | LLM-generated draft domain documents in `~/.onto/drafts/`. Contains SEED markers. Not used as verification standards |
 | **established** | Domain documents in `~/.onto/domains/` with zero SEED markers. Used as verification standards |
 
-Legacy term mapping (for reference only — not used elsewhere in this document):
-
-| Legacy Term | Current Canonical |
-|---|---|
-| Philosopher | axiology (value/purpose alignment) + synthesize (synthesis stage) |
-| agent panel | 9 review lenses |
-| agent | review_lens |
-| execution_mode | execution_realization × host_runtime (2-axis model, both now legacy). Canonical surface: `review:` axis block (P1 #152). |
-| execution_realization × host_runtime (legacy) | `review:` 6-axis block → 6 `TopologyShape` → 10 `TopologyId` catalog (Review UX Redesign, P1~P5) |
-| `execution_topology_priority` | Sketch v3 legacy priority array. Superseded by axis-first derivation in P2 #153. Migration: `docs/topology-migration-guide.md` §7 |
-| `build` (activity) | `reconstruct` — renamed via W-A-77 (2026-04-14). `npm run build:ts-core` 등 toolchain 명령은 무관하며 보존 |
-| `design` (activity) | `evolve` — renamed via W-A-78 (2026-04-15). methodology 용어(`design_target`, `design_area` 등)는 보존 |
-| `ask` | retired (§1.2) — 단일 lens 질의가 필요하면 `/onto:review` 사용 |
+Earlier prototype terminology is archived under `development-records/archive/` and does not define the active runtime vocabulary.
 
 ---
 
@@ -601,30 +589,28 @@ domains:
   - software-engineering
   - ontology
 output_language: ko              # en (default) | ko | etc.
-review:                          # 6-axis block — P1 #152
+review:
   teamlead:
     model: main
   subagent:
-    provider: codex              # main-native | codex | anthropic | openai | litellm
+    provider: codex              # main-native | codex
     model_id: gpt-5.4
     effort: high
   # max_concurrent_lenses: 6
-  # lens_deliberation: synthesizer-only
+  # lens_deliberation: controlled-lens-deliberation
 ```
-
-> **Legacy profile fully retired (P9 complete, 2026-04-21)** — `execution_realization` / `host_runtime` / `execution_topology_priority` are consolidated into the 6-axis block above. The P9 runtime cleanup track (PRs #161~#166) retired the full legacy layer: resolver priority ladder (P9.1), `OntoConfig` field removal (P9.2), always-on topology dispatch (P9.3 + m1 caching), atomic-adoption simplification (P9.4), and `legacy-field-deprecation` module removal (P9.5). Legacy YAML fields now graceful-ignore via type narrowing — no runtime throw, no parser speed bump. Migration: `docs/topology-migration-guide.md` §7.
 
 **Output language priority**: config.yml `output_language` > CLAUDE.md language directives. If absent, defaults to `en`.
 
-**Selection methods** (canonical flags first; legacy `@` syntax kept for backward compat):
+**Selection methods**:
 
-| Method | Canonical | Legacy (still works) | Behavior |
+| Method | Canonical | Alternate token | Behavior |
 |---|---|---|---|
 | Explicit | `--domain {name}` | `@{domain}` | Non-interactive, uses specified domain |
 | No-domain | `--no-domain` | `@-` | Non-interactive, no domain rules applied |
 | Interactive | (omit) | (omit) | Analyze target → suggest domain → user confirms |
 
-**Why canonical flags**: positional `@{domain}` conflicts with Claude Code's `@filename` mention syntax. `--domain` / `--no-domain` removes ambiguity. Internal canonical token remains `@{name}` / `@-` for backward compat with session artifacts. `--domain` and `--no-domain` are mutually exclusive (parser-layer fail-fast).
+**Why canonical flags**: positional `@{domain}` conflicts with Claude Code's `@filename` mention syntax. `--domain` / `--no-domain` removes ambiguity. Session artifacts may still record `@{name}` / `@-` as the internal token. `--domain` and `--no-domain` are mutually exclusive (parser-layer fail-fast).
 
 **No-domain mode**: Verifies using lens default methodology only. Learning tags: `[methodology]` only.
 
@@ -731,7 +717,7 @@ All stages pass → `[methodology]` only.
 1. `[methodology]` → always apply
 2. `[domain/{session_domain}]` → always apply
 3. `[domain/{other}]` only → review then judge
-4. No tags (legacy) → treat as `[methodology]`
+4. No tags → treat as `[methodology]`
 5. Dual-tag `[methodology]` + `[domain/X]` → always apply (domain tag is provenance)
 6. Purpose type tags do not affect consumption filtering
 
@@ -778,7 +764,7 @@ Lens execution is configured by **6 user-facing axes** (Review UX Redesign, P1 #
 | **subagent.model_id** | Foreign provider's model identifier | provider-specific; required when `provider != main-native` |
 | **subagent.effort** | Reasoning effort for the subagent | provider-specific (e.g. codex: `minimal`/`low`/`medium`/`high`/`xhigh`) |
 | **max_concurrent_lenses** | Parallel dispatch cap | positive integer; provider default applies when omitted |
-| **lens_deliberation** | Lens-to-lens deliberation channel | `synthesizer-only` (default) or `sendmessage-a2a` (requires teams env) |
+| **lens_deliberation** | Lens-to-lens deliberation semantic | `controlled-lens-deliberation` |
 
 Runtime also consumes `agent_teams_available` (auto-detected from `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`) when deriving the shape — user does not set this.
 
@@ -789,8 +775,8 @@ Runtime also consumes `agent_teams_available` (auto-detected from `CLAUDE_CODE_E
 | **main_native** | host main session | host native subagent | `cc-main-agent-subagent` (Claude) / `codex-main-subprocess` (Codex) |
 | **main_foreign** | host main session | foreign provider | `cc-main-codex-subprocess` |
 | **main-teams_native** | TeamCreate wrapping | Claude Agent tool | `cc-teams-agent-subagent` |
-| **main-teams_foreign** | TeamCreate wrapping | foreign provider | `cc-teams-codex-subprocess` / `cc-teams-litellm-sessions` |
-| **main-teams_a2a** | TeamCreate wrapping | Agent-tool + SendMessage A2A | `cc-teams-lens-agent-deliberation` (PR-D pending) |
+| **main-teams_foreign** | TeamCreate wrapping | foreign provider | `cc-teams-codex-subprocess` |
+| **main-teams_deliberation** | TeamCreate wrapping | Agent-tool + controlled deliberation transport | `cc-teams-lens-agent-deliberation` |
 | **ext-teamlead_native** | spawned subprocess | subprocess native | `codex-nested-subprocess` (PR-C pending) |
 
 Design-integrity audit (6 shape × 7 pipeline step): `development-records/audit/20260421-shape-pipeline-audit.md`.

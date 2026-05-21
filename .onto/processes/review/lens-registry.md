@@ -12,12 +12,14 @@
 `검토 (review)`의 canonical 구조는 아래다.
 
 - `9개 review lens`
+- `controlled lens deliberation`
 - `1개 종합 단계 (synthesize)`
 
 즉:
 
 - `8개의 기존 검증 관점`
 - `가치/목적 정합 lens (axiology)`
+- `teamlead 통제 하의 lens 간 숙의`
 - `종합 단계 (synthesize)`
 
 로 구성된다.
@@ -44,15 +46,18 @@
 
 | Stage ID | 한글 설명 | 책임 |
 |---|---|---|
-| `synthesize` | 종합 단계 | lens 결과를 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
+| `controlled-lens-deliberation` | 통제된 lens 숙의 | lens 결과를 제한 context에서 재검토하고 contested position resolution을 `deliberation.md`에 기록 |
+| `synthesize` | 종합 단계 | lens 결과와 `deliberation.md`를 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
 
 중요한 구분:
 
 - `axiology`는 **독립 lens**다.
+- `controlled-lens-deliberation`은 **synthesize 이전의 resolution authority**다.
 - `synthesize`는 **종합 단계**다.
 
 즉 `axiology`는 다른 lens들과 동등한 한 관점이고,
-`synthesize`는 그 관점들을 모아 최종 결과를 작성한다.
+controlled deliberation은 관점 간 충돌을 제한 맥락에서 정리하며,
+`synthesize`는 그 결과를 보존적으로 모아 최종 결과를 작성한다.
 
 ---
 
@@ -67,7 +72,7 @@
 
 ### 4.2 `synthesize`
 
-- lens set 전체를 읽어 final review output을 만든다
+- lens set 전체와 `deliberation.md`를 읽어 final review output을 만든다
 - 새로운 독립 관점 행세를 하면 안 된다
 - unresolved disagreement를 묵살하지 않고 보존해야 한다
 
@@ -90,8 +95,9 @@
 
 1. 각 lens는 자기 전용 맥락에서 실행된다
 2. Round 1에서는 다른 lens의 결과를 보지 않는다
-3. `synthesize`는 lens finding이 나온 뒤에만 실행된다
-4. 메인 `LLM` 콘텍스트는 lens별 세부 reasoning을 직접 모두 담지 않는다
+3. controlled lens deliberation은 Round 1 lens finding 이후 실행된다
+4. `synthesize`는 `deliberation.md`가 나온 뒤에만 실행된다
+5. 메인 `LLM` 콘텍스트는 lens별 세부 reasoning을 직접 모두 담지 않는다
 
 ---
 
@@ -111,11 +117,10 @@
 
 ---
 
-## 7. Legacy Note
-
-`philosopher`는 archive-only이며 review와 build 양쪽 파이프라인에서 완전히 은퇴했다. archival 정의는 `development-records/legacy/philosopher.md`에 lineage reference로 보존되어 있다.
+## 7. Registry Note
 
 `review`의 canonical 구조는 아래다.
 
-- `axiology` + `synthesize`
-- `philosopher` 중심 아님; canonical role 아님
+- `axiology`
+- controlled lens deliberation
+- `synthesize`

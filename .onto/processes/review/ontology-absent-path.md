@@ -14,7 +14,7 @@ source_refs:
   dl_provenance: "DL-029 (DR-M06-04 Option A — r+/r− 2-path split)"
   paired_contract: ".onto/processes/review/ontology-path.md (W-A-75, r+ path)"
   classifier_impl: "src/core-runtime/review/ontology-path-classifier.ts"
-  fallback_reader: "src/core-runtime/readers/scan-local.ts"
+  domain_absent_reader: "src/core-runtime/readers/scan-local.ts"
   upstream_metric_seat: "src/core-runtime/readers/review-log.ts (W-A-71 점진성 seat)"
 ---
 
@@ -84,7 +84,7 @@ r+ 대비 r− 의 품질 저하는 `PathDeltaMetric` (ontology-path.md §4.2) �
 r− cohort 가 존재하지 않으면 r+ 의 "투자 효과" 를 정량화할 수 없다. 따라서 다음 운영 원칙이 따른다:
 
 - ontology seat 을 도입하기 **이전 세션 기록은 보존** 한다 (`.onto/review/` 이하 미완료 포함 모든 세션).
-- ontology seat 도입 이후에도, seat 미비(누락·형식 오류·empty YAML)로 인한 r− fallback 세션이 발생하면 기록한다 — 이는 r+ 운영 안정성의 경고 지표가 된다.
+- ontology seat 도입 이후에도, seat 미비(누락·형식 오류·empty YAML)로 인한 r− 세션이 발생하면 기록한다 — 이는 r+ 운영 안정성의 경고 지표가 된다.
 
 ## 4. 한계와 미해결 항목
 
@@ -98,5 +98,5 @@ r− cohort 가 존재하지 않으면 r+ 의 "투자 효과" 를 정량화할 �
 |---|---|
 | W-A-76 evidence | 본 계약 + scan-local.test.ts §W-A-76 + classifier 혼합 cohort 테스트 가 completion_criterion 증빙 |
 | W-A-75 (ontology-path.md) | 쌍 계약이 본 계약의 baseline 정의를 인용 |
-| onto:health (W-A-59) | seat 누락 시 r− fallback 경보 + cohort delta 표시 |
+| onto:health (W-A-59) | seat 누락 시 r− 경보 + cohort delta 표시 |
 | refresh protocol | ontology 도입 전/후 비용·품질 변화 추적 |

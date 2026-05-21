@@ -15,16 +15,16 @@ import type {
 } from "./codex-nested-teamlead-executor.js";
 
 // ---------------------------------------------------------------------------
-// These tests assert PR-H bridge invariants:
+// These tests assert codex-nested bridge invariants:
 //
 // (1) The bridge reads execution-plan.yaml from sessionRoot and forwards
 //     lens packet triples (lens_id, packet_path, output_path) to the
 //     orchestrator in order.
-// (2) Model + reasoning_effort are sourced from ontoConfig.codex.* with
-//     top-level fallback — same precedence as other codex seats.
+// (2) Model + reasoning_effort are sourced from review axes first, then the
+//     canonical llm switcher when it resolves to Codex OAuth.
 // (3) Per-lens classification requires BOTH orchestrator-ok AND file
 //     exists with size > 0. One of the two missing → degraded.
-// (4) synthesis_executed is always `false` in PR-H (deferred).
+// (4) synthesis_executed is always `false` for this bridge.
 // (5) synthesis_output_path is pulled from execution-plan for
 //     downstream consumption by a subsequent synthesize wire-in.
 // (6) halt_reason surfaces teamlead-level failure (non-zero exit +
@@ -195,14 +195,21 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.lenses[0]!.output_path).toBe("/out/logic.md");
   });
 
-  it("passes model from ontoConfig.codex.model and reasoning_effort from codex.effort", async () => {
+  it("passes model from llm OpenAI OAuth selection", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
     await executeReviewViaCodexNested(
       {
         sessionRoot: fixture.sessionRoot,
-        ontoConfig: { codex: { model: "gpt-5.4", effort: "high" } },
+        ontoConfig: {
+          llm: {
+            auth: "oauth",
+            provider: "openai",
+            model: "gpt-5.4",
+            effort: "high",
+          },
+        },
       },
       impl,
       staticInspector(new Set(["/o"])),
@@ -211,23 +218,30 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("high");
   });
 
-  it("falls back to top-level model / reasoning_effort when codex.* unset", async () => {
+  it("does not use llm selection when it resolves to API provider", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
     await executeReviewViaCodexNested(
       {
         sessionRoot: fixture.sessionRoot,
-        ontoConfig: { model: "gpt-top", reasoning_effort: "low" },
+        ontoConfig: {
+          llm: {
+            auth: "api_key",
+            provider: "openai",
+            model: "gpt-api",
+            effort: "low",
+          },
+        },
       },
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-top");
-    expect(calls[0]!.reasoning_effort).toBe("low");
+    expect(calls[0]!.model).toBeUndefined();
+    expect(calls[0]!.reasoning_effort).toBeUndefined();
   });
 
-  it("reads model/effort from review.subagent (P2 canonical location)", async () => {
+  it("reads model/effort from review.subagent", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -267,7 +281,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("high");
   });
 
-  it("review.subagent wins over top-level codex.* (P2 canonical > legacy)", async () => {
+  it("review.subagent wins over llm OpenAI OAuth selection", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -278,7 +292,12 @@ describe("executeReviewViaCodexNested — forwarding", () => {
           review: {
             subagent: { provider: "codex", model_id: "gpt-sub", effort: "medium" },
           },
-          codex: { model: "gpt-legacy", effort: "high" },
+          llm: {
+            auth: "oauth",
+            provider: "openai",
+            model: "gpt-llm",
+            effort: "high",
+          },
         },
       },
       impl,
@@ -288,9 +307,9 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.reasoning_effort).toBe("medium");
   });
 
-  it("review.subagent with provider=main-native does NOT claim codex slot (falls through)", async () => {
-    // main-native subagent is not a codex provider → resolver should move on
-    // to teamlead → legacy → top-level, not pick up subagent.
+  it("review.subagent with provider=main-native leaves selection to llm switcher", async () => {
+    // main-native subagent is not a codex provider, so the resolver reads
+    // the llm switcher when it resolves to Codex OAuth.
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -301,22 +320,25 @@ describe("executeReviewViaCodexNested — forwarding", () => {
           review: {
             subagent: { provider: "main-native" },
           },
-          codex: { model: "gpt-legacy", effort: "high" },
+          llm: {
+            auth: "oauth",
+            provider: "openai",
+            model: "gpt-llm",
+            effort: "high",
+          },
         },
       },
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-legacy");
+    expect(calls[0]!.model).toBe("gpt-llm");
     expect(calls[0]!.reasoning_effort).toBe("high");
   });
 
   it("passes sessionRoot-based stream_stdout_path/stream_stderr_path to orchestrator (live watcher)", async () => {
     // The watcher pane's tail -f target is sessionRoot/nested-outer-*.log.
     // The orchestrator must receive those absolute paths so spawn-watcher
-    // can tee outer codex stdout/stderr there as codex emits chunks. If
-    // the dispatch stopped plumbing these paths, streaming would silently
-    // fall back to memory-only capture.
+    // can tee outer codex stdout/stderr there as codex emits chunks.
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -478,7 +500,7 @@ describe("executeReviewViaCodexNested — result shape", () => {
     if (fixture) await fixture.cleanup();
   });
 
-  it("synthesis_executed is always false in PR-H (deferred)", async () => {
+  it("synthesis_executed is always false for the nested dispatch bridge", async () => {
     const plan = buildPlan(
       [{ lens_id: "a", packet_path: "/p/a", output_path: "/o/a" }],
       "",

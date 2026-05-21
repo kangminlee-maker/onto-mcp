@@ -1,5 +1,5 @@
 /**
- * Codex Nested Teamlead Executor — PR-C (2026-04-18).
+ * Codex Nested Teamlead Executor.
  *
  * # What this module is
  *
@@ -31,22 +31,21 @@
  * # How it relates
  *
  * - `resolveExecutionTopology()` selects `codex-nested-subprocess` when
- *   priority lands on codex-A and only `codexAvailable` is satisfied.
- * - `mapTopologyToExecutorConfig()` (PR-B) does NOT map this topology
- *   to a standalone binary — `codex-nested-subprocess` needs this
+ *   an external codex teamlead is requested and `codexAvailable` is satisfied.
+ * - `mapTopologyToExecutorConfig()` does not map this topology
+ *   to a standalone per-lens binary — `codex-nested-subprocess` needs this
  *   orchestrator specifically, not a per-lens executor path, because
  *   the per-lens dispatch happens INSIDE the outer codex, not from TS.
  * - `executeReviewPromptExecution()` (run-review-prompt-execution.ts)
- *   will branch on `topology.id === "codex-nested-subprocess"` in PR-E
- *   (or earlier if needed) to route here.
+ *   branches on `topology.id === "codex-nested-subprocess"` to route here.
  *
- * # Scope of PR-C
+ * # Scope
  *
  * This PR provides the **orchestrator seat** and its unit tests.
  * Integration into `executeReviewPromptExecution` (replacing the per-lens
  * loop with one outer-codex invocation for the nested topology) is
- * reserved for PR-E's cleanup when `resolveExecutorConfig` is removed.
- * PR-C deliverables:
+ * handled by the nested-dispatch branch.
+ * Deliverables:
  *   - `runCodexNestedTeamlead(args)` function
  *   - Prompt template building
  *   - Outer codex stdout parser
@@ -57,7 +56,7 @@
  * # Design reference
  *
  * - Sketch v3 §3.1 codex-A, §9 실측 검증
- * - Handoff §5: development-records/plan/20260418-sketch-v3-implementation-handoff.md
+ * - Nested codex validation notes under `development-records/`
  */
 
 import { spawn } from "node:child_process";

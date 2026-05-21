@@ -17,7 +17,7 @@ import {
 } from "./teamcreate-lens-deliberation-executor.js";
 
 // ---------------------------------------------------------------------------
-// These tests assert the PR-D deliberation protocol invariants:
+// These tests assert controlled deliberation protocol invariants:
 //
 // (1) Triple opt-in is enforced at module boundary — missing any of
 //     CLAUDECODE, CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS, or

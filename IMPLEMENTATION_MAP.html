@@ -40,7 +40,7 @@
 </head>
 <body>
   <h1>onto MCP Implementation Map</h1>
-  <p>현재 목표는 <code>onto.review</code>를 MCP tool로 호출 가능하게 만들고, 여러 lens가 분리된 context에서 병렬 검토한 뒤 synthesize 단계에서 결론을 기록하게 하는 것이다.</p>
+  <p>현재 목표는 <code>onto.review</code>를 MCP tool로 호출 가능하게 만들고, 여러 lens가 분리된 context에서 병렬 검토한 뒤 통제된 lens 숙의 결과를 synthesize가 보존적으로 정리하게 하는 것이다.</p>
 
   <h2>Runtime Flow</h2>
   <div class="flow" aria-label="runtime flow">
@@ -58,7 +58,7 @@
   <h2>Implemented Surface</h2>
   <table>
     <tr><th>Tool</th><th>동작</th><th>완료 산출물</th></tr>
-    <tr><td><code>onto.review</code></td><td>lens 실행, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
+    <tr><td><code>onto.review</code></td><td>lens 실행, controlled deliberation, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>deliberation.md</code>, <code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
     <tr><td><code>onto.prepare_review</code></td><td>세션과 prompt packet을 준비한다.</td><td><code>execution-plan.yaml</code>, <code>execution-preparation/</code></td></tr>
     <tr><td><code>onto.review_status</code></td><td>세션 상태와 artifact 경로를 읽는다.</td><td>structured status</td></tr>
     <tr><td><code>onto.review_result</code></td><td>ReviewRecord와 최종 출력문을 읽는다.</td><td>structured result</td></tr>
@@ -80,14 +80,16 @@
   <div class="grid">
     <div class="card"><strong>MCP boundary</strong><span class="status">Active</span><br><code>src/mcp</code>는 schema와 stdio server만 소유한다.</div>
     <div class="card"><strong>Review semantics</strong><span class="status">Active</span><br><code>src/core-runtime</code>와 <code>.onto</code> 문서가 review 의미론을 소유한다.</div>
+    <div class="card"><strong>Controlled deliberation</strong><span class="status">Active</span><br>lens끼리 제한 context에서 재평가하고 teamlead 결과를 <code>deliberation.md</code>에 기록한다.</div>
     <div class="card"><strong>Core API</strong><span class="status">Active</span><br><code>src/core-api</code>는 기존 runtime을 library처럼 호출한다.</div>
     <div class="card"><strong>Fail loud</strong><span class="status">Active</span><br>config, executor, deliberation mode가 맞지 않으면 즉시 에러로 드러낸다.</div>
+    <div class="card"><strong>Snapshot retired</strong><span class="status">Active</span><br>대형 시스템 스냅샷 문서는 active surface에서 제거했고, 현재 정본은 <code>AGENTS.md</code>, <code>.onto/processes</code>, architecture docs가 나눠 가진다.</div>
   </div>
 
   <h2>Scope Boundaries</h2>
   <table>
     <tr><th>Area</th><th>현재 seat</th><th>다음 설계 질문</th></tr>
-    <tr><td><code>review</code></td><td>MCP surface 구현됨. 9개 lens + synthesize + ReviewRecord 경로가 smoke 검증됨.</td><td>provider-backed deliberation mode의 artifact contract를 확정한다.</td></tr>
+    <tr><td><code>review</code></td><td>MCP surface 구현됨. 9개 lens + controlled deliberation + synthesize + ReviewRecord 경로가 TS runner에 연결됨.</td><td>provider별 controlled deliberation conformance harness를 확장한다.</td></tr>
     <tr><td><code>learn</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>학습 산출물의 authority seat와 tool schema를 먼저 정한다.</td></tr>
     <tr><td><code>govern</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>principle 승격/검증 workflow를 MCP tool 단위로 나눈다.</td></tr>
     <tr><td><code>reconstruct</code></td><td>제품 방향에 포함. domain 문서를 함께 사용한다.</td><td>구현물에서 ontology seed를 역산하는 artifact contract를 정의한다.</td></tr>

@@ -86,7 +86,7 @@ export async function resolveReviewSessionExtractMode(
     //
     // Uses `resolveOrthogonalConfigChain` (not `resolveConfigChain`):
     // `learning_extract_mode` is an orthogonal field with no provider-
-    // profile coupling, so we skip atomic profile adoption + legacy
+    // profile coupling, so we skip atomic profile adoption and config-shape
     // deprecation gates that would otherwise fire for configs missing
     // a provider profile entirely (a legitimate state for fixtures or
     // orthogonal-only use cases).

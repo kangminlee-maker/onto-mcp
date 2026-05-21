@@ -268,23 +268,25 @@ describe("resolveExecutionRealizationHandoff", () => {
     expect(out).toEqual({ type: "no_host" });
   });
 
-  it("E7 external_http_provider=litellm → ts_inline_http self-execute", () => {
-    // LiteLLM wiring is live via the P4 auto-detection branch —
-    // `resolveExecutionPlan` sees `external_http_provider` set, routes to
-    // the S1 external HTTP path, and the handoff returns `self` so the
-    // invoking process runs the executor in-band.
+  it("E7 llm.provider=lmstudio → ts_inline_http self-execute", () => {
+    // Local model wiring is live via the P4 llm-switcher branch. The
+    // handoff returns `self` so the invoking process runs the executor
+    // in-band.
     const out = resolveExecutionRealizationHandoff({
       explicitCodex: false,
       prepareOnly: false,
       ontoConfig: {
-        external_http_provider: "litellm",
-        llm_base_url: "http://proxy.local",
-        litellm: { model: "llama-8b" },
+        llm: {
+          auth: "local",
+          provider: "lmstudio",
+          model: "llama-8b",
+          base_url: "http://proxy.local",
+        },
       },
     });
     expect(out).toEqual({
       type: "self",
-      profile: { execution_realization: "ts_inline_http", host_runtime: "litellm" },
+      profile: { execution_realization: "ts_inline_http", host_runtime: "lmstudio" },
     });
   });
 });

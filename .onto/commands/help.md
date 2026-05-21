@@ -1,107 +1,69 @@
 # Onto Help
 
-Read `{project}/.onto/config.yml` to check `output_language:` (default: `en`).
-Display the command reference below in the configured language.
+Read `{project}/.onto/config.yml` to check `output_language:` and render this
+reference in the configured language.
 
----
+## Core Workflow
 
-## Onto Review — Command Reference
-
-### Core Workflow
-
-```
-/onto:install                              First-run setup wizard (providers, auth, output language)
-/onto:onboard                              Set up onto environment for a project
-/onto:review {target}                      9-lens review + synthesize
-/onto:review {target} --domain {name}      Review with specific domain (canonical)
-/onto:review {target} --no-domain          Review without domain rules (canonical)
-/onto:review {target} --codex              Use codex host runtime (Codex CLI path)
-/onto:reconstruct {path|URL}               Reconstruct ontology from analysis target
-                                           (4-step bounded path: start → explore → complete → confirm)
-/onto:reconstruct confirm --session-id <id> --verdict passed|rejected
-                                           Record Principal verification result
-/onto:evolve {goal}                        Add new areas to existing target (brownfield)
-/onto:evolve {goal} --domain {name}        Evolve with specific domain (canonical)
-/onto:evolve {goal} --no-domain            Evolve without domain rules (canonical)
-/onto:transform {file}                     Transform raw ontology to desired format
+```text
+/onto:onboard                         Project setup
+/onto:review {target}                 Review target
+/onto:review {target} --domain {name} Domain-aware review
+/onto:review {target} --no-domain     Methodology-only review
+/onto:reconstruct {path|URL}          Reconstruct ontology from implementation
+/onto:evolve {goal}                   Design an ontology-based extension
 ```
 
-> **Legacy `@` domain syntax**: `@{domain}` and `@-` still work for backward compat. Note: `@filename` is also Claude Code's mention syntax — use `--domain` / `--no-domain` to avoid ambiguity.
+## Review Runtime
 
-### Domain Document Management
+Review runs:
 
-```
-/onto:create-domain {name} {description}   Generate seed domain documents
-/onto:feedback {domain}                    Feed learnings back into domain docs
-/onto:promote-domain {domain}              Promote seed (drafts/ → domains/)
-```
+1. interpretation
+2. binding
+3. context-isolated lens execution
+4. controlled lens deliberation
+5. synthesize
+6. `review-record.yaml` + `final-output.md`
 
-### Learning Management
+Primary CLI path:
 
-```
-/onto:promote                              Promote project learnings to global
-```
-
-### Data Management
-
-```
-/onto:backup                               Snapshot learnings + domains for rollback
-/onto:backup "reason"                      Backup with reason
-/onto:restore                              List available backups
-/onto:restore {backup-id}                  Restore from specific backup
+```bash
+npm run review:invoke -- <target> "<intent>"
 ```
 
-### Domain Selection
+MCP path:
 
-Each review/reconstruct/evolve selects a single **session domain**:
+```text
+onto.review
+```
 
-| Method | Canonical | Legacy (still works) | Behavior |
-|--------|-----------|----------------------|----------|
-| Explicit | `--domain {name}` | `@{domain}` | Uses specified domain |
-| No-domain | `--no-domain` | `@-` | No domain rules applied |
-| Interactive | (omit) | (omit) | Suggests domain, user confirms |
+## Domain Selection
 
-`--domain` and `--no-domain` are mutually exclusive (specifying both fails fast).
-Legacy `@` syntax conflicts with Claude Code's `@filename` mention — prefer `--domain`/`--no-domain`.
-
-### Execution Path
-
-Onto review has **two canonical execution paths** (2026-04-13 policy):
-
-| Path | Entrypoint | Executor |
+| Method | Syntax | Behavior |
 |---|---|---|
-| Codex CLI | `onto review ... --codex` | `codex` child process |
-| Agent Teams nested spawn | `onto coordinator start ...` in a Claude Code session | Agent tool (nested) |
+| explicit | `--domain {name}` | Uses one configured domain |
+| no domain | `--no-domain` | Uses methodology-only standards |
+| interactive | omit both flags | Runtime asks when selection is ambiguous |
 
-Claude CLI subagent, API executor, and 3-Tier fallback paths have been removed — Claude CLI authentication is unstable in the current environment, and only these two paths are supported.
+`--domain` and `--no-domain` are mutually exclusive.
 
-### Domain Document Lifecycle
+## Configuration
 
-```
-create-domain → drafts/{domain}/    Seed with SEED markers
-      ↓
-review drafts/{domain} @-          Review seed (no-domain recommended)
-      ↓
-feedback {domain}                  Feed learnings into seed
-      ↓  (repeat until all SEED markers removed)
-promote-domain {domain}            Move to domains/ (established)
-      ↓
-review {target} @{domain}          Use as verification standard
-```
+Active config contract:
 
-### Quick Start
+- `.onto/processes/configuration.md`
+- `.onto/processes/onboard.md`
 
-1. **Install runtime**: `/onto:install` (first-run only — providers + auth + output language)
-2. **Set up project**: `/onto:onboard`
-3. **Review**: `/onto:review {file-or-design}`
-4. **New domain**: `/onto:create-domain my-domain "description"`
-5. **Ask one agent**: `/onto:ask-logic "Is there a contradiction in X?"`
+Key blocks:
 
-### More Info
+- `review:` selects orchestration.
+- `lens_agent_teams_mode:` selects Agent Teams transport when available.
+- `llm:` selects auth/provider/model.
 
-> Plugin install resolves via `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}`. Set `ONTO_PLUGIN_DIR` env var when installed in a custom location.
+## More Info
 
-- README: `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}/README.md`
-- Authority docs: `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}/.onto/authority/`
-- Review contracts: `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}/.onto/processes/review/`
-- Domain documents: `~/.onto/domains/`
+- README: `README.md`
+- Agent orientation: `AGENTS.md`
+- Authority docs: `.onto/authority/`
+- Review contracts: `.onto/processes/review/`
+- Domain documents: `.onto/domains/`

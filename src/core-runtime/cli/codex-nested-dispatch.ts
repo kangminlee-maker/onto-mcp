@@ -1,10 +1,10 @@
 /**
- * Codex Nested Dispatch Bridge — PR-H (2026-04-18).
+ * Codex Nested Dispatch Bridge.
  *
  * # What this module is
  *
  * The bridge between review session artifacts (execution-plan.yaml +
- * lens packet paths) and the PR-C codex-nested teamlead orchestrator.
+ * lens packet paths) and the codex-nested teamlead orchestrator.
  * It reads the execution plan, constructs the
  * `NestedLensDispatchInput`, invokes `runCodexNestedTeamlead`, and
  * classifies per-lens outcomes into the
@@ -13,10 +13,9 @@
  *
  * # Why it exists
  *
- * PR-C delivered the orchestrator (`runCodexNestedTeamlead`) as a pure
- * function over lens inputs → outcomes, intentionally decoupled from
- * onto's session artifacts so it could be unit-tested without
- * filesystem fixtures. PR-H adds the thin integration that the
+ * `runCodexNestedTeamlead` is a pure function over lens inputs → outcomes,
+ * intentionally decoupled from onto's session artifacts so it can be
+ * unit-tested without filesystem fixtures. This bridge adds the integration that the
  * runner (`runReviewInvokeCli`) can branch into when the resolved
  * topology is `codex-nested-subprocess`.
  *
@@ -29,7 +28,7 @@
  * # How it relates
  *
  * - `resolveExecutionTopology()` selects the topology id.
- * - `tryResolveTopologyForHandoff()` (PR-G) surfaces it to the
+ * - `tryResolveTopologyForHandoff()` surfaces it to the
  *   coordinator; for non-claude topologies it also flows through
  *   `runReviewInvokeCli` directly.
  * - `executeReviewViaCodexNested()` (here) handles the nested-dispatch
@@ -38,7 +37,7 @@
  * - `completeReviewSession()` downstream consumes the result to compile
  *   the final review record.
  *
- * # Scope of PR-H
+ * # Scope
  *
  * - Bridge function `executeReviewViaCodexNested`
  * - Output-file validation (exists + non-empty) on top of orchestrator
@@ -46,18 +45,14 @@
  *   necessary but not sufficient; the file must actually be written.
  * - Tests with injected orchestrator + injected filesystem
  *
- * **Deferred** to a subsequent integration PR:
- *   - Synthesize step execution for codex-nested topology (this PR
- *     returns `synthesis_executed: false` and defers synthesize to the
- *     caller or a follow-up wire-in).
- *   - Wire-in at `runReviewInvokeCli` (the caller branch itself).
- *   - Error log and deliberation artifact integration.
+ * This bridge owns only nested lens dispatch. Synthesize, deliberation
+ * artifact handling, and final record assembly stay in the main review
+ * runner.
  *
  * # Design reference
  *
  * - Sketch v3 §3.1 option codex-A
- * - PR #101 (PR-C) — `runCodexNestedTeamlead`
- * - Handoff §5 (PR-C scope), §10 risk 2 resolution
+ * - Nested codex validation notes under `development-records/`
  */
 
 import fs from "node:fs/promises";
@@ -97,8 +92,7 @@ export interface CodexNestedDispatchArgs {
 /**
  * Shape compatible with `ReviewPromptExecutionResult` for drop-in use
  * by downstream pipeline (`completeReviewSession`). `synthesis_executed`
- * is always `false` in PR-H; a follow-up integration PR extends this
- * bridge to run synthesize inside the same nested dispatch.
+ * is always `false`; synthesize runs in the main review runner.
  */
 export interface CodexNestedDispatchResult {
   session_root: string;
@@ -135,7 +129,7 @@ const defaultInspector: OutputFileInspector = async (p) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Fallback archive for outer codex stdout/stderr when streaming did NOT
+ * Archive for outer codex stdout/stderr when streaming did not
  * already write the files. Normally `spawnOuterCodex` is invoked with
  * `stream_stdout_path` / `stream_stderr_path` and the on-disk files
  * carry the authoritative content via `fs.createWriteStream`; in that

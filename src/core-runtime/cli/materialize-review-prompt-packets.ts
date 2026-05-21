@@ -134,8 +134,8 @@ const LENS_DOMAIN_FILE_MAP: Record<string, string> = {
  * Resolution order (project-override rule):
  * 1. Project-level domain: {project}/.onto/domains/{domain}/
  * 2. User-level global domain: ~/.onto/domains/{domain}/
- * 3. Installation default: ontoHome/.onto/domains/{domain}/ (Phase 2 layout; legacy ontoHome/domains/ fallback retained through Phase 7)
- * 4. Dev-mode fallback: projectRoot when it IS the onto installation (running from the onto repo itself)
+ * 3. Installation default: ontoHome/.onto/domains/{domain}/
+ * 4. Dev-mode install root: projectRoot when it IS the onto installation (running from the onto repo itself)
  *
  * Directory-level all-or-nothing: the entire directory from one location is used.
  * Terminal failure: returns { dir: null, attempted: [...] } — caller formats the error.
@@ -160,7 +160,7 @@ function resolveDomainDirectory(
 
   // 3. Installation default (ontoHome/.onto/domains/)
   // Phase 7 (2026-04-21): resolveInstallationPath resolves canonical
-  // .onto/domains/ only; legacy top-level domains/ is no longer accepted.
+  // .onto/domains/ only; top-level domains/ is not accepted.
   if (typeof ontoHome === "string" && ontoHome.length > 0) {
     try {
       const domainsRoot = resolveInstallationPath("domains", ontoHome);
@@ -168,20 +168,20 @@ function resolveDomainDirectory(
       attempted.push(homePath);
       if (fsSync.existsSync(homePath)) return { dir: homePath, attempted };
     } catch {
-      // No domains/ directory under ontoHome at all — skip to dev-mode fallback.
+      // No domains directory under ontoHome at all — skip to dev-mode install root.
     }
   }
 
-  // 4. Dev-mode fallback: only when projectRoot is an onto installation itself
+  // 4. Dev-mode install root: only when projectRoot is an onto installation itself
   // (e.g. running `onto` from a clone of the onto repo). Without this gate an
   // external project that happens to have a `domains/{X}/` directory at its
   // root would be falsely picked up as an installation bundle.
   if (isOntoRoot(projectRoot)) {
     try {
       const domainsRoot = resolveInstallationPath("domains", projectRoot);
-      const legacyPath = path.join(domainsRoot, domain);
-      attempted.push(legacyPath);
-      if (fsSync.existsSync(legacyPath)) return { dir: legacyPath, attempted };
+      const devInstallPath = path.join(domainsRoot, domain);
+      attempted.push(devInstallPath);
+      if (fsSync.existsSync(devInstallPath)) return { dir: devInstallPath, attempted };
     } catch {
       // projectRoot has neither .onto/domains/ nor domains/ — terminal miss.
     }
@@ -249,13 +249,11 @@ function scanDomainFiles(domainDir: string): string[] {
 /**
  * Resolve a role file inside `{baseDir}/.onto/roles/`.
  *
- * Phase 7 (2026-04-21) removed the legacy top-level `roles/` fallback and
- * the pre-Phase-3 `onto_` filename prefix — both are dead code now that
- * every resource has converged on the canonical seat. The function still
+ * The function still
  * returns the canonical path when the file is missing so that the
  * downstream error message can surface the expected location.
  */
-function resolveRoleFileWithFallback(baseDir: string, lensId: string): string {
+function resolveCanonicalRoleFile(baseDir: string, lensId: string): string {
   let rolesDir: string;
   try {
     rolesDir = resolveInstallationPath("roles", baseDir);
@@ -268,9 +266,8 @@ function resolveRoleFileWithFallback(baseDir: string, lensId: string): string {
 /**
  * Resolve role definition path per the Role/Domain policy:
  * - Core roles: ontoHome installation only. Project override forbidden.
- * - Custom roles: projectRoot → ontoHome fallback. Phase 7 dropped the
- *   pre-migration mixed-layout acceptance — only `.onto/roles/` is
- *   consulted now, via the shared Phase 0 resolver.
+ * - Custom roles: projectRoot, then ontoHome. Only `.onto/roles/` is
+ *   consulted via the shared resolver.
  * - Terminal failure: caller throws after this returns a non-existent path.
  */
 function resolveRoleDefinitionPath(
@@ -282,7 +279,7 @@ function resolveRoleDefinitionPath(
     const baseDir = typeof ontoHome === "string" && ontoHome.length > 0
       ? ontoHome
       : projectRoot;
-    return resolveRoleFileWithFallback(baseDir, lensId);
+    return resolveCanonicalRoleFile(baseDir, lensId);
   }
 
   // Custom roles — project-side canonical seat first, then ontoHome.
@@ -290,7 +287,7 @@ function resolveRoleDefinitionPath(
   if (fsSync.existsSync(projectCanonical)) return projectCanonical;
 
   if (typeof ontoHome === "string" && ontoHome.length > 0) {
-    return resolveRoleFileWithFallback(ontoHome, lensId);
+    return resolveCanonicalRoleFile(ontoHome, lensId);
   }
   // No installation override and no project-side hit — return the canonical
   // shape so the downstream error message points users at the expected
@@ -388,7 +385,7 @@ export async function runMaterializeReviewPromptPacketsCli(
   const extractEnabled = extractMode === "shadow" || extractMode === "active";
 
   // C-1~C-4, C-7: Load learnings for all lens agents
-  // ONTO_LEARNING_LOAD_DISABLED=1: Phase 1 fallback — skip learning loading entirely
+  // ONTO_LEARNING_LOAD_DISABLED=1: skip learning loading entirely
   const learningDisabled = process.env.ONTO_LEARNING_LOAD_DISABLED === "1";
   const lensIds = lensPromptPacketSeats.map((s) => s.lens_id);
   const learningDomain = isNoDomain ? null : sessionDomain;
@@ -536,6 +533,7 @@ You must preserve lens evidence and must not invent new independent perspectives
 - materialized input: ${toRelativePath(binding.materialized_input_path, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- controlled lens deliberation result: ${toRelativePath(executionPlan.deliberation_output_path, projectRoot)}
 
 ## Optional Context Inputs
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
@@ -561,17 +559,18 @@ ${(executionPlan.lens_execution_seats ?? binding.resolved_lens_set.map((lensId) 
 
 ## Execution Directives
 - Read the materialized input first, then all participating lens outputs.
+- Read the controlled lens deliberation result before classifying or rendering disagreements.
 - Prefer the smallest sufficient set of files.
 - Only read optional context inputs if the materialized input and lens outputs are not enough.
 - Do not recursively chase additional document links or reference chains found inside the target text or lens outputs.
 - Preserve consensus, axiology-proposed additional perspectives, and overlooked premises.
 - Do not invent New Perspectives yourself.
-- You are the deliberation actor. When lens findings disagree, perform the deliberation in-process: re-read the contested lens outputs and the materialized input, weigh each side against the cited evidence. Preserve the original lens positions in the Disagreement section without collapsing them into a single conclusion; record your resolution per contested point in the Deliberation Decision section. When evidence is insufficient to resolve a contested point, record that fact (with the gap) in Deliberation Decision rather than declaring deliberation unperformed. Cross-process lens-to-lens messaging is not part of this contract — synthesize itself resolves disagreement using the artifacts already in scope.
+- You are not the deliberation actor. Controlled lens deliberation already ran before this step and wrote the authoritative deliberation result.
+- Do not resolve disagreements that the controlled deliberation result preserved as unresolved.
+- Do not override a controlled deliberation decision unless the result contradicts an explicit cited artifact; in that case preserve the contradiction in Disagreement instead of silently choosing a new answer.
 - Start the output with YAML frontmatter using this exact field:
-  - \`deliberation_status: not_needed | performed\`
-  - Use \`not_needed\` when no lens disagreement exists.
-  - Use \`performed\` when you executed the deliberation above and recorded the resolution.
-  - Do not emit \`required_but_unperformed\`; that value is reserved for synthesize-task failure detected by the runner.
+  - \`deliberation_status: performed\`
+  - Use \`performed\` because controlled lens deliberation is a required pre-synthesize stage.
 - Write your result to: ${toRelativePath(executionPlan.synthesis_output_path, projectRoot)}
 
 ## Required Output Sections
@@ -589,7 +588,7 @@ Use exactly these heading names in your output. The downstream renderer extracts
 ## Unique Finding Tagging
 \`\`\`
 
-The Deliberation Decision section records, per contested point, the resolution you reached (or "no contested points" when none exist). When \`deliberation_status: performed\`, every disagreement listed in the Disagreement section must have a corresponding entry here.
+The Deliberation Decision section records, per contested point, the resolution produced by the controlled lens deliberation result. If that result preserved an unresolved disagreement, preserve it here with the reason.
 
 ## Tagging Completeness Rule
 Every finding from the participating lens outputs must be accounted for in exactly one of these four classification sections: Consensus, Conditional Consensus, Disagreement, or Unique Finding Tagging. A finding may additionally appear in other sections (Recommendations, Immediate Actions, etc.), but it must have a primary classification in one of the four. If a finding is part of a cross-lens consensus, classify it under Consensus or Conditional Consensus. If it is unique to a single lens, classify it under Unique Finding Tagging.

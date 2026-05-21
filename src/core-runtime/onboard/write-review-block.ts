@@ -5,9 +5,7 @@
  *
  * A small helper that takes a validated `OntoReviewConfig` plus a path to
  * an `.onto/config.yml` file and either (a) adds a `review:` block to the
- * file or (b) replaces an existing one. The function also strips the legacy
- * `execution_topology_priority` field on request and surfaces a deprecation
- * notice the onboard prose can print verbatim.
+ * file or (b) replaces an existing one.
  *
  * # Why it exists
  *
@@ -35,11 +33,9 @@
  *
  * 1. Existing top-level fields are preserved in order.
  * 2. Comments attached to preserved fields survive the round-trip.
- * 3. The legacy `execution_topology_priority` is removed only when the
- *    caller sets `stripLegacyPriority: true` — default is preserve.
- * 4. If the file does not exist, it is created with a minimal document
+ * 3. If the file does not exist, it is created with a minimal document
  *    containing only the `review:` block.
- * 5. If the input is not a valid `OntoReviewConfig`, the function returns a
+ * 4. If the input is not a valid `OntoReviewConfig`, the function returns a
  *    result object with `ok: false` and no write is performed.
  */
 
@@ -57,16 +53,6 @@ import {
 // Public API
 // ---------------------------------------------------------------------------
 
-export interface WriteReviewBlockOptions {
-  /**
-   * When true, remove the legacy `execution_topology_priority` field from
-   * the top-level document during the write. Onboard sets this to true so
-   * the migrated config has a single source of truth; config-edit flows
-   * pass false to avoid unintended data loss.
-   */
-  stripLegacyPriority?: boolean;
-}
-
 export interface WriteReviewBlockSuccess {
   ok: true;
   /** Path that was written. */
@@ -75,12 +61,6 @@ export interface WriteReviewBlockSuccess {
   created: boolean;
   /** True when a pre-existing `review:` block was replaced. */
   replacedExistingBlock: boolean;
-  /**
-   * True when the legacy `execution_topology_priority` field was present
-   * AND removed (opts.stripLegacyPriority=true). Onboard prints the
-   * deprecation notice to the user when this is true.
-   */
-  strippedLegacyPriority: boolean;
 }
 
 export interface WriteReviewBlockFailure {
@@ -102,7 +82,6 @@ export type WriteReviewBlockResult =
 export function writeReviewBlock(
   configPath: string,
   review: OntoReviewConfig,
-  options: WriteReviewBlockOptions = {},
 ): WriteReviewBlockResult {
   // Re-validate. The type system alone cannot catch callers who constructed
   // the object manually from JSON input (the most common P4 path — the
@@ -132,19 +111,12 @@ export function writeReviewBlock(
   // Detect the prior state of the document so we can report it back to the
   // onboard prose (for the user-facing summary).
   const replacedExistingBlock = exists && doc.has("review");
-  const hadLegacyPriority = exists && doc.has("execution_topology_priority");
 
   // The yaml library accepts a plain object for `set` — it converts that
   // into the internal Node graph. We filter out undefined leaves so the
   // output does not carry `key: null` artifacts for absent axes.
   const serializable = pruneUndefined(review);
   doc.set("review", serializable);
-
-  let strippedLegacyPriority = false;
-  if (hadLegacyPriority && options.stripLegacyPriority === true) {
-    doc.delete("execution_topology_priority");
-    strippedLegacyPriority = true;
-  }
 
   const serialized = doc.toString();
   fs.writeFileSync(absolute, serialized, "utf8");
@@ -154,7 +126,6 @@ export function writeReviewBlock(
     path: absolute,
     created: !exists,
     replacedExistingBlock,
-    strippedLegacyPriority,
   };
 }
 
@@ -165,7 +136,7 @@ export function writeReviewBlock(
 /**
  * Strip `undefined` leaves from a nested object. The `yaml` library would
  * otherwise serialize them as `null`, which is semantically different from
- * "absent" in the review block (an absent key = use universal fallback).
+ * "absent" in the review block (an absent key = use review defaults).
  */
 function pruneUndefined(input: unknown): unknown {
   if (input === null || input === undefined) return input;
@@ -194,9 +165,6 @@ function printHelp(): void {
     "Usage:",
     "  npm run onboard:write-review-block -- <config-path> <review-json>",
     "  npm run onboard:write-review-block -- --help",
-    "",
-    "Options:",
-    "  --strip-legacy-priority   Remove `execution_topology_priority` if present.",
     "",
     "Arguments:",
     "  <config-path>  Path to .onto/config.yml (created if missing).",
@@ -229,7 +197,11 @@ function runCli(argv: string[]): number {
     return argv.length === 0 ? 1 : 0;
   }
 
-  const stripLegacyPriority = argv.includes("--strip-legacy-priority");
+  const unsupportedFlags = argv.filter((a) => a.startsWith("--"));
+  if (unsupportedFlags.length > 0) {
+    console.error(`error: unsupported option(s): ${unsupportedFlags.join(", ")}`);
+    return 1;
+  }
   const positional = argv.filter((a) => !a.startsWith("--"));
   if (positional.length < 2) {
     console.error(
@@ -249,11 +221,7 @@ function runCli(argv: string[]): number {
     return 1;
   }
 
-  const result = writeReviewBlock(
-    configPath as string,
-    parsed as OntoReviewConfig,
-    { stripLegacyPriority },
-  );
+  const result = writeReviewBlock(configPath as string, parsed as OntoReviewConfig);
   console.log(JSON.stringify(result));
   return result.ok ? 0 : 1;
 }

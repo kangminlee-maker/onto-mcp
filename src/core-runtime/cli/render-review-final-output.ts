@@ -71,14 +71,14 @@ function extractSection(markdownText: string, heading: string): string | null {
   return collected.join("\n").trim();
 }
 
-function sectionOrDefault(markdownText: string, headings: string[], fallback = "- none"): string {
+function sectionOrDefault(markdownText: string, headings: string[], defaultText = "- none"): string {
   for (const heading of headings) {
     const extracted = extractSection(markdownText, heading);
     if (extracted && extracted.length > 0) {
       return extracted;
     }
   }
-  return fallback;
+  return defaultText;
 }
 
 function renderLensFindingsRefs(
@@ -181,20 +181,14 @@ export async function runRenderReviewFinalOutputCli(
   const executionPlan = (await fileExists(executionPlanPath))
     ? await readYamlDocument<ReviewExecutionPlan>(executionPlanPath)
     : null;
-  const sourcePath = (await fileExists(deliberationPath))
-    ? deliberationPath
-    : (await fileExists(synthesisPath))
-      ? synthesisPath
-      : executionResultPath;
-  if (sourcePath === executionResultPath && !(await fileExists(executionResultPath))) {
-    throw new Error(
-      `Missing synthesize result and execution result artifacts: ${synthesisPath}, ${executionResultPath}`,
-    );
+  if (!(await fileExists(deliberationPath))) {
+    throw new Error(`Missing controlled deliberation artifact: ${deliberationPath}`);
   }
-  const sourceText =
-    sourcePath === executionResultPath
-      ? ""
-      : await fs.readFile(sourcePath, "utf8");
+  if (!(await fileExists(synthesisPath))) {
+    throw new Error(`Missing synthesize result artifact: ${synthesisPath}`);
+  }
+  const sourcePath = synthesisPath;
+  const sourceText = await fs.readFile(sourcePath, "utf8");
   const sessionDate = (sessionMetadata.created_at ?? "").slice(0, 10);
   const participatingLensCount =
     executionResult?.participating_lens_ids.length ??
@@ -245,7 +239,7 @@ export async function runRenderReviewFinalOutputCli(
     degradedLensIds.length > 0
       ? degradedLensIds.map((lensId) => `- degraded lens: ${lensId}`).join("\n")
       : "- none";
-  const fallbackConditionalConsensus =
+  const defaultConditionalConsensus =
     executionStatus === "completed"
       ? "- none"
       : [
@@ -256,7 +250,7 @@ export async function runRenderReviewFinalOutputCli(
         ]
           .filter((line): line is string => line !== null)
           .join("\n") || "- none";
-  const fallbackPurposeAlignment =
+  const defaultPurposeAlignment =
     executionStatus === "completed"
       ? "- bounded review execution completed"
       : `- execution status: ${executionStatus}`;
@@ -281,6 +275,7 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Review mode: ${bindingArtifact.resolved_review_mode}
 - Execution realization: ${bindingArtifact.resolved_execution_realization}${orchestratorReportedRealization ? ` (orchestrator reported: ${orchestratorReportedRealization})` : ""}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
+- Controlled deliberation: \`${toRelativePath(deliberationPath, projectRoot)}\`
 - Source artifact: \`${toRelativePath(sourcePath, projectRoot)}\`
 - Execution status: ${executionStatus}
 
@@ -292,7 +287,7 @@ ${renderConsensusHeading(
 ${sourceText.length > 0 ? consensus : "- synthesize output unavailable"}
 
 ### Conditional Consensus
-${sourceText.length > 0 ? conditionalConsensus : fallbackConditionalConsensus}
+${sourceText.length > 0 ? conditionalConsensus : defaultConditionalConsensus}
 
 ### Disagreement
 ${sourceText.length > 0 ? disagreement : degradationSummary}
@@ -301,7 +296,7 @@ ${sourceText.length > 0 ? disagreement : degradationSummary}
 ${sourceText.length > 0 ? axiologyPerspectives : "- unavailable"}
 
 ### Purpose Alignment Verification
-${sourceText.length > 0 ? purposeAlignment : fallbackPurposeAlignment}
+${sourceText.length > 0 ? purposeAlignment : defaultPurposeAlignment}
 
 ### Immediate Actions Required
 ${sourceText.length > 0 ? immediateActions : degradationSummary}

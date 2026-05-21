@@ -18,14 +18,14 @@
 runtime은 아래만 한다.
 
 1. `execution-plan.yaml`을 읽는다
-2. lens/synthesize prompt packet seat를 확인한다
+2. lens/deliberation/synthesize prompt packet seat를 확인한다
 3. 각 lens packet을 병렬로 외부 실행 단위에 deterministic하게 전달한다
 4. 각 output seat에 실제 결과 파일이 생성되었는지 검사한다
 5. 기준 미달이면 `fail-close` 한다
 6. `EffectiveBoundaryState`를 `error-log.md`와 degraded 판단의 구조적 basis로 남긴다
 
 추가로 synthesize dispatch 직전에는 runtime이
-participating lens output의 seat/ref를 synthesize runtime packet에 반영할 수 있다.
+participating lens output과 controlled deliberation result의 seat/ref를 synthesize runtime packet에 반영할 수 있다.
 이건 새로운 semantic 판단이 아니라,
 이미 존재하는 lens 결과 seat를 declared handoff에 맞게 전달하는 deterministic handoff다.
 
@@ -46,16 +46,18 @@ participating lens output의 seat/ref를 synthesize runtime packet에 반영할 
 2. `session_root`
 3. `execution-plan.yaml`
 4. `prompt-packets/{lens}.prompt.md`
-5. `prompt-packets/synthesize.prompt.md`
-6. executor realization
+5. `prompt-packets/{lens}.deliberation.prompt.md`
+6. `prompt-packets/teamlead.deliberation.prompt.md`
+7. `prompt-packets/synthesize.prompt.md`
+8. executor realization
    - `subagent`
    - `agent-teams`
    - `MCP` 분리 `LLM`
    - `external model worker`
-7. host runtime
+9. host runtime
    - `codex`
    - `claude`
-8. `max_concurrent_lenses`
+10. `max_concurrent_lenses`
 
 중요:
 
@@ -70,13 +72,16 @@ participating lens output의 seat/ref를 synthesize runtime packet에 반영할 
 최소 출력:
 
 1. `round1/{lens}.md`
-2. `synthesis.md`
-3. `execution-result.yaml`
-4. `error-log.md`
+2. `deliberation/round1/{lens}-deliberation.md`
+3. `deliberation.md`
+4. `synthesis.md`
+5. `execution-result.yaml`
+6. `error-log.md`
 
 원칙:
 
 - lens output seat는 `execution-plan.yaml`이 고정한다
+- deliberation output seat는 `execution-plan.yaml`이 고정한다
 - synthesize output seat도 `execution-plan.yaml`이 고정한다
 - `execution-result.yaml`은 actual execution truth의 canonical seat다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
@@ -87,6 +92,7 @@ participating lens output의 seat/ref를 synthesize runtime packet에 반영할 
   - planned/participating/degraded/excluded lens ids
   - per-unit started/completed timestamps
   - per-unit duration
+  - deliberation execution status
   - synthesize execution status
   - halt reason
 
@@ -124,7 +130,7 @@ npm run review:run-prompt-execution -- \
   --executor-arg=--
 ```
 
-2026-04-13 정책 확정 이후 CLI executor로 wired된 경로는 `codex`만이다. Claude CLI 기반 subagent 및 API executor 경로는 전부 제거되었다. Claude host 경로(`agent_teams_claude` nested orchestration 또는 `subagent_claude` flat orchestration)는 `onto coordinator start`를 통한 coordinator state machine으로 실행되며, `review:run-prompt-execution`을 거치지 않는다. 두 Claude host canonical path는 동일한 state machine을 공유하며 caller의 orchestration 패턴(TeamCreate nested vs Agent-tool flat)만 다르다 — 상세는 `.onto/processes/review/nested-spawn-coordinator-contract.md` §2.1.
+Claude host 경로(`agent_teams_claude` nested orchestration 또는 `subagent_claude` flat orchestration)는 `onto coordinator start`를 통한 coordinator state machine으로 실행되며, `review:run-prompt-execution`을 거치지 않는다. 두 Claude host canonical path는 동일한 state machine을 공유하며 caller의 orchestration 패턴(TeamCreate nested vs Agent-tool flat)만 다르다 — 상세는 `.onto/processes/review/nested-spawn-coordinator-contract.md` §2.1.
 
 현재 구현에서 CLI runner를 통해 실행되는 execution profile:
 
@@ -141,7 +147,8 @@ npm run review:run-prompt-execution -- \
 - 병렬 실행은 필수다
 - realization에 동시 실행 제한이 있으면 worker-pool 방식으로 bounded parallel dispatch를 사용한다
 - slot이 비면 다음 pending lens를 즉시 dispatch한다
-- synthesize는 participating lens outputs가 확정된 뒤에만 시작한다
+- controlled lens deliberation은 participating lens outputs가 확정된 뒤에만 시작한다
+- synthesize는 `deliberation.md`가 생성된 뒤에만 시작한다
 
 ---
 
@@ -176,4 +183,4 @@ authoritative artifact path와 output seat를 고정하는 쪽을 우선한다.
 
 1. `review:start-session -> review:run-prompt-execution -> review:complete-session`를 `/onto:review`의 canonical bounded path로 올린다
 2. 실제 host realization이 이 contract를 따르도록 연결한다
-3. deliberation branch를 bounded path에 추가한다
+3. provider별 controlled deliberation conformance test를 추가한다

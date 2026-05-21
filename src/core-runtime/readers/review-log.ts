@@ -21,7 +21,6 @@ import type {
   ReviewExecutionRealization,
   ReviewHostRuntime,
 } from "../review/artifact-types.js";
-import { normalizeLegacyReviewMode } from "../review/legacy-mode-policy.js";
 
 // ─── Public Types ───
 
@@ -55,7 +54,7 @@ export interface LensDuration {
 export interface ProvenanceSummary {
   runner_wallclock: number;
   coordinator_derived: number;
-  batch_fallback: number;
+  batch_window: number;
   unknown: number;
 }
 
@@ -125,7 +124,7 @@ function classifyProvenance(
   if (
     p === "runner_wallclock" ||
     p === "coordinator_derived" ||
-    p === "batch_fallback"
+    p === "batch_window"
   ) {
     return p;
   }
@@ -133,7 +132,7 @@ function classifyProvenance(
 }
 
 function emptyProvenanceSummary(): ProvenanceSummary {
-  return { runner_wallclock: 0, coordinator_derived: 0, batch_fallback: 0, unknown: 0 };
+  return { runner_wallclock: 0, coordinator_derived: 0, batch_window: 0, unknown: 0 };
 }
 
 function parseYamlFile<T>(filePath: string): T | null {
@@ -234,7 +233,7 @@ function parseSession(
   const reviewRecord = parseYamlFile<RawReviewRecord>(reviewRecordPath);
   const binding = parseYamlFile<RawBinding>(bindingPath);
 
-  // target refs 수집: binding > review-record fallback
+  // target refs 수집: binding 우선, record는 보조 자료.
   let targetRefs: string[] = [];
   if (binding?.resolved_target_scope?.resolved_refs) {
     targetRefs = binding.resolved_target_scope.resolved_refs.map((r) =>
@@ -266,22 +265,12 @@ function parseSession(
     provSummary[synthProv]++;
   }
 
-  // Legacy persisted-state policy (PR #127, v0.2.0):
-  // Sessions created before a rename cycle store the old ReviewMode value
-  // in their execution-result.yaml. Normalize at read time via the centralized
-  // legacy-mode-policy seat so historical sessions remain readable in
-  // progressiveness/audit views without rewriting the original artifacts
-  // (which stay as historical record).
-  const normalizedReviewMode = normalizeLegacyReviewMode(
-    execResult.review_mode as string,
-  ) as ReviewMode;
-
   return {
     session_id: execResult.session_id,
     created_at: reviewRecord?.created_at ?? execResult.execution_started_at,
     review_target_refs: targetRefs,
     request_text: reviewRecord?.request_text ?? "",
-    review_mode: normalizedReviewMode,
+    review_mode: requireReviewMode(execResult.review_mode as string),
     execution_realization: execResult.execution_realization,
     host_runtime: execResult.host_runtime,
     execution_status: execResult.execution_status,
@@ -293,6 +282,11 @@ function parseSession(
     synthesis_duration_ms: synthesisDuration,
     provenance_summary: provSummary,
   };
+}
+
+function requireReviewMode(value: string): ReviewMode {
+  if (value === "core-axis" || value === "full") return value;
+  throw new Error(`review-log: unsupported review_mode in execution-result.yaml: ${value}`);
 }
 
 // ─── Progressiveness ───

@@ -131,8 +131,6 @@ async function handleShow(
       for (const err of validation.errors) {
         console.log(`  - ${err.path}: ${err.message}`);
       }
-      console.log("");
-      console.log("Note: axis-first path will reject this config. P3 universal fallback would activate.");
       return 1;
     }
 
@@ -143,6 +141,7 @@ async function handleShow(
           claudeHost: detection.host === "claude-code",
           codexSessionActive: detection.host === "codex-cli",
           experimentalAgentTeams: detection.agent_teams_available,
+          lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
         }),
       ),
     );
@@ -169,7 +168,7 @@ function renderShow(
     `  max_concurrent_lenses:   ${review.max_concurrent_lenses ?? "(default)"}`,
   );
   lines.push(
-    `  lens_deliberation:       ${review.lens_deliberation ?? "synthesizer-only (default)"}`,
+    `  lens_deliberation:       ${review.lens_deliberation ?? "controlled-lens-deliberation (default)"}`,
   );
   lines.push("");
   lines.push("## Detected environment");
@@ -177,9 +176,6 @@ function renderShow(
   lines.push(`  host:                    ${detection.host}`);
   lines.push(`  agent_teams_available:   ${detection.agent_teams_available}`);
   lines.push(`  codex_available:         ${detection.codex_available}`);
-  lines.push(
-    `  litellm_endpoint:        ${detection.litellm_endpoint ?? "(not configured)"}`,
-  );
   return lines.join("\n");
 }
 
@@ -250,6 +246,7 @@ async function handleEdit(projectRoot: string): Promise<number> {
 
   const configPath = path.join(projectRoot, ".onto", "config.yml");
   const current = await readProjectReviewBlock(configPath);
+  const lensAgentTeamsMode = await readProjectLensAgentTeamsMode(configPath);
   const detection = detectReviewAxes().detected;
 
   const rl = readline.createInterface({
@@ -289,6 +286,7 @@ async function handleEdit(projectRoot: string): Promise<number> {
               claudeHost: detection.host === "claude-code",
               codexSessionActive: detection.host === "codex-cli",
               experimentalAgentTeams: detection.agent_teams_available,
+              lensAgentTeamsMode,
             }),
           ),
         );
@@ -338,9 +336,6 @@ async function handleRedetect(
   console.log(`  host:                    ${detection.host}`);
   console.log(`  agent_teams_available:   ${detection.agent_teams_available}`);
   console.log(`  codex_available:         ${detection.codex_available}`);
-  console.log(
-    `  litellm_endpoint:        ${detection.litellm_endpoint ?? "(not configured)"}`,
-  );
 
   const validation = validateReviewConfig(review);
   if (!validation.ok) {
@@ -355,6 +350,7 @@ async function handleRedetect(
         claudeHost: detection.host === "claude-code",
         codexSessionActive: detection.host === "codex-cli",
         experimentalAgentTeams: detection.agent_teams_available,
+        lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
       }),
     ),
   );
@@ -394,6 +390,7 @@ async function handleValidate(
         claudeHost: detection.host === "claude-code",
         codexSessionActive: detection.host === "codex-cli",
         experimentalAgentTeams: detection.agent_teams_available,
+        lensAgentTeamsMode: merged.lens_agent_teams_mode === true,
       }),
     ),
   );
@@ -436,6 +433,19 @@ async function readProjectReviewBlock(
     return {};
   } catch {
     return {};
+  }
+}
+
+async function readProjectLensAgentTeamsMode(configPath: string): Promise<boolean> {
+  try {
+    const fs = await import("node:fs");
+    if (!fs.existsSync(configPath)) return false;
+    const raw = fs.readFileSync(configPath, "utf8");
+    const { parse } = await import("yaml");
+    const doc = parse(raw) as { lens_agent_teams_mode?: unknown } | null;
+    return Boolean(doc && typeof doc === "object" && doc.lens_agent_teams_mode === true);
+  } catch {
+    return false;
   }
 }
 

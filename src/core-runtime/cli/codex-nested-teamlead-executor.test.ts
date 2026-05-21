@@ -8,7 +8,7 @@ import {
 } from "./codex-nested-teamlead-executor.js";
 
 // ---------------------------------------------------------------------------
-// These tests assert the PR-C orchestrator invariants:
+// These tests assert the codex-nested orchestrator invariants:
 //
 // (1) The prompt embeds every lens in the same order with packet/output
 //     paths and the sandbox flag the outer codex needs.

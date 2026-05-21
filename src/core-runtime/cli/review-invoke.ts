@@ -36,6 +36,7 @@ import {
   type ExecutionTopology,
 } from "../review/execution-topology-resolver.js";
 import {
+  EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES,
   hasStandaloneLensExecutor,
   mapTopologyToExecutorConfig,
   toCoordinatorTopologyDescriptor,
@@ -507,7 +508,7 @@ function buildNoHostDetectedError(): Error {
       "  1. Claude Code 세션에서 `onto review` 재실행 (CLAUDECODE=1 감지 시 coordinator-start 안내)",
       "  2. codex CLI 설치 + `codex login` 후 재실행",
       "  3. `--codex` 플래그로 codex path 강제 (auth·binary 있어야 성공)",
-      "  4. `.onto/config.yml` 에 `review:` axis block 추가 (docs/topology-migration-guide.md §7 참고)",
+      "  4. `.onto/config.yml` 에 `review:` block 추가 (`.onto/processes/configuration.md` 참고)",
       "  5. `.onto/config.yml` 에 llm: { auth, provider, model } 설정",
       "  6. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
     ].join("\n"),
@@ -627,6 +628,7 @@ export function tryTopologyDerivedExecutor(
     topology = resolution.topology;
   }
   if (!hasStandaloneLensExecutor(topology)) return null;
+  if (!EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(topology.id)) return null;
   const base = mapTopologyToExecutorConfig(topology, ontoHome);
   process.stderr.write(
     `[plan:executor] topology=${topology.id} bin=${base.bin} ` +
@@ -737,11 +739,7 @@ function parseHostFacingPositionals(positionals: string[]): HostFacingPositional
   }
 
   if (typeof second === "string" && second.startsWith("@")) {
-    return {
-      target,
-      requestedDomainToken: second,
-      intentText: rest.join(" ").trim(),
-    };
+    throw new Error("Domain tokens must use --domain or --no-domain.");
   }
 
   return {
@@ -1248,7 +1246,7 @@ async function resolveReviewInvokeInputs(
   }
 
   // Domain selection precedence: machine token, explicit no-domain/domain
-  // flags, positional domain token, then interactive/default resolution.
+  // flags, then interactive/default resolution.
   const noDomainFlag = hasOptionFlag(argv, "no-domain");
   const explicitDomainName = readSingleOptionValueFromArgv(argv, "domain");
   if (noDomainFlag && typeof explicitDomainName === "string" && explicitDomainName.length > 0) {
@@ -1264,7 +1262,6 @@ async function resolveReviewInvokeInputs(
   const requestedDomainToken =
     readSingleOptionValueFromArgv(argv, "requested-domain-token") ??
     (canonicalDomainToken.length > 0 ? canonicalDomainToken : undefined) ??
-    parsedPositionals.requestedDomainToken ??
     "";
   const resolvedDomainSelection = await resolveDomainSelection(
     requestedDomainToken,

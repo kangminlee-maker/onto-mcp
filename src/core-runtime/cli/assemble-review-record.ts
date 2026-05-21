@@ -45,59 +45,22 @@ async function readOrchestratorReportedRealization(
   if (!(await fileExists(coordinatorStatePath))) {
     return {};
   }
-  try {
-    const stateFile = await readYamlDocument<CoordinatorStateFile>(
-      coordinatorStatePath,
-    );
-    const value = stateFile.orchestrator_reported_realization;
-    return value ? { orchestrator_reported_realization: value } : {};
-  } catch {
-    return {};
-  }
+  const stateFile = await readYamlDocument<CoordinatorStateFile>(
+    coordinatorStatePath,
+  );
+  const value = stateFile.orchestrator_reported_realization;
+  return value ? { orchestrator_reported_realization: value } : {};
 }
 
 async function detectDeliberationStatus(
-  executionResult: ReviewExecutionResultArtifact | null,
-  synthesisPath: string,
-  deliberationPath: string,
-  binding: InvocationBindingArtifact,
+  executionResult: ReviewExecutionResultArtifact,
 ): Promise<ReviewRecord["deliberation_status"]> {
-  // Precedence per `.onto/processes/review/synthesize-prompt-contract.md` §6.4
-  // and `.onto/processes/review/record-contract.md` §4.5:
-  //
-  //   1. execution-result.yaml (runner-owned, highest authority)
-  //   2. synthesis.md frontmatter (synthesize-owned, primary source for
-  //      both in-process and cross-process realizations)
-  //   3. realization-aware fallback when frontmatter is unavailable:
-  //        - cross-process (agent-teams): deliberation.md presence ⇒ performed
-  //        - in-process (subagent + *): no fallback signal ⇒ failure marker
-  if (
-    executionResult?.deliberation_status === "not_needed" ||
-    executionResult?.deliberation_status === "performed" ||
-    executionResult?.deliberation_status === "required_but_unperformed"
-  ) {
-    return executionResult.deliberation_status;
-  }
-
-  if (await fileExists(synthesisPath)) {
-    const synthesisText = await fs.readFile(synthesisPath, "utf8");
-    const parsed = parseMarkdownFrontmatter<{ deliberation_status?: string }>(
-      synthesisText,
-    );
-    const frontmatterStatus = parsed.metadata?.deliberation_status;
-    if (frontmatterStatus === "not_needed" || frontmatterStatus === "performed") {
-      return frontmatterStatus;
-    }
-    // Frontmatter is malformed/missing or carries the failure-only marker
-    // `required_but_unperformed`. Fall through to realization-aware fallback.
-  }
-
-  const isCrossProcess = binding.resolved_execution_realization === "agent-teams";
-  if (isCrossProcess && (await fileExists(deliberationPath))) {
+  if (executionResult.deliberation_status === "performed") {
     return "performed";
   }
-
-  return "required_but_unperformed";
+  throw new Error(
+    `Review execution result must declare deliberation_status=performed for session ${executionResult.session_id}.`,
+  );
 }
 
 interface ErrorLogSummary {
@@ -133,7 +96,7 @@ async function summarizeErrorLog(errorLogPath: string): Promise<ErrorLogSummary>
   return {
     degradedLensIds: uniqueLensIds,
     hasExecutionFailure:
-      /\|\s+(?:lens|synthesize) failure:\s+/m.test(errorLogText),
+      /\|\s+(?:lens|deliberation|synthesize) failure:\s+/m.test(errorLogText),
     hasRunnerHalt: /\|\s+runner halted before synthesize/m.test(errorLogText),
   };
 }
@@ -194,18 +157,29 @@ export async function runAssembleReviewRecordCli(
   const reviewRecordPath = path.join(sessionRoot, "review-record.yaml");
   const round1Root = path.join(sessionRoot, "round1");
 
-  if (!(await fileExists(interpretationPath))) {
-    throw new Error(`Missing interpretation artifact: ${interpretationPath}`);
-  }
-  if (!(await fileExists(bindingPath))) {
-    throw new Error(`Missing binding artifact: ${bindingPath}`);
+  const requiredArtifacts = [
+    ["interpretation", interpretationPath],
+    ["binding", bindingPath],
+    ["session metadata", sessionMetadataPath],
+    ["target snapshot", targetSnapshotPath],
+    ["materialized input", materializedInputPath],
+    ["context candidate assembly", contextCandidateAssemblyPath],
+    ["controlled deliberation", deliberationPath],
+    ["synthesis", synthesisPath],
+    ["final output", finalOutputPath],
+    ["execution result", executionResultPath],
+  ] as const;
+  for (const [label, artifactPath] of requiredArtifacts) {
+    if (!(await fileExists(artifactPath))) {
+      throw new Error(`Missing ${label} artifact: ${artifactPath}`);
+    }
   }
 
   const invocationBindingArtifact =
     await readYamlDocument<InvocationBindingArtifact>(bindingPath);
-  const executionResult = (await fileExists(executionResultPath))
-    ? await readYamlDocument<ReviewExecutionResultArtifact>(executionResultPath)
-    : null;
+  const executionResult = await readYamlDocument<ReviewExecutionResultArtifact>(
+    executionResultPath,
+  );
   const sessionMetadata = await readYamlDocument<{ created_at?: string }>(
     sessionMetadataPath,
   );
@@ -273,21 +247,14 @@ export async function runAssembleReviewRecordCli(
     resolved_host_runtime: invocationBindingArtifact.resolved_host_runtime,
     ...(await readOrchestratorReportedRealization(sessionRoot)),
     resolved_lens_ids: invocationBindingArtifact.resolved_lens_set,
-    execution_result_ref: executionResult
-      ? toRelativePath(executionResultPath, projectRoot)
-      : null,
-    session_metadata_ref: (await fileExists(sessionMetadataPath))
-      ? toRelativePath(sessionMetadataPath, projectRoot)
-      : null,
-    target_snapshot_ref: (await fileExists(targetSnapshotPath))
-      ? toRelativePath(targetSnapshotPath, projectRoot)
-      : null,
-    materialized_input_ref: (await fileExists(materializedInputPath))
-      ? toRelativePath(materializedInputPath, projectRoot)
-      : null,
-    context_candidate_assembly_ref: (await fileExists(contextCandidateAssemblyPath))
-      ? toRelativePath(contextCandidateAssemblyPath, projectRoot)
-      : null,
+    execution_result_ref: toRelativePath(executionResultPath, projectRoot),
+    session_metadata_ref: toRelativePath(sessionMetadataPath, projectRoot),
+    target_snapshot_ref: toRelativePath(targetSnapshotPath, projectRoot),
+    materialized_input_ref: toRelativePath(materializedInputPath, projectRoot),
+    context_candidate_assembly_ref: toRelativePath(
+      contextCandidateAssemblyPath,
+      projectRoot,
+    ),
     lens_result_refs: lensResultRefs,
     participating_lens_ids: participatingLensIds,
     excluded_lens_ids: excludedLensIds,
@@ -299,21 +266,10 @@ export async function runAssembleReviewRecordCli(
       (await fileExists(errorLogPath))
       ? toRelativePath(errorLogPath, projectRoot)
       : null,
-    synthesis_result_ref: (await fileExists(synthesisPath))
-      ? toRelativePath(synthesisPath, projectRoot)
-      : null,
-    deliberation_status: await detectDeliberationStatus(
-      executionResult,
-      synthesisPath,
-      deliberationPath,
-      invocationBindingArtifact,
-    ),
-    deliberation_result_ref: (await fileExists(deliberationPath))
-      ? toRelativePath(deliberationPath, projectRoot)
-      : null,
-    final_output_ref: (await fileExists(finalOutputPath))
-      ? toRelativePath(finalOutputPath, projectRoot)
-      : null,
+    synthesis_result_ref: toRelativePath(synthesisPath, projectRoot),
+    deliberation_status: await detectDeliberationStatus(executionResult),
+    deliberation_result_ref: toRelativePath(deliberationPath, projectRoot),
+    final_output_ref: toRelativePath(finalOutputPath, projectRoot),
   };
 
   await writeYamlDocument(reviewRecordPath, reviewRecord);

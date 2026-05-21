@@ -1,21 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OntoConfig } from "../discovery/config-chain.js";
+import { TOPOLOGY_CATALOG } from "../review/execution-topology-resolver.js";
 import { tryTopologyDerivedExecutor } from "./review-invoke.js";
 
 // ---------------------------------------------------------------------------
 // Topology-derived executor dispatch invariants (P9.3, 2026-04-21):
 //
-// (1) Dispatch is always attempted — the former opt-in gate
-//     (`execution_topology_priority` pre-P9.1, `config.review` presence
-//     in P9.2) is removed. Resolver's universal `main_native` degrade
-//     guarantees a viable topology whenever a host is reachable.
+// (1) Dispatch uses the resolved topology, either freshly resolved from
+//     config or supplied by a caller that already resolved it.
 // (2) Resolved topology whose lens_spawn_mechanism has a standalone
 //     binary → returns the mapped ReviewUnitExecutorConfig (caller
 //     appends subagent/model args as usual).
 // (3) Resolved topology whose mechanism has NO standalone binary
 //     (claude-agent-tool, claude-teamcreate-member, codex-nested's
-//     teamlead location) → returns null (fall through to coordinator
-//     or dedicated orchestrators).
+//     teamlead location) → returns null.
 // (4) No reachable host (resolver returns `no_host`) → returns null.
 // (5) `[plan:executor]` STDERR line emitted on successful topology
 //     derivation, so operators can see topology → binary mapping.
@@ -23,21 +20,14 @@ import { tryTopologyDerivedExecutor } from "./review-invoke.js";
 
 const FAKE_HOME = "/tmp/fake-onto-home";
 
-function withInjectedSignals(config: OntoConfig, overrides: {
-  CLAUDECODE?: string;
-  EXPERIMENTAL?: string;
-} = {}): OntoConfig {
-  // `tryTopologyDerivedExecutor` reads env implicitly via
-  // resolveExecutionTopology; most tests need CLAUDECODE=1 to satisfy
-  // the cc-main-* requirement. Tests manipulate process.env directly.
-  return config;
-}
-
-describe("tryTopologyDerivedExecutor — null paths (fall through)", () => {
+describe("tryTopologyDerivedExecutor — null paths", () => {
   const originalEnv = { ...process.env };
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
+    process.env.PATH = "";
   });
   afterEach(() => {
     for (const k of Object.keys(process.env)) {
@@ -49,9 +39,6 @@ describe("tryTopologyDerivedExecutor — null paths (fall through)", () => {
   });
 
   it("no config.review block + no host → null (resolver returns no_host)", () => {
-    // P9.3 (2026-04-21): dispatch attempts axis-first resolution for
-    // every review invocation. Without CLAUDECODE / codex signals the
-    // resolver's main_native degrade cannot map → no_host → null.
     const result = tryTopologyDerivedExecutor({}, FAKE_HOME);
     expect(result).toBeNull();
   });
@@ -60,7 +47,7 @@ describe("tryTopologyDerivedExecutor — null paths (fall through)", () => {
     // P9.3 invariant: even without a review block the resolver maps
     // main_native → cc-main-agent-subagent under CLAUDECODE=1. That
     // topology's mechanism is claude-agent-tool which has no
-    // standalone binary, so dispatch falls through to coordinator.
+    // standalone binary, so dispatch returns null for the coordinator seat.
     process.env.CLAUDECODE = "1";
     const result = tryTopologyDerivedExecutor({}, FAKE_HOME);
     expect(result).toBeNull();
@@ -94,13 +81,12 @@ describe("tryTopologyDerivedExecutor — null paths (fall through)", () => {
     expect(result).toBeNull();
   });
 
-  it("review axis resolves to codex-nested-subprocess → null (PR-H dispatch branch is the seat)", () => {
+  it("review axis resolves to codex-nested-subprocess → null for external teamlead seat", () => {
     // Nested codex requires only codexAvailable; but the mapping module
     // rejects it (its teamlead is codex-subprocess, not a per-lens binary).
     // Without CLAUDECODE and with no real codex binary on the test
-    // machine's PATH the resolver will return no_host; that's fine —
-    // the test asserts null regardless, which is correct PR-F behaviour
-    // for nested topology anyway.
+    // machine's PATH the resolver will return no_host; the public contract
+    // remains null for this caller.
     const result = tryTopologyDerivedExecutor(
       {
         review: {
@@ -121,6 +107,9 @@ describe("tryTopologyDerivedExecutor — successful derivation", () => {
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
+    process.env.PATH = "";
     stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
   afterEach(() => {
@@ -139,59 +128,33 @@ describe("tryTopologyDerivedExecutor — successful derivation", () => {
       .filter((l: string) => l.startsWith("[plan:executor]"));
   }
 
-  it("cc-teams-litellm-sessions axis block → litellm executor binary", () => {
-    process.env.CLAUDECODE = "1";
-    // P9.2 (2026-04-21): topology is selected exclusively through the
-    // `config.review` axis block — legacy `execution_topology_priority`
-    // field was removed from OntoConfig.
-    const axisConfig: OntoConfig = {
-      review: {
-        subagent: { provider: "litellm" as const, model_id: "gpt-4o" },
-      },
-      llm_base_url: "http://localhost:4000",
-    };
-
-    // Without experimental flag, teams shape cannot activate → axis-first
-    // fails → degrade to main_native → cc-main-agent-subagent (no
-    // standalone binary) → null.
+  it("cached cc-main-codex-subprocess topology → codex executor binary", () => {
     const result = tryTopologyDerivedExecutor(
-      withInjectedSignals(axisConfig),
+      {},
       FAKE_HOME,
+      { ...TOPOLOGY_CATALOG["cc-main-codex-subprocess"], plan_trace: [] },
     );
-    expect(result).toBeNull();
-
-    process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-    const result2 = tryTopologyDerivedExecutor(
-      withInjectedSignals(axisConfig),
-      FAKE_HOME,
-    );
-    expect(result2).not.toBeNull();
-    expect(result2!.bin).toBe("node");
-    expect(result2!.args[0]).toContain("inline-http-review-unit-executor.js");
-    expect(result2!.args[0]).toContain(FAKE_HOME);
+    expect(result).not.toBeNull();
+    expect(result!.bin).toBe("node");
+    expect(result!.args[0]).toContain("codex-review-unit-executor.js");
+    expect(result!.args[0]).toContain(FAKE_HOME);
   });
 
   it("successful derivation emits [plan:executor] STDERR", () => {
-    process.env.CLAUDECODE = "1";
-    process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
     tryTopologyDerivedExecutor(
-      {
-        review: {
-          subagent: { provider: "litellm", model_id: "gpt-4o" },
-        },
-        llm_base_url: "http://localhost:4000",
-      },
+      {},
       FAKE_HOME,
+      { ...TOPOLOGY_CATALOG["cc-main-codex-subprocess"], plan_trace: [] },
     );
     const lines = topologyLogLines();
     expect(lines.length).toBe(1);
-    expect(lines[0]).toContain("topology=cc-teams-litellm-sessions");
+    expect(lines[0]).toContain("topology=cc-main-codex-subprocess");
     expect(lines[0]).toContain("bin=node");
-    expect(lines[0]).toContain("inline-http-review-unit-executor.js");
+    expect(lines[0]).toContain("codex-review-unit-executor.js");
   });
 
-  it("no [plan:executor] line when topology falls through", () => {
-    // cc-main-agent-subagent has no standalone binary → fall through,
+  it("no [plan:executor] line when topology returns null", () => {
+    // cc-main-agent-subagent has no standalone binary,
     // so no [plan:executor] line should be emitted for this derivation.
     // The resolver picks cc-main-agent-subagent via the axis block.
     process.env.CLAUDECODE = "1";
@@ -203,12 +166,15 @@ describe("tryTopologyDerivedExecutor — successful derivation", () => {
   });
 });
 
-describe("tryTopologyDerivedExecutor — axis-first decides (P9.2)", () => {
+describe("tryTopologyDerivedExecutor — cached topology decides", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
     delete process.env.CLAUDECODE;
     delete process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS;
+    delete process.env.CODEX_THREAD_ID;
+    delete process.env.CODEX_CI;
+    process.env.PATH = "";
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
   });
   afterEach(() => {
@@ -221,21 +187,13 @@ describe("tryTopologyDerivedExecutor — axis-first decides (P9.2)", () => {
     }
   });
 
-  it("review axis selects the binary-backed topology when declared", () => {
-    process.env.CLAUDECODE = "1";
-    process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-    // Axis block declares subagent=litellm → shape=main-teams_foreign →
-    // TopologyId=cc-teams-litellm-sessions (standalone binary).
+  it("cached topology selects the binary-backed executor", () => {
     const result = tryTopologyDerivedExecutor(
-      {
-        review: {
-          subagent: { provider: "litellm", model_id: "gpt-4o" },
-        },
-        llm_base_url: "http://localhost:4000",
-      },
+      {},
       FAKE_HOME,
+      { ...TOPOLOGY_CATALOG["cc-teams-codex-subprocess"], plan_trace: [] },
     );
     expect(result).not.toBeNull();
-    expect(result!.args[0]).toContain("inline-http-review-unit-executor.js");
+    expect(result!.args[0]).toContain("codex-review-unit-executor.js");
   });
 });

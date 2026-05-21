@@ -20,7 +20,7 @@
  * detection logic itself is reused from
  * `src/core-runtime/discovery/host-detection.ts` — this module is a thin
  * projection into the P4 axis vocabulary (host, agent_teams_available,
- * codex_available, litellm_endpoint).
+ * codex_available).
  *
  * # How it relates
  *
@@ -35,7 +35,6 @@ import {
   detectClaudeCodeEnvSignal,
   detectCodexBinaryAvailable,
   detectCodexEnvSignal,
-  detectLiteLlmEndpoint,
 } from "../discovery/host-detection.js";
 
 // ---------------------------------------------------------------------------
@@ -60,8 +59,7 @@ export interface DetectedReviewAxes {
    * Design doc §5.2 stage 2 — `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set
    * to exactly `"1"` (matching the resolver's strict check in
    * `execution-topology-resolver.ts`). When true AND teamlead=main, onboard
-   * stage 6 asks about lens deliberation; when false, synthesizer-only is
-   * forced.
+   * can offer the Agent Teams transport for controlled lens deliberation.
    */
   agent_teams_available: boolean;
   /**
@@ -69,11 +67,6 @@ export interface DetectedReviewAxes {
    * When true, onboard stage 5 surfaces "codex" as a subagent option.
    */
   codex_available: boolean;
-  /**
-   * Design doc §5.2 stage 4 — LiteLLM endpoint. `null` when not detected,
-   * otherwise the endpoint URL (so the onboard report can show it).
-   */
-  litellm_endpoint: string | null;
 }
 
 /** Public result envelope — keeps the JSON shape stable for prose callers. */
@@ -86,7 +79,6 @@ export interface DetectReviewAxesResult {
 // ---------------------------------------------------------------------------
 
 const ENV_AGENT_TEAMS = "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS";
-const ENV_LITELLM_BASE_URL = "LITELLM_BASE_URL";
 
 /**
  * Map the discovery-layer env signals into the onboard host vocabulary.
@@ -115,24 +107,16 @@ export function detectReviewAxes(): DetectReviewAxesResult {
   // Exact-match against `"1"` to stay consistent with the resolver's strict
   // check (`execution-topology-resolver.ts:506`). A loose `Boolean(...)` here
   // would disagree with the resolver when the user sets the variable to
-  // `"0"` / `"false"` / `""`, making onboard report teams as available while
-  // the review runtime would later silently degrade via P3 fallback. Both
-  // layers must read the same signal the same way so the onboard UX promise
-  // survives the runtime.
+  // `"0"` / `"false"` / `""`. Both layers must read the same signal the
+  // same way so the onboard UX promise survives the runtime.
   const agent_teams_available = process.env[ENV_AGENT_TEAMS] === "1";
   const codex_available = detectCodexBinaryAvailable();
-  const litellmEndpointValue = process.env[ENV_LITELLM_BASE_URL];
-  const litellm_endpoint =
-    detectLiteLlmEndpoint() && typeof litellmEndpointValue === "string"
-      ? litellmEndpointValue
-      : null;
 
   return {
     detected: {
       host,
       agent_teams_available,
       codex_available,
-      litellm_endpoint,
     },
   };
 }
@@ -158,11 +142,10 @@ function printHelp(): void {
   const lines = [
     "onboard:detect-review-axes",
     "",
-    "Detects the 4 environmental axes consumed by the onboard prose flow:",
+    "Detects the environmental axes consumed by the onboard prose flow:",
     "  - host            (claude-code | codex-cli | plain-terminal)",
     "  - agent_teams     (CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1)",
     "  - codex_available (codex on PATH + ~/.codex/auth.json)",
-    "  - litellm_endpoint (LITELLM_BASE_URL)",
     "",
     "Usage:",
     "  npm run onboard:detect-review-axes",

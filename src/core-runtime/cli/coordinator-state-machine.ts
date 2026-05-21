@@ -41,6 +41,12 @@ import {
   buildSynthesizeRuntimePacket,
   writeExecutionResult,
 } from "./coordinator-helpers.js";
+import {
+  buildLensControlledDeliberationPrompt,
+  buildTeamleadControlledDeliberationPrompt,
+  type LensOutputForDeliberation,
+  type LensDeliberationResponseForTeamlead,
+} from "../review/controlled-lens-deliberation.js";
 
 // ─────────────────────────────────────────────
 // Derived constants
@@ -180,6 +186,135 @@ function buildSynthesizeAgentInstruction(
     ),
     output_path: executionPlan.synthesis_output_path,
     packet_path: runtimePacketPath,
+  };
+}
+
+async function readLensOutputsForDeliberation(
+  executionPlan: ReviewExecutionPlan,
+): Promise<LensOutputForDeliberation[]> {
+  return Promise.all(
+    executionPlan.lens_prompt_packet_seats.map(async (seat) => {
+      if (!(await fileExists(seat.output_path))) {
+        throw new Error(`Missing lens output for deliberation: ${seat.output_path}`);
+      }
+      const content = await fs.readFile(seat.output_path, "utf8");
+      if (content.trim().length === 0) {
+        throw new Error(`Empty lens output for deliberation: ${seat.output_path}`);
+      }
+      return {
+        lens_id: seat.lens_id,
+        output_path: seat.output_path,
+        content,
+      };
+    }),
+  );
+}
+
+function requireDeliberationSeat(
+  executionPlan: ReviewExecutionPlan,
+  lensId: string,
+): { packet_path: string; output_path: string } {
+  const seat = executionPlan.lens_deliberation_prompt_packet_seats.find(
+    (candidate) => candidate.lens_id === lensId,
+  );
+  if (!seat) {
+    throw new Error(`Missing deliberation prompt seat for lens: ${lensId}`);
+  }
+  return seat;
+}
+
+async function buildLensDeliberationAgentInstructions(
+  executionPlan: ReviewExecutionPlan,
+): Promise<CoordinatorAgentInstruction[]> {
+  if (executionPlan.deliberation_mode !== "controlled-lens-deliberation") {
+    throw new Error(
+      `Unsupported review deliberation mode: ${executionPlan.deliberation_mode}`,
+    );
+  }
+  const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  const lensOutputById = new Map(
+    lensOutputs.map((lensOutput) => [lensOutput.lens_id, lensOutput]),
+  );
+
+  const instructions: CoordinatorAgentInstruction[] = [];
+  for (const lensOutput of lensOutputs) {
+    const seat = requireDeliberationSeat(executionPlan, lensOutput.lens_id);
+    const packetText = buildLensControlledDeliberationPrompt({
+      session_id: executionPlan.session_id,
+      lens_id: lensOutput.lens_id,
+      output_path: seat.output_path,
+      own_output: lensOutput,
+      other_outputs: lensOutputs.filter(
+        (candidate) => candidate.lens_id !== lensOutput.lens_id,
+      ),
+    });
+    await fs.mkdir(path.dirname(seat.packet_path), { recursive: true });
+    await fs.writeFile(seat.packet_path, `${packetText.trimEnd()}\n`, "utf8");
+    instructions.push({
+      lens_id: `deliberation-${lensOutput.lens_id}`,
+      description: `Controlled deliberation response: ${lensOutput.lens_id}`,
+      prompt: buildAgentPrompt(
+        `deliberation-${lensOutput.lens_id}`,
+        "deliberation",
+        seat.packet_path,
+        seat.output_path,
+      ),
+      output_path: seat.output_path,
+      packet_path: seat.packet_path,
+    });
+    if (!lensOutputById.has(lensOutput.lens_id)) {
+      throw new Error(`Missing deliberation lens output: ${lensOutput.lens_id}`);
+    }
+  }
+  return instructions;
+}
+
+async function buildTeamleadDeliberationAgentInstruction(
+  executionPlan: ReviewExecutionPlan,
+): Promise<CoordinatorAgentInstruction> {
+  const lensOutputs = await readLensOutputsForDeliberation(executionPlan);
+  const responses: LensDeliberationResponseForTeamlead[] = [];
+  for (const lensOutput of lensOutputs) {
+    const seat = requireDeliberationSeat(executionPlan, lensOutput.lens_id);
+    if (!(await fileExists(seat.output_path))) {
+      throw new Error(
+        `Missing lens deliberation response for teamlead result: ${seat.output_path}`,
+      );
+    }
+    const content = await fs.readFile(seat.output_path, "utf8");
+    if (content.trim().length === 0) {
+      throw new Error(
+        `Empty lens deliberation response for teamlead result: ${seat.output_path}`,
+      );
+    }
+    responses.push({
+      lens_id: lensOutput.lens_id,
+      response_path: seat.output_path,
+      content,
+    });
+  }
+  const packetText = buildTeamleadControlledDeliberationPrompt({
+    session_id: executionPlan.session_id,
+    output_path: executionPlan.deliberation_output_path,
+    lens_outputs: lensOutputs,
+    lens_deliberation_responses: responses,
+  });
+  await fs.writeFile(
+    executionPlan.teamlead_deliberation_prompt_packet_path,
+    `${packetText.trimEnd()}\n`,
+    "utf8",
+  );
+  return {
+    lens_id: "controlled-deliberation",
+    description: "Teamlead controlled lens deliberation result",
+    prompt: buildAgentPrompt(
+      "controlled-deliberation",
+      "deliberation",
+      executionPlan.teamlead_deliberation_prompt_packet_path,
+      executionPlan.deliberation_output_path,
+    ),
+    output_path: executionPlan.deliberation_output_path,
+    packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
   };
 }
 
@@ -331,28 +466,20 @@ export async function coordinatorNext(
         const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
           path.join(sessionRoot, "execution-plan.yaml"),
         );
-        const runtimePacketPath =
-          result.runtime_packet_path ??
-          path.join(
-            executionPlan.prompt_packets_root ??
-              path.join(sessionRoot, "prompt-packets"),
-            "synthesize.runtime.prompt.md",
-          );
+        const deliberationAgents =
+          await buildLensDeliberationAgentInstructions(executionPlan);
 
         applyTransition(
           stateFile,
           "validating_lenses",
-          "awaiting_synthesize_dispatch",
+          "awaiting_deliberation",
         );
         await writeStateFile(sessionRoot, stateFile);
 
         return {
-          state: "awaiting_synthesize_dispatch",
+          state: "awaiting_deliberation",
           session_root: sessionRoot,
-          agent: buildSynthesizeAgentInstruction(
-            executionPlan,
-            runtimePacketPath,
-          ),
+          agents: deliberationAgents,
           participating_lens_ids: result.participating_lens_ids,
           degraded_lens_ids: result.degraded_lens_ids,
         };
@@ -380,27 +507,9 @@ export async function coordinatorNext(
     }
 
     case "awaiting_synthesize_dispatch": {
-      // ── Deliberation note ──
-      //
-      // synthesize-prompt-contract.md §5.1 defines three values for
-      // `deliberation_status`:
-      //   - not_needed              → lens 간 disagreement 없음
-      //   - performed               → synthesize 가 in-process deliberation
-      //                               수행 + Deliberation Decision 기록 완료
-      //   - required_but_unperformed → synthesize task 자체가 실패했을 때
-      //                               record assembler 가 부여하는 failure
-      //                               marker. synthesize output 에는 이 값이
-      //                               나타나지 않아야 함.
-      //
-      // Deliberation 은 synthesize 단계 *내부* 에서 수행되는 canonical
-      // 설계이며, external deliberation agent 는 존재하지 않는다. 즉
-      // `awaiting_deliberation` state 는 일반 flow 에서 도달하지 않는다
-      // (해당 case 의 throw 는 설계 상 invariant 위반 감지용 guard).
-      //
-      // 여기서의 책임은 synthesize output 의 frontmatter 가 비정상 값
-      // (`required_but_unperformed`) 이면 completing 으로 진행하지 않고
-      // fail-fast 하는 것. 이전에는 이 step 이 생략되어 있어, synthesize
-      // task 실패가 completed 로 silent-advance 될 risk 가 있었다.
+      // Controlled lens deliberation is a required pre-synthesize stage.
+      // Completing may proceed only when both artifacts agree that the
+      // deliberation stage ran and synthesize consumed it.
 
       try {
         // Record auto state entry in memory (not flushed — crash-safe)
@@ -419,11 +528,9 @@ export async function coordinatorNext(
           throw new Error("completing step 1: synthesis output missing");
         }
 
-        // Step 2: Deliberation-status guard (fail-fast on synthesize failure).
-        // Reads synthesis output frontmatter — if `deliberation_status` is
-        // `required_but_unperformed`, this is a signal from the upstream
-        // record assembler (or synthesize task itself) that the synthesize
-        // stage failed. Proceeding to completed would suppress that failure.
+        // Step 2: Deliberation-status guard. Completed review requires the
+        // synthesize stage to acknowledge the pre-synthesize controlled
+        // deliberation artifact.
         const synthesisText = await fs.readFile(
           executionPlan.synthesis_output_path,
           "utf8",
@@ -433,13 +540,16 @@ export async function coordinatorNext(
         }>(synthesisText).metadata;
         const synthesisDeliberationStatus =
           synthesisFrontmatter?.deliberation_status;
-        if (synthesisDeliberationStatus === "required_but_unperformed") {
+        if (synthesisDeliberationStatus !== "performed") {
           throw new Error(
-            "completing step 2: synthesis output declares " +
-              "`deliberation_status: required_but_unperformed` — synthesize " +
-              "task failed (see synthesize-prompt-contract.md §5.1). " +
-              "Re-run synthesize dispatch or halt the session; do not " +
-              "advance to completed.",
+            "completing step 2: synthesis output must declare " +
+              "`deliberation_status: performed` because controlled lens " +
+              "deliberation is a required pre-synthesize stage.",
+          );
+        }
+        if (!(await fileExists(executionPlan.deliberation_output_path))) {
+          throw new Error(
+            `completing step 2: controlled deliberation output missing: ${executionPlan.deliberation_output_path}`,
           );
         }
 
@@ -560,20 +670,71 @@ export async function coordinatorNext(
     }
 
     case "awaiting_deliberation": {
-      // Design invariant guard — this state is unreachable in the canonical
-      // review flow. Deliberation is performed in-process by synthesize
-      // (see synthesize-prompt-contract.md §5 / §6), which emits
-      // `deliberation_status: performed` in its frontmatter. No external
-      // deliberation agent is dispatched. Reaching this state indicates
-      // an upstream wiring defect (e.g., a transition emitted
-      // `awaiting_deliberation` without a corresponding agent contract).
-      throw new Error(
-        "awaiting_deliberation is unreachable under the canonical review " +
-          "flow — synthesize performs in-process deliberation and emits " +
-          "`deliberation_status: performed`. No external deliberation agent " +
-          "exists. Reaching this state signals an upstream transition " +
-          "wiring defect; investigate the caller that emitted the transition.",
-      );
+      try {
+        const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
+          path.join(sessionRoot, "execution-plan.yaml"),
+        );
+
+        if (!(await fileExists(executionPlan.deliberation_output_path))) {
+          return {
+            state: "awaiting_deliberation",
+            session_root: sessionRoot,
+            agent: await buildTeamleadDeliberationAgentInstruction(executionPlan),
+          };
+        }
+
+        const result = await buildSynthesizeRuntimePacket([
+          "--session-root",
+          sessionRoot,
+          "--project-root",
+          projectRoot,
+          "--require-deliberation",
+        ]);
+        if (result.halt) {
+          stateFile.halt_reason = result.halt_reason ?? null;
+          applyTransition(stateFile, "awaiting_deliberation", "failed");
+          await writeStateFile(sessionRoot, stateFile);
+          return {
+            state: "failed",
+            session_root: sessionRoot,
+            halt_reason: result.halt_reason,
+          };
+        }
+        const runtimePacketPath =
+          result.runtime_packet_path ??
+          path.join(
+            executionPlan.prompt_packets_root ??
+              path.join(sessionRoot, "prompt-packets"),
+            "synthesize.runtime.prompt.md",
+          );
+        applyTransition(
+          stateFile,
+          "awaiting_deliberation",
+          "awaiting_synthesize_dispatch",
+        );
+        await writeStateFile(sessionRoot, stateFile);
+        return {
+          state: "awaiting_synthesize_dispatch",
+          session_root: sessionRoot,
+          agent: buildSynthesizeAgentInstruction(
+            executionPlan,
+            runtimePacketPath,
+          ),
+        };
+      } catch (error) {
+        const diskState = await readStateFile(sessionRoot);
+        diskState.error_message =
+          error instanceof Error ? error.message : String(error);
+        if (diskState.current_state === "awaiting_deliberation") {
+          applyTransition(diskState, "awaiting_deliberation", "failed");
+        }
+        await writeStateFile(sessionRoot, diskState);
+        return {
+          state: "failed",
+          session_root: sessionRoot,
+          error_message: diskState.error_message,
+        };
+      }
     }
 
     default:

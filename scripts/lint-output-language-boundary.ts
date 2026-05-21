@@ -63,7 +63,7 @@ interface Violation {
 
 /**
  * Files that are permitted to contain the prohibited pattern because they
- * describe it (principle doc, lint script itself, history / legacy notes).
+ * describe it (principle doc, lint script itself, archived notes).
  * Paths are repo-relative.
  */
 const R1_ALLOWLIST: readonly string[] = [
@@ -120,7 +120,6 @@ const SCAN_TOP_LEVEL_FILES: readonly string[] = [
   "AGENTS.md",
   "CLAUDE.md",
   "CHANGELOG.md",
-  "BLUEPRINT.md",
 ];
 
 const FILE_EXTENSIONS = new Set([".md", ".ts", ".yaml", ".yml"]);

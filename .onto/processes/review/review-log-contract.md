@@ -87,7 +87,7 @@ collectReviewLogs(reviewRoot: string, projectRoot: string): ReviewLogSummary
 per-lens 타이밍 비교 시 `timestamp_provenance` 를 반드시 참조해야 한다:
 
 - `runner_wallclock` / `coordinator_derived`: per-unit 비교 가능
-- `batch_fallback` / 부재: per-unit 비교 불가. 세션 수준 `total_duration_ms` 만 사용
+- `batch_window` / 부재: per-unit 비교 불가. 세션 수준 `total_duration_ms` 만 사용
 
 이 제약은 `artifact-types.ts` 의 `isPerUnitComparableProvenance()` 과 일치한다.
 

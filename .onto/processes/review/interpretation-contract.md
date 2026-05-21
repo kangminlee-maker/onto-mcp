@@ -46,7 +46,7 @@
 
 1. 주체자 자연어 요청
 2. 명시된 target token
-3. 명시된 domain selection (canonical: `--domain {name}` / `--no-domain`; legacy backward-compat: `@{domain}` / `@-` positional tokens)
+3. 명시된 domain selection (`--domain {name}` / `--no-domain`)
 4. 실행 mode 힌트 (`--codex`)
 5. 현재 project context
    - `README.md`

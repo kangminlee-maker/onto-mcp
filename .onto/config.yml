@@ -5,14 +5,11 @@ domains:
 
 review:
   teamlead:
-    model:
-      provider: codex
-      model_id: gpt-5.4
-      effort: high
+    model: main
   subagent:
-    provider: codex
-    model_id: gpt-5.4
-    effort: high
+    provider: main-native
+  lens_deliberation: controlled-lens-deliberation
+lens_agent_teams_mode: true
 review_mode: full
 
 llm:

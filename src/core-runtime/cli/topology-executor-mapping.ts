@@ -20,7 +20,7 @@
  *                                   (no standalone executor binary; the
  *                                   Claude coordinator subagent spawns
  *                                   lens subagents via its own Agent tool)
- *   - `claude-teamcreate-member`  → PR-D (SendMessage A2A lifecycle)
+ *   - `claude-teamcreate-member`  → controlled lens deliberation transport
  *
  * # How it relates
  *
@@ -46,7 +46,7 @@ import type { ReviewUnitExecutorConfig } from "./run-review-prompt-execution.js"
 /**
  * Topology ids whose lens spawn path is wired to a direct executor.
  */
-export const PR_B_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<TopologyId>([
+export const EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<TopologyId>([
   "cc-main-agent-subagent",
   "cc-main-codex-subprocess",
   "codex-main-subprocess",
@@ -67,8 +67,7 @@ const TS_EXECUTABLE_MECHANISMS: ReadonlySet<LensSpawnMechanism> = new Set<LensSp
 
 /**
  * True when the topology's lens spawn mechanism resolves to a TS-executable
- * binary (`codex-review-unit-executor.ts` or
- * `inline-http-review-unit-executor.ts`), i.e. the caller can invoke
+ * binary (`codex-review-unit-executor.ts`), i.e. the caller can invoke
  * `mapTopologyToExecutorConfig()` and feed the result to
  * `executeReviewPromptExecution()`.
  *
@@ -123,7 +122,7 @@ function codexExecutorConfig(ontoHome: string): ReviewUnitExecutorConfig {
  * lens / synthesize invocation under that topology.
  *
  * Throws `TopologyExecutorMappingError` when:
- *   - The topology id is not in `PR_B_SUPPORTED_TOPOLOGIES` (caller should
+ *   - The topology id is not in `EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES` (caller should
  *     not reach this function for unsupported ids; guard upstream).
  *   - The lens_spawn_mechanism requires a TS-invisible dispatch path
  *     (`claude-agent-tool`, `claude-teamcreate-member`) —
@@ -135,10 +134,10 @@ export function mapTopologyToExecutorConfig(
   topology: ExecutionTopology,
   ontoHome: string,
 ): ReviewUnitExecutorConfig {
-  if (!PR_B_SUPPORTED_TOPOLOGIES.has(topology.id)) {
+  if (!EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has(topology.id)) {
     throw new TopologyExecutorMappingError(
       topology.id,
-      `PR-B 지원 set 밖. 지원되는 옵션: ${[...PR_B_SUPPORTED_TOPOLOGIES].join(", ")}`,
+      `Executor mapping 지원 set 밖. 지원되는 옵션: ${[...EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES].join(", ")}`,
     );
   }
   switch (topology.lens_spawn_mechanism) {
@@ -154,8 +153,7 @@ export function mapTopologyToExecutorConfig(
     case "claude-teamcreate-member":
       throw new TopologyExecutorMappingError(
         topology.id,
-        "claude-teamcreate-member lens spawn 은 PR-D 에서 제공 예정 " +
-          "(SendMessage A2A deliberation lifecycle).",
+        "claude-teamcreate-member lens spawn 은 controlled lens deliberation transport 에서 다룹니다.",
       );
   }
 }
@@ -167,8 +165,7 @@ export function mapTopologyToExecutorConfig(
 /**
  * The coordinator state machine, running as a Claude subagent, reads this
  * structure from the coordinator-start handoff payload to decide its own
- * orchestration shape. PR-A added `topology_id` to `ExecutionPlan` as an
- * observation field; PR-B promotes it to a first-class handoff attribute.
+ * orchestration shape. `topology_id` is a first-class handoff attribute.
  *
  * Fields are a JSON-serializable subset of `ExecutionTopology` — the
  * `plan_trace` is intentionally elided (not load-bearing for downstream

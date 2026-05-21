@@ -159,8 +159,8 @@ export interface LlmCallResult {
   declared_billing_mode?: "subscription" | "per_token" | "local";
 }
 
-// Phase 3 production found 30s too tight for large audit batches (philosopher
-// 37 items was timing out then SDK-retrying for 90s total). 120s is generous
+// Phase 3 production found 30s too tight for large audit batches (37 items
+// could time out then SDK-retry for 90s total). 120s is generous
 // enough for ~50-item single-batch audits while still failing fast on real
 // network problems.
 const DEFAULT_TIMEOUT_MS = Number(process.env.ONTO_LLM_TIMEOUT_MS) || 120_000;
@@ -1012,7 +1012,7 @@ function callMockProvider(
         : "(none — mock executor)";
     const synthesizeBody = [
       "---",
-      "deliberation_status: not_needed",
+      "deliberation_status: performed",
       "---",
       "",
       "# Mock Synthesize Output (ts_inline_http executor mock, synthesize variant)",
@@ -1027,7 +1027,7 @@ function callMockProvider(
       disagreementSection,
       "",
       "## Deliberation Decision",
-      "Mock synthesize returned this output via ONTO_LLM_MOCK=1; no real deliberation performed.",
+      "Mock synthesize consumed the controlled deliberation artifact via ONTO_LLM_MOCK=1.",
       "",
       "## Unique Finding Tagging",
       "(none — mock executor)",
@@ -1088,7 +1088,7 @@ function extractJudgmentItemCount(userPrompt: string): number {
  * Cross-agent dedup user prompt lists items as:
  *   1. agent_id=structure
  *      ...
- *   2. agent_id=philosopher
+ *   2. agent_id=coverage
  *      ...
  * Pick the first agent_id we see so the mock's primary_owner_agent matches
  * the first listed shortlist member. Falls back to "structure" when no

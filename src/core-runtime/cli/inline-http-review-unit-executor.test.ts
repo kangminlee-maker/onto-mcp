@@ -34,6 +34,19 @@ beforeEach(() => {
   mkdirSync(projectRoot, { recursive: true });
   mkdirSync(sessionRoot, { recursive: true });
   mkdirSync(ontoHome, { recursive: true });
+  mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
+  writeFileSync(
+    path.join(projectRoot, ".onto", "config.yml"),
+    [
+      "llm:",
+      "  auth: oauth",
+      "  provider: openai",
+      "  model: gpt-5.4",
+      "  effort: high",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
 
   savedHome = process.env.HOME;
   process.env.HOME = scratchDir;
@@ -162,7 +175,7 @@ describe("runInlineHttpReviewUnitExecutorCli — basic execution", () => {
     expect(result.host_runtime).toBe("anthropic");
   });
 
-  it("respects --provider flag (litellm explicit override)", async () => {
+  it("respects --provider flag (lmstudio explicit override)", async () => {
     const packetPath = writePacket("lens.packet.md", PANEL_REVIEW_PACKET);
     const outputPath = path.join(sessionRoot, "logic.md");
 
@@ -174,14 +187,14 @@ describe("runInlineHttpReviewUnitExecutorCli — basic execution", () => {
       "--unit-kind", "lens",
       "--packet-path", packetPath,
       "--output-path", outputPath,
-      "--provider", "litellm",
+      "--provider", "lmstudio",
       "--tool-mode", "inline",
     ]);
 
     // Note: with mock, host_runtime reports per --provider flag, not actual mock target
     expect(exitCode).toBe(0);
     const result = JSON.parse(consoleLogSpy.getOutput().join(""));
-    expect(result.host_runtime).toBe("litellm");
+    expect(result.host_runtime).toBe("lmstudio");
   });
 });
 
@@ -584,8 +597,7 @@ You are the synthesize actor. Lens outputs live on disk.
         "--unit-kind", "synthesize",
         "--packet-path", packetPath,
         "--output-path", outputPath,
-        "--provider", "litellm",
-        "--llm-base-url", "http://localhost:8080",
+        "--provider", "openai",
         "--model", "mock-model",
         "--tool-mode", "auto",
       ]);

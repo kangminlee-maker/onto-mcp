@@ -15,13 +15,12 @@ import { validateReviewConfig } from "./review-config-validator.js";
 //       must reject it explicitly. Same for foreign providers missing
 //       model_id.
 //
-//   (3) Cross-field constraints — lens_deliberation=sendmessage-a2a
-//       with an external teamlead is statically invalid and must fail
-//       at validation time (not runtime).
+//   (3) Deliberation semantics — controlled lens deliberation is a review
+//       semantic, not a transport-specific Agent Teams setting.
 // ---------------------------------------------------------------------------
 
 describe("validateReviewConfig — happy paths", () => {
-  it("accepts undefined / null as empty config (universal fallback)", () => {
+  it("accepts undefined / null as empty config", () => {
     const a = validateReviewConfig(undefined);
     expect(a.ok).toBe(true);
     if (a.ok) expect(a.config).toEqual({});
@@ -36,7 +35,7 @@ describe("validateReviewConfig — happy paths", () => {
     if (r.ok) expect(r.config).toEqual({});
   });
 
-  it("accepts universal fallback (teamlead=main, subagent=main-native)", () => {
+  it("accepts default review axes (teamlead=main, subagent=main-native)", () => {
     const r = validateReviewConfig({
       teamlead: { model: "main" },
       subagent: { provider: "main-native" },
@@ -53,7 +52,7 @@ describe("validateReviewConfig — happy paths", () => {
       teamlead: { model: "main" },
       subagent: { provider: "codex", model_id: "gpt-5.4", effort: "high" },
       max_concurrent_lenses: 6,
-      lens_deliberation: "synthesizer-only",
+      lens_deliberation: "controlled-lens-deliberation",
     });
     expect(r.ok).toBe(true);
     if (r.ok) {
@@ -63,15 +62,15 @@ describe("validateReviewConfig — happy paths", () => {
         effort: "high",
       });
       expect(r.config.max_concurrent_lenses).toBe(6);
-      expect(r.config.lens_deliberation).toBe("synthesizer-only");
+      expect(r.config.lens_deliberation).toBe("controlled-lens-deliberation");
     }
   });
 
-  it("accepts Claude Code + a2a deliberation (teamlead=main)", () => {
+  it("accepts Claude Code + controlled deliberation deliberation (teamlead=main)", () => {
     const r = validateReviewConfig({
       teamlead: { model: "main" },
       subagent: { provider: "main-native" },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     });
     expect(r.ok).toBe(true);
   });
@@ -93,18 +92,12 @@ describe("validateReviewConfig — happy paths", () => {
     }
   });
 
-  it("accepts litellm subagent without effort", () => {
+  it("rejects provider names outside the review subagent domain", () => {
     const r = validateReviewConfig({
-      subagent: { provider: "litellm", model_id: "llama-8b" },
+      subagent: { provider: "unsupported-provider", model_id: "llama-8b" },
       max_concurrent_lenses: 2,
     });
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.config.subagent).toEqual({
-        provider: "litellm",
-        model_id: "llama-8b",
-      });
-    }
+    expect(r.ok).toBe(false);
   });
 });
 
@@ -248,29 +241,22 @@ describe("validateReviewConfig — scalar axis constraints", () => {
   });
 });
 
-describe("validateReviewConfig — cross-field constraints", () => {
-  it("rejects sendmessage-a2a with external teamlead", () => {
+describe("validateReviewConfig — deliberation semantics", () => {
+  it("accepts controlled-lens-deliberation with external teamlead", () => {
     const r = validateReviewConfig({
       teamlead: {
         model: { provider: "codex", model_id: "gpt-5.4" },
       },
       subagent: { provider: "main-native" },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(
-        r.errors.some((e) => e.path === "review.lens_deliberation"),
-      ).toBe(true);
-    }
+    expect(r.ok).toBe(true);
   });
 
-  it("accepts sendmessage-a2a with implicit teamlead (model=main) — absent teamlead block", () => {
-    // teamlead 블록 미기재 시 runtime 기본값 = main, 따라서 cross-field 제약 미발동.
-    // D=true 검증은 runtime 책임 (P1 syntactic 경계 밖).
+  it("accepts controlled-lens-deliberation with implicit teamlead (model=main) — absent teamlead block", () => {
     const r = validateReviewConfig({
       subagent: { provider: "main-native" },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     });
     expect(r.ok).toBe(true);
   });

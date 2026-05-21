@@ -1,12 +1,12 @@
 /**
- * TeamCreate Lens Deliberation Executor — PR-D (2026-04-18).
+ * TeamCreate Lens Deliberation Executor.
  *
  * # What this module is
  *
  * Realizes the protocol side of topology `cc-teams-lens-agent-deliberation`
  * (sketch v3 §3.1 option 1-0). After each of the N lens agents — spawned
  * as persistent `TeamCreate` members — completes its primary lens
- * reasoning, the teamlead dispatches 1-2 rounds of `SendMessage` A2A
+ * reasoning, the teamlead dispatches 1-2 rounds of `SendMessage` controlled-deliberation transport
  * deliberation: every lens agent sees the others' outputs and replies
  * with a re-evaluation. Deliberation outputs are written to
  * `<deliberation_dir>/roundN/<lens_id>-deliberation.md` and fed into
@@ -33,9 +33,9 @@
  *   module produces PROTOCOL ARTIFACTS — prompts the agent sends,
  *   markdown files it writes, schema the synthesize step consumes —
  *   so the Claude agent has a deterministic script to follow. The
- *   actual A2A message dispatch stays at the Claude tool layer.
+ *   actual controlled-deliberation transport message dispatch stays at the Claude tool layer.
  *
- * # Scope of PR-D
+ * # Scope
  *
  * - Triple opt-in guard (`requireDeliberationOptIn`)
  * - Per-round prompt templates (`buildDeliberationRound1Prompt` /
@@ -481,10 +481,9 @@ export interface RunDeliberationArgs {
  * — those are Claude tools the coordinator agent invokes. The returned
  * plan contains fully-formed prompts and target artifact paths.
  *
- * This separation — TS builds prompts + schema, Claude agent executes
- * tool calls — mirrors PR-B's `topology-executor-mapping.ts` pattern and
- * keeps the TS test harness deterministic without needing Claude Code
- * runtime access.
+ * This separation keeps the TS test harness deterministic without needing
+ * Claude Code runtime access: TS builds prompts + schema, Claude agent
+ * executes tool calls.
  */
 export async function runLensAgentDeliberation(
   args: RunDeliberationArgs,

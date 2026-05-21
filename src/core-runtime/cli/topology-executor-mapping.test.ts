@@ -5,7 +5,7 @@ import {
   type ExecutionTopology,
 } from "../review/execution-topology-resolver.js";
 import {
-  PR_B_SUPPORTED_TOPOLOGIES,
+  EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES,
   TopologyExecutorMappingError,
   hasStandaloneLensExecutor,
   mapTopologyToExecutorConfig,
@@ -13,15 +13,13 @@ import {
 } from "./topology-executor-mapping.js";
 
 // ---------------------------------------------------------------------------
-// These tests assert the PR-B mapping invariants:
+// These tests assert executor mapping invariants:
 //
-// (1) The PR-B supported set is exactly {2-1, 2-2, codex-B, 1-1, 1-2, 3-1} —
-//     the 3 PR-A options plus the 3 TeamCreate-teamlead options whose lens
-//     spawn mechanism reuses existing executor binaries.
+// (1) The mapping support set is exactly the topologies whose lens spawn
+//     mechanism is known to this mapper.
 //
 // (2) Mapping is deterministic per lens_spawn_mechanism:
 //       codex-subprocess → codex-review-unit-executor
-//       litellm-http     → inline-http-review-unit-executor
 //       claude-agent-tool / claude-teamcreate-member / generic-subagent
 //                        → throw (no subprocess binary exists)
 //
@@ -44,23 +42,22 @@ function synthesize(id: TopologyId): ExecutionTopology {
 // Support set
 // ---------------------------------------------------------------------------
 
-describe("PR_B_SUPPORTED_TOPOLOGIES", () => {
-  it("contains exactly 6 topologies (PR-A 3 + PR-B 3)", () => {
-    expect(PR_B_SUPPORTED_TOPOLOGIES.size).toBe(6);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-main-agent-subagent")).toBe(true);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-main-codex-subprocess")).toBe(true);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("codex-main-subprocess")).toBe(true);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-teams-agent-subagent")).toBe(true);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-teams-codex-subprocess")).toBe(true);
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-teams-litellm-sessions")).toBe(true);
+describe("EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES", () => {
+  it("contains exactly 5 mapped topologies", () => {
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.size).toBe(5);
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("cc-main-agent-subagent")).toBe(true);
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("cc-main-codex-subprocess")).toBe(true);
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("codex-main-subprocess")).toBe(true);
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("cc-teams-agent-subagent")).toBe(true);
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("cc-teams-codex-subprocess")).toBe(true);
   });
 
-  it("does NOT include 1-0 deliberation (PR-D scope)", () => {
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("cc-teams-lens-agent-deliberation")).toBe(false);
+  it("excludes Agent Teams deliberation transport", () => {
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("cc-teams-lens-agent-deliberation")).toBe(false);
   });
 
-  it("does NOT include codex-nested (PR-C scope)", () => {
-    expect(PR_B_SUPPORTED_TOPOLOGIES.has("codex-nested-subprocess")).toBe(false);
+  it("excludes external codex teamlead topology", () => {
+    expect(EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES.has("codex-nested-subprocess")).toBe(false);
   });
 
   // P7 (2026-04-21): generic-* removed entirely from TopologyId enum.
@@ -101,21 +98,6 @@ describe("mapTopologyToExecutorConfig — codex-subprocess", () => {
 });
 
 // ---------------------------------------------------------------------------
-// mapTopologyToExecutorConfig — litellm-http
-// ---------------------------------------------------------------------------
-
-describe("mapTopologyToExecutorConfig — litellm-http", () => {
-  it("3-1 cc-teams-litellm-sessions → inline-http executor", () => {
-    const cfg = mapTopologyToExecutorConfig(
-      synthesize("cc-teams-litellm-sessions"),
-      FAKE_ONTO_HOME,
-    );
-    expect(cfg.bin).toBe("node");
-    expect(cfg.args[0]).toContain("inline-http-review-unit-executor.js");
-  });
-});
-
-// ---------------------------------------------------------------------------
 // mapTopologyToExecutorConfig — claude-agent-tool (no binary; throw)
 // ---------------------------------------------------------------------------
 
@@ -148,7 +130,7 @@ describe("mapTopologyToExecutorConfig — claude-agent-tool", () => {
 // ---------------------------------------------------------------------------
 
 describe("mapTopologyToExecutorConfig — unsupported", () => {
-  it("1-0 cc-teams-lens-agent-deliberation throws (outside PR-B support set)", () => {
+  it("cc-teams-lens-agent-deliberation throws outside mapping support set", () => {
     expect(() =>
       mapTopologyToExecutorConfig(
         synthesize("cc-teams-lens-agent-deliberation"),
@@ -157,7 +139,7 @@ describe("mapTopologyToExecutorConfig — unsupported", () => {
     ).toThrow(TopologyExecutorMappingError);
   });
 
-  it("codex-A codex-nested-subprocess throws (outside PR-B; PR-C scope)", () => {
+  it("codex-nested-subprocess throws outside mapping support set", () => {
     expect(() =>
       mapTopologyToExecutorConfig(synthesize("codex-nested-subprocess"), FAKE_ONTO_HOME),
     ).toThrow(TopologyExecutorMappingError);
@@ -167,13 +149,13 @@ describe("mapTopologyToExecutorConfig — unsupported", () => {
   // guard is no longer needed — the type system prevents the values from
   // appearing at all.
 
-  it("error message lists all PR-B supported ids for discoverability", () => {
+  it("error message lists all direct-executor supported ids for discoverability", () => {
     try {
       mapTopologyToExecutorConfig(synthesize("codex-nested-subprocess"), FAKE_ONTO_HOME);
       expect.fail("expected throw");
     } catch (err) {
       const msg = (err as Error).message;
-      for (const id of PR_B_SUPPORTED_TOPOLOGIES) {
+      for (const id of EXECUTOR_MAPPING_SUPPORTED_TOPOLOGIES) {
         expect(msg).toContain(id);
       }
     }
@@ -190,10 +172,6 @@ describe("hasStandaloneLensExecutor", () => {
     expect(hasStandaloneLensExecutor(synthesize("cc-teams-codex-subprocess"))).toBe(true);
     expect(hasStandaloneLensExecutor(synthesize("codex-main-subprocess"))).toBe(true);
     expect(hasStandaloneLensExecutor(synthesize("codex-nested-subprocess"))).toBe(true);
-  });
-
-  it("litellm-http mechanism has a TS executor binary", () => {
-    expect(hasStandaloneLensExecutor(synthesize("cc-teams-litellm-sessions"))).toBe(true);
   });
 
   it("claude-agent-tool mechanisms do NOT have a TS executor binary", () => {

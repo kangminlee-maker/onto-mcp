@@ -61,7 +61,7 @@ describe("stripWrappingCodeFence", () => {
   });
 
   it("is a no-op on plain markdown without any fences", () => {
-    const raw = "---\ndeliberation_status: not_needed\n---\n### Consensus\n- finding";
+    const raw = "---\ndeliberation_status: performed\n---\n### Consensus\n- finding";
     expect(stripWrappingCodeFence(raw)).toBe(raw);
   });
 

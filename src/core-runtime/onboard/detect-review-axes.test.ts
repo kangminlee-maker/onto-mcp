@@ -12,8 +12,7 @@ import { detectReviewAxes } from "./detect-review-axes.js";
 //
 //   (1) Host priority ordering — Claude Code > Codex CLI > plain.
 //   (2) agent_teams_available reads CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS.
-//   (3) litellm_endpoint returns the URL string (not just a boolean).
-//   (4) codex_available is sourced from the shared discovery helper.
+//   (3) codex_available is sourced from the shared discovery helper.
 //
 // The codex binary / auth.json probe is filesystem-backed, so we mock
 // `detectCodexBinaryAvailable` from the discovery module to keep the tests
@@ -37,7 +36,6 @@ const VOLATILE_ENV_KEYS = [
   "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS",
   "CODEX_THREAD_ID",
   "CODEX_CI",
-  "LITELLM_BASE_URL",
 ];
 
 beforeEach(() => {
@@ -119,19 +117,6 @@ describe("detectReviewAxes — agent_teams_available (strict =1)", () => {
       process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = value;
       expect(detectReviewAxes().detected.agent_teams_available).toBe(false);
     }
-  });
-});
-
-describe("detectReviewAxes — litellm_endpoint", () => {
-  it("is null when LITELLM_BASE_URL is unset", () => {
-    expect(detectReviewAxes().detected.litellm_endpoint).toBeNull();
-  });
-
-  it("returns the URL string when LITELLM_BASE_URL is set", () => {
-    process.env.LITELLM_BASE_URL = "http://localhost:4000";
-    expect(detectReviewAxes().detected.litellm_endpoint).toBe(
-      "http://localhost:4000",
-    );
   });
 });
 

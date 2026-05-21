@@ -37,8 +37,8 @@ prompt-backed reference path에서 실제로 생성되는 산출물은 대부분
 6. `execution-preparation/materialized-input.md`
 7. `execution-preparation/context-candidate-assembly.yaml`
 8. `round1/{lens-id}.md`
-9. `synthesis.md`
-10. `deliberation.md` optional
+9. `deliberation.md`
+10. `synthesis.md`
 11. `final-output.md`
 12. `error-log.md` optional
 
@@ -114,7 +114,7 @@ lens_output_schema_version derive rule:
 - 각 `round1/{lens-id}.md`가 독자적으로 declare할 필요는 없다
 - future schema bump 시 `lens-prompt-contract.md` §8만 수정하면 mapping이 자동 전파된다
 
-### 4.3 From `execution-result.yaml`, `synthesis.md`, and `deliberation.md`
+### 4.3 From `execution-result.yaml`, `deliberation.md`, and `synthesis.md`
 
 아래는 종합 단계 artifact에서 derive된다.
 
@@ -122,20 +122,14 @@ lens_output_schema_version derive rule:
 - `deliberation_result_ref`
 - `shared_phenomenon_summary` (schema_version 2 이후: synthesis output에서 shared phenomenon 식별 및 claim relation 분류 결과를 구조화하여 추출. 분류가 없으면 빈 배열)
 
-우선순위:
+검증 순서:
 
 1. `execution-result.yaml.deliberation_status`
 2. `synthesis.md` frontmatter `deliberation_status`
-3. compatibility fallback
+3. fail-loud validation
 
-예:
-
-- `deliberation.md`가 없고 `synthesis.md`에 `not needed`가 명시된 경우
-  - `deliberation_status: not_needed`
-- `deliberation.md`가 존재하는 경우
-  - `deliberation_status: performed`
-- `synthesis.md`에 `needed`가 명시됐지만 `deliberation.md`가 존재하지 않는 경우
-  - `deliberation_status: required_but_unperformed`
+완료된 review record의 값은 `performed`여야 한다.
+`deliberation.md`가 없거나 `synthesis.md`가 `performed`를 선언하지 않으면 assemble은 실패한다.
 
 ### 4.4 From `error-log.md`
 
@@ -169,7 +163,7 @@ team lead는 아래 순서로 `review-record.yaml`을 assemble한다.
 2. `binding.yaml`의 ref와 resolved fields를 기록
 3. execution-preparation artifact ref를 기록
 4. 실제 존재하는 `round1/*.md`를 lens id별로 매핑
-5. `synthesis.md`와 optional `deliberation.md`를 기록
+5. `deliberation.md`와 `synthesis.md`를 기록
 6. `final-output.md` ref를 기록
 7. `error-log.md`가 있으면 degraded/deliberation status를 조정한다
 
@@ -240,8 +234,8 @@ degraded_lens_ids: []
 degradation_notes_ref: null
 
 synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis.md
-deliberation_status: not_needed
-deliberation_result_ref: null
+deliberation_status: performed
+deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation.md
 final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 ```
 

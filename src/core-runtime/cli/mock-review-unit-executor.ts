@@ -40,19 +40,22 @@ function renderLensOutput(unitId: string, packetPath: string): string {
 
 function renderSynthesizeOutput(packetPath: string): string {
   return `---
-deliberation_status: not_needed
+deliberation_status: performed
 ---
 
 # synthesize Result
 
 ### Consensus
-- The bounded runner dispatched all participating lens prompt packets.
+- The bounded runner dispatched lens prompt packets and controlled lens deliberation before synthesize.
 
 ### Conditional Consensus
 - A real host-side executor still needs to replace the mock executor.
 
 ### Disagreement
 - none
+
+### Deliberation Decision
+- Controlled lens deliberation completed before synthesize.
 
 ### Axiology-Proposed Additional Perspectives
 - Preserve repo-local canonical execution truth over host-specific drift.
@@ -71,6 +74,62 @@ deliberation_status: not_needed
 
 ### Applied Learnings
 - prompt packet: \`${packetPath}\`
+`;
+}
+
+function renderDeliberationOutput(unitId: string, packetPath: string): string {
+  if (unitId === "controlled-deliberation") {
+    return `---
+deliberation_status: performed
+---
+
+# Controlled Lens Deliberation Result
+
+## Consensus
+- Mock controlled deliberation completed from \`${packetPath}\`.
+
+## Conditional Consensus
+- none
+
+## Disagreement
+- none
+
+## Deliberation Decision
+- No contested mock points required resolution.
+
+## Axiology-Proposed Additional Perspectives
+- none
+
+## Purpose Alignment Verification
+- The required deliberation stage ran before synthesize.
+
+## Immediate Actions Required
+- none
+
+## Recommendations
+- none
+
+## Unique Finding Tagging
+- mock-controlled-deliberation
+`;
+  }
+
+  return `# ${unitId} Response
+
+## Re-evaluation Summary
+- Mock lens deliberation response executed from \`${packetPath}\`.
+
+## Accepted From Other Lenses
+- none
+
+## Contested Points
+- none
+
+## Position Changes
+- none
+
+## Final Lens Position
+- unchanged
 `;
 }
 
@@ -99,6 +158,8 @@ export async function runMockReviewUnitExecutorCli(
   const outputText =
     unitKind === "synthesize"
       ? renderSynthesizeOutput(packetPath)
+      : unitKind === "deliberation"
+        ? renderDeliberationOutput(unitId, packetPath)
       : renderLensOutput(unitId, packetPath);
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });

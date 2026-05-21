@@ -361,7 +361,7 @@ npm run review:inline-http-unit-executor -- \
 - 내부 canonical 토큰 (`@{name}` / `@-`) 은 유지 — session artifact backward compat
 - e2e tests E22a (`--no-domain`), E22b (`--domain {name}`), E22c (mutual exclusion fail) 추가, 모두 PASS
 
-**문서 업데이트**: `commands/review.md`, `commands/reconstruct.md`, `commands/evolve.md`, `commands/help.md`, `.onto/processes/review/review.md`, `.onto/processes/review/interpretation-contract.md`, `.onto/processes/review/productized-live-path.md`, `README.md`, `BLUEPRINT.md` — canonical 우선 표기, legacy `@` 표기를 backward compat 으로 명시.
+**문서 업데이트**: `commands/review.md`, `commands/reconstruct.md`, `commands/evolve.md`, `commands/help.md`, `.onto/processes/review/review.md`, `.onto/processes/review/interpretation-contract.md`, `.onto/processes/review/productized-live-path.md`, `README.md` — canonical domain flags 우선 표기.
 
 ### Added — Session 18 (2026-04-16): 142/142 (100%) execution-phase completion
 

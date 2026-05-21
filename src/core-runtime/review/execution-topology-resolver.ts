@@ -18,8 +18,7 @@
  *   prerequisite check → return topology or `no_host`. Emits `[topology]`
  *   STDERR for every branch (mirrors `[plan]` pattern from PR #96).
  * - `TOPOLOGY_CATALOG` — metadata for the 8 canonical options.
- * - `PR_A_SUPPORTED_TOPOLOGIES` — spawn-time support set (narrows as
- *   later PRs register executors).
+ * - `DIRECT_SPAWN_SUPPORTED_TOPOLOGIES` — spawn-time support set.
  *
  * # Design reference
  *
@@ -77,8 +76,8 @@ export type LensSpawnMechanism =
 /** Transport rank inherited from sketch v2; here a derived property. */
 export type TransportRank = "S0" | "S1" | "S2" | "S3";
 
-/** Whether lens agents can converse (A2A) before synthesize. */
-export type DeliberationChannel = "sendmessage-a2a" | "synthesizer-only";
+/** Whether lens agents can run the Agent Teams deliberation transport before synthesize. */
+export type DeliberationChannel = "controlled-lens-deliberation";
 
 /**
  * The resolved topology: a Topology metadata snapshot plus the decision
@@ -148,7 +147,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "claude-teamcreate-member",
     max_concurrent_lenses: 10,
     transport_rank: "S2",
-    deliberation_channel: "sendmessage-a2a",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "cc-teams-agent-subagent": {
     id: "cc-teams-agent-subagent",
@@ -156,7 +155,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "claude-agent-tool",
     max_concurrent_lenses: 10,
     transport_rank: "S2",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "cc-teams-codex-subprocess": {
     id: "cc-teams-codex-subprocess",
@@ -164,7 +163,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "codex-subprocess",
     max_concurrent_lenses: 5,
     transport_rank: "S0",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "cc-main-agent-subagent": {
     id: "cc-main-agent-subagent",
@@ -172,7 +171,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "claude-agent-tool",
     max_concurrent_lenses: 10,
     transport_rank: "S2",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "cc-main-codex-subprocess": {
     id: "cc-main-codex-subprocess",
@@ -180,7 +179,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "codex-subprocess",
     max_concurrent_lenses: 5,
     transport_rank: "S0",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "codex-nested-subprocess": {
     id: "codex-nested-subprocess",
@@ -188,7 +187,7 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "codex-subprocess",
     max_concurrent_lenses: 5,
     transport_rank: "S0",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
   "codex-main-subprocess": {
     id: "codex-main-subprocess",
@@ -196,14 +195,14 @@ export const TOPOLOGY_CATALOG: Record<TopologyId, TopologyMetadata> = {
     lens_spawn_mechanism: "codex-subprocess",
     max_concurrent_lenses: 5,
     transport_rank: "S0",
-    deliberation_channel: "synthesizer-only",
+    deliberation_channel: "controlled-lens-deliberation",
   },
 };
 
 /**
  * Topology ids whose spawn path is implemented in the direct executor path.
  */
-export const PR_A_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<TopologyId>([
+export const DIRECT_SPAWN_SUPPORTED_TOPOLOGIES: ReadonlySet<TopologyId> = new Set<TopologyId>([
   "cc-main-agent-subagent",
   "cc-main-codex-subprocess",
   "codex-main-subprocess",
@@ -449,15 +448,15 @@ function buildNoTopologyReason(signals: DetectionSignals): string {
 }
 
 // ---------------------------------------------------------------------------
-// Spawn-time support check (PR-A scope)
+// Spawn-time support check
 // ---------------------------------------------------------------------------
 
 /**
- * Error thrown when a resolver picks an option PR-A cannot spawn yet.
+ * Error thrown when a resolver picks an option this install cannot spawn.
  *
  * The resolver itself never throws — it always returns a resolution.
- * Callers dispatching to executors call `assertSupportedInPrA(topology)`
- * before attempting to spawn; subsequent PRs extend the supported set.
+ * Callers dispatching to executors call `assertDirectSpawnSupported(topology)`
+ * before attempting to spawn.
  */
 export class UnsupportedTopologyError extends Error {
   constructor(public readonly topologyId: TopologyId) {
@@ -467,32 +466,31 @@ export class UnsupportedTopologyError extends Error {
 }
 
 function buildUnsupportedTopologyMessage(id: TopologyId): string {
-  const supported = [...PR_A_SUPPORTED_TOPOLOGIES].join(", ");
-  const landingPr =
+  const supported = [...DIRECT_SPAWN_SUPPORTED_TOPOLOGIES].join(", ");
+  const requiredSurface =
     id === "cc-teams-agent-subagent" ||
     id === "cc-teams-codex-subprocess"
-      ? "PR-B"
+      ? "TeamCreate coordinator execution"
       : id === "codex-nested-subprocess"
-        ? "PR-C"
+        ? "external codex teamlead execution"
         : id === "cc-teams-lens-agent-deliberation"
-          ? "PR-D"
-          : "후속 PR (generic-* adapter 설계 선행 필요)";
+          ? "controlled deliberation transport"
+          : "provider adapter design";
   return [
-    `ExecutionTopology id="${id}" 는 현 설치에서 아직 구현되지 않았습니다 (${landingPr} 에서 제공 예정).`,
+    `ExecutionTopology id="${id}" 는 현 설치에서 직접 spawn 할 수 없습니다. 필요한 실행 표면: ${requiredSurface}.`,
     "지원되는 topology:",
-    ...[...PR_A_SUPPORTED_TOPOLOGIES].map((s) => `  - ${s}`),
+    ...[...DIRECT_SPAWN_SUPPORTED_TOPOLOGIES].map((s) => `  - ${s}`),
     "",
-    `PR-A 기준 지원 옵션: ${supported}`,
+    `Direct spawn 지원 옵션: ${supported}`,
   ].join("\n");
 }
 
 /**
- * Guard used by spawn-time code (PR-B/C/D/E will narrow the "unsupported"
- * set). Throws `UnsupportedTopologyError` when the resolved topology is
- * not yet wired for spawn in the current release.
+ * Guard used by spawn-time code. Throws `UnsupportedTopologyError` when the
+ * resolved topology is not wired for direct spawn in the current install.
  */
-export function assertSupportedInPrA(topology: ExecutionTopology): void {
-  if (!PR_A_SUPPORTED_TOPOLOGIES.has(topology.id)) {
+export function assertDirectSpawnSupported(topology: ExecutionTopology): void {
+  if (!DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.has(topology.id)) {
     throw new UnsupportedTopologyError(topology.id);
   }
 }
@@ -527,6 +525,7 @@ function resolveAxisFirstTopology(
     claudeHost: signals.claudeHost,
     codexSessionActive: signals.codexSessionActive,
     experimentalAgentTeams: signals.experimentalAgentTeams,
+    lensAgentTeamsMode: signals.lensAgentTeamsMode,
   };
   const derivation = deriveTopologyShape(validation.config, derivationSignals);
   for (const line of derivation.ok ? derivation.derived.trace : derivation.trace) {

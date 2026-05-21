@@ -12,8 +12,7 @@ import type {
 // Coverage:
 //   (1) Design doc §4.2 Host × Shape mapping table — every listed
 //       (shape, host, provider) combination has a corresponding assertion.
-//   (2) Un-mapped combinations return `ok=false` with a reason, not a
-//       silent fallback. P2's integrator decides fallback strategy.
+//   (2) Un-mapped combinations return `ok=false` with a reason.
 //   (3) Trace accumulates for both success and failure — operator can read
 //       STDERR and reconstruct the decision.
 // ---------------------------------------------------------------------------
@@ -69,14 +68,15 @@ describe("shapeToTopologyId — main_foreign mapping", () => {
     if (r.ok) expect(r.topology_id).toBe("cc-main-codex-subprocess");
   });
 
-  it("main_foreign + litellm + Claude → unsupported (teams mode required)", () => {
-    const r = shapeToTopologyId(input("main_foreign", "litellm", CLAUDE));
+  it("main_foreign + unknown provider + Claude → unsupported", () => {
+    const r = shapeToTopologyId(
+      input("main_foreign", "unsupported-provider" as never, CLAUDE),
+    );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toContain("teams");
   });
 
-  it("main_foreign + anthropic + Claude → unsupported (no catalog entry)", () => {
-    const r = shapeToTopologyId(input("main_foreign", "anthropic", CLAUDE));
+  it("main_foreign + null provider + Claude → unsupported", () => {
+    const r = shapeToTopologyId(input("main_foreign", null, CLAUDE));
     expect(r.ok).toBe(false);
   });
 
@@ -99,24 +99,20 @@ describe("shapeToTopologyId — teams variants", () => {
     if (r.ok) expect(r.topology_id).toBe("cc-teams-codex-subprocess");
   });
 
-  it("main-teams_foreign + litellm → cc-teams-litellm-sessions", () => {
-    const r = shapeToTopologyId(input("main-teams_foreign", "litellm", CLAUDE));
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.topology_id).toBe("cc-teams-litellm-sessions");
-  });
-
-  it("main-teams_foreign + anthropic → unsupported (no catalog entry)", () => {
-    const r = shapeToTopologyId(input("main-teams_foreign", "anthropic", CLAUDE));
+  it("main-teams_foreign + unknown provider → unsupported", () => {
+    const r = shapeToTopologyId(
+      input("main-teams_foreign", "unsupported-provider" as never, CLAUDE),
+    );
     expect(r.ok).toBe(false);
   });
 
-  it("main-teams_foreign + openai → unsupported (no catalog entry)", () => {
-    const r = shapeToTopologyId(input("main-teams_foreign", "openai", CLAUDE));
+  it("main-teams_foreign + null provider → unsupported", () => {
+    const r = shapeToTopologyId(input("main-teams_foreign", null, CLAUDE));
     expect(r.ok).toBe(false);
   });
 
-  it("main-teams_a2a → cc-teams-lens-agent-deliberation", () => {
-    const r = shapeToTopologyId(input("main-teams_a2a", null, CLAUDE));
+  it("main-teams_deliberation → cc-teams-lens-agent-deliberation", () => {
+    const r = shapeToTopologyId(input("main-teams_deliberation", null, CLAUDE));
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.topology_id).toBe("cc-teams-lens-agent-deliberation");
   });

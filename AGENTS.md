@@ -87,18 +87,16 @@ canonical review 구조:
 3. `호출 고정 (InvocationBinding)`
 4. execution preparation artifacts
 5. `9개 lens`
-6. `종합 단계 (synthesize)`
-7. `리뷰 기록 (ReviewRecord)`
-8. human-readable final output
+6. controlled lens deliberation
+7. `종합 단계 (synthesize)`
+8. `리뷰 기록 (ReviewRecord)`
+9. human-readable final output
 
 DO:
-- `9개 lens + synthesize` 구조를 따른다
+- `9개 lens → controlled lens deliberation → synthesize` 구조를 따른다
 - `New Perspectives`는 `axiology`에서 제안한다
-- `synthesize`는 기존 lens 결과를 보존적으로 종합한다
-
-DO NOT:
-- `synthesize`에서 새 독립 관점을 invent하지 않는다
-- legacy `agent panel + philosopher` 구조를 canonical로 취급하지 않는다
+- `deliberation.md`가 contested lens position의 resolution authority다
+- `synthesize`는 lens 결과와 `deliberation.md`를 보존적으로 종합한다
 
 ---
 
@@ -124,6 +122,7 @@ DO NOT:
 - [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
 - [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
 - [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
+- [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
 
 ---
 
@@ -136,6 +135,8 @@ DO NOT:
 - `session-metadata.yaml`
 - `execution-plan.yaml`
 - `execution-preparation/*`
+- `deliberation/round1/*`
+- `deliberation.md`
 - `final-output.md`
 - `review-record.yaml` ← primary artifact
 
@@ -192,7 +193,7 @@ core 제품화 계층은 TypeScript다.
 ## 10. Current Priority
 
 1. `검토 (review)`의 `제품화된 실시간 경로`를 canonical execution truth로 정착
-2. `9개 lens + synthesize` 구조를 실제 실행 truth로 정착
+2. `9개 lens + controlled lens deliberation + synthesize` 구조를 실제 실행 truth로 정착
 3. `맥락 격리 추론 단위`를 유지
 4. `리뷰 기록 (ReviewRecord)`를 actual primary artifact로 도입
 5. TS core API를 정리한 뒤 MCP tool surface로 노출

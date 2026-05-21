@@ -91,7 +91,7 @@ requested_domain_token: "@ontology"
 plugin_root: /Users/kangmin/.claude/plugins/onto
 ```
 
-`plugin_root`는 review 실행 시점에 resolve 된 install path 의 snapshot 이다. 위 예시는 default Claude Code install 경로이며, 현재 canonical 표기는 `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}` 이다 (`ONTO_PLUGIN_DIR` 환경변수 미설정 시 default 로 fallback). 새 review session 의 metadata 는 resolve 된 절대경로를 기록한다.
+`plugin_root`는 review 실행 시점에 resolve 된 install path 의 snapshot 이다. 위 예시는 default Claude Code install 경로이며, 현재 canonical 표기는 `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}` 이다. 새 review session 의 metadata 는 resolve 된 절대경로를 기록한다.
 
 ---
 

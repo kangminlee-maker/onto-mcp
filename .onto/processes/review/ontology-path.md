@@ -39,7 +39,7 @@ review 활동의 **ontology 유무 경로 분기** 중 "ontology 가 존재하�
 
 ### 2.2 Per-session 분기 (향후 확장)
 
-현재는 "프로젝트에 seat 이 있었다" → "세션이 ontology 를 소비했다" 를 1:1 매핑으로 취급한다. 향후 review artifact 에 per-session `ontology_consulted` 필드를 도입하면 classifier 는 세션별 소비 흔적을 우선 참조하고, 없을 경우 환경 수준 판정으로 fallback 한다.
+현재는 "프로젝트에 seat 이 있었다" → "세션이 ontology 를 소비했다" 를 1:1 매핑으로 취급한다. 향후 review artifact 에 per-session `ontology_consulted` 필드를 도입하면 classifier 는 세션별 소비 흔적을 우선 참조하고, 부재 시 환경 수준 판정을 사용한다.
 
 ## 3. r+ path 수행 계약
 

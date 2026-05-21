@@ -65,7 +65,6 @@ export type DetectedHostRuntime = "claude" | "codex" | "standalone";
  * - `hasCodexExec`: codex binary on PATH + ~/.codex/auth.json present
  * - `hasAnthropicApiKey`: ANTHROPIC_API_KEY env var
  * - `hasOpenAiApiKey`: OPENAI_API_KEY env var (or ~/.codex/auth.json field)
- * - `hasLiteLlmEndpoint`: LITELLM_BASE_URL env var
  */
 export interface HostCapabilities {
   hasTeamCreate: boolean;
@@ -73,7 +72,6 @@ export interface HostCapabilities {
   hasCodexExec: boolean;
   hasAnthropicApiKey: boolean;
   hasOpenAiApiKey: boolean;
-  hasLiteLlmEndpoint: boolean;
 }
 
 /** Result of full host detection. */
@@ -114,19 +112,12 @@ const CODEX_ENV_SIGNALS = ["CODEX_THREAD_ID", "CODEX_CI"] as const;
 // LLM provider env vars
 const ENV_ANTHROPIC_API_KEY = "ANTHROPIC_API_KEY";
 const ENV_OPENAI_API_KEY = "OPENAI_API_KEY";
-const ENV_LITELLM_BASE_URL = "LITELLM_BASE_URL";
-
 // ---------------------------------------------------------------------------
 // Low-level signal detectors (exported for reuse / testing)
 // ---------------------------------------------------------------------------
 
 /**
  * True when any Claude Code session env signal is present.
- *
- * Replaces the legacy `detectClaudeCodeHost()` from review-invoke.ts (which
- * checked only CLAUDECODE === "1"). The expanded signal set matches the
- * detection logic previously duplicated in bootstrap-review-binding.ts and
- * prepare-review-session.ts.
  */
 export function detectClaudeCodeEnvSignal(): boolean {
   for (const name of CLAUDE_ENV_SIGNALS) {
@@ -150,7 +141,6 @@ export function detectCodexEnvSignal(): boolean {
 /**
  * True when codex binary is on PATH AND ~/.codex/auth.json exists.
  *
- * Replaces the legacy `detectCodexAvailable()` from review-invoke.ts.
  * Both conditions must hold — auth.json alone or binary alone is insufficient.
  */
 export function detectCodexBinaryAvailable(): boolean {
@@ -192,11 +182,6 @@ export function detectOpenAiApiKey(): boolean {
   }
 }
 
-/** True when LITELLM_BASE_URL env var is set. */
-export function detectLiteLlmEndpoint(): boolean {
-  return Boolean(process.env[ENV_LITELLM_BASE_URL]);
-}
-
 // ---------------------------------------------------------------------------
 // Capability matrix per host
 // ---------------------------------------------------------------------------
@@ -207,13 +192,9 @@ export function detectLiteLlmEndpoint(): boolean {
  * - Orchestration capabilities (hasTeamCreate, hasAgentSpawn) are tied to
  *   the host runtime — only `claude` host has them.
  * - Inference capabilities (hasAnthropicApiKey, hasOpenAiApiKey,
- *   hasLiteLlmEndpoint, hasCodexExec) are environmental — detected
- *   independently of the host.
- *
- * This separation means: a Claude main session can use a LiteLLM subagent
- * if LITELLM_BASE_URL is set. A Codex main session can use an Anthropic
- * subagent if ANTHROPIC_API_KEY is set. The host runtime determines what
- * orchestration is possible; subagent provider selection happens elsewhere.
+ *   hasCodexExec) are environmental — detected independently of the host.
+ * The host runtime determines what orchestration is possible; subagent
+ * provider selection happens elsewhere.
  */
 export function detectHostCapabilities(hostRuntime: DetectedHostRuntime): HostCapabilities {
   return {
@@ -222,7 +203,6 @@ export function detectHostCapabilities(hostRuntime: DetectedHostRuntime): HostCa
     hasCodexExec: detectCodexBinaryAvailable(),
     hasAnthropicApiKey: detectAnthropicApiKey(),
     hasOpenAiApiKey: detectOpenAiApiKey(),
-    hasLiteLlmEndpoint: detectLiteLlmEndpoint(),
   };
 }
 
@@ -315,38 +295,9 @@ export function detectHostRuntime(
 
 /**
  * Convenience: detect host runtime category only (no capabilities, no source).
- *
- * Use when caller only needs the category — typically for legacy code paths
- * that previously used `detectClaudeCodeHost()` returning a boolean.
  */
 export function detectHostRuntimeCategory(
   config: HostDetectionConfig = {},
 ): DetectedHostRuntime {
   return detectHostRuntime(config).hostRuntime;
-}
-
-// ---------------------------------------------------------------------------
-// Backward-compat shims (legacy boolean predicates)
-// ---------------------------------------------------------------------------
-
-/**
- * Legacy: returns true when host is detected as Claude Code.
- *
- * Replaces `detectClaudeCodeHost()` from review-invoke.ts (which only
- * checked `CLAUDECODE === "1"`). The new implementation uses the full
- * Claude env signal set and the consolidated detection priority.
- */
-export function isClaudeCodeHost(config: HostDetectionConfig = {}): boolean {
-  return detectHostRuntimeCategory(config) === "claude";
-}
-
-/**
- * Legacy: returns true when host is detected as Codex CLI.
- *
- * Includes both active session (CODEX_THREAD_ID/CODEX_CI) and passive
- * availability (binary + auth.json). For active session only, use
- * `detectCodexEnvSignal()`.
- */
-export function isCodexHost(config: HostDetectionConfig = {}): boolean {
-  return detectHostRuntimeCategory(config) === "codex";
 }

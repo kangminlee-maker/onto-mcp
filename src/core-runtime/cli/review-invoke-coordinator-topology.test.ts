@@ -4,17 +4,14 @@ import { tryResolveTopologyForHandoff } from "./review-invoke.js";
 // ---------------------------------------------------------------------------
 // Coordinator handoff descriptor invariants (P9.3, 2026-04-21):
 //
-// (1) `tryResolveTopologyForHandoff` attempts axis-first resolution
-//     unconditionally; the former opt-in gate (config.review presence)
-//     is gone. Every review invocation that reaches a reachable host
-//     ships a descriptor.
+// (1) `tryResolveTopologyForHandoff` attempts axis-first resolution when
+//     a review axis block exists.
 // (2) Resolvable topology → non-null descriptor with all 6 static
 //     attributes, minus plan_trace (handoff payload stays compact).
 // (3) Descriptor is JSON-serializable with deterministic shape —
 //     downstream coordinator consumers parse it unmodified.
-// (4) Returns null ONLY when ontoConfig is undefined (defensive) or
-//     the resolver itself returns `no_host` (axis + main_native
-//     degrade both failed, i.e. no Claude or Codex host reachable).
+// (4) Returns null when ontoConfig is undefined or the resolver itself
+//     reports `no_host`.
 // ---------------------------------------------------------------------------
 
 const ORIGINAL_ENV = { ...process.env };
@@ -40,16 +37,10 @@ describe("tryResolveTopologyForHandoff — null paths", () => {
   });
 
   it("no host signals → null (resolver returns no_host)", () => {
-    // No CLAUDECODE, no codex session. With no reachable host even the
-    // main_native degrade cannot map — resolver returns no_host and the
-    // handoff payload omits the topology field.
     expect(tryResolveTopologyForHandoff({})).toBeNull();
   });
 
-  it("review block declares unreachable subagent → null (axis + degrade both fail)", () => {
-    // No CLAUDECODE, no experimental, no codex, no litellm. Axis-first
-    // derives `cc-teams-codex-subprocess` which fails requirements; the
-    // main_native degrade then fails to map (no host) → no_host.
+  it("review block declares unreachable subagent → null", () => {
     expect(
       tryResolveTopologyForHandoff({
         review: {
@@ -67,21 +58,13 @@ describe("tryResolveTopologyForHandoff — always-on axis-first (P9.3)", () => {
   });
   afterEach(restoreEnv);
 
-  it("plain CC session without review block → cc-main-agent-subagent descriptor via main_native degrade", () => {
-    // P9.3 invariant: every review invocation produces a descriptor
-    // when a host is reachable, even without an explicit `review:`
-    // axis block. Main_native degrade maps to cc-main-agent-subagent
-    // under CLAUDECODE=1.
+  it("plain CC session without review block → null", () => {
     process.env.CLAUDECODE = "1";
     const descriptor = tryResolveTopologyForHandoff({});
-    expect(descriptor).not.toBeNull();
-    expect(descriptor!.id).toBe("cc-main-agent-subagent");
+    expect(descriptor).toBeNull();
   });
 
-  it("empty `review: {}` ALSO resolves via main_native degrade under CC host", () => {
-    // The former M2 opt-in guard is gone — empty review blocks are no
-    // longer distinct from absent ones at dispatch time. Both produce
-    // the same cc-main-agent-subagent descriptor on CLAUDECODE=1.
+  it("empty `review: {}` resolves through explicit review defaults under CC host", () => {
     process.env.CLAUDECODE = "1";
     const descriptor = tryResolveTopologyForHandoff({
       review: {} as never,
@@ -109,25 +92,25 @@ describe("tryResolveTopologyForHandoff — resolved descriptor", () => {
     expect(descriptor!.lens_spawn_mechanism).toBe("claude-agent-tool");
     expect(descriptor!.max_concurrent_lenses).toBe(10);
     expect(descriptor!.transport_rank).toBe("S2");
-    expect(descriptor!.deliberation_channel).toBe("synthesizer-only");
+    expect(descriptor!.deliberation_channel).toBe("controlled-lens-deliberation");
   });
 
   it("cc-teams-lens-agent-deliberation resolves when triple opt-in met", () => {
     process.env.CLAUDECODE = "1";
     process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
     // P9.2 (2026-04-21): deliberation topology is selected through the
-    // `config.review` axis block (`lens_deliberation: sendmessage-a2a`)
+    // `config.review` axis block (`lens_deliberation: controlled-lens-deliberation`)
     // + `lens_agent_teams_mode: true` double opt-in.
     const descriptor = tryResolveTopologyForHandoff({
       review: {
         subagent: { provider: "main-native" },
-        lens_deliberation: "sendmessage-a2a",
+        lens_deliberation: "controlled-lens-deliberation",
       },
       lens_agent_teams_mode: true,
     });
     expect(descriptor).not.toBeNull();
     expect(descriptor!.id).toBe("cc-teams-lens-agent-deliberation");
-    expect(descriptor!.deliberation_channel).toBe("sendmessage-a2a");
+    expect(descriptor!.deliberation_channel).toBe("controlled-lens-deliberation");
     expect(descriptor!.lens_spawn_mechanism).toBe("claude-teamcreate-member");
   });
 

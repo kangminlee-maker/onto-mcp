@@ -36,38 +36,34 @@ it matches the productized live path and produces the same artifact truth.
 - Step 3 maps to the synthesize stage.
 - In the prompt-backed reference path, each review lens is executed as a `ContextIsolatedReasoningUnit` so that lens-specific context remains isolated.
 - In a productized prompt path, Step 0 and Step 1.5 are executed as pre-process interpretation work and should not be semantically re-done a second time inside the live review pass.
-- In a productized prompt path, `round1/*.md` and `synthesis.md` are human-readable source layers, while the primary artifact is `review-record.yaml` per `.onto/processes/review/record-contract.md`.
+- In a productized prompt path, `round1/*.md`, `deliberation.md`, and `synthesis.md` are human-readable source layers, while the primary artifact is `review-record.yaml` per `.onto/processes/review/record-contract.md`.
 
 **Important boundary**:
 - Step 0, Step 1, and Step 1.5 below are not the canonical live execution order.
 - They remain here as source material and reference logic for the prompt-backed path.
 - The actual live path begins after the invocation artifacts and execution preparation artifacts already exist.
 
-**Legacy source path**:
-- **Default** (consensus clear): 0→1→1.5→2→3→5→6
-- **Extended** (contested points exist): 0→1→1.5→2→3→4→5→6
-
 **Productized prompt path**:
-- **Default** (consensus clear): `review:invoke` or internally `review:start-session` → `review:run-prompt-execution` → `review:complete-session`
-- **Extended** (contested points exist): `review:invoke` with deliberation branch, or internally `review:start-session` → `review:run-prompt-execution` → 4→5→`review:complete-session`
+- `review:invoke`
+- internal bounded path: `review:start-session` → `review:run-prompt-execution` → `review:complete-session`
+- `review:run-prompt-execution` owns lens execution, controlled lens deliberation, and synthesize execution
 
 ---
 
 ### 0. Domain Selection
 
-Legacy source material for `검토 해석 (InvocationInterpretation)`.
+Reference source material for `검토 해석 (InvocationInterpretation)`.
 Productized live path에서는 이 내용을 직접 다시 실행하지 않고,
 이미 해석 단계에서 결정된 결과를 사용한다.
 
 Determine `{session_domain}` per the "Domain Determination Rules" in `process.md`.
 
-Domain selection inputs (canonical first; legacy `@` syntax retained for backward compat):
-- **Canonical**: `--domain {name}` → non-interactive resolution; `--no-domain` → empty `{session_domain}` (no-domain mode)
-- **Legacy** (deprecated due to `@filename` mention conflict in Claude Code): `@{domain}` and `@-` positional tokens still work
+Domain selection inputs:
+- `--domain {name}` → non-interactive resolution; `--no-domain` → empty `{session_domain}` (no-domain mode)
 - Otherwise (no domain flag): run the Domain Selection Flow (target analysis → collect available domains → derive suggestion → display UI → await user input)
 - `--domain` and `--no-domain` are mutually exclusive (specifying both fails fast at parser layer)
 - **Seed review detection**: If the review target path matches `drafts/{domain}`:
-  - Default domain recommendation: no-domain mode (canonical: `--no-domain`; internal token: `@-`) unless user explicitly specifies otherwise
+  - Default domain recommendation: no-domain mode (`--no-domain`) unless user explicitly specifies otherwise
   - Reason: seed content is unverified, so applying domain-specific rules would use unverified content as standards
 
 The resolved `{session_domain}` is used throughout this session for domain document loading, learning storage tags, and the verification context section of the final output.
@@ -76,7 +72,7 @@ The resolved `{session_domain}` is used throughout this session for domain docum
 
 ### 1. Context Gathering (performed by team lead)
 
-Legacy source material for `검토 해석 (InvocationInterpretation)` + `검토 고정 (InvocationBinding)`.
+Reference source material for `검토 해석 (InvocationInterpretation)` + `검토 고정 (InvocationBinding)`.
 Productized live path에서는 이 내용이 `binding`과 `execution preparation artifact`로 재배치된다.
 
 The team lead collects only the items below. Per-agent learnings/domain documents are self-loaded by the teammate.
@@ -84,7 +80,7 @@ The team lead collects only the items below. Per-agent learnings/domain document
 1. **Review target collection**:
    - If file/directory: reads the relevant code.
    - If design/decision: reads the related documents.
-   - If `drafts/{domain}` path: reads all 8 files from `~/.onto/drafts/{domain}/` as the review target (seed review mode). The seed domain's documents are the review target, not verification standards. Verification standards come from: (a) agent intrinsic methodology, (b) `--domain {other-name}` (or legacy `@{other-domain}`) if specified, (c) LLM pre-training knowledge.
+   - If `drafts/{domain}` path: reads all 8 files from `~/.onto/drafts/{domain}/` as the review target (seed review mode). The seed domain's documents are the review target, not verification standards. Verification standards come from: (a) agent intrinsic methodology, (b) `--domain {other-name}` if specified, (c) LLM pre-training knowledge.
 
 2. **Project context collection**:
    - Identifies the system purpose and principles from CLAUDE.md, README.md, etc.
@@ -100,7 +96,7 @@ The team lead collects only the items below. Per-agent learnings/domain document
 
 ### 1.5 Complexity Assessment (performed by team lead)
 
-Legacy source material for `검토 해석 (InvocationInterpretation)`.
+Reference source material for `검토 해석 (InvocationInterpretation)`.
 Productized live path에서는 이 semantic 판단이 live review pass 바깥에서 한 번만 수행된다.
 
 Step 1에서 수집한 리뷰 대상과 주체자(Principal)의 요청 형태에 따라, 경량 리뷰 제안 절차는 두 경로로 분기한다.
@@ -383,12 +379,12 @@ npm run review:materialize-execution-preparation -- \
 
 **Step 3 — Example realization: Team creation via TeamCreate**:
 - team_name: `onto-{session ID}`
-- description: `Agent Panel Review: {review target summary}`
+- description: `Onto Review: {review target summary}`
 
-**Step 4 — Create all teammates**: After TeamCreate, create all teammates **simultaneously in a single message** via Agent tool. The initial prompt combines identity + self-loading + task directives. Each review lens is realized as a `ContextIsolatedReasoningUnit`. Review lenses begin Round 1 immediately; `synthesize` waits until Step 3.
-- **core-axis 모드**: 고정 6 lens (`axiology` / `coverage` / `evolution` / `logic` / `semantics` / `structure`) + `synthesize`를 생성한다. Cost-constrained Pareto-optimal 구성 (v5 benchmark 기반, 4-axis trade-off). 단, `host_runtime: standalone | litellm | anthropic | openai` 인 경우 Step 1.5 dynamic lens selection (`selectLenses`) 이 활성화되어 LLM 이 2-6 lens 를 선택할 수 있다 (이 경우에도 `axiology` 는 항상 포함).
-- **전원 모드 (full) 또는 Complexity Assessment 미수행**: 8명 기존 검증 lens + `axiology` + `synthesize`를 생성한다.
-- Each teammate's `name`: agent-id (e.g., `logic`, `synthesize`)
+**Step 4 — Create all teammates**: After TeamCreate, create all lens teammates **simultaneously in a single message** via Agent tool. The initial prompt combines identity + self-loading + task directives. Each review lens is realized as a `ContextIsolatedReasoningUnit`. `synthesize` is dispatched only after controlled lens deliberation has produced `deliberation.md`.
+- **core-axis 모드**: 고정 6 lens (`axiology` / `coverage` / `evolution` / `logic` / `semantics` / `structure`)를 생성한다. Cost-constrained Pareto-optimal 구성 (v5 benchmark 기반, 4-axis trade-off).
+- **전원 모드 (full) 또는 Complexity Assessment 미수행**: 8명 기존 검증 lens + `axiology`를 생성한다.
+- Each teammate's `name`: lens-id (e.g., `logic`)
 - Each teammate's `team_name`: team_name created in Step 3
 - Initial prompt: use the **Teammate Initial Prompt Template** from `process.md` (including session path)
 - 세션 메타데이터에 `review_mode: core-axis | full` 기록
@@ -502,15 +498,15 @@ Codex 모드에서는 TeamCreate를 생략한다. 대신 각 review lens를 `cod
 
 Task Directives는 Agent Teams 모드와 **동일한 내용**을 사용한다. 차이점은 프롬프트 래핑(Codex Reviewer Prompt Template)과 실행 런타임뿐이다.
 
-#### Step 2 — Example realization: Subagent Fallback Variation (claude)
+#### Step 2 — Example realization: Direct Subagent Variation (claude)
 
-`execution_realization: subagent` + `host_runtime: claude` 경로다. TeamCreate가 사용 불가하거나 실패한 경우의 비상 경로 — 각 review lens를 `general-purpose` subagent_type의 Agent tool로 생성한다. canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
+`execution_realization: subagent` + `host_runtime: claude` 경로다. 각 review lens를 `general-purpose` subagent_type의 Agent tool로 생성한다. canonical requirement는 `ContextIsolatedReasoningUnit` 유지다.
 
 **Sub-step 2.3 — Team creation**: 생략. TeamCreate/TeamDelete를 사용하지 않는다.
 
 **Sub-step 2.4 — Create all reviewer Agents**: 모든 review lens Agent를 **단일 메시지에서 동시에** 호출하되, 각각 `run_in_background: true`로 설정한다.
 - 각 Agent의 `subagent_type`: `"general-purpose"`
-- 각 Agent의 프롬프트: `process.md`의 **Teammate Initial Prompt Template**을 baseline으로 사용하되, self-loading이 불가하므로 팀 리드가 agent definition + learning file + domain document + communication learning + task directives + session path를 직접 inline한다 (process.md Fallback Rules 참조)
+- 각 Agent의 프롬프트: `process.md`의 **Teammate Initial Prompt Template**을 baseline으로 사용하되, self-loading이 불가하므로 팀 리드가 agent definition + learning file + domain document + communication learning + task directives + session path를 직접 inline한다.
 - core-axis 모드: 고정 6 lens (axiology / coverage / evolution / logic / semantics / structure) 생성. (Step 1.5 dynamic selection 활성 시 2-6 lens + axiology)
 - 전원 모드(full): 8명 전원 생성
 - `synthesize`는 이 단계에서 생성하지 않는다 (메인 프로세스 Step 3에서 별도 실행)
@@ -545,23 +541,19 @@ Round 1에서 에이전트 에러 발생 시:
 
 ### 3. Reference Execution — Synthesize
 
-Synthesize 단계의 dispatch 메커니즘은 `execution_realization` × `host_runtime` 두 축의 조합으로 분기한다. 어느 경로든 lens 결과 + execution-preparation artifacts를 그대로 전달한다는 본질은 동일하며, 차이는 전달 메커니즘과 deliberation 처리 위치다.
+Synthesize 단계의 dispatch 메커니즘은 `execution_realization` × `host_runtime` 두 축의 조합으로 분기한다. 어느 경로든 lens 결과 + execution-preparation artifacts + controlled deliberation result를 그대로 전달한다는 본질은 동일하다.
 
 <!-- derived-from: .onto/processes/review/binding-contract.md, resolved_execution_realization × resolved_host_runtime -->
 
 | `execution_realization` | `host_runtime` | Dispatch 메커니즘 | Deliberation 처리 | Synthesize 실패 정책 |
 |---|---|---|---|---|
-| `agent-teams` | `claude` | SendMessage to `synthesize` teammate | "needed" 판정 시 §4 cross-process Step 4 실행 | 1회 SendMessage 재요청; 실패 시 `process-halting-with-partial-result` |
-| `subagent` | `claude` | Agent tool with `subagent_type: "general-purpose"` | synthesize가 §6 in-process로 직접 수행. §4 실행 안 함 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
-| `subagent` | `codex` | Agent tool with `subagent_type: "codex:codex-rescue"` | synthesize가 §6 in-process로 직접 수행. §4 실행 안 함 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
+| `agent-teams` | `claude` | SendMessage to `synthesize` teammate | synthesize 전에 controlled lens deliberation 완료 | 1회 SendMessage 재요청; 실패 시 `process-halting-with-partial-result` |
+| `subagent` | `claude` | Agent tool with `subagent_type: "general-purpose"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
+| `subagent` | `codex` | Agent tool with `subagent_type: "codex:codex-rescue"` | synthesize 전에 controlled lens deliberation 완료 | 1회 동일 프롬프트로 Agent re-spawn; 실패 시 `process-halting-with-partial-result` |
 
 본 표의 discriminator는 binding artifact의 `resolved_execution_realization` + `resolved_host_runtime` 두 필드와 1:1 대응한다 (별도 enum이 아니다). 2축의 카르테시안 곱 중 `agent-teams + codex` 조합은 현재 unsupported다 — `.onto/processes/review/productized-live-path.md` §3.6 참조.
 
-**Audit observability tradeoff**: cross-process 경로 (`agent-teams + claude`)는 deliberation을 별도 `deliberation.md` 파일로 산출하여 deliberation 자체의 감사 가능성이 높다. in-process 경로 (`subagent + *`)는 deliberation을 `synthesis.md`의 `Deliberation Decision` 섹션에 통합하여 감사 가능성이 상대적으로 낮다. 두 경로 간 audit observability 비대칭은 의도된 트레이드오프이며, 둘 다 contract §6.4의 single-source 규칙을 만족한다.
-
-**용어 주의 — "fallback"**: 본 문서에서 `subagent + claude` 경로의 "TeamCreate fallback" 표기는 현 시점에서 Agent Teams가 1차 선택이고 subagent가 비상 경로라는 *현재 상태*를 반영한다. 향후 `subagent + claude`가 1차 경로로 승격되면 본 용어를 재평가한다.
-
-`subagent` 경로의 synthesize 프롬프트는 host_runtime별로 process.md의 **Subagent Fallback Synthesize Prompt Template** (claude) 또는 **Codex Review Synthesize Prompt Template** (codex)을 사용한다. 두 템플릿 모두 in-process deliberation directive를 포함한다.
+**Audit observability rule**: 모든 경로는 `deliberation.md`를 산출한다. `synthesis.md`는 그 결과를 소비하고 보존적으로 최종 review output을 작성한다.
 
 이하 본 절은 `agent-teams` 경로의 SendMessage 전달 콘텐츠를 정의한다. **Since the original text is preserved in the files, the team lead does not include the original text in the message.**
 
@@ -627,7 +619,7 @@ Step 3 — Unique Finding Tagging:
 Classify at the lens-qualified claim unit, not by per-lens majority buckets. Mark whether each claim remains unique to one lens or belongs to a shared phenomenon observed by multiple lenses.
 
 ### Deliberation Decision
-- (`needed` / `not needed` with rationale aligned to the deliberation rule)
+- Preserve the controlled lens deliberation result from `{session_root}/deliberation.md`.
 
 ### Final Review Result
 - (Conservative synthesized review result that preserves lens evidence and system purpose)
@@ -641,16 +633,11 @@ Follow `.onto/processes/review/synthesize-prompt-contract.md` §4 Mandatory Exec
 Do not use simple majority as a substitute for reasoning.
 In removal vs. retention conflicts, especially when `conciseness` is involved, compare the rationales against system purpose and preserve unresolved disagreement when it cannot be closed.
 
-### Deliberation Necessity
+### Deliberation Consumption
 
-본 외부 결정 트리는 `execution_realization: agent-teams` 경로에만 적용된다. `subagent` 및 `subagent + codex` 경로에서는 synthesize가 §6.3에 따라 자기 출력의 frontmatter `deliberation_status`를 직접 emit하며 (`not_needed` 또는 `performed`), 외부 "needed/not needed" 결정 단계가 없다. deliberation 트리거 조건의 canonical enumeration은 `.onto/processes/review/synthesize-prompt-contract.md` §6.1 / §6.2가 단일 source이며 두 경로 모두 동일 조건을 공유한다.
-
-Agent Teams 경로 기준, 다음 조건 중 하나라도 만족하면 "needed"로 답한다:
-- Do disagreement items exist?
-- Were overlooked premises discovered?
-- Do axiology-proposed additional perspectives require additional examination?
-
-If none apply, answer "not needed" — in this case, write the final output directly:
+Controlled lens deliberation is completed before synthesize. Every execution path
+produces the same `{session_root}/deliberation.md` artifact, and synthesize
+preserves that artifact as the contested-position authority:
 
 ---
 session_id: {session ID}
@@ -679,7 +666,7 @@ date: {YYYY-MM-DD}
 - (Judgments that align only under explicit conditions, scope limits, or reservations)
 
 ### Disagreement
-원 lens 입장을 보존하는 섹션이다. Codex/Subagent 경로에서는 cross-process lens-to-lens 메시징이 없으므로 synthesize가 in-process deliberation을 수행하고 그 resolution은 별도의 `Deliberation Decision` 섹션에 기록한다. Agent Teams 경로에서 cross-process deliberation이 수행된 경우에는 deliberation output format에 따라 resolution이 표출된다.
+원 lens 입장을 보존하는 섹션이다. Resolution은 synthesize 이전의 controlled deliberation result에서 온다.
 Tag each disagreement item with a type:
 - **[Factual discrepancy]** — verifiable via external reference (code, documents). PO action: gather additional information
 - **[Criteria discrepancy]** — resolvable by applying a higher-level principle. PO action: confirm/decide on the higher-level principle
@@ -709,7 +696,7 @@ Classify at the lens-qualified claim unit rather than by per-lens majority bucke
 | (Record representative claim units or co-located groups) | unique claim / shared phenomenon | | |
 
 ### Deliberation Decision
-- (`needed` / `not needed` / unresolved reason)
+- (Resolved / narrowed / unresolved-with-reason decisions copied from `{session_root}/deliberation.md`)
 
 ### Final Review Result
 - (Conservative synthesized review result that preserves lens evidence and system purpose)
@@ -722,8 +709,7 @@ Classify co-located claim groups per `.onto/processes/review/shared-phenomenon-c
 | | | | corroboration / disagreement / partial overlap / dedup | |
 ```
 
-**If the synthesize stage judges "not needed"** → the final output has already been written. Proceed directly to Step 5.
-**If the synthesize stage judges "needed"** → proceed to Step 4 (deliberation).
+Synthesize는 deliberation 필요 여부를 판정하지 않는다. Step 4는 synthesize 전에 완료되어 있어야 한다.
 
 #### Step 3 — Example realization: Codex Mode Variation
 
@@ -733,16 +719,16 @@ Codex 모드에서는 `synthesize`도 `codex:codex-rescue` Agent로 실행한다
 - 프롬프트: `process.md`의 **Codex Review Synthesize Prompt Template** 사용.
 - 프롬프트에 review lens의 결과 파일 경로를 포함한다. Codex가 파일을 직접 읽고 종합한다.
 - 결과를 `{session path}/synthesis.md`에 저장하도록 지시한다.
-- **In-process deliberation 지시**: process.md의 **Codex Review Synthesize Prompt Template**이 in-process deliberation directive 본문을 포함한다 — 별도 문구를 본 절에서 재나열하지 않는다. 의미 규칙은 `.onto/processes/review/synthesize-prompt-contract.md` §6이 단일 source다.
+- 프롬프트는 `{session path}/deliberation.md`를 읽고 그 resolution을 보존한다.
 - `synthesize` 실패 시: 1회 재시도 후에도 실패하면 `process-halting-with-partial-result`를 적용한다 (process.md Error Handling Rules 참조).
 
 ---
 
-### 4. Reference Execution — Deliberation (Conditional, Agent Teams 전용)
+### 4. Reference Execution — Controlled Lens Deliberation
 
-본 단계는 `execution_realization: agent-teams` 경로에서만 실행한다. `subagent` 및 `subagent + codex` 경로에서는 cross-process lens-to-lens 메시징 채널이 없으므로 `synthesize`가 §3 단계에서 `.onto/processes/review/synthesize-prompt-contract.md` §6의 in-process deliberation 절차를 이미 수행했다 — 본 §4를 실행하지 않고 §5로 진행한다.
+본 단계는 모든 completed review 경로에서 synthesize 전에 실행한다.
 
-Agent Teams 경로에서도 본 단계는 synthesize의 §3 출력이 "deliberation needed"로 판정한 경우에만 실행한다. 경량 모드에서는 `synthesize`에게 'deliberation not needed' 지시를 포함한다.
+Agent Teams 경로에서는 SendMessage transport를 사용할 수 있다. MCP/TS 경로에서는 같은 의미론을 bounded deliberation prompt packet으로 실행한다.
 
 In this step, **direct SendMessage between teammates is permitted**.
 The team lead notifies the relevant lenses (including `synthesize`) of deliberation commencement:
@@ -868,10 +854,10 @@ This is the first `구현 치환 단계 (ImplementationReplacementStep)` for rev
 
 Assembly rules:
 
-- if `error-log.md` is absent and `deliberation.md` is absent, default to `record_status: completed`, `deliberation_status: not_needed`
 - if `error-log.md` records failed/excluded lenses but final output exists, set `record_status: completed_with_degradation`
-- if `synthesis.md` requires deliberation but `deliberation.md` is absent, set `deliberation_status: required_but_unperformed`
-- if `deliberation.md` exists, set `deliberation_status: performed`
+- if `deliberation.md` is absent, fail assembly
+- if `synthesis.md` does not declare `deliberation_status: performed`, fail assembly
+- if `deliberation.md` exists and `synthesis.md` declares `performed`, set `deliberation_status: performed`
 
 ---
 

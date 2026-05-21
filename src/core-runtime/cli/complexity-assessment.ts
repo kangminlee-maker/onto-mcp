@@ -36,7 +36,7 @@ import {
 } from "../learning/shared/llm-caller.js";
 
 // Load core-axis composition from SSOT at module init — keeps prompt text
-// and fallback set in sync with .onto/authority/core-lens-registry.yaml (v0.2.1:
+// and core-axis set in sync with .onto/authority/core-lens-registry.yaml (v0.2.1:
 // 6 cost-constrained Pareto-optimal lenses).
 const CORE_LENS_REGISTRY = loadCoreLensRegistry();
 const CORE_AXIS_LENS_IDS = CORE_LENS_REGISTRY.core_axis_lens_ids;
@@ -127,7 +127,7 @@ export async function assessComplexity(
       q3Rationale: parsed.q3_rationale ?? "",
     };
   } catch {
-    // Parse failure → default to full review (safe fallback)
+    // Parse failure → default to full review.
     return { suggestCoreAxis: false, q2Rationale: "JSON parse failed — defaulting to full", q3Rationale: "" };
   }
 }

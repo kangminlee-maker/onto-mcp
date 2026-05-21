@@ -20,8 +20,6 @@ import { writeReviewBlock } from "./write-review-block.js";
 //       write.
 //   (3) Replace semantics — a pre-existing `review:` block is REPLACED,
 //       not merged. The caller's config object is the authoritative shape.
-//   (4) Legacy stripping — when stripLegacyPriority=true, the
-//       execution_topology_priority field is removed and reported.
 //
 // Validation failure paths (foreign provider without model_id, etc.) are
 // covered indirectly via validateReviewConfig's own tests — here we spot-
@@ -59,7 +57,6 @@ describe("writeReviewBlock — fresh file", () => {
     if (!result.ok) return;
     expect(result.created).toBe(true);
     expect(result.replacedExistingBlock).toBe(false);
-    expect(result.strippedLegacyPriority).toBe(false);
 
     const written = read(configPath);
     expect(written).toContain("review:");
@@ -74,7 +71,7 @@ describe("writeReviewBlock — fresh file", () => {
       teamlead: { model: "main" },
       subagent: { provider: "codex", model_id: "gpt-5.4", effort: "high" },
       max_concurrent_lenses: 6,
-      lens_deliberation: "synthesizer-only",
+      lens_deliberation: "controlled-lens-deliberation",
     };
 
     const result = writeReviewBlock(configPath, review);
@@ -85,7 +82,7 @@ describe("writeReviewBlock — fresh file", () => {
     expect(written).toContain("model_id: gpt-5.4");
     expect(written).toContain("effort: high");
     expect(written).toContain("max_concurrent_lenses: 6");
-    expect(written).toContain("lens_deliberation: synthesizer-only");
+    expect(written).toContain("lens_deliberation: controlled-lens-deliberation");
   });
 });
 
@@ -159,65 +156,6 @@ describe("writeReviewBlock — existing file", () => {
   });
 });
 
-describe("writeReviewBlock — legacy stripping", () => {
-  it("strips execution_topology_priority when stripLegacyPriority=true", () => {
-    const configPath = makeConfigPath();
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    const original = [
-      "output_language: en",
-      "execution_topology_priority:",
-      "  - cc-teams-codex-subprocess",
-      "  - cc-main-agent-subagent",
-      "",
-    ].join("\n");
-    fs.writeFileSync(configPath, original, "utf8");
-
-    const review: OntoReviewConfig = {
-      teamlead: { model: "main" },
-      subagent: { provider: "codex", model_id: "gpt-5.4", effort: "high" },
-    };
-
-    const result = writeReviewBlock(configPath, review, {
-      stripLegacyPriority: true,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.strippedLegacyPriority).toBe(true);
-
-    const written = read(configPath);
-    expect(written).not.toContain("execution_topology_priority");
-    expect(written).not.toContain("cc-teams-codex-subprocess");
-    expect(written).toContain("review:");
-    expect(written).toContain("provider: codex");
-  });
-
-  it("leaves legacy field alone when stripLegacyPriority is false/absent", () => {
-    const configPath = makeConfigPath();
-    fs.mkdirSync(path.dirname(configPath), { recursive: true });
-    const original = [
-      "output_language: en",
-      "execution_topology_priority:",
-      "  - cc-main-agent-subagent",
-      "",
-    ].join("\n");
-    fs.writeFileSync(configPath, original, "utf8");
-
-    const review: OntoReviewConfig = {
-      teamlead: { model: "main" },
-      subagent: { provider: "main-native" },
-    };
-
-    const result = writeReviewBlock(configPath, review);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.strippedLegacyPriority).toBe(false);
-
-    const written = read(configPath);
-    expect(written).toContain("execution_topology_priority");
-    expect(written).toContain("cc-main-agent-subagent");
-  });
-});
-
 describe("writeReviewBlock — validation failure", () => {
   it("returns errors without writing when config is invalid", () => {
     const configPath = makeConfigPath();
@@ -235,22 +173,18 @@ describe("writeReviewBlock — validation failure", () => {
     expect(fs.existsSync(configPath)).toBe(false);
   });
 
-  it("rejects mismatched deliberation + teamlead combination", () => {
+  it("accepts controlled deliberation with external teamlead", () => {
     const configPath = makeConfigPath();
-    const invalid = {
+    const config = {
       teamlead: {
         model: { provider: "codex", model_id: "gpt-5.4" },
       },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     } as unknown as OntoReviewConfig;
 
-    const result = writeReviewBlock(configPath, invalid);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(
-      result.errors.some((e) => e.path === "review.lens_deliberation"),
-    ).toBe(true);
-    expect(fs.existsSync(configPath)).toBe(false);
+    const result = writeReviewBlock(configPath, config);
+    expect(result.ok).toBe(true);
+    expect(fs.existsSync(configPath)).toBe(true);
   });
 });
 

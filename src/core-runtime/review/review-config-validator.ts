@@ -58,8 +58,7 @@ export type ValidationResult =
 const FOREIGN_PROVIDERS: readonly ForeignProvider[] = ["codex"];
 const SUBAGENT_PROVIDERS: readonly string[] = ["main-native", ...FOREIGN_PROVIDERS];
 const LENS_DELIBERATIONS: readonly LensDeliberation[] = [
-  "synthesizer-only",
-  "sendmessage-a2a",
+  "controlled-lens-deliberation",
 ];
 
 /**
@@ -67,7 +66,7 @@ const LENS_DELIBERATIONS: readonly LensDeliberation[] = [
  * narrowed OntoReviewConfig or a structured error list.
  *
  * `undefined` / missing block → `{ ok: true, config: {}, errors: [] }`.
- * Consumers should treat `{}` as "all defaults" (universal fallback).
+ * Consumers should treat `{}` as the review defaults.
  */
 export function validateReviewConfig(raw: unknown): ValidationResult {
   const errors: ValidationError[] = [];
@@ -109,22 +108,6 @@ export function validateReviewConfig(raw: unknown): ValidationResult {
   if ("lens_deliberation" in obj) {
     const deliberation = validateDeliberation(obj.lens_deliberation, errors);
     if (deliberation) out.lens_deliberation = deliberation;
-  }
-
-  // Cross-field constraint: lens_deliberation=sendmessage-a2a requires
-  // teamlead=main (D=true is a runtime-only constraint, not a syntactic
-  // one, so P1 enforces only the static teamlead constraint).
-  if (
-    out.lens_deliberation === "sendmessage-a2a" &&
-    out.teamlead &&
-    out.teamlead.model !== "main"
-  ) {
-    errors.push({
-      path: "review.lens_deliberation",
-      message:
-        "lens_deliberation=sendmessage-a2a requires teamlead.model=main. " +
-        "External teamlead does not support lens-to-lens A2A deliberation.",
-    });
   }
 
   if (errors.length > 0) {

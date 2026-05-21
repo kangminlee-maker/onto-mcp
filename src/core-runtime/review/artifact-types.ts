@@ -49,15 +49,13 @@ export type ReviewRecordStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
-export type DeliberationStatus =
-  | "not_needed"
-  | "performed"
-  | "required_but_unperformed";
+export type DeliberationStatus = "performed";
 export type ReviewExecutionStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
-export type ReviewUnitKind = "lens" | "synthesize";
+export type ReviewUnitKind = "lens" | "deliberation" | "synthesize";
+export type ReviewDeliberationMode = "controlled-lens-deliberation";
 export type ReviewUnitExecutionStatus = "completed" | "failed" | "skipped";
 export type ReviewTargetMaterializedInputKind =
   | "single_text"
@@ -175,6 +173,9 @@ export interface InvocationBindingArtifact {
   materialized_input_path: string;
   context_candidate_assembly_path: string;
   synthesis_output_path: string;
+  deliberation_mode: ReviewDeliberationMode;
+  deliberation_root_path: string;
+  deliberation_output_path: string;
   execution_result_path: string;
   error_log_path: string;
   review_record_path: string;
@@ -211,8 +212,12 @@ export interface ReviewExecutionPlan {
   lens_execution_seats: ReviewLensExecutionSeat[];
   prompt_packets_root: string;
   lens_prompt_packet_seats: ReviewLensPromptPacketSeat[];
+  lens_deliberation_prompt_packet_seats: ReviewLensPromptPacketSeat[];
+  teamlead_deliberation_prompt_packet_path: string;
   synthesize_prompt_packet_path: string;
   synthesis_output_path: string;
+  deliberation_mode: ReviewDeliberationMode;
+  deliberation_root_path: string;
   deliberation_output_path: string;
   execution_result_path: string;
   error_log_path: string;
@@ -299,29 +304,19 @@ export interface ContextCandidateAssembly {
  *   state-transition read AND the mtime read both succeed for a
  *   participating unit.
  *
- * - `batch_fallback`: one or both timestamps fell back to the orchestrator's
- *   batch start/end. NOT a per-unit measurement — `duration_ms` reflects the
- *   enclosing session's wall-clock window. Source: coordinator-helpers.ts
- *   when state file is missing/unreadable, a required transition is absent,
- *   fs.stat fails for a participating unit, or the unit is non-participating
- *   / failed / skipped.
- *
- *   Note: `batch_fallback` intentionally collapses four coordinator degraded
- *   states (start-only per-unit, end-only per-unit, both batch, and
- *   non-participating) into a single value. Consumers needing finer-grained
- *   root cause should parse the structured `degradation_kind:` entries in
- *   `error-log.md` written alongside each fallback.
+ * - `batch_window`: session-level window used when a unit does not have
+ *   comparable per-unit timing. NOT a per-unit measurement — `duration_ms`
+ *   reflects the enclosing session's wall-clock window.
  */
 export type UnitTimestampProvenance =
   | "runner_wallclock"
   | "coordinator_derived"
-  | "batch_fallback";
+  | "batch_window";
 
 /**
  * Predicate for consumers: returns true when `duration_ms` is a real per-unit
  * measurement safe to average / sort / SLA-compare. Returns false for
- * `batch_fallback` and for absent values (older artifacts that predate this
- * field are treated conservatively as non-comparable).
+ * `batch_window` and for absent values.
  *
  * As of PR #26 there are no in-repo consumers of per-unit `duration_ms` —
  * this predicate is the recommended entry point for future aggregation,
@@ -350,10 +345,9 @@ export interface ReviewUnitExecutionResult {
    *
    * Optional at the type level so that older artifacts (written before this
    * field existed) can still be parsed. All new writes MUST populate the
-   * field. Consumers that care about measurability should either (a) use
+   * field. Consumers that care about measurability should use
    * {@link isPerUnitComparableProvenance}, which treats absence as
-   * non-comparable, or (b) normalize absent values to `"batch_fallback"`
-   * before branching.
+   * non-comparable.
    */
   timestamp_provenance?: UnitTimestampProvenance;
   failure_message?: string | null;
@@ -379,6 +373,7 @@ export interface ReviewExecutionResultArtifact {
   halt_reason?: string | null;
   error_log_path: string;
   lens_execution_results: ReviewUnitExecutionResult[];
+  deliberation_execution_results?: ReviewUnitExecutionResult[];
   /**
    * Per-unit result for the synthesize stage. `null` when synthesis was not
    * executed (typically `execution_status === "halted_partial"`). Consumers
@@ -417,20 +412,20 @@ export interface ReviewRecord {
    */
   orchestrator_reported_realization?: string;
   resolved_lens_ids: string[];
-  execution_result_ref?: string | null;
-  session_metadata_ref?: string | null;
-  target_snapshot_ref?: string | null;
-  materialized_input_ref?: string | null;
-  context_candidate_assembly_ref?: string | null;
+  execution_result_ref: string;
+  session_metadata_ref: string;
+  target_snapshot_ref: string;
+  materialized_input_ref: string;
+  context_candidate_assembly_ref: string;
   lens_result_refs: Record<string, string>;
   participating_lens_ids: string[];
   excluded_lens_ids: string[];
   degraded_lens_ids: string[];
   degradation_notes_ref?: string | null;
-  synthesis_result_ref?: string | null;
+  synthesis_result_ref: string;
   deliberation_status: DeliberationStatus;
-  deliberation_result_ref?: string | null;
-  final_output_ref?: string | null;
+  deliberation_result_ref: string;
+  final_output_ref: string;
 }
 
 // ─────────────────────────────────────────────
@@ -513,6 +508,7 @@ export interface CoordinatorNextResult {
   state: CoordinatorStateName;
   session_root: string;
   agent?: CoordinatorAgentInstruction | undefined;
+  agents?: CoordinatorAgentInstruction[] | undefined;
   final_output_path?: string | undefined;
   review_record_path?: string | undefined;
   record_status?: string | undefined;

@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 import { runAssembleReviewRecordCli } from "./assemble-review-record.js";
 import { runRenderReviewFinalOutputCli } from "./render-review-final-output.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
-import { appendMarkdownLogEntry } from "../review/review-artifact-utils.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -26,7 +25,6 @@ async function main(): Promise<number> {
 export interface CompleteReviewSessionResult {
   session_root: string;
   bounded_complete_steps: string[];
-  final_output_rendered: boolean;
 }
 
 export async function completeReviewSession(
@@ -47,25 +45,12 @@ export async function completeReviewSession(
   const projectRoot = requireString(values["project-root"], "project-root");
   const sessionRoot = requireString(values["session-root"], "session-root");
   const requestText = requireString(values["request-text"], "request-text");
-  const errorLogPath = path.join(sessionRoot, "error-log.md");
-
-  let finalOutputRendered = false;
-
-  try {
-    await runRenderReviewFinalOutputCli([
-      "--project-root",
-      projectRoot,
-      "--session-root",
-      sessionRoot,
-    ]);
-    finalOutputRendered = true;
-  } catch (error: unknown) {
-    await appendMarkdownLogEntry(
-      errorLogPath,
-      "final output render failed",
-      error instanceof Error ? error.message : String(error),
-    );
-  }
+  await runRenderReviewFinalOutputCli([
+    "--project-root",
+    projectRoot,
+    "--session-root",
+    sessionRoot,
+  ]);
 
   await runAssembleReviewRecordCli([
     "--project-root",
@@ -82,7 +67,6 @@ export async function completeReviewSession(
       "review:render-final-output",
       "review:finalize-session",
     ],
-    final_output_rendered: finalOutputRendered,
   };
 }
 

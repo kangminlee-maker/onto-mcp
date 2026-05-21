@@ -666,7 +666,7 @@ async function main(): Promise<number> {
   // Set ONTO_HOME so spawned processes inherit it
   process.env.ONTO_HOME = ontoHome;
 
-  // Auto-load onto's .env files (written by `onto install`).
+  // Auto-load onto's .env files.
   // Global first so project overrides it; neither overrides the shell.
   loadOntoEnvFile(path.join(os.homedir(), ".onto", ".env"));
   loadOntoEnvFile(path.join(process.cwd(), ".onto", ".env"));
@@ -730,12 +730,11 @@ async function main(): Promise<number> {
       return handleConfigCli(ontoHome, subcommandArgv);
     }
 
-    case "install": {
-      const { handleInstallCli } = await import(
-        "./core-runtime/install/cli.js"
+    case "install":
+      console.error(
+        "[onto] `onto install` is retired while the active llm switcher is being simplified. Edit .onto/config.yml directly or use `onto config`.",
       );
-      return handleInstallCli(ontoHome, subcommandArgv);
-    }
+      return 1;
 
     case "mcp": {
       const { startMcpServer } = await import("./mcp/server.js");
@@ -780,7 +779,6 @@ async function main(): Promise<number> {
           "  migrate-session-roots       Move pre-v3 sessions under review/",
           "  health [project]            Learning pool health dashboard (default: global)",
           "  config [subcommand]         Inspect / edit onto config (show/set/edit/re-detect/validate)",
-          "  install                     First-run setup (profile, providers, auth)",
           "  mcp                         Start the MCP stdio tool server",
           "",
           "Options:",

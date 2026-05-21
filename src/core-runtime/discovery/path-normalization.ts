@@ -1,9 +1,8 @@
 /**
  * Path-segment utilities.
  *
- * Originally introduced (Phase 5, 2026-04-21) to centralize canonical/legacy
- * path aliases during the 8-phase repo-layout migration. Phase 7 removed
- * the legacy side of the migration, so the alias list is now empty and the
+ * Originally introduced to centralize path aliases during the repo-layout
+ * migration. The alias list is now empty and the
  * rewrite helper is effectively identity. What remains load-bearing is the
  * segment-bound prefix check — still consumed by drift-engine and
  * promote-principle validation to prevent near-miss prefix collisions

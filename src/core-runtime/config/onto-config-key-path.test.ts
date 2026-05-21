@@ -70,22 +70,15 @@ describe("applySet — subagent.provider (discriminated-union preservation)", ()
     }
   });
 
-  it("codex → litellm carries over model_id + effort (user may prune later)", () => {
+  it("rejects providers outside the review subagent domain", () => {
     const r = applySet(
       {
         subagent: { provider: "codex", model_id: "gpt-5.4", effort: "high" },
       },
       "subagent.provider",
-      "litellm",
+      "unsupported-provider",
     );
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.config.subagent).toEqual({
-        provider: "litellm",
-        model_id: "gpt-5.4",
-        effort: "high",
-      });
-    }
+    expect(r.ok).toBe(false);
   });
 
   it("codex → main-native drops model_id + effort (union branch change)", () => {
@@ -114,7 +107,7 @@ describe("applySet — subagent.model_id", () => {
       "gpt-5.4",
     );
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toMatch(/foreign provider/);
+    if (!r.ok) expect(r.error).toMatch(/codex/);
   });
 
   it("rejects empty model_id", () => {
@@ -205,16 +198,16 @@ describe("applySet — max_concurrent_lenses", () => {
 });
 
 describe("applySet — lens_deliberation", () => {
-  it("accepts synthesizer-only", () => {
-    const r = applySet({}, "lens_deliberation", "synthesizer-only");
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.config.lens_deliberation).toBe("synthesizer-only");
+  it("rejects retired single-pass deliberation mode", () => {
+    const retiredMode = ["synthesizer", "only"].join("-");
+    const r = applySet({}, "lens_deliberation", retiredMode);
+    expect(r.ok).toBe(false);
   });
 
-  it("accepts sendmessage-a2a", () => {
-    const r = applySet({}, "lens_deliberation", "sendmessage-a2a");
+  it("accepts controlled-lens-deliberation", () => {
+    const r = applySet({}, "lens_deliberation", "controlled-lens-deliberation");
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.config.lens_deliberation).toBe("sendmessage-a2a");
+    if (r.ok) expect(r.config.lens_deliberation).toBe("controlled-lens-deliberation");
   });
 
   it("rejects unknown deliberation value", () => {

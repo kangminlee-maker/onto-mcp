@@ -33,12 +33,15 @@ import path from "node:path";
 import {
   detectAnthropicApiKey,
   detectClaudeCodeEnvSignal,
-  detectLiteLlmEndpoint,
   detectOpenAiApiKey,
 } from "../discovery/host-detection.js";
 import type { PreflightDetection } from "./types.js";
 
 const ENV_LITELLM_BASE_URL = "LITELLM_BASE_URL";
+
+function detectLiteLlmEndpointForInstall(): boolean {
+  return Boolean(process.env[ENV_LITELLM_BASE_URL]);
+}
 
 /**
  * True when the `codex` binary is reachable on PATH.
@@ -104,7 +107,7 @@ export function runPreflight(projectRoot: string): PreflightDetection {
     existingProjectConfig: fsSync.existsSync(projectConfigPath(projectRoot)),
     hasAnthropicKey: detectAnthropicApiKey(),
     hasOpenAiKey: detectOpenAiApiKey(),
-    hasLitellmBaseUrl: detectLiteLlmEndpoint(),
+    hasLitellmBaseUrl: detectLiteLlmEndpointForInstall(),
     hasCodexBinary: detectCodexBinary(),
     hasCodexAuth: detectCodexAuthFile(),
     hostIsClaudeCode: detectClaudeCodeEnvSignal(),

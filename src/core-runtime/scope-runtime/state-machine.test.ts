@@ -692,12 +692,13 @@ describe("Review state machine (9-state, W-B-02 dedup)", () => {
     expect(canReviewTransition("preparing", "completed")).toBe(false);
   });
 
-  it("full happy path: (init)→preparing→awaiting_lens_dispatch→validating_lenses→awaiting_synthesize_dispatch→completing→completed", () => {
+  it("full happy path: (init)→preparing→awaiting_lens_dispatch→validating_lenses→awaiting_deliberation→awaiting_synthesize_dispatch→completing→completed", () => {
     const path: Array<[string, string]> = [
       ["(init)", "preparing"],
       ["preparing", "awaiting_lens_dispatch"],
       ["awaiting_lens_dispatch", "validating_lenses"],
-      ["validating_lenses", "awaiting_synthesize_dispatch"],
+      ["validating_lenses", "awaiting_deliberation"],
+      ["awaiting_deliberation", "awaiting_synthesize_dispatch"],
       ["awaiting_synthesize_dispatch", "completing"],
       ["completing", "completed"],
     ];

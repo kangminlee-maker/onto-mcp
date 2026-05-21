@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
-  PR_A_SUPPORTED_TOPOLOGIES,
+  DIRECT_SPAWN_SUPPORTED_TOPOLOGIES,
   TOPOLOGY_CATALOG,
   UnsupportedTopologyError,
-  assertSupportedInPrA,
+  assertDirectSpawnSupported,
   resolveExecutionTopology,
   type ExecutionTopologyResolution,
   type TopologyId,
@@ -12,20 +12,16 @@ import {
 // ---------------------------------------------------------------------------
 // Invariants covered here (post-P9.1, 2026-04-21):
 //
-// (1) TOPOLOGY_CATALOG has exactly 8 canonical entries, each with the
-//     full static attribute set populated. A2A deliberation belongs to
-//     exactly one entry.
-// (2) `assertSupportedInPrA` matches the PR-A support set: 3 ids pass,
-//     all others throw UnsupportedTopologyError with a PR-migration hint.
-// (3) `execution_topology_overrides.<id>.max_concurrent_lenses` is the
-//     only override applied at resolution time; zero / negative values
-//     fall back to catalog default.
+// (1) TOPOLOGY_CATALOG has exactly 7 canonical entries, each with the
+//     full static attribute set populated. Controlled deliberation is the
+//     canonical channel for all review topologies.
+// (2) `assertDirectSpawnSupported` matches the direct spawn support set:
+//     3 ids pass, all others throw UnsupportedTopologyError with guidance.
+// (3) `review.max_concurrent_lenses` is the only override applied at
+//     resolution time; zero / negative values keep the catalog default.
 // (4) `[topology]` STDERR prefix mirrors plan_trace 1:1.
 // (5) `no_host` resolution composes a reason listing signals + guidance.
-// (6) Legacy `execution_topology_priority` field is ignored at runtime
-//     (the ladder walk was retired in P9.1; field removal lands in P9.2).
-// (7) When `config.review` is absent, the resolver takes the main_native
-//     degrade path — the legacy priority ladder is not consulted.
+// (6) When `config.review` is absent, the resolver reports no_host.
 //
 // Axis-first positive / negative coverage lives in
 // `execution-topology-resolver-axis-first.test.ts`.
@@ -43,7 +39,6 @@ function withSignals(overrides: Partial<ResolveArgs>): ResolveArgs {
     experimentalAgentTeams: false,
     codexAvailable: false,
     codexSessionActive: false,
-    liteLlmEndpointAvailable: false,
     ...overrides,
   };
 }
@@ -106,7 +101,7 @@ describe("resolveExecutionTopology — review.max_concurrent_lenses override", (
     ).toBe(true);
   });
 
-  it("zero/negative review.max_concurrent_lenses is ignored with a warning log", () => {
+  it("zero/negative review.max_concurrent_lenses reports no_host through validation", () => {
     const res = resolveExecutionTopology(
       withSignals({
         ontoConfig: {
@@ -118,13 +113,12 @@ describe("resolveExecutionTopology — review.max_concurrent_lenses override", (
         claudeHost: true,
       }),
     );
-    const resolved = expectResolved(res);
+    const nohost = expectNoHost(res);
     expect(
-      resolved.topology.plan_trace.some((l) =>
-        l.includes("review.max_concurrent_lenses=0 ignored (must be positive integer)"),
+      nohost.plan_trace.some((l) =>
+        l.includes("review.max_concurrent_lenses"),
       ),
     ).toBe(true);
-    expect(resolved.topology.max_concurrent_lenses).toBe(10);
   });
 });
 
@@ -183,21 +177,21 @@ describe("resolveExecutionTopology — observability", () => {
 });
 
 // ---------------------------------------------------------------------------
-// (2) PR-A support set — spawn-time guard
+// (2) Direct spawn support set
 // ---------------------------------------------------------------------------
 
-describe("resolveExecutionTopology — PR-A support set", () => {
-  it("PR-A supports exactly 3 topologies", () => {
-    expect(PR_A_SUPPORTED_TOPOLOGIES.size).toBe(3);
-    expect(PR_A_SUPPORTED_TOPOLOGIES.has("cc-main-agent-subagent")).toBe(true);
-    expect(PR_A_SUPPORTED_TOPOLOGIES.has("cc-main-codex-subprocess")).toBe(true);
-    expect(PR_A_SUPPORTED_TOPOLOGIES.has("codex-main-subprocess")).toBe(true);
+describe("resolveExecutionTopology — direct spawn support set", () => {
+  it("direct spawn supports exactly 3 topologies", () => {
+    expect(DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.size).toBe(3);
+    expect(DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.has("cc-main-agent-subagent")).toBe(true);
+    expect(DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.has("cc-main-codex-subprocess")).toBe(true);
+    expect(DIRECT_SPAWN_SUPPORTED_TOPOLOGIES.has("codex-main-subprocess")).toBe(true);
   });
 
-  it("assertSupportedInPrA passes for supported ids", () => {
-    for (const id of PR_A_SUPPORTED_TOPOLOGIES) {
+  it("assertDirectSpawnSupported passes for supported ids", () => {
+    for (const id of DIRECT_SPAWN_SUPPORTED_TOPOLOGIES) {
       expect(() =>
-        assertSupportedInPrA({
+        assertDirectSpawnSupported({
           ...TOPOLOGY_CATALOG[id],
           plan_trace: [],
         }),
@@ -205,24 +199,23 @@ describe("resolveExecutionTopology — PR-A support set", () => {
     }
   });
 
-  it("assertSupportedInPrA throws UnsupportedTopologyError for non-supported ids", () => {
+  it("assertDirectSpawnSupported throws UnsupportedTopologyError for non-supported ids", () => {
     const unsupported: TopologyId[] = [
       "cc-teams-lens-agent-deliberation",
       "cc-teams-agent-subagent",
       "cc-teams-codex-subprocess",
-      "cc-teams-litellm-sessions",
       "codex-nested-subprocess",
     ];
     for (const id of unsupported) {
       expect(() =>
-        assertSupportedInPrA({ ...TOPOLOGY_CATALOG[id], plan_trace: [] }),
+        assertDirectSpawnSupported({ ...TOPOLOGY_CATALOG[id], plan_trace: [] }),
       ).toThrow(UnsupportedTopologyError);
     }
   });
 
-  it("UnsupportedTopologyError message names the PR where the option lands", () => {
+  it("UnsupportedTopologyError message names the required execution surface", () => {
     try {
-      assertSupportedInPrA({
+      assertDirectSpawnSupported({
         ...TOPOLOGY_CATALOG["cc-teams-agent-subagent"],
         plan_trace: [],
       });
@@ -230,7 +223,7 @@ describe("resolveExecutionTopology — PR-A support set", () => {
     } catch (err) {
       expect(err).toBeInstanceOf(UnsupportedTopologyError);
       const msg = (err as Error).message;
-      expect(msg).toContain("PR-B");
+      expect(msg).toContain("TeamCreate coordinator execution");
       expect(msg).toContain("cc-main-agent-subagent");
     }
   });
@@ -246,16 +239,15 @@ const EXPECTED_CATALOG_IDS: TopologyId[] = [
   "cc-teams-codex-subprocess",
   "cc-main-agent-subagent",
   "cc-main-codex-subprocess",
-  "cc-teams-litellm-sessions",
   "codex-nested-subprocess",
   "codex-main-subprocess",
 ];
 
 describe("TOPOLOGY_CATALOG — shape", () => {
-  it("has exactly 8 canonical entries (post-P7 trim)", () => {
+  it("has exactly 7 canonical entries", () => {
     const catalogIds = Object.keys(TOPOLOGY_CATALOG).sort();
     expect(catalogIds).toEqual([...EXPECTED_CATALOG_IDS].sort());
-    expect(catalogIds.length).toBe(8);
+    expect(catalogIds.length).toBe(7);
   });
 
   it("each entry has all required static attributes populated", () => {
@@ -266,24 +258,25 @@ describe("TOPOLOGY_CATALOG — shape", () => {
       expect(entry.lens_spawn_mechanism).toBeTruthy();
       expect(entry.max_concurrent_lenses).toBeGreaterThan(0);
       expect(["S0", "S1", "S2", "S3"]).toContain(entry.transport_rank);
-      expect(["sendmessage-a2a", "synthesizer-only"]).toContain(entry.deliberation_channel);
+      expect(entry.deliberation_channel).toBe("controlled-lens-deliberation");
     }
   });
 
-  it("only cc-teams-lens-agent-deliberation declares SendMessage A2A deliberation", () => {
-    const a2a = (Object.keys(TOPOLOGY_CATALOG) as TopologyId[]).filter(
-      (id) => TOPOLOGY_CATALOG[id].deliberation_channel === "sendmessage-a2a",
+  it("all topologies declare controlled lens deliberation", () => {
+    const channels = new Set(
+      (Object.keys(TOPOLOGY_CATALOG) as TopologyId[]).map(
+        (id) => TOPOLOGY_CATALOG[id].deliberation_channel,
+      ),
     );
-    expect(a2a).toEqual(["cc-teams-lens-agent-deliberation"]);
+    expect([...channels]).toEqual(["controlled-lens-deliberation"]);
   });
 });
 
 // ---------------------------------------------------------------------------
-// (6) P9.1 — legacy `execution_topology_priority` is ignored at runtime
-// (7) review absent → main_native degrade (no ladder walk)
+// (6) review absent → no_host
 // ---------------------------------------------------------------------------
 
-describe("resolveExecutionTopology — P9.1 ladder retirement", () => {
+describe("resolveExecutionTopology — missing review block", () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -292,44 +285,22 @@ describe("resolveExecutionTopology — P9.1 ladder retirement", () => {
     stderrSpy.mockRestore();
   });
 
-  it("no review block + CC host → main_native degrade → cc-main-agent-subagent", () => {
+  it("no review block + CC host → no_host", () => {
     const res = resolveExecutionTopology(
       withSignals({
         ontoConfig: {},
         claudeHost: true,
       }),
     );
-    const resolved = expectResolved(res);
-    expect(resolved.topology.id).toBe("cc-main-agent-subagent");
-    expect(
-      resolved.topology.plan_trace.some((l) =>
-        l.includes("topology source=fallback-main-native"),
-      ),
-    ).toBe(true);
-    expect(
-      resolved.topology.plan_trace.some((l) =>
-        l.includes("degraded: requested=<review-block-absent>"),
-      ),
-    ).toBe(true);
+    const nohost = expectNoHost(res);
+    expect(nohost.plan_trace.some((l) => l.includes("no topology resolved"))).toBe(true);
   });
 
-  it("no review block + no host signals → no_host (fail-fast, no ladder)", () => {
+  it("no review block + no host signals → no_host", () => {
     const res = resolveExecutionTopology(withSignals({}));
     const nohost = expectNoHost(res);
-    expect(
-      nohost.plan_trace.some((l) =>
-        l.includes("no topology resolved (axis-first + main_native fallback both failed)"),
-      ),
-    ).toBe(true);
-    // Guarantee we did NOT emit the old priority-ladder trace shape.
-    expect(nohost.plan_trace.some((l) => l.includes("priority source="))).toBe(
-      false,
-    );
+    expect(nohost.plan_trace.some((l) => l.includes("no topology resolved"))).toBe(true);
   });
-
-  // P9.2 (2026-04-21): the "legacy execution_topology_priority acknowledged
-  // but ignored" test was removed — the field no longer exists in `OntoConfig`,
-  // so TypeScript alone prevents its assignment. No runtime assertion needed.
 });
 
 // ---------------------------------------------------------------------------
@@ -342,13 +313,13 @@ describe("resolveExecutionTopology — P9.1 ladder retirement", () => {
 // ---------------------------------------------------------------------------
 
 describe("checkTopologyRequirements — axis-first derives id but requirement fails", () => {
-  it("cc-teams-lens-agent-deliberation skips when lens_agent_teams_mode=false", () => {
+  it("lens_agent_teams_mode=false keeps controlled deliberation on the runner transport", () => {
     const res = resolveExecutionTopology(
       withSignals({
         ontoConfig: {
           review: {
             subagent: { provider: "main-native" },
-            lens_deliberation: "sendmessage-a2a",
+            lens_deliberation: "controlled-lens-deliberation",
           },
           lens_agent_teams_mode: false,
         },
@@ -356,12 +327,15 @@ describe("checkTopologyRequirements — axis-first derives id but requirement fa
         experimentalAgentTeams: true,
       }),
     );
-    const nohost = expectNoHost(res);
-    expect(
-      nohost.plan_trace.some((l) =>
-        l.includes("cc-teams-lens-agent-deliberation: skip — need config.lens_agent_teams_mode=true"),
-      ),
-    ).toBe(true);
+    expect(res.type).toBe("resolved");
+    if (res.type === "resolved") {
+      expect(res.topology.id).toBe("cc-teams-agent-subagent");
+      expect(
+        res.topology.plan_trace.some((l) =>
+          l.includes("controlled deliberation will be executed by the review runner transport"),
+        ),
+      ).toBe(true);
+    }
   });
 
   it("cc-teams-codex-subprocess skips when codex binary missing", () => {
@@ -381,27 +355,6 @@ describe("checkTopologyRequirements — axis-first derives id but requirement fa
     expect(
       nohost.plan_trace.some((l) =>
         l.includes("cc-teams-codex-subprocess: skip — need codex binary + ~/.codex/auth.json"),
-      ),
-    ).toBe(true);
-  });
-
-  it("cc-teams-litellm-sessions skips when LiteLLM endpoint missing", () => {
-    const res = resolveExecutionTopology(
-      withSignals({
-        ontoConfig: {
-          review: {
-            subagent: { provider: "litellm", model_id: "gpt-4o" },
-          },
-        },
-        claudeHost: true,
-        experimentalAgentTeams: true,
-        liteLlmEndpointAvailable: false,
-      }),
-    );
-    const nohost = expectNoHost(res);
-    expect(
-      nohost.plan_trace.some((l) =>
-        l.includes("cc-teams-litellm-sessions: skip — need LITELLM_BASE_URL or config.llm_base_url"),
       ),
     ).toBe(true);
   });

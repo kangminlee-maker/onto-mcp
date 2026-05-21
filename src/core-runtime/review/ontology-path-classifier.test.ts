@@ -23,7 +23,7 @@ function makeEntry(overrides: Partial<ReviewLogEntry> = {}): ReviewLogEntry {
     degraded_lens_ids: [],
     per_lens_duration: [],
     synthesis_duration_ms: 5000,
-    provenance_summary: { runner_wallclock: 3, coordinator_derived: 0, batch_fallback: 0, unknown: 0 },
+    provenance_summary: { runner_wallclock: 3, coordinator_derived: 0, batch_window: 0, unknown: 0 },
     ...overrides,
   };
 }

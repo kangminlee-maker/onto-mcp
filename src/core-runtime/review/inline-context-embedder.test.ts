@@ -123,7 +123,7 @@ Some unrelated content.
     expect(result).toContain("...truncated: 950 more lines omitted");
   });
 
-  it("expands ${ONTO_PLUGIN_DIR:-default} fallback notation", () => {
+  it("expands ${ONTO_PLUGIN_DIR:-default} default-value notation", () => {
     // Set ONTO_PLUGIN_DIR to a real dir with a doc.
     // Phase 4 layout: processes/ moved to .onto/processes/, so fixture
     // must create the file at the new canonical location to match the

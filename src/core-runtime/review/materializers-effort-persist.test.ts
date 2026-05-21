@@ -58,10 +58,17 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     await fs.rm(tmp, { recursive: true, force: true });
   });
 
-  it("persists resolved_llm_plan from OntoConfig top-level model + codex.effort", async () => {
+  it("persists resolved_llm_plan from canonical OpenAI OAuth llm config", async () => {
     await writeConfig(
       tmp,
-      "model: gpt-5.4\ncodex:\n  effort: high\n",
+      [
+        "llm:",
+        "  auth: oauth",
+        "  provider: openai",
+        "  model: gpt-5.4",
+        "  effort: high",
+        "",
+      ].join("\n"),
     );
 
     const { sessionMetadataPath } =
@@ -69,14 +76,21 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
 
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeDefined();
+    expect(md.resolved_llm_plan?.provider).toBe("codex");
     expect(md.resolved_llm_plan?.model).toBe("gpt-5.4");
     expect(md.resolved_llm_plan?.reasoning_effort).toBe("high");
   });
 
-  it("persists provider when external_http_provider is set", async () => {
+  it("persists provider when canonical Anthropic API-key llm config is set", async () => {
     await writeConfig(
       tmp,
-      "external_http_provider: anthropic\nanthropic:\n  model: claude-sonnet-4-6\n",
+      [
+        "llm:",
+        "  auth: api_key",
+        "  provider: anthropic",
+        "  model: claude-sonnet-4-6",
+        "",
+      ].join("\n"),
     );
 
     const { sessionMetadataPath } =
@@ -97,9 +111,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
 
   it("omits resolved_llm_plan field when config.yml has no LLM fields", async () => {
     // Fixture writes an orthogonal-only field so the config YAML is
-    // non-empty but carries no LLM profile information. P9.6 (2026-04-21):
-    // swapped from legacy `execution_topology_priority` to `output_language`
-    // after the P9 runtime cleanup track retired all legacy fields.
+    // non-empty but carries no LLM profile information.
     await writeConfig(tmp, "output_language: en\n");
 
     const { sessionMetadataPath } =

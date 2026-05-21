@@ -82,8 +82,8 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
     },
     deliberation: {
       type: "string",
-      enum: ["cross_process", "cross_context_reinvoke", "synthesizer_only"],
-      description: "Requested deliberation style. Current lightweight path resolves conflicts in synthesize.",
+      enum: ["controlled_lens_deliberation"],
+      description: "Controlled lens-to-lens deliberation under teamlead authority. This is the default review path.",
     },
     executorRealization: {
       type: "string",
@@ -163,10 +163,10 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
   const parsed = OntoReviewToolInputSchema.parse(input);
   if (
     parsed.deliberation !== undefined &&
-    parsed.deliberation !== "synthesizer_only"
+    parsed.deliberation !== "controlled_lens_deliberation"
   ) {
     throw new Error(
-      `Unsupported deliberation mode: ${parsed.deliberation}. Current MCP review supports synthesizer_only.`,
+      `Unsupported deliberation mode: ${parsed.deliberation}. MCP review supports controlled_lens_deliberation.`,
     );
   }
   const request: PrepareReviewRequest = {

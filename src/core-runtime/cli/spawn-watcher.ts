@@ -46,7 +46,7 @@ export interface SpawnWatcherResult {
  *      pane that actually launched onto:review. If the env var is missing
  *      or no matching session is found, the spawn is refused (returns
  *      spawned: false) rather than falling back to the currently-focused
- *      tab — a fallback would land the watcher on whichever tab happens to
+ *      tab — a default target would land the watcher on whichever tab happens to
  *      be frontmost at spawn time, which is the bug this path exists to
  *      avoid.
  *   3. Apple Terminal on macOS (via $TERM_PROGRAM === 'Apple_Terminal')
@@ -59,7 +59,7 @@ export interface SpawnWatcherResult {
  * pointer would otherwise create under concurrent review invocations.
  *
  * Returns silently with `spawned: false` if no supported mechanism is found.
- * The caller should print a fallback hint in that case.
+ * The caller should print an explicit recovery hint in that case.
  *
  * This function never throws — it returns a result object instead, so the
  * runtime continues even if the spawn fails.
@@ -72,11 +72,11 @@ export function spawnWatcherPane(
   // Resolution order for the watcher helper:
   //   1. <projectRoot>/scripts/onto-review-watch.sh — co-located with the
   //      review target (onto repo invocations, full-repo projects).
-  //   2. <ontoHome>/scripts/onto-review-watch.sh   — fallback when
+  //   2. <ontoHome>/scripts/onto-review-watch.sh   — install-local script when
   //      projectRoot is an isolated workspace (e.g. scripts/review-pr.sh's
   //      tmp dir that only carries .onto/config.yml + target) and the
   //      watcher helper lives in the repo home.
-  // Without the fallback, any invocation with --project-root pointed at a
+  // Without the install-local script branch, any invocation with --project-root pointed at a
   // non-repo location silently degrades to "watcher script not found"
   // (observed 2026-04-22 self-review finding). The two-slot search keeps
   // deterministic wrappers viable without forcing them to symlink or copy.

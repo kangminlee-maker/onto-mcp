@@ -14,33 +14,36 @@ import {
 // axis-first path:
 //
 //   (1) Happy path — a valid config + suitable host → correct shape +
-//       canonical TopologyId + degraded=false.
-//   (2) Derivation failure (a2a + no teams) → degrades to main_native.
-//   (3) Mapping failure (main_foreign + litellm) → degrades to main_native.
-//   (4) No Claude, no Codex → main_native unmappable → preview fails
-//       (runtime would fall through to legacy ladder / no_host).
-//   (5) renderPreview produces a stable human-readable block for CLI use.
+//       canonical TopologyId.
+//   (2) controlled-lens-deliberation without Agent Teams remains executable through the
+//       controlled deliberation artifacts in the TS runner.
+//   (3) Unsupported axis combinations fail loudly.
+//   (4) renderPreview produces a stable human-readable block for CLI use.
 // ---------------------------------------------------------------------------
 
 const CLAUDE_NO_TEAMS: PreviewSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 const CLAUDE_TEAMS: PreviewSignals = {
   claudeHost: true,
   codexSessionActive: false,
   experimentalAgentTeams: true,
+  lensAgentTeamsMode: false,
 };
 const CODEX_HOST: PreviewSignals = {
   claudeHost: false,
   codexSessionActive: true,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 const NEITHER: PreviewSignals = {
   claudeHost: false,
   codexSessionActive: false,
   experimentalAgentTeams: false,
+  lensAgentTeamsMode: false,
 };
 
 describe("previewTopologyDerivation — happy paths", () => {
@@ -50,7 +53,6 @@ describe("previewTopologyDerivation — happy paths", () => {
     if (r.ok) {
       expect(r.shape).toBe("main_native");
       expect(r.topology_id).toBe("cc-main-agent-subagent");
-      expect(r.degraded).toBe(false);
     }
   });
 
@@ -64,7 +66,6 @@ describe("previewTopologyDerivation — happy paths", () => {
     if (r.ok) {
       expect(r.shape).toBe("main-teams_native");
       expect(r.topology_id).toBe("cc-teams-agent-subagent");
-      expect(r.degraded).toBe(false);
     }
   });
 
@@ -81,45 +82,42 @@ describe("previewTopologyDerivation — happy paths", () => {
   });
 });
 
-describe("previewTopologyDerivation — degrade paths", () => {
-  it("a2a without teams → degrades to main_native", () => {
+describe("previewTopologyDerivation — controlled deliberation transport", () => {
+  it("controlled deliberation without teams → main_native with runner-owned deliberation", () => {
     const config: OntoReviewConfig = {
       subagent: { provider: "main-native" },
-      lens_deliberation: "sendmessage-a2a",
+      lens_deliberation: "controlled-lens-deliberation",
     };
     const r = previewTopologyDerivation(config, CLAUDE_NO_TEAMS);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.degraded).toBe(true);
       expect(r.shape).toBe("main_native");
       expect(r.topology_id).toBe("cc-main-agent-subagent");
-      expect(r.trace.some((l) => l.startsWith("degrade:"))).toBe(true);
+      expect(r.trace.some((l) => l.includes("review runner"))).toBe(true);
     }
   });
 
-  it("main_foreign + litellm (Claude host) → degrades to main_native", () => {
+  it("controlled deliberation with codex subagent stays on the codex subprocess shape", () => {
     const config: OntoReviewConfig = {
-      subagent: { provider: "litellm", model_id: "llama-8b" },
+      subagent: { provider: "codex", model_id: "gpt-5.4" },
+      lens_deliberation: "controlled-lens-deliberation",
     };
     const r = previewTopologyDerivation(config, CLAUDE_NO_TEAMS);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.degraded).toBe(true);
-      expect(r.topology_id).toBe("cc-main-agent-subagent");
-      expect(
-        r.trace.some((l) => l.includes("main_foreign(litellm)")),
-      ).toBe(true);
+      expect(r.shape).toBe("main_foreign");
+      expect(r.topology_id).toBe("cc-main-codex-subprocess");
     }
   });
 });
 
-describe("previewTopologyDerivation — total failure (no host)", () => {
+describe("previewTopologyDerivation — fail-loud paths", () => {
   it("main_native unmappable → preview fails with explanatory reason", () => {
     const r = previewTopologyDerivation({}, NEITHER);
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.reason).toContain("main_native fallback");
-      expect(r.trace.some((l) => l.includes("unmappable"))).toBe(true);
+      expect(r.reason).toContain("main_native shape requires");
+      expect(r.trace.some((l) => l.includes("main_native"))).toBe(true);
     }
   });
 });
@@ -132,16 +130,6 @@ describe("renderPreview — human-readable output", () => {
     expect(text).toContain("shape:");
     expect(text).toContain("cc-main-agent-subagent");
     expect(text).toContain("Trace:");
-  });
-
-  it("degraded block includes (degraded) marker and fallback note", () => {
-    const config: OntoReviewConfig = {
-      subagent: { provider: "litellm", model_id: "llama-8b" },
-    };
-    const r = previewTopologyDerivation(config, CLAUDE_NO_TEAMS);
-    const text = renderPreview(r);
-    expect(text).toContain("(degraded)");
-    expect(text).toContain("P3 universal fallback");
   });
 
   it("failure block includes reason + FAILED header", () => {

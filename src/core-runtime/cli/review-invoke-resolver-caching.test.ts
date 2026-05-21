@@ -24,13 +24,13 @@ import {
 
 const FAKE_HOME = "/tmp/fake-onto-home";
 
-const CACHED_LITELLM_TOPOLOGY: ExecutionTopology = {
-  id: "cc-teams-litellm-sessions",
-  teamlead_location: "claude-teamcreate",
-  lens_spawn_mechanism: "litellm-http",
+const CACHED_CODEX_TOPOLOGY: ExecutionTopology = {
+  id: "cc-main-codex-subprocess",
+  teamlead_location: "onto-main",
+  lens_spawn_mechanism: "codex-subprocess",
   max_concurrent_lenses: 3,
-  transport_rank: "S2",
-  deliberation_channel: "synthesizer-only",
+  transport_rank: "S0",
+  deliberation_channel: "controlled-lens-deliberation",
   plan_trace: ["cached-by-runReviewInvokeCli"],
 };
 
@@ -40,7 +40,7 @@ const CACHED_CC_MAIN_TOPOLOGY: ExecutionTopology = {
   lens_spawn_mechanism: "claude-agent-tool",
   max_concurrent_lenses: 3,
   transport_rank: "S0",
-  deliberation_channel: "synthesizer-only",
+  deliberation_channel: "controlled-lens-deliberation",
   plan_trace: ["cached-by-runReviewInvokeCli"],
 };
 
@@ -70,10 +70,10 @@ describe("tryResolveTopologyForHandoff — cached topology bypass", () => {
   }
 
   it("cached=ExecutionTopology → descriptor returned without re-running resolver", () => {
-    const descriptor = tryResolveTopologyForHandoff({}, CACHED_LITELLM_TOPOLOGY);
+    const descriptor = tryResolveTopologyForHandoff({}, CACHED_CODEX_TOPOLOGY);
     expect(descriptor).not.toBeNull();
-    expect(descriptor!.id).toBe("cc-teams-litellm-sessions");
-    expect(descriptor!.teamlead_location).toBe("claude-teamcreate");
+    expect(descriptor!.id).toBe("cc-main-codex-subprocess");
+    expect(descriptor!.teamlead_location).toBe("onto-main");
     expect(signalsTraceLines()).toHaveLength(0);
   });
 
@@ -83,7 +83,7 @@ describe("tryResolveTopologyForHandoff — cached topology bypass", () => {
     expect(signalsTraceLines()).toHaveLength(0);
   });
 
-  it("cached=undefined → legacy behaviour (resolver runs, emits signals)", () => {
+  it("cached=undefined → resolver runs and emits signals", () => {
     // Two-argument call path preserved for test-harness compatibility;
     // this branch is what existing tests exercise.
     tryResolveTopologyForHandoff({});
@@ -120,11 +120,11 @@ describe("tryTopologyDerivedExecutor — cached topology bypass", () => {
     const result = tryTopologyDerivedExecutor(
       { llm_base_url: "http://localhost:4000" },
       FAKE_HOME,
-      CACHED_LITELLM_TOPOLOGY,
+      CACHED_CODEX_TOPOLOGY,
     );
     expect(result).not.toBeNull();
     expect(result!.bin).toBe("node");
-    expect(result!.args[0]).toContain("inline-http-review-unit-executor.js");
+    expect(result!.args[0]).toContain("codex-review-unit-executor.js");
     expect(signalsTraceLines()).toHaveLength(0);
   });
 
@@ -144,7 +144,7 @@ describe("tryTopologyDerivedExecutor — cached topology bypass", () => {
     expect(signalsTraceLines()).toHaveLength(0);
   });
 
-  it("cached=undefined → legacy behaviour (resolver runs, emits signals)", () => {
+  it("cached=undefined → resolver runs and emits signals", () => {
     process.env.CLAUDECODE = "1";
     tryTopologyDerivedExecutor({}, FAKE_HOME);
     expect(signalsTraceLines()).toHaveLength(1);
@@ -198,8 +198,8 @@ describe("runReviewInvokeCli full-dispatch consumer sequence — invariant", () 
     //    for completeness of the 3-consumer contract.
     // 3. tryTopologyDerivedExecutor ×2 (default + synthesize via
     //    resolveExecutorConfig).
-    const cachedTopology = CACHED_LITELLM_TOPOLOGY;
-    const config = { llm_base_url: "http://localhost:4000" };
+    const cachedTopology = CACHED_CODEX_TOPOLOGY;
+    const config = { llm: { auth: "oauth", provider: "openai", model: "gpt-5.4" } } as const;
 
     tryResolveTopologyForHandoff(config, cachedTopology);
     tryTopologyDerivedExecutor(config, FAKE_HOME, cachedTopology);

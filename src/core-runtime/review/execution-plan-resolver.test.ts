@@ -76,22 +76,25 @@ describe("resolveExecutionPlan — P1 explicit", () => {
     expect(resolved.plan.plan_trace[0]).toContain("P1 explicit-codex");
   });
 
-  it("P1f env ONTO_HOST_RUNTIME=litellm forces ts_inline_http with matching provider", () => {
+  it("P1f env ONTO_HOST_RUNTIME=lmstudio forces ts_inline_http with matching provider", () => {
     const res = resolveExecutionPlan({
       explicitCodex: false,
       ontoConfig: {
-        external_http_provider: "litellm",
-        llm_base_url: "http://proxy.local",
-        litellm: { model: "llama-8b" },
+        llm: {
+          auth: "local",
+          provider: "lmstudio",
+          model: "llama-8b",
+          base_url: "http://proxy.local",
+        },
       },
-      env: { ONTO_HOST_RUNTIME: "litellm" },
+      env: { ONTO_HOST_RUNTIME: "lmstudio" },
       claudeHost: false,
       codexAvailable: false,
     });
     const resolved = expectResolved(res);
     expect(resolved.plan.separation_rank).toBe("S1");
     expect(resolved.plan.execution_realization).toBe("ts_inline_http");
-    expect(resolved.plan.provider_identity).toBe("litellm");
+    expect(resolved.plan.provider_identity).toBe("lmstudio");
     expect(resolved.plan.base_url).toBe("http://proxy.local");
   });
 });
@@ -123,12 +126,15 @@ describe("resolveExecutionPlan — P2/P3 auto-detection", () => {
     expect(resolved.plan.provider_identity).toBe("codex");
   });
 
-  it("P4 external_http_provider config → ts_inline_http when no host/codex", () => {
+  it("P4 llm switcher config → ts_inline_http when no host/codex", () => {
     const res = resolveExecutionPlan({
       explicitCodex: false,
       ontoConfig: {
-        external_http_provider: "anthropic",
-        anthropic: { model: "claude-sonnet-4" },
+        llm: {
+          auth: "api_key",
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+        },
       },
       env: {},
       claudeHost: false,
@@ -159,7 +165,7 @@ describe("resolveExecutionPlan — env override", () => {
   it("ONTO_HOST_RUNTIME=standalone → ts_inline_http + provider lookup", () => {
     const res = resolveExecutionPlan({
       explicitCodex: false,
-      ontoConfig: { external_http_provider: "openai", openai: { model: "gpt-5" } },
+      ontoConfig: { llm: { auth: "api_key", provider: "openai", model: "gpt-5" } },
       env: { ONTO_HOST_RUNTIME: "standalone" },
       claudeHost: true, // env should override claudeHost auto-detection
       codexAvailable: true,
@@ -238,14 +244,12 @@ describe("resolveExecutionPlan — observability", () => {
   });
 });
 
-describe("resolveExecutionPlan — provider resolution priority", () => {
-  it("external_http_provider > subagent_llm.provider", () => {
+describe("resolveExecutionPlan — provider resolution", () => {
+  it("llm switcher selects the external provider", () => {
     const res = resolveExecutionPlan({
       explicitCodex: false,
       ontoConfig: {
-        external_http_provider: "anthropic",
-        subagent_llm: { provider: "litellm" }, // loser
-        anthropic: { model: "claude-x" },
+        llm: { auth: "api_key", provider: "anthropic", model: "claude-x" },
       },
       env: {},
       claudeHost: false,

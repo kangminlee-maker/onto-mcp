@@ -129,9 +129,9 @@ function expandPath(refPath: string, options: EmbedderOptions): string | null {
   // Expand ${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}
   p = p.replace(
     /\$\{ONTO_PLUGIN_DIR:-([^}]+)\}/g,
-    (_match, fallback) => {
+    (_match, defaultPath) => {
       const env = process.env.ONTO_PLUGIN_DIR;
-      return typeof env === "string" && env.length > 0 ? env : fallback;
+      return typeof env === "string" && env.length > 0 ? env : defaultPath;
     },
   );
 

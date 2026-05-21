@@ -26,7 +26,7 @@ function hasGitOrPackageJson(dir: string): boolean {
  * 2. Walk up from target path for .onto/config.yml
  * 3. Walk up from CWD for .onto/config.yml
  * 4. Walk up from CWD for .git or package.json
- * 5. CWD fallback
+ * 5. CWD default
  */
 export function resolveProjectRoot(targetPath?: string): string {
   // 2. Walk up from target
@@ -47,6 +47,6 @@ export function resolveProjectRoot(targetPath?: string): string {
   const fromCwdGit = walkUpFor(process.cwd(), hasGitOrPackageJson);
   if (fromCwdGit) return fromCwdGit;
 
-  // 5. CWD fallback
+  // 5. CWD default
   return process.cwd();
 }

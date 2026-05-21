@@ -69,6 +69,6 @@ onto의 출력은 정확한 이해를 목표로 한다.
 
 - 프로세스 실행 중 주체자에게 전달되는 보고, 질문, 안내
 - 설계 문서, 리뷰 결과, 학습 기록 등 산출물
-- BLUEPRINT.md, README.md 등 시스템 설명 문서
+- README.md, IMPLEMENTATION_MAP.html 등 시스템 설명 문서
 
 내부 구현 코드(TypeScript, YAML 등)의 주석은 이 원칙의 적용 대상이 아니다.

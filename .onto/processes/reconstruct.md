@@ -1646,8 +1646,8 @@ Either delete the session directory and start a new reconstruct, or repair the a
 | `runtime_coordinator_failure` | halt | phase_1 | Runtime Coordinator deterministic failure (indicates bug) |
 | `session_state_corrupt` | halt | phase_0 | Resumption integrity check detects any of: malformed `wip.yml`, missing `deltas/`, corrupt `session-log.yml`, or missing `schema.yml` — any of which prevents deterministic replay |
 | `lens_partial_failure` | warning | phase_1 | One or more lenses failed; graceful degradation applied |
-| `adjudicator_failure` | warning | phase_1 | Axiology Adjudicator agent failed during Phase 1 lens-loop; fallback paths engaged |
-| `adjudicator_failure` | warning | phase_2 | Axiology Adjudicator agent failed during Phase 2 cross-Stage collation; fallback paths engaged |
+| `adjudicator_failure` | warning | phase_1 | Axiology Adjudicator agent failed during Phase 1 lens-loop; user-visible limitation recorded |
+| `adjudicator_failure` | warning | phase_2 | Axiology Adjudicator agent failed during Phase 2 cross-Stage collation; user-visible limitation recorded |
 | `synthesize_failure` | warning | phase_1 | Synthesize agent failed; raw epsilons delivered to Explorer |
 | `degradation_threshold_warning` | warning | phase_1 | 2 consecutive Adjudicator/Synthesize failures reached; user warned |
 | `phase3_response_inconsistent` | warning | phase_3 | User submitted `adjustments_provided` with all three fields empty; re-prompt issued (non-halting) |
@@ -1734,7 +1734,7 @@ domain document 확장 직후 또는 domain document 변경 시, review 단계�
 
 P-2 와 P-1 의 역할 분리: P-1 은 reconstruct/extend 직후의 process gate (생산 시점), P-2 는 review-time 의 lens 공통 점검 (소비 시점). 두 gate 가 동일 cross-ref 점검을 중복 수행하지 않도록 실행 시점이 분리된다.
 
-근거: BL-086, philosopher_synthesis CC-3 (4/4 합의).
+근거: BL-086 synthesis CC-3 (4/4 합의).
 
 ### P-3. Inter-Stage File Overlap Pre-check (Stage 1↔Stage 2 영향 파일 겹침 사전 확인)
 
@@ -1762,7 +1762,6 @@ When modifying this file (reconstruct.md), the following documents must be synch
 | Document | Sections to Synchronize |
 |---|---|
 | `README.md` | Line 3 (description), agent table, "Ontology Build" section, certainty description, directory structure |
-| `BLUEPRINT.md` | Section 2 (term definitions), Section 3.6 (Explorer), Section 4.3 (reconstruct), certainty table, directory structure, MCP interface |
 | `process.md` | Certainty-related content in Teammate prompt template, agent-domain document mapping, "verification agent" → "lens" terminology |
 | `explorers/*.md` | Source-type profiles — if certainty level names/formats in reconstruct.md change, synchronize the examples in the profiles |
 | `src/core-runtime/cli/coordinator-state-machine.ts` | Add `awaiting_adjudication` state for reconstruct mode pipeline |

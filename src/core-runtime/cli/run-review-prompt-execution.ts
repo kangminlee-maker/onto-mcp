@@ -13,6 +13,7 @@ import type {
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewExecutionStatus,
+  ReviewUnitKind,
   ReviewUnitExecutionResult,
 } from "../review/artifact-types.js";
 import {
@@ -25,6 +26,12 @@ import {
   writeYamlDocument,
 } from "../review/review-artifact-utils.js";
 import type { ExecutionTopology } from "../review/execution-topology-resolver.js";
+import {
+  buildLensControlledDeliberationPrompt,
+  buildTeamleadControlledDeliberationPrompt,
+  type LensOutputForDeliberation,
+  type LensDeliberationResponseForTeamlead,
+} from "../review/controlled-lens-deliberation.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
 
@@ -35,7 +42,7 @@ export interface ReviewUnitExecutorConfig {
 
 interface ExecutionDispatchResult {
   unit_id: string;
-  unit_kind: "lens" | "synthesize";
+  unit_kind: ReviewUnitKind;
   packet_path: string;
   output_path: string;
 }
@@ -53,7 +60,7 @@ export interface ReviewPromptExecutionResult {
 
 interface ExecutionFailure {
   unit_id: string;
-  unit_kind: "lens" | "synthesize";
+  unit_kind: ReviewUnitKind;
   packet_path: string;
   output_path: string;
   message: string;
@@ -136,6 +143,27 @@ function renderDegradedLensFailuresSection(
         `- ${failure.unit_id}: ${failure.message.replaceAll("\n", " ").trim()}`,
     )
     .join("\n")}\n`;
+}
+
+function renderControlledDeliberationRefsSection(
+  projectRoot: string,
+  executionPlan: ReviewExecutionPlan,
+  deliberationDispatches: ExecutionDispatchResult[],
+): string {
+  return [
+    "## Controlled Lens Deliberation Result",
+    `- teamlead result: ${path.relative(projectRoot, executionPlan.deliberation_output_path)}`,
+    "",
+    "## Lens Deliberation Responses",
+    ...deliberationDispatches.map(
+      (dispatch) =>
+        `- ${dispatch.unit_id.replace(/^deliberation-/, "")}: ${path.relative(
+          projectRoot,
+          dispatch.output_path,
+        )}`,
+    ),
+    "",
+  ].join("\n");
 }
 
 function requireString(
@@ -308,38 +336,43 @@ function deriveExecutionStatus(params: {
 }
 
 async function readStructuredDeliberationStatus(
+  executionPlan: ReviewExecutionPlan,
   synthesizeOutputPath: string,
-  deliberationOutputPath: string,
-  executionRealization: ReviewExecutionRealization,
-): Promise<DeliberationStatus | null> {
-  // Mirrors the precedence rule in `assemble-review-record.ts`
-  // (`detectDeliberationStatus`) per `.onto/processes/review/synthesize-prompt-contract.md`
-  // §6.4 and `.onto/processes/review/record-contract.md` §4.5:
-  //   1. synthesis.md frontmatter — primary for both realizations.
-  //   2. realization-aware fallback when frontmatter is unavailable:
-  //        - cross-process (agent-teams): deliberation.md presence ⇒ performed
-  //        - in-process (subagent): no fallback signal ⇒ null (defer to assembler)
-  if (await fileExists(synthesizeOutputPath)) {
-    const synthesizeText = await fs.readFile(synthesizeOutputPath, "utf8");
-    const parsed = parseMarkdownFrontmatter<{ deliberation_status?: string }>(
-      synthesizeText,
+): Promise<DeliberationStatus> {
+  if (!(await fileExists(executionPlan.deliberation_output_path))) {
+    throw new Error(
+      `Missing controlled deliberation result: ${executionPlan.deliberation_output_path}`,
     );
-    const frontmatterStatus = parsed.metadata?.deliberation_status;
-    if (
-      frontmatterStatus === "not_needed" ||
-      frontmatterStatus === "performed" ||
-      frontmatterStatus === "required_but_unperformed"
-    ) {
-      return frontmatterStatus;
-    }
   }
-  if (
-    executionRealization === "agent-teams" &&
-    (await fileExists(deliberationOutputPath))
-  ) {
-    return "performed";
+  const deliberationText = await fs.readFile(
+    executionPlan.deliberation_output_path,
+    "utf8",
+  );
+  if (deliberationText.trim().length === 0) {
+    throw new Error(
+      `Controlled deliberation result is empty: ${executionPlan.deliberation_output_path}`,
+    );
   }
-  return null;
+  const deliberationFrontmatter = parseMarkdownFrontmatter<{
+    deliberation_status?: string;
+  }>(deliberationText).metadata?.deliberation_status;
+  if (deliberationFrontmatter !== "performed") {
+    throw new Error(
+      `Controlled deliberation result must declare deliberation_status: performed in ${executionPlan.deliberation_output_path}`,
+    );
+  }
+  if (!(await fileExists(synthesizeOutputPath))) {
+    throw new Error(`Missing synthesize output: ${synthesizeOutputPath}`);
+  }
+  const synthesizeText = await fs.readFile(synthesizeOutputPath, "utf8");
+  const parsed = parseMarkdownFrontmatter<{ deliberation_status?: string }>(
+    synthesizeText,
+  );
+  const frontmatterStatus = parsed.metadata?.deliberation_status;
+  if (frontmatterStatus === "performed") return "performed";
+  throw new Error(
+    `Synthesize output must acknowledge controlled deliberation with deliberation_status: performed in ${synthesizeOutputPath}`,
+  );
 }
 
 async function writeExecutionResultArtifact(
@@ -358,11 +391,18 @@ async function resetExecutionOutputs(
     executionPlan.synthesis_output_path,
     executionPlan.deliberation_output_path,
     executionPlan.final_output_path,
+    executionPlan.teamlead_deliberation_prompt_packet_path,
     path.join(
       executionPlan.prompt_packets_root,
       "synthesize.runtime.prompt.md",
     ),
     ...executionPlan.lens_execution_seats.map((seat) => seat.output_path),
+    ...executionPlan.lens_deliberation_prompt_packet_seats.map(
+      (seat) => seat.packet_path,
+    ),
+    ...executionPlan.lens_deliberation_prompt_packet_seats.map(
+      (seat) => seat.output_path,
+    ),
   ];
 
   await Promise.all(pathsToClear.map((targetPath) => removeFileIfExists(targetPath)));
@@ -393,6 +433,301 @@ async function appendExecutionFailure(
   );
 }
 
+async function runSingleDispatchWithRetries(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  dispatch: ExecutionDispatchResult;
+  maxRetries: number;
+  retryInitialDelayMs: number;
+}): Promise<ExecutionOutcome> {
+  const {
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executorConfig,
+    dispatch,
+    maxRetries,
+    retryInitialDelayMs,
+  } = args;
+  console.log(`[review runner] starting ${dispatch.unit_kind}: ${dispatch.unit_id}`);
+  await appendExecutionProgress(
+    executionPlan.error_log_path,
+    `runner dispatch started: ${dispatch.unit_id}`,
+    [
+      `unit_id: ${dispatch.unit_id}`,
+      `unit_kind: ${dispatch.unit_kind}`,
+      `packet_path: ${dispatch.packet_path}`,
+      `output_path: ${dispatch.output_path}`,
+    ],
+  );
+
+  const startedAtMs = Date.now();
+  let lastError: unknown = undefined;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      await invokeExecutor(executorConfig, projectRoot, sessionRoot, dispatch);
+      const completedAtMs = Date.now();
+      console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
+      await appendExecutionProgress(
+        executionPlan.error_log_path,
+        `runner dispatch completed: ${dispatch.unit_id}`,
+        [
+          `unit_id: ${dispatch.unit_id}`,
+          `unit_kind: ${dispatch.unit_kind}`,
+          `output_path: ${dispatch.output_path}`,
+        ],
+      );
+      return {
+        dispatch,
+        success: true,
+        startedAtMs,
+        completedAtMs,
+      };
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        const retryDelay = retryInitialDelayMs * (attempt + 1);
+        console.log(
+          `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
+        );
+        await appendExecutionProgress(
+          executionPlan.error_log_path,
+          `runner dispatch retry: ${dispatch.unit_id}`,
+          [
+            `attempt: ${attempt + 1}/${maxRetries}`,
+            `retry_delay_ms: ${retryDelay}`,
+            `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
+          ],
+        );
+        await sleep(retryDelay);
+      }
+    }
+  }
+
+  const completedAtMs = Date.now();
+  const failure: ExecutionFailure = {
+    unit_id: dispatch.unit_id,
+    unit_kind: dispatch.unit_kind,
+    packet_path: dispatch.packet_path,
+    output_path: dispatch.output_path,
+    message: lastError instanceof Error ? lastError.message : String(lastError),
+  };
+  await removeFileIfExists(dispatch.output_path);
+  await appendExecutionFailure(
+    executionPlan.error_log_path,
+    failure,
+    executionPlan.effective_boundary_state,
+  );
+  return {
+    dispatch,
+    success: false,
+    startedAtMs,
+    completedAtMs,
+    failure,
+  };
+}
+
+async function readLensOutputsForDeliberation(
+  dispatches: ExecutionDispatchResult[],
+): Promise<LensOutputForDeliberation[]> {
+  return Promise.all(
+    dispatches.map(async (dispatch) => ({
+      lens_id: dispatch.unit_id,
+      output_path: dispatch.output_path,
+      content: await fs.readFile(dispatch.output_path, "utf8"),
+    })),
+  );
+}
+
+function requireDeliberationSeat(
+  executionPlan: ReviewExecutionPlan,
+  lensId: string,
+): { packet_path: string; output_path: string } {
+  const seat = executionPlan.lens_deliberation_prompt_packet_seats.find(
+    (candidate) => candidate.lens_id === lensId,
+  );
+  if (!seat) {
+    throw new Error(`Missing deliberation prompt seat for lens: ${lensId}`);
+  }
+  return seat;
+}
+
+async function runControlledLensDeliberation(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  successfulLensDispatches: ExecutionDispatchResult[];
+  maxConcurrentLenses: number;
+}): Promise<{
+  deliberationDispatches: ExecutionDispatchResult[];
+  deliberationOutcomes: ExecutionOutcome[];
+  teamleadOutcome: ExecutionOutcome;
+}> {
+  const {
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executorConfig,
+    successfulLensDispatches,
+    maxConcurrentLenses,
+  } = args;
+  if (executionPlan.deliberation_mode !== "controlled-lens-deliberation") {
+    throw new Error(
+      `Unsupported review deliberation mode: ${executionPlan.deliberation_mode}`,
+    );
+  }
+
+  await appendExecutionProgress(
+    executionPlan.error_log_path,
+    "runner controlled lens deliberation started",
+    [
+      `deliberation_mode: ${executionPlan.deliberation_mode}`,
+      `participating_lens_count: ${successfulLensDispatches.length}`,
+    ],
+  );
+
+  const lensOutputs = await readLensOutputsForDeliberation(
+    successfulLensDispatches,
+  );
+  const lensOutputById = new Map(
+    lensOutputs.map((lensOutput) => [lensOutput.lens_id, lensOutput]),
+  );
+
+  const deliberationDispatches = successfulLensDispatches.map((dispatch) => {
+    const seat = requireDeliberationSeat(executionPlan, dispatch.unit_id);
+    return {
+      unit_id: `deliberation-${dispatch.unit_id}`,
+      unit_kind: "deliberation" as const,
+      packet_path: seat.packet_path,
+      output_path: seat.output_path,
+    };
+  });
+
+  for (const dispatch of deliberationDispatches) {
+    const lensId = dispatch.unit_id.replace(/^deliberation-/, "");
+    const ownOutput = lensOutputById.get(lensId);
+    if (!ownOutput) {
+      throw new Error(`Missing primary lens output for deliberation: ${lensId}`);
+    }
+    const otherOutputs = lensOutputs.filter((lens) => lens.lens_id !== lensId);
+    const packetText = buildLensControlledDeliberationPrompt({
+      session_id: executionPlan.session_id,
+      lens_id: lensId,
+      output_path: dispatch.output_path,
+      own_output: ownOutput,
+      other_outputs: otherOutputs,
+    });
+    await fs.mkdir(path.dirname(dispatch.packet_path), { recursive: true });
+    await fs.writeFile(dispatch.packet_path, `${packetText.trimEnd()}\n`, "utf8");
+  }
+
+  const deliberationOutcomes: Array<ExecutionOutcome | undefined> = new Array(
+    deliberationDispatches.length,
+  );
+  let nextDeliberationIndex = 0;
+
+  async function runDeliberationWorker(): Promise<void> {
+    while (true) {
+      const currentIndex = nextDeliberationIndex;
+      nextDeliberationIndex += 1;
+      if (currentIndex >= deliberationDispatches.length) return;
+      const dispatch = deliberationDispatches[currentIndex];
+      if (!dispatch) return;
+      deliberationOutcomes[currentIndex] = await runSingleDispatchWithRetries({
+        projectRoot,
+        sessionRoot,
+        executionPlan,
+        executorConfig,
+        dispatch,
+        maxRetries: DEFAULT_LENS_MAX_RETRIES,
+        retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+      });
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(maxConcurrentLenses, deliberationDispatches.length) },
+      async () => runDeliberationWorker(),
+    ),
+  );
+
+  const completedDeliberationOutcomes = deliberationOutcomes.filter(
+    (outcome): outcome is ExecutionOutcome => outcome !== undefined,
+  );
+  const failedDeliberation = completedDeliberationOutcomes.find(
+    (outcome) => !outcome.success,
+  );
+  if (failedDeliberation?.failure) {
+    throw new Error(
+      `Controlled lens deliberation failed for ${failedDeliberation.dispatch.unit_id}: ${failedDeliberation.failure.message}`,
+    );
+  }
+
+  const lensDeliberationResponses: LensDeliberationResponseForTeamlead[] =
+    await Promise.all(
+      deliberationDispatches.map(async (dispatch) => {
+        const lensId = dispatch.unit_id.replace(/^deliberation-/, "");
+        return {
+          lens_id: lensId,
+          response_path: dispatch.output_path,
+          content: await fs.readFile(dispatch.output_path, "utf8"),
+        };
+      }),
+    );
+
+  const teamleadPacketText = buildTeamleadControlledDeliberationPrompt({
+    session_id: executionPlan.session_id,
+    output_path: executionPlan.deliberation_output_path,
+    lens_outputs: lensOutputs,
+    lens_deliberation_responses: lensDeliberationResponses,
+  });
+  await fs.writeFile(
+    executionPlan.teamlead_deliberation_prompt_packet_path,
+    `${teamleadPacketText.trimEnd()}\n`,
+    "utf8",
+  );
+
+  const teamleadDispatch: ExecutionDispatchResult = {
+    unit_id: "controlled-deliberation",
+    unit_kind: "deliberation",
+    packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
+    output_path: executionPlan.deliberation_output_path,
+  };
+  const teamleadOutcome = await runSingleDispatchWithRetries({
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executorConfig,
+    dispatch: teamleadDispatch,
+    maxRetries: 1,
+    retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+  });
+  if (!teamleadOutcome.success) {
+    throw new Error(
+      `Teamlead controlled deliberation failed: ${teamleadOutcome.failure?.message ?? "unknown error"}`,
+    );
+  }
+
+  await appendExecutionProgress(
+    executionPlan.error_log_path,
+    "runner controlled lens deliberation completed",
+    [
+      `deliberation_output_path: ${executionPlan.deliberation_output_path}`,
+      `lens_deliberation_response_count: ${deliberationDispatches.length}`,
+    ],
+  );
+
+  return {
+    deliberationDispatches,
+    deliberationOutcomes: completedDeliberationOutcomes,
+    teamleadOutcome,
+  };
+}
+
 export async function executeReviewPromptExecution(
   params: {
     projectRoot: string;
@@ -401,19 +736,17 @@ export async function executeReviewPromptExecution(
     synthesizeExecutorConfig?: ReviewUnitExecutorConfig;
     maxConcurrentLenses?: number;
     /**
-     * PR-L (2026-04-18): resolved topology from `runReviewInvokeCli`.
      * When `topology.id === "codex-nested-subprocess"`, the lens dispatch
-     * phase is handled by `executeReviewViaCodexNested` (PR-H bridge)
+     * phase is handled by `executeReviewViaCodexNested`
      * instead of the per-lens worker pool — one outer codex teamlead
      * + nested inner codex per lens. Synthesize step continues through
      * the regular per-unit dispatch (uses `synthesizeExecutorConfig`).
      *
-     * When undefined or any other topology id: existing per-lens worker
-     * pool behavior (backward compatible).
+     * When undefined or any other topology id: per-lens worker pool behavior.
      */
     topology?: ExecutionTopology;
     /**
-     * PR-L: OntoConfig for codex-nested dispatch (model / reasoning_effort
+     * OntoConfig for codex-nested dispatch (model / reasoning_effort
      * forwarded to outer codex teamlead). Ignored for non-nested paths.
      */
     ontoConfig?: OntoConfig;
@@ -580,8 +913,8 @@ export async function executeReviewPromptExecution(
     }
   }
 
-  // PR-L (2026-04-18): codex-nested-subprocess topology bypasses the per-lens
-  // worker pool. One outer codex teamlead is spawned (PR-H bridge) which in
+  // codex-nested-subprocess topology bypasses the per-lens
+  // worker pool. One outer codex teamlead is spawned, which in
   // turn spawns nested codex per lens inside its own shell. Outcomes from the
   // bridge are mapped into the same `executionOutcomes[]` shape so the post-
   // dispatch code (halt check, synthesize, result artifact) stays identical.
@@ -606,7 +939,7 @@ export async function executeReviewPromptExecution(
       ontoConfig: params.ontoConfig ?? {},
     });
     const nestedCompletedAtMs = Date.now();
-    // Map PR-H outcomes into executionOutcomes[] in lensDispatches order.
+    // Map nested-dispatch outcomes into executionOutcomes[] in lensDispatches order.
     // `participating_lens_ids` is the authoritative success set (orchestrator
     // ok AND output file exists + non-empty). Missing / failed → record as
     // ExecutionFailure; also remove empty output files for consistency with
@@ -751,6 +1084,15 @@ export async function executeReviewPromptExecution(
     };
   }
 
+  const controlledDeliberation = await runControlledLensDeliberation({
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executorConfig: defaultExecutorConfig,
+    successfulLensDispatches,
+    maxConcurrentLenses,
+  });
+
   const synthesizePacketRuntimePath = path.join(
     executionPlan.prompt_packets_root,
     "synthesize.runtime.prompt.md",
@@ -762,6 +1104,10 @@ export async function executeReviewPromptExecution(
   const enrichedSynthesizePacketText = `${synthesizePacketText.trimEnd()}\n\n${renderLensOutputRefsSection(
     projectRoot,
     successfulLensDispatches,
+  )}\n${renderControlledDeliberationRefsSection(
+    projectRoot,
+    executionPlan,
+    controlledDeliberation.deliberationDispatches,
   )}\n${renderDegradedLensFailuresSection(
     executionFailures.filter((failure) => failure.unit_kind === "lens"),
   )}`;
@@ -887,12 +1233,16 @@ export async function executeReviewPromptExecution(
         ),
       executed_lens_count: successfulLensDispatches.length,
       synthesis_executed: false,
-      deliberation_status: null,
+      deliberation_status: "performed",
       halt_reason: `Synthesize execution failed: ${failure.message}`,
       error_log_path: executionPlan.error_log_path,
       lens_execution_results: executionOutcomes
         .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
         .map(toUnitExecutionResult),
+      deliberation_execution_results: [
+        ...controlledDeliberation.deliberationOutcomes,
+        controlledDeliberation.teamleadOutcome,
+      ].map(toUnitExecutionResult),
       synthesize_execution_result: synthesizeOutcome
         ? toUnitExecutionResult(synthesizeOutcome)
         : null,
@@ -926,9 +1276,8 @@ export async function executeReviewPromptExecution(
     .map((failure) => failure.unit_id);
   const executionCompletedAtMs = Date.now();
   const deliberationStatus = await readStructuredDeliberationStatus(
+    executionPlan,
     executionPlan.synthesis_output_path,
-    executionPlan.deliberation_output_path,
-    executionPlan.execution_realization,
   );
   await writeExecutionResultArtifact(executionPlan, {
     session_id: executionPlan.session_id,
@@ -961,6 +1310,10 @@ export async function executeReviewPromptExecution(
     lens_execution_results: executionOutcomes
       .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
       .map(toUnitExecutionResult),
+    deliberation_execution_results: [
+      ...controlledDeliberation.deliberationOutcomes,
+      controlledDeliberation.teamleadOutcome,
+    ].map(toUnitExecutionResult),
     synthesize_execution_result: synthesizeOutcome
       ? toUnitExecutionResult(synthesizeOutcome)
       : null,

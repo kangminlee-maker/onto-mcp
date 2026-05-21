@@ -151,8 +151,9 @@ OUTPUT FORMAT — READ FIRST:
 
 Your job:
 - Read every Participating Lens Output that is inlined in the prompt packet.
+- Read the Controlled Lens Deliberation Result that is inlined in the prompt packet.
 - Classify findings into Consensus, Conditional Consensus, Disagreement, and Unique Finding Tagging.
-- When lens findings disagree, perform deliberation IN-PROCESS: weigh each side against the cited evidence in the inlined materialized input and lens outputs. Pick a side ONLY when the evidence supports it; otherwise preserve the disagreement and document why deliberation is inconclusive.
+- Do not perform deliberation yourself. Controlled lens deliberation already produced the authoritative resolution or unresolved-disagreement record.
 - Integrate Axiology proposed perspectives without erasing the lens-level evidence.
 
 Rules:
@@ -163,10 +164,10 @@ Rules:
 - Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
 - The 8 required output sections in the packet are MANDATORY heading names. Do not rename, merge, or omit them, even if a section is empty (state "(none)" instead).
 - Preserve lens-level evidence in your output — never paraphrase a lens away from its citation.
-- Set deliberation_status in the YAML frontmatter to "performed" if you resolved at least one disagreement, otherwise "not_needed".
+- Set deliberation_status in the YAML frontmatter to "performed".
 - Produce ONLY the final markdown content for the canonical output path.
 - Do not add commentary before or after the markdown.
-- If the inlined evidence is insufficient to resolve a disagreement, write the limitation explicitly under Deliberation Decision rather than fabricating a verdict.`;
+- If controlled deliberation preserved an unresolved disagreement, preserve that limitation explicitly under Deliberation Decision.`;
 }
 
 /**
@@ -253,13 +254,15 @@ You have THREE read-only tools:
 Tool boundary for synthesize:
 - Paths must resolve inside projectRoot or ontoHome.
 - Lens outputs live under \`.onto/review/<session>/round1/<lens>.md\`. The packet's "Participating Lens Outputs" section lists the exact paths — call read_file on those paths to read each lens's findings.
+- The controlled lens deliberation result lives at the packet's "Controlled Lens Deliberation Result" path — call read_file on that path before classifying disagreements.
 - The materialized input (the actual review target) is also referenced in the packet — read_file it whenever you need to verify a contested claim against the source.
 - For synthesize, .onto traversal IS allowed (unlike lens runs) so list_directory and search_content work under .onto/review.
 
 Your job:
 - Read every Participating Lens Output via read_file. Do not skip any successful lens.
+- Read the Controlled Lens Deliberation Result via read_file.
 - Classify findings: Consensus, Conditional Consensus, Disagreement, Unique Finding Tagging.
-- When lens findings disagree, perform deliberation: re-read the contested claims AND the relevant slice of the materialized input, then weigh each side against the cited evidence. Pick a side ONLY when the evidence supports it; otherwise preserve the disagreement and explain why deliberation is inconclusive.
+- Do not perform deliberation yourself. Controlled lens deliberation already produced the authoritative resolution or unresolved-disagreement record.
 - Integrate Axiology proposed perspectives without erasing lens-level evidence.
 
 Rules:
@@ -267,7 +270,7 @@ Rules:
 - Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
 - The 8 required output sections in the packet are MANDATORY heading names. Do not rename, merge, or omit them — write "(none)" if a section has no content.
 - Preserve lens-level evidence — never paraphrase a lens away from its citation.
-- Set deliberation_status in the YAML frontmatter to "performed" if you resolved at least one disagreement, otherwise "not_needed".
+- Set deliberation_status in the YAML frontmatter to "performed".
 - Produce ONLY the final markdown content for the canonical output path.
 - Do not add commentary before or after the markdown.
 - If a lens output file is missing or unreadable via read_file, list it under Degraded Lens Failures rather than fabricating its findings.`;

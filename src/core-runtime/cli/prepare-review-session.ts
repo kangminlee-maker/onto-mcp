@@ -21,10 +21,6 @@ import {
   materializeReviewExecutionPreparationArtifacts,
   writeInvocationInterpretationArtifact,
 } from "../review/materializers.js";
-import {
-  formatLegacyMigrationError,
-  isLegacyReviewMode,
-} from "../review/legacy-mode-policy.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import {
   detectClaudeCodeEnvSignal,
@@ -56,9 +52,6 @@ function requireReviewMode(value: string): ReviewMode {
   if (value === "core-axis" || value === "full") {
     return value;
   }
-  if (isLegacyReviewMode(value)) {
-    throw new Error(formatLegacyMigrationError("review_mode", value));
-  }
   throw new Error(`Invalid review mode: ${value}`);
 }
 
@@ -83,13 +76,12 @@ function normalizeHostRuntime(
   if (hostRuntimeValue === "codex" || hostRuntimeValue === "claude") {
     return hostRuntimeValue;
   }
-  // Phase 2: standalone and direct-call hosts are valid — pass through as
-  // ReviewHostRuntime (artifact-types.ts union includes these values).
   if (
     hostRuntimeValue === "standalone" ||
-    hostRuntimeValue === "litellm" ||
     hostRuntimeValue === "anthropic" ||
-    hostRuntimeValue === "openai"
+    hostRuntimeValue === "openai" ||
+    hostRuntimeValue === "grok" ||
+    hostRuntimeValue === "lmstudio"
   ) {
     return hostRuntimeValue as ReviewHostRuntime;
   }

@@ -2,7 +2,7 @@
 # shellcheck shell=bash
 #
 # host-env.sh — shared host-environment sanitization helpers for onto
-# launcher scripts (review-pr.sh, smoke-topology/*.sh).
+# launcher scripts.
 #
 # # What this is
 #
@@ -33,7 +33,6 @@
 #
 # Sourced (not executed) by:
 #   - scripts/review-pr.sh
-#   - scripts/smoke-topology/fixture.sh   (transitively all 8 smoke scripts)
 #
 # Functions:
 #   onto_env_codex_host CMD…

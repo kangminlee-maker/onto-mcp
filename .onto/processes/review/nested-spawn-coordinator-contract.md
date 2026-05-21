@@ -46,13 +46,13 @@ Runtime은 "deterministic contract executor" 역할을 유지한다. 상태 전�
 - 주체자 메인 context가 orchestration(state machine 호출·결과 집계)에 일부 사용되나 lens reasoning은 여전히 독립 subagent context.
 - TeamCreate 비가용 환경(기능 설정·권한 제약 등)의 canonical 대안.
 
-**선택 책임**: TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 **주체자의 판단**. 주체자는 TeamCreate 시도 후 실패 시 flat 패턴으로 전환할 수 있다. `onto review` auto-resolution이 emit하는 handoff JSON의 `orchestration_guidance.preferred` / `.fallback` 문구가 참고 지침.
+**선택 책임**: TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 **주체자의 판단**. 주체자는 TeamCreate 시도 후 flat 패턴이 더 적합하면 그 패턴을 선택할 수 있다. `onto review` auto-resolution이 emit하는 handoff JSON의 `orchestration_guidance.preferred` / `.alternate` 문구가 참고 지침.
 
 Semantic reference: `.onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization` (instances `agent_teams_claude`, `subagent_claude`).
 
 ### 2.2 Topology-Driven Orchestration (sketch v3, 2026-04-18)
 
-Principal 이 `.onto/config.yml` 의 `execution_topology_priority: [...]` 를 설정한 경우 handoff JSON 에 `topology` descriptor 필드가 포함된다 (PR #105 이후). Payload 예:
+Principal 이 `.onto/config.yml` 의 `review:` axis block 을 설정한 경우 handoff JSON 에 `topology` descriptor 필드가 포함된다. Payload 예:
 
 ```json
 {
@@ -64,19 +64,19 @@ Principal 이 `.onto/config.yml` 의 `execution_topology_priority: [...]` 를 �
     "lens_spawn_mechanism": "claude-agent-tool",
     "max_concurrent_lenses": 10,
     "transport_rank": "S2",
-    "deliberation_channel": "synthesizer-only"
+    "deliberation_channel": "controlled-lens-deliberation"
   },
   "next_action": {
     "orchestration_guidance": {
       "preferred": "...",
-      "fallback": "...",
+      "alternate": "...",
       "topology_note": "principal 이 topology=... 를 canonical 로 따르세요"
     }
   }
 }
 ```
 
-**`topology` 필드가 존재하면 이것이 canonical.** `preferred_realization` / `fallback` 힌트 대신 `topology.id` 에 따라 아래 mapping 을 따른다:
+**`topology` 필드가 존재하면 이것이 canonical.** `preferred_realization` / `alternate` 힌트 대신 `topology.id` 에 따라 아래 mapping 을 따른다:
 
 | topology.id | Coordinator orchestration 지침 |
 |---|---|
@@ -84,15 +84,13 @@ Principal 이 `.onto/config.yml` 의 `execution_topology_priority: [...]` 를 �
 | `cc-teams-agent-subagent` | nested (`agent_teams_claude`): 주체자가 `TeamCreate + TaskCreate` 로 coordinator subagent 1 개 spawn → coordinator 가 Agent tool 로 lens subagent nested spawn. |
 | `cc-main-codex-subprocess` | 주체자 메인이 `onto coordinator start/next` 로 state machine 구동. Lens dispatch 는 Agent tool 아니라 **onto 가 spawn 하는 codex CLI subprocess** (coordinator-state-machine 의 executor_realization=codex 경로). |
 | `cc-teams-codex-subprocess` | 주체자가 TeamCreate 로 coordinator spawn. Coordinator 는 Agent tool 대신 codex CLI subprocess 를 lens 당 1 회 spawn. Teamlead 는 Claude agent, lens 실행은 codex. |
-| `cc-teams-litellm-sessions` | 주체자가 TeamCreate 로 coordinator spawn. Coordinator 가 lens 당 1 회 LiteLLM HTTP 세션 (inline-http executor). `llm_base_url` 필요. |
-| `cc-teams-lens-agent-deliberation` | **유일한 lens 간 deliberation 옵션**. Lens 를 TeamCreate MEMBER (persistent) 로 spawn 후 SendMessage A2A round 1 (+2) 수행. 상세: §16. |
+| `cc-teams-lens-agent-deliberation` | Claude Code Agent Teams에서 controlled lens deliberation을 SendMessage transport로 수행한다. 상세: §16. |
 | `codex-main-subprocess` | Codex CLI host 세션 내부. onto TS 가 teamlead, lens 는 codex CLI subprocess. Claude TeamCreate 미사용. |
-| `codex-nested-subprocess` | Host 무관. onto TS 가 outer `codex exec` 1 개 spawn → outer 가 shell 로 nested `codex exec` 을 lens 당 spawn. **이 경로는 TS runtime (`executeReviewViaCodexNested` bridge, PR #106) 가 처리** — coordinator state machine 관여 없음. |
-| `generic-nested-subagent` / `generic-main-subagent` | Host adapter 미구현. 현재 도달 시 지원되지 않음 경고. |
+| `codex-nested-subprocess` | Host 무관. onto TS 가 outer `codex exec` 1 개 spawn → outer 가 shell 로 nested `codex exec` 을 lens 당 spawn. 이 경로는 TS runtime (`executeReviewViaCodexNested`) 가 처리하며 coordinator state machine 관여 없음. |
 
-**Fallback**: handoff payload 에 `topology` 필드가 없으면 §2.1 의 `preferred_realization` 해석으로 회귀 (sketch v3 opt-in 하지 않은 주체자).
+handoff payload 에 `topology` 필드는 필수다. 누락 시 coordinator는 실행을 중단한다.
 
-Semantic reference: `docs/topology-migration-guide.md` + `development-records/evolve/20260418-execution-topology-priority-sketch.md` §3.
+Semantic reference: `.onto/processes/review/productized-live-path.md` + `.onto/processes/configuration.md`.
 
 ---
 
@@ -104,9 +102,9 @@ Semantic reference: `docs/topology-migration-guide.md` + `development-records/ev
 |---|---|---|
 | `preparing` | auto | 세션 준비 (artifacts, prompt packets, error-log 초기화) |
 | `awaiting_lens_dispatch` | await | caller에게 lens Agent dispatch 지시. 병렬 dispatch |
-| `validating_lenses` | auto | lens output 검증 + synthesize packet enrichment |
+| `validating_lenses` | auto | lens output 검증 + lens deliberation packet 생성 |
+| `awaiting_deliberation` | await | caller에게 lens deliberation 및 teamlead deliberation dispatch 지시 |
 | `awaiting_synthesize_dispatch` | await | caller에게 synthesize Agent dispatch 지시 |
-| `awaiting_deliberation` | await | (조건부, 미구현) deliberation Agent dispatch 지시 |
 | `completing` | auto | execution-result 작성 + complete-session |
 | `completed` | terminal | 정상 종료 |
 | `halted_partial` | terminal | lens 부족으로 중단 |
@@ -117,7 +115,7 @@ Semantic reference: `docs/topology-migration-guide.md` + `development-records/ev
 정상 경로:
 ```
 (init) → preparing → awaiting_lens_dispatch → validating_lenses
-  → awaiting_synthesize_dispatch → completing → completed
+  → awaiting_deliberation → awaiting_synthesize_dispatch → completing → completed
 ```
 
 완전한 간선 목록 (유일한 전이 authority):
@@ -128,12 +126,12 @@ Semantic reference: `docs/topology-migration-guide.md` + `development-records/ev
 | 2 | `preparing` | `awaiting_lens_dispatch` | 성공 |
 | 3 | `preparing` | `failed` | runtime 에러 |
 | 4 | `awaiting_lens_dispatch` | `validating_lenses` | `next` 호출 |
-| 5 | `validating_lenses` | `awaiting_synthesize_dispatch` | participating ≥ minimum |
+| 5 | `validating_lenses` | `awaiting_deliberation` | participating ≥ minimum |
 | 6 | `validating_lenses` | `halted_partial` | participating < minimum |
 | 7 | `validating_lenses` | `failed` | runtime 에러 |
-| 8 | `awaiting_synthesize_dispatch` | `completing` | `next` 호출 |
-| 9 | `awaiting_synthesize_dispatch` | `awaiting_deliberation` | deliberation_required (미구현) |
-| 10 | `awaiting_deliberation` | `completing` | `next` 호출 (미구현) |
+| 8 | `awaiting_deliberation` | `awaiting_synthesize_dispatch` | `deliberation.md` 생성 후 `next` 호출 |
+| 9 | `awaiting_deliberation` | `failed` | deliberation artifact 부재/오류 |
+| 10 | `awaiting_synthesize_dispatch` | `completing` | `next` 호출 |
 | 11 | `completing` | `completed` | 성공 |
 | 12 | `completing` | `failed` | synthesis output 부재 또는 runtime 에러 |
 
@@ -160,9 +158,9 @@ onto coordinator next --session-root <session_root> [--project-root <path>]
 
 | 현재 state | 동작 | 가능한 출력 state |
 |---|---|---|
-| `awaiting_lens_dispatch` | `validating_lenses` auto 실행 | `awaiting_synthesize_dispatch`, `halted_partial`, `failed` |
+| `awaiting_lens_dispatch` | `validating_lenses` auto 실행 | `awaiting_deliberation`, `halted_partial`, `failed` |
+| `awaiting_deliberation` | lens response가 없으면 lens/teamlead deliberation Agent dispatch 지시, `deliberation.md`가 있으면 synthesize packet 생성 | `awaiting_deliberation`, `awaiting_synthesize_dispatch`, `failed` |
 | `awaiting_synthesize_dispatch` | `completing` auto 실행 | `completed`, `failed` |
-| `awaiting_deliberation` | `completing` auto 실행 (미구현) | `completed`, `failed` |
 | terminal states | 에러 반환 | — ("session already terminated") |
 
 **Optional `--orchestrator-reported-realization <value>`**: orchestrator 가 실제로 lens agents 를 dispatch 한 mechanism 을 자기 보고 — state file 의 `orchestrator_reported_realization` 필드에 기록. Idempotent (첫 값이 유지). 상세는 §18.
@@ -275,13 +273,20 @@ transitions:
 
 1. 각 lens의 output_path 존재 + 비공 확인 (participating / degraded 분류)
 2. participating < minimum → error-log 기록 → `halted_partial`로 전이 기록, 종료
-3. participating ≥ minimum → `coordinator-build-synthesize-packet` 실행 (enrichment)
+3. participating ≥ minimum → controlled lens deliberation prompt packet 생성
+4. 성공 → `awaiting_deliberation`로 전이 기록
+
+### `awaiting_deliberation` (await)
+
+1. lens deliberation response가 없으면 caller에게 lens별 deliberation Agent dispatch 지시
+2. lens response가 있고 `deliberation.md`가 없으면 caller에게 teamlead controlled deliberation Agent dispatch 지시
+3. `deliberation.md`가 있으면 `coordinator-build-synthesize-packet --require-deliberation` 실행
 4. 성공 → `awaiting_synthesize_dispatch`로 전이 기록
 
 ### `completing` (auto)
 
 1. synthesis output 존재 확인. 부재 시 → `failed`
-2. (deliberation 확인 — 미구현)
+2. `deliberation.md` 존재 + `synthesis.md` frontmatter `deliberation_status: performed` 확인. 부재/불일치 시 → `failed`
 3. `runWriteExecutionResult(argv)` — execution-result.yaml 작성
 4. `runCompleteReviewSessionCli(argv)` — final-output.md + review-record.yaml
 5. 성공 → `completed`로 전이 기록
@@ -354,11 +359,11 @@ Auto state 재실행 시 기존 파일을 덮어쓴다 (overwrite-safe).
 
 ## 12. Deliberation Slot
 
-현재 coordinator state machine 은 deliberation 을 자동 실행하지 않는다 (state 존재, trigger 미구현). 향후:
-- `awaiting_synthesize_dispatch`에서 `next` 호출 후 `completing` 진입 시 synthesis output의 `deliberation_status` 확인
-- `awaiting_deliberation`으로 분기 (간선 #9)
+현재 coordinator state machine은 controlled lens deliberation을 canonical stage로 실행한다.
 
-**Topology `cc-teams-lens-agent-deliberation` (sketch v3 option 1-0)** 이 선택된 경우 coordinator 는 §16 프로토콜을 수동 실행하거나, state machine 이 자동 실행하도록 후속 PR 에서 확장. 현재 PR-D (src/core-runtime/cli/teamcreate-lens-deliberation-executor.ts) 는 prompt template + artifact schema 를 완비 — coordinator 가 SendMessage 로 직접 호출 가능.
+- `validating_lenses` 다음 상태는 `awaiting_deliberation`이다.
+- `awaiting_deliberation`은 lens별 deliberation response와 teamlead `deliberation.md`를 순서대로 요구한다.
+- `awaiting_synthesize_dispatch`는 `deliberation.md`가 존재한 뒤에만 도달한다.
 
 ---
 
@@ -386,37 +391,37 @@ import { runCompleteReviewSessionCli } from "./complete-review-session.js";
 |---|---|---|
 | `preparing` | — | session artifacts, error-log.md, coordinator-state.yaml |
 | `awaiting_lens_dispatch` | prompt-packets/*.prompt.md | round1/*.md |
-| `validating_lenses` | round1/*.md, execution-plan.yaml | synthesize.runtime.prompt.md, error-log.md |
+| `validating_lenses` | round1/*.md, execution-plan.yaml | prompt-packets/*.deliberation.prompt.md, error-log.md |
+| `awaiting_deliberation` | round1/*.md, deliberation/round1/*.md | deliberation/round1/*.md, deliberation.md, synthesize.runtime.prompt.md |
 | `awaiting_synthesize_dispatch` | synthesize.runtime.prompt.md | synthesis.md |
-| `awaiting_deliberation` (1-0 only, §16) | round1/*.md, deliberation/round1/*.md | deliberation/round1/*.md, deliberation/round2/*.md |
-| `completing` | execution-plan.yaml, synthesis.md, deliberation/**/* (있을 시) | execution-result.yaml, final-output.md, review-record.yaml |
+| `completing` | execution-plan.yaml, synthesis.md, deliberation.md | execution-result.yaml, final-output.md, review-record.yaml |
 
 ---
 
-## 16. Deliberation Protocol (topology cc-teams-lens-agent-deliberation)
+## 16. Deliberation Protocol
 
 ### 16.1 진입 조건 (3 중 opt-in)
 
-이 프로토콜은 **topology `cc-teams-lens-agent-deliberation`** 이 선택된 경우에만 실행된다. 3 조건 AND:
+이 프로토콜은 모든 completed review에서 실행된다. Claude Code Agent Teams에서 SendMessage transport를 쓰려면 3 조건 AND가 필요하다:
 
 1. `CLAUDECODE=1` (Claude Code 세션)
 2. `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` (~/.claude*/settings.json env)
 3. `.onto/config.yml` 의 `lens_agent_teams_mode: true`
 
-Resolver (`src/core-runtime/review/execution-topology-resolver.ts`) 가 세 조건 모두 검증 후에만 이 topology 를 채택. PR-D 의 `requireDeliberationOptIn` (`src/core-runtime/cli/teamcreate-lens-deliberation-executor.ts`) 가 defence-in-depth 로 재검증.
+Resolver (`src/core-runtime/review/execution-topology-resolver.ts`) 는 Agent Teams transport 가능 여부를 검증한다. MCP/TS provider 경로는 동일한 controlled deliberation 의미론을 bounded prompt packet으로 실행한다.
 
 ### 16.2 Lens agent lifecycle 차이점
 
-다른 모든 topology 에서는 lens 실행 후 agent 가 종료되어 synthesizer 단계에서만 교차. 1-0 은:
+Agent Teams transport에서는 lens 실행 후 agent를 유지할 수 있다:
 
 - Lens agent 를 **TeamCreate MEMBER (persistent)** 로 spawn. Agent tool 아님.
 - Lens 가 primary output 작성 후에도 **종료 금지** — deliberation round 를 위해 살아있어야 함.
 
 ### 16.3 Round 1 (재평가)
 
-`awaiting_synthesize_dispatch` → `awaiting_deliberation` 전이 후 각 lens agent 에게 순차 또는 병렬로 SendMessage:
+`validating_lenses` → `awaiting_deliberation` 전이 후 각 lens agent 에게 순차 또는 병렬로 SendMessage 또는 bounded provider call:
 
-1. Prompt 생성: `buildDeliberationRound1Prompt({ own_lens_id, own_output_summary, other_lens_outputs })` (PR-D helper)
+1. Prompt 생성: `buildDeliberationRound1Prompt({ own_lens_id, own_output_summary, other_lens_outputs })` (controlled deliberation helper)
 2. Prompt 는 다른 lens 들의 primary output 전체를 embed + 재평가 요청
 3. Required response sections: `## 재평가 요약`, `## 동의/강화 지점`, `## 충돌/수정 지점`, `## 추가 발견`
 4. Lens 응답을 `{session_root}/deliberation/round1/<lens_id>-deliberation.md` 에 기록
@@ -434,21 +439,21 @@ Round 2 는 선택적 — config 에 `deliberation_rounds: 2` 같은 설정이 �
 
 ### 16.5 Synthesizer 단계 반영
 
-Deliberation 완료 후 `completing` auto state 에서 synthesizer 가 소비할 artifact:
+Deliberation 완료 후 `awaiting_synthesize_dispatch`의 synthesizer 가 소비할 artifact:
 
 - Lens primary outputs (`round1/<lens>.md`)
 - Deliberation round 1 artifacts (`deliberation/round1/<lens>-deliberation.md`)
-- Deliberation round 2 artifacts (있으면)
-- `extractDisagreements(round2_artifacts)` (PR-D helper) 가 surface 한 persistent disagreements 는 synthesis 본문에 **숨기지 말고 명시** — 표상이 소거보다 낫다는 sketch v3 §3.1 의 epistemic independence axiom.
+- Teamlead controlled deliberation result (`deliberation.md`)
+- `extractDisagreements(round2_artifacts)` 가 surface 한 persistent disagreements 는 synthesis 본문에 **숨기지 말고 명시** — 표상이 소거보다 낫다는 sketch v3 §3.1 의 epistemic independence axiom.
 
 ### 16.6 현재 runtime 지원 상태
 
-- **TypeScript state machine**: `awaiting_deliberation` state 는 존재하지만 trigger 조건 + 완료 경로가 **미구현** (coordinator-state-machine.ts:510 `throw "not yet implemented"`). 자동 실행 wiring 은 후속 PR.
-- **Prompt 도구**: PR-D 가 prompt template + artifact schema + 3 중 opt-in guard + disagreement 추출을 완비. Coordinator 가 state machine 지원을 기다리지 않고도 **수동으로** SendMessage 호출 + artifact 작성 가능.
+- **TypeScript state machine**: `awaiting_deliberation` state가 lens deliberation response와 teamlead `deliberation.md` dispatch를 지시한다.
+- **Prompt 도구**: controlled deliberation prompt template + artifact schema는 Agent Teams transport에서 재사용 가능하다.
 
 ### 16.7 Reference
 
-- PR #102 (PR-D): `src/core-runtime/cli/teamcreate-lens-deliberation-executor.ts`
+- Agent Teams transport executor: `src/core-runtime/cli/teamcreate-lens-deliberation-executor.ts`
 - PR #102 tests: `src/core-runtime/cli/teamcreate-lens-deliberation-executor.test.ts`
 - Sketch v3 §3.1 option 1-0, §6.4 triple opt-in 근거
 
@@ -490,7 +495,6 @@ Deliberation 완료 후 `completing` auto state 에서 synthesizer 가 소비할
 
 | topology | 기본 N | 근거 |
 |---|---|---|
-| `cc-teams-litellm-sessions` | 1 | LiteLLM 프록시 단일 큐 가정 |
 | `cc-teams-codex-subprocess` | 5 | codex CLI subprocess pool 안전 상한 |
 | `cc-main-codex-subprocess` | 5 | 동일 |
 | `cc-main-agent-subagent` | 10 | Claude Agent tool 일반 안전 상한 |
@@ -505,7 +509,7 @@ Deliberation 완료 후 `completing` auto state 에서 synthesizer 가 소비할
 
 ### 17.8 Empirical 검증 상태
 
-- Core-axis review (과거 4 lens, v0.2.1 이후 6 lens per `.onto/authority/core-lens-registry.yaml`) + Claude Agent tool 환경: 2026-04-18 Full E2E 에서 4 parallel 무난 처리 확인 (PR #119, 당시 4 lens 구성). v0.2.1 6-lens 구성에서의 재검증은 미수행 — 본 세션 full review (9 parallel) 가 첫 empirical 관측이 됨.
+- Core-axis review (과거 4 lens, v0.2.1 이후 6 lens per `.onto/authority/core-lens-registry.yaml`) + Claude Agent tool 환경: 2026-04-18 Full E2E 에서 4 parallel 무난 처리 확인. v0.2.1 6-lens 구성에서의 재검증은 미수행 — 본 세션 full review (9 parallel) 가 첫 empirical 관측이 됨.
 - Full review (9 lens) + N < 9 환경: **부분 검증** (본 세션 9 parallel Agent spawn 성공). 추가 batch-by-N 효과 관측은 별도 세션에서.
 - 배경 분석 memory: `project_agent_concurrency_full_execution.md`.
 
@@ -517,7 +521,7 @@ Orchestrator (주체자 세션 또는 coordinator subagent) 가 실제로 사용
 
 ### 18.1 문제
 
-Plan-time `resolved_execution_realization` (binding.yaml 에 기록) 은 resolver 가 handoff payload 의 `preferred_realization` 기반으로 결정한 값. 실제 orchestrator 가 그 preferred 에 따라 dispatch 했는지, 다른 mechanism (예: TeamCreate 대신 flat Agent tool) 을 선택했는지는 coordinator state machine 이 알 수 없음. 2026-04-18 Full E2E (PR #119) 에서 topology 1 (flat) / 2 (TeamCreate nested) 모두 `resolved_execution_realization: agent-teams` 로 기록된 것이 이 gap 의 empirical 증거.
+Plan-time `resolved_execution_realization` (binding.yaml 에 기록) 은 resolver 가 handoff payload 의 `preferred_realization` 기반으로 결정한 값. 실제 orchestrator 가 그 preferred 에 따라 dispatch 했는지, 다른 mechanism (예: TeamCreate 대신 flat Agent tool) 을 선택했는지는 coordinator state machine 이 알 수 없음. 2026-04-18 Full E2E 에서 topology 1 (flat) / 2 (TeamCreate nested) 모두 `resolved_execution_realization: agent-teams` 로 기록된 것이 이 gap 의 empirical 증거.
 
 ### 18.2 해결
 
@@ -541,13 +545,12 @@ Free-form string (forward compatibility). 권장 예시:
 - `claude-agent-tool-flat` — 주체자 세션이 Agent tool 로 flat parallel spawn
 - `claude-teamcreate-nested` — TeamCreate 로 coordinator subagent spawn → coordinator 가 Agent tool 로 lens nested spawn
 - `codex-subprocess` — per-lens codex CLI subprocess
-- `litellm-http` — LiteLLM endpoint HTTP dispatch
 - 기타 orchestrator 환경 고유 값
 
 ### 18.5 소비
 
 - `coordinator-state.yaml` 에 필드로 보존 (orchestrator 자체 보고이므로 authoritative 성격; binding.yaml 의 plan-time 값과 구분).
-- 후속 PR 에서 `review-record.yaml` 또는 final-output.md 의 Verification Context 섹션에 반영 가능 (scope 밖, 선택 사항).
+- 이후 작업에서 `review-record.yaml` 또는 final-output.md 의 Verification Context 섹션에 반영 가능 (scope 밖, 선택 사항).
 - 분석 / 감사 용도 — 실제로 어떤 mechanism 이 사용됐는지 post-hoc 확인.
 
 ### 18.6 현재 상태

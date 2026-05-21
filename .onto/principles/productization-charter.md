@@ -111,7 +111,7 @@ prototype path, reference path, comparison path는 기준과 회귀 비교의 �
 하지만 아래는 금지한다.
 
 1. reference path를 authoritative core로 장기 병행 운영
-2. TS core 실패 시 reference path로 silent fallback
+2. TS core 실패를 숨기고 reference path로 계속 진행하는 것
 3. reference path와 core path가 다른 artifact truth를 독자적으로 발전시키는 것
 
 ### 4.4 Canonical Pointers
@@ -313,7 +313,7 @@ canonical entrypoint path로 연결할 수 있어야 한다.
 
 ### 10.1 `9개 lens + synthesize`
 
-`review`는 더 이상 legacy `agent panel + philosopher` 구조를 canonical로 두지 않는다.
+`review`의 canonical structure는 현재 lens set, controlled deliberation, synthesize로 정의한다.
 
 canonical은:
 
@@ -494,7 +494,6 @@ canonical execution profile은 아래 두 축으로 표현한다.
 
 | 이전 위치 | 새 위치 | 이유 |
 |---|---|---|
-| `.onto/authority/BLUEPRINT.md` | `BLUEPRINT.md` (루트) | 이용자용 시스템 설명서로 README와 같은 레벨. legacy/reference 표시함 |
 | `.onto/authority/philosophical-foundations-of-ontology.md` | `development-records/reference/20260327-philosophical-foundations-of-ontology.md` | 설계 배경 이론 (Gomez-Perez, Obrst, OntoClean 등 ontology evaluation framework). 개발 원칙이 아니라 historical reference. authority 내에 후계 seat 없음 — 이는 의도적 de-scope (review-first productization은 lens semantic grounding을 외부 표준 매핑이 아니라 `core-lens-registry.yaml`과 `core-lexicon.yaml`로 한정함) |
 | `.onto/authority/discovered-enhancements.md` | `development-records/tracking/20260406-discovered-enhancements.md` | 백로그/추적 문서. authority 원칙이 아님. enhancement-record seat 역할 유지 |
 
@@ -510,8 +509,8 @@ canonical execution profile은 아래 두 축으로 표현한다.
 | 영역 | 결정 | 이유 |
 |---|---|---|
 | Lens semantic grounding (Obrst L1, OntoClean Rigidity/Identity, Gomez-Perez 등) | authority 외 (`development-records/reference/`) | review-first productization은 lens 의미 근거를 외부 ontology 평가 framework가 아니라 `core-lens-registry.yaml` (lens 설정)과 `core-lexicon.yaml` (개념 SSOT)로 한정한다. 외부 framework 매핑이 다시 필요해지면 별도 reference seat를 추가한다 |
-| 비-`review` 프로세스/시스템 authority surface (team review, ontology build, learning promotion 등의 deep authority) | 당분간 de-scope | 현재 productization은 `review-first` 단계이며 `reconstruct/learn/govern`은 same methodology로 확장 가능함을 §14 Success Criteria 항목 5에서 선언하지만 authority deep coverage는 review가 닫힌 후로 미룬다. legacy surface는 `translation-reference.yaml`(legacy aid)과 `BLUEPRINT.md`(legacy/reference)에 남아 있음 |
-| `agent panel + Philosopher` 모델 | de-canonicalized | §10에서 명시. legacy `BLUEPRINT.md`에 historical record로 남아 있음 |
+| 비-`review` 프로세스/시스템 authority surface (team review, ontology build, learning promotion 등의 deep authority) | 당분간 de-scope | 현재 productization은 `review-first` 단계이며 `reconstruct/learn/govern`은 same methodology로 확장 가능함을 §14 Success Criteria 항목 5에서 선언하지만 authority deep coverage는 review가 닫힌 후로 미룬다. 비정본 설명 스냅샷은 archive에 격리한다 |
+| prototype coordinator model | de-canonicalized | §10에서 명시. historical reference는 `development-records/archive/`에만 둔다 |
 
 ### Reshuffle 2026-04-07
 
@@ -566,6 +565,6 @@ Agent ID onto_ prefix 제거. Canonical lens/role ID가 bare form으로 변경�
 |---|---|
 | `roles/onto_{id}.md` | `roles/{id}.md` |
 
-**보존 대상 (legacy allowlist)**: `philosopher.md`, `ask-philosopher.md`, `development-records/`, `.onto/review-migrated/`
+**보존 대상**: historical material은 `development-records/archive/`에 격리한다.
 
-**dual-read fallback**: `lens-registry.ts`의 `canonicalizeLensId()`, `paths.ts`의 `resolveWithFallback()`. retire gate 조건은 `core-lexicon.yaml` legacy_alias_governance에 명시.
+**runtime rule**: active runtime accepts canonical lens IDs only.

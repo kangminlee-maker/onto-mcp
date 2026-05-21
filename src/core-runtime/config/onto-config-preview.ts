@@ -9,7 +9,7 @@
  *   (a) which topology shape the config would derive to,
  *   (b) which canonical `TopologyId` that shape would map to under the
  *       current environment, and
- *   (c) any degradation that would occur (per P3 universal fallback).
+ *   (c) the exact validation or mapping point that would stop execution.
  *
  * # Why it exists
  *
@@ -23,7 +23,7 @@
  *
  * - Input: validated `OntoReviewConfig` (from `validateReviewConfig`) +
  *   detected axes (from `detectReviewAxes`).
- * - Output: a typed `Preview` object (topology id, shape, degraded?) plus
+ * - Output: a typed `Preview` object (topology id, shape) plus
  *   a rendered string for CLI display.
  * - Shares derivation/mapping logic with `resolveAxisFirstTopology` so
  *   the preview and the runtime can never drift.
@@ -53,19 +53,13 @@ export interface PreviewSuccess {
   shape: TopologyShape;
   /** Canonical TopologyId the runtime would dispatch to. */
   topology_id: TopologyId;
-  /**
-   * True when the preview had to degrade to `main_native` because the
-   * requested shape or its mapping failed. Surfaces P3 behavior at
-   * config time.
-   */
-  degraded: boolean;
-  /** Human-readable rationale for each step (derivation → mapping → degrade). */
+  /** Human-readable rationale for each step (derivation → mapping). */
   trace: string[];
 }
 
 export interface PreviewFailure {
   ok: false;
-  /** Reason the preview cannot produce a TopologyId (even after degrade). */
+  /** Reason the preview cannot produce a TopologyId. */
   reason: string;
   trace: string[];
 }
@@ -77,7 +71,7 @@ export type PreviewResult = PreviewSuccess | PreviewFailure;
 // ---------------------------------------------------------------------------
 
 /**
- * Run derivation + mapping + (if needed) degrade preview. Mirrors the
+ * Run derivation + mapping preview. Mirrors the
  * runtime resolver's axis-first path so the output matches what the user
  * would see in `[topology]` STDERR during a real review invocation.
  */
@@ -93,8 +87,11 @@ export function previewTopologyDerivation(
   }
 
   if (!derivation.ok) {
-    // Runtime would degrade to main_native here. Mirror that.
-    return attemptDegrade(trace, "derivation-failed", signals, derivation.reasons[0] ?? "derivation failed");
+    return {
+      ok: false,
+      reason: derivation.reasons[0] ?? "topology shape derivation failed",
+      trace,
+    };
   }
 
   const mapping = shapeToTopologyId({
@@ -110,11 +107,11 @@ export function previewTopologyDerivation(
   }
 
   if (!mapping.ok) {
-    const providerSuffix = derivation.derived.subagent_provider
-      ? `(${derivation.derived.subagent_provider})`
-      : "";
-    const requested = `${derivation.derived.shape}${providerSuffix}`;
-    return attemptDegrade(trace, requested, signals, mapping.reason);
+    return {
+      ok: false,
+      reason: mapping.reason,
+      trace,
+    };
   }
 
   trace.push(`result: shape=${derivation.derived.shape} topology=${mapping.topology_id}`);
@@ -122,50 +119,6 @@ export function previewTopologyDerivation(
     ok: true,
     shape: derivation.derived.shape,
     topology_id: mapping.topology_id,
-    degraded: false,
-    trace,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Degrade path (mirrors resolver's attemptMainNativeDegrade)
-// ---------------------------------------------------------------------------
-
-function attemptDegrade(
-  trace: string[],
-  requested: string,
-  signals: PreviewSignals,
-  reason: string,
-): PreviewResult {
-  trace.push(
-    `degrade: requested=${requested} → actual=main_native (reason: ${reason})`,
-  );
-  const mapping = shapeToTopologyId({
-    shape: "main_native",
-    subagent_provider: null,
-    signals: {
-      claudeHost: signals.claudeHost,
-      codexSessionActive: signals.codexSessionActive,
-    },
-  });
-  for (const line of mapping.trace) {
-    trace.push(`degrade-fallback: ${line}`);
-  }
-  if (!mapping.ok) {
-    trace.push("degrade-fallback: main_native unmappable — review would fall through to legacy priority ladder or no_host");
-    return {
-      ok: false,
-      reason:
-        `main_native fallback also unmappable: ${mapping.reason}. Review would fail with no_host at runtime.`,
-      trace,
-    };
-  }
-  trace.push(`result: shape=main_native (degraded) topology=${mapping.topology_id}`);
-  return {
-    ok: true,
-    shape: "main_native",
-    topology_id: mapping.topology_id,
-    degraded: true,
     trace,
   };
 }
@@ -185,17 +138,8 @@ export function renderPreview(result: PreviewResult): string {
   if (result.ok) {
     lines.push("## Topology derivation preview");
     lines.push("");
-    lines.push(`  shape:        ${result.shape}${result.degraded ? " (degraded)" : ""}`);
+    lines.push(`  shape:        ${result.shape}`);
     lines.push(`  topology_id:  ${result.topology_id}`);
-    if (result.degraded) {
-      lines.push("");
-      lines.push(
-        "  Note: P3 universal fallback would activate — the requested",
-      );
-      lines.push(
-        "        configuration is not reachable under the current signals.",
-      );
-    }
   } else {
     lines.push("## Topology derivation preview — FAILED");
     lines.push("");

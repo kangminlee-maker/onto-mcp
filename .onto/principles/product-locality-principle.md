@@ -31,7 +31,7 @@ onto는 세 가지 방식으로 설치될 수 있다.
 
 ### 2.1 실행: product local 이 항상 우선한다
 
-onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 로컬 설치(`node_modules/onto-core`)가 존재하면 **로컬 바이너리에 실행을 위임**한다. 글로벌 설치는 로컬이 없을 때의 fallback이다.
+onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 로컬 설치(`node_modules/onto-core`)가 존재하면 **로컬 바이너리에 실행을 위임**한다. 글로벌 설치는 로컬 설치가 없을 때만 사용한다.
 
 이 우선순위는 product 가 고정한 버전의 roles, authority, contract가 항상 사용되도록 보장하기 위한 것이다 (OaC authority chain 무결성).
 
@@ -133,4 +133,4 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 
 ### 5.3 `{product}/.onto/` 디렉토리가 없는 경우
 
-신규 product 에서 `.onto/` 디렉토리가 아직 없을 때: `onto` CLI는 Trust Boundary 확인(`checkOntoDirectoryInit`)을 거쳐 주체자 동의 후 디렉토리를 생성한다. 주체자가 거부하면 데이터 기록은 발생하지 않으며 에러를 반환한다 (글로벌 fallback 아님). `checkOntoDirectoryInit`은 `resolveWritePaths()` 호출 전에 상위 caller가 보장해야 하는 선행 조건이다.
+신규 product 에서 `.onto/` 디렉토리가 아직 없을 때: `onto` CLI는 Trust Boundary 확인(`checkOntoDirectoryInit`)을 거쳐 주체자 동의 후 디렉토리를 생성한다. 주체자가 거부하면 데이터 기록은 발생하지 않으며 에러를 반환한다. `checkOntoDirectoryInit`은 `resolveWritePaths()` 호출 전에 상위 caller가 보장해야 하는 선행 조건이다.

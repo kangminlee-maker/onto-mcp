@@ -6,8 +6,8 @@ import path from "node:path";
  *
  * Phase 0-6 (2026-04-20 / 2026-04-21) migrated every top-level structural
  * directory (commands / domains / roles / processes / principles / authority)
- * into the `.onto/` namespace. Phase 7 (2026-04-21) removes the legacy
- * fallback — projects must be on the `.onto/` layout to be recognized as
+ * into the `.onto/` namespace. The resolver accepts only the current
+ * branch — projects must be on the `.onto/` layout to be recognized as
  * an onto installation root. There is no more dual-path dispatch.
  *
  * If a project has not yet migrated, the intended escalation path is to
@@ -44,7 +44,7 @@ export function resolveInstallationPath(
   throw new Error(
     `[installation-paths] .onto/${kind}/ not found under ${installRoot}. ` +
       `Installation may be corrupted, or the project may still be on a ` +
-      `pre-migration legacy layout — run scripts/repo-layout-migration-replace.py ` +
+      `pre-migration layout — run scripts/repo-layout-migration-replace.py ` +
       `to migrate to the .onto/ layout.`,
   );
 }

@@ -10,10 +10,6 @@ import {
   parseBooleanFlag,
 } from "../review/review-artifact-utils.js";
 import { writeInvocationInterpretationArtifact } from "../review/materializers.js";
-import {
-  formatLegacyMigrationError,
-  isLegacyReviewMode,
-} from "../review/legacy-mode-policy.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 
 function requireString(
@@ -40,9 +36,6 @@ function requireReviewTargetScopeKind(value: string): ReviewTargetScopeKind {
 function requireReviewMode(value: string): ReviewMode {
   if (value === "core-axis" || value === "full") {
     return value;
-  }
-  if (isLegacyReviewMode(value)) {
-    throw new Error(formatLegacyMigrationError("--review-mode-recommendation", value));
   }
   throw new Error(`Invalid --review-mode-recommendation: ${value}`);
 }

@@ -22,10 +22,7 @@
 
 이 문서는 `검토 (review)`의 현재 canonical live execution truth다.
 
-즉:
-
-- `legacy source path`는 source material이다
-- 실제 productization target은 이 문서의 순서를 따른다
+즉 실제 productization target은 이 문서의 순서를 따른다.
 
 `.onto/processes/review/review.md`는 prompt-backed reference execution의 source와 절차를 담되,
 live path authority는 이 문서가 가진다.
@@ -41,6 +38,7 @@ user request
 -> 호출 고정 (InvocationBinding)
 -> execution preparation artifacts
 -> 9개 lens 독립 실행
+-> 통제된 lens 숙의 (controlled lens deliberation)
 -> 종합 단계 (synthesize)
 -> human-readable final output
 -> 리뷰 기록 (ReviewRecord)
@@ -87,7 +85,7 @@ prompt-backed path에서도 이 단계의 결과는 최종적으로
 
 현재 host-facing `review:invoke`의 기본 규칙:
 
-- explicit `--domain {name}` / `--no-domain` (canonical) 또는 legacy `@{domain}` / `@-` (backward compat) 가 있으면 그대로 사용
+- explicit `--domain {name}` / `--no-domain` 이 있으면 그대로 사용
 - configured domain이 하나면 바로 사용
 - configured domain이 여러 개면 interactive selection을 수행
 - interactive selection이 불가능한 non-interactive 환경이면 fail-fast 하고 explicit domain selection을 요구
@@ -150,6 +148,7 @@ prompt-backed path에서도 실제 파일이 만들어져야 한다.
 - lens별 output seat
 - `synthesis.md` seat
 - `deliberation.md` seat
+- lens별 deliberation response seat
 - `error-log.md` seat
 - `final-output.md` seat
 - `review-record.yaml` seat
@@ -229,7 +228,28 @@ packet materialization만 단독으로 디버깅해야 할 때는 아래 내부 
 
 필요하면 `--max-concurrent-lenses`로 override할 수 있다.
 
-### 3.7 종합 단계 (synthesize)
+### 3.7 통제된 lens 숙의 (Controlled Lens Deliberation)
+
+Round 1 lens 결과가 나온 뒤, review는 반드시 통제된 lens 숙의 단계를 거친다.
+
+이 단계의 목적은 `synthesize`가 혼자 충돌을 판정하는 것이 아니라,
+서로 다른 관점의 lens가 teamlead가 제한한 context 안에서 자기 입장을 재평가하고,
+teamlead deliberation result가 합의/조건부 합의/지속 이견을 명시하게 하는 것이다.
+
+canonical requirement:
+
+1. 각 lens deliberation response는 fresh bounded context에서 실행된다.
+2. 입력은 해당 lens의 Round 1 결과와 다른 participating lens 결과로 제한된다.
+3. lens는 최종 종합을 수행하지 않고 자기 관점의 유지/수정/양보/지속 이견만 기록한다.
+4. teamlead-controlled deliberation result는 모든 lens response를 읽고 `deliberation.md`를 작성한다.
+5. `deliberation.md`는 synthesize보다 앞선 authoritative conflict-resolution artifact다.
+6. `synthesize`는 이 결과를 소비하며, 독자적으로 새 resolution을 만들지 않는다.
+
+Claude Code Agent Teams 환경에서는 이 단계가 SendMessage transport 방식으로 실현될 수 있다.
+MCP/TS runtime에서는 같은 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
+중요한 것은 기능명이 아니라 `분리된 관점 + 제한 context + teamlead 통제 + 기록 가능한 resolution`이다.
+
+### 3.8 종합 단계 (synthesize)
 
 `synthesize`는 lens finding을 읽고 아래를 정리한다.
 
@@ -244,10 +264,12 @@ packet materialization만 단독으로 디버깅해야 할 때는 아래 내부 
 중요:
 
 - `synthesize`는 새 독립 관점을 만들지 않는다
+- `synthesize`는 deliberation actor가 아니다
+- 충돌 resolution의 authority는 `deliberation.md`다
 - `New Perspectives`는 `axiology`가 제시하는 영역이다
 - synthesize는 `axiology`가 제시한 추가 관점이 있으면 그것을 보존/배치할 수는 있지만, 스스로 invent하면 안 된다
 
-### 3.8 리뷰 기록 (ReviewRecord)
+### 3.9 리뷰 기록 (ReviewRecord)
 
 `review`의 primary output은 `리뷰 기록 (ReviewRecord)`다.
 
@@ -257,6 +279,7 @@ later `learn/govern`가 읽을 canonical artifact는 `ReviewRecord`여야 한다
 즉:
 
 - lens markdown
+- deliberation markdown
 - synthesis markdown
 
 은 최종적으로 `ReviewRecord`의 source/human-readable layer로 내려간다.
@@ -279,7 +302,7 @@ Preferred repo-local combined completion 포함 entrypoint는 아래다.
 - `npm run review:render-final-output -- ...`
 - `npm run review:finalize-session -- ...`
 
-### 3.9 Human-Readable Final Output
+### 3.10 Human-Readable Final Output
 
 주체자에게 보여주는 최종 review output은
 `ReviewRecord`와 synthesis result를 기반으로 render된 결과다.
@@ -294,27 +317,12 @@ later system handoff artifact를 분리한다.
 중요:
 
 - degraded case가 발생하면 `review:run-prompt-execution`은 `error-log.md`를 기록한다
-- `review:complete-session`은 `final-output.md` render가 실패해도 `review-record.yaml` 조립은 계속 시도한다
-- 따라서 partial failure에서도 `ReviewRecord`는 남아야 한다
+- `review:complete-session`은 `final-output.md`와 `review-record.yaml`을 모두 필수 산출물로 취급한다
+- 필수 artifact가 없으면 해당 단계는 즉시 실패한다
 
 ---
 
-## 4. What This Replaces
-
-이 live path가 canonical truth가 되면,
-기존 `.onto/processes/review/review.md`의 아래 항목은 source material로만 남는다.
-
-- Step 0의 legacy domain selection wording
-- Step 1.5의 legacy complexity UI wording
-- host-specific TeamCreate / SendMessage 중심 절차 설명
-
-즉 old process description은 버리는 것이 아니라
-prompt-backed reference source로만 남기고,
-live execution truth는 이 문서로 옮긴다.
-
----
-
-## 5. Immediate Follow-up
+## 4. Immediate Follow-up
 
 이 문서 다음 우선순위는 아래다.
 

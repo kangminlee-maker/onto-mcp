@@ -56,7 +56,7 @@ export interface OntoConfig {
    * Even when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set in the
    * Claude Code environment, the deliberation-enabled topology activates
    * only if this field is `true` — because keeping lens agents alive for
-   * SendMessage A2A deliberation rounds materially changes memory and
+   * SendMessage transport deliberation rounds materially changes memory and
    * latency characteristics, so we require explicit per-project consent.
    *
    * Profile-coupled: adopts atomically with the rest of the provider
@@ -75,7 +75,7 @@ export interface OntoConfig {
 // ---------------------------------------------------------------------------
 
 /** Axis E — lens-to-lens deliberation channel. */
-export type LensDeliberation = "synthesizer-only" | "sendmessage-a2a";
+export type LensDeliberation = "controlled-lens-deliberation";
 
 /** Foreign (non-host) provider identifiers. */
 export type ForeignProvider = "codex";
