@@ -2,7 +2,10 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
-import type { LlmModelSwitcherConfig } from "../llm/model-switcher.js";
+import {
+  normalizeLlmModelSwitcher,
+  type LlmModelSwitcherConfig,
+} from "../llm/model-switcher.js";
 import { fileExists } from "../review/review-artifact-utils.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
@@ -15,6 +18,7 @@ const LlmSettingsSchema = z
     model: z.string().min(1).optional(),
     base_url: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),
+    service_tier: z.string().min(1).optional(),
     api_key_env: z.string().min(1).optional(),
   })
   .strict();
@@ -160,21 +164,21 @@ export function projectSettingsPath(projectRoot: string): string {
   return path.join(projectRoot, ".onto", SETTINGS_FILENAME);
 }
 
-export async function assertNoRetiredConfigFiles(
+export async function assertNoUnsupportedConfigFiles(
   root: string,
 ): Promise<void> {
-  const retired = [];
+  const unsupported = [];
   for (const filename of RETIRED_CONFIG_FILENAMES) {
     const candidate = path.join(root, ".onto", filename);
-    if (await fileExists(candidate)) retired.push(candidate);
+    if (await fileExists(candidate)) unsupported.push(candidate);
   }
-  if (retired.length > 0) {
+  if (unsupported.length > 0) {
     throw new Error(
       [
-        "Retired onto config file detected.",
-        ...retired.map((filePath) => `- ${filePath}`),
+        "Unsupported onto config file detected.",
+        ...unsupported.map((filePath) => `- ${filePath}`),
         "",
-        "Use .onto/settings.json for runtime settings. The retired YAML settings surface is not read.",
+        "Use .onto/settings.json for runtime settings. YAML settings are not read.",
       ].join("\n"),
     );
   }
@@ -261,11 +265,25 @@ export async function resolveSettingsChain(
   _ontoHome: string,
   projectRoot: string,
 ): Promise<OntoSettings> {
-  await assertNoRetiredConfigFiles(os.homedir());
-  await assertNoRetiredConfigFiles(projectRoot);
+  await assertNoUnsupportedConfigFiles(os.homedir());
+  await assertNoUnsupportedConfigFiles(projectRoot);
   const user = await readSettingsAt(userSettingsPath());
   const project = await readSettingsAt(projectSettingsPath(projectRoot));
-  return mergeSettings(user, project);
+  const merged = mergeSettings(user, project);
+  const result = SettingsSchema.safeParse(merged);
+  if (!result.success) {
+    throw new Error(
+      [
+        "Invalid merged onto settings:",
+        ...result.error.issues.map((issue) => {
+          const where = issue.path.length > 0 ? issue.path.join(".") : "(root)";
+          return `- ${where}: ${issue.message}`;
+        }),
+      ].join("\n"),
+    );
+  }
+  normalizeLlmModelSwitcher(merged.llm);
+  return merged;
 }
 
 export async function resolveOrthogonalSettingsChain(

@@ -421,13 +421,12 @@ provisional_terms:
       registered_by: "W-A-74"
       registered_date: "2026-04-14"
       definition_draft: >
-        reconstruct 활동의 CLI 관찰 가능 3-step bounded path (start → explore → complete).
+        reconstruct 활동의 bounded path (start → explore → complete).
         review 3-step 과 대응하며, reconstruct runtime 의 RECONSTRUCT_TRANSITIONS 전체 상태 머신과는
-        구별되는 public surface. session-level state 는 reconstruct-state.json 단일 파일로 관리한다.
+        구별되는 runtime surface. session-level state 는 reconstruct-state.json 단일 파일로 관리한다.
         없으면 reconstruct runtime 방법론 호출 경로가 ad-hoc 이어서 post-PR 결함 cluster (reconstruct-runtime 40 BL) 의
         구조적 원인이 유지된다.
       evidence:
-        - ".onto/commands/reconstruct.md (CLI entry 문서)"
         - "src/core-runtime/evolve/commands/reconstruct.ts (handler)"
         - "src/core-runtime/evolve/commands/reconstruct.test.ts (17 tests)"
         - ".onto/processes/reconstruct.md (activity=reconstruct, process_name=reconstruct)"
@@ -441,17 +440,14 @@ provisional_terms:
       registered_by: "W-A-52"
       registered_date: "2026-04-14"
       definition_draft: >
-        entrypoint 호출 시 주체자가 진입하는 표면 파일. design 활동에서는 .onto/commands/evolve.md
-        (repo) 또는 그 install 경로 ~/.claude/plugins/onto/.onto/commands/evolve.md 를 가리킨다.
-        authority seat (.onto/processes/evolve.md) 을 참조하는 citation 의 출발점이며,
-        install_surface 가 deterministic snapshot 으로 mirror 된다.
-        없으면 repo 경로와 install 경로 어느 쪽이 실제 호출 대상인지 모호해진다.
+        주체자가 진입하는 runtime/tool 표면. MCP-native 방향에서는 `src/mcp/` tool schema가 public
+        invoke surface이고, process 문서는 의미론 authority seat를 제공한다.
       evidence:
-        - ".onto/commands/evolve.md (invoke surface 실체)"
-        - ".onto/processes/evolve.md §9 (Install-Surface Authority Alignment)"
+        - "src/mcp/tool-schemas.ts (public tool schema)"
+        - ".onto/processes/evolve.md (future evolve semantic authority)"
       notes:
         - "R-4 성문화 seed. authority seat 는 기존 rank 1 authority 파일 개념이므로 별도 seed 없음."
-        - "§8 command surface 와 동일 실체를 가리키며 §9 alignment 불변식의 참조점."
+        - "MCP-native public surface는 command document가 아니라 tool schema로 고정한다."
     install_surface:
       term_id: install_surface
       lifecycle_status: seed
@@ -459,17 +455,17 @@ provisional_terms:
       registered_date: "2026-04-14"
       definition_draft: >
         runtime 실행 시 invoke_surface 가 실제로 읽는 파일이 거주하는 배포 트리.
-        현재 onto 배포 기준 ~/.claude/plugins/onto/ 하위 전체가 install surface 이다.
+        현재 onto 배포 기준 npm package와 project-local `.onto/`가 install surface 이다.
         authority seat 의 deterministic snapshot 이어야 하며 (mirror requirement),
         independent authority 를 갖지 않는다 (non-mutation). drift 는 재설치로만 보정된다.
         없으면 install tree 에 대한 현장 수정이 authority seat 를 우회할 수 있다.
       evidence:
         - ".onto/processes/evolve.md §9.2 (4 불변식)"
-        - ".onto/commands/evolve.md 의 ~/.claude/plugins/onto/ 상대 경로 citation"
+        - "package.json files list"
       notes:
         - "R-4 성문화 seed. invoke_surface 와 한 쌍으로 alignment 모델의 축을 형성."
         - "runtime-bound 경로에서도 동일 불변식 적용 (§9.4)."
-        - "Phase 1 host-decoupling (2026-04-17): install_surface 의 default 경로는 ~/.claude/plugins/onto/ 이지만 ONTO_PLUGIN_DIR env var 로 override 가능. 즉 install surface 는 host runtime 종속이 아니다 — Claude Code · Codex CLI · standalone CLI 모두 동일 install tree 를 공유."
+        - "MCP-native install surface는 host runtime에 종속되지 않는다."
 
     host_runtime_detection:
       term_id: host_runtime_detection
@@ -648,7 +644,7 @@ entities:
         note: "submit 서브커맨드가 새 entry 생성. origin=human → tag=norm_change, origin=system → tag=drift"
     execution_rules_ref:
       process_contract: ".onto/processes/govern.md"
-      cli_surface: ".onto/commands/govern.md"
+      tool_surface: "future MCP govern tool"
       storage_path: ".onto/govern/queue.ndjson (project-local)"
     notes:
       - "W-C-01 v0 (2026-04-16): bounded minimum surface. 큐 기록만 제공. 승인 강제 차단은 W-C-02, 승급 경로·cross-project 규범은 W-C-03."
@@ -890,7 +886,7 @@ entities:
         orchestration_locus: "coordinator_worker"
         context_cost: "independent"
         billing_source: "claude_code_subscription"
-        notes: "`onto coordinator start` + 주체자의 TeamCreate + nested Agent tool. 주체자 메인 context 거의 무소비."
+        notes: "Coordinator state machine + 주체자의 TeamCreate + nested Agent tool. 주체자 메인 context 거의 무소비."
       worker_claude:
         execution_realization: "worker"
         host_runtime: "claude"
@@ -904,14 +900,14 @@ entities:
         orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "chatgpt_account"
-        notes: "`onto review --codex` 경로 + ~/.codex/auth.json이 chatgpt OAuth mode (auth_mode=chatgpt 또는 tokens.access_token). codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
+        notes: "`llm.auth=oauth` + `llm.provider=openai` 경로. codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
       worker_codex_apikey:
         execution_realization: "worker"
         host_runtime: "codex"
         orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "openai_account"
-        notes: "`onto review --codex` 경로 + ~/.codex/auth.json이 API-key mode (OPENAI_API_KEY 필드 존재). codex CLI가 api.openai.com 사용. 과금 모드 분류는 LlmBillingMode.per_token 참조. 타입 space에서는 worker_codex_oauth와 동일한 (worker, codex) 조합이지만 billing_source rail이 다르므로 별도 instance."
+        notes: "OpenAI API key 기반 worker 경로. codex CLI가 api.openai.com 사용. 과금 모드 분류는 LlmBillingMode.per_token 참조. 타입 space에서는 worker_codex_oauth와 동일한 (worker, codex) 조합이지만 billing_source rail이 다르므로 별도 instance."
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"
@@ -919,7 +915,7 @@ entities:
       codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts (worker_codex_* 전용)"
       design_record: "development-records/plan/20260415T1700-execution-realization-priority-design.md"
     notes:
-      - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/settings.json` 의 `review.worker.provider`, `review.teamlead.model`, `llm` switcher."
+      - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/settings.json` 의 `review.execution`, `llm` switcher."
       - "Provider resolution 축(LlmBillingMode, LlmCompatibleProxy)과 직교 — background task의 단일-턴 API call 경로와 review의 agentic 실행 경로는 서로 영향 주지 않음"
       - "Local model access is represented by `llm.auth: local` + `llm.provider: lmstudio`. Review orchestration remains selected by the `review:` block."
       - "TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 nested(host_team_claude) vs flat(worker_claude) 최종 선택은 주체자 세션의 판단. onto는 handoff JSON의 orchestration_guidance로 힌트만 제공"
@@ -1363,7 +1359,7 @@ terms:
         retire_date: "2026-04-13"
         context: >
           Legacy activity name retired 2026-04-13 via DR-M00-04 homonym mapping.
-          Scope: (1) activity 분류 시 build→reconstruct 로 계산, (2) 파일명·명령명·slash command rename 은 W-A-77 (2026-04-14) 에서 집행 완료 — 현재 canonical 은 `.onto/processes/reconstruct.md`, `.onto/commands/reconstruct.md`, slash `/onto:reconstruct`; `npm run build:ts-core` 는 TypeScript 컴파일 명령으로 activity 와 무관하며 유지,
+          Scope: (1) activity 분류 시 build→reconstruct 로 계산, (2) 현재 canonical process seat 는 `.onto/processes/reconstruct.md`; `npm run build:ts-core` 는 TypeScript 컴파일 명령으로 activity 와 무관하며 유지,
           (3) state-machine 코드 식별자 (`RECONSTRUCT_TRANSITIONS` / `ReconstructState` / `reconstruct_exploring` / `reconstruct_failed` 등) 도 W-A-77 에서 전수 rename 완료 — legacy `BUILD_*` / `build_*` 식별자는 제거됨,
           (4) 관용 표현 ("build 프로세스") 은 legacy 명칭 유지 가능, (5) promoted learning artifact 의 source token 은 retire 이후에도 historical record 로 보존.
       - alias: "design"
@@ -1372,7 +1368,7 @@ terms:
         retire_date: "2026-04-15"
         context: >
           Legacy activity name retired 2026-04-15 via W-A-78 (entrypoint-only rename).
-          Scope: (1) entrypoint (파일·디렉토리·slash·CLI·activity_enum·W-ID activity field·TS handler) 는 W-A-78 에서 `evolve` 로 전수 치환 — current canonical: `.onto/processes/evolve.md`, `.onto/commands/evolve.md`, `src/core-runtime/evolve/`, `development-records/evolve/`, slash `/onto:evolve`, `onto evolve <subcommand>`, `handleEvolve*`,
+          Scope: (1) activity_enum·W-ID activity field·TS handler 는 W-A-78 에서 `evolve` 로 전수 치환 — current canonical: `.onto/processes/evolve.md`, `src/core-runtime/evolve/`, `development-records/evolve/`, `handleEvolve*`,
           (2) 방법론 term (`design_target`, `design_area`, `design_constraint`, `design_gap`) 은 entrypoint 가 아닌 lexicon entity 이므로 legacy 명칭 유지 — Perl word boundary (`\b`) 매칭에서 `_` 가 word char 이므로 자동 보존,
           (3) 한국어 자연어 "설계" (e.g., "설계 대상", "설계 방식") 는 자연어 번역어로 보존. entrypoint 지칭 맥락의 한국어 "설계" 는 향후 Phase B 에서 영문 "evolve" 로 통일 예정,
           (4) 관용 표현 ("design 프로세스") 은 legacy 명칭 유지 가능, (5) promoted learning artifact 의 source token 은 retire 이후에도 historical record 로 보존.
@@ -1382,7 +1378,7 @@ terms:
         retire_date: "2026-04-13"
         context: >
           §1.2 에서 폐기 선언 (2026-04-13). 대체 없음 — 필요 시 단일 lens review 로 대체.
-          .onto/commands/ask-*.md 파일은 BL-121 에서 review 계열 이동 또는 제거 예정.
+          단일 lens 질의는 review 계열에서 다룬다.
       - alias: "E"
         retire_kind: "shortcode"
         canonical_replacement: "reconstruct"

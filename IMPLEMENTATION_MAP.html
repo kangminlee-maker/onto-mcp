@@ -3,100 +3,597 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>onto MCP Implementation Map</title>
+  <title>onto-mcp Implementation Map</title>
   <style>
     :root {
       color-scheme: light;
-      --ink: #1f2933;
-      --muted: #52606d;
-      --line: #d7dde4;
-      --soft: #f5f7fa;
-      --accent: #176b87;
-      --ok: #207a4c;
-      --warn: #8a5a00;
+      --ink: #172026;
+      --muted: #5b6773;
+      --line: #d8dee6;
+      --panel: #ffffff;
+      --wash: #f6f8fb;
+      --blue: #1967a3;
+      --green: #1f7a4d;
+      --amber: #9a6400;
+      --red: #b63b3b;
+      --violet: #6952a3;
+      --teal: #12736d;
+      --code: #eef2f6;
     }
+
+    * { box-sizing: border-box; }
+
     body {
-      margin: 28px;
+      margin: 0;
       color: var(--ink);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      line-height: 1.45;
+      background: #fbfcfe;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.48;
     }
-    h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: 0; }
-    h2 { margin: 28px 0 10px; font-size: 18px; letter-spacing: 0; }
-    p { margin: 0 0 12px; color: var(--muted); }
-    code { padding: 1px 4px; border-radius: 4px; background: var(--soft); }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
-    .card { border: 1px solid var(--line); border-radius: 6px; padding: 14px; background: #fff; }
-    .card strong { display: block; margin-bottom: 6px; color: var(--accent); }
-    .status { color: var(--ok); font-weight: 700; }
-    .decision { color: var(--warn); font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid var(--line); padding: 8px; text-align: left; vertical-align: top; }
-    th { background: var(--soft); }
-    .flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-    .step { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: #fff; }
-    .arrow { color: var(--muted); }
+
+    main {
+      width: min(1320px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: 30px; letter-spacing: 0; }
+    h2 { margin-top: 28px; font-size: 19px; letter-spacing: 0; }
+    h3 { font-size: 15px; letter-spacing: 0; }
+    p { color: var(--muted); }
+    code {
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: var(--code);
+      color: #1e2b36;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1.4fr 0.8fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .lede {
+      margin-top: 10px;
+      max-width: 860px;
+      font-size: 15px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: var(--wash);
+    }
+
+    .metric b {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 9px;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+
+    .active .dot { background: var(--green); }
+    .progress .dot { background: var(--amber); }
+    .dev .dot { background: var(--blue); }
+    .retired .dot { background: var(--red); }
+
+    .section-note {
+      margin: 6px 0 12px;
+      max-width: 980px;
+      font-size: 14px;
+    }
+
+    .architecture {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(170px, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .lane {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      min-height: 430px;
+      overflow: hidden;
+    }
+
+    .lane header {
+      padding: 12px;
+      color: #fff;
+      font-weight: 750;
+      font-size: 14px;
+    }
+
+    .lane:nth-child(1) header { background: var(--teal); }
+    .lane:nth-child(2) header { background: var(--violet); }
+    .lane:nth-child(3) header { background: var(--blue); }
+    .lane:nth-child(4) header { background: var(--green); }
+    .lane:nth-child(5) header { background: var(--amber); }
+
+    .lane-body {
+      display: grid;
+      gap: 9px;
+      padding: 12px;
+    }
+
+    .node {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      background: #fff;
+    }
+
+    .node strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .node small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(9, minmax(96px, 1fr));
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      min-height: 104px;
+    }
+
+    .step::after {
+      content: "→";
+      position: absolute;
+      right: -12px;
+      top: 38px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .step:last-child::after { content: ""; }
+
+    .step b {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 13px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swimlanes {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .swimlane {
+      display: grid;
+      grid-template-columns: 170px 1fr;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .swimlane-label {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: var(--wash);
+      border-right: 1px solid var(--line);
+      font-weight: 750;
+      font-size: 13px;
+    }
+
+    .swimlane-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: #fff;
+      color: var(--ink);
+      font-size: 12px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--wash);
+      color: #26323d;
+      font-weight: 750;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .status {
+      display: inline-block;
+      min-width: 82px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: #fff;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .status.active { background: var(--green); }
+    .status.progress { background: var(--amber); }
+    .status.dev { background: var(--blue); }
+    .status.retired { background: var(--red); }
+    .status.design { background: var(--violet); }
+
+    .artifact-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(160px, 1fr));
+      gap: 10px;
+    }
+
+    .artifact {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 11px;
+      background: #fff;
+    }
+
+    .artifact b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 13px;
+    }
+
+    .artifact span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--blue);
+      border-radius: 6px;
+      padding: 12px 14px;
+      background: #f2f7fb;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    @media (max-width: 980px) {
+      main { width: min(100% - 24px, 1320px); }
+      .top, .split { grid-template-columns: 1fr; }
+      .architecture { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .step::after {
+        content: "↓";
+        right: 50%;
+        top: auto;
+        bottom: -15px;
+      }
+      .artifact-grid { grid-template-columns: 1fr; }
+      .swimlane { grid-template-columns: 1fr; }
+      .swimlane-label { border-right: 0; border-bottom: 1px solid var(--line); }
+    }
   </style>
 </head>
 <body>
-  <h1>onto MCP Implementation Map</h1>
-  <p>현재 목표는 <code>onto.review</code>를 MCP tool로 호출 가능하게 만들고, 여러 lens가 분리된 context에서 병렬 검토한 뒤 surface finding을 root-cause issue로 묶고 문제 성격 분류와 통제된 숙의 결과를 synthesize가 보존적으로 정리하게 하는 것이다.</p>
+<main>
+  <section class="top">
+    <div class="panel">
+      <h1>onto-mcp 구현 현황 아키텍처</h1>
+      <p class="lede">
+        현재 제품 방향은 <code>.onto</code>의 authority/process/domain 문서를 정본으로 두고,
+        TypeScript core runtime이 review를 실행하며, MCP server가 LLM host에 얇은 tool surface를 노출하는 구조입니다.
+        지금 가장 성숙한 기능은 <code>onto.review</code>입니다.
+      </p>
+      <div class="badge-row" aria-label="status badges">
+        <span class="badge active"><span class="dot"></span>review MCP path active</span>
+        <span class="badge active"><span class="dot"></span>controlled deliberation active</span>
+        <span class="badge dev"><span class="dot"></span>npm scripts are dev harness</span>
+        <span class="badge active"><span class="dot"></span>public binary is MCP-only</span>
+        <span class="badge retired"><span class="dot"></span>command docs archived</span>
+      </div>
+    </div>
 
-  <h2>Runtime Flow</h2>
-  <div class="flow" aria-label="runtime flow">
-    <div class="step"><code>.onto</code> authority/domain/process 문서</div>
-    <div class="arrow">→</div>
-    <div class="step"><code>src/core-runtime</code> review 실행</div>
-    <div class="arrow">→</div>
-    <div class="step"><code>src/core-api</code> library facade</div>
-    <div class="arrow">→</div>
-    <div class="step"><code>src/mcp</code> stdio tool surface</div>
-    <div class="arrow">→</div>
-    <div class="step">LLM host 또는 MCP client</div>
-  </div>
+    <aside class="panel">
+      <div class="meta-grid">
+        <div class="metric"><b>Snapshot</b><span>2026-05-22</span></div>
+        <div class="metric"><b>Primary feature</b><span><code>review</code></span></div>
+        <div class="metric"><b>Public direction</b><span><code>onto mcp</code> + MCP tools</span></div>
+        <div class="metric"><b>Project model</b><span><code>gpt-5.5</code>, <code>medium</code>, <code>fast</code></span></div>
+      </div>
+    </aside>
+  </section>
 
-  <h2>Implemented Surface</h2>
+  <h2>1. Layer Architecture</h2>
+  <p class="section-note">
+    의미론은 <code>.onto</code>와 core runtime이 소유하고, MCP 계층은 schema와 stdio server만 소유합니다.
+    provider 차이는 실행 능력으로만 흡수합니다.
+  </p>
+  <section class="architecture" aria-label="layer architecture">
+    <article class="lane">
+      <header>Authority / Contracts</header>
+      <div class="lane-body">
+        <div class="node"><strong><code>.onto/authority</code></strong><small>core lexicon, canonical concept SSOT</small></div>
+        <div class="node"><strong><code>.onto/processes/review</code></strong><small>review prompt/runtime contracts</small></div>
+        <div class="node"><strong><code>.onto/domains</code></strong><small>domain background and problem framing profiles</small></div>
+        <div class="node"><strong><code>.onto/settings.json</code></strong><small>project-local settings chain source</small></div>
+      </div>
+    </article>
+
+    <article class="lane">
+      <header>TS Core Runtime</header>
+      <div class="lane-body">
+        <div class="node"><strong><code>src/core-runtime/review</code></strong><small>artifact types, materializers, issue runtime, deliberation</small></div>
+        <div class="node"><strong><code>src/core-runtime/cli/review-invoke.ts</code></strong><small>canonical dev harness for full review path</small></div>
+        <div class="node"><strong><code>run-review-prompt-execution.ts</code></strong><small>lens execution, deliberation, synthesize orchestration</small></div>
+        <div class="node"><strong>executors</strong><small><code>codex</code>, <code>mock</code>, <code>ts_inline_http</code></small></div>
+      </div>
+    </article>
+
+    <article class="lane">
+      <header>Core API Facade</header>
+      <div class="lane-body">
+        <div class="node"><strong><code>src/core-api/review-api.ts</code></strong><small>library-like API over runtime scripts</small></div>
+        <div class="node"><strong><code>prepareReview</code></strong><small>materializes session and execution plan</small></div>
+        <div class="node"><strong><code>runReview</code></strong><small>executes full review and returns artifact refs</small></div>
+        <div class="node"><strong><code>getReviewStatus/result</code></strong><small>bounded artifact readers for MCP</small></div>
+      </div>
+    </article>
+
+    <article class="lane">
+      <header>MCP Surface</header>
+      <div class="lane-body">
+        <div class="node"><strong><code>src/mcp/server.ts</code></strong><small>stdio JSON-RPC server</small></div>
+        <div class="node"><strong><code>src/mcp/tool-schemas.ts</code></strong><small>Zod schemas and tool names</small></div>
+        <div class="node"><strong><code>onto.review</code></strong><small>main user-facing review tool</small></div>
+        <div class="node"><strong>read/list tools</strong><small>status, result, lenses, domains</small></div>
+      </div>
+    </article>
+
+    <article class="lane">
+      <header>Host / Provider</header>
+      <div class="lane-body">
+        <div class="node"><strong>Codex OAuth</strong><small>current primary live path, <code>service_tier</code> supported</small></div>
+        <div class="node"><strong>API key providers</strong><small>OpenAI, Anthropic, Grok</small></div>
+        <div class="node"><strong>Local provider</strong><small>LM Studio path exists as switcher target</small></div>
+        <div class="node"><strong>Future hosts</strong><small>must satisfy context-isolated worker contract</small></div>
+      </div>
+    </article>
+  </section>
+
+  <h2>2. Review Execution Flow</h2>
+  <p class="section-note">
+    review는 하나의 호출을 interpretation/binding으로 고정한 뒤, lens를 분리된 context에서 실행하고,
+    모든 issue에 대한 stance와 이견을 보존한 상태로 controlled deliberation을 수행합니다.
+  </p>
+  <section class="flow" aria-label="review execution flow">
+    <div class="step"><b>1. MCP Call</b><span><code>onto.review</code> receives target, intent, optional domain and lens controls.</span></div>
+    <div class="step"><b>2. Core API</b><span><code>review-api.ts</code> captures runtime facts and returns structured refs plus LLM presentation prompts.</span></div>
+    <div class="step"><b>3. Invocation</b><span>interpretation and binding are materialized as runtime-owned artifacts.</span></div>
+    <div class="step"><b>4. Preparation</b><span>execution plan, context bundle, and prompt packets are written.</span></div>
+    <div class="step"><b>5. Isolated Lens</b><span>9 lens set or selected lens set runs through worker seats.</span></div>
+    <div class="step"><b>6. Issue Closure</b><span>findings are grouped into root-cause issue clusters and stance matrices.</span></div>
+    <div class="step"><b>7. Deliberation</b><span>contested positions are revisited by participating lens contexts under teamlead control.</span></div>
+    <div class="step"><b>8. Synthesize</b><span>synthesis consumes lens outputs and deliberation result, then writes a comprehensive final result explanation.</span></div>
+    <div class="step"><b>9. Record</b><span><code>ReviewRecord</code>, manifest, final output, and MCP result overview are produced.</span></div>
+  </section>
+
+  <h2>3. Runtime Seats And Context Isolation</h2>
+  <section class="swimlanes" aria-label="runtime seats">
+    <div class="swimlane">
+      <div class="swimlane-label">Main</div>
+      <div class="swimlane-items">
+        <span class="pill">resolve settings</span>
+        <span class="pill">select execution profile</span>
+        <span class="pill">own interpretation/binding</span>
+        <span class="pill">coordinate artifacts</span>
+        <span class="pill">emit presentation prompt inputs</span>
+        <span class="pill">return bounded manifest</span>
+      </div>
+    </div>
+    <div class="swimlane">
+      <div class="swimlane-label">Teamlead</div>
+      <div class="swimlane-items">
+        <span class="pill">controlled deliberation authority</span>
+        <span class="pill">reads issue ledger</span>
+        <span class="pill">reads lens deliberation responses</span>
+        <span class="pill">writes <code>deliberation.md</code></span>
+      </div>
+    </div>
+    <div class="swimlane">
+      <div class="swimlane-label">Lens Workers</div>
+      <div class="swimlane-items">
+        <span class="pill">context-isolated reasoning unit</span>
+        <span class="pill">contracted input only</span>
+        <span class="pill">raw output preserved</span>
+        <span class="pill">structured output validated</span>
+      </div>
+    </div>
+    <div class="swimlane">
+      <div class="swimlane-label">Synthesize</div>
+      <div class="swimlane-items">
+        <span class="pill">no new independent lens</span>
+        <span class="pill">consumes deliberation result</span>
+        <span class="pill">preserves unresolved disagreement</span>
+        <span class="pill">explains final review result</span>
+        <span class="pill">renders final output</span>
+      </div>
+    </div>
+  </section>
+
+  <h2>4. Artifact Truth</h2>
+  <p class="section-note">
+    실행의 truth는 main context가 아니라 세션 디렉터리의 artifact입니다. MCP 응답은 그 artifact에 대한 bounded manifest에 가깝습니다.
+  </p>
+  <section class="artifact-grid" aria-label="artifact truth">
+    <div class="artifact"><b>Session Root</b><span><code>.onto/review/{session_id}/</code></span></div>
+    <div class="artifact"><b>Invocation</b><span><code>interpretation.yaml</code>, <code>binding.yaml</code>, <code>session-metadata.yaml</code></span></div>
+    <div class="artifact"><b>Preparation</b><span><code>execution-plan.yaml</code>, <code>execution-preparation/</code>, prompt packets</span></div>
+    <div class="artifact"><b>Lens Evidence</b><span>raw lens outputs, structured outputs, execution results</span></div>
+    <div class="artifact"><b>Issue Closure</b><span><code>finding-ledger.yaml</code>, <code>issue-ledger.yaml</code>, stance matrix, relation graph</span></div>
+    <div class="artifact"><b>Deliberation</b><span>lens deliberation responses, <code>deliberation-plan.yaml</code>, <code>deliberation.md</code></span></div>
+    <div class="artifact"><b>Record</b><span><code>execution-result.yaml</code>, <code>review-run-manifest.yaml</code>, <code>review-record.yaml</code></span></div>
+    <div class="artifact"><b>Human Output</b><span><code>final-output.md</code> includes the comprehensive <code>Final Review Result</code> explanation</span></div>
+  </section>
+
+  <h2>5. Settings And Provider Switcher</h2>
+  <section class="split">
+    <div class="panel">
+      <h3>Settings Chain</h3>
+      <p class="section-note">
+        project/user settings are parsed as JSON and merged into a narrow runtime profile.
+        Current project settings select <code>auth=oauth</code>, <code>provider=openai</code>,
+        <code>model=gpt-5.5</code>, <code>effort=medium</code>, <code>service_tier=fast</code>.
+      </p>
+      <table>
+        <tr><th>Source</th><th>Runtime consequence</th></tr>
+        <tr><td><code>~/.onto/settings.json</code></td><td>User default layer.</td></tr>
+        <tr><td><code>{project}/.onto/settings.json</code></td><td>Project-local override and current canonical config seat.</td></tr>
+        <tr><td><code>resolveSettingsChain</code></td><td>Schema validation and fail-loud normalized switcher config.</td></tr>
+        <tr><td><code>ReviewExecutionProfile</code></td><td>Concrete runtime descriptor for main/teamlead/lens execution.</td></tr>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h3>Provider Matrix</h3>
+      <table>
+        <tr><th>Auth</th><th>Provider</th><th>Status</th><th>Notes</th></tr>
+        <tr><td><code>oauth</code></td><td><code>openai</code></td><td><span class="status active">active</span></td><td>Codex path. <code>service_tier</code> is valid here.</td></tr>
+        <tr><td><code>api_key</code></td><td><code>openai</code></td><td><span class="status design">wired</span></td><td>API provider contract path.</td></tr>
+        <tr><td><code>api_key</code></td><td><code>anthropic</code></td><td><span class="status design">wired</span></td><td>Provider guarantee remains separate task.</td></tr>
+        <tr><td><code>api_key</code></td><td><code>grok</code></td><td><span class="status design">wired</span></td><td>xAI/Grok API key path.</td></tr>
+        <tr><td><code>local</code></td><td><code>lmstudio</code></td><td><span class="status design">wired</span></td><td>Local endpoint target.</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <h2>6. MCP Tool Surface</h2>
   <table>
-    <tr><th>Tool</th><th>동작</th><th>완료 산출물</th></tr>
-    <tr><td><code>onto.review</code></td><td>lens 실행, issue closure artifact 생성, controlled deliberation, problem framing, synthesize, record 조립까지 한 번에 수행한다.</td><td><code>finding-ledger.yaml</code>, <code>issue-ledger.yaml</code>, <code>problem-framing.yaml</code>, <code>deliberation.md</code>, <code>review-record.yaml</code>, <code>final-output.md</code></td></tr>
-    <tr><td><code>onto.prepare_review</code></td><td>세션과 prompt packet을 준비한다.</td><td><code>execution-plan.yaml</code>, <code>execution-preparation/</code></td></tr>
-    <tr><td><code>onto.review_status</code></td><td>세션 상태와 artifact 경로를 읽는다.</td><td>structured status</td></tr>
-    <tr><td><code>onto.review_result</code></td><td>ReviewRecord와 최종 출력문을 읽는다.</td><td>structured result</td></tr>
-    <tr><td><code>onto.list_lenses</code></td><td>full/core-axis lens set을 노출한다.</td><td>lens id list</td></tr>
-    <tr><td><code>onto.list_domains</code></td><td>사용 가능한 domain pack을 노출한다.</td><td>domain id list</td></tr>
+    <tr><th>Tool</th><th>Implemented behavior</th><th>Primary output</th></tr>
+    <tr><td><code>onto.review</code></td><td>Runs the full review path with isolated lens execution, issue closure, controlled deliberation, synthesize, and record assembly.</td><td>session id, status, artifact refs, summary, LLM presentation prompts</td></tr>
+    <tr><td><code>onto.prepare_review</code></td><td>Materializes a review session and prompt packets without executing lens workers.</td><td>session root, execution plan, opening brief prompt</td></tr>
+    <tr><td><code>onto.review_status</code></td><td>Reads structured status and known artifact refs from a session root.</td><td>status plus artifact refs</td></tr>
+    <tr><td><code>onto.review_result</code></td><td>Reads <code>review-record.yaml</code> and rendered <code>final-output.md</code>.</td><td>ReviewRecord and final text</td></tr>
+    <tr><td><code>onto.list_lenses</code></td><td>Lists canonical full and core-axis lens sets.</td><td>lens id arrays</td></tr>
+    <tr><td><code>onto.list_domains</code></td><td>Lists project/user/install domain ids.</td><td>domain id array</td></tr>
   </table>
 
-  <h2>LLM Switcher</h2>
+  <h2>7. Implementation Status</h2>
   <table>
-    <tr><th>Config</th><th>Runtime path</th><th>User-facing result</th></tr>
-    <tr><td><code>auth: oauth</code> + <code>provider: openai</code></td><td><code>codex</code> subprocess</td><td>OpenAI account login을 사용한다.</td></tr>
-    <tr><td><code>auth: api_key</code> + <code>provider: openai</code></td><td>OpenAI API</td><td><code>OPENAI_API_KEY</code>가 필요하다.</td></tr>
-    <tr><td><code>auth: api_key</code> + <code>provider: anthropic</code></td><td>Anthropic API</td><td><code>ANTHROPIC_API_KEY</code>가 필요하다.</td></tr>
-    <tr><td><code>auth: api_key</code> + <code>provider: grok</code></td><td>xAI/Grok API</td><td><code>XAI_API_KEY</code> 또는 <code>GROK_API_KEY</code>가 필요하다.</td></tr>
-    <tr><td><code>auth: local</code> + <code>provider: lmstudio</code></td><td>LM Studio endpoint</td><td>local endpoint가 필요하다.</td></tr>
+    <tr><th>Area</th><th>Status</th><th>Current state</th><th>Next verification</th></tr>
+    <tr><td>Review MCP path</td><td><span class="status active">active</span></td><td><code>src/mcp</code> calls <code>src/core-api</code>, which drives the TS review runtime.</td><td><code>npm run test:mcp:review</code></td></tr>
+    <tr><td>Codex live path</td><td><span class="status active">active</span></td><td>Project config points to OpenAI OAuth via Codex with <code>gpt-5.5</code>, <code>medium</code>, <code>fast</code>.</td><td>full review run with real Codex executor</td></tr>
+    <tr><td>Controlled deliberation</td><td><span class="status active">active</span></td><td>Runner creates lens deliberation packets and teamlead result before synthesize.</td><td>session artifact inspection for issue stance coverage</td></tr>
+    <tr><td>Review UX</td><td><span class="status active">active</span></td><td><code>review:invoke</code> prints structured start, progress, and result blocks; MCP results expose bounded facts through <code>llmPresentation</code> prompts for host-rendered explanations.</td><td>E2E review invocation output inspection</td></tr>
+    <tr><td>Provider parity</td><td><span class="status design">later</span></td><td>Switcher shape exists for API/local providers; provider-specific guarantees are deferred.</td><td>per-provider conformance tasks</td></tr>
+    <tr><td>Public binary boundary</td><td><span class="status active">active</span></td><td>Public binary exposes <code>onto mcp</code>; review execution remains available through MCP and repository-local development harnesses.</td><td>package/docs/tests alignment and TS check</td></tr>
+    <tr><td>learn / govern</td><td><span class="status design">planned</span></td><td>Existing runtime areas remain outside this MCP review slice.</td><td>separate MCP design after review/reconstruct/evolve stabilize</td></tr>
+    <tr><td>reconstruct / evolve</td><td><span class="status design">planned</span></td><td>Product direction is defined, but review remains first productized path.</td><td>artifact contract and tool schema design</td></tr>
   </table>
 
-  <h2>Current Decisions</h2>
-  <div class="grid">
-    <div class="card"><strong>MCP boundary</strong><span class="status">Active</span><br><code>src/mcp</code>는 schema와 stdio server만 소유한다.</div>
-    <div class="card"><strong>Review semantics</strong><span class="status">Active</span><br><code>src/core-runtime</code>와 <code>.onto</code> 문서가 review 의미론을 소유한다.</div>
-    <div class="card"><strong>Controlled deliberation</strong><span class="status">Active</span><br>현재는 participating lens가 제한 context에서 재평가하고 teamlead 결과를 <code>deliberation.md</code>에 기록한다.</div>
-    <div class="card"><strong>Issue closure artifacts</strong><span class="status">Active</span><br>finding ledger, relation graph, issue ledger, stance matrix, deliberation plan, problem framing을 prompt-backed runtime step으로 생성하고 검증한다.</div>
-    <div class="card"><strong>Codex path</strong><span class="status">Active</span><br><code>--codex</code>, Codex host, Codex-selected execution은 <code>codex-main-subprocess</code>로 수렴한다.</div>
-    <div class="card"><strong>Core API</strong><span class="status">Active</span><br><code>src/core-api</code>는 기존 runtime을 library처럼 호출한다.</div>
-    <div class="card"><strong>Fail loud</strong><span class="status">Active</span><br>config, executor, deliberation mode가 맞지 않으면 즉시 에러로 드러낸다.</div>
-    <div class="card"><strong>Record provenance</strong><span class="status">Active</span><br>lens output의 domain provenance 섹션은 YAML list만 허용하고, <code>ReviewRecord</code> 조립에서 검증한다.</div>
-    <div class="card"><strong>Snapshot retired</strong><span class="status">Active</span><br>대형 시스템 스냅샷 문서는 active surface에서 제거했고, 현재 정본은 <code>AGENTS.md</code>, <code>.onto/processes</code>, architecture docs가 나눠 가진다.</div>
-  </div>
-
-  <h2>Scope Boundaries</h2>
-  <table>
-    <tr><th>Area</th><th>현재 seat</th><th>다음 설계 질문</th></tr>
-    <tr><td><code>review</code></td><td>MCP surface 구현됨. lens + issue closure artifacts + controlled deliberation + problem framing + synthesize + ReviewRecord 경로가 TS runner에 연결됨.</td><td>남은 질문은 issue별 lens response를 별도 구조화 파일로 분리할지, 현재 <code>deliberation.md</code> 중심 구조를 유지할지이다.</td></tr>
-    <tr><td><code>learn</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>학습 산출물의 authority seat와 tool schema를 먼저 정한다.</td></tr>
-    <tr><td><code>govern</code></td><td>기존 runtime 영역. MCP surface 편입 대상.</td><td>principle 승격/검증 workflow를 MCP tool 단위로 나눈다.</td></tr>
-    <tr><td><code>reconstruct</code></td><td>제품 방향에 포함. domain 문서를 함께 사용한다.</td><td>구현물에서 ontology seed를 역산하는 artifact contract를 정의한다.</td></tr>
-    <tr><td><code>evolve</code></td><td>제품 방향에 포함. ontology 기반 설계 프로세스다.</td><td>기능 추가 설계안을 어떤 record로 남길지 정한다.</td></tr>
-  </table>
+  <h2>8. Boundary Decisions</h2>
+  <section class="split">
+    <div class="callout">
+      <strong>Canonical public path</strong>
+      <p><code>onto mcp</code> exposes MCP tools. <code>npm run review:*</code> scripts remain useful as development harnesses and conformance checks, not as the long-term user interface.</p>
+    </div>
+    <div class="callout">
+      <strong>Deliberation transport</strong>
+      <p>SendMessageA2A is treated as one host transport idea. The product requirement is transport-neutral: different context-isolated lens units must revisit contested claims under teamlead-controlled deliberation.</p>
+    </div>
+  </section>
+</main>
 </body>
 </html>

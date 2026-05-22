@@ -243,28 +243,58 @@ Allowed stance values:
 | `not_applicable` | 해당 lens 관점에서 판단 대상이 아님 |
 | `insufficient_evidence` | 판단에 필요한 evidence가 현재 boundary 안에 없음 |
 
+Enum fields must use exact tokens only. Explanation text belongs in
+`rationale`/`explanation`, not in enum-valued fields.
+
+Allowed `root_hypothesis_position` values:
+
+| Value | 의미 |
+|---|---|
+| `accepts` | issue root hypothesis를 수용 |
+| `narrows` | root hypothesis를 조건부/부분 수용 |
+| `replaces` | 다른 root hypothesis로 대체 |
+| `rejects` | root hypothesis를 거부 |
+| `not_applicable` | lens 관점에서 root 판단 대상이 아님 |
+| `insufficient_evidence` | root 판단 evidence가 부족 |
+
+Allowed `severity_position` values:
+
+| Value | 의미 |
+|---|---|
+| `keeps` | issue severity를 유지 |
+| `raises` | issue severity를 상향 |
+| `lowers` | issue severity를 하향 |
+| `not_applicable` | severity 판단 대상이 아님 |
+| `insufficient_evidence` | severity 판단 evidence가 부족 |
+
 Minimum shape:
 
 ```yaml
 schema_version: 1
 session_id: "{session_id}"
-lens_ids: [logic, structure, dependency, semantics, pragmatics, evolution, coverage, conciseness, axiology]
-issue_ids: [issue-001, issue-002]
-stances:
-  issue-001:
-    logic:
+issues:
+  - issue_id: issue-001
+    stances:
+    - lens_id: logic
       stance: support
-      explanation: "The same unresolved boundary explains the script/runtime mismatch and export ambiguity."
-      basis_refs: [finding-ledger.yaml#finding-001, finding-relation-graph.yaml#rel-001]
-    structure:
+      rationale: "The same unresolved boundary explains the script/runtime mismatch and export ambiguity."
+      root_hypothesis_position: accepts
+      severity_position: keeps
+      evidence_refs: [round1/logic.md, finding-ledger.yaml#finding-001, finding-relation-graph.yaml#rel-001]
+    - lens_id: structure
       stance: narrow
-      explanation: "The cluster is valid only for package/runtime seats, not for all source references."
-      basis_refs: [finding-ledger.yaml#finding-004]
-    semantics:
+      rationale: "The cluster is valid only for package/runtime seats, not for all source references."
+      root_hypothesis_position: narrows
+      severity_position: keeps
+      evidence_refs: [round1/structure.md, finding-ledger.yaml#finding-004]
+    - lens_id: semantics
       stance: alternative_root
-      explanation: "The stronger root is not packaging but ambiguous naming of runtime seats."
-      alternative_root_hypothesis: "Runtime seat names are not differentiated from source implementation paths."
-      basis_refs: [finding-ledger.yaml#finding-006]
+      rationale: "The stronger root is not packaging but ambiguous naming of runtime seats."
+      root_hypothesis_position: replaces
+      severity_position: keeps
+      evidence_refs: [round1/semantics.md, finding-ledger.yaml#finding-006]
+validation:
+  missing_stances: []
 ```
 
 Rules:

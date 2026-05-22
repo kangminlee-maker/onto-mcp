@@ -7219,8 +7219,8 @@ describe("Phase 3 Promote E2E (focused)", () => {
       "message names the field that's missing in v1",
     );
     assert(
-      msg.includes("onto promote"),
-      "message names the regenerate command",
+      msg.includes("regenerate"),
+      "message names the regenerate action",
     );
     assert(
       msg.toLowerCase().includes("discard") ||
@@ -7511,8 +7511,8 @@ describe("Phase 3 Promote E2E (focused)", () => {
       "option B names the marker removal action",
     );
     assert(
-      msg.includes("onto promote --apply test-154"),
-      "option B includes the exact rerun command with session id",
+      msg.includes("re-run apply for session test-154"),
+      "option B includes the rerun action with session id",
     );
   });
 
@@ -7823,7 +7823,7 @@ describe("Phase 3 Promote E2E (focused)", () => {
   //   5-RECLAIM: PID-liveness stale-lock reclaim
   //   5-LINEINDEX: drop dead preflight lineIndex accumulator
   //   5-SCOPE: narrow withFileLock doc scope (cross_agent_dedup-only)
-  //   5-D1: rerun command fidelity (onto promote --apply re-run skips
+  //   5-D1: rerun apply fidelity (apply re-run skips
   //         already-applied decisions via isPending filter)
   //   5-LOCK-LIFECYCLE: stale reclaim + cleanup-on-throw tests
   // -------------------------------------------------------------------------

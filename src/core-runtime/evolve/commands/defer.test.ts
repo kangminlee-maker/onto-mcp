@@ -73,7 +73,7 @@ describe("executeDefer", () => {
   });
 });
 
-describe("onto evolve defer — CLI surface", () => {
+describe("evolve defer runtime adapter", () => {
   let logs: string[];
   let errors: string[];
   let logSpy: ReturnType<typeof vi.spyOn>;

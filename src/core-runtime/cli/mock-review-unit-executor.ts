@@ -71,11 +71,14 @@ deliberation_status: performed
 ### Purpose Alignment Verification
 - The session followed the productized bounded path.
 
+### Final Review Result
+- The review completed the bounded path with isolated lens outputs, controlled deliberation, and issue framing preserved. The mock result indicates no unresolved disagreement and one low-severity issue that can be handled as watch/defer work rather than a current blocker.
+
 ### Immediate Actions Required
 - Replace the mock executor with a real ContextIsolatedReasoningUnit realization.
 
 ### Recommendations
-- Connect \`/onto:review\` directly to \`review:start-session -> review:run-prompt-execution -> review:complete-session\`.
+- Keep MCP review connected to \`review:start-session -> review:run-prompt-execution -> review:complete-session\`.
 
 ### Unique Finding Tagging
 - mock-runner-generated

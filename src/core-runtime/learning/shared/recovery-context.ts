@@ -360,7 +360,7 @@ export function saveRecoveryResolution(
   }
 
   // N-3 acknowledged: this load → merge → save sequence is not atomic across
-  // processes. Two concurrent `onto promote --resolve-conflict` invocations
+  // processes. Two concurrent recovery-resolution writes
   // for the same session could lose updates. Phase 3 is single-process per
   // session by design; cross-process coordination is a follow-up requiring a
   // file lock or rename-temp pattern. Documented as a known limitation.
@@ -501,8 +501,7 @@ export function resolveRecoveryTruth(
             escalation_reason:
               `Existing recovery-resolution.yaml references attempt_id ` +
               `${existing.selected_attempt_id}, but no source matches that ` +
-              `attempt anymore. Re-record decision via 'onto promote ` +
-              `--resolve-conflict'.`,
+              `attempt anymore. Re-record the recovery decision.`,
           };
         }
         const within = resolveWithinAttempt(selectedSources);
@@ -525,8 +524,7 @@ export function resolveRecoveryTruth(
         escalation_reason:
           `Multiple attempt_ids detected (${attemptIds.size}). Manual ` +
           `operator decision required to select canonical recovery source. ` +
-          `Use 'onto promote --resolve-conflict <session-id> --select ` +
-          `<attempt-id>' to record decision.`,
+          `Record a recovery decision selecting the canonical attempt id.`,
       };
     }
 
@@ -587,9 +585,9 @@ export function buildEscalationMessage(
   lines.push(
     "",
     "Resolution options:",
-    "  A) onto promote --resolve-conflict <session-id> --select <attempt-id> [--note '<reason>']",
+    "  A) Record recovery-resolution selection for <attempt-id>",
     "  B) Edit decisions file with 'recovery_resolution' section",
-    "  C) onto promote --apply <session-id> --auto-resolve-attempt-conflict",
+    "  C) Re-run apply with auto-resolve-attempt-conflict",
     "",
     "Note: option C bypasses manual review. Use only when trade-offs are understood.",
   );

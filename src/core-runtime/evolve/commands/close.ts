@@ -59,4 +59,4 @@ export function executeClose(paths: ScopePaths): CloseOutput {
 }
 
 // refreshScopeMd is imported from ./shared.ts (UF-CONCISENESS-SCOPE-MD consolidated)
-// executeDefer lives in ./defer.ts so that deferral has its own CLI surface.
+// executeDefer lives in ./defer.ts so deferral has its own runtime adapter surface.

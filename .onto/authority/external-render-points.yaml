@@ -78,12 +78,8 @@ points:
     rationale: "Reconstruct 완료 시 principal 이 읽는 최종 표·지표. agent 소비 없음."
 
   # ─────────────────────────────────────────────────────────────────
-  # Onboard / help — 대화형 CLI surface
+  # Onboard / help — principal-facing messages
   # ─────────────────────────────────────────────────────────────────
   - id: onboard_interactive_messages
     file: .onto/processes/onboard.md
     rationale: "Onboard 의 모든 프롬프트·안내 메시지. principal 과 직접 대화."
-
-  - id: help_command_output
-    file: .onto/commands/help.md
-    rationale: "/onto:help 출력. README 외 principal 이 직접 읽는 커맨드 reference."

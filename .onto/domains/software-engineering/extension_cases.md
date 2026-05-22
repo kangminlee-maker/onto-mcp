@@ -1,7 +1,7 @@
 ---
 version: 3
 last_updated: "2026-03-31"
-source: setup-domains
+source: bundled-domain-baseline
 status: established
 ---
 

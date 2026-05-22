@@ -15,7 +15,6 @@
     ".onto/roles/",
     ".onto/domains/",
     ".onto/authority/",
-    ".onto/commands/",
     ".onto/processes/",
     ".onto/principles/",
     "explorers/",

@@ -622,7 +622,7 @@ Classify at the lens-qualified claim unit, not by per-lens majority buckets. Mar
 - Preserve the controlled lens deliberation result from `{session_root}/deliberation.md`.
 
 ### Final Review Result
-- (Conservative synthesized review result that preserves lens evidence and system purpose)
+- (Comprehensive principal-facing explanation of the bounded review result. Preserve lens evidence, controlled deliberation outcome, issue/root-cause clustering, problem framing, and system purpose.)
 
 ### Shared Phenomenon Summary
 - Group lens-qualified claims by co-location (`target` + `evidence_anchor`).
@@ -656,7 +656,7 @@ date: {YYYY-MM-DD}
 - Domain: {session_domain / none (no-domain mode)}
 - Domain rule documents: {N}/7 loaded {list of absent documents}
 - (If session_domain is empty) "Verified using agent default methodology (no-domain mode). Domain-specific issues may be missed."
-- (If domain documents are absent but session_domain is set) "Verified using general principles (no domain document). Creating domain documents via `/onto:onboard` will improve verification precision."
+- (If domain documents are absent but session_domain is set) "Verified using general principles (no domain document). Adding domain documents will improve verification precision."
 
 ### Consensus (N/{participating agent count})
 ※ 합의 분모는 실제 참여한 review lens 수 (고정값 9가 아님). 경량 모드 및 에러 제외를 반영.
@@ -699,7 +699,7 @@ Classify at the lens-qualified claim unit rather than by per-lens majority bucke
 - (Resolved / narrowed / unresolved-with-reason decisions copied from `{session_root}/deliberation.md`)
 
 ### Final Review Result
-- (Conservative synthesized review result that preserves lens evidence and system purpose)
+- (Comprehensive principal-facing explanation of the bounded review result. Preserve lens evidence, controlled deliberation outcome, issue/root-cause clustering, problem framing, and system purpose.)
 
 ### Shared Phenomenon Summary
 Classify co-located claim groups per `.onto/processes/review/shared-phenomenon-contract.md` §4.
@@ -864,10 +864,10 @@ Assembly rules:
 ### 6. Example realization — Wrap-Up (Learning Storage + Team Shutdown)
 
 1. **Learning storage**: Stores learnings from all members. Follows the "Learning Storage Rules" in `learning-rules.md`. If deliberation occurred, also includes learnings generated during the deliberation process. **Learning data collection must be completed before team shutdown.**
-   - **Seed review learning tag**: When reviewing a seed domain (`drafts/{domain}`), learnings about the seed domain's content are tagged with `[domain/{seed-domain}]`. These learnings become input for the feedback loop (`/onto:feedback {domain}`).
+   - **Seed review learning tag**: When reviewing a seed domain (`drafts/{domain}`), learnings about the seed domain's content are tagged with `[domain/{seed-domain}]`.
 
 2. **Promotion guidance** (conditional): Provide guidance only if new domain learnings were stored in this review:
-   "Project domain learnings have accumulated to {N} entries. If promotion is needed, run `/onto:promote`."
+   "Project domain learnings have accumulated to {N} entries. Promotion remains a separate learn/govern design path."
 
 3. **Team shutdown**:
    - Agent Teams: The team lead sends shutdown_request to all members via **individual SendMessage** (structured messages cannot use `to: "*"` broadcast). After all members have shut down, clean up the team via TeamDelete.

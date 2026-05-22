@@ -70,7 +70,7 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 | 글로벌 자산 | 용도 | product 와의 관계 |
 |---|---|---|
 | `~/.onto/domains/` | 검증된 도메인 문서 | 리뷰 시 읽기 참조됨, product 에서 override 가능 |
-| `~/.onto/learnings/` | 승격된 methodology 학습 | `onto promote`로 product 학습에서 올림 |
+| `~/.onto/learnings/` | 승격된 methodology 학습 | learn promotion process로 product 학습에서 올림 |
 
 공유 자산의 읽기 참조와 `ONTO_HOME` 격리는 별개다. §3 #5의 격리 대상은 설치에 포함된 리소스(.onto/roles/, .onto/authority/)이며, 주체자 수준 공유 데이터(`~/.onto/domains/`, `~/.onto/learnings/`)는 product-override 규칙으로 관리된다.
 

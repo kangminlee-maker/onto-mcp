@@ -79,8 +79,8 @@ describe("drift-engine classifier (W-C-02 v0, §1.3 수준 0→1 3 분기)", () 
 
   it("boundary: docs_only 이지만 2+ 파일 → queue (local 경계 이탈)", () => {
     const decision = classifyProposal({
-      summary: "README + CHANGELOG 일괄 갱신",
-      target_files: ["README.md", "CHANGELOG.md"],
+      summary: "README + implementation map 일괄 갱신",
+      target_files: ["README.md", "IMPLEMENTATION_MAP.html"],
       change_kind: "docs_only",
     });
     expect(decision.route).toBe("queue");

@@ -5,9 +5,8 @@
  *
  * Canonical operator-decision seat for cross-attempt manual escalation. When
  * resolveRecoveryTruth() detects multiple attempt_ids, it surfaces a
- * manual_escalation_required result. The operator records their selection via
- * `onto promote --resolve-conflict`, which writes this artifact. Subsequent
- * --resume runs read it first.
+ * manual_escalation_required result. The operator records their selection in
+ * this artifact. Subsequent resume runs read it first.
  */
 
 import type { ArtifactSpec, ValidationResult } from "../artifact-registry.js";

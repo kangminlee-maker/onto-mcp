@@ -37,14 +37,18 @@ beforeEach(() => {
   mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
   writeFileSync(
     path.join(projectRoot, ".onto", "settings.json"),
-    [
-      "llm:",
-      "  auth: oauth",
-      "  provider: openai",
-      "  model: gpt-5.4",
-      "  effort: high",
-      "",
-    ].join("\n"),
+    JSON.stringify(
+      {
+        llm: {
+          auth: "oauth",
+          provider: "openai",
+          model: "gpt-5.4",
+          effort: "high",
+        },
+      },
+      null,
+      2,
+    ) + "\n",
     "utf8",
   );
 

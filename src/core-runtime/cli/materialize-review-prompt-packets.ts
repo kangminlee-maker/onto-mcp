@@ -614,6 +614,7 @@ ${(executionPlan.lens_execution_seats ?? binding.resolved_lens_set.map((lensId) 
 - You are not the problem-framing actor. problem-framing.yaml already classified issue role, judgment state, impact kind, timing, closure, and domain axes.
 - Do not resolve disagreements that the controlled deliberation result preserved as unresolved.
 - Do not override a controlled deliberation decision unless the result contradicts an explicit cited artifact; in that case preserve the contradiction in Disagreement instead of silently choosing a new answer.
+- In Final Review Result, comprehensively explain what the principal should conclude from the full bounded artifact set: review target and boundary, issue/root-cause clusters, lens agreement and disagreement, controlled deliberation outcome, problem framing classification, closure/timing, and the practical next step. Ground this explanation in existing lens outputs and issue artifacts; do not introduce new independent findings.
 - Start the output with YAML frontmatter using this exact field:
   - \`deliberation_status: performed\`
   - Use \`performed\` because controlled lens deliberation is a required pre-synthesize stage.
@@ -629,6 +630,7 @@ Use exactly these heading names in your output. The downstream renderer extracts
 ## Deliberation Decision
 ## Axiology-Proposed Additional Perspectives
 ## Purpose Alignment Verification
+## Final Review Result
 ## Immediate Actions Required
 ## Recommendations
 ## Unique Finding Tagging

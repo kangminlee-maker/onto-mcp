@@ -10,7 +10,7 @@
 |---|---|
 | 활동 분류 | 다섯 활동 (review / reconstruct / evolve / learn / **govern**) 중 하나. `.onto/authority/core-lexicon.yaml#activity_enum` 등재. |
 | onto-direction §1.4 | govern 완료 기준 = 규범 등재·갱신·폐기 추적 + drift 정책 + Principal 승인 강제. 본 v0 는 "기록 추적" 부분만 충족. |
-| Authority seat | 본 파일 (contract). .onto/commands/govern.md 가 entrypoint surface. `src/core-runtime/govern/` 이 구현 surface. |
+| Authority seat | 본 파일 (contract). Future MCP govern tool이 entrypoint surface. `src/core-runtime/govern/` 은 구현 실험 surface. |
 
 ## 1. Purpose
 
@@ -82,7 +82,7 @@ projection: 모든 이벤트를 id 별로 그룹핑. `submit` 이 base, `decide`
 
 ### v0 = 현 레포 한정
 
-본 v0 는 **현 product 내부 규범** (.onto/authority/, .onto/processes/, .onto/commands/, .onto/principles/, .onto/roles/ 등) 의 변경 관리에만 적용한다. 다음은 범위 밖:
+본 v0 는 **현 product 내부 규범** (.onto/authority/, .onto/processes/, .onto/principles/, .onto/roles/ 등) 의 변경 관리에만 적용한다. 다음은 범위 밖:
 
 | 범위 밖 | 이유 | 처리 경로 |
 |---|---|---|
@@ -96,7 +96,7 @@ projection: 모든 이벤트를 id 별로 그룹핑. `submit` 이 base, `decide`
 
 v0 는 기록만 하므로 decide 이후 consumer 가 없다. 이로 인한 dead-letter risk 를 방어하기 위해:
 
-- `onto govern list --status decided` 조회를 명시적으로 지원. 판정 이력이 언제든 감사 가능.
+- decided 상태 조회를 명시적으로 지원. 판정 이력이 언제든 감사 가능.
 - `decide` 출력의 `note` 필드에 후속 반영 경로 (주체자 수동 편집 / W-C-02) 를 명시.
 
 ### GC 정책
@@ -323,19 +323,19 @@ onto 자체 개발에 onto 도구 (review, reconstruct, evolve, govern) 를 사�
 
 | 단계 | 시점 | 수행 | 산출물 |
 |---|---|---|---|
-| **도구 적용** | W-ID 구현 전·후 | 해당 영역에 `onto review`, `onto evolve`, `onto reconstruct` 실행 | review record + learning (자동 생성) |
-| **마찰 수집** | 도구 사용 중 오류·friction | `onto govern submit --origin human --target <affected-tool> --json '{"kind":"dogfood","symptom":"...","expected":"..."}'` | govern queue pending 누적 |
-| **과제 전환** | 세션 종료 시 | `onto govern list --status pending` → Principal 리뷰 → 유의미 항목 W-ID 도출 | 신규 W-ID (onto-todo.md 추가) |
+| **도구 적용** | W-ID 구현 전·후 | review/evolve/reconstruct 도구 적용 | review record + learning |
+| **마찰 수집** | 도구 사용 중 오류·friction | govern queue entry 기록 | govern queue pending 누적 |
+| **과제 전환** | 세션 종료 시 | pending 항목 Principal 리뷰 → 유의미 항목 W-ID 도출 | 신규 W-ID |
 
 ### 14.2 도구 적용 매핑
 
 | onto 도구 | 적용 시점 | 기대 효과 |
 |---|---|---|
-| `onto review <target>` | 구현 완료 후 변경 파일에 9-lens | 자체 코드 품질 검증 + learning 축적 |
-| `onto evolve start <goal>` | 설계 세션 (align-packet 보완/대체) | scope lifecycle 로 설계 관리 |
-| `onto reconstruct start <target>` | 기존 코드 이해 필요 시 | 역설계 ontology → 이해 가속 |
-| `onto govern route --json <proposal>` | 코드 변경 시 | drift 분류 실증 |
-| `onto govern promote-principle` | 반복 발견 learning 승격 시 | knowledge → principle 경로 실증 |
+| MCP review | 구현 완료 후 변경 파일에 lens review | 자체 코드 품질 검증 + learning 축적 |
+| future MCP evolve | 설계 세션 | scope lifecycle 로 설계 관리 |
+| future MCP reconstruct | 기존 코드 이해 필요 시 | 역설계 ontology → 이해 가속 |
+| future MCP govern route | 코드 변경 시 | drift 분류 실증 |
+| future MCP govern promote-principle | 반복 발견 learning 승격 시 | knowledge → principle 경로 실증 |
 
 ### 14.3 마찰 수집 schema
 

@@ -40,6 +40,7 @@ export interface ReviewExecutionProfile {
   auth?: LlmAuthMode;
   model?: string;
   effort?: string;
+  service_tier?: string;
   base_url?: string;
   trace: string[];
 }
@@ -114,6 +115,7 @@ function buildProfile(args: {
     ...(inherited?.auth ? { auth: inherited.auth } : {}),
     ...(normalized?.model_id ? { model: normalized.model_id } : {}),
     ...(normalized?.reasoning_effort ? { effort: normalized.reasoning_effort } : {}),
+    ...(normalized?.service_tier ? { service_tier: normalized.service_tier } : {}),
     ...(normalized?.base_url ? { base_url: normalized.base_url } : {}),
     trace: args.trace,
   };

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Global CLI entry point for onto.
+// Public binary entry point for onto.
 // Uses tsx for TypeScript execution in development.
 // For production, compile first: npm run build
 //

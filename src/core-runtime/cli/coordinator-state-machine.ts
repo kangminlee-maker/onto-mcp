@@ -1013,7 +1013,7 @@ export async function coordinatorStatus(
 }
 
 // ─────────────────────────────────────────────
-// CLI entrypoints
+// Runtime dispatch entrypoints
 // ─────────────────────────────────────────────
 
 async function cliStart(argv: string[]): Promise<number> {
@@ -1094,7 +1094,7 @@ async function cliStatus(argv: string[]): Promise<number> {
 }
 
 // ─────────────────────────────────────────────
-// CLI dispatch
+// Runtime dispatch
 // ─────────────────────────────────────────────
 
 async function main(): Promise<number> {

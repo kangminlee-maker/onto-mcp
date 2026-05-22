@@ -168,7 +168,7 @@ async function archiveWriteIfMissing(targetPath: string, content: string): Promi
  */
 export function resolveCodexSpawnConfig(
   config: OntoConfig,
-): { model?: string; effort?: string } {
+): { model?: string; effort?: string; service_tier?: string } {
   const execution = config.review?.execution;
   const inherited = config.llm;
   const teamleadConfig =
@@ -190,21 +190,26 @@ export function resolveCodexSpawnConfig(
 function codexConfigFromRef(
   ref: ReviewLlmRef | undefined,
   inherited: OntoConfig["llm"],
-): { model?: string; effort?: string } | null {
+): { model?: string; effort?: string; service_tier?: string } | null {
   const llm = ref === undefined || ref === "inherit" ? inherited : ref;
   const selection = normalizeLlmModelSwitcher(llm);
   if (selection?.provider !== "codex") return null;
   return {
     ...(selection.model_id ? { model: selection.model_id } : {}),
     ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
+    ...(selection.service_tier ? { service_tier: selection.service_tier } : {}),
   };
 }
 
 function sameSpawnConfig(
-  left: { model?: string; effort?: string },
-  right: { model?: string; effort?: string },
+  left: { model?: string; effort?: string; service_tier?: string },
+  right: { model?: string; effort?: string; service_tier?: string },
 ): boolean {
-  return left.model === right.model && left.effort === right.effort;
+  return (
+    left.model === right.model &&
+    left.effort === right.effort &&
+    left.service_tier === right.service_tier
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +265,7 @@ export async function executeReviewViaCodexNested(
     lenses,
     ...(spawnConfig.model ? { model: spawnConfig.model } : {}),
     ...(spawnConfig.effort ? { reasoning_effort: spawnConfig.effort } : {}),
+    ...(spawnConfig.service_tier ? { service_tier: spawnConfig.service_tier } : {}),
     ...(args.projectRoot ? { project_root: args.projectRoot } : {}),
     ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
     ...(args.codex_bin ? { codex_bin: args.codex_bin } : {}),

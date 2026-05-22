@@ -7,7 +7,6 @@ of recreating `onto` semantics in another language.
 ```text
 .onto/
   authority/      language-neutral IDs and concept contracts
-  commands/       user-facing command contracts
   domains/        selectable domain documents
   processes/      review / install / govern process contracts
   roles/          lens and synthesize role definitions

@@ -66,7 +66,7 @@ import { parsePacketBoundaryPolicy } from "../review/packet-boundary-policy.js";
 import { parseParticipatingLensPaths } from "../review/participating-lens-paths.js";
 import { auditCitations, type CitationAuditResult } from "../review/citation-audit.js";
 import {
-  assertNoRetiredConfigFiles,
+  assertNoUnsupportedConfigFiles,
   projectSettingsPath,
 } from "../discovery/settings-chain.js";
 import { stripWrappingCodeFence } from "./strip-wrapping-code-fence.js";
@@ -156,6 +156,7 @@ Your job:
 - Classify findings into Consensus, Conditional Consensus, Disagreement, and Unique Finding Tagging.
 - Do not perform deliberation yourself. Controlled lens deliberation already produced the authoritative resolution or unresolved-disagreement record.
 - Integrate Axiology proposed perspectives without erasing the lens-level evidence.
+- Write a comprehensive Final Review Result section grounded in the full inlined artifact set.
 
 Rules:
 - Treat the prompt packet (in the user message) as the authoritative contract.
@@ -163,7 +164,7 @@ Rules:
   You do NOT have file system access or any tools — produce your answer from
   the inlined content alone.
 - Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
-- The 8 required output sections in the packet are MANDATORY heading names. Do not rename, merge, or omit them, even if a section is empty (state "(none)" instead).
+- Every required output section in the packet is MANDATORY. Do not rename, merge, or omit required headings, even if a section is empty (state "(none)" instead).
 - Preserve lens-level evidence in your output — never paraphrase a lens away from its citation.
 - Set deliberation_status in the YAML frontmatter to "performed".
 - Produce ONLY the final markdown content for the canonical output path.
@@ -265,11 +266,12 @@ Your job:
 - Classify findings: Consensus, Conditional Consensus, Disagreement, Unique Finding Tagging.
 - Do not perform deliberation yourself. Controlled lens deliberation already produced the authoritative resolution or unresolved-disagreement record.
 - Integrate Axiology proposed perspectives without erasing lens-level evidence.
+- Write a comprehensive Final Review Result section grounded in the full artifact set.
 
 Rules:
 - Treat the prompt packet (in the user message) as the authoritative contract.
 - Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
-- The 8 required output sections in the packet are MANDATORY heading names. Do not rename, merge, or omit them — write "(none)" if a section has no content.
+- Every required output section in the packet is MANDATORY. Do not rename, merge, or omit required headings — write "(none)" if a section has no content.
 - Preserve lens-level evidence — never paraphrase a lens away from its citation.
 - Set deliberation_status in the YAML frontmatter to "performed".
 - Produce ONLY the final markdown content for the canonical output path.
@@ -355,7 +357,7 @@ function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | nu
 }
 
 async function loadOntoConfig(projectRoot: string): Promise<LearningProviderConfigInputs> {
-  await assertNoRetiredConfigFiles(projectRoot);
+  await assertNoUnsupportedConfigFiles(projectRoot);
   const configPath = projectSettingsPath(projectRoot);
   try {
     const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));

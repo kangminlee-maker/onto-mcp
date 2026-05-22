@@ -7,6 +7,7 @@ export interface LlmModelSwitcherConfig {
   model?: string;
   base_url?: string;
   effort?: string;
+  service_tier?: string;
   api_key_env?: string;
 }
 
@@ -23,6 +24,7 @@ export interface NormalizedLlmSelection {
   model_id?: string;
   base_url?: string;
   reasoning_effort?: string;
+  service_tier?: string;
   api_key_env?: string;
 }
 
@@ -53,12 +55,18 @@ export function normalizeLlmModelSwitcher(
   if (provider !== "lmstudio" && auth === "local") {
     throw new Error("llm.auth=local currently requires llm.provider=lmstudio.");
   }
+  if (config.service_tier && !(provider === "openai" && auth === "oauth")) {
+    throw new Error(
+      "llm.service_tier is codex-only and requires llm.auth=oauth with llm.provider=openai.",
+    );
+  }
 
   const model_id = config.model;
   const common = {
     auth,
     ...(model_id ? { model_id } : {}),
     ...(config.effort ? { reasoning_effort: config.effort } : {}),
+    ...(config.service_tier ? { service_tier: config.service_tier } : {}),
     ...(config.api_key_env ? { api_key_env: config.api_key_env } : {}),
   };
 

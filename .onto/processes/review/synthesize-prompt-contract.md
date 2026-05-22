@@ -184,7 +184,7 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Principal Su
 8. recommendations
 9. unique finding tagging
 10. deliberation decision
-11. final review result
+11. final review result — principal-facing comprehensive explanation of the bounded review result. It explains what to conclude from the target/boundary, root-cause issue clusters, lens agreement and disagreement, controlled deliberation outcome, problem-framing classification, closure/timing, and practical next step. It must be grounded in lens outputs and issue artifacts and must not introduce independent findings
 12. shared phenomenon summary — 동일 phenomenon에 대한 다중 lens claim이 있는 경우, claim relation 분류 결과를 명시한다 (corroboration / disagreement / partial overlap / dedup). 분류 규칙은 `.onto/processes/review/shared-phenomenon-contract.md` §4를 따른다. 이 계약은 분류 규칙을 재정의하지 않는다
 
 ### 5.4 Alias map (IA-3)
@@ -230,7 +230,7 @@ sections 1–12 의 각 item 은 아래 provenance 필드를 갖는다. 명시 �
 
 위 source 중 어느 것도 없는 action 은 `recommendations` (§5.3 item 8) 로 분류하거나 priority 없이 `immediate actions` 에 unprioritized marker 와 함께 유지한다. synthesize 가 "합리적 판단" 으로 priority 를 부여하는 것은 §Adjudication boundary 금지 경로다.
 
-**Runtime packet과의 정합성**: 위 12개 항목 중 4 (overlooked premises), 11 (final review result), 12 (shared phenomenon summary)는 현 runtime packet (`materialize-review-prompt-packets.ts`)이 별도 heading으로 강제하지 않는다. 4와 12는 9개 분류 섹션 (Consensus / Conditional Consensus / Disagreement / Unique Finding Tagging)이 적용하는 Tagging Completeness Rule에 흡수되며, 11은 synthesis output 자체와 등가다. 이 3개 항목을 별도 heading으로 부활시킬지 또는 이 contract에서 제거할지는 packet 갱신 PR이 단일 결정 seat이며, 본 contract는 그 결정 시점까지 12개 enumeration을 conceptual reference로 보존한다.
+**Runtime packet과의 정합성**: 위 12개 항목 중 11 (final review result)은 현 runtime packet (`materialize-review-prompt-packets.ts`)에서 별도 heading으로 강제한다. 4 (overlooked premises)와 12 (shared phenomenon summary)는 현 runtime packet이 별도 heading으로 강제하지 않으며, 9개 분류 섹션 (Consensus / Conditional Consensus / Disagreement / Unique Finding Tagging)이 적용하는 Tagging Completeness Rule에 흡수된다. 4와 12를 별도 heading으로 부활시킬지 또는 이 contract에서 제거할지는 packet 갱신 PR이 단일 결정 seat이며, 본 contract는 그 결정 시점까지 12개 enumeration을 conceptual reference로 보존한다.
 
 즉 현재 prompt-backed reference path에서는
 `synthesis markdown`이 canonical prompt output이다.

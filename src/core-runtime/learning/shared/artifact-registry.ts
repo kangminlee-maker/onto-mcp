@@ -12,7 +12,7 @@
  *   2. Without central registration, each artifact would re-implement parsing
  *      and version gates ad hoc — v6 review traced multiple drift bugs back to
  *      this pattern.
- *   3. Lazy init means CLI entry points do not need to call initArtifactRegistry()
+ *   3. Lazy init means runtime entry points do not need to call initArtifactRegistry()
  *      explicitly. The first REGISTRY.loadFromFile / saveToFile call performs
  *      registration and caches success/failure.
  *

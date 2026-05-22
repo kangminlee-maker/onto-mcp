@@ -1,31 +1,30 @@
 # Ontology Reconstruct Process (Integral Exploration)
 
 > The Explorer traverses the source, and lenses provide exploration directions in an iterative loop that incrementally reconstructs the ontology.
-> Related: After reconstruct, transform via `/onto:transform`, verification via `/onto:review`.
+> Related: After reconstruct, transform and verification should use future MCP-native tool surfaces.
 >
 > **State machine SSOT**: `src/core-runtime/scope-runtime/state-machine.ts` — `RECONSTRUCT_TRANSITIONS` (W-B-02 dedup).
 > Reconstruct session 의 phase 전이(negotiating→gathering_context→reconstruct_exploring→adjudicating→awaiting_user_review→processing_responses→converting→converted)는 이 파일이 canonical definition.
 
 ## Naming: reconstruct (activity + process + code)
 
-DL-013 activity taxonomy (2026-04-13) 이후 public activity name 은 **reconstruct** 로 통일되었고, W-A-77 (2026-04-14) rename 으로 process filename (`.onto/processes/reconstruct.md`) + slash command (`/onto:reconstruct`) + state machine 상수/타입/phase label (`RECONSTRUCT_TRANSITIONS` / `ReconstructState` / `reconstruct_exploring` / `reconstruct_failed` 등) 이 전수 정렬되었다. legacy `build` 토큰은 activity_enum.legacy_aliases 에만 alias 로 보존된다.
+DL-013 activity taxonomy (2026-04-13) 이후 public activity name 은 **reconstruct** 로 통일되었고, process filename (`.onto/processes/reconstruct.md`) + state machine 상수/타입/phase label (`RECONSTRUCT_TRANSITIONS` / `ReconstructState` / `reconstruct_exploring` / `reconstruct_failed` 등) 이 정렬되었다. legacy `build` 토큰은 activity_enum.legacy_aliases 에만 alias 로 보존된다.
 
 - **Activity name**: `reconstruct` (canonical, DL-013)
 - **Process filename**: `.onto/processes/reconstruct.md` (W-A-77 rename 완료, 2026-04-14)
-- **CLI entry**: `.onto/commands/reconstruct.md` (W-A-74 DL-020 해소, 2026-04-14)
-- **CLI handler**: `src/core-runtime/evolve/commands/reconstruct.ts`
+- **Runtime handler**: `src/core-runtime/evolve/commands/reconstruct.ts`
 
 ### Bounded path (review 3-step 대응, W-A-74)
 
-W-A-74 에서 reconstruct CLI 의 3-step bounded path 를 확보했다. 이는 본 process document 의 RECONSTRUCT_TRANSITIONS 전체 상태 머신과는 구분되는 **CLI 관찰 가능 minimum surface** 다:
+W-A-74 에서 reconstruct 3-step bounded path 를 확보했다. 이는 본 process document 의 RECONSTRUCT_TRANSITIONS 전체 상태 머신과는 구분되는 **minimum runtime surface** 다:
 
-| Step | CLI | Bounded state 전이 | process document 과의 관계 |
+| Step | Runtime step | Bounded state 전이 | process document 과의 관계 |
 |---|---|---|---|
-| 1 | `onto reconstruct start` | → `gathering_context` | negotiating~gathering_context phase 의 CLI face |
-| 2 | `onto reconstruct explore` | → `exploring` (반복 가능) | reconstruct_exploring~adjudicating~awaiting_user_review~processing_responses loop 의 bounded invocation |
-| 3 | `onto reconstruct complete` | → `converted` | converting~converted phase + Principal 검증 요청 |
+| 1 | `start` | → `gathering_context` | negotiating~gathering_context phase 의 bounded face |
+| 2 | `explore` | → `exploring` (반복 가능) | reconstruct_exploring~adjudicating~awaiting_user_review~processing_responses loop 의 bounded invocation |
+| 3 | `complete` | → `converted` | converting~converted phase + Principal 검증 요청 |
 
-본 document 의 상세 phase 구조 (Phase 0.5 ~ Phase 4) 는 CLI 호출 내부에서 reconstruct runtime 이 실행하는 방법론이다. CLI 는 방법론의 public surface 만 노출한다.
+본 document 의 상세 phase 구조 (Phase 0.5 ~ Phase 4) 는 reconstruct runtime 이 실행하는 방법론이다. Future MCP tool은 이 방법론의 public surface를 노출한다.
 
 §1.4 정본의 reconstruct 완료 기준 3축 (ontology 초안 산출 + domain knowledge 기반 "왜" 추정 + Principal 검증 경로) 은 CLI 3-step 과 다음과 같이 매핑된다:
 
@@ -963,7 +962,7 @@ meta:
   # Lifecycle: reentry_count starts at 0 at first Phase 4 entry; incremented atomically with wip.yml fsync
   # (must survive Runtime crash/restart to prevent crash-restart loop bypass); cleared with phase3_user_responses on Save success.
   # Atomic-clear invariant: phase3_user_responses and phase4_runtime_state MUST be cleared in the same wip.yml
-  # rewrite that marks Save success. Partial clear (one but not the other) leaves the next /onto:reconstruct invocation
+  # rewrite that marks Save success. Partial clear (one but not the other) leaves the next reconstruct invocation
   # unable to distinguish completion from resumption; Runtime enforces this via a single atomic write.
   # Lifecycle of cumulative_unresolved_conflicts (Runtime-managed):
   #   - Appended by Runtime at end of each round (from Synthesize's unresolved_for_user).
@@ -1400,7 +1399,7 @@ After 4b, Runtime also prepares the Phase 3 Unresolved Conflicts table using the
 - Phase 3.5 never executes (no trigger event).
 - Phase 4 never triggers (Phase 3.5 is the only path into it).
 - wip.yml remains in its post-Phase-2 state, preserved indefinitely in `{project}/.onto/builds/{session ID}/`.
-- **Resumption**: the user re-runs `/onto:reconstruct` with the same session directory. Runtime detects existing `wip.yml` without `phase3_user_responses` and re-enters Phase 3 (re-renders the same summary from the existing wip.yml). No reconstruct work is lost; only the Phase 3 prompt is re-issued.
+- **Resumption**: the user resumes reconstruct with the same session directory. Runtime detects existing `wip.yml` without `phase3_user_responses` and re-enters Phase 3 (re-renders the same summary from the existing wip.yml). No reconstruct work is lost; only the Phase 3 prompt is re-issued.
 - **Resumption integrity check**: before re-entering any phase, Runtime reads and validates four artifacts — `schema.yml` (structural spec), `wip.yml` (reconstruct state, YAML-parse + meta presence), `deltas/` directory (non-empty, matches `meta.deltas` references), `session-log.yml` (YAML-parse if present). Any failure halts with `session_state_corrupt` (see registered codes table) and preserves the session directory untouched so the user can repair or discard.
 - **Alternative abort**: user can manually delete the session directory to abort the reconstruct.
 
@@ -1596,7 +1595,7 @@ Fix the config file and re-run. No session state was written (halt fires before 
 [HALT: phase_3_5_invariant_violation at phase_4]
 Runtime bug: Phase 3.5 reported `resolution: pending` with no Phase 3 pending items to re-render.
 Preserved: wip.yml at {wip_path}, session-log.yml at {log_path}.
-Report this bug with the session directory attached. Do not re-run /onto:reconstruct on this session — state is inconsistent.
+Report this bug with the session directory attached. Do not resume reconstruct on this session — state is inconsistent.
 ```
 
 `phase_reentry_bound_exhausted` (phase_4):
@@ -1604,7 +1603,7 @@ Report this bug with the session directory attached. Do not re-run /onto:reconst
 [HALT: phase_reentry_bound_exhausted at phase_4]
 Phase 4 bug-guard detected `resolution: pending` on {reentry_count}/{max_phase4_reentries} re-entries; the re-entry bound is exhausted with pending still remaining.
 Preserved: wip.yml at {wip_path} (pre-Save state; raw.yml is NOT written by this halt), session-log.yml at {log_path}.
-Per Phase 3.5 step 5 invariants, surviving `pending` indicates a Runtime defect (Phase 3.5 did not terminalize as expected). Report the session directory as a bug and start a new /onto:reconstruct session; do not resume this one.
+Per Phase 3.5 step 5 invariants, surviving `pending` indicates a Runtime defect (Phase 3.5 did not terminalize as expected). Report the session directory as a bug and start a new reconstruct session; do not resume this one.
 ```
 
 `explorer_failure` (phase_1):
@@ -1612,7 +1611,7 @@ Per Phase 3.5 step 5 invariants, surviving `pending` indicates a Runtime defect 
 [HALT: explorer_failure at phase_1]
 Explorer failed mid-exploration (stage {stage}, round {round}): {explorer_error}
 Preserved: session directory at {session_dir} (partial wip.yml retained for debugging).
-Start a new /onto:reconstruct session on the same target; the partial session is not resumable.
+Start a new reconstruct session on the same target; the partial session is not resumable.
 ```
 
 `runtime_coordinator_failure` (phase_1):
@@ -1684,8 +1683,8 @@ Save path:
 - Raw Ontology: `.onto/builds/{session ID}/raw.yml`
 
 ### Next Steps
-- `/onto:transform` — transform into desired format
-- `/onto:review .onto/builds/{session ID}/raw.yml` — verify the built ontology via panel
+- transform into desired format
+- verify `.onto/builds/{session ID}/raw.yml` via MCP review
 ```
 
 ---

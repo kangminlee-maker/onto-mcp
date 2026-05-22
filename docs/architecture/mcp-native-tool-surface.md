@@ -1,14 +1,14 @@
 # MCP-Native Tool Surface
 
 The product goal is for Codex, Claude, and future hosts to call `onto` as a
-small set of tools instead of remembering platform-specific CLI paths.
+small set of tools with a stable MCP surface.
 
 ## Tool Set
 
 | Tool | Purpose | Primary output |
 |---|---|---|
-| `onto.review` | Start and optionally run a review | session id, status, artifact refs |
-| `onto.prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs |
+| `onto.review` | Start and optionally run a review | session id, status, artifact refs, `llmPresentation` prompts |
+| `onto.prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs, opening brief prompt |
 | `onto.review_status` | Read progress for a review session | structured status |
 | `onto.review_result` | Read final result and artifact refs | `review-record.yaml`, `final-output.md` |
 | `onto.list_lenses` | Show canonical lens sets | full/core-axis lens IDs |
@@ -19,6 +19,9 @@ small set of tools instead of remembering platform-specific CLI paths.
 - MCP does not redefine lens semantics.
 - MCP does not choose a different artifact contract.
 - MCP does not hide degraded runs; status and result tools must expose them.
+- MCP stdout is not the user-facing UX contract. Runtime returns bounded facts;
+  the host LLM renders opening/result explanations from `llmPresentation`
+  prompt/input pairs.
 
 ## Provider Selection
 
@@ -45,7 +48,7 @@ the conflict-resolution stage.
 ## First Implementation Slice
 
 1. Export a TS core API facade from `src/core-api/`.
-2. Keep the existing CLI path working.
+2. Keep repository-local npm harnesses available for verification.
 3. Add MCP schemas from `src/mcp/tool-schemas.ts`.
 4. Add a local/mock provider that satisfies `src/providers/capability-contract.ts`.
 5. Write conformance tests against generated review artifacts.

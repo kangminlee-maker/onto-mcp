@@ -19,10 +19,10 @@ If `$ARGUMENTS` is empty, list available backups:
 | 1 | 20260329-143022 | 2026-03-29 14:30 | before domain cleanup | 3 | 42 lines |
 | 2 | 20260328-091500 | 2026-03-28 09:15 | manual backup | 2 | 28 lines |
 
-To restore: `/onto:restore {backup-id}`
+To restore: use the restore process with the selected backup id.
 ```
 
-If no backups exist: "No backups found. Create one with `/onto:backup`."
+If no backups exist: "No backups found. Create a backup first."
 
 ### 1. Pre-Restore Safety Backup
 
@@ -79,7 +79,7 @@ Safety backup: {safety-backup-id}
 | Drafts | {list} |
 | Communication | {n} files |
 
-To undo this restore: `/onto:restore {safety-backup-id}`
+To undo this restore: use the restore process with `{safety-backup-id}`.
 ```
 
 ### 5. Selective Restore (Future)

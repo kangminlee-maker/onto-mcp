@@ -128,7 +128,7 @@ cleanup_fixtures() {
 trap cleanup_fixtures EXIT
 setup_fixtures
 
-echo "onto review:invoke E2E Test Suite"
+echo "review:invoke E2E Test Suite"
 echo "================================="
 echo "project root: $PROJECT_ROOT"
 echo "fixtures: $FIXTURE_DIR"
@@ -321,7 +321,7 @@ run_expect_pass "E21: no-domain-default" \
   src/core-runtime/cli/review-invoke.ts "no domain" \
   --executor-realization mock --review-mode core-axis
 
-run_expect_pass "E22: explicit-no-domain (legacy @- syntax)" \
+run_expect_pass "E22: explicit-no-domain (@- syntax)" \
   src/core-runtime/cli/review-invoke.ts "no domain" \
   --executor-realization mock --review-mode core-axis \
   --requested-domain-token "@-"
@@ -506,105 +506,97 @@ fi
 echo ""
 
 # ─────────────────────────────────────────────
-# 11. GLOBAL CLI
+# 11. PUBLIC CLI BOUNDARY
 # ─────────────────────────────────────────────
 
-echo "── Global CLI ──"
+echo "── Public CLI Boundary ──"
 
-# E39: onto info from project root
-echo "=== E39: onto-info ==="
-E39_OUT=$(onto info 2>&1)
+# E39: onto --version
+echo "=== E39: onto-version ==="
+E39_OUT=$(onto --version 2>&1)
 E39_EXIT=$?
-E39_ONTO_HOME=$(echo "$E39_OUT" | grep '"onto_home"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E39_EXIT -eq 0 ] && [ -n "$E39_ONTO_HOME" ] && [ -d "$E39_ONTO_HOME/.onto/roles" ]; then
-  echo "  PASS  E39: onto-info (onto_home=$E39_ONTO_HOME)"
+if [ $E39_EXIT -eq 0 ] && echo "$E39_OUT" | grep -q "onto-core"; then
+  echo "  PASS  E39: onto-version"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E39: onto-info (exit=$E39_EXIT, onto_home=$E39_ONTO_HOME)"
+  echo "  FAIL! E39: onto-version (exit=$E39_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 
-# E40: onto review with mock executor via global CLI
-echo "=== E40: onto-review-mock ==="
-E40_OUT=$(onto review src/ "global cli mock test" \
-  --executor-realization mock --review-mode core-axis \
-  --project-root "$PROJECT_ROOT" 2>&1)
+# E40: onto --help exposes only active public command
+echo "=== E40: onto-help ==="
+E40_OUT=$(onto --help 2>&1)
 E40_EXIT=$?
-E40_STATUS=$(echo "$E40_OUT" | grep '"record_status"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E40_EXIT -eq 0 ]; then
-  echo "  PASS  E40: onto-review-mock (status=$E40_STATUS)"
+if [ $E40_EXIT -eq 0 ] && echo "$E40_OUT" | grep -q "Usage: onto mcp" && echo "$E40_OUT" | grep -q "onto.review"; then
+  echo "  PASS  E40: onto-help"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E40: onto-review-mock (exit=$E40_EXIT)"
+  echo "  FAIL! E40: onto-help (exit=$E40_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 
-# E41: onto review --prepare-only via global CLI
-echo "=== E41: onto-prepare-only ==="
-E41_OUT=$(onto review src/ "global cli prepare test" \
-  --executor-realization mock --review-mode core-axis --prepare-only \
-  --project-root "$PROJECT_ROOT" 2>&1)
+# E41: public review subcommand is unsupported
+echo "=== E41: onto-review-unsupported ==="
+E41_OUT=$(onto review src/ "public cli review boundary" 2>&1)
 E41_EXIT=$?
-E41_PREPARE=$(echo "$E41_OUT" | grep '"prepare_only"' | head -1)
-E41_REQUEST=$(echo "$E41_OUT" | grep '"request_text"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E41_EXIT -eq 0 ] && [ -n "$E41_PREPARE" ] && [ -n "$E41_REQUEST" ]; then
-  echo "  PASS  E41: onto-prepare-only (request_text present)"
+if [ $E41_EXIT -ne 0 ] && echo "$E41_OUT" | grep -q "Unsupported public CLI subcommand"; then
+  echo "  PASS  E41: onto-review-unsupported"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E41: onto-prepare-only (exit=$E41_EXIT)"
+  echo "  FAIL! E41: onto-review-unsupported (exit=$E41_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 
-# E42: onto info from external directory
-echo "=== E42: onto-info-external ==="
-E42_OUT=$(cd /tmp && onto info 2>&1)
+# E42: public config subcommand is unsupported
+echo "=== E42: onto-config-unsupported ==="
+E42_OUT=$(onto config validate 2>&1)
 E42_EXIT=$?
-E42_ONTO_HOME=$(echo "$E42_OUT" | grep '"onto_home"' | head -1 | sed 's/.*: "//;s/".*//')
 
-if [ $E42_EXIT -eq 0 ] && [ -n "$E42_ONTO_HOME" ] && [ -d "$E42_ONTO_HOME/.onto/roles" ]; then
-  echo "  PASS  E42: onto-info-external (onto_home resolved from /tmp)"
+if [ $E42_EXIT -ne 0 ] && echo "$E42_OUT" | grep -q "Unsupported public CLI subcommand"; then
+  echo "  PASS  E42: onto-config-unsupported"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E42: onto-info-external (exit=$E42_EXIT)"
+  echo "  FAIL! E42: onto-config-unsupported (exit=$E42_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 
-# E43: trust boundary — reject .onto/ creation without --allow-onto-init (non-TTY)
-echo "=== E43: trust-boundary-reject ==="
+# E43: external project without onto-home fails loudly on missing runtime assets
+echo "=== E43: external-project-missing-onto-home ==="
 E43_TMPDIR=$(mktemp -d)
 mkdir -p "$E43_TMPDIR/.git"  # make it look like a project
-E43_OUT=$(onto review "$E43_TMPDIR/test.txt" "trust test" \
+echo "test content" > "$E43_TMPDIR/test.txt"
+E43_OUT=$(npm run review:invoke -- "$E43_TMPDIR/test.txt" "trust test" \
   --executor-realization mock --review-mode core-axis \
   --project-root "$E43_TMPDIR" 2>&1)
 E43_EXIT=$?
 
-if [ $E43_EXIT -ne 0 ] && echo "$E43_OUT" | grep -q "not approved\|allow-onto-init"; then
-  echo "  PASS  E43: trust-boundary-reject (blocked without --allow-onto-init)"
+if [ $E43_EXIT -ne 0 ] && echo "$E43_OUT" | grep -q "Role definition not found"; then
+  echo "  PASS  E43: external-project-missing-onto-home"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E43: trust-boundary-reject (exit=$E43_EXIT, expected rejection)"
+  echo "  FAIL! E43: external-project-missing-onto-home (exit=$E43_EXIT, expected role resolution failure)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 rm -rf "$E43_TMPDIR"
 
-# E44: trust boundary — allow with --allow-onto-init
-echo "=== E44: trust-boundary-allow ==="
+# E44: external project succeeds when runtime assets are supplied via onto-home
+echo "=== E44: external-project-with-onto-home ==="
 E44_TMPDIR=$(mktemp -d)
 mkdir -p "$E44_TMPDIR/.git"
 echo "test content" > "$E44_TMPDIR/test.txt"
-E44_OUT=$(onto review "$E44_TMPDIR/test.txt" "trust allow test" \
+E44_OUT=$(npm run review:invoke -- "$E44_TMPDIR/test.txt" "trust allow test" \
   --executor-realization mock --review-mode core-axis \
-  --project-root "$E44_TMPDIR" --allow-onto-init 2>&1)
+  --project-root "$E44_TMPDIR" --onto-home "$PROJECT_ROOT" --allow-onto-init 2>&1)
 E44_EXIT=$?
 
 if [ $E44_EXIT -eq 0 ]; then
-  echo "  PASS  E44: trust-boundary-allow (proceeded with --allow-onto-init)"
+  echo "  PASS  E44: external-project-with-onto-home"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
-  echo "  FAIL! E44: trust-boundary-allow (exit=$E44_EXIT)"
+  echo "  FAIL! E44: external-project-with-onto-home (exit=$E44_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 rm -rf "$E44_TMPDIR"
@@ -619,7 +611,7 @@ echo "── Coordinator State Machine ──"
 
 # E45: coordinator start (mock, light)
 echo "=== E45: coordinator-start ==="
-E45_OUT=$(onto coordinator start \
+E45_OUT=$(npm run coordinator:start -- \
   src/ "coordinator test" \
   --executor-realization mock --review-mode core-axis \
   --project-root "$PROJECT_ROOT" 2>&1)
@@ -639,7 +631,7 @@ fi
 # E46: coordinator status
 echo "=== E46: coordinator-status ==="
 if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E46_OUT=$(onto coordinator status --session-root "$E45_SESSION_ROOT" 2>&1)
+  E46_OUT=$(npm run coordinator:status -- --session-root "$E45_SESSION_ROOT" 2>&1)
   E46_EXIT=$?
   E46_STATE=$(echo "$E46_OUT" | grep '"current_state"' | head -1 | sed 's/.*: "//;s/".*//')
 
@@ -657,7 +649,7 @@ fi
 # E47: coordinator next (lens validation → halted_partial since mock executor didn't write lens outputs)
 echo "=== E47: coordinator-next-halt ==="
 if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E47_OUT=$(onto coordinator next \
+  E47_OUT=$(npm run coordinator:next -- \
     --session-root "$E45_SESSION_ROOT" \
     --project-root "$PROJECT_ROOT" 2>&1)
   E47_EXIT=$?
@@ -677,7 +669,7 @@ fi
 # E48: coordinator next on terminal state → error
 echo "=== E48: coordinator-next-terminal ==="
 if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E48_OUT=$(onto coordinator next \
+  E48_OUT=$(npm run coordinator:next -- \
     --session-root "$E45_SESSION_ROOT" \
     --project-root "$PROJECT_ROOT" 2>&1)
   E48_EXIT=$?
@@ -771,6 +763,9 @@ write_e49_mock_teamlead_deliberation_output() {
     '## Purpose Alignment Verification' \
     '- mock' \
     '' \
+    '## Final Review Result' \
+    '- mock final review result' \
+    '' \
     '## Immediate Actions Required' \
     '- none' \
     '' \
@@ -805,6 +800,9 @@ write_e49_mock_synthesis_output() {
     '' \
     '## Purpose Alignment Verification' \
     '- mock' \
+    '' \
+    '## Final Review Result' \
+    '- mock final review result' \
     '' \
     '## Immediate Actions Required' \
     '- none' \
@@ -850,7 +848,7 @@ write_e49_mock_issue_artifact_output() {
       ;;
   esac
 }
-E49_START_OUT=$(onto coordinator start \
+E49_START_OUT=$(npm run coordinator:start -- \
   src/core-runtime/cli/review-invoke.ts "full cycle test" \
   --executor-realization mock --review-mode core-axis \
   --project-root "$PROJECT_ROOT" 2>&1)
@@ -869,7 +867,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
   done
 
   # Step 2: next through issue artifact agents → awaiting_deliberation
-  E49_NEXT1_OUT=$(onto coordinator next \
+  E49_NEXT1_OUT=$(npm run coordinator:next -- \
     --session-root "$E49_SESSION_ROOT" \
     --project-root "$PROJECT_ROOT" 2>&1)
   E49_NEXT1_EXIT=$?
@@ -880,7 +878,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
     if [ -n "$E49_ARTIFACT_OUTPUT" ]; then
       write_e49_mock_issue_artifact_output "$E49_ARTIFACT_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
     fi
-    E49_NEXT1_OUT=$(onto coordinator next \
+    E49_NEXT1_OUT=$(npm run coordinator:next -- \
       --session-root "$E49_SESSION_ROOT" \
       --project-root "$PROJECT_ROOT" 2>&1)
     E49_NEXT1_EXIT=$?
@@ -894,7 +892,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
       write_e49_mock_lens_deliberation_output "$op"
     done
 
-    E49_NEXT1_OUT=$(onto coordinator next \
+    E49_NEXT1_OUT=$(npm run coordinator:next -- \
       --session-root "$E49_SESSION_ROOT" \
       --project-root "$PROJECT_ROOT" 2>&1)
     E49_NEXT1_EXIT=$?
@@ -903,7 +901,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
     if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ -n "$E49_TEAMLEAD_OUTPUT" ]; then
       mkdir -p "$(dirname "$E49_TEAMLEAD_OUTPUT")"
       write_e49_mock_teamlead_deliberation_output "$E49_TEAMLEAD_OUTPUT"
-      E49_NEXT1_OUT=$(onto coordinator next \
+      E49_NEXT1_OUT=$(npm run coordinator:next -- \
         --session-root "$E49_SESSION_ROOT" \
         --project-root "$PROJECT_ROOT" 2>&1)
       E49_NEXT1_EXIT=$?
@@ -913,7 +911,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
     E49_PROBLEM_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
     if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ "$(basename "$E49_PROBLEM_OUTPUT")" = "problem-framing.yaml" ]; then
       write_e49_mock_issue_artifact_output "$E49_PROBLEM_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
-      E49_NEXT1_OUT=$(onto coordinator next \
+      E49_NEXT1_OUT=$(npm run coordinator:next -- \
         --session-root "$E49_SESSION_ROOT" \
         --project-root "$PROJECT_ROOT" 2>&1)
       E49_NEXT1_EXIT=$?
@@ -930,7 +928,7 @@ if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION
     fi
 
     # Step 3: next → completed
-    E49_NEXT2_OUT=$(onto coordinator next \
+    E49_NEXT2_OUT=$(npm run coordinator:next -- \
       --session-root "$E49_SESSION_ROOT" \
       --project-root "$PROJECT_ROOT" 2>&1)
     E49_NEXT2_EXIT=$?

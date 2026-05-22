@@ -1,4 +1,6 @@
 import type {
+  InvocationBindingArtifact,
+  InvocationInterpretationArtifact,
   ReviewExecutionPlan,
   ReviewMode,
   ReviewRecord,
@@ -34,6 +36,7 @@ export interface PreparedReview {
   sessionId: string;
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
+  llmPresentation: LlmPresentationPrompts;
 }
 
 export interface RunReviewRequest extends PrepareReviewRequest {
@@ -52,6 +55,23 @@ export interface ReviewRunResult {
   participatingLensIds: string[];
   degradedLensIds: string[];
   summary?: unknown;
+  resultOverview?: unknown;
+  startPreview?: {
+    entrypointPlan?: unknown;
+    routeSummary?: unknown;
+    boundedInvokeSteps?: string[];
+  };
+  llmPresentation?: LlmPresentationPrompts;
+}
+
+export interface LlmPresentationPrompt {
+  prompt: string;
+  input: unknown;
+}
+
+export interface LlmPresentationPrompts {
+  openingBrief?: LlmPresentationPrompt;
+  finalResult?: LlmPresentationPrompt;
 }
 
 export interface ReviewStatus {
@@ -197,6 +217,79 @@ async function readOptionalText(filePath: string): Promise<string | undefined> {
   return fs.readFile(filePath, "utf8");
 }
 
+function buildOpeningBriefPresentation(input: unknown): LlmPresentationPrompt {
+  return {
+    prompt: [
+      "Explain this onto review opening brief to the user before execution.",
+      "Use only the provided input facts. Do not infer or invent target scope, boundary, domain, lens set, model, provider, or execution mode.",
+      "Cover: what is being reviewed, why, filesystem boundary, selected domain, review mode and lens set, execution path, model/provider settings, and where the user can change configuration.",
+      "Keep it structured and concise. Use the user's conversation language.",
+    ].join("\n"),
+    input,
+  };
+}
+
+function buildFinalResultPresentation(input: unknown): LlmPresentationPrompt {
+  return {
+    prompt: [
+      "Explain this onto review result to the user after execution.",
+      "Use only the provided input facts and referenced final result fields. Do not invent new findings or silently resolve unresolved disagreement.",
+      "Cover: outcome, deliberation status, coverage, final review result, issue count/classification, top problem definitions, and primary artifacts.",
+      "Make the result comprehensive enough for the user to understand what to do next, but keep operational detail bounded. Use the user's conversation language.",
+    ].join("\n"),
+    input,
+  };
+}
+
+async function buildPreparedOpeningBriefInput(
+  sessionRoot: string,
+  executionPlan: ReviewExecutionPlan,
+): Promise<unknown> {
+  const interpretation = await readOptionalYaml<InvocationInterpretationArtifact>(
+    path.join(sessionRoot, "interpretation.yaml"),
+  );
+  const binding = await readOptionalYaml<InvocationBindingArtifact>(
+    path.join(sessionRoot, "binding.yaml"),
+  );
+
+  return {
+    session_id: executionPlan.session_id,
+    session_root: sessionRoot,
+    interpretation: interpretation
+      ? {
+          entrypoint: interpretation.entrypoint,
+          target_scope_candidate: interpretation.target_scope_candidate,
+          intent_summary: interpretation.intent_summary,
+          domain_recommendation: interpretation.domain_recommendation,
+          domain_selection_required: interpretation.domain_selection_required,
+          review_mode_recommendation: interpretation.review_mode_recommendation,
+          lens_selection_plan: interpretation.lens_selection_plan,
+          ambiguity_notes: interpretation.ambiguity_notes,
+        }
+      : null,
+    binding: binding
+      ? {
+          resolved_target_scope: binding.resolved_target_scope,
+          resolved_session_domain: binding.resolved_session_domain,
+          resolved_review_mode: binding.resolved_review_mode,
+          resolved_lens_set: binding.resolved_lens_set,
+          resolved_execution_realization: binding.resolved_execution_realization,
+          resolved_host_runtime: binding.resolved_host_runtime,
+          boundary_policy: binding.boundary_policy,
+          effective_boundary_state: binding.effective_boundary_state,
+        }
+      : null,
+    execution_plan: {
+      review_mode: executionPlan.review_mode,
+      execution_realization: executionPlan.execution_realization,
+      host_runtime: executionPlan.host_runtime,
+      lens_ids: executionPlan.lens_execution_seats.map((seat) => seat.lens_id),
+      prompt_packets_root: executionPlan.prompt_packets_root,
+      review_run_manifest_path: path.join(sessionRoot, "review-run-manifest.yaml"),
+    },
+  };
+}
+
 function parseReviewInvokeOutput(stdout: string[]): unknown {
   for (const line of [...stdout].reverse()) {
     const trimmed = line.trim();
@@ -223,6 +316,10 @@ function isReviewInvokeShape(value: unknown): value is {
     degraded_lens_ids?: string[];
     summary?: unknown;
   };
+  result_overview?: unknown;
+  entrypoint_plan?: unknown;
+  route_summary?: unknown;
+  bounded_invoke_steps?: string[];
 } {
   if (value === null || typeof value !== "object") return false;
   const reviewResult = (value as { review_result?: unknown }).review_result;
@@ -273,10 +370,15 @@ export function createOntoReviewCoreApi(
       const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
         path.join(sessionRoot, "execution-plan.yaml"),
       );
+      const openingBriefInput =
+        await buildPreparedOpeningBriefInput(sessionRoot, executionPlan);
       return {
         sessionId: executionPlan.session_id,
         sessionRoot,
         executionPlan,
+        llmPresentation: {
+          openingBrief: buildOpeningBriefPresentation(openingBriefInput),
+        },
       };
     },
 
@@ -295,6 +397,17 @@ export function createOntoReviewCoreApi(
       }
       const result = parsed.review_result;
       const status = result.record_status ?? "halted_partial";
+      const startPreview: ReviewRunResult["startPreview"] = {
+        entrypointPlan: parsed.entrypoint_plan,
+        routeSummary: parsed.route_summary,
+        ...(parsed.bounded_invoke_steps !== undefined
+          ? { boundedInvokeSteps: parsed.bounded_invoke_steps }
+          : {}),
+      };
+      const finalResultInput = {
+        result_overview: parsed.result_overview ?? null,
+        review_result: result,
+      };
       return {
         sessionId: basenameSessionId(result.session_root),
         sessionRoot: path.resolve(result.session_root),
@@ -309,6 +422,14 @@ export function createOntoReviewCoreApi(
         participatingLensIds: result.participating_lens_ids ?? [],
         degradedLensIds: result.degraded_lens_ids ?? [],
         ...(result.summary !== undefined ? { summary: result.summary } : {}),
+        ...(parsed.result_overview !== undefined
+          ? { resultOverview: parsed.result_overview }
+          : {}),
+        startPreview,
+        llmPresentation: {
+          openingBrief: buildOpeningBriefPresentation(startPreview),
+          finalResult: buildFinalResultPresentation(finalResultInput),
+        },
       };
     },
 

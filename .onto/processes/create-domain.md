@@ -71,7 +71,7 @@ If validation fails, fix the issues before proceeding.
 | Experience-gated files | competency_qs.md, extension_cases.md |
 
 ### Next Steps
-- Review the seed: `/onto:review drafts/{domain} @-` (recommended: no-domain mode)
-- Run feedback loop: `/onto:feedback {domain}` (after learnings accumulate)
-- Promote to established: `/onto:promote-domain {domain}` (after all SEED markers are removed)
+- Review the seed through MCP review (recommended: no-domain mode)
+- Run the feedback loop after learnings accumulate
+- Promote to established after all SEED markers are removed
 ```

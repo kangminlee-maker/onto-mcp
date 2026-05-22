@@ -55,6 +55,8 @@ export interface LlmCallConfig {
   base_url?: string;
   /** codex-only: reasoning effort passed as `model_reasoning_effort`. Ignored by other providers. */
   reasoning_effort?: string;
+  /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
+  service_tier?: string;
   /**
    * Pre-resolved ExecutionPlan (Review Recovery PR-1, 2026-04-18).
    *
@@ -97,6 +99,7 @@ export interface LearningProviderCliOverrides {
   base_url?: string;
   model?: string;
   reasoning_effort?: string;
+  service_tier?: string;
 }
 
 /**
@@ -134,6 +137,7 @@ export function resolveLearningProviderConfig(args: {
     cli.base_url ?? envBaseUrl ?? selection?.base_url;
 
   const reasoning_effort = cli.reasoning_effort ?? selection?.reasoning_effort;
+  const service_tier = selection?.provider === "codex" ? selection.service_tier : undefined;
   const models_per_provider: NonNullable<LlmCallConfig["models_per_provider"]> = {};
   if (provider && model_id) models_per_provider[provider] = model_id;
 
@@ -142,6 +146,7 @@ export function resolveLearningProviderConfig(args: {
   if (model_id) out.model_id = model_id;
   if (base_url) out.base_url = base_url;
   if (reasoning_effort) out.reasoning_effort = reasoning_effort;
+  if (service_tier) out.service_tier = service_tier;
   if (Object.keys(models_per_provider).length > 0) {
     out.models_per_provider = models_per_provider;
   }
@@ -466,18 +471,20 @@ async function callCodexCli(
   userPrompt: string,
   modelId?: string,
   reasoningEffort?: string,
+  serviceTier?: string,
 ): Promise<LlmCallResult> {
   const { spawn } = await import("node:child_process");
 
   const args: string[] = ["exec", "--skip-git-repo-check", "--ephemeral"];
   if (modelId) args.push("-m", modelId);
   if (reasoningEffort) args.push("-c", `model_reasoning_effort="${reasoningEffort}"`);
+  if (serviceTier) args.push("-c", `service_tier="${serviceTier}"`);
   args.push("-");
 
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
   emitModelCallLog(
-    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+    `codex call: model="${modelId ?? "(codex default)"}" effort="${reasoningEffort ?? "(unset)"}" service_tier="${serviceTier ?? "(unset)"}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
   );
 
   const child = spawn("codex", args, {
@@ -614,7 +621,13 @@ async function dispatchByPlan(
   }
   if (plan.provider_identity === "codex") {
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.codex;
-    return callCodexCli(systemPrompt, userPrompt, modelId, config.reasoning_effort);
+    return callCodexCli(
+      systemPrompt,
+      userPrompt,
+      modelId,
+      config.reasoning_effort,
+      config.service_tier,
+    );
   }
   if (plan.provider_identity === "anthropic") {
     const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -700,6 +713,7 @@ export async function callLlm(
       userPrompt,
       config.model_id ?? config.models_per_provider?.codex,
       config.reasoning_effort,
+      config.service_tier,
     );
   }
 
@@ -747,6 +761,7 @@ export async function callLlm(
         userPrompt,
         modelId,
         config?.reasoning_effort,
+        config?.service_tier,
       );
     }
     case "anthropic": {

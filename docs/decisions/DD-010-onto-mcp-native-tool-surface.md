@@ -86,7 +86,7 @@ interface OntoExecutionProvider {
 ```
 
 This keeps platform-specific work bounded. A provider does not decide what
-`onto review` means; it only reports and performs what its host can execute.
+MCP review means; it only reports and performs what its host can execute.
 The canonical behavior is always: isolated lens contexts, controlled
 lens-deliberation result, then synthesize consumption of `deliberation.md`.
 
@@ -101,8 +101,8 @@ lens-deliberation result, then synthesize consumption of `deliberation.md`.
 
 ## Next Work
 
-1. Inventory TS `onto` review APIs that can become library calls instead of CLI
-   worker calls.
+1. Inventory TS `onto` review APIs that can become library calls instead of
+   process-bound worker calls.
 2. Define MCP tool schemas and result shapes.
 3. Map current `.onto` YAML/MD and TS runtime artifacts to those tool schemas.
 4. Define provider conformance tests using mock/local provider first.

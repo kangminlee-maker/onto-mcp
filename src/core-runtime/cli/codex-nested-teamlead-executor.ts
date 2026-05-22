@@ -73,6 +73,8 @@ export interface CodexNestedTeamleadInput {
    * (medium | high | xhigh | low). When unset, codex picks its default.
    */
   reasoning_effort?: string;
+  /** Codex-only `service_tier` value for outer and inner invocations. */
+  service_tier?: string;
   /**
    * Project root for the outer codex's cwd. Defaults to `process.cwd()`.
    * Inner codex invocations inherit the outer's cwd; pass an explicit
@@ -163,6 +165,7 @@ export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): stri
   const script = buildNestedDispatchScript(input);
   const modelDiag = input.model ?? "(codex default)";
   const effortDiag = input.reasoning_effort ?? "(codex default)";
+  const serviceTierDiag = input.service_tier ?? "(codex default)";
 
   // The prompt deliberately minimizes descriptive instructions. Outer codex's
   // job is to run a literal bash script — not to reason about dispatch
@@ -174,7 +177,7 @@ export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): stri
   // removed.
   return [
     `Nested-codex dispatch for ${input.lenses.length} lenses ` +
-      `(model=${modelDiag}, effort=${effortDiag}).`,
+      `(model=${modelDiag}, effort=${effortDiag}, service_tier=${serviceTierDiag}).`,
     "",
     "Action: Execute the bash script below by piping it to `bash -s`.",
     "Do not modify it, do not substitute variables, do not use file-edit",
@@ -210,6 +213,9 @@ function buildNestedDispatchScript(input: CodexNestedTeamleadInput): string {
   const modelOpt = input.model ? ` -m ${shellQuote(input.model)}` : "";
   const effortOpt = input.reasoning_effort
     ? ` -c model_reasoning_effort=${shellQuote(input.reasoning_effort)}`
+    : "";
+  const serviceTierOpt = input.service_tier
+    ? ` -c service_tier=${shellQuote(input.service_tier)}`
     : "";
   const lensEntries = input.lenses
     .map((l) => {
@@ -262,7 +268,7 @@ function buildNestedDispatchScript(input: CodexNestedTeamleadInput): string {
     "      --sandbox danger-full-access \\",
     "      --skip-git-repo-check \\",
     "      --ephemeral \\",
-    `      -o "$OUTPUT"${modelOpt}${effortOpt} \\`,
+      `      -o "$OUTPUT"${modelOpt}${effortOpt}${serviceTierOpt} \\`,
     '      - >> "$LOG" 2>&1',
     '    EC=$?',
     '    if [ -f "$OUTPUT" ]; then',
@@ -426,6 +432,8 @@ export async function spawnOuterCodex(
     model?: string;
     /** `-c model_reasoning_effort=<value>` override. Absent → TOML default. */
     reasoning_effort?: string;
+    /** `-c service_tier=<value>` override. Absent → TOML default. */
+    service_tier?: string;
     /**
      * Optional path to tee outer codex stdout into as the worker
      * emits data. When set, each stdout chunk is appended to this file
@@ -452,6 +460,9 @@ export async function spawnOuterCodex(
   ];
   if (options.reasoning_effort) {
     args.push("-c", `model_reasoning_effort="${options.reasoning_effort}"`);
+  }
+  if (options.service_tier) {
+    args.push("-c", `service_tier="${options.service_tier}"`);
   }
   if (options.model) {
     args.push("-m", options.model);
@@ -562,6 +573,9 @@ export async function runCodexNestedTeamlead(
     ...(input.model ? { model: input.model } : {}),
     ...(input.reasoning_effort
       ? { reasoning_effort: input.reasoning_effort }
+      : {}),
+    ...(input.service_tier
+      ? { service_tier: input.service_tier }
       : {}),
     ...(input.stream_stdout_path
       ? { stream_stdout_path: input.stream_stdout_path }

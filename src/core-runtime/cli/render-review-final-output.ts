@@ -224,6 +224,16 @@ export async function runRenderReviewFinalOutputCli(
     sourceText,
     ["Purpose Alignment Verification", "Synthesis Verdict"],
   );
+  const finalReviewResult = sectionOrDefault(
+    sourceText,
+    [
+      "Final Review Result",
+      "Comprehensive Result Explanation",
+      "Overall Result Explanation",
+      "Review Result Explanation",
+    ],
+    "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts",
+  );
   const immediateActions = sectionOrDefault(sourceText, [
     "Immediate Actions Required",
     "Immediate Actions",
@@ -282,6 +292,9 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Controlled deliberation: ${synthesisExecuted ? `\`${toRelativePath(deliberationPath, projectRoot)}\`` : "not performed"}
 - Source artifact: ${synthesisExecuted ? `\`${toRelativePath(sourcePath, projectRoot)}\`` : "not produced"}
 - Execution status: ${executionStatus}
+
+### Final Review Result
+${sourceText.length > 0 ? finalReviewResult : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts"}
 
 ${renderConsensusHeading(
     participatingLensCount,

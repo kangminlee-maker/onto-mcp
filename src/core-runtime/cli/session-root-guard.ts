@@ -22,8 +22,8 @@
  *
  * Modes:
  *   - "enforce" (default): write marker on first run, throw on legacy.
- *   - "inspect": pure read, no I/O writes, no throw. Used by `onto info` /
- *     diagnostic commands that should not trigger migration as a side effect.
+ *   - "inspect": pure read, no I/O writes, no throw. Used by diagnostics
+ *     that should not trigger migration as a side effect.
  *
  * Why a separate module:
  *   - Phase 3 commands (promote, reclassify-insights) call this from src/cli.ts

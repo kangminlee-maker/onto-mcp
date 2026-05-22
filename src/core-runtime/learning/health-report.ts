@@ -11,7 +11,7 @@
  * Scope: pure. No I/O. No mutation.
  *
  * Consumers:
- *   - `src/core-runtime/cli/health.ts` — /onto:health CLI entry
+ *   - future learn/govern surfaces
  */
 
 import type {
@@ -216,10 +216,10 @@ export function renderHealthReport(report: HealthReport): string {
   const largestLines = report.largest_file?.lines ?? 0;
   const sizeStatus = largestLines >= 200 ? "WARNING" : largestLines >= 100 ? "NOTICE" : "OK";
   lines.push(
-    `| File size | ${sizeStatus} | 최대 ${largestLines}행 (100 NOTICE, 200 WARNING). 대응: /onto:promote 로 consolidation·retirement 검토 |`,
+    `| File size | ${sizeStatus} | 최대 ${largestLines}행 (100 NOTICE, 200 WARNING). 대응: learn promotion design에서 consolidation 검토 |`,
   );
   lines.push(
-    `| Event markers | ${report.event_markers} | applied-then-found-invalid 누적. /onto:promote 실행 시 퇴역 후보로 표면화 |`,
+    `| Event markers | ${report.event_markers} | applied-then-found-invalid 누적. learn promotion design에서 후보로 표면화 |`,
   );
   lines.push(
     `| Tag-incomplete | ${report.tag_incomplete} | Creation gate 실패 수. 해당 학습 항목의 태그 수동 보완 필요 |`,

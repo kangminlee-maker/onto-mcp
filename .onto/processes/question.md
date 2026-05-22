@@ -1,7 +1,7 @@
 # Individual Query Mode
 
 > Asks a question to a single agent from a specific perspective. Executed via Agent tool (worker) without Agent Teams.
-> Related: If multiple perspectives are needed, run a team review via `/onto:review`. If learnings accumulate, promotion is possible via `.onto/processes/learn/promote.md`.
+> Related: If multiple perspectives are needed, use the MCP review path. If learnings accumulate, promotion is possible via `.onto/processes/learn/promote.md`.
 
 ### 0. Domain Selection
 
@@ -100,7 +100,7 @@ Mark "none" if no learnings were applied.
 
 Delivers the agent's answer to the user.
 If any items are marked as requiring another agent's perspective, inform the user:
-"The perspective of {agent name} may also be helpful for this question. You can check further via `/onto:ask-{dimension} {question}`."
+"The perspective of {agent name} may also be helpful for this question."
 
 ### 4. Learning Storage
 

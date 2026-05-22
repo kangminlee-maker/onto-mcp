@@ -29,7 +29,7 @@ Scan all files in `~/.onto/drafts/{domain}/` for SEED markers (`<!-- SEED:` ... 
 
 **Total**: {total} SEED markers remaining.
 
-Remove all SEED markers before promoting. Use `/onto:feedback {domain}` to replace seed content with evidence-based content, or edit files directly.
+Remove all SEED markers before promoting. Use the feedback process to replace seed content with evidence-based content, or edit files directly.
 ```
 
 ### 2. Structural Validation

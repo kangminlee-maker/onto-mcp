@@ -178,7 +178,7 @@ function formatNextAction(state: ScopeState): string {
     case "draft":
       return "소스를 스캔하세요 (`/start`를 실행하세요)";
     case "grounded":
-      return "스캔이 끝났습니다. 대화 에이전트(Claude Code 세션 등)가 주체자에게 선택지 기반 질문으로 방향·범위·제약을 확인한 뒤, 수렴된 답을 모아 `onto evolve propose-align --scope-id <id> --json '<dialog-output>'` 으로 제출하세요. CLI 가 constraint.discovered 이벤트 + align-packet.md + align.proposed 이벤트를 기록합니다.";
+      return "스캔이 끝났습니다. 대화 에이전트가 주체자에게 선택지 기반 질문으로 방향·범위·제약을 확인한 뒤, 수렴된 답을 bounded evolve runtime input으로 제출하세요. Runtime이 constraint.discovered 이벤트 + align-packet.md + align.proposed 이벤트를 기록합니다.";
     case "exploring": {
       const ep = state.exploration_progress;
       const phaseInfo = ep ? ` (Phase ${ep.current_phase}/6: ${ep.current_phase_name})` : "";

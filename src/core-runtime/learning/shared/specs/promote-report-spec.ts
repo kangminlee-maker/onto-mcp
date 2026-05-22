@@ -58,8 +58,7 @@ export const PromoteReportSpec: ArtifactSpec<PromoteReport> = {
           `bump (v1→v2). The new Phase B apply path requires ` +
           `cross_agent_dedup_clusters[].primary_member_index which the legacy format ` +
           `does not carry. ` +
-          `Action: discard the legacy report and regenerate via ` +
-          `'onto promote' (new session), then re-run apply on the fresh session.`,
+          `Action: discard the legacy report, regenerate a new report, then re-run apply on the fresh session.`,
       );
     }
     return rejectPreV7<PromoteReport>(raw, KIND, SUPPORTED);
@@ -124,7 +123,7 @@ export const PromoteReportSpec: ArtifactSpec<PromoteReport> = {
         ) {
           errors.push(
             `cross_agent_dedup_clusters[${i}].primary_member_index must be a non-negative integer ` +
-              `(schema v2 required; regenerate Phase A via 'onto promote' if the report predates the bump)`,
+              `(schema v2 required; regenerate Phase A if the report predates the bump)`,
           );
         }
         if (!Array.isArray(c.member_items)) {

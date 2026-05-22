@@ -1,8 +1,7 @@
 {
   "name": "onto",
-  "description": "Ontology verification system using a 9-lens review structure plus a separate synthesize stage. Verifies logical consistency, structural completeness, dependency integrity, semantic accuracy, practical usability, evolution fitness, domain coverage, conciseness, and purpose/value alignment across any domain.",
+  "description": "MCP-native ontology review runtime using context-isolated lenses, controlled deliberation, and a structured ReviewRecord artifact.",
   "author": {
     "name": "kangmin"
-  },
-  "commands": "./.onto/commands/"
+  }
 }

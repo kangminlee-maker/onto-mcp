@@ -1,5 +1,5 @@
 /**
- * onto evolve — CLI entry point.
+ * Evolve runtime adapter.
  *
  * Routes evolve subcommands to the appropriate command handler.
  */
@@ -36,7 +36,7 @@ export async function handleEvolveCli(
     case undefined:
       console.log(
         [
-          "Usage: onto evolve <subcommand> [options]",
+          "Usage: evolve <subcommand> [options]",
           "",
           "Subcommands:",
           "  start <description>              Start or resume an evolve scope",
@@ -62,14 +62,14 @@ export async function handleEvolveCli(
           "  selection-based choices + natural-language fallback, consolidates answers",
           "  across rounds, and on convergence calls propose-align with the resulting",
           "  {interpreted_direction, proposed_scope, scenarios, as_is, constraints,",
-          "   decision_questions}. CLI owns state machine, event log, packet rendering.",
+          "   decision_questions}. Runtime owns state machine, event log, packet rendering.",
         ].join("\n"),
       );
       return 0;
 
     default:
       console.error(`[onto] Unknown evolve subcommand: ${subcommand}`);
-      console.error("Run 'onto evolve --help' for usage.");
+      console.error("Run evolve help for usage.");
       return 1;
   }
 }
@@ -147,7 +147,7 @@ async function handleEvolveStart(
           status: "initialized",
           scope_id: result.scopeId,
           brief_path: result.briefPath,
-          message: "Scope initialized. Fill in the brief, then run 'onto evolve start' again.",
+          message: "Scope initialized. Fill in the brief, then resume evolve start.",
         }, null, 2),
       );
       return 0;
@@ -213,7 +213,7 @@ async function handleEvolveProposeAlign(argv: string[]): Promise<number> {
       'Shape: --json \'{"interpreted_direction":"...","proposed_scope":{"in":[...],"out":[...]},"as_is":{...},"constraints":[...],"decision_questions":[...]}\'',
     );
     console.error(
-      "See `onto evolve --help` for the UX contract (agent owns dialog, CLI owns state/events/packet).",
+      "See evolve help for the UX contract (agent owns dialog, runtime owns state/events/packet).",
     );
     return 1;
   }

@@ -1,7 +1,7 @@
 # Review Interpretation Contract
 
 > 상태: Active
-> 목적: 현재 `onto` 프로토타입의 `/onto:review`가 먼저 수행해야 하는 `검토 해석 (InvocationInterpretation)` 책임을 고정한다.
+> 목적: MCP review 호출이 먼저 수행해야 하는 `검토 해석 (InvocationInterpretation)` 책임을 고정한다.
 > 기준 문서:
 > - `.onto/processes/review/lens-registry.md`
 > - `.onto/authority/core-lexicon.yaml`
@@ -10,7 +10,7 @@
 
 ## 1. Position
 
-`검토 해석 (InvocationInterpretation)`은 `/onto:review`가 실제 실행에 들어가기 전에 수행하는
+`검토 해석 (InvocationInterpretation)`은 `onto.review` 또는 `onto.prepare_review`가 실제 실행에 들어가기 전에 수행하는
 `LLM` 소유 단계다.
 
 이 단계의 목적은 아래를 해석하는 것이다.
@@ -132,7 +132,7 @@ target_scope_candidate:
 주체자 요청:
 
 ```text
-/onto:review .onto/principles/ontology-as-code-guideline.md
+Review `.onto/principles/ontology-as-code-guideline.md`.
 production semantic quality bar 기획이 완결적인지 검토해줘
 ```
 
@@ -181,13 +181,12 @@ ambiguity_notes:
 
 ## 7. Prompt Surface Mapping
 
-현재 프로토타입에서는 아래가 interpretation source material이다.
+현재 runtime에서는 아래가 interpretation source material이다.
 
-- `.onto/commands/review.md`
 - `process.md`의 domain determination rules
 - `.onto/processes/review/review.md`의 Step 0, Step 1.5
 
-즉 현재 `/onto:review` 프롬프트는 먼저 아래 순서를 따라야 한다.
+즉 현재 review preparation은 먼저 아래 순서를 따라야 한다.
 
 1. 요청 의미를 해석한다
 2. domain recommendation을 만든다
@@ -200,15 +199,15 @@ ambiguity_notes:
 
 ---
 
-## 8. Command / Plugin Effect
+## 8. MCP / Runtime Effect
 
 이 계약이 뜻하는 바는 아래다.
 
-1. `/onto:review` command는 바로 process 전체를 실행하면 안 된다.
+1. `onto.review`는 해석 없이 process 전체를 바로 실행하면 안 된다.
 2. 먼저 interpretation 결과를 만든 뒤,
 3. 그 interpretation을 다음 단계에 넘겨야 한다.
 
-즉 커맨드와 플러그인은 적어도 개념적으로 아래 흐름을 따라야 한다.
+즉 MCP tool과 runtime은 적어도 개념적으로 아래 흐름을 따라야 한다.
 
 `user request -> interpretation -> binding -> review execution`
 
@@ -244,5 +243,5 @@ prompt-backed path에서는 이 중 interpretation 결과를
 이 문서 다음 단계는 아래다.
 
 1. `검토 고정 계약 (review binding contract)`을 고정한다
-2. `.onto/commands/review.md`가 이 두 단계를 명시적으로 읽도록 바꾼다
+2. `src/core-api/review-api.ts`와 materializer가 이 두 단계를 명시적으로 보존한다
 3. 이후 `.onto/processes/review/review.md` Step 0/1/1.5를 interpretation/binding 기준으로 다시 정리한다

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * CLI helpers for the Nested Spawn Coordinator.
+ * Runtime helpers for the Nested Spawn Coordinator.
  *
  * These automate the deterministic boilerplate that the coordinator
  * previously performed manually between Agent tool dispatches.
@@ -9,7 +9,7 @@
  * Non-deterministic elements (documented):
  * - Failure messages: generic "output file missing or empty" (Agent tool
  *   does not provide structured error info)
- * - Timing: approximate timestamps recorded at CLI invocation time
+ * - Timing: approximate timestamps recorded at process invocation time
  */
 
 import fs from "node:fs/promises";
@@ -783,7 +783,7 @@ export async function runWriteExecutionResult(argv: string[]): Promise<number> {
 }
 
 // ─────────────────────────────────────────────
-// CLI dispatch
+// Runtime dispatch
 // ─────────────────────────────────────────────
 
 /** SSOT for subcommand names: one map, used both by dispatch and the help text. */

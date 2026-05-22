@@ -95,11 +95,34 @@ interface ReviewInvokeRouteSummary {
     lens_seat: ReviewExecutionProfile["lens"]["seat"];
     worker_executor: ReviewExecutionProfile["worker_executor"];
     deliberation: ReviewExecutionProfile["deliberation"];
+    model?: string;
+    effort?: string;
+    service_tier?: string;
   };
   review_mode: ReviewMode;
   max_concurrent_lenses: number;
   concurrency_strategy: "bounded_parallel";
   synthesize_waits_for_all_lenses: true;
+}
+
+interface ReviewResultClosureSummary {
+  issue_count: number;
+  severity_counts: Record<string, number>;
+  timing_counts: Record<string, number>;
+  closure_counts: Record<string, number>;
+  problem_definitions: Array<{
+    issue_id: string;
+    problem_definition: string;
+    issue_role: string;
+    judgment_state: string;
+    timing_class: string;
+    closure_class: string;
+  }>;
+}
+
+interface ReviewResultExplanationSummary {
+  final_review_result: string;
+  screen_lines: string[];
 }
 
 // Lens IDs derived from .onto/authority/core-lens-registry.yaml (single source of truth)
@@ -291,6 +314,323 @@ function applyExecutorOverrideToProfile(
   return profile;
 }
 
+function isInsidePath(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function displayPathFromProject(projectRoot: string, candidate: string): string {
+  if (!path.isAbsolute(candidate)) return candidate;
+  const relative = path.relative(projectRoot, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative))
+    ? relative || "."
+    : candidate;
+}
+
+function displayMaybePathFromProject(projectRoot: string, value: string): string {
+  return path.isAbsolute(value) ? displayPathFromProject(projectRoot, value) : value;
+}
+
+function displaySettingValue(value: string | undefined | null): string {
+  return typeof value === "string" && value.length > 0 ? value : "(unset)";
+}
+
+function formatPreviewList(items: string[], indent = "    "): string[] {
+  return items.length > 0
+    ? items.map((item) => `${indent}- ${item}`)
+    : [`${indent}- (none)`];
+}
+
+function renderReviewStartPreview(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  setup: ReviewInvokeSetup;
+  reviewExecutionProfile: ReviewExecutionProfile;
+}): string {
+  const { projectRoot, sessionRoot, setup, reviewExecutionProfile } = args;
+  const inputs = setup.resolvedInvokeInputs;
+  const targetPath = path.resolve(inputs.targetPath);
+  const boundaryLabel = isInsidePath(projectRoot, targetPath)
+    ? "project"
+    : "external";
+  const projectSettingsPath = path.join(projectRoot, ".onto", "settings.json");
+  const userSettingsPath = path.join(os.homedir(), ".onto", "settings.json");
+  const selectedDomain =
+    inputs.domainFinalValue.length > 0 ? inputs.domainFinalValue : "no-domain";
+  const configuredLensIds = inputs.resolvedLensIds;
+  const profileTrace = reviewExecutionProfile.trace.length > 0
+    ? reviewExecutionProfile.trace
+    : ["profile resolved from settings and host signals"];
+
+  return [
+    "[review start]",
+    "scope:",
+    `  target: ${displayPathFromProject(projectRoot, targetPath)}`,
+    `  boundary: ${boundaryLabel}`,
+    `  target_scope_kind: ${inputs.targetScopeKind}`,
+    `  materialized_kind: ${inputs.materializedKind}`,
+    "  resolved_target_refs:",
+    ...formatPreviewList(
+      inputs.resolvedTargetRefs.map((ref) =>
+        displayMaybePathFromProject(projectRoot, ref),
+      ),
+    ),
+    "  filesystem_allowed_roots:",
+    ...formatPreviewList(
+      inputs.filesystemAllowedRoots.map((root) =>
+        displayMaybePathFromProject(projectRoot, root),
+      ),
+    ),
+    `  session_root: ${displayPathFromProject(projectRoot, sessionRoot)}`,
+    "intent:",
+    `  request_text: ${inputs.requestText}`,
+    "domain:",
+    `  requested_token: ${
+      inputs.requestedDomainToken.length > 0 ? inputs.requestedDomainToken : "(none)"
+    }`,
+    `  selected: ${selectedDomain}`,
+    `  selection_mode: ${inputs.domainSelectionMode}`,
+    `  selection_required: ${String(inputs.domainSelectionRequired)}`,
+    "review_lenses:",
+    `  review_mode: ${inputs.reviewMode}`,
+    `  lens_count: ${configuredLensIds.length}`,
+    `  lens_ids: ${configuredLensIds.join(", ")}`,
+    "execution:",
+    `  mode: ${reviewExecutionProfile.mode}`,
+    `  host_runtime: ${reviewExecutionProfile.host}`,
+    `  worker_executor: ${reviewExecutionProfile.worker_executor}`,
+    `  teamlead_seat: ${reviewExecutionProfile.teamlead.seat}`,
+    `  lens_seat: ${reviewExecutionProfile.lens.seat}`,
+    `  deliberation: ${reviewExecutionProfile.deliberation}`,
+    `  max_concurrent_lenses: ${setup.maxConcurrentLenses}`,
+    "model:",
+    `  auth: ${displaySettingValue(reviewExecutionProfile.auth)}`,
+    `  provider: ${displaySettingValue(reviewExecutionProfile.provider)}`,
+    `  model: ${displaySettingValue(reviewExecutionProfile.model)}`,
+    `  effort: ${displaySettingValue(reviewExecutionProfile.effort)}`,
+    `  service_tier: ${displaySettingValue(reviewExecutionProfile.service_tier)}`,
+    "configuration:",
+    `  project_settings: ${displayPathFromProject(projectRoot, projectSettingsPath)}`,
+    `  user_settings: ${userSettingsPath}`,
+    "  mcp_arguments: domain/noDomain, reviewMode, lensIds, maxConcurrentLenses",
+    "  dev_harness_flags: --domain, --no-domain, --review-mode, --lens-id, --max-concurrent-lenses",
+    "profile_trace:",
+    ...formatPreviewList(profileTrace),
+  ].join("\n");
+}
+
+function stringValue(value: unknown, fallback = "unknown"): string {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : fallback;
+}
+
+function countStringValues(values: string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) {
+    counts[value] = (counts[value] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function renderCountMap(counts: Record<string, number>): string {
+  const entries = Object.entries(counts).sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  if (entries.length === 0) return "(none)";
+  return entries.map(([key, count]) => `${key}=${count}`).join(", ");
+}
+
+function markdownHeadingLevel(line: string): number | null {
+  const match = /^(#{2,6})\s+/.exec(line.trim());
+  if (!match) return null;
+  return match[1]?.length ?? null;
+}
+
+function extractMarkdownSectionByHeadings(
+  markdownText: string,
+  headings: string[],
+): string | null {
+  const lines = markdownText.split("\n");
+  const accepted = new Set(
+    headings.flatMap((heading) => [`## ${heading}`, `### ${heading}`]),
+  );
+  const startIndex = lines.findIndex((line) => accepted.has(line.trim()));
+  if (startIndex === -1) return null;
+
+  const startLine = lines[startIndex];
+  const startHeadingLevel =
+    typeof startLine === "string" ? markdownHeadingLevel(startLine) : null;
+  const collected: string[] = [];
+
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (line === undefined) break;
+    const currentHeadingLevel = markdownHeadingLevel(line);
+    if (
+      currentHeadingLevel !== null &&
+      startHeadingLevel !== null &&
+      currentHeadingLevel <= startHeadingLevel
+    ) {
+      break;
+    }
+    collected.push(line);
+  }
+
+  const section = collected.join("\n").trim();
+  return section.length > 0 ? section : null;
+}
+
+function renderScreenBoundedLines(text: string, maxLines = 10): string[] {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) return ["    - (none)"];
+  const bounded = lines.slice(0, maxLines).map((line) => `    ${line}`);
+  if (lines.length > maxLines) {
+    bounded.push("    - ... see final_output for the complete explanation");
+  }
+  return bounded;
+}
+
+async function readReviewResultExplanationSummary(
+  finalOutputPath: string,
+): Promise<ReviewResultExplanationSummary> {
+  if (!(await fileExists(finalOutputPath))) {
+    const unavailable = "- final output unavailable";
+    return {
+      final_review_result: unavailable,
+      screen_lines: renderScreenBoundedLines(unavailable),
+    };
+  }
+
+  const finalOutputText = await fs.readFile(finalOutputPath, "utf8");
+  const finalReviewResult =
+    extractMarkdownSectionByHeadings(finalOutputText, [
+      "Final Review Result",
+      "Comprehensive Result Explanation",
+      "Overall Result Explanation",
+      "Review Result Explanation",
+    ]) ?? "- final review result section unavailable";
+
+  return {
+    final_review_result: finalReviewResult,
+    screen_lines: renderScreenBoundedLines(finalReviewResult),
+  };
+}
+
+async function readReviewResultClosureSummary(
+  sessionRoot: string,
+): Promise<ReviewResultClosureSummary> {
+  const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
+  const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
+  const issueLedger = (await fileExists(issueLedgerPath))
+    ? await readYamlDocument<{ issues?: unknown[] }>(issueLedgerPath)
+    : {};
+  const problemFraming = (await fileExists(problemFramingPath))
+    ? await readYamlDocument<{ classifications?: unknown[] }>(problemFramingPath)
+    : {};
+  const issues = Array.isArray(issueLedger.issues) ? issueLedger.issues : [];
+  const classifications = Array.isArray(problemFraming.classifications)
+    ? problemFraming.classifications
+    : [];
+  const severityValues = issues.map((issue) =>
+    issue !== null && typeof issue === "object"
+      ? stringValue((issue as Record<string, unknown>).severity)
+      : "unknown",
+  );
+  const classificationRecords = classifications
+    .filter(
+      (classification): classification is Record<string, unknown> =>
+        classification !== null &&
+        typeof classification === "object" &&
+        !Array.isArray(classification),
+    );
+  return {
+    issue_count: Math.max(issues.length, classificationRecords.length),
+    severity_counts: countStringValues(severityValues),
+    timing_counts: countStringValues(
+      classificationRecords.map((classification) =>
+        stringValue(classification.timing_class),
+      ),
+    ),
+    closure_counts: countStringValues(
+      classificationRecords.map((classification) =>
+        stringValue(classification.closure_class),
+      ),
+    ),
+    problem_definitions: classificationRecords.slice(0, 5).map((classification) => ({
+      issue_id: stringValue(classification.issue_id),
+      problem_definition: stringValue(classification.problem_definition),
+      issue_role: stringValue(classification.issue_role),
+      judgment_state: stringValue(classification.judgment_state),
+      timing_class: stringValue(classification.timing_class),
+      closure_class: stringValue(classification.closure_class),
+    })),
+  };
+}
+
+function renderReviewResultOverview(args: {
+  projectRoot: string;
+  target: string;
+  targetScopeKind: ReviewTargetScopeKind;
+  domain: string;
+  status: string | null;
+  deliberationStatus: string | null;
+  reviewMode: ReviewMode;
+  plannedLensIds: string[];
+  participatingLensIds: string[];
+  degradedLensIds: string[];
+  closureSummary: ReviewResultClosureSummary;
+  explanationSummary: ReviewResultExplanationSummary;
+  artifactRefs: {
+    final_output: string;
+    review_record: string;
+    execution_result: string;
+    review_run_manifest: string;
+  };
+}): string {
+  const degraded =
+    args.degradedLensIds.length > 0 ? args.degradedLensIds.join(", ") : "none";
+  const problemLines =
+    args.closureSummary.problem_definitions.length > 0
+      ? args.closureSummary.problem_definitions.map(
+          (problem) =>
+            `    - ${problem.issue_id}: ${problem.problem_definition} (${problem.issue_role}, ${problem.judgment_state}, ${problem.timing_class}/${problem.closure_class})`,
+        )
+      : ["    - (none)"];
+  return [
+    "[review result]",
+    "outcome:",
+    `  status: ${args.status ?? "unknown"}`,
+    `  deliberation: ${args.deliberationStatus ?? "unknown"}`,
+    `  review_mode: ${args.reviewMode}`,
+    "scope:",
+    `  target: ${args.target}`,
+    `  target_scope_kind: ${args.targetScopeKind}`,
+    `  domain: ${args.domain.length > 0 ? args.domain : "none"}`,
+    "coverage:",
+    `  lenses: ${args.participatingLensIds.length}/${args.plannedLensIds.length} participating`,
+    `  degraded_lenses: ${degraded}`,
+    "result_explanation:",
+    "  final_review_result:",
+    ...args.explanationSummary.screen_lines,
+    "issues:",
+    `  count: ${args.closureSummary.issue_count}`,
+    `  severity: ${renderCountMap(args.closureSummary.severity_counts)}`,
+    `  timing: ${renderCountMap(args.closureSummary.timing_counts)}`,
+    `  closure: ${renderCountMap(args.closureSummary.closure_counts)}`,
+    "  problem_definitions:",
+    ...problemLines,
+    "artifacts:",
+    `  final_output: ${displayPathFromProject(args.projectRoot, args.artifactRefs.final_output)}`,
+    `  review_record: ${displayPathFromProject(args.projectRoot, args.artifactRefs.review_record)}`,
+    `  execution_result: ${displayPathFromProject(args.projectRoot, args.artifactRefs.execution_result)}`,
+    `  review_run_manifest: ${displayPathFromProject(args.projectRoot, args.artifactRefs.review_run_manifest)}`,
+  ].join("\n");
+}
+
 function executionRealizationForProfile(
   profile: ReviewExecutionProfile,
 ): ResolvedExecutionProfile["execution_realization"] {
@@ -405,6 +745,9 @@ function appendExecutorModelArgs(
     llmSelection?.reasoning_effort;
   if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
     args.push("--reasoning-effort", reasoningEffort);
+  }
+  if (llmSelection?.service_tier) {
+    args.push("--config-override", `service_tier="${llmSelection.service_tier}"`);
   }
   return { bin: config.bin, args };
 }
@@ -542,7 +885,7 @@ function emitCoordinatorStartHandoff(args: {
     request_text: string;
     review_execution_profile: ReviewExecutionProfile;
     next_action: {
-      cli: string;
+      development_harness: string;
       orchestration_guidance: {
         preferred: string;
         alternate: string;
@@ -559,12 +902,12 @@ function emitCoordinatorStartHandoff(args: {
     request_text: args.requestText,
     review_execution_profile: args.reviewExecutionProfile,
     next_action: {
-      cli: `onto coordinator start ${q(args.requestedTarget)} ${q(args.requestText)}`,
+      development_harness: `npm run coordinator:start -- ${q(args.requestedTarget)} ${q(args.requestText)}`,
       orchestration_guidance: {
         preferred:
           "teamlead가 제한된 context를 보존하며 worker lens들을 조율한다.",
         alternate:
-          "host가 nested worker orchestration을 제공하지 않으면 main-workers 경로로 재실행한다.",
+          "host capability와 profile seat constraint에 맞는 coordinator state machine 경로를 선택한다.",
         recording_note:
           "실제 실행 profile은 session artifact와 review-run-manifest에 기록한다.",
         profile_note:
@@ -1521,8 +1864,7 @@ function resolveMaxConcurrentLenses(
 function rejectRemovedFlags(argv: string[]): void {
   if (hasOptionFlag(argv, "claude")) {
     throw new Error(
-      "--claude is no longer accepted. The `onto review` CLI runs Codex only. " +
-        "For Claude execution, use `onto coordinator start` (Agent Teams nested spawn).",
+      "--claude is not supported by review:invoke. Use the MCP review path or project settings.",
     );
   }
   for (const removed of ["host-runtime", "execution-realization", "execution-mode"]) {
@@ -1532,8 +1874,7 @@ function rejectRemovedFlags(argv: string[]): void {
       argv.some((token) => token.startsWith(`${optionToken}=`));
     if (present) {
       throw new Error(
-        `--${removed} is no longer accepted. The \`onto review\` CLI is codex-only; ` +
-          "remove the flag.",
+        `--${removed} is not supported by review:invoke. Use .onto/settings.json for execution profile selection.`,
       );
     }
   }
@@ -1728,7 +2069,35 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const resolvedOntoHome = rawOntoHome ? path.resolve(rawOntoHome) : undefined;
 
   const noWatch = hasOptionFlag(argv, "no-watch");
+  const hasExplicitExecutorOverride =
+    readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
+    readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
+  const effectiveReviewExecutionProfile = applyExecutorOverrideToProfile(
+    setup.executionProfile.review_execution_profile,
+    argv,
+  );
+  const plannedSessionId = requireString(
+    readSingleOptionValueFromArgv(setup.startArgv, "session-id"),
+    "session-id",
+  );
+  const plannedSessionRoot = path.join(
+    resolvedProjectRoot,
+    ".onto",
+    "review",
+    plannedSessionId,
+  );
 
+  console.log(
+    renderReviewStartPreview({
+      projectRoot: resolvedProjectRoot,
+      sessionRoot: plannedSessionRoot,
+      setup,
+      reviewExecutionProfile: effectiveReviewExecutionProfile,
+    }),
+  );
+  console.log("[review invoke] step 1/3 start session");
   const startResult = await startReviewSession(setup.startArgv);
 
   if (prepareOnly) {
@@ -1753,7 +2122,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   // spawned the watcher before startReviewSession and relied on the shared
   // `.onto/review/.latest-session` pointer — but that pointer is a project-
   // global single file, so concurrent review sessions (two or more
-  // `onto review --codex` invocations running in parallel) caused each
+  // review invocations running in parallel) caused each
   // watcher to latch onto whichever session wrote `.latest-session` last.
   // Passing sessionRoot explicitly eliminates that race.
   if (!noWatch) {
@@ -1781,16 +2150,6 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     }
   }
 
-  const hasExplicitExecutorOverride =
-    readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
-    readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
-    readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
-    readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
-  const effectiveReviewExecutionProfile = applyExecutorOverrideToProfile(
-    setup.executionProfile.review_execution_profile,
-    argv,
-  );
-
   const resolvedRequestText = setup.resolvedInvokeInputs.requestText;
   const defaultExecutorConfig = resolveExecutorConfig(
     argv,
@@ -1811,6 +2170,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       : setup.executionProfile.review_execution_profile,
   );
 
+  console.log("[review invoke] step 2/3 prompt execution");
   const promptExecutionResult = await executeReviewPromptExecution({
     projectRoot: resolvedProjectRoot,
     sessionRoot,
@@ -1825,6 +2185,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     ontoConfig: setup.ontoConfig,
   });
 
+  console.log("[review invoke] step 3/3 record assembly");
   await completeReviewSession([
     "--project-root",
     resolvedProjectRoot,
@@ -1833,6 +2194,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "--request-text",
     resolvedRequestText,
   ]);
+  console.log("[review invoke] completed 3/3 record assembly");
   const reviewSummary = await readOptionalReviewSummary(sessionRoot);
   const boundedInvokeSteps = [
     "review:start-session",
@@ -1856,6 +2218,15 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       lens_seat: routeProfile.review_execution_profile.lens.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
+      ...(routeProfile.review_execution_profile.model
+        ? { model: routeProfile.review_execution_profile.model }
+        : {}),
+      ...(routeProfile.review_execution_profile.effort
+        ? { effort: routeProfile.review_execution_profile.effort }
+        : {}),
+      ...(routeProfile.review_execution_profile.service_tier
+        ? { service_tier: routeProfile.review_execution_profile.service_tier }
+        : {}),
     },
     review_mode: setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: setup.maxConcurrentLenses,
@@ -1901,11 +2272,57 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     execution_result: executionResultPath,
     review_run_manifest: reviewRunManifestPath,
   };
+  const closureSummary = await readReviewResultClosureSummary(sessionRoot);
+  const explanationSummary =
+    await readReviewResultExplanationSummary(finalOutputPath);
+  const resultOverview = {
+    outcome: {
+      status: recordStatus,
+      deliberation_status: deliberationStatus,
+      review_mode: setup.resolvedInvokeInputs.reviewMode,
+    },
+    scope: {
+      target: setup.resolvedInvokeInputs.requestedTarget,
+      target_scope_kind: setup.resolvedInvokeInputs.targetScopeKind,
+      domain: setup.resolvedInvokeInputs.domainFinalValue,
+    },
+    coverage: {
+      planned_lens_count: setup.resolvedInvokeInputs.resolvedLensIds.length,
+      participating_lens_count: participatingLensIds.length,
+      degraded_lens_count: degradedLensIds.length,
+      participating_lens_ids: participatingLensIds,
+      degraded_lens_ids: degradedLensIds,
+    },
+    explanation: {
+      final_review_result: explanationSummary.final_review_result,
+    },
+    issues: closureSummary,
+    artifacts: artifactRefs,
+  };
+
+  console.log(
+    renderReviewResultOverview({
+      projectRoot: resolvedProjectRoot,
+      target: setup.resolvedInvokeInputs.requestedTarget,
+      targetScopeKind: setup.resolvedInvokeInputs.targetScopeKind,
+      domain: setup.resolvedInvokeInputs.domainFinalValue,
+      status: recordStatus,
+      deliberationStatus,
+      reviewMode: setup.resolvedInvokeInputs.reviewMode,
+      plannedLensIds: setup.resolvedInvokeInputs.resolvedLensIds,
+      participatingLensIds,
+      degradedLensIds,
+      closureSummary,
+      explanationSummary,
+      artifactRefs,
+    }),
+  );
 
   console.log(
     JSON.stringify(
       {
         summary: executionSummary,
+        result_overview: resultOverview,
         entrypoint_plan: {
           entrypoint: "review",
           target: setup.resolvedInvokeInputs.requestedTarget,

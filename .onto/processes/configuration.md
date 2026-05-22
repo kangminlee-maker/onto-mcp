@@ -90,13 +90,8 @@ other lens outputs in a bounded context. A teamlead-controlled step writes
 `deliberation.md`; synthesize consumes that artifact and does not create a new
 resolution channel.
 
-CLI setup shortcuts:
-
-| Command | Result |
-|---|---|
-| `onto config use main-workers` | main coordinates review; lens units run as isolated workers |
-| `onto config use nested-workers` | worker teamlead coordinates nested isolated lens workers |
-| `onto config set review.execution.max_concurrent_workers 6` | set the project concurrency cap |
+Edit `.onto/settings.json` directly. Unsupported shapes stop during settings
+resolution before review preparation continues.
 
 ### `llm`
 
@@ -107,8 +102,9 @@ Canonical model switcher.
   "llm": {
     "auth": "oauth",
     "provider": "openai",
-    "model": "gpt-5.4",
-    "effort": "high"
+    "model": "gpt-5.5",
+    "effort": "medium",
+    "service_tier": "fast"
   }
 }
 ```
@@ -121,6 +117,7 @@ Fields:
 | `provider` | `openai`, `anthropic`, `grok`, `lmstudio` |
 | `model` | provider model id |
 | `effort` | optional reasoning effort |
+| `service_tier` | Codex-only service tier; requires `auth: oauth` + `provider: openai` |
 | `base_url` | optional OpenAI-compatible endpoint URL |
 | `api_key_env` | optional environment variable name for API key lookup |
 
@@ -163,8 +160,9 @@ Unsupported combinations stop execution during settings/profile resolution.
   "llm": {
     "auth": "oauth",
     "provider": "openai",
-    "model": "gpt-5.4",
-    "effort": "high"
+    "model": "gpt-5.5",
+    "effort": "medium",
+    "service_tier": "fast"
   }
 }
 ```

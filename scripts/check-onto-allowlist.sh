@@ -23,12 +23,9 @@
 
 set -euo pipefail
 
-# Structural (versioned) subdirectory prefixes. Each repo-layout migration
-# phase (Phase 1 commands, Phase 2 domains, Phase 3-6 roles/processes/
-# principles/authority) appends its top-level directory pattern here. All
-# six structural subdirs were landed by Phase 6 (authority) on 2026-04-21.
+# Structural (versioned) subdirectory prefixes. Runtime-ephemeral directories
+# remain ignored; archived command surfaces live under development-records/.
 ALLOWED=(
-  ".onto/commands"
   ".onto/domains"
   ".onto/roles"
   ".onto/processes"
@@ -148,8 +145,6 @@ run_self_test() {
 
   # Case 1: all paths in allowlist → expect exit 0
   local -a pass_paths=(
-    ".onto/commands/foo.md"
-    ".onto/commands/learn/promote.md"
     ".onto/domains/software-engineering/concepts.md"
     ".onto/domains/nested/deep/path/file.md"
     ".onto/roles/logic.md"
@@ -160,7 +155,7 @@ run_self_test() {
   echo "[self-test] Case 1 (expect PASS): ${#pass_paths[@]} allowlist-conforming paths"
   local case1_out
   case1_out=$(check_paths "${pass_paths[@]}" 2>&1) && case1_rc=0 || case1_rc=$?
-  if [ "$case1_rc" -eq 0 ] && echo "$case1_out" | grep -q "__SUMMARY__ matched=8 violations=0"; then
+  if [ "$case1_rc" -eq 0 ] && echo "$case1_out" | grep -q "__SUMMARY__ matched=6 violations=0"; then
     echo "  ✓ guard accepted all ${#pass_paths[@]} conforming paths"
   else
     echo "  ✗ guard rejected conforming paths (regression)"
@@ -193,7 +188,7 @@ run_self_test() {
 
   # Case 3: mixed → expect exit 1 with exactly 1 violation reported
   local -a mixed_paths=(
-    ".onto/commands/ok.md"
+    ".onto/processes/ok.md"
     ".onto/violation/bad.md"
   )
   echo "[self-test] Case 3 (expect FAIL with 1 violation): mixed"

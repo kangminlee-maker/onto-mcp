@@ -26,7 +26,7 @@ import {
   type LlmModelSwitcherConfig,
 } from "../llm/model-switcher.js";
 import {
-  assertNoRetiredConfigFiles,
+  assertNoUnsupportedConfigFiles,
   projectSettingsPath,
 } from "../discovery/settings-chain.js";
 import {
@@ -103,7 +103,7 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
 async function loadOntoConfigForPlan(
   projectRoot: string,
 ): Promise<{ llm?: LlmModelSwitcherConfig }> {
-  await assertNoRetiredConfigFiles(projectRoot);
+  await assertNoUnsupportedConfigFiles(projectRoot);
   const configPath = projectSettingsPath(projectRoot);
   if (!(await fileExists(configPath))) return {};
   const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
@@ -125,6 +125,7 @@ function derivePlanTimeLlmResolution(
   const plan: ResolvedLlmPlan = {};
   if (partial.model_id) plan.model = partial.model_id;
   if (partial.reasoning_effort) plan.reasoning_effort = partial.reasoning_effort;
+  if (partial.service_tier) plan.service_tier = partial.service_tier;
   if (partial.provider) plan.provider = partial.provider;
   return Object.keys(plan).length > 0 ? plan : undefined;
 }

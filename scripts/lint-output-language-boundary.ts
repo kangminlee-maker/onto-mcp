@@ -69,7 +69,6 @@ interface Violation {
 const R1_ALLOWLIST: readonly string[] = [
   ".onto/principles/output-language-boundary.md",
   "scripts/lint-output-language-boundary.ts",
-  "CHANGELOG.md", // historical references to the pre-boundary pattern
 ];
 
 const R1_PATTERN = /Respond in \{output_language\}/;
@@ -94,18 +93,13 @@ const R2_GUIDANCE_TEMPLATE = (id: string, known: string): string =>
   `Known ids: ${known}. See .onto/principles/output-language-boundary.md §4.`;
 
 /**
- * Directories scanned by default. `.onto/commands/` is explicitly listed
- * because the repo-layout migration (Phase 1, 2026-04-20) moved versioned
- * command definitions under `.onto/`. The blanket `.onto/` entry in
- * `IGNORED_DIRECTORIES` below still blocks walking *into* `.onto/` from
- * above; the explicit scan root starts the walker one level deeper so the
- * versioned files are scanned while ephemeral subdirs (e.g. `.onto/review/`)
- * remain untouched. We still deliberately skip `dist/`, `node_modules/`,
- * and `.git/` — those are either gitignored or held ephemeral.
+ * Directories scanned by default. The blanket `.onto/` entry in
+ * `IGNORED_DIRECTORIES` below blocks walking into runtime artifacts from above;
+ * explicit scan roots include only versioned authority/process/principle/role
+ * seats. We still skip `dist/`, `node_modules/`, and `.git/`.
  */
 const SCAN_ROOTS: readonly string[] = [
   ".onto/processes",
-  ".onto/commands",
   ".onto/principles",
   ".onto/authority",
   ".onto/roles",
@@ -119,7 +113,6 @@ const SCAN_TOP_LEVEL_FILES: readonly string[] = [
   "README.md",
   "AGENTS.md",
   "CLAUDE.md",
-  "CHANGELOG.md",
 ];
 
 const FILE_EXTENSIONS = new Set([".md", ".ts", ".yaml", ".yml"]);

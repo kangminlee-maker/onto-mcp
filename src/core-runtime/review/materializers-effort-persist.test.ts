@@ -25,11 +25,15 @@ async function makeTmpProject(): Promise<string> {
 
 async function writeConfig(
   projectRoot: string,
-  yaml: string,
+  value: unknown,
 ): Promise<void> {
   const dir = path.join(projectRoot, ".onto");
   await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(path.join(dir, "settings.json"), yaml, "utf8");
+  await fs.writeFile(
+    path.join(dir, "settings.json"),
+    `${JSON.stringify(value, null, 2)}\n`,
+    "utf8",
+  );
 }
 
 function commonParams(projectRoot: string) {
@@ -61,14 +65,15 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
   it("persists resolved_llm_plan from canonical OpenAI OAuth llm config", async () => {
     await writeConfig(
       tmp,
-      [
-        "llm:",
-        "  auth: oauth",
-        "  provider: openai",
-        "  model: gpt-5.4",
-        "  effort: high",
-        "",
-      ].join("\n"),
+      {
+        llm: {
+          auth: "oauth",
+          provider: "openai",
+          model: "gpt-5.5",
+          effort: "medium",
+          service_tier: "fast",
+        },
+      },
     );
 
     const { sessionMetadataPath } =
@@ -77,20 +82,21 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeDefined();
     expect(md.resolved_llm_plan?.provider).toBe("codex");
-    expect(md.resolved_llm_plan?.model).toBe("gpt-5.4");
-    expect(md.resolved_llm_plan?.reasoning_effort).toBe("high");
+    expect(md.resolved_llm_plan?.model).toBe("gpt-5.5");
+    expect(md.resolved_llm_plan?.reasoning_effort).toBe("medium");
+    expect(md.resolved_llm_plan?.service_tier).toBe("fast");
   });
 
   it("persists provider when canonical Anthropic API-key llm config is set", async () => {
     await writeConfig(
       tmp,
-      [
-        "llm:",
-        "  auth: api_key",
-        "  provider: anthropic",
-        "  model: claude-sonnet-4-6",
-        "",
-      ].join("\n"),
+      {
+        llm: {
+          auth: "api_key",
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+        },
+      },
     );
 
     const { sessionMetadataPath } =
@@ -110,9 +116,9 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
   });
 
   it("omits resolved_llm_plan field when settings.json has no LLM fields", async () => {
-    // Fixture writes an orthogonal-only field so the config YAML is
+    // Fixture writes an orthogonal-only field so the settings JSON is
     // non-empty but carries no LLM profile information.
-    await writeConfig(tmp, "output_language: en\n");
+    await writeConfig(tmp, { output_language: "en" });
 
     const { sessionMetadataPath } =
       await bootstrapInvocationBindingArtifacts(commonParams(tmp));

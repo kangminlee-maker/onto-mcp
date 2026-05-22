@@ -5,7 +5,7 @@
  *   - Completeness gate: proposal schema 필수 필드 전수
  *   - Quality gate: workload-evidence (events.ndjson 에서 집계된 지표 OR threshold)
  *   - Frequency gate: similar_to 가 기존 pending 참조 시 workload evidence 면제 (2번째부터)
- *   - Principal gate: 기존 onto govern decide 재사용 (별도 호출)
+ *   - Principal gate: queue verdict recorded through the govern adapter
  *
  * v0 bounded minimum surface: 기록만. decide approve 후 실제 파일 편집은 주체자 수동.
  */

@@ -77,8 +77,8 @@ full_review_lens_ids:
 # (coverage × depth × items-lost × cost 4-axis) 6 lens.
 #
 # Default 결정은 invocation path 별 다름 (registry 단독 결정 X):
-#   - explicit `--review-mode` / config `review_mode` 없으면 → `full`
-#   - host-facing positional invoke (예: /onto:review) → `core-axis`
+#   - explicit reviewMode / config `review_mode` 없으면 → `full`
+#   - compact host-facing review tools may select `core-axis`
 #
 # 선정 근거 · 각 lens 의 empirical 역할 · 이름 `core-axis` 의 의미 shift
 # (PR #127 meta-level axis → PR #131 empirical core lens) · rejected

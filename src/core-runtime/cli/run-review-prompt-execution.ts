@@ -108,6 +108,28 @@ async function appendExecutionProgress(
   await appendMarkdownLogEntry(errorLogPath, title, bodyLines.join("\n"));
 }
 
+const REVIEW_PROGRESS_TOTAL_STEPS = 12;
+
+async function emitReviewProgress(args: {
+  executionPlan: ReviewExecutionPlan;
+  step: number;
+  label: string;
+  details?: string[];
+}): Promise<void> {
+  const detailText =
+    args.details && args.details.length > 0
+      ? ` - ${args.details.join("; ")}`
+      : "";
+  console.log(
+    `[review progress] ${args.step}/${REVIEW_PROGRESS_TOTAL_STEPS} ${args.label}${detailText}`,
+  );
+  await appendExecutionProgress(
+    args.executionPlan.error_log_path,
+    `review progress ${args.step}/${REVIEW_PROGRESS_TOTAL_STEPS}: ${args.label}`,
+    args.details ?? [],
+  );
+}
+
 function renderEffectiveBoundaryStateLog(
   effectiveBoundaryState: EffectiveBoundaryState,
 ): string {
@@ -452,6 +474,7 @@ async function writeReviewRunManifest(
           auth: reviewExecutionProfile.auth ?? null,
           model: reviewExecutionProfile.model ?? null,
           effort: reviewExecutionProfile.effort ?? null,
+          service_tier: reviewExecutionProfile.service_tier ?? null,
           base_url: reviewExecutionProfile.base_url ?? null,
           trace: reviewExecutionProfile.trace,
         }
@@ -678,6 +701,26 @@ function requireDeliberationSeat(
   return seat;
 }
 
+function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
+  step: number;
+  label: string;
+} {
+  switch (artifactId) {
+    case "finding-ledger":
+      return { step: 4, label: "finding ledger" };
+    case "finding-relation-graph":
+      return { step: 5, label: "finding relation graph" };
+    case "issue-ledger":
+      return { step: 6, label: "issue ledger" };
+    case "issue-stance-matrix":
+      return { step: 7, label: "issue stance matrix" };
+    case "deliberation-plan":
+      return { step: 8, label: "deliberation plan" };
+    case "problem-framing":
+      return { step: 11, label: "problem framing" };
+  }
+}
+
 async function runIssueArtifactDispatch(args: {
   projectRoot: string;
   sessionRoot: string;
@@ -711,6 +754,13 @@ async function runIssueArtifactDispatch(args: {
     packet_path: seat.packet_path,
     output_path: seat.output_path,
   };
+  const progress = issueArtifactProgress(args.artifactId);
+  await emitReviewProgress({
+    executionPlan: args.executionPlan,
+    step: progress.step,
+    label: progress.label,
+    details: [`artifact=${args.artifactId}`],
+  });
   const participatingLensIds = args.lensOutputPaths.map((lensPath) =>
     path.basename(lensPath, ".md"),
   );
@@ -760,6 +810,11 @@ async function runIssueArtifactDispatch(args: {
       return outcome;
     } catch (error) {
       lastValidationError = error;
+      console.warn(
+        `[review progress] ${progress.step}/${REVIEW_PROGRESS_TOTAL_STEPS} ${args.artifactId} validation failed on attempt ${attempt + 1}/2: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
       await removeFileIfExists(seat.output_path);
     }
   }
@@ -826,6 +881,12 @@ async function runControlledLensDeliberation(args: {
     };
   });
 
+  await emitReviewProgress({
+    executionPlan,
+    step: 9,
+    label: "lens deliberation responses",
+    details: [`participating_lens_count=${deliberationDispatches.length}`],
+  });
   for (const dispatch of deliberationDispatches) {
     const lensId = dispatch.unit_id.replace(/^deliberation-/, "");
     const ownOutput = lensOutputById.get(lensId);
@@ -919,6 +980,12 @@ async function runControlledLensDeliberation(args: {
     packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
     output_path: executionPlan.deliberation_output_path,
   };
+  await emitReviewProgress({
+    executionPlan,
+    step: 10,
+    label: "teamlead controlled deliberation",
+    details: [`output_path=${executionPlan.deliberation_output_path}`],
+  });
   const teamleadOutcome = await runSingleDispatchWithRetries({
     projectRoot,
     sessionRoot,
@@ -967,11 +1034,26 @@ export async function executeReviewPromptExecution(
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   const executionStartedAtMs = Date.now();
   await resetExecutionOutputs(executionPlan);
+  await emitReviewProgress({
+    executionPlan,
+    step: 1,
+    label: "load execution plan",
+    details: [`session_id=${executionPlan.session_id}`],
+  });
   await appendMarkdownLogEntry(
     executionPlan.error_log_path,
     "runner boundary state",
     renderEffectiveBoundaryStateLog(executionPlan.effective_boundary_state),
   );
+  await emitReviewProgress({
+    executionPlan,
+    step: 2,
+    label: "record effective boundary",
+    details: [
+      `web=${executionPlan.effective_boundary_state.web_research.effective_policy}`,
+      `repo=${executionPlan.effective_boundary_state.repo_exploration.effective_policy}`,
+    ],
+  });
 
   const defaultExecutorConfig = params.defaultExecutorConfig;
   const synthesizeExecutorConfig =
@@ -992,6 +1074,15 @@ export async function executeReviewPromptExecution(
       output_path: seat.output_path,
     }));
 
+  await emitReviewProgress({
+    executionPlan,
+    step: 3,
+    label: "isolated lens execution",
+    details: [
+      `planned_lens_count=${lensDispatches.length}`,
+      `max_concurrent=${maxConcurrentLenses}`,
+    ],
+  });
   console.log(
     `[review runner] parallel lens dispatch enabled: max_concurrent=${maxConcurrentLenses}`,
   );
@@ -1380,6 +1471,12 @@ export async function executeReviewPromptExecution(
     output_path: executionPlan.synthesis_output_path,
   };
 
+  await emitReviewProgress({
+    executionPlan,
+    step: 12,
+    label: "synthesize and write execution result",
+    details: [`participating_lens_count=${successfulLensDispatches.length}`],
+  });
   console.log("[review runner] starting synthesize: synthesize");
   await appendExecutionProgress(
     executionPlan.error_log_path,

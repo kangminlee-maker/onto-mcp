@@ -14,7 +14,7 @@ Done when:
 
 - `src/core-api/` exposes prepare/run/status/result functions over the existing
   runtime behavior.
-- Existing CLI scripts keep working.
+- Repository-local npm harnesses call the same runtime behavior.
 - Core API calls return structured artifact references instead of only terminal
   output.
 
@@ -35,14 +35,13 @@ Done when:
 - Local/mock provider has conformance tests.
 - Codex and Claude provider strategies are documented before implementation.
 
-## Stage 4 — Cross-Process Deliberation
+## Stage 4 — Controlled Deliberation
 
 Done when:
 
-- Providers can report whether persistent agents and cross-process messaging
-  are available.
-- `cross_process`, `cross_context_reinvoke`, and `synthesizer_only` are selected
-  from capabilities and recorded in review artifacts.
+- Providers can report whether isolated workers are available.
+- Controlled lens deliberation is selected from runtime settings and recorded
+  in review artifacts.
 - Lens-to-lens deliberation evidence is preserved separately from synthesis.
 
 ## Stage 5 — Migration And Cleanup

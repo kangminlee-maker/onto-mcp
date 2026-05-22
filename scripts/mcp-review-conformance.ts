@@ -23,6 +23,10 @@ interface ReviewRunStructured {
   participatingLensIds: string[];
   degradedLensIds: string[];
   summary?: unknown;
+  llmPresentation?: {
+    openingBrief?: { prompt?: unknown; input?: unknown };
+    finalResult?: { prompt?: unknown; input?: unknown };
+  };
 }
 
 interface ToolCallResult {
@@ -151,6 +155,26 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(Array.isArray(result.participatingLensIds), "participatingLensIds missing.");
   assert(Array.isArray(result.degradedLensIds), "degradedLensIds missing.");
   assert(result.summary !== undefined, "summary missing.");
+  const presentation = result.llmPresentation;
+  assert(presentation !== undefined, "llmPresentation missing.");
+  const openingBrief = presentation.openingBrief;
+  const finalResult = presentation.finalResult;
+  assert(
+    typeof openingBrief?.prompt === "string",
+    "llmPresentation.openingBrief.prompt missing.",
+  );
+  assert(
+    openingBrief.input !== undefined,
+    "llmPresentation.openingBrief.input missing.",
+  );
+  assert(
+    typeof finalResult?.prompt === "string",
+    "llmPresentation.finalResult.prompt missing.",
+  );
+  assert(
+    finalResult.input !== undefined,
+    "llmPresentation.finalResult.input missing.",
+  );
   return result as ReviewRunStructured;
 }
 

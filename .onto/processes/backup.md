@@ -53,8 +53,8 @@ Location: ~/.onto/_backups/{backup-id}/
 | Drafts | {n} domains | {size} |
 | Communication | {n} | {size} |
 
-To restore: `/onto:restore {backup-id}`
-To list all backups: `/onto:restore`
+To restore: use the restore process with the selected backup id.
+To list all backups: use the restore process without a backup id.
 ```
 
 ### 3. Optional: Reason
@@ -62,6 +62,6 @@ To list all backups: `/onto:restore`
 If `$ARGUMENTS` contains text after the command, use it as the backup reason in the manifest.
 
 ```
-/onto:backup                          → reason: "manual backup"
-/onto:backup "before domain cleanup"  → reason: "before domain cleanup"
+backup request without reason         → reason: "manual backup"
+backup request with reason            → reason: "before domain cleanup"
 ```

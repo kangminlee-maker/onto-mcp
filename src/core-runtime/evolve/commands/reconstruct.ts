@@ -1,5 +1,5 @@
 /**
- * reconstruct — CLI handler for the reconstruct activity (3-step bounded path).
+ * reconstruct — runtime handler for the reconstruct activity (3-step bounded path).
  *
  * W-A-74 (DL-020 resolution): review 의 3-step bounded path 수준으로 reconstruct 비대칭 해소.
  *
@@ -9,10 +9,10 @@
  *              loop 는 build runtime 확장과 함께 채운다)
  *   complete — ontology 초안 산출 + converted 상태 기록
  *
- * 본 handler 는 build runtime (.onto/processes/reconstruct.md) 의 public CLI face 다.
+ * 본 handler 는 reconstruct runtime (.onto/processes/reconstruct.md) 의 bounded adapter 다.
  * Bounded state 는 `{session_root}/reconstruct-state.json` 단일 파일로 관리한다 —
  * 이는 build runtime 의 완전한 state machine (RECONSTRUCT_TRANSITIONS) 과 구별되는
- * **CLI 관찰 가능 minimum surface**.
+ * **runtime 관찰 가능 minimum surface**.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -152,7 +152,7 @@ export function executeReconstructStart(
  *
  * 현 단계는 bounded placeholder — state 만 `exploring` 으로 전이하고 invocations 을 증가.
  * 실제 Explorer/lens loop 실행은 후속 W-ID 에서 build runtime 과 연결한다.
- * 이 분리 자체가 W-A-74 의 증분: CLI 관찰 가능 surface 를 build runtime 구현보다 먼저 확보.
+ * 이 분리 자체가 W-A-74 의 증분: runtime 관찰 가능 surface 를 build runtime 구현보다 먼저 확보.
  */
 export function executeReconstructExplore(
   options: ReconstructStepOptions,
@@ -184,7 +184,7 @@ export function executeReconstructExplore(
     session_id: options.sessionId,
     state: next,
     next_action:
-      "Call `onto reconstruct explore` again to continue or `onto reconstruct complete` to finalize.",
+      "Resume reconstruct exploration to continue or complete reconstruct to finalize.",
   };
 }
 
@@ -301,7 +301,7 @@ export function executeReconstructConfirm(
   };
 }
 
-// ─── CLI entry ───
+// ─── Runtime entry ───
 
 function readOption(argv: string[], name: string): string | undefined {
   const idx = argv.indexOf(`--${name}`);
@@ -352,7 +352,7 @@ export async function handleReconstructCli(
           "[onto] reconstruct start requires <source> and <intent>.",
         );
         console.error(
-          'Example: onto reconstruct start ./src "recover domain ontology"',
+          'Example input: target=./src intent="recover domain ontology"',
         );
         return 1;
       }
@@ -372,7 +372,7 @@ export async function handleReconstructCli(
               session_root: result.session_root,
               current_state: result.state.current_state,
               next_action:
-                "Call `onto reconstruct explore --session-id <id>` to begin exploration.",
+                "Resume reconstruct exploration with the session id to begin exploration.",
             },
             null,
             2,
@@ -469,7 +469,7 @@ export async function handleReconstructCli(
     case undefined:
       console.log(
         [
-          "Usage: onto reconstruct <subcommand> [options]",
+          "Usage: reconstruct <subcommand> [options]",
           "",
           "Subcommands:",
           "  start <source> <intent>     Initialize a reconstruct session",
@@ -496,7 +496,7 @@ export async function handleReconstructCli(
       console.error(
         `[onto] Unknown reconstruct subcommand: ${subcommand}`,
       );
-      console.error("Run 'onto reconstruct --help' for usage.");
+      console.error("Run reconstruct help for usage.");
       return 1;
   }
 }

@@ -58,8 +58,8 @@
 ### Health Indicators
 | Indicator | Status | Note | 권장 조치 |
 |-----------|--------|------|----------|
-| File size | {OK/NOTICE/WARNING} | 최대 {N}행 (100행 = 주의, 200행 = 조치 권고) | `/onto:promote` 실행으로 consolidation/retirement 검토 |
-| Event markers | {N} pending | {퇴역 후보 수} | `/onto:promote` 실행 시 퇴역 후보로 표면화됨 |
+| File size | {OK/NOTICE/WARNING} | 최대 {N}행 (100행 = 주의, 200행 = 조치 권고) | learn promotion design에서 consolidation 검토 |
+| Event markers | {N} pending | {퇴역 후보 수} | learn promotion design에서 후보로 표면화 |
 | Tag-incomplete | {N} | Creation gate 실패 수 | 해당 학습 항목의 태그 수동 보완 |
 | Consolidated | {N} | Cross-agent dedup 수행 수 | 정보만 — 조치 불필요 |
 

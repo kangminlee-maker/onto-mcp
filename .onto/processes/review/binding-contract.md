@@ -1,7 +1,7 @@
 # Review Binding Contract
 
 > 상태: Active
-> 목적: 현재 `onto` 프로토타입의 `/onto:review`가 `검토 해석 (InvocationInterpretation)` 다음에 수행해야 하는 `검토 고정 (InvocationBinding)` 책임을 고정한다.
+> 목적: MCP review 호출이 `검토 해석 (InvocationInterpretation)` 다음에 수행해야 하는 `검토 고정 (InvocationBinding)` 책임을 고정한다.
 > 기준 문서:
 > - `.onto/processes/review/interpretation-contract.md`
 > - `.onto/authority/core-lexicon.yaml`
@@ -228,22 +228,18 @@ recommendation, explicit token, 주체자 확인 결과를
 
 ---
 
-## 7. Prompt / Command / Plugin Effect
+## 7. Prompt / MCP / Runtime Effect
 
-현재 프로토타입에서 이 단계가 뜻하는 바는 아래다.
+현재 MCP-native runtime에서 이 단계가 뜻하는 바는 아래다.
 
-1. `/onto:review` command는 interpretation 결과를 받은 뒤
+1. `onto.review` 또는 `onto.prepare_review` 호출은 interpretation 결과를 받은 뒤
    - target scope를 검증하고
    - domain/context를 고정하고
    - review mode와 lens set을 materialize하고
    - session directory를 만든다
-2. plugin은 이 binding 결과를 바탕으로
-   - Agent Teams
-   - Codex background task
-   - later runtime executor
-   중 하나를 사용할 수 있다.
+2. runtime은 이 binding 결과를 바탕으로 configured provider executor를 사용할 수 있다.
 
-즉 plugin/host가 바뀌어도 binding output은 같아야 한다.
+즉 MCP host/provider가 바뀌어도 binding output은 같아야 한다.
 
 prompt-backed reference path에서 team lead는
 최소 아래 artifact를 이 output에 맞춰 실제로 작성해야 한다.
@@ -270,6 +266,6 @@ artifact seat를 포함한 deterministic shell materialization이다.
 
 이 문서 다음 단계는 아래다.
 
-1. `.onto/commands/review.md`에 interpretation -> binding 순서를 명시한다
+1. `src/core-api/review-api.ts`와 `src/mcp/server.ts`가 interpretation -> binding 순서를 보존한다
 2. `.onto/processes/review/review.md` Step 0/1/1.5/2의 설명을 이 계약에 맞게 정리한다
 3. 이후 `lens prompt contract`와 `synthesize prompt contract`를 분리한다

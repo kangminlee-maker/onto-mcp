@@ -53,6 +53,8 @@ const ROOT_HYPOTHESIS_POSITION_VALUES = new Set([
   "narrows",
   "replaces",
   "rejects",
+  "not_applicable",
+  "insufficient_evidence",
 ]);
 
 const SEVERITY_POSITION_VALUES = new Set([
@@ -60,6 +62,7 @@ const SEVERITY_POSITION_VALUES = new Set([
   "raises",
   "lowers",
   "not_applicable",
+  "insufficient_evidence",
 ]);
 
 const ISSUE_ROLE_VALUES = new Set([
@@ -158,7 +161,11 @@ function requireAllowed(
 ): string {
   const text = requireString(value, label);
   if (!allowed.has(text)) {
-    throw new Error(`${label} has unsupported value: ${text}`);
+    throw new Error(
+      `${label} has unsupported value: ${text}. Allowed values: ${[
+        ...allowed,
+      ].join(", ")}`,
+    );
   }
   return text;
 }
@@ -260,6 +267,7 @@ You must derive the requested artifact from existing lens outputs and prior issu
 - Do not leave a colon-bearing text value unquoted.
 - Preserve lens IDs, source refs, issue IDs, and finding IDs consistently.
 - If evidence is insufficient, encode that explicitly in the YAML instead of inventing facts.
+- Enum fields must use exactly one listed token. Do not append explanation text to enum values; put explanations in rationale fields.
 
 ## Lens Outputs
 ${lensRefs}
@@ -373,6 +381,21 @@ Allowed stance values:
 - not_applicable
 - insufficient_evidence
 
+Allowed root_hypothesis_position values:
+- accepts
+- narrows
+- replaces
+- rejects
+- not_applicable
+- insufficient_evidence
+
+Allowed severity_position values:
+- keeps
+- raises
+- lowers
+- not_applicable
+- insufficient_evidence
+
 ## Required YAML Shape
 schema_version: 1
 session_id: "${args.sessionId}"
@@ -382,8 +405,8 @@ issues:
       - lens_id: logic
         stance: support
         rationale: "why this lens takes this stance"
-        root_hypothesis_position: "accepts, narrows, replaces, or rejects the issue root"
-        severity_position: "keeps, raises, lowers, or not_applicable"
+        root_hypothesis_position: accepts
+        severity_position: keeps
         evidence_refs: [round1/logic.md]
 validation:
   missing_stances: []

@@ -1,5 +1,5 @@
 /**
- * onto evolve propose-align — transition grounded → align_proposed.
+ * Evolve propose-align — transition grounded → align_proposed.
  *
  * Consumes consolidated dialog output (direction, scope, constraints, tensions)
  * from the agent who conducted the Principal dialog, then:
@@ -257,6 +257,6 @@ export function executeProposeAlign(
     packet_hash: packetHash,
     next_state: proposeResult.next_state,
     next_action:
-      "build/align-packet.md 를 검토하고 `onto evolve align --scope-id <id> --json <verdict>` 를 호출하세요 (verdict type: approve/revise/reject/redirect).",
+      "build/align-packet.md 를 검토하고 bounded evolve align input을 제출하세요 (verdict type: approve/revise/reject/redirect).",
   };
 }

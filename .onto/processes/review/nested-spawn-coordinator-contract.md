@@ -14,9 +14,9 @@
 
 ## 1. Position
 
-이 문서는 `.onto/commands/review.md`가 가리키는 실행 계약 중 하나다.
+이 문서는 review runtime이 사용하는 실행 계약 중 하나다.
 
-- `.onto/commands/review.md`는 주체자 옵션과 경로 선택만 담는 thin entrypoint다
+- MCP tool schema와 `InvocationBinding`이 주체자 옵션과 경로 선택을 고정한다
 - 이 문서는 Nested Spawn Coordinator 경로의 실행 절차를 정의한다
 - 실행 중 사용하는 값은 이 문서의 prose가 아니라 `execution-plan.yaml`과 `binding.yaml`이 authority다
 
@@ -38,15 +38,15 @@ Runtime은 "deterministic contract executor" 역할을 유지한다. 상태 전�
 
 **nested (canonical path: `host_team_claude`)**:
 - 주체자가 `TeamCreate + TaskCreate`로 coordinator worker 1개 spawn.
-- coordinator worker가 `onto coordinator start/next`를 호출하고 그 결과의 `agents[]`를 Agent tool로 lens worker를 추가 nested spawn.
+- coordinator worker가 `coordinator state machine start/next`를 호출하고 그 결과의 `agents[]`를 Agent tool로 lens worker를 추가 nested spawn.
 - 주체자 메인 context는 거의 사용되지 않음 (coordinator가 orchestration 담당).
 
 **flat (canonical path: `worker_claude`)**:
-- 주체자가 TeamCreate 없이 자신이 직접 `onto coordinator start/next`를 호출하고 결과의 `agents[]`를 Agent tool로 lens worker spawn.
+- 주체자가 TeamCreate 없이 자신이 직접 `coordinator state machine start/next`를 호출하고 결과의 `agents[]`를 Agent tool로 lens worker spawn.
 - 주체자 메인 context가 orchestration(state machine 호출·결과 집계)에 일부 사용되나 lens reasoning은 여전히 독립 worker context.
 - TeamCreate 비가용 환경(기능 설정·권한 제약 등)의 canonical 대안.
 
-**선택 책임**: TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 **주체자의 판단**. 주체자는 TeamCreate 시도 후 flat 패턴이 더 적합하면 그 패턴을 선택할 수 있다. `onto review` auto-resolution이 emit하는 handoff JSON의 `orchestration_guidance.preferred` / `.alternate` 문구가 참고 지침.
+**선택 책임**: TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 **주체자의 판단**. 주체자는 TeamCreate 시도 후 flat 패턴이 더 적합하면 그 패턴을 선택할 수 있다. MCP-native execution profile이 참고 지침이다.
 
 Semantic reference: `.onto/authority/core-lexicon.yaml:LlmAgentSpawnRealization` (instances `host_team_claude`, `worker_claude`).
 
@@ -88,8 +88,8 @@ seat constraint가 우선한다:
 
 | profile mode | Coordinator orchestration 지침 |
 |---|---|
-| `main-workers` | 주체자 메인 세션이 직접 `onto coordinator start/next` 호출 → 결과의 `agents[]` 를 worker lens로 dispatch. |
-| `nested-workers` | worker teamlead가 `onto coordinator start/next`를 호출하고 nested worker lens를 dispatch. |
+| `main-workers` | 주체자 메인 세션이 직접 `coordinator state machine start/next` 호출 → 결과의 `agents[]` 를 worker lens로 dispatch. |
+| `nested-workers` | worker teamlead가 `coordinator state machine start/next`를 호출하고 nested worker lens를 dispatch. |
 
 handoff payload 에 `review_execution_profile` 필드는 필수다. 누락 시 coordinator는 실행을 중단한다.
 
@@ -142,20 +142,20 @@ Machine-readable 허용 전이 맵: `artifact-types.ts`의 `ALLOWED_TRANSITIONS`
 
 ---
 
-## 4. CLI Interface
+## 4. Development Harness Interface
 
-### `onto coordinator start`
+### `npm run coordinator:start --`
 
 ```
-onto coordinator start <target> <intent> [@domain] [options]
+npm run coordinator:start -- <target> <intent> [@domain] [options]
 ```
 
 Runs `preparing` auto state → returns `CoordinatorStartResult` with lens agent instructions.
 
-### `onto coordinator next`
+### `npm run coordinator:next --`
 
 ```
-onto coordinator next --session-root <session_root> [--project-root <path>]
+npm run coordinator:next -- --session-root <session_root> [--project-root <path>]
   [--orchestrator-reported-realization <value>]
 ```
 
@@ -168,10 +168,10 @@ onto coordinator next --session-root <session_root> [--project-root <path>]
 
 **Optional `--orchestrator-reported-realization <value>`**: orchestrator 가 실제로 lens agents 를 dispatch 한 mechanism 을 자기 보고 — state file 의 `orchestrator_reported_realization` 필드에 기록. Idempotent (첫 값이 유지). 상세는 §18.
 
-### `onto coordinator status`
+### `npm run coordinator:status --`
 
 ```
-onto coordinator status --session-root <session_root>
+npm run coordinator:status -- --session-root <session_root>
 ```
 
 Returns the coordinator state file as JSON.
@@ -183,7 +183,7 @@ Returns the coordinator state file as JSON.
 ### Step 1: Start
 
 ```bash
-onto coordinator start <target> <intent> [@domain] [options]
+npm run coordinator:start -- <target> <intent> [@domain] [options]
 ```
 
 Returns JSON with `state: "awaiting_lens_dispatch"`, `session_root`, `agents[]`.
@@ -197,7 +197,7 @@ Caller 는 `agents[]` 를 **N 개씩 batch 로 나누어 dispatch**:
 1. 남은 agent 중 첫 `min(N, remaining)` 개를 parallel dispatch (단일 메시지에 Agent tool use 블록 N 개).
 2. Batch 의 모든 agent 응답을 대기.
 3. `remaining > 0` 이면 step 1 반복.
-4. 전원 완료 → `onto coordinator next`.
+4. 전원 완료 → `npm run coordinator:next --`.
 
 **근거**: orchestrator 실행 환경 (Claude Code Agent tool / TeamCreate 등) 의 parallel 상한 과 정합. 상한 초과 시 harness 가 초과분을 silent drop 할 risk. batch-by-N 패턴으로 lens 전수 실행 보장.
 
@@ -228,7 +228,7 @@ Caller 는 `agents[]` 를 **N 개씩 batch 로 나누어 dispatch**:
 ### Step 3: Validate + Get Synthesize Instruction
 
 ```bash
-onto coordinator next --session-root <session_root>
+npm run coordinator:next -- --session-root <session_root>
 ```
 
 Returns `state: "awaiting_synthesize_dispatch"` with `agent` (synthesize instruction) — or `halted_partial` / `failed`.
@@ -240,7 +240,7 @@ Caller dispatches single synthesize agent using the `agent` from Step 3.
 ### Step 5: Complete
 
 ```bash
-onto coordinator next --session-root <session_root>
+npm run coordinator:next -- --session-root <session_root>
 ```
 
 Returns `state: "completed"` with `final_output_path`, `review_record_path`, `record_status`.
@@ -482,7 +482,7 @@ Deliberation 완료 후 `awaiting_synthesize_dispatch`의 synthesizer 가 소비
 
 ### 17.1 배치 구성
 
-1. `onto coordinator start` 출력에서 `max_concurrent_lenses` (N) 을 읽는다.
+1. `npm run coordinator:start --` 출력에서 `max_concurrent_lenses` (N) 을 읽는다.
 2. `agents[]` 를 순서대로 N 개씩 배치로 나눈다.
 3. 각 배치는 **단일 메시지에 N 개 Agent tool use 블록** 으로 parallel dispatch.
 
@@ -494,11 +494,11 @@ Deliberation 완료 후 `awaiting_synthesize_dispatch`의 synthesizer 가 소비
 ### 17.3 다음 배치
 
 6. 남은 agent 수 > 0 → step 17.1 의 3 반복.
-7. 전원 완료 → `onto coordinator next --session-root <session_root>` 호출.
+7. 전원 완료 → `npm run coordinator:next -- --session-root <session_root>` 호출.
 
 ### 17.4 `max_concurrent_lenses` resolution 순서
 
-1. **CLI override**: `--max-concurrent-lenses <N>` 이 있으면 그 값을 사용한다.
+1. **Invocation override**: `--max-concurrent-lenses <N>` 이 있으면 그 값을 사용한다.
 2. **Project settings**: `.onto/settings.json` 의 `review.execution.max_concurrent_workers`.
 3. **Runner default**: executor별 runtime 기본값.
 
@@ -532,10 +532,10 @@ coordinator state machine이 자동으로 알 수 없다.
 
 ### 18.2 해결
 
-`onto coordinator next` 에 optional flag 추가:
+`npm run coordinator:next --` 에 optional flag 추가:
 
 ```
-onto coordinator next --session-root <session_root> \
+npm run coordinator:next -- --session-root <session_root> \
   --orchestrator-reported-realization <value>
 ```
 
@@ -564,7 +564,7 @@ Free-form string. 권장 예시:
 
 - State file 기록 로직: `src/core-runtime/cli/coordinator-state-machine.ts` `coordinatorNext(sessionRoot, projectRoot, orchestratorReportedRealization?)` 구현됨.
 - Type: `src/core-runtime/review/artifact-types.ts` `CoordinatorStateFile.orchestrator_reported_realization?: string`.
-- CLI: `cliNext` 의 parseArgs options 에 `orchestrator-reported-realization: { type: "string" }` 추가됨.
+- Runtime dispatch: `cliNext` 의 parseArgs options 에 `orchestrator-reported-realization: { type: "string" }` 추가됨.
 - Review-record 반영 / final-output 표시: 후속 PR.
 
 ### 18.7 Orchestrator 의무 여부

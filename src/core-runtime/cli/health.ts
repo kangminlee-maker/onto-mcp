@@ -1,5 +1,5 @@
 /**
- * /onto:health CLI entry.
+ * Learning health CLI adapter.
  *
  * Design authority: .onto/processes/learn/health.md (rule owner)
  *

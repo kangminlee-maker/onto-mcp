@@ -35,11 +35,19 @@ describe("resolveSettingsChain", () => {
     writeJson(userSettingsPath(), {
       output_language: "ko",
       domains: ["software-engineering"],
-      llm: { auth: "oauth", provider: "openai", model: "gpt-5.4" },
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "gpt-5.5",
+        effort: "medium",
+      },
     });
     writeJson(projectSettingsPath(projectRoot), {
       domains: ["ontology"],
       review_mode: "full",
+      llm: {
+        service_tier: "fast",
+      },
       review: {
         execution: {
           mode: "main-workers",
@@ -53,20 +61,22 @@ describe("resolveSettingsChain", () => {
     expect(settings.output_language).toBe("ko");
     expect(settings.domains).toEqual(["ontology"]);
     expect(settings.review_mode).toBe("full");
-    expect(settings.llm?.model).toBe("gpt-5.4");
+    expect(settings.llm?.model).toBe("gpt-5.5");
+    expect(settings.llm?.effort).toBe("medium");
+    expect(settings.llm?.service_tier).toBe("fast");
     expect(settings.review?.execution.mode).toBe("main-workers");
     expect(settings.review?.execution.teamlead.seat).toBe("main");
     expect(settings.review?.execution.lens.seat).toBe("worker");
     expect(settings.review?.execution.max_concurrent_workers).toBe(4);
   });
 
-  it("fails loudly when retired YAML config exists", async () => {
+  it("fails loudly when unsupported YAML config exists", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     fs.mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
     fs.writeFileSync(path.join(projectRoot, ".onto", `config.${"yml"}`), "review_mode: full\n");
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "Retired onto config file detected",
+      "Unsupported onto config file detected",
     );
   });
 
@@ -97,6 +107,23 @@ describe("resolveSettingsChain", () => {
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
       "nested-workers requires review.execution.teamlead.seat=worker",
+    );
+  });
+
+  it("rejects service_tier outside codex OAuth settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      llm: {
+        auth: "api_key",
+        provider: "openai",
+        model: "gpt-5.5",
+        effort: "medium",
+        service_tier: "fast",
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "llm.service_tier is codex-only",
     );
   });
 });

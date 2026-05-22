@@ -1,10 +1,10 @@
 /**
- * onto govern — CLI entry point (W-C-01, bounded minimum surface v0).
+ * govern runtime adapter (W-C-01, bounded minimum surface v0).
  *
  * Subcommands: submit / list / decide (queue pattern).
  *
  * Responsibility split (consistent with evolve propose-align precedent):
- *   - CLI owns: queue I/O, event log append, deterministic projection, table/JSON rendering.
+ *   - runtime adapter owns: queue I/O, event log append, deterministic projection, table/JSON rendering.
  *   - LLM / agent owns: proposal authoring (payload JSON assembly), judgment reasoning.
  *
  * v0 scope: 기록만. decide approve 후 authority 파일 실제 반영은 주체자 수동 편집 or W-C-02.
@@ -55,8 +55,8 @@ export async function handleGovernCli(
       printHelp();
       return 0;
     default:
-      console.error(`[onto] Unknown govern subcommand: ${subcommand}`);
-      console.error("Run 'onto govern --help' for usage.");
+      console.error(`[onto] Unknown govern adapter subcommand: ${subcommand}`);
+      console.error("Use the govern runtime adapter help for usage.");
       return 1;
   }
 }
@@ -64,7 +64,7 @@ export async function handleGovernCli(
 function printHelp(): void {
   console.log(
     [
-      "Usage: onto govern <subcommand> [options]",
+      "Usage: govern-adapter <subcommand> [options]",
       "",
       "Subcommands:",
       "  submit   Queue a norm-change proposal or drift-detection item",
@@ -187,7 +187,7 @@ function handleSubmit(argv: string[]): number {
         origin,
         tag,
         target,
-        next_action: `onto govern list --status pending  # 또는 onto govern decide ${id} --verdict <approve|reject> --reason <text>`,
+        next_action: "govern MCP design pending; inspect the queue artifact before deciding",
       },
       null,
       2,
@@ -279,7 +279,7 @@ function handlePromotePrinciple(argv: string[]): number {
   const jsonRaw = readOption(argv, "json");
   if (!jsonRaw) {
     console.error("[onto] govern promote-principle: --json proposal is required.");
-    console.error("Example: onto govern promote-principle --json '{\"learning_ref\":{\"agent_id\":\"logic\",\"entry_marker\":\"...\"},\"target\":{\"category\":\"principle\",\"file_path\":\".onto/principles/X.md\",\"section\":\"NEW\"},\"rationale\":\"...\",\"conflict_check\":{\"reviewed_by_agent\":true,\"existing_principle_refs\":[],\"conflict_summary\":\"no conflict\"},\"workload_evidence\":{\"state_transitions\":10,\"evidence_summary\":\"...\",\"event_refs\":[]},\"source_impact\":\"high\"}'");
+    console.error("Example JSON shape: {\"learning_ref\":{\"agent_id\":\"logic\",\"entry_marker\":\"...\"},\"target\":{\"category\":\"principle\",\"file_path\":\".onto/principles/X.md\",\"section\":\"NEW\"},\"rationale\":\"...\",\"conflict_check\":{\"reviewed_by_agent\":true,\"existing_principle_refs\":[],\"conflict_summary\":\"no conflict\"},\"workload_evidence\":{\"state_transitions\":10,\"evidence_summary\":\"...\",\"event_refs\":[]},\"source_impact\":\"high\"}");
     return 1;
   }
   let parsed: unknown;
@@ -307,7 +307,7 @@ function handlePromotePrinciple(argv: string[]): number {
     id: result.id,
     gate_passed: result.gate_passed,
     similar_to: result.similar_to,
-    next_action: `onto govern decide ${result.id} --verdict <approve|reject> --reason <text>`,
+    next_action: "govern MCP design pending; inspect the queue artifact before deciding",
   }, null, 2));
   return 0;
 }

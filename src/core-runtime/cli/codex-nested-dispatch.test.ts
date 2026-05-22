@@ -206,16 +206,18 @@ describe("executeReviewViaCodexNested — forwarding", () => {
           llm: {
             auth: "oauth",
             provider: "openai",
-            model: "gpt-5.4",
-            effort: "high",
+            model: "gpt-5.5",
+            effort: "medium",
+            service_tier: "fast",
           },
         },
       },
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-5.4");
-    expect(calls[0]!.reasoning_effort).toBe("high");
+    expect(calls[0]!.model).toBe("gpt-5.5");
+    expect(calls[0]!.reasoning_effort).toBe("medium");
+    expect(calls[0]!.service_tier).toBe("fast");
   });
 
   it("does not use llm selection when it resolves to API provider", async () => {

@@ -249,7 +249,7 @@ export interface ReviewExecutionPlan {
  * Plan-time resolved LLM values for executor (effort persist Option A).
  *
  * Bootstrap 시점에 OntoConfig 로부터 도출된 model · reasoning_effort · provider.
- * CLI override (`onto review --model=...`) 는 executor dispatch 층에서 추가 적용되므로
+ * Session-level override is applied at executor dispatch when present, so
  * 본 필드는 **project-level 의도** 를 기록한다 (세션별 override 와 별개).
  *
  * Stderr `[plan:executor]` 로그의 artifact 화 목적. codex global config fallthrough
@@ -259,6 +259,7 @@ export interface ReviewExecutionPlan {
 export interface ResolvedLlmPlan {
   model?: string;
   reasoning_effort?: string;
+  service_tier?: string;
   provider?: string;
 }
 

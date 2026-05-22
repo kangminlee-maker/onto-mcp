@@ -2,7 +2,7 @@
  * Phase 3 — Insight Reclassifier (Step 12 + follow-up apply path).
  *
  * Design authority:
- *   - learn-phase3-design-v2.md DD-9 (separate `onto reclassify-insights` command)
+ *   - learn-phase3-design-v2.md DD-9 (separate insight reclassifier path)
  *   - learn-phase3-design-v3.md DD-9 (collector mode + lineage)
  *   - learn-phase3-design-v4.md DD-9 (panel-reviewer reuse, batch-size,
  *     resumable progress)
@@ -14,7 +14,7 @@
  *     the LLM, and records a recommended reclassification. A follow-up apply
  *     path rewrites the role tag in place.
  *
- * Why a separate command from `onto promote`:
+ * Why a separate path from promotion:
  *   - Cost separation: 462 × 3 panel members ≈ 1,400 LLM calls. Running this
  *     on every promote pass would balloon cost.
  *   - Migration vs steady-state separation: this is a one-shot cleanup that

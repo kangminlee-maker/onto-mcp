@@ -43,8 +43,9 @@ Create or update `.onto/settings.json` with the active key surface:
   "llm": {
     "auth": "oauth",
     "provider": "openai",
-    "model": "gpt-5.4",
-    "effort": "high"
+    "model": "gpt-5.5",
+    "effort": "medium",
+    "service_tier": "fast"
   }
 }
 ```
