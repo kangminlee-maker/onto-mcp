@@ -58,8 +58,13 @@ It does not select the provider API.
         "seat": "worker",
         "llm": "inherit"
       },
-      "deliberation": "controlled-lens-deliberation",
-      "max_concurrent_workers": 6
+      "synthesize": {
+        "seat": "worker",
+        "llm": {
+          "effort": "xhigh"
+        }
+      },
+      "deliberation": "controlled-lens-deliberation"
     }
   }
 }
@@ -74,8 +79,20 @@ Fields:
 | `teamlead.llm` | `inherit` or `llm` object | teamlead model selection |
 | `lens.seat` | `worker` | where lens judgments run |
 | `lens.llm` | `inherit` or `llm` object | lens model selection |
+| `synthesize.seat` | `worker` | where final synthesis runs |
+| `synthesize.llm` | `inherit` or `llm` object | synthesize model selection |
 | `deliberation` | `controlled-lens-deliberation` | required review deliberation semantic |
-| `max_concurrent_workers` | positive integer | review unit concurrency cap |
+
+Actor `llm` inheritance:
+
+- `inherit` means the actor uses the root `llm` object after user/project
+  settings merge.
+- An actor `llm` object overlays the root `llm` when it omits both `auth` and
+  `provider`. Example: `"llm": { "effort": "xhigh" }` keeps the root auth,
+  provider, model, and service tier, but changes the actor effort.
+- An actor `llm` object that sets `auth` or `provider` is treated as an explicit
+  actor selection and must provide enough provider information to normalize.
+- Root `llm` is the stable project default for deterministic model choice.
 
 Valid shapes:
 
@@ -83,6 +100,40 @@ Valid shapes:
 |---|---|---|---|
 | `main-workers` | `main` | `worker` | main coordinates; isolated workers run lens units. |
 | `nested-workers` | `worker` | `worker` | a worker teamlead coordinates nested isolated lens workers. |
+
+`synthesize.llm` is independent from `teamlead.llm` and `lens.llm`.
+Use a higher effort for synthesize when it must integrate all lens outputs,
+deliberation, issue artifacts, and problem framing. The teamlead seat can stay
+lighter when it only controls dispatch and bounded deliberation.
+
+In `nested-workers`, `teamlead.llm` configures the outer coordinator worker;
+`lens.llm` configures the inner context-isolated lens workers. They may use
+different `effort` values. Synthesize remains a separate post-deliberation unit.
+
+```json
+{
+  "review": {
+    "execution": {
+      "mode": "nested-workers",
+      "teamlead": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "synthesize": {
+        "seat": "worker",
+        "llm": {
+          "effort": "xhigh"
+        }
+      },
+      "deliberation": "controlled-lens-deliberation"
+    }
+  }
+}
+```
 
 `controlled-lens-deliberation` is the review semantic. Each participating lens
 first produces an isolated judgment, then re-evaluates its position against the
@@ -153,8 +204,7 @@ Unsupported combinations stop execution during settings/profile resolution.
         "seat": "worker",
         "llm": "inherit"
       },
-      "deliberation": "controlled-lens-deliberation",
-      "max_concurrent_workers": 6
+      "deliberation": "controlled-lens-deliberation"
     }
   },
   "llm": {

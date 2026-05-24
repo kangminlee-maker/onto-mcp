@@ -13,6 +13,12 @@
         "seat": "worker",
         "llm": "inherit"
       },
+      "synthesize": {
+        "seat": "worker",
+        "llm": {
+          "effort": "xhigh"
+        }
+      },
       "deliberation": "controlled-lens-deliberation"
     }
   },

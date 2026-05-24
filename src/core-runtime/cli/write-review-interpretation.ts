@@ -58,6 +58,7 @@ async function main(): Promise<number> {
       "recommended-lens-id": { type: "string", multiple: true, default: [] },
       rationale: { type: "string", multiple: true, default: [] },
       "ambiguity-note": { type: "string", multiple: true, default: [] },
+      "confirm-value-alignment": { type: "boolean", default: false },
     },
     strict: true,
     allowPositionals: false,
@@ -89,6 +90,7 @@ async function main(): Promise<number> {
     recommendedLensIds: values["recommended-lens-id"],
     rationale: values.rationale,
     ambiguityNotes: values["ambiguity-note"],
+    valueAlignmentConfirmed: Boolean(values["confirm-value-alignment"]),
     ...(typeof values["bundle-kind"] === "string" && values["bundle-kind"].length > 0
       ? { bundleKind: values["bundle-kind"] }
       : {}),

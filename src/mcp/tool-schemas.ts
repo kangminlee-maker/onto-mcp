@@ -14,11 +14,11 @@ const OntoReviewToolInputBaseSchema = z.object({
   noDomain: z.boolean().optional(),
   reviewMode: ReviewModeSchema.optional(),
   lensIds: z.array(z.string().min(1)).optional(),
-  maxConcurrentLenses: z.number().int().positive().optional(),
   deliberation: DeliberationModeSchema.optional(),
   executorRealization: ExecutorRealizationSchema.optional(),
+  confirmValueAlignment: z.boolean().optional(),
   prepareOnly: z.boolean().optional(),
-});
+}).strict();
 
 export const OntoReviewToolInputSchema = OntoReviewToolInputBaseSchema.refine((input) => !(input.domain && input.noDomain), {
   message: "Use either domain or noDomain, not both.",
@@ -33,6 +33,7 @@ export const OntoPrepareReviewToolInputSchema =
 
 export const OntoReviewSessionInputSchema = z.object({
   sessionRoot: z.string().min(1),
+  projectRoot: z.string().min(1).optional(),
 });
 
 export const OntoListDomainsToolInputSchema = z.object({

@@ -117,8 +117,13 @@ Minimal Codex OAuth profile:
         "seat": "worker",
         "llm": "inherit"
       },
-      "deliberation": "controlled-lens-deliberation",
-      "max_concurrent_workers": 9
+      "synthesize": {
+        "seat": "worker",
+        "llm": {
+          "effort": "xhigh"
+        }
+      },
+      "deliberation": "controlled-lens-deliberation"
     }
   },
   "review_mode": "full"

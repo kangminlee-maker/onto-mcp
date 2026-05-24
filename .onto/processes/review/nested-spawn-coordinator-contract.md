@@ -188,20 +188,17 @@ npm run coordinator:start -- <target> <intent> [@domain] [options]
 
 Returns JSON with `state: "awaiting_lens_dispatch"`, `session_root`, `agents[]`.
 
-### Step 2: Lens Dispatch (batch-by-N)
+### Step 2: Lens Dispatch (all selected lenses)
 
 Caller reads `agents[]` 와 `max_concurrent_lenses` (N) from Step 1 output. 각 agent 에 `lens_id`, `prompt`, `output_path`, `packet_path`.
 
-Caller 는 `agents[]` 를 **N 개씩 batch 로 나누어 dispatch**:
+Caller 는 `agents[]` 전체를 dispatch한다:
 
-1. 남은 agent 중 첫 `min(N, remaining)` 개를 parallel dispatch (단일 메시지에 Agent tool use 블록 N 개).
-2. Batch 의 모든 agent 응답을 대기.
-3. `remaining > 0` 이면 step 1 반복.
-4. 전원 완료 → `npm run coordinator:next --`.
+1. `agents[]` 전체를 parallel dispatch한다.
+2. 모든 agent 응답을 대기.
+3. 전원 완료 → `npm run coordinator:next --`.
 
-**근거**: orchestrator 실행 환경 (Claude Code Agent tool / TeamCreate 등) 의 parallel 상한 과 정합. 상한 초과 시 harness 가 초과분을 silent drop 할 risk. batch-by-N 패턴으로 lens 전수 실행 보장.
-
-**Settings 조정**: project `.onto/settings.json` 에서 worker cap 설정:
+**Settings 예시**:
 
 ```json
 {
@@ -216,14 +213,13 @@ Caller 는 `agents[]` 를 **N 개씩 batch 로 나누어 dispatch**:
         "seat": "worker",
         "llm": "inherit"
       },
-      "deliberation": "controlled-lens-deliberation",
-      "max_concurrent_workers": 6
+      "deliberation": "controlled-lens-deliberation"
     }
   }
 }
 ```
 
-0 또는 음수 값은 settings validation에서 실패한다. 상세 프로토콜은 §17 참조.
+상세 프로토콜은 §17 참조.
 
 ### Step 3: Validate + Get Synthesize Instruction
 
@@ -289,9 +285,10 @@ transitions:
 ### `validating_lenses` (auto)
 
 1. 각 lens의 output_path 존재 + 비공 확인 (participating / degraded 분류)
-2. participating < minimum → error-log 기록 → `halted_partial`로 전이 기록, 종료
-3. participating ≥ minimum → controlled lens deliberation prompt packet 생성
-4. 성공 → `awaiting_deliberation`로 전이 기록
+2. minimum은 selected lens count와 동일하다. 단일 lens selection의 minimum은 1이다
+3. participating < minimum → error-log 기록 → `halted_partial`로 전이 기록, 종료
+4. participating ≥ minimum → controlled lens deliberation prompt packet 생성
+5. 성공 → `awaiting_deliberation`로 전이 기록
 
 ### `awaiting_deliberation` (await)
 
@@ -476,49 +473,52 @@ Deliberation 완료 후 `awaiting_synthesize_dispatch`의 synthesizer 가 소비
 
 ---
 
-## 17. Orchestrator Batch Dispatch Protocol
+## 17. Orchestrator Dispatch Protocol
 
-§5 Step 2 의 batch-by-N dispatch 를 수행하는 orchestrator (주체자 세션 또는 coordinator worker) 의 의무 contract.
+§5 Step 2 의 selected-lens dispatch 를 수행하는 orchestrator (주체자 세션 또는 coordinator worker) 의 의무 contract.
 
-### 17.1 배치 구성
+### 17.1 Dispatch 구성
 
 1. `npm run coordinator:start --` 출력에서 `max_concurrent_lenses` (N) 을 읽는다.
-2. `agents[]` 를 순서대로 N 개씩 배치로 나눈다.
-3. 각 배치는 **단일 메시지에 N 개 Agent tool use 블록** 으로 parallel dispatch.
+2. `max_concurrent_lenses`는 `agents[]` 길이와 같아야 한다.
+3. `agents[]` 전체를 parallel dispatch한다.
 
-### 17.2 Batch 완료 대기
+### 17.2 완료 대기
 
-4. 각 Agent tool use 의 응답이 모두 도착할 때까지 다음 배치 dispatch 를 보류.
+4. 각 Agent tool use 의 응답이 모두 도착할 때까지 synthesize 단계로 넘어가지 않는다.
 5. Agent 완료 여부는 `output_path` 파일 존재 + 비공 으로 `validating_lenses` auto state 가 후속 판정 — orchestrator 가 직접 확인하지 않음.
 
-### 17.3 다음 배치
+### 17.3 다음 단계
 
-6. 남은 agent 수 > 0 → step 17.1 의 3 반복.
-7. 전원 완료 → `npm run coordinator:next -- --session-root <session_root>` 호출.
+6. 전원 완료 → `npm run coordinator:next -- --session-root <session_root>` 호출.
 
-### 17.4 `max_concurrent_lenses` resolution 순서
+### 17.4 `max_concurrent_lenses` resolution
 
-1. **Invocation override**: `--max-concurrent-lenses <N>` 이 있으면 그 값을 사용한다.
-2. **Project settings**: `.onto/settings.json` 의 `review.execution.max_concurrent_workers`.
-3. **Runner default**: executor별 runtime 기본값.
+`max_concurrent_lenses`는 `agents[]` 길이와 같다. runtime은 선택된 lens 전체를
+동시에 dispatch한다.
 
-0/음수 값은 설정 검증 단계에서 즉시 실패한다.
+별도 invocation override나 project settings cap은 없다.
 
 ### 17.5 Silent drop 방지
 
-- orchestrator 는 `agents[]` 길이가 N 을 초과해도 **단일 메시지에 전수 spawn 금지**. 초과분이 Claude Code harness 의 parallel limit 에 도달하면 silent drop → `validating_lenses` 에서 `halted_partial` 로 귀결될 risk.
-- orchestrator 실행 환경의 자체 parallel limit 이 N 보다 낮을 경우 **min(N, 환경 limit)** 을 사용.
+- orchestrator 는 `agents[]` 전수를 dispatch한다. 실행 환경이 자체 parallel limit 을 강제하면 해당 host adapter가 명시적으로 실패하거나 queue 상태를 artifact에 남겨야 한다.
 
 ### 17.6 ReviewExecutionProfile 별 seat 의미
 
-| mode | teamlead seat | lens seat | 의미 |
-|---|---|---|---|
-| `main-workers` | `main` | `worker` | main이 조율하고 worker들이 lens 판단을 수행한다. |
-| `nested-workers` | `worker` | `worker` | worker teamlead가 제한된 문서 truth를 기준으로 nested worker lens를 조율한다. |
+| mode | teamlead seat | lens seat | synthesize seat | 의미 |
+|---|---|---|---|---|
+| `main-workers` | `main` | `worker` | `worker` | main이 조율하고 worker들이 lens 판단을 수행한다. synthesize는 별도 post-deliberation worker unit이다. |
+| `nested-workers` | `worker` | `worker` | `worker` | worker teamlead가 제한된 문서 truth를 기준으로 nested worker lens를 조율한다. synthesize는 nested lens dispatch 이후 별도 unit이다. |
+
+`nested-workers`에서 `teamlead.llm`, `lens.llm`, `synthesize.llm`은 독립 seat다.
+Codex nested realization 기준으로 `teamlead.llm`은 outer Codex teamlead
+process의 model/effort/service_tier로, `lens.llm`은 inner lens Codex process의
+model/effort/service_tier로 전달된다. `synthesize.llm`은 post-deliberation
+synthesize worker process의 model/effort/service_tier로 전달된다.
 
 ### 17.7 Rationale
 
-"single message 에 all agents parallel" 패턴은 orchestrator 환경의 parallel 상한을 가정하지 않음. 실제로는 Claude Code / Codex / 기타 harness 가 상한을 강제하며, 상한 초과 시 silent drop / rate limit error / queue 처리 등 구현 상세에 달림. 이는 외부 행위에 coordinator pipeline 의 성공 여부가 의존하게 만드는 취약 — batch-by-N 패턴은 이 의존을 제거하고 orchestrator 가 상한 내에서 전수 실행을 보장하도록 contract 로 명시.
+"single message 에 all agents parallel" 패턴은 orchestrator 환경의 parallel 상한을 가정하지 않음. 실제로는 Claude Code / Codex / 기타 harness 가 상한을 강제하며, 상한 초과 시 silent drop / rate limit error / queue 처리 등 구현 상세에 달림. onto runtime은 선택된 lens 전체 dispatch를 요구하며, host adapter가 이를 보장할 수 없으면 queue로 의미를 바꾸지 않고 fail-loud해야 한다.
 
 ## 18. Orchestrator Self-Reporting Protocol
 

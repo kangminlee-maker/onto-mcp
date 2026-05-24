@@ -15,6 +15,8 @@
 > - `.onto/processes/review/execution-preparation-artifacts.md`
 > - `.onto/processes/review/prompt-execution-runner-contract.md`
 > - `.onto/processes/review/issue-stance-deliberation-contract.md`
+> - `.onto/processes/review/review-context-manifest-contract.md`
+> - `.onto/processes/review/pre-dispatch-contracts.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -134,12 +136,19 @@ binding 다음에는 최소 아래 artifact가 materialize되어야 한다.
 3. `review target materialized input`
 4. `context candidate assembly`
 5. `execution plan`
-6. `prompt packets`
-7. `execution result`
+6. `actor invocation profiles`
+7. `actor consumer bindings`
+8. `domain binding`
+9. `review value-alignment criteria`
+10. `review context manifest`
+11. `prompt packets`
+12. `execution result`
 
 이 단계는 later `ReviewRecord`와 runtime replacement의 bridge다.
 
 세부 contract는 `.onto/processes/review/execution-preparation-artifacts.md`를 따른다.
+dispatch 전에 닫혀야 하는 gate와 phase boundary는
+`.onto/processes/review/pre-dispatch-contracts.md`를 따른다.
 
 prompt-backed path에서도 실제 파일이 만들어져야 한다.
 즉 이 단계는 단순 개념 설명이 아니라 artifact materialization step이다.
@@ -190,12 +199,13 @@ canonical requirement:
 4. 각 실행 단위는 packet에 제시된 `BoundaryPolicy`와 `EffectiveBoundaryState`를 hard constraint로 읽는다
 5. 경계 안에서 충분한 근거를 얻지 못하면 broad search로 타협하지 않고 degraded/uncertain output을 남긴다
 6. lens dispatch는 병렬 실행이 기본이다
-7. realization에 동시 실행 제한이 있으면 bounded parallel dispatch를 사용하고, slot이 비면 다음 pending lens를 즉시 투입한다
+7. runtime은 선택된 lens 전체를 dispatch한다. host가 자체 제한으로 이를 수행할 수 없으면 fail-loud하게 중단한다
 
 현재 repo-local TS bounded path에서 연결된 `ReviewExecutionProfile` mode는 아래다.
 
 - `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
-- `nested-workers`: worker teamlead가 nested worker lens를 실행한다.
+- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer coordinator worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
+- `synthesize.llm`: deliberation 이후 별도 synthesize unit에 적용된다. synthesize는 모든 lens output, issue artifacts, deliberation, problem framing을 통합하므로 높은 effort가 기본적으로 적합하다.
 
 worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 
@@ -218,9 +228,13 @@ packet materialization만 단독으로 디버깅해야 할 때는 아래 내부 
 
 - `npm run review:materialize-prompt-packets -- ...`
 
-현재 TS bounded runner의 병렬성은 `--max-concurrent-lenses`가 있으면 그 값을
-우선 사용하고, 없으면 `review.execution.max_concurrent_workers` 또는 executor
-기본값을 사용한다.
+현재 TS bounded runner의 lens 병렬성은 선택된 lens 수와 같다. full review는
+9개 lens를 모두 병렬 dispatch하고, core-axis 또는 명시적 lens 선택은 해당 lens
+전체를 병렬 dispatch한다.
+
+Round 1 이후에는 `lens-completion-barrier.yaml`이 작성되어야 한다.
+canonical review path는 선택된 lens 전원이 완료되고, 선택된 lens 수가 최소 2개일 때만
+issue artifacts, controlled deliberation, synthesize로 진행한다.
 
 ### 3.7 통제된 lens 숙의 (Controlled Lens Deliberation)
 

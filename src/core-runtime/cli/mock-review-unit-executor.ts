@@ -149,6 +149,9 @@ function renderIssueArtifactOutput(
   sessionId: string,
   participatingLensIds: string[],
 ): string {
+  if (process.env.ONTO_REVIEW_MOCK_MALFORMED_ISSUE_ARTIFACT === unitId) {
+    return "schema_version: [\n";
+  }
   const primaryLensId = participatingLensIds[0] ?? "logic";
   switch (unitId) {
     case "finding-ledger":

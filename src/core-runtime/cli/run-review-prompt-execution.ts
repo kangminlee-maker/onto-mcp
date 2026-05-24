@@ -10,11 +10,15 @@ import type { OntoConfig } from "../discovery/settings-chain.js";
 import type {
   DeliberationStatus,
   EffectiveBoundaryState,
+  ReviewContextManifestArtifact,
+  ReviewContextManifestPacketRef,
+  ReviewContextSource,
   ReviewExecutionRealization,
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewExecutionStatus,
   ReviewIssueArtifactId,
+  ReviewLensCompletionBarrierArtifact,
   ReviewUnitKind,
   ReviewUnitExecutionResult,
 } from "../review/artifact-types.js";
@@ -29,6 +33,8 @@ import {
 } from "../review/review-artifact-utils.js";
 import {
   PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+  issueArtifactConsumerId,
+  issueArtifactSpec,
   renderIssueArtifactContext,
   renderIssueArtifactRefs,
   resolveProblemFramingProfileRef,
@@ -42,8 +48,10 @@ import {
   type LensOutputForDeliberation,
   type LensDeliberationResponseForTeamlead,
 } from "../review/controlled-lens-deliberation.js";
+import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
+import { writeAndThrowStructuredFailureRecord } from "../review/failure-records.js";
 
 export interface ReviewUnitExecutorConfig {
   bin: string;
@@ -109,6 +117,20 @@ async function appendExecutionProgress(
 }
 
 const REVIEW_PROGRESS_TOTAL_STEPS = 12;
+const REVIEW_EXECUTION_STEP_IDS = [
+  "manifest_validation",
+  "lens_dispatch",
+  "lens_completion_barrier",
+  "finding_ledger",
+  "finding_relation_graph",
+  "issue_ledger",
+  "issue_stance_matrix",
+  "deliberation_plan",
+  "lens_deliberation_responses",
+  "controlled_deliberation",
+  "problem_framing",
+  "synthesize",
+] as const;
 
 async function emitReviewProgress(args: {
   executionPlan: ReviewExecutionPlan;
@@ -177,6 +199,71 @@ function renderDegradedLensFailuresSection(
     .join("\n")}\n`;
 }
 
+async function writeLensCompletionBarrier(args: {
+  executionPlan: ReviewExecutionPlan;
+  observedDispatchWidth: number;
+  minimumParticipatingLenses: number;
+  lensDispatches: ExecutionDispatchResult[];
+  successfulLensDispatches: ExecutionDispatchResult[];
+  executionFailures: ExecutionFailure[];
+}): Promise<ReviewLensCompletionBarrierArtifact> {
+  const plannedLensIds = args.lensDispatches.map((dispatch) => dispatch.unit_id);
+  const completedLensIds = args.successfulLensDispatches.map(
+    (dispatch) => dispatch.unit_id,
+  );
+  const failedLensIds = args.executionFailures
+    .filter((failure) => failure.unit_kind === "lens")
+    .map((failure) => failure.unit_id);
+  const missingLensIds = plannedLensIds.filter(
+    (lensId) =>
+      !completedLensIds.includes(lensId) && !failedLensIds.includes(lensId),
+  );
+  const degradedLensIds = plannedLensIds.filter(
+    (lensId) => !completedLensIds.includes(lensId),
+  );
+  const downstreamAllowed =
+    completedLensIds.length >= args.minimumParticipatingLenses;
+  const status: ReviewLensCompletionBarrierArtifact["status"] =
+    downstreamAllowed && degradedLensIds.length === 0
+      ? "passed"
+      : downstreamAllowed
+        ? "passed_with_degradation"
+        : "failed";
+  const barrier: ReviewLensCompletionBarrierArtifact = {
+    schema_version: "1",
+    session_id: args.executionPlan.session_id,
+    created_at: isoFromTimestamp(Date.now()),
+    observed_dispatch_width: args.observedDispatchWidth,
+    minimum_participating_lenses: args.minimumParticipatingLenses,
+    planned_lens_ids: plannedLensIds,
+    completed_lens_ids: completedLensIds,
+    failed_lens_ids: failedLensIds,
+    missing_lens_ids: missingLensIds,
+    degraded_lens_ids: degradedLensIds,
+    status,
+    downstream_allowed: downstreamAllowed,
+    downstream_reason: downstreamAllowed
+      ? "selected lens completion threshold satisfied"
+      : "selected lens completion threshold not satisfied",
+  };
+  const barrierPath =
+    args.executionPlan.lens_completion_barrier_path ??
+    path.join(args.executionPlan.session_root, "lens-completion-barrier.yaml");
+  await writeYamlDocument(barrierPath, barrier);
+  await appendExecutionProgress(
+    args.executionPlan.error_log_path,
+    "runner lens completion barrier",
+    [
+      `status: ${barrier.status}`,
+      `observed_dispatch_width: ${barrier.observed_dispatch_width}`,
+      `completed_lens_count: ${barrier.completed_lens_ids.length}`,
+      `degraded_lens_count: ${barrier.degraded_lens_ids.length}`,
+      `downstream_allowed: ${String(barrier.downstream_allowed)}`,
+    ],
+  );
+  return barrier;
+}
+
 function renderControlledDeliberationRefsSection(
   projectRoot: string,
   executionPlan: ReviewExecutionPlan,
@@ -206,27 +293,6 @@ function requireString(
     throw new Error(`Missing required option --${optionName}`);
   }
   return value;
-}
-
-function requirePositiveInteger(value: string, optionName: string): number {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    throw new Error(`Invalid positive integer for --${optionName}: ${value}`);
-  }
-  return parsed;
-}
-
-function defaultMaxConcurrentLensesForExecutorConfig(
-  executorConfig: ReviewUnitExecutorConfig,
-): number {
-  if (executorConfig.bin === "npm" || executorConfig.bin.endsWith("npm.cmd")) {
-    if (executorConfig.args.includes("review:codex-unit-executor")) {
-      // 9 lenses can run concurrently with stagger + retry to mitigate
-      // thundering herd and transient API rate-limit failures.
-      return 9;
-    }
-  }
-  return 1;
 }
 
 /** Default stagger delay between successive lens dispatches (ms).
@@ -412,14 +478,621 @@ async function writeExecutionResultArtifact(
   artifact: ReviewExecutionResultArtifact,
   reviewExecutionProfile?: ReviewExecutionProfile,
 ): Promise<void> {
-  await writeYamlDocument(executionPlan.execution_result_path, artifact);
-  await writeReviewRunManifest(executionPlan, artifact, reviewExecutionProfile);
+  try {
+    await writeYamlDocument(executionPlan.execution_result_path, artifact);
+    await writeReviewRunManifest(executionPlan, artifact, reviewExecutionProfile);
+  } catch (error) {
+    await writeAndThrowStructuredFailureRecord({
+      sessionRoot: executionPlan.session_root,
+      phase: "execution.artifact_write",
+      reasonCode: "review_execution_artifact_write_failed",
+      humanMessage:
+        "Runtime failed to write a required review execution artifact.",
+      requiredUserAction:
+        "Restore write access to the review session artifact path, then rerun the review.",
+      retrySafety: "safe_after_environment_change",
+      artifactTrust: "execution_artifacts_partial",
+      dispatchState: "dispatched",
+      artifactRefs: {
+        execution_plan: path.join(executionPlan.session_root, "execution-plan.yaml"),
+        execution_result: executionPlan.execution_result_path,
+        review_run_manifest: path.join(
+          executionPlan.session_root,
+          "review-run-manifest.yaml",
+        ),
+      },
+      mcpErrorCode: "ONTO_REVIEW_ARTIFACT_WRITE_FAILED",
+      detailsKind: "artifact_write",
+      details: {
+        execution_result_path: executionPlan.execution_result_path,
+        review_run_manifest_path: path.join(
+          executionPlan.session_root,
+          "review-run-manifest.yaml",
+        ),
+        error_message: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
+}
+
+async function throwMalformedOutputFailure(args: {
+  executionPlan: ReviewExecutionPlan;
+  phase: string;
+  unitId: string;
+  unitKind: ReviewUnitKind;
+  packetPath: string;
+  outputPath: string;
+  humanMessage: string;
+  error: unknown;
+}): Promise<never> {
+  return writeAndThrowStructuredFailureRecord({
+    sessionRoot: args.executionPlan.session_root,
+    phase: args.phase,
+    reasonCode: "review_unit_malformed_output",
+    humanMessage: args.humanMessage,
+    requiredUserAction:
+      "Regenerate the review unit output with the current prompt contract.",
+    retrySafety: "safe_after_input_change",
+    artifactTrust: "execution_artifacts_partial",
+    dispatchState: "dispatched",
+    artifactRefs: {
+      execution_plan: path.join(args.executionPlan.session_root, "execution-plan.yaml"),
+      packet: args.packetPath,
+      output: args.outputPath,
+      error_log: args.executionPlan.error_log_path,
+    },
+    mcpErrorCode: "ONTO_REVIEW_MALFORMED_OUTPUT",
+    detailsKind: "malformed_output",
+    details: {
+      unit_id: args.unitId,
+      unit_kind: args.unitKind,
+      packet_path: args.packetPath,
+      output_path: args.outputPath,
+      error_message:
+        args.error instanceof Error ? args.error.message : String(args.error),
+    },
+  });
 }
 
 async function optionalFileDigest(filePath: string): Promise<string | null> {
   if (!(await fileExists(filePath))) return null;
   const content = await fs.readFile(filePath);
   return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+function runtimeProviderForProfile(profile: ReviewExecutionProfile): string {
+  if (profile.worker_executor === "mock") return "mock";
+  if (profile.worker_executor === "codex") {
+    return profile.host === "claude" ? "claude" : "codex";
+  }
+  return profile.provider ?? profile.host;
+}
+
+function authModeForProfile(profile: ReviewExecutionProfile): string | null {
+  if (profile.worker_executor === "mock") return null;
+  if (profile.worker_executor === "codex") return profile.auth ?? "oauth";
+  return profile.auth ?? null;
+}
+
+function consumerIdForLens(lensId: string): string {
+  return `lens:${lensId}`;
+}
+
+function deriveContextAccessMatrix(
+  contextSources: ReviewContextSource[],
+): Record<string, string[]> {
+  const matrix: Record<string, string[]> = {};
+  for (const source of contextSources) {
+    for (const consumerId of source.allowed_consumers) {
+      matrix[consumerId] = [
+        ...(matrix[consumerId] ?? []),
+        source.context_source_id,
+      ];
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(matrix).map(([consumerId, sourceIds]) => [
+      consumerId,
+      [...new Set(sourceIds)].sort(),
+    ]),
+  );
+}
+
+function sortedJson(values: string[]): string {
+  return JSON.stringify([...new Set(values)].sort());
+}
+
+async function throwManifestValidationFailure(args: {
+  executionPlan: ReviewExecutionPlan;
+  reasonCode: string;
+  humanMessage: string;
+  requiredUserAction: string;
+  detailsKind:
+    | "manifest_lifecycle"
+    | "context_eligibility"
+    | "schema_validation";
+  details: Record<string, unknown>;
+}): Promise<never> {
+  return writeAndThrowStructuredFailureRecord({
+    sessionRoot: args.executionPlan.session_root,
+    phase: "packets_materialized.manifest_validation",
+    reasonCode: args.reasonCode,
+    humanMessage: args.humanMessage,
+    requiredUserAction: args.requiredUserAction,
+    retrySafety: "safe_after_input_change",
+    artifactTrust: "manifest_artifacts_trusted",
+    dispatchState: "dispatch_blocked",
+    artifactRefs: {
+      execution_plan: path.join(args.executionPlan.session_root, "execution-plan.yaml"),
+      review_context_manifest:
+        args.executionPlan.review_context_manifest_path ??
+        path.join(
+          args.executionPlan.session_root,
+          "execution-preparation",
+          "review-context-manifest.yaml",
+        ),
+    },
+    mcpErrorCode: "ONTO_REVIEW_MANIFEST_VALIDATION_FAILED",
+    detailsKind: args.detailsKind,
+    details: args.details,
+  });
+}
+
+function packetRefByPath(
+  packetRefs: ReviewContextManifestPacketRef[],
+): Map<string, ReviewContextManifestPacketRef> {
+  return new Map(
+    packetRefs.map((packetRef) => [path.resolve(packetRef.packet_ref), packetRef]),
+  );
+}
+
+async function reviewContextManifestPath(
+  executionPlan: ReviewExecutionPlan,
+): Promise<string> {
+  return (
+    executionPlan.review_context_manifest_path ??
+    path.join(
+      executionPlan.session_root,
+      "execution-preparation",
+      "review-context-manifest.yaml",
+    )
+  );
+}
+
+async function readReviewContextManifest(
+  executionPlan: ReviewExecutionPlan,
+): Promise<{
+  manifestPath: string;
+  manifest: ReviewContextManifestArtifact;
+}> {
+  const manifestPath = await reviewContextManifestPath(executionPlan);
+  return {
+    manifestPath,
+    manifest: await readYamlDocument<ReviewContextManifestArtifact>(manifestPath),
+  };
+}
+
+async function validatePromptPacketRefForDispatch(args: {
+  executionPlan: ReviewExecutionPlan;
+  manifest: ReviewContextManifestArtifact;
+  expectedMatrix: Record<string, string[]>;
+  consumerId: string;
+  packetPath: string;
+}): Promise<void> {
+  const refsByPath = packetRefByPath(args.manifest.packet_refs);
+  const ref = refsByPath.get(path.resolve(args.packetPath));
+  if (!ref) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_ref_missing",
+      humanMessage: "A required prompt packet is absent from the manifest.",
+      requiredUserAction: "Regenerate prompt packets before dispatch.",
+      detailsKind: "manifest_lifecycle",
+      details: {
+        consumer_id: args.consumerId,
+        packet_path: args.packetPath,
+      },
+    });
+    return;
+  }
+  if (ref.consumer_id !== args.consumerId) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_consumer_mismatch",
+      humanMessage: "A prompt packet is bound to an unexpected consumer.",
+      requiredUserAction:
+        "Regenerate actor/consumer bindings and prompt packets before dispatch.",
+      detailsKind: "context_eligibility",
+      details: {
+        packet_path: args.packetPath,
+        expected_consumer_id: args.consumerId,
+        actual_consumer_id: ref.consumer_id,
+      },
+    });
+  }
+  const observedPacketHash = await optionalFileDigest(args.packetPath);
+  if (ref.packet_sha256 !== observedPacketHash) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_hash_mismatch",
+      humanMessage: "A prompt packet hash changed after manifest dispatch.",
+      requiredUserAction:
+        "Regenerate prompt packets or restart review preparation.",
+      detailsKind: "manifest_lifecycle",
+      details: {
+        packet_path: args.packetPath,
+        expected_sha256: ref.packet_sha256,
+        observed_sha256: observedPacketHash,
+      },
+    });
+  }
+  const allowedContext = args.expectedMatrix[ref.consumer_id];
+  if (!allowedContext) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_consumer_not_admitted",
+      humanMessage:
+        "A prompt packet consumer is not admitted by the review context manifest.",
+      requiredUserAction:
+        "Regenerate actor/consumer bindings and prompt packets before dispatch.",
+      detailsKind: "context_eligibility",
+      details: {
+        consumer_id: ref.consumer_id,
+        packet_path: ref.packet_ref,
+      },
+    });
+    return;
+  }
+  const allContextIds = args.manifest.context_sources.map(
+    (source) => source.context_source_id,
+  );
+  const expectedForbiddenContext = allContextIds.filter(
+    (sourceId) => !allowedContext.includes(sourceId),
+  );
+  if (
+    sortedJson(ref.consumed_context_refs) !== sortedJson(allowedContext) ||
+    sortedJson(ref.forbidden_context_refs) !==
+      sortedJson(expectedForbiddenContext)
+  ) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_context_eligibility_mismatch",
+      humanMessage:
+        "Prompt packet context refs do not match manifest consumer eligibility.",
+      requiredUserAction: "Regenerate prompt packets from the current manifest.",
+      detailsKind: "context_eligibility",
+      details: {
+        consumer_id: ref.consumer_id,
+        packet_path: ref.packet_ref,
+        expected_consumed_context_refs: allowedContext,
+        actual_consumed_context_refs: ref.consumed_context_refs,
+        expected_forbidden_context_refs: expectedForbiddenContext,
+        actual_forbidden_context_refs: ref.forbidden_context_refs,
+      },
+    });
+  }
+}
+
+async function validateManifestPacketRefsForDispatch(args: {
+  executionPlan: ReviewExecutionPlan;
+  manifest: ReviewContextManifestArtifact;
+  expectedMatrix: Record<string, string[]>;
+}): Promise<void> {
+  const allContextIds = args.manifest.context_sources.map(
+    (source) => source.context_source_id,
+  );
+  for (const ref of args.manifest.packet_refs) {
+    const allowedContext = args.expectedMatrix[ref.consumer_id];
+    if (!allowedContext) {
+      await throwManifestValidationFailure({
+        executionPlan: args.executionPlan,
+        reasonCode: "packet_consumer_not_admitted",
+        humanMessage:
+          "A prompt packet consumer is not admitted by the review context manifest.",
+        requiredUserAction:
+          "Regenerate actor/consumer bindings and prompt packets before dispatch.",
+        detailsKind: "context_eligibility",
+        details: {
+          consumer_id: ref.consumer_id,
+          packet_path: ref.packet_ref,
+        },
+      });
+      return;
+    }
+    const observedPacketHash = await optionalFileDigest(ref.packet_ref);
+    if (ref.packet_sha256 !== observedPacketHash) {
+      await throwManifestValidationFailure({
+        executionPlan: args.executionPlan,
+        reasonCode: "packet_hash_mismatch",
+        humanMessage: "A prompt packet hash changed after manifest dispatch.",
+        requiredUserAction:
+          "Regenerate prompt packets or restart review preparation.",
+        detailsKind: "manifest_lifecycle",
+        details: {
+          packet_path: ref.packet_ref,
+          expected_sha256: ref.packet_sha256,
+          observed_sha256: observedPacketHash,
+        },
+      });
+    }
+    const expectedForbiddenContext = allContextIds.filter(
+      (sourceId) => !allowedContext.includes(sourceId),
+    );
+    if (
+      sortedJson(ref.consumed_context_refs) !== sortedJson(allowedContext) ||
+      sortedJson(ref.forbidden_context_refs) !==
+        sortedJson(expectedForbiddenContext)
+    ) {
+      await throwManifestValidationFailure({
+        executionPlan: args.executionPlan,
+        reasonCode: "packet_context_eligibility_mismatch",
+        humanMessage:
+          "Prompt packet context refs do not match manifest consumer eligibility.",
+        requiredUserAction: "Regenerate prompt packets from the current manifest.",
+        detailsKind: "context_eligibility",
+        details: {
+          consumer_id: ref.consumer_id,
+          packet_path: ref.packet_ref,
+          expected_consumed_context_refs: allowedContext,
+          actual_consumed_context_refs: ref.consumed_context_refs,
+          expected_forbidden_context_refs: expectedForbiddenContext,
+          actual_forbidden_context_refs: ref.forbidden_context_refs,
+        },
+      });
+    }
+  }
+}
+
+async function registerGeneratedPromptPacketRefForDispatch(args: {
+  executionPlan: ReviewExecutionPlan;
+  consumerId: string;
+  packetPath: string;
+}): Promise<void> {
+  const { manifestPath, manifest } = await readReviewContextManifest(
+    args.executionPlan,
+  );
+  if (manifest.lifecycle_state !== "dispatched") {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "review_context_manifest_not_dispatched",
+      humanMessage:
+        "Review context manifest must be dispatched before generated packet registration.",
+      requiredUserAction:
+        "Regenerate prompt packets from a validated manifest before dispatch.",
+      detailsKind: "manifest_lifecycle",
+      details: {
+        manifest_path: manifestPath,
+        lifecycle_state: manifest.lifecycle_state,
+      },
+    });
+  }
+  const expectedMatrix = deriveContextAccessMatrix(manifest.context_sources);
+  const allowedContext = expectedMatrix[args.consumerId];
+  if (!allowedContext) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "packet_consumer_not_admitted",
+      humanMessage:
+        "A generated prompt packet consumer is not admitted by the review context manifest.",
+      requiredUserAction:
+        "Regenerate actor/consumer bindings and prompt packets before dispatch.",
+      detailsKind: "context_eligibility",
+      details: {
+        consumer_id: args.consumerId,
+        packet_path: args.packetPath,
+      },
+    });
+    return;
+  }
+  const packetSha256 = await optionalFileDigest(args.packetPath);
+  if (!packetSha256) {
+    await throwManifestValidationFailure({
+      executionPlan: args.executionPlan,
+      reasonCode: "generated_packet_missing",
+      humanMessage: "A generated prompt packet is missing before dispatch.",
+      requiredUserAction: "Regenerate the runtime prompt packet before dispatch.",
+      detailsKind: "manifest_lifecycle",
+      details: {
+        consumer_id: args.consumerId,
+        packet_path: args.packetPath,
+      },
+    });
+    return;
+  }
+  const allContextIds = manifest.context_sources.map(
+    (source) => source.context_source_id,
+  );
+  const packetRef: ReviewContextManifestPacketRef = {
+    consumer_id: args.consumerId,
+    packet_ref: args.packetPath,
+    packet_sha256: packetSha256,
+    consumed_context_refs: allowedContext,
+    forbidden_context_refs: allContextIds.filter(
+      (sourceId) => !allowedContext.includes(sourceId),
+    ),
+  };
+  const packetPath = path.resolve(args.packetPath);
+  const updatedManifest: ReviewContextManifestArtifact = {
+    ...manifest,
+    packet_refs: [
+      ...manifest.packet_refs.filter(
+        (ref) => path.resolve(ref.packet_ref) !== packetPath,
+      ),
+      packetRef,
+    ],
+    validation_results: [
+      ...new Set([
+        ...manifest.validation_results,
+        `generated_packet_ref_registered:${args.consumerId}`,
+      ]),
+    ],
+  };
+  await writeYamlDocument(manifestPath, updatedManifest);
+  await validatePromptPacketRefForDispatch({
+    executionPlan: args.executionPlan,
+    manifest: updatedManifest,
+    expectedMatrix,
+    consumerId: args.consumerId,
+    packetPath: args.packetPath,
+  });
+}
+
+async function pruneGeneratedPromptPacketRefs(
+  executionPlan: ReviewExecutionPlan,
+): Promise<void> {
+  const { manifestPath, manifest } = await readReviewContextManifest(executionPlan);
+  const staticPacketPaths = new Set(
+    [
+      ...executionPlan.lens_prompt_packet_seats.map((seat) => seat.packet_path),
+      executionPlan.synthesize_prompt_packet_path,
+    ].map((packetPath) => path.resolve(packetPath)),
+  );
+  const staticPacketRefs = manifest.packet_refs.filter((packetRef) =>
+    staticPacketPaths.has(path.resolve(packetRef.packet_ref)),
+  );
+  if (staticPacketRefs.length === manifest.packet_refs.length) return;
+  await writeYamlDocument(manifestPath, {
+    ...manifest,
+    packet_refs: staticPacketRefs,
+    validation_results: [
+      ...new Set([
+        ...manifest.validation_results,
+        "generated_packet_refs_pruned_for_new_execution",
+      ]),
+    ],
+  });
+}
+
+async function ensureReviewContextManifestReadyForDispatch(
+  executionPlan: ReviewExecutionPlan,
+): Promise<void> {
+  const manifestPath = await reviewContextManifestPath(executionPlan);
+  if (!(await fileExists(manifestPath))) {
+    await throwManifestValidationFailure({
+      executionPlan,
+      reasonCode: "review_context_manifest_missing",
+      humanMessage: "Review context manifest is missing before lens dispatch.",
+      requiredUserAction:
+        "Run review preparation again so the manifest and prompt packet refs are materialized.",
+      detailsKind: "manifest_lifecycle",
+      details: { manifest_path: manifestPath },
+    });
+  }
+
+  const manifest = await readYamlDocument<ReviewContextManifestArtifact>(
+    manifestPath,
+  );
+  if (manifest.schema_version !== "1") {
+    await throwManifestValidationFailure({
+      executionPlan,
+      reasonCode: "review_context_manifest_schema_unsupported",
+      humanMessage: "Review context manifest schema version is unsupported.",
+      requiredUserAction:
+        "Regenerate the review context manifest with the current runtime.",
+      detailsKind: "schema_validation",
+      details: {
+        manifest_path: manifestPath,
+        expected_schema_version: "1",
+        actual_schema_version: manifest.schema_version,
+      },
+    });
+  }
+  if (manifest.lifecycle_state !== "dispatched") {
+    await throwManifestValidationFailure({
+      executionPlan,
+      reasonCode: "review_context_manifest_not_dispatched",
+      humanMessage:
+        "Review context manifest must be dispatched before lens execution.",
+      requiredUserAction:
+        "Regenerate prompt packets from a validated manifest before dispatch.",
+      detailsKind: "manifest_lifecycle",
+      details: {
+        manifest_path: manifestPath,
+        lifecycle_state: manifest.lifecycle_state,
+      },
+    });
+  }
+
+  const expectedMatrix = deriveContextAccessMatrix(manifest.context_sources);
+  if (
+    JSON.stringify(expectedMatrix) !==
+    JSON.stringify(manifest.derived_context_access_matrix)
+  ) {
+    await throwManifestValidationFailure({
+      executionPlan,
+      reasonCode: "review_context_matrix_mismatch",
+      humanMessage:
+        "Review context manifest access matrix does not match allowed consumers.",
+      requiredUserAction:
+        "Regenerate the review context manifest from runtime-owned context sources.",
+      detailsKind: "context_eligibility",
+      details: {
+        expected_matrix: expectedMatrix,
+        actual_matrix: manifest.derived_context_access_matrix,
+      },
+    });
+  }
+
+  for (const source of manifest.context_sources) {
+    const resolvedSourcePath = path.resolve(source.source_ref);
+    if (source.required && !(await fileExists(resolvedSourcePath))) {
+      await throwManifestValidationFailure({
+        executionPlan,
+        reasonCode: "required_context_source_missing",
+        humanMessage: "A required review context source is missing.",
+        requiredUserAction:
+          "Restore the required artifact or restart review preparation.",
+        detailsKind: "context_eligibility",
+        details: {
+          context_source_id: source.context_source_id,
+          source_ref: source.source_ref,
+        },
+      });
+    }
+    const observedHash = await optionalFileDigest(resolvedSourcePath);
+    if (source.source_sha256 !== observedHash) {
+      await throwManifestValidationFailure({
+        executionPlan,
+        reasonCode: "context_source_hash_mismatch",
+        humanMessage: "A review context source hash changed after manifest validation.",
+        requiredUserAction:
+          "Restart review preparation so context hashes and prompt packets match the target state.",
+        detailsKind: "context_eligibility",
+        details: {
+          context_source_id: source.context_source_id,
+          source_ref: source.source_ref,
+          expected_sha256: source.source_sha256,
+          observed_sha256: observedHash,
+        },
+      });
+    }
+  }
+
+  await validateManifestPacketRefsForDispatch({
+    executionPlan,
+    manifest,
+    expectedMatrix,
+  });
+
+  const requiredPackets = [
+    ...executionPlan.lens_prompt_packet_seats.map((seat) => ({
+      consumer_id: consumerIdForLens(seat.lens_id),
+      packet_path: seat.packet_path,
+    })),
+    {
+      consumer_id: "synthesize",
+      packet_path: executionPlan.synthesize_prompt_packet_path,
+    },
+  ];
+  for (const requiredPacket of requiredPackets) {
+    await validatePromptPacketRefForDispatch({
+      executionPlan,
+      manifest,
+      expectedMatrix,
+      consumerId: requiredPacket.consumer_id,
+      packetPath: requiredPacket.packet_path,
+    });
+  }
 }
 
 async function unitManifestEntry(
@@ -458,20 +1131,44 @@ async function writeReviewRunManifest(
   for (const result of unitResults) {
     workerUnits.push(await unitManifestEntry(result));
   }
+  const resumeToken = crypto
+    .createHash("sha256")
+    .update(
+      [
+        executionPlan.session_id,
+        executionPlan.execution_result_path,
+        artifact.execution_started_at,
+      ].join("\n"),
+    )
+    .digest("hex");
   await writeYamlDocument(manifestPath, {
     schema_version: "1",
     session_id: executionPlan.session_id,
     created_at: artifact.execution_completed_at,
+    execution_contract: {
+      schema_version: "1",
+      execution_step_ids: [...REVIEW_EXECUTION_STEP_IDS],
+      progress_total_steps: REVIEW_PROGRESS_TOTAL_STEPS,
+      resume_token: resumeToken,
+      resume_token_ref: "review-run-manifest.execution_contract.resume_token",
+      idempotency_scope: "session_id",
+      idempotency_key: executionPlan.session_id,
+      duplicate_dispatch_policy: "session_id_collision_blocks",
+    },
     review_execution_profile: reviewExecutionProfile
       ? {
           mode: reviewExecutionProfile.mode,
           teamlead: reviewExecutionProfile.teamlead,
           lens: reviewExecutionProfile.lens,
+          synthesize: reviewExecutionProfile.synthesize,
           deliberation: reviewExecutionProfile.deliberation,
-          worker_executor: reviewExecutionProfile.worker_executor,
-          host: reviewExecutionProfile.host,
-          provider: reviewExecutionProfile.provider ?? null,
-          auth: reviewExecutionProfile.auth ?? null,
+          runtime_route: {
+            execution_realization: executionPlan.execution_realization,
+            host_runtime: reviewExecutionProfile.host,
+            worker_executor: reviewExecutionProfile.worker_executor,
+            runtime_provider: runtimeProviderForProfile(reviewExecutionProfile),
+            auth_mode: authModeForProfile(reviewExecutionProfile),
+          },
           model: reviewExecutionProfile.model ?? null,
           effort: reviewExecutionProfile.effort ?? null,
           service_tier: reviewExecutionProfile.service_tier ?? null,
@@ -485,6 +1182,13 @@ async function writeReviewRunManifest(
       binding: executionPlan.binding_output_path,
       execution_plan: path.join(executionPlan.session_root, "execution-plan.yaml"),
       execution_result: executionPlan.execution_result_path,
+      actor_invocation_profiles: executionPlan.actor_invocation_profiles_path ?? null,
+      actor_consumer_bindings: executionPlan.actor_consumer_bindings_path ?? null,
+      domain_binding: executionPlan.domain_binding_path ?? null,
+      review_value_alignment_criteria:
+        executionPlan.review_value_alignment_criteria_path ?? null,
+      review_context_manifest: executionPlan.review_context_manifest_path ?? null,
+      lens_completion_barrier: executionPlan.lens_completion_barrier_path ?? null,
       final_output: executionPlan.final_output_path,
       review_record: executionPlan.review_record_path,
       synthesis_output: executionPlan.synthesis_output_path,
@@ -505,14 +1209,15 @@ async function writeReviewRunManifest(
       deliberation_output_sha256: await optionalFileDigest(executionPlan.deliberation_output_path),
       participating_lens_ids: artifact.participating_lens_ids,
       degraded_lens_ids: artifact.degraded_lens_ids,
-      issue_artifact_refs: {
-        finding_ledger: executionPlan.finding_ledger_path,
-        finding_relation_graph: executionPlan.finding_relation_graph_path,
-        issue_ledger: executionPlan.issue_ledger_path,
-        issue_stance_matrix: executionPlan.issue_stance_matrix_path,
-        deliberation_plan: executionPlan.deliberation_plan_path,
-        problem_framing: executionPlan.problem_framing_path,
-      },
+      observed_dispatch_width:
+        artifact.observed_dispatch_width ?? artifact.max_concurrent_lenses,
+      lens_completion_barrier_ref: artifact.lens_completion_barrier_ref ?? null,
+      issue_artifact_refs: Object.fromEntries(
+        executionPlan.issue_artifact_prompt_packet_seats.map((seat) => [
+          issueArtifactSpec(seat.artifact_id).ref_key,
+          seat.output_path,
+        ]),
+      ),
     },
   });
 }
@@ -532,6 +1237,8 @@ async function resetExecutionOutputs(
     executionPlan.deliberation_plan_path,
     executionPlan.problem_framing_path,
     executionPlan.final_output_path,
+    executionPlan.lens_completion_barrier_path ??
+      path.join(executionPlan.session_root, "lens-completion-barrier.yaml"),
     executionPlan.teamlead_deliberation_prompt_packet_path,
     path.join(
       executionPlan.prompt_packets_root,
@@ -705,20 +1412,8 @@ function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
   step: number;
   label: string;
 } {
-  switch (artifactId) {
-    case "finding-ledger":
-      return { step: 4, label: "finding ledger" };
-    case "finding-relation-graph":
-      return { step: 5, label: "finding relation graph" };
-    case "issue-ledger":
-      return { step: 6, label: "issue ledger" };
-    case "issue-stance-matrix":
-      return { step: 7, label: "issue stance matrix" };
-    case "deliberation-plan":
-      return { step: 8, label: "deliberation plan" };
-    case "problem-framing":
-      return { step: 11, label: "problem framing" };
-  }
+  const spec = issueArtifactSpec(artifactId);
+  return { step: spec.progress_step, label: spec.progress_label };
 }
 
 async function runIssueArtifactDispatch(args: {
@@ -786,6 +1481,11 @@ async function runIssueArtifactDispatch(args: {
         "utf8",
       );
     }
+    await registerGeneratedPromptPacketRefForDispatch({
+      executionPlan: args.executionPlan,
+      consumerId: issueArtifactConsumerId(args.artifactId),
+      packetPath: seat.packet_path,
+    });
     const outcome = await runSingleDispatchWithRetries({
       projectRoot: args.projectRoot,
       sessionRoot: args.sessionRoot,
@@ -818,20 +1518,25 @@ async function runIssueArtifactDispatch(args: {
       await removeFileIfExists(seat.output_path);
     }
   }
-  throw new Error(
-    `Issue artifact validation failed for ${args.artifactId}: ${
-      lastValidationError instanceof Error
-        ? lastValidationError.message
-        : String(lastValidationError)
-    }${lastOutcome?.failure ? ` (${lastOutcome.failure.message})` : ""}`,
-  );
+  return await throwMalformedOutputFailure({
+    executionPlan: args.executionPlan,
+    phase: `execution.issue_artifact.${args.artifactId}`,
+    unitId: args.artifactId,
+    unitKind: "issue_artifact",
+    packetPath: seat.packet_path,
+    outputPath: seat.output_path,
+    humanMessage:
+      "An issue artifact review unit produced malformed output after validation retry.",
+    error: lastValidationError,
+  });
 }
 
 async function runControlledLensDeliberation(args: {
   projectRoot: string;
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
-  executorConfig: ReviewUnitExecutorConfig;
+  lensExecutorConfig: ReviewUnitExecutorConfig;
+  teamleadExecutorConfig: ReviewUnitExecutorConfig;
   successfulLensDispatches: ExecutionDispatchResult[];
   maxConcurrentLenses: number;
   issueArtifactContext?: string;
@@ -844,7 +1549,8 @@ async function runControlledLensDeliberation(args: {
     projectRoot,
     sessionRoot,
     executionPlan,
-    executorConfig,
+    lensExecutorConfig,
+    teamleadExecutorConfig,
     successfulLensDispatches,
     maxConcurrentLenses,
     issueArtifactContext,
@@ -904,6 +1610,11 @@ async function runControlledLensDeliberation(args: {
     });
     await fs.mkdir(path.dirname(dispatch.packet_path), { recursive: true });
     await fs.writeFile(dispatch.packet_path, `${packetText.trimEnd()}\n`, "utf8");
+    await registerGeneratedPromptPacketRefForDispatch({
+      executionPlan,
+      consumerId: `deliberation:${lensId}`,
+      packetPath: dispatch.packet_path,
+    });
   }
 
   const deliberationOutcomes: Array<ExecutionOutcome | undefined> = new Array(
@@ -922,7 +1633,7 @@ async function runControlledLensDeliberation(args: {
         projectRoot,
         sessionRoot,
         executionPlan,
-        executorConfig,
+        executorConfig: lensExecutorConfig,
         dispatch,
         maxRetries: DEFAULT_LENS_MAX_RETRIES,
         retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
@@ -973,6 +1684,11 @@ async function runControlledLensDeliberation(args: {
     `${teamleadPacketText.trimEnd()}\n`,
     "utf8",
   );
+  await registerGeneratedPromptPacketRefForDispatch({
+    executionPlan,
+    consumerId: "controlled-deliberation",
+    packetPath: executionPlan.teamlead_deliberation_prompt_packet_path,
+  });
 
   const teamleadDispatch: ExecutionDispatchResult = {
     unit_id: "controlled-deliberation",
@@ -990,7 +1706,7 @@ async function runControlledLensDeliberation(args: {
     projectRoot,
     sessionRoot,
     executionPlan,
-    executorConfig,
+    executorConfig: teamleadExecutorConfig,
     dispatch: teamleadDispatch,
     maxRetries: 1,
     retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
@@ -1022,8 +1738,8 @@ export async function executeReviewPromptExecution(
     projectRoot: string;
     sessionRoot: string;
     defaultExecutorConfig: ReviewUnitExecutorConfig;
+    teamleadExecutorConfig?: ReviewUnitExecutorConfig;
     synthesizeExecutorConfig?: ReviewUnitExecutorConfig;
-    maxConcurrentLenses?: number;
     reviewExecutionProfile?: ReviewExecutionProfile;
     ontoConfig?: OntoConfig;
   },
@@ -1034,6 +1750,8 @@ export async function executeReviewPromptExecution(
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   const executionStartedAtMs = Date.now();
   await resetExecutionOutputs(executionPlan);
+  await pruneGeneratedPromptPacketRefs(executionPlan);
+  await ensureReviewContextManifestReadyForDispatch(executionPlan);
   await emitReviewProgress({
     executionPlan,
     step: 1,
@@ -1056,15 +1774,10 @@ export async function executeReviewPromptExecution(
   });
 
   const defaultExecutorConfig = params.defaultExecutorConfig;
+  const teamleadExecutorConfig =
+    params.teamleadExecutorConfig ?? defaultExecutorConfig;
   const synthesizeExecutorConfig =
     params.synthesizeExecutorConfig ?? defaultExecutorConfig;
-  const maxConcurrentLenses = Math.max(
-    1,
-    Math.min(
-      params.maxConcurrentLenses ?? 1,
-      executionPlan.lens_prompt_packet_seats.length || 1,
-    ),
-  );
 
   const lensDispatches: ExecutionDispatchResult[] =
     executionPlan.lens_prompt_packet_seats.map((seat) => ({
@@ -1073,6 +1786,7 @@ export async function executeReviewPromptExecution(
       packet_path: seat.packet_path,
       output_path: seat.output_path,
     }));
+  const maxConcurrentLenses = Math.max(1, lensDispatches.length);
 
   await emitReviewProgress({
     executionPlan,
@@ -1318,12 +2032,22 @@ export async function executeReviewPromptExecution(
   const executionFailures = executionOutcomes
     .filter(isFailureOutcome)
     .map((outcome) => outcome.failure);
+  const minimumParticipatingLenses =
+    resolveRequiredParticipatingLensCount(executionPlan);
+  const lensCompletionBarrier = await writeLensCompletionBarrier({
+    executionPlan,
+    observedDispatchWidth: maxConcurrentLenses,
+    minimumParticipatingLenses,
+    lensDispatches,
+    successfulLensDispatches,
+    executionFailures,
+  });
 
-  if (successfulLensDispatches.length < 2) {
+  if (!lensCompletionBarrier.downstream_allowed) {
     const haltReason =
       successfulLensDispatches.length === 0
         ? "No participating lens outputs were produced."
-        : "Fewer than two participating lens outputs remain after degraded execution.";
+        : `Selected lens completion barrier failed: ${lensCompletionBarrier.completed_lens_ids.length}/${lensCompletionBarrier.planned_lens_ids.length} planned lenses completed.`;
     await appendMarkdownLogEntry(
       executionPlan.error_log_path,
       "runner halted before synthesize",
@@ -1348,6 +2072,8 @@ export async function executeReviewPromptExecution(
       execution_started_at: isoFromTimestamp(executionStartedAtMs),
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+      max_concurrent_lenses: maxConcurrentLenses,
+      observed_dispatch_width: maxConcurrentLenses,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -1363,6 +2089,9 @@ export async function executeReviewPromptExecution(
       deliberation_status: null,
       halt_reason: haltReason,
       error_log_path: executionPlan.error_log_path,
+      lens_completion_barrier_ref:
+        executionPlan.lens_completion_barrier_path ??
+        path.join(sessionRoot, "lens-completion-barrier.yaml"),
       lens_execution_results: executionOutcomes
         .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
         .map(toUnitExecutionResult),
@@ -1392,7 +2121,7 @@ export async function executeReviewPromptExecution(
         projectRoot,
         sessionRoot,
         executionPlan,
-        executorConfig: defaultExecutorConfig,
+        executorConfig: teamleadExecutorConfig,
         artifactId,
         lensOutputPaths,
       }),
@@ -1407,7 +2136,8 @@ export async function executeReviewPromptExecution(
     projectRoot,
     sessionRoot,
     executionPlan,
-    executorConfig: defaultExecutorConfig,
+    lensExecutorConfig: defaultExecutorConfig,
+    teamleadExecutorConfig,
     successfulLensDispatches,
     maxConcurrentLenses,
     issueArtifactContext,
@@ -1418,7 +2148,7 @@ export async function executeReviewPromptExecution(
       projectRoot,
       sessionRoot,
       executionPlan,
-      executorConfig: defaultExecutorConfig,
+      executorConfig: teamleadExecutorConfig,
       artifactId: "problem-framing",
       lensOutputPaths,
       deliberationResponsePaths:
@@ -1463,6 +2193,11 @@ export async function executeReviewPromptExecution(
     enrichedSynthesizePacketText.trimEnd() + "\n",
     "utf8",
   );
+  await registerGeneratedPromptPacketRefForDispatch({
+    executionPlan,
+    consumerId: "synthesize",
+    packetPath: synthesizePacketRuntimePath,
+  });
 
   const synthesizeDispatch: ExecutionDispatchResult = {
     unit_id: "synthesize",
@@ -1574,6 +2309,8 @@ export async function executeReviewPromptExecution(
       execution_started_at: isoFromTimestamp(executionStartedAtMs),
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+      max_concurrent_lenses: maxConcurrentLenses,
+      observed_dispatch_width: maxConcurrentLenses,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -1589,6 +2326,9 @@ export async function executeReviewPromptExecution(
       deliberation_status: "performed",
       halt_reason: `Synthesize execution failed: ${failure.message}`,
       error_log_path: executionPlan.error_log_path,
+      lens_completion_barrier_ref:
+        executionPlan.lens_completion_barrier_path ??
+        path.join(sessionRoot, "lens-completion-barrier.yaml"),
       lens_execution_results: executionOutcomes
         .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
         .map(toUnitExecutionResult),
@@ -1633,6 +2373,18 @@ export async function executeReviewPromptExecution(
   const deliberationStatus = await readStructuredDeliberationStatus(
     executionPlan,
     executionPlan.synthesis_output_path,
+  ).catch(async (error) =>
+    throwMalformedOutputFailure({
+      executionPlan,
+      phase: "execution.synthesize.validation",
+      unitId: synthesizeDispatch.unit_id,
+      unitKind: synthesizeDispatch.unit_kind,
+      packetPath: synthesizeDispatch.packet_path,
+      outputPath: synthesizeDispatch.output_path,
+      humanMessage:
+        "Synthesize output did not satisfy the controlled deliberation output contract.",
+      error,
+    }),
   );
   await writeExecutionResultArtifact(executionPlan, {
     session_id: executionPlan.session_id,
@@ -1647,6 +2399,8 @@ export async function executeReviewPromptExecution(
     execution_started_at: isoFromTimestamp(executionStartedAtMs),
     execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
     total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+    max_concurrent_lenses: maxConcurrentLenses,
+    observed_dispatch_width: maxConcurrentLenses,
     planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
     participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
     degraded_lens_ids: degradedLensIds,
@@ -1662,6 +2416,9 @@ export async function executeReviewPromptExecution(
     deliberation_status: deliberationStatus,
     halt_reason: null,
     error_log_path: executionPlan.error_log_path,
+    lens_completion_barrier_ref:
+      executionPlan.lens_completion_barrier_path ??
+      path.join(sessionRoot, "lens-completion-barrier.yaml"),
     lens_execution_results: executionOutcomes
       .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
       .map(toUnitExecutionResult),
@@ -1698,7 +2455,6 @@ export async function runReviewPromptExecution(
       "executor-arg": { type: "string", multiple: true, default: [] },
       "synthesize-executor-bin": { type: "string" },
       "synthesize-executor-arg": { type: "string", multiple: true, default: [] },
-      "max-concurrent-lenses": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -1717,18 +2473,11 @@ export async function runReviewPromptExecution(
           args: values["synthesize-executor-arg"],
         }
       : defaultExecutorConfig;
-  const maxConcurrentLenses =
-    typeof values["max-concurrent-lenses"] === "string" &&
-    values["max-concurrent-lenses"].length > 0
-      ? requirePositiveInteger(values["max-concurrent-lenses"], "max-concurrent-lenses")
-      : defaultMaxConcurrentLensesForExecutorConfig(defaultExecutorConfig);
-
   return executeReviewPromptExecution({
     projectRoot: requireString(values["project-root"], "project-root"),
     sessionRoot: requireString(values["session-root"], "session-root"),
     defaultExecutorConfig,
     synthesizeExecutorConfig,
-    maxConcurrentLenses,
   });
 }
 

@@ -20,8 +20,9 @@ import type {
 // (1) The bridge reads execution-plan.yaml from sessionRoot and forwards
 //     lens packet triples (lens_id, packet_path, output_path) to the
 //     orchestrator in order.
-// (2) Model + reasoning_effort are sourced from review axes first, then the
-//     canonical llm switcher when it resolves to Codex OAuth.
+// (2) Teamlead and lens model + reasoning_effort are resolved separately from
+//     review axes first, then the canonical llm switcher when it resolves to
+//     Codex OAuth.
 // (3) Per-lens classification requires BOTH orchestrator-ok AND file
 //     exists with size > 0. One of the two missing → degraded.
 // (4) synthesis_executed is always `false` for this bridge.
@@ -195,7 +196,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
     expect(calls[0]!.lenses[0]!.output_path).toBe("/out/logic.md");
   });
 
-  it("passes model from llm OpenAI OAuth selection", async () => {
+  it("passes inherited OpenAI OAuth selection to both teamlead and lens", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -215,9 +216,12 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-5.5");
-    expect(calls[0]!.reasoning_effort).toBe("medium");
-    expect(calls[0]!.service_tier).toBe("fast");
+    expect(calls[0]!.teamlead_model).toBe("gpt-5.5");
+    expect(calls[0]!.teamlead_reasoning_effort).toBe("medium");
+    expect(calls[0]!.teamlead_service_tier).toBe("fast");
+    expect(calls[0]!.lens_model).toBe("gpt-5.5");
+    expect(calls[0]!.lens_reasoning_effort).toBe("medium");
+    expect(calls[0]!.lens_service_tier).toBe("fast");
   });
 
   it("does not use llm selection when it resolves to API provider", async () => {
@@ -239,8 +243,10 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBeUndefined();
-    expect(calls[0]!.reasoning_effort).toBeUndefined();
+    expect(calls[0]!.teamlead_model).toBeUndefined();
+    expect(calls[0]!.teamlead_reasoning_effort).toBeUndefined();
+    expect(calls[0]!.lens_model).toBeUndefined();
+    expect(calls[0]!.lens_reasoning_effort).toBeUndefined();
   });
 
   it("reads model/effort from lens llm settings", async () => {
@@ -264,6 +270,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
                   effort: "medium",
                 },
               },
+              synthesize: { seat: "worker", llm: "inherit" },
               deliberation: "controlled-lens-deliberation",
             },
           },
@@ -272,8 +279,10 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-sub");
-    expect(calls[0]!.reasoning_effort).toBe("medium");
+    expect(calls[0]!.teamlead_model).toBeUndefined();
+    expect(calls[0]!.teamlead_reasoning_effort).toBeUndefined();
+    expect(calls[0]!.lens_model).toBe("gpt-sub");
+    expect(calls[0]!.lens_reasoning_effort).toBe("medium");
   });
 
   it("reads model/effort from teamlead llm settings", async () => {
@@ -297,6 +306,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
                 },
               },
               lens: { seat: "worker", llm: "inherit" },
+              synthesize: { seat: "worker", llm: "inherit" },
               deliberation: "controlled-lens-deliberation",
             },
           },
@@ -305,11 +315,13 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-tl");
-    expect(calls[0]!.reasoning_effort).toBe("high");
+    expect(calls[0]!.teamlead_model).toBe("gpt-tl");
+    expect(calls[0]!.teamlead_reasoning_effort).toBe("high");
+    expect(calls[0]!.lens_model).toBeUndefined();
+    expect(calls[0]!.lens_reasoning_effort).toBeUndefined();
   });
 
-  it("actor llm wins over inherited OpenAI OAuth selection", async () => {
+  it("lens actor llm wins over inherited OpenAI OAuth selection for lens only", async () => {
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
     const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
@@ -330,6 +342,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
                   effort: "medium",
                 },
               },
+              synthesize: { seat: "worker", llm: "inherit" },
               deliberation: "controlled-lens-deliberation",
             },
           },
@@ -344,11 +357,13 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-sub");
-    expect(calls[0]!.reasoning_effort).toBe("medium");
+    expect(calls[0]!.teamlead_model).toBe("gpt-llm");
+    expect(calls[0]!.teamlead_reasoning_effort).toBe("high");
+    expect(calls[0]!.lens_model).toBe("gpt-sub");
+    expect(calls[0]!.lens_reasoning_effort).toBe("medium");
   });
 
-  it("inherited lens llm leaves selection to llm switcher", async () => {
+  it("inherited actor llm leaves selection to llm switcher for both seats", async () => {
     // The nested worker path reads the llm switcher when actor llm refs inherit.
     const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
     fixture = await mkSession(plan);
@@ -362,6 +377,7 @@ describe("executeReviewViaCodexNested — forwarding", () => {
               mode: "nested-workers",
               teamlead: { seat: "worker", llm: "inherit" },
               lens: { seat: "worker", llm: "inherit" },
+              synthesize: { seat: "worker", llm: "inherit" },
               deliberation: "controlled-lens-deliberation",
             },
           },
@@ -376,8 +392,58 @@ describe("executeReviewViaCodexNested — forwarding", () => {
       impl,
       staticInspector(new Set(["/o"])),
     );
-    expect(calls[0]!.model).toBe("gpt-llm");
-    expect(calls[0]!.reasoning_effort).toBe("high");
+    expect(calls[0]!.teamlead_model).toBe("gpt-llm");
+    expect(calls[0]!.teamlead_reasoning_effort).toBe("high");
+    expect(calls[0]!.lens_model).toBe("gpt-llm");
+    expect(calls[0]!.lens_reasoning_effort).toBe("high");
+  });
+
+  it("allows distinct teamlead and lens effort settings in nested-workers", async () => {
+    const plan = buildPlan([{ lens_id: "l", packet_path: "/p", output_path: "/o" }], "");
+    fixture = await mkSession(plan);
+    const { impl, calls } = buildOrchestrator([{ lens_id: "l", status: "ok" }]);
+    await executeReviewViaCodexNested(
+      {
+        sessionRoot: fixture.sessionRoot,
+        ontoConfig: {
+          review: {
+            execution: {
+              mode: "nested-workers",
+              teamlead: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.5",
+                  effort: "xhigh",
+                  service_tier: "fast",
+                },
+              },
+              lens: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.5",
+                  effort: "medium",
+                  service_tier: "fast",
+                },
+              },
+              synthesize: { seat: "worker", llm: "inherit" },
+              deliberation: "controlled-lens-deliberation",
+            },
+          },
+        },
+      },
+      impl,
+      staticInspector(new Set(["/o"])),
+    );
+    expect(calls[0]!.teamlead_model).toBe("gpt-5.5");
+    expect(calls[0]!.teamlead_reasoning_effort).toBe("xhigh");
+    expect(calls[0]!.teamlead_service_tier).toBe("fast");
+    expect(calls[0]!.lens_model).toBe("gpt-5.5");
+    expect(calls[0]!.lens_reasoning_effort).toBe("medium");
+    expect(calls[0]!.lens_service_tier).toBe("fast");
   });
 
   it("passes sessionRoot-based stream_stdout_path/stream_stderr_path to orchestrator (live watcher)", async () => {

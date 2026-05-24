@@ -11,18 +11,99 @@ import {
   toRelativePath,
 } from "./review-artifact-utils.js";
 
-export const PRE_DELIBERATION_ISSUE_ARTIFACT_IDS = [
-  "finding-ledger",
-  "finding-relation-graph",
-  "issue-ledger",
-  "issue-stance-matrix",
-  "deliberation-plan",
-] as const satisfies ReviewIssueArtifactId[];
+export interface IssueArtifactSpec {
+  artifact_id: ReviewIssueArtifactId;
+  file_name: string;
+  prompt_packet_file_name: string;
+  ref_key: string;
+  phase: "pre_deliberation" | "post_deliberation";
+  progress_step: number;
+  progress_label: string;
+}
 
-export const ISSUE_ARTIFACT_IDS = [
-  ...PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
-  "problem-framing",
-] as const satisfies ReviewIssueArtifactId[];
+export const ISSUE_ARTIFACT_REGISTRY = [
+  {
+    artifact_id: "finding-ledger",
+    file_name: "finding-ledger.yaml",
+    prompt_packet_file_name: "finding-ledger.prompt.md",
+    ref_key: "finding_ledger",
+    phase: "pre_deliberation",
+    progress_step: 4,
+    progress_label: "finding ledger",
+  },
+  {
+    artifact_id: "finding-relation-graph",
+    file_name: "finding-relation-graph.yaml",
+    prompt_packet_file_name: "finding-relation-graph.prompt.md",
+    ref_key: "finding_relation_graph",
+    phase: "pre_deliberation",
+    progress_step: 5,
+    progress_label: "finding relation graph",
+  },
+  {
+    artifact_id: "issue-ledger",
+    file_name: "issue-ledger.yaml",
+    prompt_packet_file_name: "issue-ledger.prompt.md",
+    ref_key: "issue_ledger",
+    phase: "pre_deliberation",
+    progress_step: 6,
+    progress_label: "issue ledger",
+  },
+  {
+    artifact_id: "issue-stance-matrix",
+    file_name: "issue-stance-matrix.yaml",
+    prompt_packet_file_name: "issue-stance-matrix.prompt.md",
+    ref_key: "issue_stance_matrix",
+    phase: "pre_deliberation",
+    progress_step: 7,
+    progress_label: "issue stance matrix",
+  },
+  {
+    artifact_id: "deliberation-plan",
+    file_name: "deliberation-plan.yaml",
+    prompt_packet_file_name: "deliberation-plan.prompt.md",
+    ref_key: "deliberation_plan",
+    phase: "pre_deliberation",
+    progress_step: 8,
+    progress_label: "deliberation plan",
+  },
+  {
+    artifact_id: "problem-framing",
+    file_name: "problem-framing.yaml",
+    prompt_packet_file_name: "problem-framing.prompt.md",
+    ref_key: "problem_framing",
+    phase: "post_deliberation",
+    progress_step: 11,
+    progress_label: "problem framing",
+  },
+] as const satisfies readonly IssueArtifactSpec[];
+
+export const PRE_DELIBERATION_ISSUE_ARTIFACT_IDS =
+  ISSUE_ARTIFACT_REGISTRY
+    .filter((spec) => spec.phase === "pre_deliberation")
+    .map((spec) => spec.artifact_id);
+
+export const ISSUE_ARTIFACT_IDS = ISSUE_ARTIFACT_REGISTRY.map(
+  (spec) => spec.artifact_id,
+);
+
+export function issueArtifactSpec(
+  artifactId: ReviewIssueArtifactId,
+): IssueArtifactSpec {
+  const spec = ISSUE_ARTIFACT_REGISTRY.find(
+    (candidate) => candidate.artifact_id === artifactId,
+  );
+  if (!spec) {
+    throw new Error(`Unknown issue artifact id: ${artifactId}`);
+  }
+  return spec;
+}
+
+export function issueArtifactConsumerId(
+  artifactId: ReviewIssueArtifactId,
+): string {
+  return `issue-artifact:${artifactId}`;
+}
 
 const STANCE_VALUES = new Set([
   "support",
@@ -250,6 +331,7 @@ session_id: ${args.sessionId}
 unit_id: ${args.artifactId}
 unit_kind: issue_artifact
 artifact_id: ${args.artifactId}
+consumer_id: ${issueArtifactConsumerId(args.artifactId)}
 output_path: ${outputRef}
 
 ## Canonical Role

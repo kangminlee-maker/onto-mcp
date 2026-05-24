@@ -51,7 +51,6 @@ describe("resolveSettingsChain", () => {
       review: {
         execution: {
           mode: "main-workers",
-          max_concurrent_workers: 4,
         },
       },
     });
@@ -67,7 +66,8 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution.mode).toBe("main-workers");
     expect(settings.review?.execution.teamlead.seat).toBe("main");
     expect(settings.review?.execution.lens.seat).toBe("worker");
-    expect(settings.review?.execution.max_concurrent_workers).toBe(4);
+    expect(settings.review?.execution.synthesize.seat).toBe("worker");
+    expect(settings.review?.execution.synthesize.llm).toBe("inherit");
   });
 
   it("fails loudly when unsupported YAML config exists", async () => {
@@ -107,6 +107,91 @@ describe("resolveSettingsChain", () => {
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
       "nested-workers requires review.execution.teamlead.seat=worker",
+    );
+  });
+
+  it("merges synthesize actor settings independently", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "gpt-5.5",
+        effort: "medium",
+      },
+      review: {
+        execution: {
+          mode: "main-workers",
+          synthesize: {
+            seat: "worker",
+            llm: {
+              auth: "oauth",
+              provider: "openai",
+              model: "gpt-5.5",
+              effort: "xhigh",
+              service_tier: "fast",
+            },
+          },
+        },
+      },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      review: {
+        execution: {
+          synthesize: {
+            seat: "worker",
+            llm: {
+              effort: "high",
+            },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution.synthesize.seat).toBe("worker");
+    expect(settings.review?.execution.synthesize.llm).toEqual({
+      auth: "oauth",
+      provider: "openai",
+      model: "gpt-5.5",
+      effort: "high",
+      service_tier: "fast",
+    });
+  });
+
+  it("requires synthesize seat to stay worker", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      review: {
+        execution: {
+          synthesize: { seat: "main" },
+        },
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "review.execution.synthesize.seat must be worker",
+    );
+  });
+
+  it("requires actor llm partials to inherit from a root llm", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      review: {
+        execution: {
+          synthesize: {
+            seat: "worker",
+            llm: {
+              effort: "xhigh",
+            },
+          },
+        },
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "review.execution.synthesize.llm must provide llm.provider or inherit from root llm",
     );
   });
 

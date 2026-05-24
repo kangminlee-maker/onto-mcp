@@ -55,6 +55,8 @@ ${args.issue_artifact_context?.trim() || "(none)"}
 Re-evaluate your lens position against the other lens outputs.
 
 - Identify where another lens changes, strengthens, or weakens your conclusion.
+- If no other lens output is provided, state that no cross-lens contest is
+  available and preserve your bounded primary position.
 - Use the issue artifact context to focus on root-cause issue clusters and planned contested points.
 - Identify direct disagreements and state whether your lens concedes, narrows,
   or maintains its position.
@@ -123,6 +125,9 @@ ${args.issue_artifact_context?.trim() || "(none)"}
 Resolve contested points when the lens deliberation responses provide enough
 reason to converge. Preserve unresolved disagreement when the responses do not
 justify convergence. Do not invent a new lens perspective.
+If only one lens participates, record that cross-lens disagreement is not
+applicable for this run and preserve the single lens position as bounded
+evidence, not as multi-lens consensus.
 Use the issue artifact context as the root-cause issue frame; preserve issue IDs
 and planned contested points when they are present.
 

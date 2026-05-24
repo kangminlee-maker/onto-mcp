@@ -38,6 +38,7 @@ import {
   ISSUE_ARTIFACT_IDS,
   renderIssueArtifactContext,
 } from "../review/issue-artifact-runtime.js";
+import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
 
 function toRelativePath(absolutePath: string, projectRoot: string): string {
   return path.relative(projectRoot, absolutePath);
@@ -185,7 +186,8 @@ export async function buildSynthesizeRuntimePacket(argv: string[]): Promise<Buil
     );
   }
 
-  const minimumParticipating = executionPlan.minimum_participating_lenses ?? 2;
+  const minimumParticipating =
+    resolveRequiredParticipatingLensCount(executionPlan);
 
   if (participating.length < minimumParticipating) {
     const haltReason = participating.length === 0
@@ -747,6 +749,7 @@ export async function writeExecutionResult(argv: string[]): Promise<WriteExecuti
     execution_started_at: executionStartedAt,
     execution_completed_at: completedAt,
     total_duration_ms: computeDurationMs(executionStartedAt, completedAt),
+    max_concurrent_lenses: planned.length,
     planned_lens_ids: planned,
     participating_lens_ids: participating,
     degraded_lens_ids: degraded,

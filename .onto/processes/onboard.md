@@ -67,7 +67,17 @@ Use `review.execution` for review coordination:
 - `mode: nested-workers` sends teamlead coordination and lens judgments to workers.
 - `teamlead.seat` must match the chosen mode.
 - `lens.seat` is `worker`.
+- `synthesize.seat` is `worker`.
 - `deliberation: controlled-lens-deliberation` is required for review.
+- In `nested-workers`, `teamlead.llm` configures the outer coordinator worker
+  and `lens.llm` configures the inner lens workers. They may use different
+  `effort` values.
+- `synthesize.llm` configures the final synthesis unit. Prefer high or xhigh
+  effort for full reviews because it integrates every successful lens,
+  deliberation, issue artifacts, and problem framing.
+- `llm: "inherit"` means the actor uses the root `llm` object. An actor object
+  such as `{ "effort": "xhigh" }` overlays the root `llm` while keeping the root
+  auth, provider, model, and service tier.
 
 Unsupported values stop configuration validation.
 

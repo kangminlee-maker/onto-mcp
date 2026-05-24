@@ -60,6 +60,17 @@ import {
   runCodexNestedTeamlead,
 } from "./codex-nested-teamlead-executor.js";
 
+interface CodexSpawnConfig {
+  model?: string;
+  effort?: string;
+  service_tier?: string;
+}
+
+export interface CodexNestedSpawnConfig {
+  teamlead: CodexSpawnConfig;
+  lens: CodexSpawnConfig;
+}
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -163,34 +174,24 @@ async function archiveWriteIfMissing(targetPath: string, content: string): Promi
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the `model` / `effort` to pass to the nested Codex orchestrator.
- * Returns `{}` when nothing resolves; Codex then picks its configured defaults.
+ * Resolve distinct Codex model settings for the outer teamlead and inner lens
+ * workers. Empty objects mean Codex picks its configured defaults for that seat.
  */
 export function resolveCodexSpawnConfig(
   config: OntoConfig,
-): { model?: string; effort?: string; service_tier?: string } {
+): CodexNestedSpawnConfig {
   const execution = config.review?.execution;
   const inherited = config.llm;
-  const teamleadConfig =
-    execution?.teamlead.llm && execution.teamlead.llm !== "inherit"
-      ? codexConfigFromRef(execution.teamlead.llm, inherited)
-      : null;
-  const lensConfig =
-    execution?.lens.llm && execution.lens.llm !== "inherit"
-      ? codexConfigFromRef(execution.lens.llm, inherited)
-      : null;
-  if (teamleadConfig && lensConfig && !sameSpawnConfig(teamleadConfig, lensConfig)) {
-    throw new Error(
-      "nested-workers codex execution currently requires matching teamlead/lens llm settings.",
-    );
-  }
-  return teamleadConfig ?? lensConfig ?? codexConfigFromRef("inherit", inherited) ?? {};
+  return {
+    teamlead: codexConfigFromRef(execution?.teamlead.llm, inherited) ?? {},
+    lens: codexConfigFromRef(execution?.lens.llm, inherited) ?? {},
+  };
 }
 
 function codexConfigFromRef(
   ref: ReviewLlmRef | undefined,
   inherited: OntoConfig["llm"],
-): { model?: string; effort?: string; service_tier?: string } | null {
+): CodexSpawnConfig | null {
   const llm = ref === undefined || ref === "inherit" ? inherited : ref;
   const selection = normalizeLlmModelSwitcher(llm);
   if (selection?.provider !== "codex") return null;
@@ -199,17 +200,6 @@ function codexConfigFromRef(
     ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
     ...(selection.service_tier ? { service_tier: selection.service_tier } : {}),
   };
-}
-
-function sameSpawnConfig(
-  left: { model?: string; effort?: string; service_tier?: string },
-  right: { model?: string; effort?: string; service_tier?: string },
-): boolean {
-  return (
-    left.model === right.model &&
-    left.effort === right.effort &&
-    left.service_tier === right.service_tier
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -263,9 +253,22 @@ export async function executeReviewViaCodexNested(
 
   const nestedResult = await runImpl({
     lenses,
-    ...(spawnConfig.model ? { model: spawnConfig.model } : {}),
-    ...(spawnConfig.effort ? { reasoning_effort: spawnConfig.effort } : {}),
-    ...(spawnConfig.service_tier ? { service_tier: spawnConfig.service_tier } : {}),
+    ...(spawnConfig.teamlead.model
+      ? { teamlead_model: spawnConfig.teamlead.model }
+      : {}),
+    ...(spawnConfig.teamlead.effort
+      ? { teamlead_reasoning_effort: spawnConfig.teamlead.effort }
+      : {}),
+    ...(spawnConfig.teamlead.service_tier
+      ? { teamlead_service_tier: spawnConfig.teamlead.service_tier }
+      : {}),
+    ...(spawnConfig.lens.model ? { lens_model: spawnConfig.lens.model } : {}),
+    ...(spawnConfig.lens.effort
+      ? { lens_reasoning_effort: spawnConfig.lens.effort }
+      : {}),
+    ...(spawnConfig.lens.service_tier
+      ? { lens_service_tier: spawnConfig.lens.service_tier }
+      : {}),
     ...(args.projectRoot ? { project_root: args.projectRoot } : {}),
     ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
     ...(args.codex_bin ? { codex_bin: args.codex_bin } : {}),

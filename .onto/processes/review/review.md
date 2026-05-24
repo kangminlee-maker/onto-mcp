@@ -223,15 +223,14 @@ npm run review:run-prompt-execution -- \
   --project-root {project} \
   --session-root "{session path}" \
   --executor-bin {executor bin} \
-  --executor-arg={executor arg} \
-  --max-concurrent-lenses {N}
+  --executor-arg={executor arg}
 ```
 
 canonical requirement:
 
 - lens dispatch는 병렬 실행이 기본이다
-- realization에 동시 실행 제한이 있으면 bounded parallel dispatch를 사용한다
-- slot이 비면 다음 pending lens를 즉시 투입한다
+- runtime은 선택된 lens 전체를 dispatch한다
+- host adapter가 선택된 lens 전체 dispatch를 보장할 수 없으면 fail-loud하게 중단한다
 
 Everything below is reference execution behavior for the prompt-backed path.
 Host-specific realization details are allowed only if they preserve the same artifact truth and
@@ -257,6 +256,12 @@ the same `ContextIsolatedReasoningUnit` boundary.
     target-snapshot-manifest.yaml
     materialized-input.md
     context-candidate-assembly.yaml
+    actor-invocation-profiles.yaml
+    actor-consumer-bindings.yaml
+    domain-binding.yaml
+    review-value-alignment-criteria.yaml
+    review-context-manifest.yaml
+  lens-completion-barrier.yaml
 ```
 
 Productized prompt path 기준으로:

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import type {
@@ -26,6 +27,8 @@ import {
   detectClaudeCodeEnvSignal,
   detectCodexEnvSignal,
 } from "../discovery/host-detection.js";
+import { resolveOntoHome } from "../discovery/onto-home.js";
+import { resolveSettingsChain } from "../discovery/settings-chain.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -201,12 +204,16 @@ export async function runPrepareReviewSessionCli(
       "recommended-lens-id": { type: "string", multiple: true, default: [] },
       rationale: { type: "string", multiple: true, default: [] },
       "ambiguity-note": { type: "string", multiple: true, default: [] },
+      "confirm-value-alignment": { type: "boolean", default: false },
       "resolved-target-ref": { type: "string", multiple: true, default: [] },
       "domain-final-value": { type: "string" },
       "domain-selection-mode": { type: "string" },
       "execution-realization": { type: "string" },
       "execution-mode": { type: "string" },
       "host-runtime": { type: "string" },
+      "runtime-provider": { type: "string" },
+      "auth-mode": { type: "string" },
+      "effective-worker-executor": { type: "string" },
       codex: { type: "boolean", default: false },
       claude: { type: "boolean", default: false },
       "review-mode": { type: "string" },
@@ -258,8 +265,15 @@ export async function runPrepareReviewSessionCli(
     hostRuntime,
   );
 
+  const projectRoot = path.resolve(
+    requireString(values["project-root"], "project-root"),
+  );
+  const ontoHome = resolveOntoHome(optionalString(values["onto-home"]) || undefined);
+  const ontoConfig = await resolveSettingsChain(ontoHome, projectRoot);
+
   const bindingParams = {
-    projectRoot: requireString(values["project-root"], "project-root"),
+    projectRoot,
+    ontoConfig,
     requestedTarget: requireString(values["requested-target"], "requested-target"),
     requestedDomainToken: optionalString(values["requested-domain-token"]),
     targetScopeKind,
@@ -272,6 +286,17 @@ export async function runPrepareReviewSessionCli(
     ),
     executionRealization,
     hostRuntime,
+    ...(typeof values["runtime-provider"] === "string" &&
+    values["runtime-provider"].length > 0
+      ? { runtimeProvider: values["runtime-provider"] }
+      : {}),
+    ...(typeof values["auth-mode"] === "string" && values["auth-mode"].length > 0
+      ? { authMode: values["auth-mode"] === "none" ? null : values["auth-mode"] }
+      : {}),
+    ...(typeof values["effective-worker-executor"] === "string" &&
+    values["effective-worker-executor"].length > 0
+      ? { effectiveWorkerExecutor: values["effective-worker-executor"] }
+      : {}),
     reviewMode: requireReviewMode(requireString(values["review-mode"], "review-mode")),
     resolvedLensIds: values["lens-id"],
     webResearchPolicy: requireBoundaryAccessPolicy(
@@ -325,6 +350,7 @@ export async function runPrepareReviewSessionCli(
     recommendedLensIds: values["recommended-lens-id"],
     rationale: values.rationale,
     ambiguityNotes: values["ambiguity-note"],
+    valueAlignmentConfirmed: Boolean(values["confirm-value-alignment"]),
     ...(typeof values["bundle-kind"] === "string" && values["bundle-kind"].length > 0
       ? { bundleKind: values["bundle-kind"] }
       : {}),

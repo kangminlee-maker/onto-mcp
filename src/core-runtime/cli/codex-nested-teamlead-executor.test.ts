@@ -64,12 +64,12 @@ describe("buildNestedTeamleadPrompt", () => {
     expect(prompt).toContain("LENS_DISPATCH_SUMMARY:");
   });
 
-  it("passes through model + reasoning_effort when provided", () => {
+  it("passes lens model + reasoning_effort into inner codex script", () => {
     const prompt = buildNestedTeamleadPrompt({
       lenses: LENSES.slice(0, 1),
-      model: "gpt-5.5",
-      reasoning_effort: "medium",
-      service_tier: "fast",
+      lens_model: "gpt-5.5",
+      lens_reasoning_effort: "medium",
+      lens_service_tier: "fast",
     });
     expect(prompt).toContain("-m gpt-5.5");
     expect(prompt).toContain("model_reasoning_effort=medium");
@@ -88,23 +88,32 @@ describe("buildNestedTeamleadPrompt", () => {
     expect(prompt).toContain(`${LENSES.length} lenses`);
   });
 
-  it("surfaces nested model/effort in the diagnostic header for outer log readers", () => {
+  it("surfaces teamlead and lens model/effort in the diagnostic header", () => {
     const prompt = buildNestedTeamleadPrompt({
       lenses: LENSES.slice(0, 1),
-      model: "gpt-5.5",
-      reasoning_effort: "medium",
-      service_tier: "fast",
+      teamlead_model: "gpt-5.5",
+      teamlead_reasoning_effort: "xhigh",
+      teamlead_service_tier: "fast",
+      lens_model: "gpt-5.5",
+      lens_reasoning_effort: "medium",
+      lens_service_tier: "fast",
     });
-    expect(prompt).toContain("model=gpt-5.5");
-    expect(prompt).toContain("effort=medium");
-    expect(prompt).toContain("service_tier=fast");
+    expect(prompt).toContain("teamlead_model=gpt-5.5");
+    expect(prompt).toContain("teamlead_effort=xhigh");
+    expect(prompt).toContain("teamlead_service_tier=fast");
+    expect(prompt).toContain("lens_model=gpt-5.5");
+    expect(prompt).toContain("lens_effort=medium");
+    expect(prompt).toContain("lens_service_tier=fast");
   });
 
   it("falls back to (codex default) in diagnostic header when unset", () => {
     const prompt = buildNestedTeamleadPrompt({ lenses: LENSES.slice(0, 1) });
-    expect(prompt).toContain("model=(codex default)");
-    expect(prompt).toContain("effort=(codex default)");
-    expect(prompt).toContain("service_tier=(codex default)");
+    expect(prompt).toContain("teamlead_model=(codex default)");
+    expect(prompt).toContain("teamlead_effort=(codex default)");
+    expect(prompt).toContain("teamlead_service_tier=(codex default)");
+    expect(prompt).toContain("lens_model=(codex default)");
+    expect(prompt).toContain("lens_effort=(codex default)");
+    expect(prompt).toContain("lens_service_tier=(codex default)");
   });
 
   it("embeds ENV-BEFORE and ENV-AFTER diagnostic emissions in the script body", () => {
@@ -328,7 +337,7 @@ describe("runCodexNestedTeamlead", () => {
     expect(result.outer_stderr).toBe(stderrRaw);
   });
 
-  it("forwards model, reasoning_effort, and service_tier to outer codex spawn options", async () => {
+  it("forwards teamlead model, reasoning_effort, and service_tier to outer codex spawn options", async () => {
     // Regression: outer codex previously inherited ~/.codex/config.toml
     // defaults (e.g. xhigh effort), ignoring .onto/settings.json overrides and
     // causing orchestration timeouts. The input fields must reach the
@@ -341,15 +350,47 @@ describe("runCodexNestedTeamlead", () => {
     };
     const input: CodexNestedTeamleadInput = {
       lenses: LENSES.slice(0, 1),
-      model: "gpt-5.5",
-      reasoning_effort: "medium",
-      service_tier: "fast",
+      teamlead_model: "gpt-5.5",
+      teamlead_reasoning_effort: "xhigh",
+      teamlead_service_tier: "fast",
     };
     await runCodexNestedTeamlead(input, capturingSpawn);
     expect(captured).not.toBeNull();
     expect(captured!.model).toBe("gpt-5.5");
-    expect(captured!.reasoning_effort).toBe("medium");
+    expect(captured!.reasoning_effort).toBe("xhigh");
     expect(captured!.service_tier).toBe("fast");
+  });
+
+  it("does not forward lens model settings to outer codex spawn options", async () => {
+    let captured: Parameters<NonNullable<SpawnArgs>>[1] | null = null;
+    const capturingSpawn: NonNullable<SpawnArgs> = async (_prompt, options) => {
+      captured = options;
+      return { stdout: "", stderr: "", exit_code: 0, timed_out: false };
+    };
+    const input: CodexNestedTeamleadInput = {
+      lenses: LENSES.slice(0, 1),
+      lens_model: "gpt-5.5",
+      lens_reasoning_effort: "medium",
+      lens_service_tier: "fast",
+    };
+    await runCodexNestedTeamlead(input, capturingSpawn);
+    expect(captured).not.toBeNull();
+    expect(captured!.model).toBeUndefined();
+    expect(captured!.reasoning_effort).toBeUndefined();
+    expect(captured!.service_tier).toBeUndefined();
+  });
+
+  it("does not put teamlead effort into the inner lens script", () => {
+    const prompt = buildNestedTeamleadPrompt({
+      lenses: LENSES.slice(0, 1),
+      teamlead_model: "gpt-5.5",
+      teamlead_reasoning_effort: "xhigh",
+      lens_model: "gpt-5.5",
+      lens_reasoning_effort: "medium",
+    });
+    expect(prompt).toContain("teamlead_effort=xhigh");
+    expect(prompt).toContain("model_reasoning_effort=medium");
+    expect(prompt).not.toContain("model_reasoning_effort=xhigh");
   });
 
   it("omits model, reasoning_effort, and service_tier from spawn options when unset", async () => {

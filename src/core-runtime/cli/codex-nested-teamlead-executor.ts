@@ -66,15 +66,24 @@ export interface NestedLensDispatchOutcome {
 export interface CodexNestedTeamleadInput {
   /** Lens packets to dispatch, in priority order. */
   lenses: NestedLensDispatchInput[];
-  /** Codex model id to pass to inner `codex exec -m`. Empty → codex default. */
-  model?: string;
+  /** Codex model id for the outer teamlead `codex exec -m`. Empty → codex default. */
+  teamlead_model?: string;
   /**
-   * `model_reasoning_effort` value for inner codex invocations
+   * `model_reasoning_effort` value for the outer teamlead invocation
    * (medium | high | xhigh | low). When unset, codex picks its default.
    */
-  reasoning_effort?: string;
-  /** Codex-only `service_tier` value for outer and inner invocations. */
-  service_tier?: string;
+  teamlead_reasoning_effort?: string;
+  /** Codex-only `service_tier` value for the outer teamlead invocation. */
+  teamlead_service_tier?: string;
+  /** Codex model id to pass to inner lens `codex exec -m`. Empty → codex default. */
+  lens_model?: string;
+  /**
+   * `model_reasoning_effort` value for inner lens invocations
+   * (medium | high | xhigh | low). When unset, codex picks its default.
+   */
+  lens_reasoning_effort?: string;
+  /** Codex-only `service_tier` value for inner lens invocations. */
+  lens_service_tier?: string;
   /**
    * Project root for the outer codex's cwd. Defaults to `process.cwd()`.
    * Inner codex invocations inherit the outer's cwd; pass an explicit
@@ -163,9 +172,12 @@ const SUMMARY_SENTINEL_PREFIX = "LENS_DISPATCH_SUMMARY:";
  */
 export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): string {
   const script = buildNestedDispatchScript(input);
-  const modelDiag = input.model ?? "(codex default)";
-  const effortDiag = input.reasoning_effort ?? "(codex default)";
-  const serviceTierDiag = input.service_tier ?? "(codex default)";
+  const teamleadModelDiag = input.teamlead_model ?? "(codex default)";
+  const teamleadEffortDiag = input.teamlead_reasoning_effort ?? "(codex default)";
+  const teamleadServiceTierDiag = input.teamlead_service_tier ?? "(codex default)";
+  const lensModelDiag = input.lens_model ?? "(codex default)";
+  const lensEffortDiag = input.lens_reasoning_effort ?? "(codex default)";
+  const lensServiceTierDiag = input.lens_service_tier ?? "(codex default)";
 
   // The prompt deliberately minimizes descriptive instructions. Outer codex's
   // job is to run a literal bash script — not to reason about dispatch
@@ -177,7 +189,9 @@ export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): stri
   // removed.
   return [
     `Nested-codex dispatch for ${input.lenses.length} lenses ` +
-      `(model=${modelDiag}, effort=${effortDiag}, service_tier=${serviceTierDiag}).`,
+      `(teamlead_model=${teamleadModelDiag}, teamlead_effort=${teamleadEffortDiag}, ` +
+      `teamlead_service_tier=${teamleadServiceTierDiag}, lens_model=${lensModelDiag}, ` +
+      `lens_effort=${lensEffortDiag}, lens_service_tier=${lensServiceTierDiag}).`,
     "",
     "Action: Execute the bash script below by piping it to `bash -s`.",
     "Do not modify it, do not substitute variables, do not use file-edit",
@@ -210,12 +224,12 @@ export function buildNestedTeamleadPrompt(input: CodexNestedTeamleadInput): stri
  *   5. emit the LENS_DISPATCH_SUMMARY:{...} sentinel with per-lens status
  */
 function buildNestedDispatchScript(input: CodexNestedTeamleadInput): string {
-  const modelOpt = input.model ? ` -m ${shellQuote(input.model)}` : "";
-  const effortOpt = input.reasoning_effort
-    ? ` -c model_reasoning_effort=${shellQuote(input.reasoning_effort)}`
+  const modelOpt = input.lens_model ? ` -m ${shellQuote(input.lens_model)}` : "";
+  const effortOpt = input.lens_reasoning_effort
+    ? ` -c model_reasoning_effort=${shellQuote(input.lens_reasoning_effort)}`
     : "";
-  const serviceTierOpt = input.service_tier
-    ? ` -c service_tier=${shellQuote(input.service_tier)}`
+  const serviceTierOpt = input.lens_service_tier
+    ? ` -c service_tier=${shellQuote(input.lens_service_tier)}`
     : "";
   const lensEntries = input.lenses
     .map((l) => {
@@ -570,12 +584,12 @@ export async function runCodexNestedTeamlead(
     codex_bin: input.codex_bin ?? "codex",
     project_root: input.project_root ?? process.cwd(),
     timeout_ms: input.timeout_ms ?? 600_000,
-    ...(input.model ? { model: input.model } : {}),
-    ...(input.reasoning_effort
-      ? { reasoning_effort: input.reasoning_effort }
+    ...(input.teamlead_model ? { model: input.teamlead_model } : {}),
+    ...(input.teamlead_reasoning_effort
+      ? { reasoning_effort: input.teamlead_reasoning_effort }
       : {}),
-    ...(input.service_tier
-      ? { service_tier: input.service_tier }
+    ...(input.teamlead_service_tier
+      ? { service_tier: input.teamlead_service_tier }
       : {}),
     ...(input.stream_stdout_path
       ? { stream_stdout_path: input.stream_stdout_path }

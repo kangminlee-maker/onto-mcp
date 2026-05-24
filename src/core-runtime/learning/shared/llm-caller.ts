@@ -53,6 +53,8 @@ export interface LlmCallConfig {
   max_tokens: number;
   /** Optional base URL for OpenAI-style providers. Ignored by codex/anthropic. */
   base_url?: string;
+  /** Optional environment variable name that contains the API key. */
+  api_key_env?: string;
   /** codex-only: reasoning effort passed as `model_reasoning_effort`. Ignored by other providers. */
   reasoning_effort?: string;
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
@@ -100,6 +102,7 @@ export interface LearningProviderCliOverrides {
   model?: string;
   reasoning_effort?: string;
   service_tier?: string;
+  api_key_env?: string;
 }
 
 /**
@@ -138,6 +141,7 @@ export function resolveLearningProviderConfig(args: {
 
   const reasoning_effort = cli.reasoning_effort ?? selection?.reasoning_effort;
   const service_tier = selection?.provider === "codex" ? selection.service_tier : undefined;
+  const api_key_env = selection?.api_key_env;
   const models_per_provider: NonNullable<LlmCallConfig["models_per_provider"]> = {};
   if (provider && model_id) models_per_provider[provider] = model_id;
 
@@ -147,6 +151,7 @@ export function resolveLearningProviderConfig(args: {
   if (base_url) out.base_url = base_url;
   if (reasoning_effort) out.reasoning_effort = reasoning_effort;
   if (service_tier) out.service_tier = service_tier;
+  if (api_key_env) out.api_key_env = api_key_env;
   if (Object.keys(models_per_provider).length > 0) {
     out.models_per_provider = models_per_provider;
   }
@@ -220,22 +225,33 @@ function readCodexAuthState(): CodexAuthState {
   }
 }
 
+function readEnvApiKey(envNames: string[]): string | null {
+  for (const envName of envNames) {
+    const value = process.env[envName];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+  return null;
+}
+
 function resolveProvider(
   preferred?: LlmCallConfig["provider"],
   configBaseUrl?: string,
+  apiKeyEnv?: string,
 ): ResolvedProvider {
   if (preferred === undefined) {
     throw new Error(missingProviderSelectionError());
   }
   if (preferred === "anthropic") {
-    if (process.env.ANTHROPIC_API_KEY) {
-      return { provider: "anthropic", apiKey: process.env.ANTHROPIC_API_KEY };
+    const apiKey = readEnvApiKey(apiKeyEnv ? [apiKeyEnv] : ["ANTHROPIC_API_KEY"]);
+    if (apiKey) {
+      return { provider: "anthropic", apiKey };
     }
     throw new Error(explicitProviderMissingCredentialError("anthropic"));
   }
   if (preferred === "openai") {
-    if (process.env.OPENAI_API_KEY) {
-      return { provider: "openai", apiKey: process.env.OPENAI_API_KEY };
+    const envKey = readEnvApiKey(apiKeyEnv ? [apiKeyEnv] : ["OPENAI_API_KEY"]);
+    if (envKey) {
+      return { provider: "openai", apiKey: envKey };
     }
     const codexAuth = readCodexAuthState();
     if (codexAuth.openaiApiKey) {
@@ -244,7 +260,9 @@ function resolveProvider(
     throw new Error(explicitProviderMissingCredentialError("openai"));
   }
   if (preferred === "grok") {
-    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    const apiKey = readEnvApiKey(
+      apiKeyEnv ? [apiKeyEnv] : ["XAI_API_KEY", "GROK_API_KEY"],
+    );
     if (apiKey) {
       return {
         provider: "grok",
@@ -630,7 +648,9 @@ async function dispatchByPlan(
     );
   }
   if (plan.provider_identity === "anthropic") {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const apiKey = readEnvApiKey(
+      config.api_key_env ? [config.api_key_env] : ["ANTHROPIC_API_KEY"],
+    );
     if (!apiKey) {
       throw new Error(explicitProviderMissingCredentialError("anthropic"));
     }
@@ -639,7 +659,9 @@ async function dispatchByPlan(
     return callAnthropic(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
   }
   if (plan.provider_identity === "openai") {
-    const envKey = process.env.OPENAI_API_KEY;
+    const envKey = readEnvApiKey(
+      config.api_key_env ? [config.api_key_env] : ["OPENAI_API_KEY"],
+    );
     const codexAuth = readCodexAuthState();
     const apiKey = envKey ?? codexAuth.openaiApiKey ?? null;
     if (!apiKey) {
@@ -650,7 +672,9 @@ async function dispatchByPlan(
     return callOpenAI(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
   }
   if (plan.provider_identity === "grok") {
-    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    const apiKey = readEnvApiKey(
+      config.api_key_env ? [config.api_key_env] : ["XAI_API_KEY", "GROK_API_KEY"],
+    );
     if (!apiKey) {
       throw new Error(explicitProviderMissingCredentialError("grok"));
     }
@@ -720,7 +744,9 @@ export async function callLlm(
   if (config?.provider === "grok") {
     const modelId = config.model_id ?? config.models_per_provider?.grok;
     if (!modelId) throw missingModelError("grok");
-    const apiKey = process.env.XAI_API_KEY ?? process.env.GROK_API_KEY;
+    const apiKey = readEnvApiKey(
+      config.api_key_env ? [config.api_key_env] : ["XAI_API_KEY", "GROK_API_KEY"],
+    );
     if (!apiKey) throw new Error(explicitProviderMissingCredentialError("grok"));
     const maxTokens = config.max_tokens ?? 1024;
     return callOpenAI(
@@ -749,7 +775,11 @@ export async function callLlm(
     );
   }
 
-  const resolved = resolveProvider(config?.provider, config?.base_url);
+  const resolved = resolveProvider(
+    config?.provider,
+    config?.base_url,
+    config?.api_key_env,
+  );
   const maxTokens = config?.max_tokens ?? 1024;
   const perProviderModel = config?.models_per_provider?.[resolved.provider];
 

@@ -48,8 +48,9 @@
 9. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
 10. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
 11. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-12. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-13. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+12. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
+13. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+14. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
 
 ---
 

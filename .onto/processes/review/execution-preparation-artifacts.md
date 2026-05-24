@@ -6,6 +6,7 @@
 > - `.onto/processes/review/productized-live-path.md`
 > - `.onto/processes/review/binding-contract.md`
 > - `.onto/processes/review/record-contract.md`
+> - `.onto/processes/review/pre-dispatch-contracts.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -15,14 +16,19 @@
 `검토 해석 (InvocationInterpretation)`과 `검토 고정 (InvocationBinding)`만으로는
 lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
 
-그래서 lens 실행 전에 최소 아래 bridge artifact가 필요하다.
+그래서 lens 실행 전에 최소 아래 bridge artifact와 gate artifact가 필요하다.
 
 1. `review_session_metadata`
 2. `target_snapshot`
 3. `review_target_materialized_input`
 4. `context_candidate_assembly`
+5. `actor_invocation_profiles`
+6. `actor_consumer_bindings`
+7. `domain_binding`
+8. `review_value_alignment_criteria`
+9. `review_context_manifest`
 
-이 네 가지는 이후 `ReviewRecord`의 execution preparation layer를 이룬다.
+이 artifact들은 이후 `ReviewRecord`의 execution preparation layer를 이룬다.
 
 ---
 
@@ -42,6 +48,11 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
     target-snapshot-manifest.yaml
     materialized-input.md
     context-candidate-assembly.yaml
+    actor-invocation-profiles.yaml
+    actor-consumer-bindings.yaml
+    domain-binding.yaml
+    review-value-alignment-criteria.yaml
+    review-context-manifest.yaml
 ```
 
 원칙:
@@ -55,6 +66,7 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
   - `EffectiveBoundaryState`
 - `error-log.md`는 degraded case / partial failure를 기록하는 deterministic conformance log seat다
 - `execution-preparation/` 아래 artifact들은 lens 실행 직전 basis artifact다
+- `pre-dispatch-contracts.md`가 정한 gate를 통과하지 못하면 lens dispatch를 시작하지 않는다
 - later runtime implementation도 이 구분은 유지해야 한다
 
 ---
@@ -208,6 +220,11 @@ execution_rule_refs:
 | `target-snapshot.*` | runtime/host |
 | `materialized-input.md` | runtime/host |
 | `context-candidate-assembly.yaml` | runtime/host |
+| `actor-invocation-profiles.yaml` | runtime/host |
+| `actor-consumer-bindings.yaml` | runtime/host |
+| `domain-binding.yaml` | runtime/host |
+| `review-value-alignment-criteria.yaml` | runtime/host with principal authority |
+| `review-context-manifest.yaml` | runtime/host |
 
 즉 semantic interpretation은 `LLM`이 맡고,
 그 해석을 실제 실행 basis로 materialize하는 것은 runtime/host가 맡는다.

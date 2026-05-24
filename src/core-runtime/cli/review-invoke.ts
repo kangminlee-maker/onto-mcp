@@ -33,6 +33,11 @@ import {
   resolveReviewExecutionProfile,
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
+import {
+  createStructuredFailureRecord,
+  ReviewStructuredFailureError,
+  writeAndThrowStructuredFailureRecord,
+} from "../review/failure-records.js";
 import { assessComplexity, selectLenses } from "./complexity-assessment.js";
 
 /**
@@ -93,6 +98,7 @@ interface ReviewInvokeRouteSummary {
     mode: ReviewExecutionProfile["mode"];
     teamlead_seat: ReviewExecutionProfile["teamlead"]["seat"];
     lens_seat: ReviewExecutionProfile["lens"]["seat"];
+    synthesize_seat: ReviewExecutionProfile["synthesize"]["seat"];
     worker_executor: ReviewExecutionProfile["worker_executor"];
     deliberation: ReviewExecutionProfile["deliberation"];
     model?: string;
@@ -101,7 +107,7 @@ interface ReviewInvokeRouteSummary {
   };
   review_mode: ReviewMode;
   max_concurrent_lenses: number;
-  concurrency_strategy: "bounded_parallel";
+  concurrency_strategy: "all_lenses_parallel";
   synthesize_waits_for_all_lenses: true;
 }
 
@@ -173,7 +179,10 @@ const KNOWN_PASSTHROUGH_OPTION_NAMES = [
   "max-embed-lines",
 ] as const;
 
-const KNOWN_PASSTHROUGH_FLAG_NAMES = ["codex"] as const;
+const KNOWN_PASSTHROUGH_FLAG_NAMES = [
+  "codex",
+  "confirm-value-alignment",
+] as const;
 
 const KNOWN_INVOKE_ONLY_OPTION_NAMES = [
   "request-text",
@@ -183,7 +192,6 @@ const KNOWN_INVOKE_ONLY_OPTION_NAMES = [
   "synthesize-executor-realization",
   "synthesize-executor-bin",
   "synthesize-executor-arg",
-  "max-concurrent-lenses",
   "filesystem-boundary-decision",
   "diff-range",
   "model",
@@ -191,7 +199,12 @@ const KNOWN_INVOKE_ONLY_OPTION_NAMES = [
   "domain",
 ] as const;
 
-const KNOWN_INVOKE_ONLY_FLAG_NAMES = ["codex", "prepare-only", "no-watch", "no-domain"] as const;
+const KNOWN_INVOKE_ONLY_FLAG_NAMES = [
+  "codex",
+  "prepare-only",
+  "no-watch",
+  "no-domain",
+] as const;
 
 function requireString(
   value: string | undefined,
@@ -314,6 +327,20 @@ function applyExecutorOverrideToProfile(
   return profile;
 }
 
+function runtimeProviderForProfile(profile: ReviewExecutionProfile): string {
+  if (profile.worker_executor === "mock") return "mock";
+  if (profile.worker_executor === "codex") {
+    return profile.host === "claude" ? "claude" : "codex";
+  }
+  return profile.provider ?? profile.host;
+}
+
+function authModeForProfile(profile: ReviewExecutionProfile): string | null {
+  if (profile.worker_executor === "mock") return null;
+  if (profile.worker_executor === "codex") return profile.auth ?? "oauth";
+  return profile.auth ?? null;
+}
+
 function isInsidePath(root: string, candidate: string): boolean {
   const relative = path.relative(path.resolve(root), path.resolve(candidate));
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -333,6 +360,19 @@ function displayMaybePathFromProject(projectRoot: string, value: string): string
 
 function displaySettingValue(value: string | undefined | null): string {
   return typeof value === "string" && value.length > 0 ? value : "(unset)";
+}
+
+function displayActorLlmRef(
+  value: ReviewExecutionProfile["teamlead"]["llm"],
+): string {
+  if (value === "inherit") return "inherit";
+  return [
+    `auth=${displaySettingValue(value.auth)}`,
+    `provider=${displaySettingValue(value.provider)}`,
+    `model=${displaySettingValue(value.model)}`,
+    `effort=${displaySettingValue(value.effort)}`,
+    `service_tier=${displaySettingValue(value.service_tier)}`,
+  ].join(", ");
 }
 
 function formatPreviewList(items: string[], indent = "    "): string[] {
@@ -402,18 +442,21 @@ function renderReviewStartPreview(args: {
     `  teamlead_seat: ${reviewExecutionProfile.teamlead.seat}`,
     `  lens_seat: ${reviewExecutionProfile.lens.seat}`,
     `  deliberation: ${reviewExecutionProfile.deliberation}`,
-    `  max_concurrent_lenses: ${setup.maxConcurrentLenses}`,
+    `  max_concurrent_lenses: ${setup.maxConcurrentLenses} (all selected lenses)`,
     "model:",
     `  auth: ${displaySettingValue(reviewExecutionProfile.auth)}`,
     `  provider: ${displaySettingValue(reviewExecutionProfile.provider)}`,
     `  model: ${displaySettingValue(reviewExecutionProfile.model)}`,
     `  effort: ${displaySettingValue(reviewExecutionProfile.effort)}`,
     `  service_tier: ${displaySettingValue(reviewExecutionProfile.service_tier)}`,
+    `  teamlead_llm: ${displayActorLlmRef(reviewExecutionProfile.teamlead.llm)}`,
+    `  lens_llm: ${displayActorLlmRef(reviewExecutionProfile.lens.llm)}`,
+    `  synthesize_llm: ${displayActorLlmRef(reviewExecutionProfile.synthesize.llm)}`,
     "configuration:",
     `  project_settings: ${displayPathFromProject(projectRoot, projectSettingsPath)}`,
     `  user_settings: ${userSettingsPath}`,
-    "  mcp_arguments: domain/noDomain, reviewMode, lensIds, maxConcurrentLenses",
-    "  dev_harness_flags: --domain, --no-domain, --review-mode, --lens-id, --max-concurrent-lenses",
+    "  mcp_arguments: domain/noDomain, reviewMode, lensIds",
+    "  dev_harness_flags: --domain, --no-domain, --review-mode, --lens-id",
     "profile_trace:",
     ...formatPreviewList(profileTrace),
   ].join("\n");
@@ -723,6 +766,7 @@ function appendExecutorModelArgs(
   config: ReviewUnitExecutorConfig,
   argv: string[],
   ontoConfig?: OntoConfig,
+  llmRef?: ReviewExecutionProfile["synthesize"]["llm"],
 ): ReviewUnitExecutorConfig {
   // Mock executor does not accept --model/--reasoning-effort flags.
   // Skip model/effort args when the executor targets the mock script.
@@ -735,7 +779,8 @@ function appendExecutorModelArgs(
   if (isMock) return config;
 
   const args = [...config.args];
-  const llmSelection = normalizeLlmModelSwitcher(ontoConfig?.llm);
+  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const llmSelection = normalizeLlmModelSwitcher(llmSettings);
   const model = readSingleOptionValueFromArgv(argv, "model") ?? llmSelection?.model_id;
   if (typeof model === "string" && model.length > 0) {
     args.push("--model", model);
@@ -758,9 +803,11 @@ function appendExecutorModelArgs(
 function appendDirectCallLlmArgs(
   config: ReviewUnitExecutorConfig,
   ontoConfig?: OntoConfig,
+  llmRef?: ReviewExecutionProfile["synthesize"]["llm"],
 ): ReviewUnitExecutorConfig {
   const args = [...config.args];
-  const selection = normalizeLlmModelSwitcher(ontoConfig?.llm);
+  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const selection = normalizeLlmModelSwitcher(llmSettings);
 
   if (selection && selection.provider !== "codex") {
     args.push("--provider", selection.provider);
@@ -772,6 +819,12 @@ function appendDirectCallLlmArgs(
 
   if (selection?.base_url) {
     args.push("--llm-base-url", selection.base_url);
+  }
+  if (selection?.api_key_env) {
+    args.push("--api-key-env", selection.api_key_env);
+  }
+  if (selection?.reasoning_effort) {
+    args.push("--reasoning-effort", selection.reasoning_effort);
   }
 
   return { bin: config.bin, args };
@@ -924,8 +977,10 @@ function resolveExecutorConfig(
   ontoConfig?: OntoConfig,
   ontoHome?: string,
   reviewExecutionProfile?: ReviewExecutionProfile,
+  actor: "teamlead" | "lens" | "synthesize" = "lens",
 ): ReviewUnitExecutorConfig {
   const optionPrefixLabel = optionPrefix.length > 0 ? optionPrefix : "";
+  const actorLlmRef = reviewExecutionProfile?.[actor].llm;
   const explicitBin = readSingleOptionValueFromArgv(
     argv,
     `${optionPrefixLabel}executor-bin`,
@@ -939,6 +994,7 @@ function resolveExecutorConfig(
       { bin: explicitBin, args: explicitArgs },
       argv,
       ontoConfig,
+      actorLlmRef,
     );
   }
 
@@ -953,6 +1009,7 @@ function resolveExecutorConfig(
       buildExecutorConfigFromRealization(explicitRealization, ontoHome),
       argv,
       ontoConfig,
+      actorLlmRef,
     );
   }
   if (
@@ -973,6 +1030,7 @@ function resolveExecutorConfig(
     return appendDirectCallLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
       ontoConfig,
+      actorLlmRef,
     );
   }
   if (profile?.worker_executor === "codex") {
@@ -980,6 +1038,7 @@ function resolveExecutorConfig(
       buildExecutorConfigFromRealization("codex", ontoHome),
       argv,
       ontoConfig,
+      actorLlmRef,
     );
   }
 
@@ -992,6 +1051,7 @@ function resolveExecutorConfig(
     return appendDirectCallLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
       ontoConfig,
+      actorLlmRef,
     );
   }
 
@@ -999,7 +1059,225 @@ function resolveExecutorConfig(
     buildExecutorConfigFromRealization("codex", ontoHome),
     argv,
     ontoConfig,
+    actorLlmRef,
   );
+}
+
+function defaultCredentialEnvNames(provider: string): string[] {
+  if (provider === "anthropic") return ["ANTHROPIC_API_KEY"];
+  if (provider === "openai") return ["OPENAI_API_KEY"];
+  if (provider === "grok") return ["XAI_API_KEY", "GROK_API_KEY"];
+  return [];
+}
+
+function visibleCredentialEnvNames(selection: {
+  provider: string;
+  api_key_env?: string;
+}): string[] {
+  return selection.api_key_env
+    ? [selection.api_key_env]
+    : defaultCredentialEnvNames(selection.provider);
+}
+
+function hasCredentialEnv(selection: {
+  provider: string;
+  api_key_env?: string;
+}): boolean {
+  return visibleCredentialEnvNames(selection).some(
+    (envName) =>
+      typeof process.env[envName] === "string" &&
+      process.env[envName]!.length > 0,
+  );
+}
+
+function assertValidLocalBaseUrl(baseUrl: string | undefined): void {
+  if (baseUrl === undefined) return;
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("invalid protocol");
+    }
+  } catch {
+    throw new Error(`Invalid local provider base_url: ${baseUrl}`);
+  }
+}
+
+async function ensureProviderRouteReadyForDispatch(args: {
+  sessionRoot: string;
+  executionPlanPath: string;
+  reviewExecutionProfile: ReviewExecutionProfile;
+}): Promise<void> {
+  const profile = args.reviewExecutionProfile;
+  if (profile.worker_executor === "mock") {
+    return;
+  }
+
+  const actorRefs: Array<{
+    actor: "teamlead" | "lens" | "synthesize";
+    llm: ReviewExecutionProfile["teamlead"]["llm"];
+  }> = [
+    { actor: "teamlead", llm: profile.teamlead.llm },
+    { actor: "lens", llm: profile.lens.llm },
+    { actor: "synthesize", llm: profile.synthesize.llm },
+  ];
+
+  if (profile.worker_executor === "codex") {
+    for (const actorRef of actorRefs) {
+      const selection =
+        actorRef.llm === "inherit"
+          ? null
+          : normalizeLlmModelSwitcher(actorRef.llm);
+      if (
+        selection !== null &&
+        (selection.auth !== "oauth" || selection.provider !== "openai")
+      ) {
+        await writeAndThrowStructuredFailureRecord({
+          sessionRoot: args.sessionRoot,
+          phase: "pre_dispatch.actor_route",
+          reasonCode: "codex_actor_route_mismatch",
+          humanMessage:
+            "Review Codex worker route cannot dispatch because an actor selects a non-Codex provider route.",
+          requiredUserAction:
+            "Use root/actor OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
+          retrySafety: "safe_after_input_change",
+          artifactTrust: "manifest_artifacts_trusted",
+          dispatchState: "dispatch_blocked",
+          artifactRefs: {
+            execution_plan: args.executionPlanPath,
+          },
+          mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+          detailsKind: "actor_route",
+          details: {
+            actor: actorRef.actor,
+            worker_executor: profile.worker_executor,
+            host: profile.host,
+            provider: selection.provider,
+            auth: selection.auth,
+          },
+        });
+      }
+    }
+    return;
+  }
+
+  if (profile.worker_executor !== "direct_call") {
+    return;
+  }
+
+  for (const actorRef of actorRefs) {
+    const selection =
+      actorRef.llm === "inherit"
+        ? null
+        : normalizeLlmModelSwitcher(actorRef.llm);
+    if (selection === null || selection.provider === "codex") {
+      await writeAndThrowStructuredFailureRecord({
+        sessionRoot: args.sessionRoot,
+        phase: "pre_dispatch.actor_route",
+        reasonCode: "direct_call_actor_provider_unresolved",
+        humanMessage:
+          "Review direct-call route cannot dispatch because an actor does not resolve to an API/local provider.",
+        requiredUserAction:
+          "Set .onto/settings.json llm to api_key/local provider settings, or use the Codex OAuth worker route.",
+        retrySafety: "safe_after_environment_change",
+        artifactTrust: "manifest_artifacts_trusted",
+        dispatchState: "dispatch_blocked",
+        artifactRefs: {
+          execution_plan: args.executionPlanPath,
+        },
+        mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+        detailsKind: "actor_route",
+        details: {
+          actor: actorRef.actor,
+          worker_executor: profile.worker_executor,
+          host: profile.host,
+          provider: selection?.provider ?? null,
+        },
+      });
+      continue;
+    }
+
+    if (!selection.model_id) {
+      await writeAndThrowStructuredFailureRecord({
+        sessionRoot: args.sessionRoot,
+        phase: "pre_dispatch.actor_route",
+        reasonCode: "direct_call_actor_model_missing",
+        humanMessage:
+          "Review direct-call route cannot dispatch because an actor model is missing.",
+        requiredUserAction:
+          "Set llm.model in .onto/settings.json or in the actor-specific review.execution.*.llm block.",
+        retrySafety: "safe_after_input_change",
+        artifactTrust: "manifest_artifacts_trusted",
+        dispatchState: "dispatch_blocked",
+        artifactRefs: {
+          execution_plan: args.executionPlanPath,
+        },
+        mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+        detailsKind: "actor_route",
+        details: {
+          actor: actorRef.actor,
+          provider: selection.provider,
+          auth: selection.auth,
+        },
+      });
+    }
+
+    if (selection.auth === "api_key" && !hasCredentialEnv(selection)) {
+      await writeAndThrowStructuredFailureRecord({
+        sessionRoot: args.sessionRoot,
+        phase: "pre_dispatch.actor_route",
+        reasonCode: "direct_call_actor_credential_missing",
+        humanMessage:
+          "Review direct-call route cannot dispatch because the provider credential environment variable is missing.",
+        requiredUserAction:
+          "Export the required provider API key environment variable or change .onto/settings.json to an available route.",
+        retrySafety: "safe_after_environment_change",
+        artifactTrust: "manifest_artifacts_trusted",
+        dispatchState: "dispatch_blocked",
+        artifactRefs: {
+          execution_plan: args.executionPlanPath,
+        },
+        mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+        detailsKind: "actor_route",
+        details: {
+          actor: actorRef.actor,
+          provider: selection.provider,
+          auth: selection.auth,
+          credential_env_names: visibleCredentialEnvNames(selection),
+        },
+      });
+    }
+
+    if (selection.auth === "local") {
+      try {
+        assertValidLocalBaseUrl(selection.base_url);
+      } catch (error) {
+        await writeAndThrowStructuredFailureRecord({
+          sessionRoot: args.sessionRoot,
+          phase: "pre_dispatch.actor_route",
+          reasonCode: "direct_call_local_base_url_invalid",
+          humanMessage:
+            "Review local route cannot dispatch because the local provider base_url is invalid.",
+          requiredUserAction:
+            "Set llm.base_url to a valid http(s) LM Studio endpoint or remove it to use the default.",
+          retrySafety: "safe_after_input_change",
+          artifactTrust: "manifest_artifacts_trusted",
+          dispatchState: "dispatch_blocked",
+          artifactRefs: {
+            execution_plan: args.executionPlanPath,
+          },
+          mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+          detailsKind: "actor_route",
+          details: {
+            actor: actorRef.actor,
+            provider: selection.provider,
+            auth: selection.auth,
+            base_url: selection.base_url ?? null,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    }
+  }
 }
 
 async function readOntoConfig(projectRoot: string): Promise<OntoConfig> {
@@ -1837,33 +2115,37 @@ async function readOptionalReviewSummary(
   };
 }
 
-function resolveMaxConcurrentLenses(
-  argv: string[],
-  ontoConfig: OntoConfig,
-): number {
-  const explicitValue = readSingleOptionValueFromArgv(argv, "max-concurrent-lenses");
-  if (typeof explicitValue === "string" && explicitValue.length > 0) {
-    const parsed = Number.parseInt(explicitValue, 10);
-    if (!Number.isFinite(parsed) || parsed < 1) {
-      throw new Error(`Invalid max concurrent lenses: ${explicitValue}`);
-    }
-    return parsed;
-  }
-
-  const configValue = ontoConfig.review?.execution?.max_concurrent_workers;
-  if (typeof configValue === "number") {
-    if (!Number.isFinite(configValue) || configValue < 1) {
-      throw new Error(`Invalid .onto/settings.json review.execution.max_concurrent_workers: ${configValue}`);
-    }
-    return configValue;
-  }
-
-  return 9;
-}
-
 function rejectRemovedFlags(argv: string[]): void {
+  const throwRetiredInput = (flag: string, message: string): never => {
+    throw new ReviewStructuredFailureError({
+      failureRecord: createStructuredFailureRecord({
+        phase: "pre_manifest.retired_entry",
+        reasonCode: "retired_review_invoke_flag",
+        humanMessage: message,
+        requiredUserAction:
+          "Remove the retired argument and use .onto/settings.json or MCP tool arguments for review execution settings.",
+        retrySafety: "safe_after_input_change",
+        artifactTrust: "no_artifacts_trusted",
+        dispatchState: "not_dispatched",
+        artifactRefs: {},
+        mcpErrorCode: "ONTO_REVIEW_RETIRED_INPUT_DETECTED",
+        detailsKind: "retired_config",
+        details: {
+          flag,
+        },
+      }),
+      failureRecordPath: null,
+    });
+  };
+  if (readSingleOptionValueFromArgv(argv, "max-concurrent-lenses") !== undefined) {
+    throwRetiredInput(
+      "--max-concurrent-lenses",
+      "--max-concurrent-lenses is not supported. Review runs all selected lenses in parallel.",
+    );
+  }
   if (hasOptionFlag(argv, "claude")) {
-    throw new Error(
+    throwRetiredInput(
+      "--claude",
       "--claude is not supported by review:invoke. Use the MCP review path or project settings.",
     );
   }
@@ -1873,7 +2155,8 @@ function rejectRemovedFlags(argv: string[]): void {
       hasOptionFlag(argv, removed) ||
       argv.some((token) => token.startsWith(`${optionToken}=`));
     if (present) {
-      throw new Error(
+      throwRetiredInput(
+        optionToken,
         `--${removed} is not supported by review:invoke. Use .onto/settings.json for execution profile selection.`,
       );
     }
@@ -1884,13 +2167,20 @@ function appendCanonicalExecutionProfileArgs(
   argv: string[],
   profile: ResolvedExecutionProfile,
 ): string[] {
-  return [
+  const reviewProfile = profile.review_execution_profile;
+  const result = [
     ...argv,
     "--execution-realization",
     profile.execution_realization,
     "--host-runtime",
     profile.host_runtime,
+    "--runtime-provider",
+    runtimeProviderForProfile(reviewProfile),
+    "--effective-worker-executor",
+    reviewProfile.worker_executor,
   ];
+  result.push("--auth-mode", authModeForProfile(reviewProfile) ?? "none");
+  return result;
 }
 
 function appendDirectoryListingConfigArgs(
@@ -1964,7 +2254,7 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     ontoConfig,
     projectRoot,
   );
-  const maxConcurrentLenses = resolveMaxConcurrentLenses(argv, ontoConfig);
+  const maxConcurrentLenses = Math.max(1, resolvedInvokeInputs.resolvedLensIds.length);
 
   const { optionTokens: argvWithoutPositionals } = splitArgvIntoOptionsAndPositionals(
     argv,
@@ -1982,17 +2272,22 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     ),
     resolvedInvokeInputs,
   );
-  // Resolve execution profile ONCE here so session artifacts, startArgv, and
-  // downstream responses all share the same (realization, host) pair. This is
-  // the single seat that writes the Claude-host profile into prepared session
-  // artifacts — closes the "Claude run recorded as codex" artifact seam gap
-  // (review consensus #1, 2026-04-16).
+  // Resolve the effective profile before session preparation so artifacts,
+  // dispatch, and API responses share one route identity.
   const explicitCodex = hasOptionFlag(argv, "codex");
   const profileResolution = resolveExecutionProfile({ explicitCodex, ontoConfig });
   if (profileResolution.type === "no_host") {
     throw buildNoHostDetectedError();
   }
-  const executionProfile = profileResolution.profile;
+  const effectiveReviewExecutionProfile = applyExecutorOverrideToProfile(
+    profileResolution.profile.review_execution_profile,
+    argv,
+  );
+  const executionProfile: ResolvedExecutionProfile = {
+    execution_realization: toArtifactExecutionRealization(effectiveReviewExecutionProfile),
+    host_runtime: effectiveReviewExecutionProfile.host,
+    review_execution_profile: effectiveReviewExecutionProfile,
+  };
   const startArgvWithProfile = appendCanonicalExecutionProfileArgs(
     normalizedStartArgv,
     executionProfile,
@@ -2018,9 +2313,7 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
  * Used by the coordinator state machine to avoid console.log capture.
  *
  * The execution_realization / host_runtime in the returned result mirror the
- * values that were written into the prepared session artifacts (via
- * setup.executionProfile). This closes the artifact seam gap where Claude-path
- * runs were previously recorded with the wrong host-bound worker identity.
+ * values written into the prepared session artifacts.
  */
 export async function reviewPrepareOnly(argv: string[]): Promise<PrepareOnlyResult> {
   const setup = await resolveReviewInvokeSetup(argv);
@@ -2074,10 +2367,8 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
-  const effectiveReviewExecutionProfile = applyExecutorOverrideToProfile(
-    setup.executionProfile.review_execution_profile,
-    argv,
-  );
+  const effectiveReviewExecutionProfile =
+    setup.executionProfile.review_execution_profile;
   const plannedSessionId = requireString(
     readSingleOptionValueFromArgv(setup.startArgv, "session-id"),
     "session-id",
@@ -2151,6 +2442,12 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   }
 
   const resolvedRequestText = setup.resolvedInvokeInputs.requestText;
+  await ensureProviderRouteReadyForDispatch({
+    sessionRoot,
+    executionPlanPath: path.join(sessionRoot, "execution-plan.yaml"),
+    reviewExecutionProfile: effectiveReviewExecutionProfile,
+  });
+
   const defaultExecutorConfig = resolveExecutorConfig(
     argv,
     "",
@@ -2159,6 +2456,17 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     hasExplicitExecutorOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
+    "lens",
+  );
+  const teamleadExecutorConfig = resolveExecutorConfig(
+    argv,
+    "",
+    setup.ontoConfig,
+    setup.ontoHome,
+    hasExplicitExecutorOverride
+      ? undefined
+      : setup.executionProfile.review_execution_profile,
+    "teamlead",
   );
   const synthesizeExecutorConfig = resolveExecutorConfig(
     argv,
@@ -2168,6 +2476,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     hasExplicitExecutorOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
+    "synthesize",
   );
 
   console.log("[review invoke] step 2/3 prompt execution");
@@ -2175,7 +2484,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     projectRoot: resolvedProjectRoot,
     sessionRoot,
     defaultExecutorConfig,
-    maxConcurrentLenses: setup.maxConcurrentLenses,
+    ...(teamleadExecutorConfig.bin === defaultExecutorConfig.bin &&
+    JSON.stringify(teamleadExecutorConfig.args) ===
+      JSON.stringify(defaultExecutorConfig.args)
+      ? {}
+      : { teamleadExecutorConfig }),
     ...(synthesizeExecutorConfig.bin === defaultExecutorConfig.bin &&
     JSON.stringify(synthesizeExecutorConfig.args) ===
       JSON.stringify(defaultExecutorConfig.args)
@@ -2216,6 +2529,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       mode: routeProfile.review_execution_profile.mode,
       teamlead_seat: routeProfile.review_execution_profile.teamlead.seat,
       lens_seat: routeProfile.review_execution_profile.lens.seat,
+      synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
       ...(routeProfile.review_execution_profile.model
@@ -2230,7 +2544,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     },
     review_mode: setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: setup.maxConcurrentLenses,
-    concurrency_strategy: "bounded_parallel",
+    concurrency_strategy: "all_lenses_parallel",
     synthesize_waits_for_all_lenses: true,
   };
   const finalOutputPath =
@@ -2261,6 +2575,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     },
     executor: {
       max_concurrent_lenses: setup.maxConcurrentLenses,
+      concurrency_strategy: "all_lenses_parallel",
       realization: inferExecutorRealization(defaultExecutorConfig),
       profile: routeSummary.review_execution_profile,
     },

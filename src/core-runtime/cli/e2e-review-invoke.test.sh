@@ -166,6 +166,23 @@ run_expect_pass "T6: custom-lenses" \
   --executor-realization mock \
   --lens-id logic --lens-id pragmatics
 
+T6B_OUT=$(npm run review:invoke -- \
+  src/core-runtime/cli/review-invoke.ts "single lens" \
+  --executor-realization mock \
+  --lens-id logic 2>&1)
+T6B_EXIT=$?
+T6B_SESSION_ROOT=$(echo "$T6B_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $T6B_EXIT -eq 0 ] && [ -n "$T6B_SESSION_ROOT" ] &&
+  grep -q 'minimum_participating_lenses: 1' "$T6B_SESSION_ROOT/lens-completion-barrier.yaml" &&
+  grep -q 'observed_dispatch_width: 1' "$T6B_SESSION_ROOT/lens-completion-barrier.yaml" &&
+  grep -q 'downstream_allowed: true' "$T6B_SESSION_ROOT/lens-completion-barrier.yaml"; then
+  echo "  PASS  T6B: single-lens review"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL! T6B: single-lens review (exit=$T6B_EXIT session=$T6B_SESSION_ROOT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
 run_expect_pass "T9: bundle" \
   --primary-ref src/core-runtime/cli/review-invoke.ts \
   --member-ref package.json \
@@ -173,9 +190,9 @@ run_expect_pass "T9: bundle" \
   --executor-realization mock \
   --request-text "bundle review"
 
-run_expect_pass "T12: max-concurrent" \
+run_expect_pass "T12: all-selected-lenses-parallel" \
   src/ "parallelism test" \
-  --executor-realization mock --max-concurrent-lenses 2 --review-mode core-axis
+  --executor-realization mock --review-mode core-axis
 
 echo ""
 
@@ -192,6 +209,10 @@ run_expect_fail "T7: invalid-target" \
 run_expect_fail "T8: missing-intent" \
   src/core-runtime/cli/review-invoke.ts \
   --executor-realization mock
+
+run_expect_fail "T13: max-concurrent-removed" \
+  src/ "parallelism cap removed" \
+  --executor-realization mock --review-mode core-axis --max-concurrent-lenses 2
 
 echo ""
 
@@ -345,6 +366,108 @@ run_expect_fail "E23: unknown-executor-rejected" \
   src/ "test" \
   --executor-realization banana --review-mode core-axis
 
+echo "=== E23a: value-alignment-confirmation-gate ==="
+E23A_OUT=$(npm run review:invoke -- src/core-runtime/cli/review-invoke.ts "ambiguous value gate" \
+  --executor-realization mock --review-mode core-axis \
+  --ambiguity-note "principal intent requires confirmation" 2>&1)
+E23A_EXIT=$?
+if [ $E23A_EXIT -ne 0 ] && echo "$E23A_OUT" | grep -q "Review value-alignment criteria require confirmation"; then
+  echo "  PASS  E23a: value-alignment-confirmation-gate"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL! E23a: value-alignment-confirmation-gate (exit=$E23A_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E23b: value-alignment-confirmed-allow-path ==="
+E23B_OUT=$(npm run review:invoke -- \
+  src/core-runtime/cli/review-invoke.ts "ambiguous but confirmed value gate" \
+  --executor-realization mock --review-mode core-axis \
+  --ambiguity-note "principal intent was confirmed out of band" \
+  --confirm-value-alignment 2>&1)
+E23B_EXIT=$?
+E23B_SESSION_ROOT=$(cat "$PROJECT_ROOT/.onto/review/.latest-session" 2>/dev/null)
+E23B_VALUE_FILE="$E23B_SESSION_ROOT/execution-preparation/review-value-alignment-criteria.yaml"
+if [ $E23B_EXIT -eq 0 ] && \
+  [ -f "$E23B_VALUE_FILE" ] && \
+  grep -q "ambiguity_status: clear" "$E23B_VALUE_FILE" && \
+  grep -q "dispatch_state: allow_dispatch" "$E23B_VALUE_FILE"; then
+  echo "  PASS  E23b: value-alignment-confirmed-allow-path"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL! E23b: value-alignment-confirmed-allow-path (exit=$E23B_EXIT value_file=$E23B_VALUE_FILE)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E23c: direct-call-provider-route-preflight ==="
+E23C_ROOT="$FIXTURE_DIR/provider-route-missing"
+mkdir -p "$E23C_ROOT/.onto"
+printf 'provider route missing credential\n' > "$E23C_ROOT/target.txt"
+cat > "$E23C_ROOT/.onto/settings.json" <<'JSON'
+{
+  "llm": {
+    "auth": "api_key",
+    "provider": "openai",
+    "model": "gpt-5.5",
+    "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+  }
+}
+JSON
+E23C_OUT=$(env -u ONTO_E2E_MISSING_OPENAI_API_KEY npm run review:invoke -- \
+  target.txt "provider route must fail before dispatch" \
+  --project-root "$E23C_ROOT" --onto-home "$PROJECT_ROOT" \
+  --no-domain --review-mode core-axis --no-watch \
+  --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+  --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/inline-http-review-unit-executor.ts" 2>&1)
+E23C_EXIT=$?
+if [ $E23C_EXIT -ne 0 ] && echo "$E23C_OUT" | grep -q "provider credential environment variable is missing"; then
+  echo "  PASS  E23c: direct-call-provider-route-preflight"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL! E23c: direct-call-provider-route-preflight (exit=$E23C_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E23d: codex-actor-route-mismatch ==="
+E23D_ROOT="$FIXTURE_DIR/codex-actor-route-mismatch"
+mkdir -p "$E23D_ROOT/.onto"
+printf 'codex actor mismatch\n' > "$E23D_ROOT/target.txt"
+cat > "$E23D_ROOT/.onto/settings.json" <<'JSON'
+{
+  "llm": {
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.5"
+  },
+  "review": {
+    "execution": {
+      "lens": {
+        "seat": "worker",
+        "llm": {
+          "auth": "api_key",
+          "provider": "openai",
+          "model": "gpt-5.5",
+          "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+        }
+      }
+    }
+  }
+}
+JSON
+E23D_OUT=$(npm run review:invoke -- \
+  target.txt "codex actor route mismatch must fail before dispatch" \
+  --project-root "$E23D_ROOT" --onto-home "$PROJECT_ROOT" \
+  --no-domain --review-mode core-axis --no-watch \
+  --executor-realization codex 2>&1)
+E23D_EXIT=$?
+if [ $E23D_EXIT -ne 0 ] && echo "$E23D_OUT" | grep -q "Codex worker route cannot dispatch"; then
+  echo "  PASS  E23d: codex-actor-route-mismatch"
+  PASS_COUNT=$((PASS_COUNT + 1))
+else
+  echo "  FAIL! E23d: codex-actor-route-mismatch (exit=$E23D_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
 echo ""
 
 # ─────────────────────────────────────────────
@@ -369,7 +492,7 @@ run_expect_pass "E25: light+9lenses-override" \
   --lens-id semantics --lens-id pragmatics --lens-id evolution \
   --lens-id coverage --lens-id conciseness --lens-id axiology
 
-run_expect_status "E26: single-lens-halts" "halted_partial" \
+run_expect_status "E26: single-lens-completes" "completed" \
   src/ "single lens" \
   --executor-realization mock \
   --lens-id logic
@@ -500,6 +623,195 @@ if [ $E38_EXIT -eq 0 ] && [ -n "$E38_PREPARE" ] && [ -d "$E38_SESSION_ROOT" ]; t
   fi
 else
   echo "  FAIL! E38: prepare-only (exit=$E38_EXIT, prepare_only=$E38_PREPARE)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E38b: packet-hash-mismatch-fails-before-dispatch ==="
+if [ -n "${E38_SESSION_ROOT:-}" ] && [ -d "$E38_SESSION_ROOT" ]; then
+  printf '\nmanual packet mutation\n' >> "$E38_SESSION_ROOT/prompt-packets/logic.prompt.md"
+  E38B_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38B_EXIT=$?
+  if [ $E38B_EXIT -ne 0 ] && echo "$E38B_OUT" | grep -q "prompt packet hash changed"; then
+    echo "  PASS  E38b: packet-hash-mismatch-fails-before-dispatch"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38b: packet-hash-mismatch-fails-before-dispatch (exit=$E38B_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  SKIP  E38b: no prepare-only session"
+fi
+
+echo "=== E38c: manifest-schema-version-fails-before-dispatch ==="
+E38C_OUT=$(npm run review:invoke -- \
+  src/ "manifest schema guard test" \
+  --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
+E38C_EXIT=$?
+E38C_SESSION_ROOT=$(echo "$E38C_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $E38C_EXIT -eq 0 ] && [ -n "$E38C_SESSION_ROOT" ] && [ -d "$E38C_SESSION_ROOT" ]; then
+  node --input-type=module - "$E38C_SESSION_ROOT/execution-preparation/review-context-manifest.yaml" <<'NODE'
+import fs from "node:fs";
+import YAML from "yaml";
+const filePath = process.argv[2];
+const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
+doc.schema_version = "999";
+fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
+NODE
+  E38C_RUN_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38C_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38C_RUN_EXIT=$?
+  if [ $E38C_RUN_EXIT -ne 0 ] && echo "$E38C_RUN_OUT" | grep -q "schema version is unsupported"; then
+    echo "  PASS  E38c: manifest-schema-version-fails-before-dispatch"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38c: manifest-schema-version-fails-before-dispatch (exit=$E38C_RUN_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  FAIL! E38c: prepare-only setup failed (exit=$E38C_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E38d: manifest-derived-matrix-mismatch-fails-before-dispatch ==="
+E38D_OUT=$(npm run review:invoke -- \
+  src/ "manifest matrix guard test" \
+  --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
+E38D_EXIT=$?
+E38D_SESSION_ROOT=$(echo "$E38D_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $E38D_EXIT -eq 0 ] && [ -n "$E38D_SESSION_ROOT" ] && [ -d "$E38D_SESSION_ROOT" ]; then
+  node --input-type=module - "$E38D_SESSION_ROOT/execution-preparation/review-context-manifest.yaml" <<'NODE'
+import fs from "node:fs";
+import YAML from "yaml";
+const filePath = process.argv[2];
+const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
+doc.derived_context_access_matrix["lens:logic"] = ["materialized-input"];
+fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
+NODE
+  E38D_RUN_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38D_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38D_RUN_EXIT=$?
+  if [ $E38D_RUN_EXIT -ne 0 ] && echo "$E38D_RUN_OUT" | grep -q "access matrix does not match"; then
+    echo "  PASS  E38d: manifest-derived-matrix-mismatch-fails-before-dispatch"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38d: manifest-derived-matrix-mismatch-fails-before-dispatch (exit=$E38D_RUN_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  FAIL! E38d: prepare-only setup failed (exit=$E38D_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E38e: packet-forbidden-context-ref-fails-before-dispatch ==="
+E38E_OUT=$(npm run review:invoke -- \
+  src/ "packet context guard test" \
+  --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
+E38E_EXIT=$?
+E38E_SESSION_ROOT=$(echo "$E38E_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $E38E_EXIT -eq 0 ] && [ -n "$E38E_SESSION_ROOT" ] && [ -d "$E38E_SESSION_ROOT" ]; then
+  node --input-type=module - "$E38E_SESSION_ROOT/execution-preparation/review-context-manifest.yaml" <<'NODE'
+import fs from "node:fs";
+import YAML from "yaml";
+const filePath = process.argv[2];
+const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
+const packet = doc.packet_refs.find((item) => item.consumer_id === "synthesize");
+if (!packet) throw new Error("synthesize packet ref missing");
+packet.consumed_context_refs = [...packet.consumed_context_refs, "domain:logic_rules"];
+fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
+NODE
+  E38E_RUN_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38E_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38E_RUN_EXIT=$?
+  if [ $E38E_RUN_EXIT -ne 0 ] && echo "$E38E_RUN_OUT" | grep -q "Prompt packet context refs do not match"; then
+    echo "  PASS  E38e: packet-forbidden-context-ref-fails-before-dispatch"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38e: packet-forbidden-context-ref-fails-before-dispatch (exit=$E38E_RUN_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  FAIL! E38e: prepare-only setup failed (exit=$E38E_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E38f: packet-unknown-consumer-fails-before-dispatch ==="
+E38F_OUT=$(npm run review:invoke -- \
+  src/ "packet unknown consumer guard test" \
+  --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
+E38F_EXIT=$?
+E38F_SESSION_ROOT=$(echo "$E38F_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $E38F_EXIT -eq 0 ] && [ -n "$E38F_SESSION_ROOT" ] && [ -d "$E38F_SESSION_ROOT" ]; then
+  node --input-type=module - "$E38F_SESSION_ROOT/execution-preparation/review-context-manifest.yaml" <<'NODE'
+import fs from "node:fs";
+import YAML from "yaml";
+const filePath = process.argv[2];
+const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
+const packet = doc.packet_refs.find((item) => item.consumer_id === "lens:logic");
+if (!packet) throw new Error("logic packet ref missing");
+doc.packet_refs.push({
+  ...packet,
+  consumer_id: "lens:unknown",
+});
+fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
+NODE
+  E38F_RUN_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38F_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38F_RUN_EXIT=$?
+  if [ $E38F_RUN_EXIT -ne 0 ] && \
+     echo "$E38F_RUN_OUT" | grep -q "consumer is not admitted" && \
+     grep -R "details_kind: context_eligibility" "$E38F_SESSION_ROOT/failures" >/dev/null 2>&1; then
+    echo "  PASS  E38f: packet-unknown-consumer-fails-before-dispatch"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38f: packet-unknown-consumer-fails-before-dispatch (exit=$E38F_RUN_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  FAIL! E38f: prepare-only setup failed (exit=$E38F_EXIT)"
+  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+fi
+
+echo "=== E38g: artifact-write-failure-is-structured ==="
+E38G_OUT=$(npm run review:invoke -- \
+  src/ "artifact write guard test" \
+  --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
+E38G_EXIT=$?
+E38G_SESSION_ROOT=$(echo "$E38G_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
+if [ $E38G_EXIT -eq 0 ] && [ -n "$E38G_SESSION_ROOT" ] && [ -d "$E38G_SESSION_ROOT" ]; then
+  mkdir "$E38G_SESSION_ROOT/review-run-manifest.yaml"
+  E38G_RUN_OUT=$(npm run review:run-prompt-execution -- \
+    --project-root "$PROJECT_ROOT" \
+    --session-root "$E38G_SESSION_ROOT" \
+    --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
+    --executor-arg "$PROJECT_ROOT/src/core-runtime/cli/mock-review-unit-executor.ts" 2>&1)
+  E38G_RUN_EXIT=$?
+  if [ $E38G_RUN_EXIT -ne 0 ] && \
+     echo "$E38G_RUN_OUT" | grep -q "required review execution artifact" && \
+     grep -R "details_kind: artifact_write" "$E38G_SESSION_ROOT/failures" >/dev/null 2>&1; then
+    echo "  PASS  E38g: artifact-write-failure-is-structured"
+    PASS_COUNT=$((PASS_COUNT + 1))
+  else
+    echo "  FAIL! E38g: artifact-write-failure-is-structured (exit=$E38G_RUN_EXIT)"
+    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
+  fi
+else
+  echo "  FAIL! E38g: prepare-only setup failed (exit=$E38G_EXIT)"
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 

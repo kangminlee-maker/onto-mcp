@@ -408,6 +408,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
       // LLM provider selection (reuses llm-caller bridge)
       provider: { type: "string" }, // anthropic | openai | grok | lmstudio | codex
       auth: { type: "string" },
+      "api-key-env": { type: "string" },
       "llm-base-url": { type: "string" },
       model: { type: "string" },
       "reasoning-effort": { type: "string" },
@@ -473,6 +474,9 @@ export async function runInlineHttpReviewUnitExecutorCli(
   }
   if (typeof values["llm-base-url"] === "string") {
     cliOverrides.base_url = values["llm-base-url"];
+  }
+  if (typeof values["api-key-env"] === "string") {
+    cliOverrides.api_key_env = values["api-key-env"];
   }
   if (typeof values.model === "string") {
     cliOverrides.model = values.model;

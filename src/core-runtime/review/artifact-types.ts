@@ -48,6 +48,51 @@ export type ReviewTargetMaterializedInputKind =
   | "single_text"
   | "directory_listing"
   | "bundle_member_texts";
+export type ReviewActorKind =
+  | "teamlead"
+  | "lens"
+  | "synthesize";
+export type ReviewActorSeat = "main" | "worker";
+export type ReviewContextManifestLifecycleState =
+  | "created"
+  | "validated"
+  | "blocked"
+  | "dispatched"
+  | "completed"
+  | "invalidated";
+export type ReviewContextSensitivity = "public" | "internal" | "sensitive";
+export type ReviewFailureRetrySafety =
+  | "safe_after_input_change"
+  | "safe_after_environment_change"
+  | "unsafe_without_operator_review";
+export type ReviewFailureArtifactTrust =
+  | "no_artifacts_trusted"
+  | "pre_manifest_artifacts_trusted"
+  | "manifest_artifacts_trusted"
+  | "execution_artifacts_partial"
+  | "execution_artifacts_trusted";
+export type ReviewFailureDispatchState =
+  | "not_dispatched"
+  | "dispatch_blocked"
+  | "partially_dispatched"
+  | "dispatched";
+export type ReviewFailureDetailsKind =
+  | "settings_validation"
+  | "retired_config"
+  | "domain_binding"
+  | "value_alignment_gate"
+  | "actor_route"
+  | "manifest_lifecycle"
+  | "context_eligibility"
+  | "provider_api"
+  | "malformed_output"
+  | "schema_validation"
+  | "artifact_write"
+  | "security_disclosure";
+export type ReviewLensCompletionBarrierStatus =
+  | "passed"
+  | "passed_with_degradation"
+  | "failed";
 
 export interface ReviewTargetScopeCandidate {
   kind: ReviewTargetScopeKind;
@@ -62,6 +107,13 @@ export interface LensSelectionPlan {
   rationale: string[];
 }
 
+export interface ReviewValueAlignmentConfirmation {
+  status: "confirmed";
+  confirmed_by: "user";
+  source_ref: string;
+  confirmed_at: string;
+}
+
 export interface InvocationInterpretationArtifact {
   entrypoint: ReviewEntrypoint;
   target_scope_candidate: ReviewTargetScopeCandidate;
@@ -71,6 +123,7 @@ export interface InvocationInterpretationArtifact {
   review_mode_recommendation: ReviewMode;
   lens_selection_plan: LensSelectionPlan;
   ambiguity_notes: string[];
+  value_alignment_confirmation?: ReviewValueAlignmentConfirmation;
 }
 
 export interface DomainFinalSelection {
@@ -159,6 +212,11 @@ export interface InvocationBindingArtifact {
   target_snapshot_manifest_path: string;
   materialized_input_path: string;
   context_candidate_assembly_path: string;
+  actor_invocation_profiles_path?: string;
+  actor_consumer_bindings_path?: string;
+  domain_binding_path?: string;
+  review_value_alignment_criteria_path?: string;
+  review_context_manifest_path?: string;
   synthesis_output_path: string;
   finding_ledger_path: string;
   finding_relation_graph_path: string;
@@ -166,6 +224,7 @@ export interface InvocationBindingArtifact {
   issue_stance_matrix_path: string;
   deliberation_plan_path: string;
   problem_framing_path: string;
+  lens_completion_barrier_path?: string;
   deliberation_mode: ReviewDeliberationMode;
   deliberation_root_path: string;
   deliberation_output_path: string;
@@ -223,6 +282,11 @@ export interface ReviewExecutionPlan {
   lens_deliberation_prompt_packet_seats: ReviewLensPromptPacketSeat[];
   teamlead_deliberation_prompt_packet_path: string;
   synthesize_prompt_packet_path: string;
+  actor_invocation_profiles_path?: string;
+  actor_consumer_bindings_path?: string;
+  domain_binding_path?: string;
+  review_value_alignment_criteria_path?: string;
+  review_context_manifest_path?: string;
   synthesis_output_path: string;
   finding_ledger_path: string;
   finding_relation_graph_path: string;
@@ -230,6 +294,7 @@ export interface ReviewExecutionPlan {
   issue_stance_matrix_path: string;
   deliberation_plan_path: string;
   problem_framing_path: string;
+  lens_completion_barrier_path?: string;
   deliberation_mode: ReviewDeliberationMode;
   deliberation_root_path: string;
   deliberation_output_path: string;
@@ -261,6 +326,170 @@ export interface ResolvedLlmPlan {
   reasoning_effort?: string;
   service_tier?: string;
   provider?: string;
+}
+
+export interface ReviewResolvedActorInvocationProfile {
+  actor_profile_id: string;
+  actor_kind: ReviewActorKind;
+  seat: ReviewActorSeat;
+  execution_realization: ReviewExecutionRealization;
+  host_runtime: ReviewHostRuntime;
+  runtime_provider: string | null;
+  auth_mode: string | null;
+  model: string | null;
+  effort: string | null;
+  service_tier: string | null;
+  base_url: string | null;
+  effective_worker_executor: string;
+  credential_ref: string | null;
+  credential_serialization_policy: "ref_only_no_secret";
+  route_unavailable_policy: "fail_before_dispatch";
+  capability_requirements: string[];
+  source_settings_refs: string[];
+}
+
+export interface ReviewActorInvocationProfilesArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  profiles: ReviewResolvedActorInvocationProfile[];
+}
+
+export interface ReviewActorConsumerBinding {
+  actor_profile_id: string;
+  actor_kind: ReviewActorKind;
+  actor_instance_id: string;
+  consumer_id: string;
+  consumer_kind: string;
+  lens_id: string | null;
+  applies_to: string[];
+  profile_ref: string;
+  context_access_ref: string;
+  extension_admission_status: "admitted";
+}
+
+export interface ReviewActorConsumerBindingsArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  bindings: ReviewActorConsumerBinding[];
+}
+
+export interface ReviewDomainDocumentBinding {
+  doc_id: string;
+  path: string;
+  required: boolean;
+  status: "present" | "missing" | "not_applicable";
+  sha256: string | null;
+  allowed_consumers: string[];
+}
+
+export interface ReviewDomainBindingArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  selected_domain: string;
+  selection_mode: string;
+  domain_sentinel: boolean;
+  domain_directory: string | null;
+  attempted_directories: string[];
+  validation_status: "valid" | "blocked";
+  required_docs: ReviewDomainDocumentBinding[];
+  optional_docs: ReviewDomainDocumentBinding[];
+}
+
+export interface ReviewValueAlignmentCriterion {
+  criterion_id: string;
+  statement: string;
+  source_kind: string;
+  source_ref: string;
+  authority_rank: number;
+  inference_owner: string;
+  confidence: number;
+  confidence_basis: string;
+  confirmation_status: "confirmed" | "pending_confirmation";
+  ambiguity_status: "clear" | "ambiguous";
+  conflict_status: "none" | "contested";
+  lifecycle_state:
+    | "inferred"
+    | "pending_confirmation"
+    | "confirmed"
+    | "revised"
+    | "contested"
+    | "insufficient"
+    | "blocked"
+    | "invalidated";
+  lineage_ref: string;
+  dispatch_decision:
+    | "allow_dispatch"
+    | "block_for_confirmation"
+    | "block_for_revision"
+    | "block_for_more_context"
+    | "halt"
+    | "regenerate_or_cancel";
+}
+
+export interface ReviewValueAlignmentCriteriaArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  dispatch_state: "allow_dispatch" | "blocked";
+  criteria: ReviewValueAlignmentCriterion[];
+}
+
+export interface ReviewContextSource {
+  context_source_id: string;
+  source_kind: string;
+  source_ref: string;
+  source_sha256: string | null;
+  required: boolean;
+  sensitivity: ReviewContextSensitivity;
+  allowed_consumers: string[];
+}
+
+export interface ReviewContextManifestPacketRef {
+  consumer_id: string;
+  packet_ref: string;
+  packet_sha256: string | null;
+  consumed_context_refs: string[];
+  forbidden_context_refs: string[];
+}
+
+export interface ReviewContextManifestArtifact {
+  schema_version: "1";
+  producer: "onto-review-runtime";
+  producer_version: string;
+  settings_schema_version: string;
+  domain_registry_version: string;
+  alignment_contract_version: string;
+  lifecycle_state: ReviewContextManifestLifecycleState;
+  session_id: string;
+  target_refs: string[];
+  domain_binding_ref: string;
+  review_value_alignment_criteria_ref: string;
+  actor_consumer_bindings_ref: string;
+  context_sources: ReviewContextSource[];
+  derived_context_access_matrix: Record<string, string[]>;
+  packet_refs: ReviewContextManifestPacketRef[];
+  validation_results: string[];
+  failure_record_refs: string[];
+}
+
+export interface ReviewStructuredFailureRecord {
+  schema_version: "1";
+  failure_id: string;
+  created_at: string;
+  phase: string;
+  reason_code: string;
+  human_message: string;
+  required_user_action: string;
+  retry_safety: ReviewFailureRetrySafety;
+  artifact_trust: ReviewFailureArtifactTrust;
+  dispatch_state: ReviewFailureDispatchState;
+  artifact_refs: Record<string, string>;
+  mcp_error_code: string;
+  details_kind: ReviewFailureDetailsKind;
+  details: Record<string, unknown>;
 }
 
 export interface ReviewSessionMetadata {
@@ -378,6 +607,8 @@ export interface ReviewExecutionResultArtifact {
   execution_started_at: string;
   execution_completed_at: string;
   total_duration_ms: number;
+  max_concurrent_lenses: number;
+  observed_dispatch_width?: number;
   planned_lens_ids: string[];
   participating_lens_ids: string[];
   degraded_lens_ids: string[];
@@ -387,6 +618,7 @@ export interface ReviewExecutionResultArtifact {
   deliberation_status?: DeliberationStatus | null | undefined;
   halt_reason?: string | null;
   error_log_path: string;
+  lens_completion_barrier_ref?: string;
   lens_execution_results: ReviewUnitExecutionResult[];
   issue_artifact_execution_results?: ReviewUnitExecutionResult[];
   deliberation_execution_results?: ReviewUnitExecutionResult[];
@@ -397,6 +629,22 @@ export interface ReviewExecutionResultArtifact {
    * check before including synthesize timing in any aggregation.
    */
   synthesize_execution_result?: ReviewUnitExecutionResult | null;
+}
+
+export interface ReviewLensCompletionBarrierArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  observed_dispatch_width: number;
+  minimum_participating_lenses: number;
+  planned_lens_ids: string[];
+  completed_lens_ids: string[];
+  failed_lens_ids: string[];
+  missing_lens_ids: string[];
+  degraded_lens_ids: string[];
+  status: ReviewLensCompletionBarrierStatus;
+  downstream_allowed: boolean;
+  downstream_reason: string;
 }
 
 export interface ReviewLensDomainConstraint {

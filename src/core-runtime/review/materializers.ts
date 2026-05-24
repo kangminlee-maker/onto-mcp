@@ -2,6 +2,11 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type {
+  ReviewActorConsumerBinding,
+  ReviewActorConsumerBindingsArtifact,
+  ReviewActorInvocationProfilesArtifact,
+  ReviewActorKind,
+  ReviewActorSeat,
   BoundaryAccessPolicy,
   BoundaryEnforcementProfile,
   BoundaryPolicy,
@@ -15,7 +20,9 @@ import type {
   ReviewExecutionPlan,
   ReviewExecutionRealization,
   ReviewHostRuntime,
+  ReviewIssueArtifactId,
   ReviewMode,
+  ReviewResolvedActorInvocationProfile,
   ReviewSessionMetadata,
   ReviewTargetMaterializedInputKind,
   ReviewTargetScopeKind,
@@ -27,6 +34,10 @@ import {
 } from "../llm/model-switcher.js";
 import {
   assertNoUnsupportedConfigFiles,
+  defaultReviewExecution,
+  type OntoSettings,
+  type ReviewExecutionSettings,
+  type ReviewLlmRef,
   projectSettingsPath,
 } from "../discovery/settings-chain.js";
 import {
@@ -38,6 +49,11 @@ import {
   renderTargetSnapshot,
   writeYamlDocument,
 } from "./review-artifact-utils.js";
+import {
+  ISSUE_ARTIFACT_IDS,
+  issueArtifactConsumerId,
+  issueArtifactSpec,
+} from "./issue-artifact-runtime.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
   sessionRoot: string;
@@ -54,10 +70,12 @@ export interface WriteInvocationInterpretationArtifactParams {
   recommendedLensIds?: string[];
   rationale?: string[];
   ambiguityNotes?: string[];
+  valueAlignmentConfirmed?: boolean;
 }
 
 export interface BootstrapInvocationBindingArtifactsParams {
   projectRoot: string;
+  ontoConfig?: OntoSettings;
   requestedTarget: string;
   requestedDomainToken?: string;
   pluginRoot?: string;
@@ -70,6 +88,9 @@ export interface BootstrapInvocationBindingArtifactsParams {
   domainSelectionMode: string;
   executionRealization: ReviewExecutionRealization;
   hostRuntime: ReviewHostRuntime;
+  runtimeProvider?: string | null | undefined;
+  authMode?: string | null | undefined;
+  effectiveWorkerExecutor?: string | undefined;
   reviewMode: ReviewMode;
   resolvedLensIds: string[];
   webResearchPolicy?: BoundaryAccessPolicy;
@@ -102,13 +123,13 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
  */
 async function loadOntoConfigForPlan(
   projectRoot: string,
-): Promise<{ llm?: LlmModelSwitcherConfig }> {
+): Promise<OntoSettings> {
   await assertNoUnsupportedConfigFiles(projectRoot);
   const configPath = projectSettingsPath(projectRoot);
   if (!(await fileExists(configPath))) return {};
   const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
   if (parsed && typeof parsed === "object") {
-    return parsed as { llm?: LlmModelSwitcherConfig };
+    return parsed as OntoSettings;
   }
   return {};
 }
@@ -128,6 +149,205 @@ function derivePlanTimeLlmResolution(
   if (partial.service_tier) plan.service_tier = partial.service_tier;
   if (partial.provider) plan.provider = partial.provider;
   return Object.keys(plan).length > 0 ? plan : undefined;
+}
+
+function resolveReviewExecutionSettingsForArtifacts(
+  config: OntoSettings,
+): ReviewExecutionSettings {
+  const defaults = defaultReviewExecution();
+  const execution = config.review?.execution;
+  if (!execution) return defaults;
+  return {
+    ...defaults,
+    ...execution,
+    teamlead: {
+      ...defaults.teamlead,
+      ...execution.teamlead,
+    },
+    lens: {
+      ...defaults.lens,
+      ...execution.lens,
+    },
+    synthesize: {
+      ...defaults.synthesize,
+      ...execution.synthesize,
+    },
+  };
+}
+
+function resolveActorLlmForArtifact(
+  actorLlmRef: ReviewLlmRef,
+  inherited: OntoSettings["llm"],
+): LlmModelSwitcherConfig | undefined {
+  if (actorLlmRef === "inherit") return inherited;
+  const shouldOverlayInherited =
+    actorLlmRef.auth === undefined && actorLlmRef.provider === undefined;
+  return {
+    ...(shouldOverlayInherited ? inherited ?? {} : {}),
+    ...actorLlmRef,
+  };
+}
+
+function workerExecutorForRealization(
+  executionRealization: ReviewExecutionRealization,
+  hostRuntime: ReviewHostRuntime,
+): string {
+  if (executionRealization === "direct-call") return "direct_call";
+  if (hostRuntime === "standalone") return "mock_or_standalone";
+  return hostRuntime;
+}
+
+function defaultAuthForHostRuntime(hostRuntime: ReviewHostRuntime): string | null {
+  if (hostRuntime === "standalone") return null;
+  if (hostRuntime === "lmstudio") return "local";
+  return "oauth";
+}
+
+function credentialRefForSelection(args: {
+  auth: string | null;
+  provider: string | null;
+  apiKeyEnv?: string;
+}): string | null {
+  if (args.apiKeyEnv) return `env:${args.apiKeyEnv}`;
+  if (args.auth === "oauth" && args.provider) return `host:${args.provider}:oauth`;
+  if (args.auth === "local" && args.provider) return `local:${args.provider}`;
+  return null;
+}
+
+function buildActorInvocationProfile(args: {
+  actorKind: ReviewActorKind;
+  seat: ReviewActorSeat;
+  actorLlmRef: ReviewLlmRef;
+  inheritedLlm: OntoSettings["llm"];
+  executionRealization: ReviewExecutionRealization;
+  hostRuntime: ReviewHostRuntime;
+  runtimeProvider?: string | null | undefined;
+  authMode?: string | null | undefined;
+  effectiveWorkerExecutor?: string | undefined;
+  sourceSettingsRefs: string[];
+}): ReviewResolvedActorInvocationProfile {
+  const resolvedLlm = resolveActorLlmForArtifact(
+    args.actorLlmRef,
+    args.inheritedLlm,
+  );
+  const normalized = normalizeLlmModelSwitcher(resolvedLlm);
+  const auth = normalized?.auth ?? defaultAuthForHostRuntime(args.hostRuntime);
+  const provider = normalized?.provider ?? args.hostRuntime;
+  const runtimeProvider = args.runtimeProvider ?? provider;
+  const authMode = args.authMode !== undefined ? args.authMode : auth;
+  const effectiveWorkerExecutor =
+    args.effectiveWorkerExecutor ??
+    workerExecutorForRealization(args.executionRealization, args.hostRuntime);
+  const apiKeyEnv = normalized?.api_key_env ?? resolvedLlm?.api_key_env;
+  return {
+    actor_profile_id: `actor:${args.actorKind}`,
+    actor_kind: args.actorKind,
+    seat: args.seat,
+    execution_realization: args.executionRealization,
+    host_runtime: args.hostRuntime,
+    runtime_provider: runtimeProvider,
+    auth_mode: authMode,
+    model: normalized?.model_id ?? resolvedLlm?.model ?? null,
+    effort: normalized?.reasoning_effort ?? resolvedLlm?.effort ?? null,
+    service_tier: normalized?.service_tier ?? resolvedLlm?.service_tier ?? null,
+    base_url: normalized?.base_url ?? resolvedLlm?.base_url ?? null,
+    effective_worker_executor: effectiveWorkerExecutor,
+    credential_ref: credentialRefForSelection({
+      auth: authMode ?? null,
+      provider: runtimeProvider ?? null,
+      ...(apiKeyEnv ? { apiKeyEnv } : {}),
+    }),
+    credential_serialization_policy: "ref_only_no_secret",
+    route_unavailable_policy: "fail_before_dispatch",
+    capability_requirements: ["review_unit_execution", "artifact_write"],
+    source_settings_refs: args.sourceSettingsRefs,
+  };
+}
+
+function consumerIdForLens(lensId: string): string {
+  return `lens:${lensId}`;
+}
+
+function buildActorConsumerBindings(args: {
+  sessionId: string;
+  resolvedLensIds: string[];
+  actorInvocationProfilesPath: string;
+  reviewContextManifestPath: string;
+}): ReviewActorConsumerBinding[] {
+  return [
+    {
+      actor_profile_id: "actor:teamlead",
+      actor_kind: "teamlead",
+      actor_instance_id: "teamlead:main",
+      consumer_id: "teamlead",
+      consumer_kind: "teamlead",
+      lens_id: null,
+      applies_to: ["review_coordination"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    },
+    ...args.resolvedLensIds.map((lensId): ReviewActorConsumerBinding => ({
+      actor_profile_id: "actor:lens",
+      actor_kind: "lens",
+      actor_instance_id: `lens:${lensId}`,
+      consumer_id: consumerIdForLens(lensId),
+      consumer_kind: "lens",
+      lens_id: lensId,
+      applies_to: ["round1:lens"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    })),
+    ...args.resolvedLensIds.map((lensId): ReviewActorConsumerBinding => ({
+      actor_profile_id: "actor:lens",
+      actor_kind: "lens",
+      actor_instance_id: `lens:${lensId}`,
+      consumer_id: `deliberation:${lensId}`,
+      consumer_kind: "deliberation",
+      lens_id: lensId,
+      applies_to: ["controlled-lens-deliberation:lens-response"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    })),
+    ...ISSUE_ARTIFACT_IDS.map((artifactId): ReviewActorConsumerBinding => ({
+      actor_profile_id: "actor:teamlead",
+      actor_kind: "teamlead",
+      actor_instance_id: `issue-artifact:${artifactId}`,
+      consumer_id: issueArtifactConsumerId(artifactId),
+      consumer_kind: "issue_artifact",
+      lens_id: null,
+      applies_to: [`issue-artifact:${artifactId}`],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    })),
+    {
+      actor_profile_id: "actor:teamlead",
+      actor_kind: "teamlead",
+      actor_instance_id: "controlled-deliberation:teamlead",
+      consumer_id: "controlled-deliberation",
+      consumer_kind: "controlled-deliberation",
+      lens_id: null,
+      applies_to: ["controlled-lens-deliberation:teamlead"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    },
+    {
+      actor_profile_id: "actor:synthesize",
+      actor_kind: "synthesize",
+      actor_instance_id: "synthesize:main",
+      consumer_id: "synthesize",
+      consumer_kind: "synthesize",
+      lens_id: null,
+      applies_to: ["synthesize"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    },
+  ];
 }
 
 export function generateReviewSessionId(): string {
@@ -265,6 +485,16 @@ export async function writeInvocationInterpretationArtifact(
       rationale: params.rationale ?? [],
     },
     ambiguity_notes: params.ambiguityNotes ?? [],
+    ...(params.valueAlignmentConfirmed
+      ? {
+          value_alignment_confirmation: {
+            status: "confirmed",
+            confirmed_by: "user",
+            source_ref: "review invocation flag --confirm-value-alignment",
+            confirmed_at: isoNow(),
+          },
+        }
+      : {}),
   };
 
   const interpretationArtifactPath = path.join(
@@ -321,6 +551,26 @@ export async function bootstrapInvocationBindingArtifacts(
     executionPreparationRoot,
     "context-candidate-assembly.yaml",
   );
+  const actorInvocationProfilesPath = path.join(
+    executionPreparationRoot,
+    "actor-invocation-profiles.yaml",
+  );
+  const actorConsumerBindingsPath = path.join(
+    executionPreparationRoot,
+    "actor-consumer-bindings.yaml",
+  );
+  const domainBindingPath = path.join(
+    executionPreparationRoot,
+    "domain-binding.yaml",
+  );
+  const reviewValueAlignmentCriteriaPath = path.join(
+    executionPreparationRoot,
+    "review-value-alignment-criteria.yaml",
+  );
+  const reviewContextManifestPath = path.join(
+    executionPreparationRoot,
+    "review-context-manifest.yaml",
+  );
   const synthesisOutputPath = path.join(sessionRoot, "synthesis.md");
   const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
   const findingRelationGraphPath = path.join(
@@ -331,6 +581,10 @@ export async function bootstrapInvocationBindingArtifacts(
   const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
   const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
   const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
+  const lensCompletionBarrierPath = path.join(
+    sessionRoot,
+    "lens-completion-barrier.yaml",
+  );
   const deliberationOutputPath = path.join(sessionRoot, "deliberation.md");
   const executionResultPath = path.join(sessionRoot, "execution-result.yaml");
   const errorLogPath = path.join(sessionRoot, "error-log.md");
@@ -347,6 +601,7 @@ export async function bootstrapInvocationBindingArtifacts(
     issueStanceMatrixPath,
     deliberationPlanPath,
     problemFramingPath,
+    lensCompletionBarrierPath,
     synthesisOutputPath,
     deliberationOutputPath,
   ];
@@ -364,7 +619,10 @@ export async function bootstrapInvocationBindingArtifacts(
     : path.resolve(projectRoot, ".claude-plugin");
 
   const ontoConfigSubset = await loadOntoConfigForPlan(projectRoot);
-  const resolvedLlmPlan = derivePlanTimeLlmResolution(ontoConfigSubset);
+  const ontoConfig = params.ontoConfig ?? ontoConfigSubset;
+  const resolvedLlmPlan = derivePlanTimeLlmResolution(ontoConfig);
+  const reviewExecutionSettings =
+    resolveReviewExecutionSettingsForArtifacts(ontoConfig);
 
   const reviewSessionMetadata: ReviewSessionMetadata = {
     session_id: sessionId,
@@ -420,6 +678,11 @@ export async function bootstrapInvocationBindingArtifacts(
     target_snapshot_manifest_path: targetSnapshotManifestPath,
     materialized_input_path: materializedInputPath,
     context_candidate_assembly_path: contextCandidateAssemblyPath,
+    actor_invocation_profiles_path: actorInvocationProfilesPath,
+    actor_consumer_bindings_path: actorConsumerBindingsPath,
+    domain_binding_path: domainBindingPath,
+    review_value_alignment_criteria_path: reviewValueAlignmentCriteriaPath,
+    review_context_manifest_path: reviewContextManifestPath,
     synthesis_output_path: synthesisOutputPath,
     finding_ledger_path: findingLedgerPath,
     finding_relation_graph_path: findingRelationGraphPath,
@@ -427,6 +690,7 @@ export async function bootstrapInvocationBindingArtifacts(
     issue_stance_matrix_path: issueStanceMatrixPath,
     deliberation_plan_path: deliberationPlanPath,
     problem_framing_path: problemFramingPath,
+    lens_completion_barrier_path: lensCompletionBarrierPath,
     deliberation_mode: "controlled-lens-deliberation",
     deliberation_root_path: deliberationRootPath,
     deliberation_output_path: deliberationOutputPath,
@@ -462,38 +726,22 @@ export async function bootstrapInvocationBindingArtifacts(
       packet_path: path.join(promptPacketsRoot, `${lensId}.prompt.md`),
       output_path: path.join(round1Root, `${lensId}.md`),
     })),
-    issue_artifact_prompt_packet_seats: [
-      {
-        artifact_id: "finding-ledger",
-        packet_path: path.join(promptPacketsRoot, "finding-ledger.prompt.md"),
-        output_path: findingLedgerPath,
-      },
-      {
-        artifact_id: "finding-relation-graph",
-        packet_path: path.join(promptPacketsRoot, "finding-relation-graph.prompt.md"),
-        output_path: findingRelationGraphPath,
-      },
-      {
-        artifact_id: "issue-ledger",
-        packet_path: path.join(promptPacketsRoot, "issue-ledger.prompt.md"),
-        output_path: issueLedgerPath,
-      },
-      {
-        artifact_id: "issue-stance-matrix",
-        packet_path: path.join(promptPacketsRoot, "issue-stance-matrix.prompt.md"),
-        output_path: issueStanceMatrixPath,
-      },
-      {
-        artifact_id: "deliberation-plan",
-        packet_path: path.join(promptPacketsRoot, "deliberation-plan.prompt.md"),
-        output_path: deliberationPlanPath,
-      },
-      {
-        artifact_id: "problem-framing",
-        packet_path: path.join(promptPacketsRoot, "problem-framing.prompt.md"),
-        output_path: problemFramingPath,
-      },
-    ],
+    issue_artifact_prompt_packet_seats: ISSUE_ARTIFACT_IDS.map((artifactId) => {
+      const spec = issueArtifactSpec(artifactId);
+      const outputPaths: Record<ReviewIssueArtifactId, string> = {
+        "finding-ledger": findingLedgerPath,
+        "finding-relation-graph": findingRelationGraphPath,
+        "issue-ledger": issueLedgerPath,
+        "issue-stance-matrix": issueStanceMatrixPath,
+        "deliberation-plan": deliberationPlanPath,
+        "problem-framing": problemFramingPath,
+      };
+      return {
+        artifact_id: artifactId,
+        packet_path: path.join(promptPacketsRoot, spec.prompt_packet_file_name),
+        output_path: outputPaths[artifactId],
+      };
+    }),
     lens_deliberation_prompt_packet_seats: params.resolvedLensIds.map((lensId) => ({
       lens_id: lensId,
       packet_path: path.join(promptPacketsRoot, `${lensId}.deliberation.prompt.md`),
@@ -504,6 +752,11 @@ export async function bootstrapInvocationBindingArtifacts(
       "teamlead.deliberation.prompt.md",
     ),
     synthesize_prompt_packet_path: path.join(promptPacketsRoot, "synthesize.prompt.md"),
+    actor_invocation_profiles_path: actorInvocationProfilesPath,
+    actor_consumer_bindings_path: actorConsumerBindingsPath,
+    domain_binding_path: domainBindingPath,
+    review_value_alignment_criteria_path: reviewValueAlignmentCriteriaPath,
+    review_context_manifest_path: reviewContextManifestPath,
     synthesis_output_path: synthesisOutputPath,
     finding_ledger_path: findingLedgerPath,
     finding_relation_graph_path: findingRelationGraphPath,
@@ -511,6 +764,7 @@ export async function bootstrapInvocationBindingArtifacts(
     issue_stance_matrix_path: issueStanceMatrixPath,
     deliberation_plan_path: deliberationPlanPath,
     problem_framing_path: problemFramingPath,
+    lens_completion_barrier_path: lensCompletionBarrierPath,
     deliberation_mode: "controlled-lens-deliberation",
     deliberation_root_path: deliberationRootPath,
     deliberation_output_path: deliberationOutputPath,
@@ -522,12 +776,71 @@ export async function bootstrapInvocationBindingArtifacts(
     boundary_presentation: boundaryPresentation,
     boundary_enforcement_profile: boundaryEnforcementProfile,
     effective_boundary_state: effectiveBoundaryState,
+    minimum_participating_lenses: params.resolvedLensIds.length,
+  };
+
+  const actorInvocationProfiles: ReviewActorInvocationProfilesArtifact = {
+    schema_version: "1",
+    session_id: sessionId,
+    created_at: reviewSessionMetadata.created_at,
+    profiles: [
+      buildActorInvocationProfile({
+        actorKind: "teamlead",
+        seat: reviewExecutionSettings.teamlead.seat,
+        actorLlmRef: reviewExecutionSettings.teamlead.llm,
+        inheritedLlm: ontoConfig.llm,
+        executionRealization: params.executionRealization,
+        hostRuntime: params.hostRuntime,
+        runtimeProvider: params.runtimeProvider,
+        authMode: params.authMode,
+        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
+        sourceSettingsRefs: ["review.execution.teamlead.llm", "llm"],
+      }),
+      buildActorInvocationProfile({
+        actorKind: "lens",
+        seat: reviewExecutionSettings.lens.seat,
+        actorLlmRef: reviewExecutionSettings.lens.llm,
+        inheritedLlm: ontoConfig.llm,
+        executionRealization: params.executionRealization,
+        hostRuntime: params.hostRuntime,
+        runtimeProvider: params.runtimeProvider,
+        authMode: params.authMode,
+        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
+        sourceSettingsRefs: ["review.execution.lens.llm", "llm"],
+      }),
+      buildActorInvocationProfile({
+        actorKind: "synthesize",
+        seat: reviewExecutionSettings.synthesize.seat,
+        actorLlmRef: reviewExecutionSettings.synthesize.llm,
+        inheritedLlm: ontoConfig.llm,
+        executionRealization: params.executionRealization,
+        hostRuntime: params.hostRuntime,
+        runtimeProvider: params.runtimeProvider,
+        authMode: params.authMode,
+        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
+        sourceSettingsRefs: ["review.execution.synthesize.llm", "llm"],
+      }),
+    ],
+  };
+
+  const actorConsumerBindings: ReviewActorConsumerBindingsArtifact = {
+    schema_version: "1",
+    session_id: sessionId,
+    created_at: reviewSessionMetadata.created_at,
+    bindings: buildActorConsumerBindings({
+      sessionId,
+      resolvedLensIds: params.resolvedLensIds,
+      actorInvocationProfilesPath,
+      reviewContextManifestPath,
+    }),
   };
 
   await Promise.all([
     writeYamlDocument(sessionMetadataPath, reviewSessionMetadata),
     writeYamlDocument(bindingOutputPath, invocationBindingArtifact),
     writeYamlDocument(executionPlanPath, reviewExecutionPlan),
+    writeYamlDocument(actorInvocationProfilesPath, actorInvocationProfiles),
+    writeYamlDocument(actorConsumerBindingsPath, actorConsumerBindings),
   ]);
 
   return {

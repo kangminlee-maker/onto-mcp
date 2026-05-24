@@ -154,6 +154,9 @@ async function main(): Promise<number> {
       "execution-realization": { type: "string" },
       "execution-mode": { type: "string" },
       "host-runtime": { type: "string" },
+      "runtime-provider": { type: "string" },
+      "auth-mode": { type: "string" },
+      "effective-worker-executor": { type: "string" },
       codex: { type: "boolean", default: false },
       claude: { type: "boolean", default: false },
       "review-mode": { type: "string" },
@@ -200,6 +203,17 @@ async function main(): Promise<number> {
     ),
     executionRealization,
     hostRuntime,
+    ...(typeof values["runtime-provider"] === "string" &&
+    values["runtime-provider"].length > 0
+      ? { runtimeProvider: values["runtime-provider"] }
+      : {}),
+    ...(typeof values["auth-mode"] === "string" && values["auth-mode"].length > 0
+      ? { authMode: values["auth-mode"] === "none" ? null : values["auth-mode"] }
+      : {}),
+    ...(typeof values["effective-worker-executor"] === "string" &&
+    values["effective-worker-executor"].length > 0
+      ? { effectiveWorkerExecutor: values["effective-worker-executor"] }
+      : {}),
     reviewMode: requireReviewMode(requireString(values["review-mode"], "review-mode")),
     resolvedLensIds,
     bindingNotes: values["binding-note"],

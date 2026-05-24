@@ -7,7 +7,20 @@ import {
   createOntoReviewCoreApi,
   type PrepareReviewRequest,
 } from "../core-api/review-api.js";
+import {
+  OntoSettingsValidationError,
+  UnsupportedOntoConfigFilesError,
+} from "../core-runtime/discovery/settings-chain.js";
 import { readOntoVersion } from "../core-runtime/release-channel/release-channel.js";
+import {
+  createStructuredFailureRecord,
+  ReviewStructuredFailureError,
+} from "../core-runtime/review/failure-records.js";
+import {
+  buildReviewRouteVisibilityFromFailure,
+} from "../core-runtime/review/route-visibility.js";
+import type { ReviewStructuredFailureRecord } from "../core-runtime/review/artifact-types.js";
+import { fileExists, readYamlDocument } from "../core-runtime/review/review-artifact-utils.js";
 import {
   OntoListDomainsToolInputSchema,
   OntoPrepareReviewToolInputSchema,
@@ -75,11 +88,6 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       items: { type: "string" },
       description: "Optional explicit lens ids. Omit to use reviewMode defaults.",
     },
-    maxConcurrentLenses: {
-      type: "integer",
-      minimum: 1,
-      description: "Upper bound for parallel isolated lens execution.",
-    },
     deliberation: {
       type: "string",
       enum: ["controlled_lens_deliberation"],
@@ -89,6 +97,11 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["codex", "mock", "ts_inline_http"],
       description: "Debug/testing override. Normal callers should omit this and use project config.",
+    },
+    confirmValueAlignment: {
+      type: "boolean",
+      description:
+        "Explicitly confirms review value-alignment criteria when the invocation contains known ambiguity. Omit unless the user has confirmed the criteria.",
     },
     prepareOnly: {
       type: "boolean",
@@ -105,6 +118,11 @@ const SESSION_INPUT_SCHEMA: JsonValue = {
     sessionRoot: {
       type: "string",
       description: "Absolute or project-relative review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
     },
   },
 };
@@ -177,11 +195,11 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
     ...(parsed.noDomain !== undefined ? { noDomain: parsed.noDomain } : {}),
     ...(parsed.reviewMode !== undefined ? { reviewMode: parsed.reviewMode } : {}),
     ...(parsed.lensIds !== undefined ? { lensIds: parsed.lensIds } : {}),
-    ...(parsed.maxConcurrentLenses !== undefined
-      ? { maxConcurrentLenses: parsed.maxConcurrentLenses }
-      : {}),
     ...(parsed.executorRealization !== undefined
       ? { executorRealization: parsed.executorRealization }
+      : {}),
+    ...(parsed.confirmValueAlignment !== undefined
+      ? { confirmValueAlignment: parsed.confirmValueAlignment }
       : {}),
   };
   return request;
@@ -195,12 +213,187 @@ function formatToolResult(data: unknown): JsonValue {
   };
 }
 
-function formatToolError(error: unknown): JsonValue {
+function structuredFailureFromError(error: unknown): {
+  failure: ReviewStructuredFailureRecord;
+  failureRecordPath: string | null;
+} | null {
+  if (error instanceof ReviewStructuredFailureError) {
+    return {
+      failure: error.failureRecord,
+      failureRecordPath: error.failureRecordPath,
+    };
+  }
+  if (error instanceof UnsupportedOntoConfigFilesError) {
+    return {
+      failure: error.failureRecord,
+      failureRecordPath: null,
+    };
+  }
+  if (error instanceof OntoSettingsValidationError) {
+    return {
+      failure: error.failureRecord,
+      failureRecordPath: null,
+    };
+  }
+  return null;
+}
+
+async function formatToolError(error: unknown): Promise<JsonValue> {
   const message = error instanceof Error ? error.message : String(error);
+  const structuredFailure = structuredFailureFromError(error);
+  const routeVisibility = structuredFailure
+    ? await buildReviewRouteVisibilityFromFailure(
+        structuredFailure.failure,
+        structuredFailure.failureRecordPath,
+      )
+    : null;
   return {
     isError: true,
     content: [{ type: "text", text: message }],
+    ...(structuredFailure
+      ? {
+          structuredContent: {
+            failure: structuredFailure.failure as unknown as JsonValue,
+            failureRecordPath: structuredFailure.failureRecordPath,
+            ...(routeVisibility
+              ? { routeVisibility: routeVisibility as unknown as JsonValue }
+              : {}),
+          },
+        }
+      : {}),
   };
+}
+
+function isInsidePath(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function realpathIfExists(targetPath: string): Promise<string | null> {
+  try {
+    return await fs.realpath(targetPath);
+  } catch {
+    return null;
+  }
+}
+
+function throwSessionDisclosureBlocked(args: {
+  requestedSessionRoot: string;
+  resolvedSessionRoot: string;
+  realSessionRoot: string | null;
+  projectRoot: string;
+  realProjectRoot: string | null;
+  allowedRoot: string;
+  realAllowedRoot: string | null;
+  reasonCode: string;
+  humanMessage: string;
+}): never {
+  throw new ReviewStructuredFailureError({
+    failureRecord: createStructuredFailureRecord({
+      phase: "mcp.session_disclosure",
+      reasonCode: args.reasonCode,
+      humanMessage: args.humanMessage,
+      requiredUserAction:
+        "Pass a sessionRoot owned by the selected projectRoot .onto/review directory.",
+      retrySafety: "safe_after_input_change",
+      artifactTrust: "no_artifacts_trusted",
+      dispatchState: "not_dispatched",
+      artifactRefs: {},
+      mcpErrorCode: "ONTO_REVIEW_SECURITY_DISCLOSURE_BLOCKED",
+      detailsKind: "security_disclosure",
+      details: {
+        requested_session_root: args.requestedSessionRoot,
+        resolved_session_root: args.resolvedSessionRoot,
+        real_session_root: args.realSessionRoot,
+        project_root: args.projectRoot,
+        real_project_root: args.realProjectRoot,
+        allowed_root: args.allowedRoot,
+        real_allowed_root: args.realAllowedRoot,
+      },
+    }),
+    failureRecordPath: null,
+  });
+}
+
+async function resolveAllowedSessionRoot(args: {
+  sessionRoot: string;
+  projectRoot?: string | undefined;
+}): Promise<string> {
+  const projectRoot = path.resolve(args.projectRoot ?? process.cwd());
+  const allowedRoot = path.join(projectRoot, ".onto", "review");
+  const resolvedSessionRoot = path.resolve(projectRoot, args.sessionRoot);
+  const realProjectRoot = await realpathIfExists(projectRoot);
+  const realAllowedRoot = await realpathIfExists(allowedRoot);
+
+  if (!isInsidePath(allowedRoot, resolvedSessionRoot)) {
+    throwSessionDisclosureBlocked({
+      requestedSessionRoot: args.sessionRoot,
+      resolvedSessionRoot,
+      realSessionRoot: null,
+      projectRoot,
+      realProjectRoot,
+      allowedRoot,
+      realAllowedRoot,
+      reasonCode: "review_session_root_outside_project_boundary",
+      humanMessage:
+        "MCP review session read was blocked because the sessionRoot is outside the project review boundary.",
+    });
+  }
+
+  const realSessionRoot = await realpathIfExists(resolvedSessionRoot);
+  if (
+    realSessionRoot &&
+    realAllowedRoot &&
+    !isInsidePath(realAllowedRoot, realSessionRoot)
+  ) {
+    throwSessionDisclosureBlocked({
+      requestedSessionRoot: args.sessionRoot,
+      resolvedSessionRoot,
+      realSessionRoot,
+      projectRoot,
+      realProjectRoot,
+      allowedRoot,
+      realAllowedRoot,
+      reasonCode: "review_session_root_realpath_escape",
+      humanMessage:
+        "MCP review session read was blocked because the sessionRoot realpath escapes the project review boundary.",
+    });
+  }
+
+  const canonicalSessionRoot = realSessionRoot ?? resolvedSessionRoot;
+  const metadataPath = path.join(canonicalSessionRoot, "session-metadata.yaml");
+  if (await fileExists(metadataPath)) {
+    const metadata = await readYamlDocument<{ project_root?: unknown }>(metadataPath);
+    const recordedProjectRoot =
+      typeof metadata.project_root === "string"
+        ? path.resolve(metadata.project_root)
+        : null;
+    const realRecordedProjectRoot = recordedProjectRoot
+      ? await realpathIfExists(recordedProjectRoot)
+      : null;
+    const projectRootForComparison = realProjectRoot ?? projectRoot;
+    const recordedForComparison =
+      realRecordedProjectRoot ?? recordedProjectRoot;
+    if (
+      !recordedForComparison ||
+      path.resolve(recordedForComparison) !== path.resolve(projectRootForComparison)
+    ) {
+      throwSessionDisclosureBlocked({
+        requestedSessionRoot: args.sessionRoot,
+        resolvedSessionRoot,
+        realSessionRoot,
+        projectRoot,
+        realProjectRoot,
+        allowedRoot,
+        realAllowedRoot,
+        reasonCode: "review_session_root_project_owner_mismatch",
+        humanMessage:
+          "MCP review session read was blocked because the session metadata is owned by a different projectRoot.",
+      });
+    }
+  }
+
+  return canonicalSessionRoot;
 }
 
 async function callTool(name: string, args: unknown): Promise<JsonValue> {
@@ -222,11 +415,13 @@ async function callTool(name: string, args: unknown): Promise<JsonValue> {
       }
       case "onto.review_status": {
         const parsed = OntoReviewSessionInputSchema.parse(args);
-        return formatToolResult(await api.getReviewStatus(parsed.sessionRoot));
+        const sessionRoot = await resolveAllowedSessionRoot(parsed);
+        return formatToolResult(await api.getReviewStatus(sessionRoot));
       }
       case "onto.review_result": {
         const parsed = OntoReviewSessionInputSchema.parse(args);
-        return formatToolResult(await api.getReviewResult(parsed.sessionRoot));
+        const sessionRoot = await resolveAllowedSessionRoot(parsed);
+        return formatToolResult(await api.getReviewResult(sessionRoot));
       }
       case "onto.list_lenses":
         return formatToolResult(await api.listLenses());

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import crypto from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -9,18 +10,26 @@ import { pathToFileURL } from "node:url";
 import type {
   InvocationBindingArtifact,
   InvocationInterpretationArtifact,
+  ReviewContextManifestArtifact,
+  ReviewContextManifestPacketRef,
+  ReviewContextSource,
+  ReviewDomainBindingArtifact,
+  ReviewDomainDocumentBinding,
   ReviewExecutionPlan,
   ReviewLensPromptPacketSeat,
   ReviewSessionMetadata,
+  ReviewValueAlignmentCriteriaArtifact,
 } from "../review/artifact-types.js";
 import {
   fileExists,
+  isoNow,
   readYamlDocument,
   writeYamlDocument,
   toRelativePath,
   truncateForEmbedding,
 } from "../review/review-artifact-utils.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
+import { writeAndThrowStructuredFailureRecord } from "../review/failure-records.js";
 import {
   loadLearningsForSession,
   renderLearningSection,
@@ -34,6 +43,10 @@ import {
 } from "../learning/prompt-sections.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
 import { isOntoRoot } from "../discovery/onto-home.js";
+import {
+  ISSUE_ARTIFACT_IDS,
+  issueArtifactConsumerId,
+} from "../review/issue-artifact-runtime.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -280,6 +293,463 @@ function scanDomainFiles(domainDir: string): string[] {
   }
 }
 
+function consumerIdForLens(lensId: string): string {
+  return `lens:${lensId}`;
+}
+
+function allReviewConsumers(lensIds: string[]): string[] {
+  return [
+    "teamlead",
+    ...lensIds.map(consumerIdForLens),
+    ...lensIds.map((lensId) => `deliberation:${lensId}`),
+    ...ISSUE_ARTIFACT_IDS.map(issueArtifactConsumerId),
+    "controlled-deliberation",
+    "synthesize",
+    "final-output",
+    "review-record",
+  ];
+}
+
+async function fileSha256(filePath: string): Promise<string> {
+  const content = await fs.readFile(filePath);
+  return crypto.createHash("sha256").update(content).digest("hex");
+}
+
+async function optionalFileSha256(filePath: string): Promise<string | null> {
+  if (!(await fileExists(filePath))) return null;
+  return fileSha256(filePath);
+}
+
+function requiredDomainFileNamesForLenses(lensIds: string[]): string[] {
+  return [
+    ...new Set(
+      lensIds
+        .map((lensId) => LENS_DOMAIN_FILE_MAP[lensId])
+        .filter((fileName): fileName is string => typeof fileName === "string"),
+    ),
+  ].sort();
+}
+
+async function buildDomainDocumentBinding(args: {
+  filePath: string;
+  required: boolean;
+  allowedConsumers: string[];
+}): Promise<ReviewDomainDocumentBinding> {
+  const exists = await fileExists(args.filePath);
+  return {
+    doc_id: path.basename(args.filePath, ".md"),
+    path: args.filePath,
+    required: args.required,
+    status: exists ? "present" : "missing",
+    sha256: exists ? await fileSha256(args.filePath) : null,
+    allowed_consumers: args.allowedConsumers,
+  };
+}
+
+function domainDocumentAllowedConsumers(
+  fileName: string,
+  lensIds: string[],
+): string[] {
+  if (fileName === "problem_framing_profile.md") {
+    return [issueArtifactConsumerId("problem-framing"), "review-record"];
+  }
+  const lensIdsMappedToFile = Object.entries(LENS_DOMAIN_FILE_MAP)
+    .filter(([, mappedFileName]) => mappedFileName === fileName)
+    .map(([lensId]) => lensId);
+  const mappedLensIds = lensIds.filter(
+    (lensId) => LENS_DOMAIN_FILE_MAP[lensId] === fileName,
+  );
+  if (mappedLensIds.length > 0) {
+    return [
+      ...mappedLensIds.map(consumerIdForLens),
+      ...mappedLensIds.map((lensId) => `deliberation:${lensId}`),
+      "review-record",
+    ];
+  }
+  if (lensIdsMappedToFile.length > 0) {
+    return ["review-record"];
+  }
+  return [
+    ...lensIds.map(consumerIdForLens),
+    ...lensIds.map((lensId) => `deliberation:${lensId}`),
+    "review-record",
+  ];
+}
+
+function domainContextSourceKind(
+  doc: ReviewDomainDocumentBinding,
+): string {
+  if (doc.doc_id === "problem_framing_profile") {
+    return "domain_problem_framing_profile";
+  }
+  return doc.required ? "domain_required_doc" : "domain_optional_doc";
+}
+
+function domainFilesAllowedForConsumer(
+  contextManifest: ReviewContextManifestArtifact,
+  consumerId: string,
+): string[] {
+  return contextManifest.context_sources
+    .filter(
+      (source) =>
+        source.context_source_id.startsWith("domain:") &&
+        source.allowed_consumers.includes(consumerId),
+    )
+    .map((source) => source.source_ref);
+}
+
+function deriveContextAccessMatrix(
+  contextSources: ReviewContextSource[],
+): Record<string, string[]> {
+  const matrix: Record<string, string[]> = {};
+  for (const source of contextSources) {
+    for (const consumerId of source.allowed_consumers) {
+      matrix[consumerId] = [
+        ...(matrix[consumerId] ?? []),
+        source.context_source_id,
+      ];
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(matrix).map(([consumerId, sourceIds]) => [
+      consumerId,
+      [...new Set(sourceIds)].sort(),
+    ]),
+  );
+}
+
+function validateContextAccessMatrix(
+  contextSources: ReviewContextSource[],
+  matrix: Record<string, string[]>,
+): void {
+  const expected = deriveContextAccessMatrix(contextSources);
+  const expectedText = JSON.stringify(expected);
+  const actualText = JSON.stringify(matrix);
+  if (actualText !== expectedText) {
+    throw new Error(
+      `review-context-manifest derived_context_access_matrix does not match context_sources[].allowed_consumers.`,
+    );
+  }
+}
+
+function makeValueAlignmentCriteria(args: {
+  sessionId: string;
+  interpretationPath: string;
+  interpretation: InvocationInterpretationArtifact;
+}): ReviewValueAlignmentCriteriaArtifact {
+  const hasAmbiguity = args.interpretation.ambiguity_notes.length > 0;
+  const userConfirmed =
+    args.interpretation.value_alignment_confirmation?.status === "confirmed";
+  const confirmationRequired = hasAmbiguity && !userConfirmed;
+  const ambiguityResolved = !hasAmbiguity || userConfirmed;
+  const dispatchDecision = confirmationRequired
+    ? "block_for_confirmation"
+    : "allow_dispatch";
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    dispatch_state: confirmationRequired ? "blocked" : "allow_dispatch",
+    criteria: [
+      {
+        criterion_id: "user-request-intent",
+        statement: args.interpretation.intent_summary,
+        source_kind: "invocation_interpretation",
+        source_ref: args.interpretationPath,
+        authority_rank: 1,
+        inference_owner: "main",
+        confidence: confirmationRequired ? 0.7 : 1,
+        confidence_basis: confirmationRequired
+          ? "explicit invocation intent has ambiguity notes that require user confirmation"
+          : userConfirmed
+            ? "explicit invocation intent ambiguity confirmed by user"
+            : "explicit invocation intent summary",
+        confirmation_status: confirmationRequired ? "pending_confirmation" : "confirmed",
+        ambiguity_status: ambiguityResolved ? "clear" : "ambiguous",
+        conflict_status: "none",
+        lifecycle_state: confirmationRequired ? "pending_confirmation" : "confirmed",
+        lineage_ref: args.interpretationPath,
+        dispatch_decision: dispatchDecision,
+      },
+    ],
+  };
+}
+
+async function ensureValueAlignmentDispatchAllowed(args: {
+  sessionRoot: string;
+  valueAlignmentCriteriaPath: string;
+  valueAlignmentCriteria: ReviewValueAlignmentCriteriaArtifact;
+  interpretationPath: string;
+  bindingPath: string;
+}): Promise<void> {
+  if (args.valueAlignmentCriteria.dispatch_state === "allow_dispatch") {
+    return;
+  }
+  const blockingCriteria = args.valueAlignmentCriteria.criteria.filter(
+    (criterion) => criterion.dispatch_decision !== "allow_dispatch",
+  );
+  await writeAndThrowStructuredFailureRecord({
+    sessionRoot: args.sessionRoot,
+    phase: "pre_manifest.value_alignment_gate",
+    reasonCode: "review_value_alignment_dispatch_blocked",
+    humanMessage:
+      "Review value-alignment criteria require confirmation before lens dispatch.",
+    requiredUserAction:
+      "Confirm, revise, or narrow the review purpose/value criteria before starting dispatch.",
+    retrySafety: "safe_after_input_change",
+    artifactTrust: "pre_manifest_artifacts_trusted",
+    dispatchState: "dispatch_blocked",
+    artifactRefs: {
+      interpretation: args.interpretationPath,
+      binding: args.bindingPath,
+      review_value_alignment_criteria: args.valueAlignmentCriteriaPath,
+    },
+    mcpErrorCode: "ONTO_REVIEW_VALUE_ALIGNMENT_BLOCKED",
+    detailsKind: "value_alignment_gate",
+    details: {
+      dispatch_state: args.valueAlignmentCriteria.dispatch_state,
+      blocking_criteria: blockingCriteria.map((criterion) => ({
+        criterion_id: criterion.criterion_id,
+        dispatch_decision: criterion.dispatch_decision,
+        confirmation_status: criterion.confirmation_status,
+        ambiguity_status: criterion.ambiguity_status,
+        conflict_status: criterion.conflict_status,
+        lifecycle_state: criterion.lifecycle_state,
+      })),
+    },
+  });
+}
+
+async function writePreManifestContextArtifacts(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  binding: InvocationBindingArtifact;
+  interpretationPath: string;
+  interpretation: InvocationInterpretationArtifact;
+  sessionMetadataPath: string;
+  contextCandidateAssemblyPath: string;
+  lensIds: string[];
+  isNoDomain: boolean;
+  resolvedDomainDir: string | null;
+  domainResolutionAttempts: string[];
+  domainAllFiles: string[];
+}): Promise<ReviewContextManifestArtifact> {
+  const domainBindingPath =
+    args.executionPlan.domain_binding_path ??
+    path.join(args.sessionRoot, "execution-preparation", "domain-binding.yaml");
+  const reviewValueAlignmentCriteriaPath =
+    args.executionPlan.review_value_alignment_criteria_path ??
+    path.join(
+      args.sessionRoot,
+      "execution-preparation",
+      "review-value-alignment-criteria.yaml",
+    );
+  const actorConsumerBindingsPath =
+    args.executionPlan.actor_consumer_bindings_path ??
+    path.join(args.sessionRoot, "execution-preparation", "actor-consumer-bindings.yaml");
+  const reviewContextManifestPath =
+    args.executionPlan.review_context_manifest_path ??
+    path.join(args.sessionRoot, "execution-preparation", "review-context-manifest.yaml");
+
+  const requiredDomainFileNames = args.isNoDomain
+    ? []
+    : requiredDomainFileNamesForLenses(args.lensIds);
+  const requiredDomainDocs = await Promise.all(
+    requiredDomainFileNames.map((fileName) =>
+      buildDomainDocumentBinding({
+        filePath: path.join(args.resolvedDomainDir ?? "", fileName),
+        required: true,
+        allowedConsumers: domainDocumentAllowedConsumers(
+          fileName,
+          args.lensIds,
+        ),
+      }),
+    ),
+  );
+  const missingRequiredDocs = requiredDomainDocs.filter(
+    (doc) => doc.status === "missing",
+  );
+  if (missingRequiredDocs.length > 0) {
+    const blockedDomainBinding: ReviewDomainBindingArtifact = {
+      schema_version: "1",
+      session_id: args.executionPlan.session_id,
+      created_at: isoNow(),
+      selected_domain: args.binding.resolved_session_domain,
+      selection_mode: args.binding.domain_final_selection.selection_mode,
+      domain_sentinel: false,
+      domain_directory: args.resolvedDomainDir,
+      attempted_directories: args.domainResolutionAttempts,
+      validation_status: "blocked",
+      required_docs: requiredDomainDocs,
+      optional_docs: [],
+    };
+    await writeYamlDocument(domainBindingPath, blockedDomainBinding);
+    await writeAndThrowStructuredFailureRecord({
+      sessionRoot: args.sessionRoot,
+      phase: "pre_manifest.domain_binding",
+      reasonCode: "required_domain_docs_missing",
+      humanMessage: `Required domain document(s) are missing for domain ${args.binding.resolved_session_domain}.`,
+      requiredUserAction:
+        "Add the missing required domain document(s), choose another domain, or run with domain=none.",
+      retrySafety: "safe_after_input_change",
+      artifactTrust: "pre_manifest_artifacts_trusted",
+      dispatchState: "dispatch_blocked",
+      artifactRefs: {
+        binding: args.binding.binding_output_path,
+        domain_binding: domainBindingPath,
+      },
+      mcpErrorCode: "ONTO_REVIEW_DOMAIN_BINDING_FAILED",
+      detailsKind: "domain_binding",
+      details: {
+        selected_domain: args.binding.resolved_session_domain,
+        missing_required_docs: missingRequiredDocs.map((doc) => doc.path),
+      },
+    });
+  }
+
+  const requiredPaths = new Set(requiredDomainDocs.map((doc) => doc.path));
+  const optionalDomainDocs = await Promise.all(
+    args.domainAllFiles
+      .filter((filePath) => !requiredPaths.has(filePath))
+      .map((filePath) =>
+        buildDomainDocumentBinding({
+          filePath,
+          required: false,
+          allowedConsumers: domainDocumentAllowedConsumers(
+            path.basename(filePath),
+            args.lensIds,
+          ),
+        }),
+      ),
+  );
+  const domainBinding: ReviewDomainBindingArtifact = {
+    schema_version: "1",
+    session_id: args.executionPlan.session_id,
+    created_at: isoNow(),
+    selected_domain: args.binding.resolved_session_domain,
+    selection_mode: args.binding.domain_final_selection.selection_mode,
+    domain_sentinel: args.isNoDomain,
+    domain_directory: args.resolvedDomainDir,
+    attempted_directories: args.domainResolutionAttempts,
+    validation_status: "valid",
+    required_docs: requiredDomainDocs,
+    optional_docs: optionalDomainDocs,
+  };
+
+  const valueAlignmentCriteria = makeValueAlignmentCriteria({
+    sessionId: args.executionPlan.session_id,
+    interpretationPath: args.interpretationPath,
+    interpretation: args.interpretation,
+  });
+  await writeYamlDocument(domainBindingPath, domainBinding);
+  await writeYamlDocument(reviewValueAlignmentCriteriaPath, valueAlignmentCriteria);
+  await ensureValueAlignmentDispatchAllowed({
+    sessionRoot: args.sessionRoot,
+    valueAlignmentCriteriaPath: reviewValueAlignmentCriteriaPath,
+    valueAlignmentCriteria,
+    interpretationPath: args.interpretationPath,
+    bindingPath: args.binding.binding_output_path,
+  });
+
+  const allConsumers = allReviewConsumers(args.lensIds);
+  const contextSources: ReviewContextSource[] = [
+    {
+      context_source_id: "materialized-input",
+      source_kind: "materialized_input",
+      source_ref: args.binding.materialized_input_path,
+      source_sha256: await optionalFileSha256(args.binding.materialized_input_path),
+      required: true,
+      sensitivity: "internal",
+      allowed_consumers: allConsumers,
+    },
+    {
+      context_source_id: "target-snapshot",
+      source_kind: "target_snapshot",
+      source_ref: args.binding.target_snapshot_path,
+      source_sha256: await optionalFileSha256(args.binding.target_snapshot_path),
+      required: true,
+      sensitivity: "internal",
+      allowed_consumers: allConsumers,
+    },
+    {
+      context_source_id: "context-candidate-assembly",
+      source_kind: "context_candidate_assembly",
+      source_ref: args.contextCandidateAssemblyPath,
+      source_sha256: await optionalFileSha256(args.contextCandidateAssemblyPath),
+      required: true,
+      sensitivity: "internal",
+      allowed_consumers: allConsumers,
+    },
+    {
+      context_source_id: "review-value-alignment-criteria",
+      source_kind: "review_value_alignment_criteria",
+      source_ref: reviewValueAlignmentCriteriaPath,
+      source_sha256: await optionalFileSha256(reviewValueAlignmentCriteriaPath),
+      required: true,
+      sensitivity: "internal",
+      allowed_consumers: allConsumers,
+    },
+    ...[...requiredDomainDocs, ...optionalDomainDocs]
+      .filter((doc) => doc.status === "present")
+      .map((doc): ReviewContextSource => ({
+        context_source_id: `domain:${doc.doc_id}`,
+        source_kind: domainContextSourceKind(doc),
+        source_ref: doc.path,
+        source_sha256: doc.sha256,
+        required: doc.required,
+        sensitivity: "internal",
+        allowed_consumers: doc.allowed_consumers,
+      })),
+  ];
+  const derivedContextAccessMatrix = deriveContextAccessMatrix(contextSources);
+  validateContextAccessMatrix(contextSources, derivedContextAccessMatrix);
+
+  const contextManifest: ReviewContextManifestArtifact = {
+    schema_version: "1",
+    producer: "onto-review-runtime",
+    producer_version: "review-runtime-settings-domain-axiology-plan-20260523",
+    settings_schema_version: "settings.json/v1",
+    domain_registry_version: "domain-docs/v1",
+    alignment_contract_version: "review-value-alignment-criteria/v1",
+    lifecycle_state: "validated",
+    session_id: args.executionPlan.session_id,
+    target_refs: args.binding.resolved_target_scope.resolved_refs,
+    domain_binding_ref: domainBindingPath,
+    review_value_alignment_criteria_ref: reviewValueAlignmentCriteriaPath,
+    actor_consumer_bindings_ref: actorConsumerBindingsPath,
+    context_sources: contextSources,
+    derived_context_access_matrix: derivedContextAccessMatrix,
+    packet_refs: [],
+    validation_results: [
+      "domain_binding_valid",
+      "review_value_alignment_dispatch_allowed",
+      "context_access_matrix_valid",
+    ],
+    failure_record_refs: [],
+  };
+
+  await writeYamlDocument(reviewContextManifestPath, contextManifest);
+  return contextManifest;
+}
+
+async function updateContextManifestPacketRefs(args: {
+  contextManifest: ReviewContextManifestArtifact;
+  contextManifestPath: string;
+  packetRefs: ReviewContextManifestPacketRef[];
+}): Promise<void> {
+  const updated: ReviewContextManifestArtifact = {
+    ...args.contextManifest,
+    lifecycle_state: "dispatched",
+    packet_refs: args.packetRefs,
+    validation_results: [
+      ...args.contextManifest.validation_results,
+      "packet_refs_materialized",
+    ],
+  };
+  await writeYamlDocument(args.contextManifestPath, updated);
+}
+
 /**
  * Resolve a role file inside `{baseDir}/.onto/roles/`.
  *
@@ -389,6 +859,7 @@ export async function runMaterializeReviewPromptPacketsCli(
   const synthesizePromptPacketPath =
     executionPlan.synthesize_prompt_packet_path ??
     path.join(promptPacketsRoot, "synthesize.prompt.md");
+  const lensIds = lensPromptPacketSeats.map((s) => s.lens_id);
 
   await fs.mkdir(promptPacketsRoot, { recursive: true });
 
@@ -400,16 +871,40 @@ export async function runMaterializeReviewPromptPacketsCli(
   const sessionDomain = binding.resolved_session_domain;
   const isNoDomain = !sessionDomain || sessionDomain === "none" || sessionDomain === "@-";
   let resolvedDomainDir: string | null = null;
+  let domainResolutionAttempts: string[] = [];
   let domainAllFiles: string[] = [];
   if (!isNoDomain) {
     const resolution = resolveDomainDirectory(sessionDomain, projectRoot, ontoHome);
+    domainResolutionAttempts = resolution.attempted;
     resolvedDomainDir = resolution.dir;
     if (!resolvedDomainDir) {
       const searchedList = resolution.attempted.map((p) => `  - ${p}`).join("\n");
-      throw new Error(
-        `Domain directory not found for "${sessionDomain}".\n` +
-        `Searched ${resolution.attempted.length} location(s):\n${searchedList}`,
-      );
+      await writeAndThrowStructuredFailureRecord({
+        sessionRoot,
+        phase: "pre_manifest.domain_binding",
+        reasonCode: "domain_directory_not_found",
+        humanMessage:
+          `Domain directory not found for "${sessionDomain}". Searched ${resolution.attempted.length} location(s).`,
+        requiredUserAction:
+          "Create the domain directory, choose another domain, or run with domain=none.",
+        retrySafety: "safe_after_input_change",
+        artifactTrust: "pre_manifest_artifacts_trusted",
+        dispatchState: "dispatch_blocked",
+        artifactRefs: {
+          binding: bindingPath,
+          execution_plan: executionPlanPath,
+          domain_binding:
+            executionPlan.domain_binding_path ??
+            path.join(sessionRoot, "execution-preparation", "domain-binding.yaml"),
+        },
+        mcpErrorCode: "ONTO_REVIEW_DOMAIN_BINDING_FAILED",
+        detailsKind: "domain_binding",
+        details: {
+          selected_domain: sessionDomain,
+          attempted_directories: resolution.attempted,
+        },
+      });
+      throw new Error(searchedList);
     }
     domainAllFiles = scanDomainFiles(resolvedDomainDir);
   }
@@ -421,7 +916,6 @@ export async function runMaterializeReviewPromptPacketsCli(
   // C-1~C-4, C-7: Load learnings for all lens agents
   // ONTO_LEARNING_LOAD_DISABLED=1: skip learning loading entirely
   const learningDisabled = process.env.ONTO_LEARNING_LOAD_DISABLED === "1";
-  const lensIds = lensPromptPacketSeats.map((s) => s.lens_id);
   const learningDomain = isNoDomain ? null : sessionDomain;
   const { results: learningResults, manifest: learningManifest } = learningDisabled
     ? { results: [], manifest: { session_domain: learningDomain ?? "none", agents_loaded: 0, total_items_loaded: 0, total_items_parsed: 0, total_items_skipped: 0, per_agent: [] as LearningLoadManifest["per_agent"], learning_file_paths: [] as string[], degraded: false, degradation_reason: null } }
@@ -439,7 +933,59 @@ export async function runMaterializeReviewPromptPacketsCli(
     }
   }
 
+  if (domainAllFiles.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
+    const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
+    const existingRefs = Array.isArray(assembly?.domain_context_refs) ? assembly.domain_context_refs as string[] : [];
+    const mergedRefs = [...new Set([...existingRefs, ...domainAllFiles])];
+    if (mergedRefs.length > existingRefs.length) {
+      (assembly as Record<string, unknown>).domain_context_refs = mergedRefs;
+      await writeYamlDocument(contextCandidateAssemblyPath, assembly);
+    }
+  }
+
+  if (learningManifest.learning_file_paths.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
+    const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
+    const existingLearningRefs = Array.isArray(assembly?.learning_context_refs) ? assembly.learning_context_refs as string[] : [];
+    const mergedLearningRefs = [...new Set([...existingLearningRefs, ...learningManifest.learning_file_paths])];
+    if (mergedLearningRefs.length > existingLearningRefs.length) {
+      (assembly as Record<string, unknown>).learning_context_refs = mergedLearningRefs;
+      await writeYamlDocument(contextCandidateAssemblyPath, assembly);
+    }
+  }
+
+  if (learningManifest.total_items_loaded > 0) {
+    const manifestPath = path.join(sessionRoot, "execution-preparation", "learning-manifest.yaml");
+    await writeYamlDocument(manifestPath, learningManifest);
+  }
+
+  const reviewContextManifest = await writePreManifestContextArtifacts({
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    binding,
+    interpretationPath,
+    interpretation,
+    sessionMetadataPath,
+    contextCandidateAssemblyPath,
+    lensIds,
+    isNoDomain,
+    resolvedDomainDir,
+    domainResolutionAttempts,
+    domainAllFiles,
+  });
+  const reviewContextManifestPath =
+    executionPlan.review_context_manifest_path ??
+    path.join(sessionRoot, "execution-preparation", "review-context-manifest.yaml");
+  const packetRefs: ReviewContextManifestPacketRef[] = [];
+
   for (const seat of lensPromptPacketSeats) {
+    const consumerId = consumerIdForLens(seat.lens_id);
+    const allowedContextSourceIds =
+      reviewContextManifest.derived_context_access_matrix[consumerId] ?? [];
+    const allowedDomainFiles = domainFilesAllowedForConsumer(
+      reviewContextManifest,
+      consumerId,
+    );
     const roleDefinitionPath = resolveRoleDefinitionPath(seat.lens_id, projectRoot, ontoHome);
     const roleDefinitionText = await readOptionalText(roleDefinitionPath);
     if (roleDefinitionText.trim().length === 0) {
@@ -474,6 +1020,7 @@ ${roleDefinitionText.trim().length > 0 ? `${roleDefinitionText.trim()}\n` : ""}
 - role definition: ${toRelativePath(roleDefinitionPath, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- review context manifest: ${toRelativePath(reviewContextManifestPath, projectRoot)}
 
 ## Embedded Materialized Input
 
@@ -483,6 +1030,10 @@ ${materializedInputText.trim().length > 0 ? truncateForEmbedding(materializedInp
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
 - target snapshot: ${toRelativePath(binding.target_snapshot_path, projectRoot)}
 - context candidate assembly: ${toRelativePath(contextCandidateAssemblyPath, projectRoot)}
+- domain binding: ${toRelativePath(executionPlan.domain_binding_path ?? path.join(sessionRoot, "execution-preparation", "domain-binding.yaml"), projectRoot)}
+- review value-alignment criteria: ${toRelativePath(executionPlan.review_value_alignment_criteria_path ?? path.join(sessionRoot, "execution-preparation", "review-value-alignment-criteria.yaml"), projectRoot)}
+- consumer id: ${consumerId}
+- allowed context source ids: ${allowedContextSourceIds.join(", ")}
 
 ${renderBoundaryPolicySection(binding, projectRoot)}
 
@@ -514,43 +1065,26 @@ ${binding.resolved_target_scope.resolved_refs
 
 ${renderLensOutputSchemaGate(binding.resolved_session_domain)}
 
-${renderDomainDocumentRefsSection(seat.lens_id, resolvedDomainDir, domainAllFiles, projectRoot)}
+${renderDomainDocumentRefsSection(seat.lens_id, resolvedDomainDir, allowedDomainFiles, projectRoot)}
 ${renderLearningSection(learningsByAgent.get(seat.lens_id)?.items ?? [])}
 ${extractEnabled ? renderNewlyLearnedInstructions(learningDomain) : ""}
 ${extractEnabled ? renderEventMarkerInstructions() : ""}
 `;
 
     await fs.writeFile(seat.packet_path, lensPacketText.trimEnd() + "\n", "utf8");
+    packetRefs.push({
+      consumer_id: consumerId,
+      packet_ref: seat.packet_path,
+      packet_sha256: await fileSha256(seat.packet_path),
+      consumed_context_refs: allowedContextSourceIds,
+      forbidden_context_refs: reviewContextManifest.context_sources
+        .map((source) => source.context_source_id)
+        .filter((sourceId) => !allowedContextSourceIds.includes(sourceId)),
+    });
   }
 
-  // CC3: Auto-populate domain_context_refs in context-candidate-assembly.yaml
-  if (domainAllFiles.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
-    const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
-    const existingRefs = Array.isArray(assembly?.domain_context_refs) ? assembly.domain_context_refs as string[] : [];
-    const mergedRefs = [...new Set([...existingRefs, ...domainAllFiles])];
-    if (mergedRefs.length > existingRefs.length) {
-      (assembly as Record<string, unknown>).domain_context_refs = mergedRefs;
-      await writeYamlDocument(contextCandidateAssemblyPath, assembly);
-    }
-  }
-
-  // C-6b: Auto-populate learning_context_refs in context-candidate-assembly.yaml
-  if (learningManifest.learning_file_paths.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
-    const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
-    const existingLearningRefs = Array.isArray(assembly?.learning_context_refs) ? assembly.learning_context_refs as string[] : [];
-    const mergedLearningRefs = [...new Set([...existingLearningRefs, ...learningManifest.learning_file_paths])];
-    if (mergedLearningRefs.length > existingLearningRefs.length) {
-      (assembly as Record<string, unknown>).learning_context_refs = mergedLearningRefs;
-      await writeYamlDocument(contextCandidateAssemblyPath, assembly);
-    }
-  }
-
-  // C-6b: Write learning loading manifest
-  if (learningManifest.total_items_loaded > 0) {
-    const manifestPath = path.join(sessionRoot, "execution-preparation", "learning-manifest.yaml");
-    await writeYamlDocument(manifestPath, learningManifest);
-  }
-
+  const synthesizeAllowedContextSourceIds =
+    reviewContextManifest.derived_context_access_matrix.synthesize ?? [];
   const synthesizePacketText = `# Review Synthesize Prompt Packet
 
 session_id: ${executionPlan.session_id}
@@ -570,6 +1104,7 @@ You must preserve lens evidence and must not invent new independent perspectives
 - materialized input: ${toRelativePath(binding.materialized_input_path, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- review context manifest: ${toRelativePath(reviewContextManifestPath, projectRoot)}
 - finding ledger: ${toRelativePath(executionPlan.finding_ledger_path, projectRoot)}
 - finding relation graph: ${toRelativePath(executionPlan.finding_relation_graph_path, projectRoot)}
 - issue ledger: ${toRelativePath(executionPlan.issue_ledger_path, projectRoot)}
@@ -582,6 +1117,10 @@ You must preserve lens evidence and must not invent new independent perspectives
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
 - target snapshot: ${toRelativePath(binding.target_snapshot_path, projectRoot)}
 - context candidate assembly: ${toRelativePath(contextCandidateAssemblyPath, projectRoot)}
+- domain binding: ${toRelativePath(executionPlan.domain_binding_path ?? path.join(sessionRoot, "execution-preparation", "domain-binding.yaml"), projectRoot)}
+- review value-alignment criteria: ${toRelativePath(executionPlan.review_value_alignment_criteria_path ?? path.join(sessionRoot, "execution-preparation", "review-value-alignment-criteria.yaml"), projectRoot)}
+- consumer id: synthesize
+- allowed context source ids: ${synthesizeAllowedContextSourceIds.join(", ")}
 
 ${renderBoundaryPolicySection(binding, projectRoot, { tools: "required" })}
 
@@ -647,6 +1186,20 @@ Every finding from the participating lens outputs must be accounted for in exact
     synthesizePacketText.trimEnd() + "\n",
     "utf8",
   );
+  packetRefs.push({
+    consumer_id: "synthesize",
+    packet_ref: synthesizePromptPacketPath,
+    packet_sha256: await fileSha256(synthesizePromptPacketPath),
+    consumed_context_refs: synthesizeAllowedContextSourceIds,
+    forbidden_context_refs: reviewContextManifest.context_sources
+      .map((source) => source.context_source_id)
+      .filter((sourceId) => !synthesizeAllowedContextSourceIds.includes(sourceId)),
+  });
+  await updateContextManifestPacketRefs({
+    contextManifest: reviewContextManifest,
+    contextManifestPath: reviewContextManifestPath,
+    packetRefs,
+  });
 
   console.log(
     JSON.stringify(

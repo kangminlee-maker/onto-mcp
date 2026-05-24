@@ -7,6 +7,7 @@
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
 > - `.onto/processes/review/record-contract.md`
+> - `.onto/processes/review/pre-dispatch-contracts.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -23,6 +24,7 @@ runtime은 아래만 한다.
 4. 각 output seat에 실제 결과 파일이 생성되었는지 검사한다
 5. 기준 미달이면 `fail-close` 한다
 6. `EffectiveBoundaryState`를 `error-log.md`와 degraded 판단의 구조적 basis로 남긴다
+7. Round 1 완료 후 `lens-completion-barrier.yaml`을 작성한다
 
 추가로 synthesize dispatch 직전에는 runtime이
 participating lens output과 controlled deliberation result의 seat/ref를 synthesize runtime packet에 반영할 수 있다.
@@ -57,7 +59,7 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 9. host runtime
    - `codex`
    - `claude`
-10. `max_concurrent_lenses`
+10. selected lens count
 
 중요:
 
@@ -84,6 +86,7 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 - deliberation output seat는 `execution-plan.yaml`이 고정한다
 - synthesize output seat도 `execution-plan.yaml`이 고정한다
 - `execution-result.yaml`은 actual execution truth의 canonical seat다
+- `lens-completion-barrier.yaml`은 downstream stage 진입 gate다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
 - `error-log.md`는 최소 한 번 `EffectiveBoundaryState`를 기록해야 한다
 - `error-log.md`는 runner progress seat도 겸할 수 있다
@@ -107,8 +110,7 @@ npm run review:run-prompt-execution -- \
   --project-root {project_root} \
   --session-root {session_root} \
   --executor-bin {executor_bin} \
-  --executor-arg {executor_arg} \
-  --max-concurrent-lenses {N}
+  --executor-arg {executor_arg}
 ```
 
 옵션:
@@ -138,17 +140,16 @@ Claude host 경로(`host_team_claude` nested orchestration 또는 `worker_claude
 
 `host-team + claude`는 coordinator state machine이 직접 Agent tool로 dispatch하며, prompt execution runner를 호출하지 않는다.
 
-현재 기본 병렬성:
-
-- prompt execution runner (codex) → `9`
-
 원칙:
 
 - 병렬 실행은 필수다
-- realization에 동시 실행 제한이 있으면 worker-pool 방식으로 bounded parallel dispatch를 사용한다
-- slot이 비면 다음 pending lens를 즉시 dispatch한다
+- runtime은 선택된 lens 전체를 dispatch한다
+- host adapter가 선택된 lens 전체 dispatch를 보장할 수 없으면 fail-loud하게 중단한다
 - controlled lens deliberation은 participating lens outputs가 확정된 뒤에만 시작한다
 - synthesize는 `deliberation.md`가 생성된 뒤에만 시작한다
+- issue artifacts, controlled deliberation, synthesize는
+  `.onto/processes/review/pre-dispatch-contracts.md §6`의 lens completion barrier가
+  `downstream_allowed=true`일 때만 시작한다
 
 ---
 

@@ -32,8 +32,8 @@ export interface ReviewExecutionProfile {
   mode: ReviewExecutionSettings["mode"];
   teamlead: ReviewExecutionActorProfile;
   lens: ReviewExecutionActorProfile;
+  synthesize: ReviewExecutionActorProfile;
   deliberation: ReviewExecutionSettings["deliberation"];
-  max_concurrent_workers?: number;
   worker_executor: ReviewWorkerExecutor;
   host: ReviewExecutionHost;
   provider?: LlmProviderName;
@@ -58,14 +58,38 @@ export interface ResolveReviewExecutionProfileArgs {
 }
 
 function settingsExecution(settings: OntoSettings): ReviewExecutionSettings {
-  return settings.review?.execution ?? defaultReviewExecution();
+  const defaults = defaultReviewExecution();
+  const execution = settings.review?.execution;
+  if (!execution) return defaults;
+  return {
+    ...defaults,
+    ...execution,
+    teamlead: {
+      ...defaults.teamlead,
+      ...execution.teamlead,
+    },
+    lens: {
+      ...defaults.lens,
+      ...execution.lens,
+    },
+    synthesize: {
+      ...defaults.synthesize,
+      ...execution.synthesize,
+    },
+  };
 }
 
 function actorLlm(
   actorLlmRef: ReviewLlmRef,
   inherited: OntoSettings["llm"],
 ): ReviewLlmRef {
-  return actorLlmRef === "inherit" ? inherited ?? "inherit" : actorLlmRef;
+  if (actorLlmRef === "inherit") return inherited ?? "inherit";
+  const shouldOverlayInherited =
+    actorLlmRef.auth === undefined && actorLlmRef.provider === undefined;
+  return {
+    ...(shouldOverlayInherited ? inherited ?? {} : {}),
+    ...actorLlmRef,
+  };
 }
 
 function hostFromEnv(env: NodeJS.ProcessEnv): ReviewExecutionHost | null {
@@ -94,6 +118,7 @@ function buildProfile(args: {
   const inherited = args.settings.llm;
   const teamleadLlm = actorLlm(execution.teamlead.llm, inherited);
   const lensLlm = actorLlm(execution.lens.llm, inherited);
+  const synthesizeLlm = actorLlm(execution.synthesize.llm, inherited);
   const normalized = normalizeLlmModelSwitcher(inherited);
   return {
     mode: execution.mode,
@@ -105,10 +130,11 @@ function buildProfile(args: {
       seat: execution.lens.seat,
       llm: lensLlm,
     },
+    synthesize: {
+      seat: execution.synthesize.seat,
+      llm: synthesizeLlm,
+    },
     deliberation: execution.deliberation,
-    ...(execution.max_concurrent_workers !== undefined
-      ? { max_concurrent_workers: execution.max_concurrent_workers }
-      : {}),
     worker_executor: args.workerExecutor,
     host: args.host,
     ...(inherited?.provider ? { provider: inherited.provider } : {}),

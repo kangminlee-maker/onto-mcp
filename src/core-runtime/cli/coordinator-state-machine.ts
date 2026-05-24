@@ -48,6 +48,7 @@ import {
   type LensOutputForDeliberation,
   type LensDeliberationResponseForTeamlead,
 } from "../review/controlled-lens-deliberation.js";
+import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
 import {
   PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
   renderIssueArtifactContext,
@@ -215,7 +216,8 @@ async function readLensOutputsForDeliberation(
         content,
     });
   }
-  const minimumParticipating = executionPlan.minimum_participating_lenses ?? 2;
+  const minimumParticipating =
+    resolveRequiredParticipatingLensCount(executionPlan);
   if (lensOutputs.length < minimumParticipating) {
     throw new Error(
       `Fewer than ${minimumParticipating} participating lens outputs are available for deliberation.`,
@@ -550,7 +552,9 @@ export async function coordinatorStart(
       session_root: sessionRoot,
       request_text: requestText,
       agents: buildLensAgentInstructions(executionPlan),
-      max_concurrent_lenses: executionPlan.max_concurrent_lenses ?? 5,
+      max_concurrent_lenses:
+        executionPlan.max_concurrent_lenses ??
+        executionPlan.lens_prompt_packet_seats.length,
     };
   } catch (error) {
     if (sessionRoot) {

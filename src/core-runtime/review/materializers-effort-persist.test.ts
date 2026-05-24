@@ -10,7 +10,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { parse as parseYaml } from "yaml";
-import type { ReviewSessionMetadata } from "./artifact-types.js";
+import type {
+  InvocationBindingArtifact,
+  ReviewActorConsumerBindingsArtifact,
+  ReviewActorInvocationProfilesArtifact,
+  ReviewSessionMetadata,
+} from "./artifact-types.js";
 import { bootstrapInvocationBindingArtifacts } from "./materializers.js";
 
 async function readYaml<T>(p: string): Promise<T> {
@@ -125,5 +130,82 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
 
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeUndefined();
+  });
+
+  it("writes resolved actor invocation profiles and consumer bindings", async () => {
+    await writeConfig(
+      tmp,
+      {
+        llm: {
+          auth: "oauth",
+          provider: "openai",
+          model: "gpt-5.5",
+          effort: "medium",
+          service_tier: "fast",
+        },
+        review: {
+          execution: {
+            mode: "main-workers",
+            teamlead: { seat: "main", llm: "inherit" },
+            lens: { seat: "worker", llm: "inherit" },
+            synthesize: {
+              seat: "worker",
+              llm: { effort: "xhigh" },
+            },
+            deliberation: "controlled-lens-deliberation",
+          },
+        },
+      },
+    );
+
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      resolvedLensIds: ["structure", "axiology"],
+    });
+
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    expect(binding.actor_invocation_profiles_path).toBeDefined();
+    expect(binding.actor_consumer_bindings_path).toBeDefined();
+    expect(binding.review_context_manifest_path).toBeDefined();
+
+    const profiles =
+      await readYaml<ReviewActorInvocationProfilesArtifact>(
+        binding.actor_invocation_profiles_path!,
+      );
+    expect(profiles.profiles.map((profile) => profile.actor_kind).sort()).toEqual([
+      "lens",
+      "synthesize",
+      "teamlead",
+    ]);
+    expect(
+      profiles.profiles.some(
+        (profile) => profile.actor_profile_id === "actor:deliberation",
+      ),
+    ).toBe(false);
+    const synthesize = profiles.profiles.find(
+      (profile) => profile.actor_kind === "synthesize",
+    );
+    expect(synthesize?.runtime_provider).toBe("codex");
+    expect(synthesize?.auth_mode).toBe("oauth");
+    expect(synthesize?.effective_worker_executor).toBe("codex");
+    expect(synthesize?.model).toBe("gpt-5.5");
+    expect(synthesize?.effort).toBe("xhigh");
+    expect(synthesize?.service_tier).toBe("fast");
+    expect(synthesize?.credential_ref).toBe("host:codex:oauth");
+
+    const bindings =
+      await readYaml<ReviewActorConsumerBindingsArtifact>(
+        binding.actor_consumer_bindings_path!,
+      );
+    expect(bindings.bindings.some((entry) => entry.consumer_id === "axiology"))
+      .toBe(true);
+    expect(
+      bindings.bindings.some(
+        (entry) =>
+          entry.consumer_id === "deliberation:structure" &&
+          entry.actor_profile_id === "actor:lens" &&
+          entry.actor_kind === "lens",
+      ),
+    ).toBe(true);
   });
 });

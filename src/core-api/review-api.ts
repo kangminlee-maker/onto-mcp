@@ -4,6 +4,7 @@ import type {
   ReviewExecutionPlan,
   ReviewMode,
   ReviewRecord,
+  ReviewStructuredFailureRecord,
 } from "../core-runtime/review/artifact-types.js";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -14,6 +15,10 @@ import {
   fileExists,
   readYamlDocument,
 } from "../core-runtime/review/review-artifact-utils.js";
+import {
+  buildReviewRouteVisibilityFromSession,
+  type ReviewRouteVisibility,
+} from "../core-runtime/review/route-visibility.js";
 import { reviewPrepareOnly, runReviewInvokeCli } from "../core-runtime/cli/review-invoke.js";
 
 export interface PrepareReviewRequest {
@@ -24,7 +29,7 @@ export interface PrepareReviewRequest {
   noDomain?: boolean;
   reviewMode?: ReviewMode;
   lensIds?: string[];
-  maxConcurrentLenses?: number;
+  confirmValueAlignment?: boolean;
   /**
    * Debug/testing escape hatch. Normal MCP callers should let project config
    * choose the provider so the tool remains model/host independent.
@@ -36,6 +41,7 @@ export interface PreparedReview {
   sessionId: string;
   sessionRoot: string;
   executionPlan: ReviewExecutionPlan;
+  routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation: LlmPresentationPrompts;
 }
 
@@ -56,6 +62,9 @@ export interface ReviewRunResult {
   degradedLensIds: string[];
   summary?: unknown;
   resultOverview?: unknown;
+  artifactRefs?: Record<string, string>;
+  failureRefs?: string[];
+  routeVisibility?: ReviewRouteVisibility | null;
   startPreview?: {
     entrypointPlan?: unknown;
     routeSummary?: unknown;
@@ -86,6 +95,9 @@ export interface ReviewStatus {
     | "failed"
     | "unknown";
   artifactRefs: Record<string, string>;
+  failureRefs: string[];
+  structuredFailures: ReviewStructuredFailureRecord[];
+  routeVisibility?: ReviewRouteVisibility | null;
 }
 
 export interface ReviewResult {
@@ -95,6 +107,9 @@ export interface ReviewResult {
   finalOutputPath: string;
   reviewRunManifestPath: string;
   finalOutputText?: string;
+  artifactRefs: Record<string, string>;
+  failureRefs: string[];
+  routeVisibility?: ReviewRouteVisibility | null;
 }
 
 export interface OntoReviewCoreApi {
@@ -191,14 +206,14 @@ function appendCommonReviewArgs(
   if (request.reviewMode) {
     result.push("--review-mode", request.reviewMode);
   }
-  if (request.maxConcurrentLenses !== undefined) {
-    result.push("--max-concurrent-lenses", String(request.maxConcurrentLenses));
-  }
   if (request.executorRealization) {
     result.push("--executor-realization", request.executorRealization);
   }
   for (const lensId of request.lensIds ?? []) {
     result.push("--lens-id", lensId);
+  }
+  if (request.confirmValueAlignment) {
+    result.push("--confirm-value-alignment");
   }
   return result;
 }
@@ -333,6 +348,35 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
     binding: path.join(sessionRoot, "binding.yaml"),
     execution_plan: path.join(sessionRoot, "execution-plan.yaml"),
     execution_result: path.join(sessionRoot, "execution-result.yaml"),
+    actor_invocation_profiles: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "actor-invocation-profiles.yaml",
+    ),
+    actor_consumer_bindings: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "actor-consumer-bindings.yaml",
+    ),
+    domain_binding: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "domain-binding.yaml",
+    ),
+    review_value_alignment_criteria: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "review-value-alignment-criteria.yaml",
+    ),
+    review_context_manifest: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "review-context-manifest.yaml",
+    ),
+    lens_completion_barrier: path.join(
+      sessionRoot,
+      "lens-completion-barrier.yaml",
+    ),
     review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
     error_log: path.join(sessionRoot, "error-log.md"),
     final_output: path.join(sessionRoot, "final-output.md"),
@@ -343,6 +387,30 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
     if (await fileExists(filePath)) entries.push([key, filePath]);
   }
   return Object.fromEntries(entries);
+}
+
+async function collectStructuredFailures(sessionRoot: string): Promise<{
+  failureRefs: string[];
+  structuredFailures: ReviewStructuredFailureRecord[];
+}> {
+  const failuresRoot = path.join(sessionRoot, "failures");
+  let filenames: string[];
+  try {
+    filenames = await fs.readdir(failuresRoot);
+  } catch {
+    return { failureRefs: [], structuredFailures: [] };
+  }
+  const failureRefs = filenames
+    .filter((filename) => filename.endsWith(".yaml"))
+    .map((filename) => path.join(failuresRoot, filename))
+    .sort();
+  const structuredFailures: ReviewStructuredFailureRecord[] = [];
+  for (const failureRef of failureRefs) {
+    structuredFailures.push(
+      await readYamlDocument<ReviewStructuredFailureRecord>(failureRef),
+    );
+  }
+  return { failureRefs, structuredFailures };
 }
 
 async function listDomainDirs(root: string): Promise<string[]> {
@@ -376,6 +444,7 @@ export function createOntoReviewCoreApi(
         sessionId: executionPlan.session_id,
         sessionRoot,
         executionPlan,
+        routeVisibility: await buildReviewRouteVisibilityFromSession(sessionRoot),
         llmPresentation: {
           openingBrief: buildOpeningBriefPresentation(openingBriefInput),
         },
@@ -425,6 +494,11 @@ export function createOntoReviewCoreApi(
         ...(parsed.result_overview !== undefined
           ? { resultOverview: parsed.result_overview }
           : {}),
+        artifactRefs: await collectArtifactRefs(path.resolve(result.session_root)),
+        ...(await collectStructuredFailures(path.resolve(result.session_root))),
+        routeVisibility: await buildReviewRouteVisibilityFromSession(
+          path.resolve(result.session_root),
+        ),
         startPreview,
         llmPresentation: {
           openingBrief: buildOpeningBriefPresentation(startPreview),
@@ -436,6 +510,7 @@ export function createOntoReviewCoreApi(
     async getReviewStatus(sessionRoot: string): Promise<ReviewStatus> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
       const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
+      const failures = await collectStructuredFailures(resolvedSessionRoot);
       const reviewRecord = await readOptionalYaml<ReviewRecord>(
         path.join(resolvedSessionRoot, "review-record.yaml"),
       );
@@ -445,6 +520,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status: reviewRecord.record_status,
           artifactRefs,
+          ...failures,
+          routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         };
       }
 
@@ -457,6 +534,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status: "halted_partial",
           artifactRefs,
+          ...failures,
+          routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         };
       }
 
@@ -466,6 +545,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status: executionResult ? "running" : "prepared",
           artifactRefs,
+          ...failures,
+          routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         };
       }
 
@@ -474,11 +555,15 @@ export function createOntoReviewCoreApi(
         sessionRoot: resolvedSessionRoot,
         status: "unknown",
         artifactRefs,
+        ...failures,
+        routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
       };
     },
 
     async getReviewResult(sessionRoot: string): Promise<ReviewResult> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
+      const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
+      const { failureRefs } = await collectStructuredFailures(resolvedSessionRoot);
       const reviewRecordPath = path.join(resolvedSessionRoot, "review-record.yaml");
       const reviewRecord = await readYamlDocument<ReviewRecord>(reviewRecordPath);
       const finalOutputPath =
@@ -490,6 +575,9 @@ export function createOntoReviewCoreApi(
         reviewRecord,
         finalOutputPath,
         reviewRunManifestPath: path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
+        artifactRefs,
+        failureRefs,
+        routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         ...(finalOutputText !== undefined ? { finalOutputText } : {}),
       };
     },
