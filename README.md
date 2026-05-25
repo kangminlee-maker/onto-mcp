@@ -169,7 +169,6 @@ Primary outputs:
 | `src/core-runtime/` | TypeScript runtime |
 | `src/core-api/` | library facade used by MCP |
 | `src/mcp/` | MCP tool surface |
-| `src/providers/` | provider-specific execution capability |
 | `development-records/` | development records and archived material |
 | `IMPLEMENTATION_MAP.html` | visual architecture and roadmap map |
 

@@ -527,6 +527,24 @@ async function main(): Promise<void> {
       "review-run-manifest must record standalone host runtime for mock execution.",
     );
     assert(
+      reviewRunManifest.review_execution_profile?.runtime_route?.runtime_provider === "mock" &&
+        reviewRunManifest.review_execution_profile.runtime_route.auth_mode === null,
+      "review-run-manifest must record mock runtime provider and null auth mode.",
+    );
+    assert(
+      structured.routeVisibility?.executionRealization ===
+        reviewRunManifest.review_execution_profile?.runtime_route?.execution_realization &&
+        structured.routeVisibility.hostRuntime ===
+          reviewRunManifest.review_execution_profile.runtime_route.host_runtime &&
+        structured.routeVisibility.workerExecutor ===
+          reviewRunManifest.review_execution_profile.runtime_route.worker_executor &&
+        structured.routeVisibility.runtimeProvider ===
+          reviewRunManifest.review_execution_profile.runtime_route.runtime_provider &&
+        structured.routeVisibility.authMode ===
+          reviewRunManifest.review_execution_profile.runtime_route.auth_mode,
+      "MCP routeVisibility must match review-run-manifest runtime_route.",
+    );
+    assert(
       reviewRunManifest.review_execution_profile?.deliberation === "controlled-lens-deliberation",
       "review-run-manifest must record controlled deliberation.",
     );
@@ -1190,11 +1208,11 @@ async function main(): Promise<void> {
         "malformed output dispatch_state must be dispatched.",
       );
       assert(
-        malformedFailure.routeVisibility?.source === "execution-plan" &&
+        malformedFailure.routeVisibility?.source === "review-run-manifest" &&
           malformedFailure.routeVisibility.executionRealization === "direct-call" &&
           malformedFailure.routeVisibility.hostRuntime === "standalone" &&
           malformedFailure.routeVisibility.workerExecutor === "mock",
-        "malformed output failure must expose execution-plan routeVisibility.",
+        "malformed output failure must expose review-run-manifest routeVisibility.",
       );
     } finally {
       malformedChild.stdin.end();

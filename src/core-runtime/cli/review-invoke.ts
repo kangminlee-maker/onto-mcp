@@ -33,6 +33,7 @@ import {
   resolveReviewExecutionProfile,
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
+import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
 import {
   createStructuredFailureRecord,
   ReviewStructuredFailureError,
@@ -92,8 +93,8 @@ interface ResolvedReviewInvokeInputs {
 interface ReviewInvokeRouteSummary {
   combined_entrypoint: "review:invoke";
   bounded_invoke_steps: string[];
-  execution_realization: "worker" | "host-team" | "direct-call";
-  host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  execution_realization: "worker" | "direct-call";
+  host_runtime: "codex" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
   review_execution_profile: {
     mode: ReviewExecutionProfile["mode"];
     teamlead_seat: ReviewExecutionProfile["teamlead"]["seat"];
@@ -101,6 +102,13 @@ interface ReviewInvokeRouteSummary {
     synthesize_seat: ReviewExecutionProfile["synthesize"]["seat"];
     worker_executor: ReviewExecutionProfile["worker_executor"];
     deliberation: ReviewExecutionProfile["deliberation"];
+    runtime_route: {
+      execution_realization: "worker" | "direct-call";
+      host_runtime: ReviewInvokeRouteSummary["host_runtime"];
+      worker_executor: ReviewExecutionProfile["worker_executor"];
+      runtime_provider: string;
+      auth_mode: string | null;
+    };
     model?: string;
     effort?: string;
     service_tier?: string;
@@ -139,7 +147,6 @@ const CORE_AXIS_LENS_IDS = _registry.core_axis_lens_ids;
 const KNOWN_PASSTHROUGH_OPTION_NAMES = [
   "project-root",
   "onto-home",
-  "plugin-root",
   "session-id",
   "requested-target",
   "requested-domain-token",
@@ -170,7 +177,6 @@ const KNOWN_PASSTHROUGH_OPTION_NAMES = [
   "materialized-ref",
   "system-purpose-ref",
   "domain-context-ref",
-  "learning-context-ref",
   "role-definition-ref",
   "execution-rule-ref",
   "excluded-name",
@@ -325,20 +331,6 @@ function applyExecutorOverrideToProfile(
     };
   }
   return profile;
-}
-
-function runtimeProviderForProfile(profile: ReviewExecutionProfile): string {
-  if (profile.worker_executor === "mock") return "mock";
-  if (profile.worker_executor === "codex") {
-    return profile.host === "claude" ? "claude" : "codex";
-  }
-  return profile.provider ?? profile.host;
-}
-
-function authModeForProfile(profile: ReviewExecutionProfile): string | null {
-  if (profile.worker_executor === "mock") return null;
-  if (profile.worker_executor === "codex") return profile.auth ?? "oauth";
-  return profile.auth ?? null;
 }
 
 function isInsidePath(root: string, candidate: string): boolean {
@@ -674,12 +666,6 @@ function renderReviewResultOverview(args: {
   ].join("\n");
 }
 
-function executionRealizationForProfile(
-  profile: ReviewExecutionProfile,
-): ResolvedExecutionProfile["execution_realization"] {
-  return profile.worker_executor === "direct_call" ? "direct-call" : "worker";
-}
-
 function stripOptionsFromArgv(
   argv: string[],
   optionNames: string[],
@@ -865,8 +851,8 @@ function appendDirectCallLlmArgs(
 }
 
 export interface ResolvedExecutionProfile {
-  execution_realization: "worker" | "host-team" | "direct-call";
-  host_runtime: "codex" | "claude" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  execution_realization: "worker" | "direct-call";
+  host_runtime: "codex" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
   review_execution_profile: ReviewExecutionProfile;
 }
 
@@ -876,54 +862,36 @@ export type ExecutionProfileResolution =
 
 export type ExecutionRealizationHandoff =
   | { type: "self"; profile: ResolvedExecutionProfile }
-  | { type: "coordinator_start"; profile: ResolvedExecutionProfile }
   | { type: "no_host" };
-
-function toArtifactExecutionRealization(
-  profile: ReviewExecutionProfile,
-): ResolvedExecutionProfile["execution_realization"] {
-  if (profile.worker_executor === "direct_call" || profile.worker_executor === "mock") {
-    return "direct-call";
-  }
-  return profile.host === "claude" ? "host-team" : "worker";
-}
 
 export function resolveExecutionProfile(args: {
   explicitCodex: boolean;
   ontoConfig: OntoConfig;
+  forceMock?: boolean;
 }): ExecutionProfileResolution {
   const resolution = resolveReviewExecutionProfile({
     explicitCodex: args.explicitCodex,
     settings: args.ontoConfig,
+    ...(args.forceMock ? { env: { ...process.env, ONTO_LLM_MOCK: "1" } } : {}),
   });
   if (resolution.type === "no_host") {
     return { type: "no_host" };
   }
   const profile = resolution.profile;
+  const route = buildReviewExecutionRoute(profile);
 
   return {
     type: "resolved",
     profile: {
-      execution_realization: toArtifactExecutionRealization(profile),
-      host_runtime: profile.host,
+      execution_realization: route.execution_realization,
+      host_runtime: route.artifact_host_runtime,
       review_execution_profile: profile,
     },
   };
 }
 
-/**
- * Wraps resolveExecutionProfile with action decision:
- * - prepareOnly=true + resolved Claude → "self" (coordinator-state-machine is
- *   already calling this internally; don't emit handoff JSON, just record the
- *   profile into session artifacts)
- * - prepareOnly=false + resolved Claude → "coordinator_start" (emit handoff)
- * - resolved codex → "self" (execute via Codex worker)
- * - resolved standalone → "self" (self-execute via ts_inline_http)
- * - no_host → "no_host"
- */
 export function resolveExecutionRealizationHandoff(args: {
   explicitCodex: boolean;
-  prepareOnly: boolean;
   ontoConfig: OntoConfig;
 }): ExecutionRealizationHandoff {
   const profile = resolveExecutionProfile({
@@ -931,13 +899,6 @@ export function resolveExecutionRealizationHandoff(args: {
     ontoConfig: args.ontoConfig,
   });
   if (profile.type === "no_host") return { type: "no_host" };
-
-  // Claude host: emit handoff unless we're in prepare-only mode (coordinator
-  // state machine is already calling us — it needs artifacts prepared, not a
-  // handoff JSON written to stdout).
-  if (profile.profile.host_runtime === "claude" && !args.prepareOnly) {
-    return { type: "coordinator_start", profile: profile.profile };
-  }
   return { type: "self", profile: profile.profile };
 }
 
@@ -954,55 +915,6 @@ function buildNoHostDetectedError(): Error {
       "  4. 테스트 실행은 --executor-realization mock 사용",
     ].join("\n"),
   );
-}
-
-function emitCoordinatorStartHandoff(args: {
-  preferredRealization: "worker" | "host-team" | "direct-call";
-  requestedTarget: string;
-  requestText: string;
-  reviewExecutionProfile: ReviewExecutionProfile;
-}): void {
-  const q = (s: string) => `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-  const payload: {
-    handoff: "coordinator-start";
-    host_runtime: "claude";
-    preferred_realization: typeof args.preferredRealization;
-    actual_realization: "deferred_to_subject_session";
-    requested_target: string;
-    request_text: string;
-    review_execution_profile: ReviewExecutionProfile;
-    next_action: {
-      development_harness: string;
-      orchestration_guidance: {
-        preferred: string;
-        alternate: string;
-        recording_note: string;
-        profile_note: string;
-      };
-    };
-  } = {
-    handoff: "coordinator-start",
-    host_runtime: "claude",
-    preferred_realization: args.preferredRealization,
-    actual_realization: "deferred_to_subject_session",
-    requested_target: args.requestedTarget,
-    request_text: args.requestText,
-    review_execution_profile: args.reviewExecutionProfile,
-    next_action: {
-      development_harness: `npm run coordinator:start -- ${q(args.requestedTarget)} ${q(args.requestText)}`,
-      orchestration_guidance: {
-        preferred:
-          "teamlead가 제한된 context를 보존하며 worker lens들을 조율한다.",
-        alternate:
-          "host capability와 profile seat constraint에 맞는 coordinator state machine 경로를 선택한다.",
-        recording_note:
-          "실제 실행 profile은 session artifact와 review-run-manifest에 기록한다.",
-        profile_note:
-          `mode=${args.reviewExecutionProfile.mode}, teamlead=${args.reviewExecutionProfile.teamlead.seat}, lens=${args.reviewExecutionProfile.lens.seat}, worker_executor=${args.reviewExecutionProfile.worker_executor}`,
-      },
-    },
-  };
-  console.log(JSON.stringify(payload, null, 2));
 }
 
 function resolveExecutorConfig(
@@ -1161,9 +1073,12 @@ async function ensureProviderRouteReadyForDispatch(args: {
         actorRef.llm === "inherit"
           ? null
           : normalizeLlmModelSwitcher(actorRef.llm);
+      const selectsCodexOauth =
+        selection?.auth === "oauth" &&
+        (selection.provider === "codex" || selection.provider === "openai");
       if (
         selection !== null &&
-        (selection.auth !== "oauth" || selection.provider !== "openai")
+        !selectsCodexOauth
       ) {
         await writeAndThrowStructuredFailureRecord({
           sessionRoot: args.sessionRoot,
@@ -1212,7 +1127,7 @@ async function ensureProviderRouteReadyForDispatch(args: {
           "Review direct-call route cannot dispatch because an actor does not resolve to an API/local provider.",
         requiredUserAction:
           "Set .onto/settings.json llm to api_key/local provider settings, or use the Codex OAuth worker route.",
-        retrySafety: "safe_after_environment_change",
+        retrySafety: "safe_after_input_change",
         artifactTrust: "manifest_artifacts_trusted",
         dispatchState: "dispatch_blocked",
         artifactRefs: {
@@ -2392,19 +2307,13 @@ function appendCanonicalExecutionProfileArgs(
   argv: string[],
   profile: ResolvedExecutionProfile,
 ): string[] {
-  const reviewProfile = profile.review_execution_profile;
   const result = [
     ...argv,
     "--execution-realization",
     profile.execution_realization,
     "--host-runtime",
     profile.host_runtime,
-    "--runtime-provider",
-    runtimeProviderForProfile(reviewProfile),
-    "--effective-worker-executor",
-    reviewProfile.worker_executor,
   ];
-  result.push("--auth-mode", authModeForProfile(reviewProfile) ?? "none");
   return result;
 }
 
@@ -2504,7 +2413,11 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
   // Resolve the effective profile before session preparation so artifacts,
   // dispatch, and API responses share one route identity.
   const explicitCodex = hasOptionFlag(argv, "codex");
-  const profileResolution = resolveExecutionProfile({ explicitCodex, ontoConfig });
+  const profileResolution = resolveExecutionProfile({
+    explicitCodex,
+    ontoConfig,
+    forceMock: readSingleOptionValueFromArgv(argv, "executor-realization") === "mock",
+  });
   if (profileResolution.type === "no_host") {
     throw buildNoHostDetectedError();
   }
@@ -2512,9 +2425,10 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     profileResolution.profile.review_execution_profile,
     argv,
   );
+  const effectiveRoute = buildReviewExecutionRoute(effectiveReviewExecutionProfile);
   const executionProfile: ResolvedExecutionProfile = {
-    execution_realization: toArtifactExecutionRealization(effectiveReviewExecutionProfile),
-    host_runtime: effectiveReviewExecutionProfile.host,
+    execution_realization: effectiveRoute.execution_realization,
+    host_runtime: effectiveRoute.artifact_host_runtime,
     review_execution_profile: effectiveReviewExecutionProfile,
   };
   const startArgvWithProfile = appendCanonicalExecutionProfileArgs(
@@ -2539,7 +2453,6 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
 
 /**
  * Runs review preparation and returns the result directly (no console output).
- * Used by the coordinator state machine to avoid console.log capture.
  *
  * The execution_realization / host_runtime in the returned result mirror the
  * values written into the prepared session artifacts.
@@ -2561,28 +2474,8 @@ export async function reviewPrepareOnly(argv: string[]): Promise<PrepareOnlyResu
 
 export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const prepareOnly = hasOptionFlag(argv, "prepare-only");
-  const explicitCodex = hasOptionFlag(argv, "codex");
 
   const setup = await resolveReviewInvokeSetup(argv);
-
-  const handoff = resolveExecutionRealizationHandoff({
-    explicitCodex,
-    prepareOnly,
-    ontoConfig: setup.ontoConfig,
-  });
-  if (handoff.type === "no_host") {
-    throw buildNoHostDetectedError();
-  }
-
-  if (handoff.type === "coordinator_start") {
-    emitCoordinatorStartHandoff({
-      preferredRealization: handoff.profile.execution_realization,
-      requestedTarget: setup.resolvedInvokeInputs.requestedTarget,
-      requestText: setup.resolvedInvokeInputs.requestText,
-      reviewExecutionProfile: handoff.profile.review_execution_profile,
-    });
-    return 0;
-  }
 
   const resolvedProjectRoot = path.resolve(
     readSingleOptionValueFromArgv(setup.startArgv, "project-root") ?? ".",
@@ -2743,10 +2636,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "review:run-prompt-execution",
     "review:complete-session",
   ] as const;
+  const finalRoute = buildReviewExecutionRoute(effectiveReviewExecutionProfile);
   const routeProfile: ResolvedExecutionProfile = {
     ...setup.executionProfile,
-    execution_realization: executionRealizationForProfile(effectiveReviewExecutionProfile),
-    host_runtime: effectiveReviewExecutionProfile.host,
+    execution_realization: finalRoute.execution_realization,
+    host_runtime: finalRoute.artifact_host_runtime,
     review_execution_profile: effectiveReviewExecutionProfile,
   };
   const routeSummary: ReviewInvokeRouteSummary = {
@@ -2761,6 +2655,13 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
+      runtime_route: {
+        execution_realization: finalRoute.execution_realization,
+        host_runtime: finalRoute.artifact_host_runtime,
+        worker_executor: finalRoute.executor,
+        runtime_provider: finalRoute.resolved_provider,
+        auth_mode: finalRoute.auth_mode,
+      },
       ...(routeProfile.review_execution_profile.model
         ? { model: routeProfile.review_execution_profile.model }
         : {}),

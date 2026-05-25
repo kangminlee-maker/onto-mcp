@@ -2,9 +2,6 @@
 
 > 상태: Active
 > 목적: `검토 (review)`의 `제품화된 실시간 경로 (productized live path)`를 canonical 실행 경로로 고정한다.
-> 하위 실행 계약:
-> - `.onto/processes/review/nested-spawn-coordinator-contract.md` — Claude Code 세션에서 Agent tool 기반 lens dispatch coordinator
->
 > 기준 문서:
 > - `.onto/processes/review/interpretation-contract.md`
 > - `.onto/processes/review/binding-contract.md`
@@ -27,8 +24,7 @@
 
 즉 실제 productization target은 이 문서의 순서를 따른다.
 
-`.onto/processes/review/review.md`는 prompt-backed reference execution의 source와 절차를 담되,
-live path authority는 이 문서가 가진다.
+live path authority는 이 문서와 하위 review contracts가 가진다.
 
 ---
 
@@ -120,12 +116,8 @@ Preferred repo-local combined entrypoint는 아래다.
 
 - `npm run review:start-session -- ...`
 
-필요하면 아래 분해된 step도 내부 bounded step으로 사용할 수 있다.
-
-- `npm run review:write-interpretation -- ...`
-- `npm run review:bootstrap-binding -- ...`
-- `npm run review:materialize-execution-preparation -- ...`
-- `npm run review:materialize-prompt-packets -- ...`
+`review:start-session` 내부에서 interpretation, binding, execution preparation,
+prompt packet materialization을 순서대로 수행한다.
 
 ### 3.5 Execution Preparation Artifacts
 
@@ -204,7 +196,7 @@ canonical requirement:
 현재 repo-local TS bounded path에서 연결된 `ReviewExecutionProfile` mode는 아래다.
 
 - `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
-- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer coordinator worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
+- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
 - `synthesize.llm`: deliberation 이후 별도 synthesize unit에 적용된다. synthesize는 모든 lens output, issue artifacts, deliberation, problem framing을 통합하므로 높은 effort가 기본적으로 적합하다.
 
 worker executor는 profile resolution에서 아래 중 하나로 고정된다.
@@ -212,9 +204,6 @@ worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 - `codex`: host-bound OAuth 또는 Codex worker path.
 - `direct_call`: `api_key` 또는 `local` provider path.
 - `mock`: `ONTO_LLM_MOCK=1` 또는 explicit test override.
-
-Claude host의 Agent tool dispatch는 같은 semantic을 따르되, TypeScript runner가
-해당 host 도구를 직접 보장하지 않는다.
 
 중요한 점은 host-specific naming이 아니라:
 
@@ -253,8 +242,7 @@ canonical requirement:
 5. `deliberation.md`는 synthesize보다 앞선 authoritative conflict-resolution artifact다.
 6. `synthesize`는 이 결과를 소비하며, 독자적으로 새 resolution을 만들지 않는다.
 
-Claude Code Agent Teams 환경에서는 이 단계가 SendMessage transport 방식으로 실현될 수 있다.
-MCP/TS runtime에서는 같은 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
+MCP/TS runtime에서는 이 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
 중요한 것은 기능명이 아니라 `분리된 관점 + 제한 context + teamlead 통제 + 기록 가능한 resolution`이다.
 
 #### 3.7.1 Issue-Stance Deliberation Target
@@ -366,6 +354,4 @@ later system handoff artifact를 분리한다.
 
 이 문서 다음 우선순위는 아래다.
 
-1. `.onto/processes/review/review.md`를 이 live path에 맞는 reference execution 문서로 더 축소한다
-2. `review:invoke`를 host command path에 직접 연결하고, 내부에서는 `review:start-session` / `review:run-prompt-execution` / `review:complete-session` bounded steps를 유지한다
-3. deprecated Python prototypes를 제거하고 TS core path만 canonical path로 남긴다
+1. MCP `onto.review`가 `review:invoke`를 통해 `review:start-session` / `review:run-prompt-execution` / `review:complete-session` bounded steps를 유지한다

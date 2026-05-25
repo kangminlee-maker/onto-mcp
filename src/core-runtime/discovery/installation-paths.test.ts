@@ -11,7 +11,7 @@ function makeTempInstallRoot(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "onto-install-paths-"));
 }
 
-describe("resolveInstallationPath — canonical-only resolver (Phase 7)", () => {
+describe("resolveInstallationPath", () => {
   const tmpRoots: string[] = [];
 
   beforeEach(() => {
@@ -48,19 +48,13 @@ describe("resolveInstallationPath — canonical-only resolver (Phase 7)", () => 
     );
   });
 
-  it("ignores a bare top-level dir that matches the kind name (pre-Phase-6 legacy layout)", () => {
-    // A project still on the pre-migration layout (e.g., legacy `authority/`
-    // at repo root) must NOT be recognized by this resolver in Phase 7+.
-    // Error message should nudge the operator toward the migration script.
+  it("ignores a bare top-level dir that matches the kind name", () => {
     const installRoot = makeTempInstallRoot();
     tmpRoots.push(installRoot);
     fs.mkdirSync(path.join(installRoot, "authority"), { recursive: true });
 
     expect(() => resolveInstallationPath("authority", installRoot)).toThrow(
       /\.onto\/authority\/ not found/,
-    );
-    expect(() => resolveInstallationPath("authority", installRoot)).toThrow(
-      /repo-layout-migration-replace\.py/,
     );
   });
 

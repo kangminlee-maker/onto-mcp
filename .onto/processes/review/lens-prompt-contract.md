@@ -6,8 +6,6 @@
 > - `.onto/processes/review/lens-registry.md`
 > - `.onto/processes/review/interpretation-contract.md`
 > - `.onto/processes/review/binding-contract.md`
-> - `process.md`
-> - `.onto/processes/review/review.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -28,9 +26,8 @@
 - `.onto/roles/coverage.md`
 - `.onto/roles/conciseness.md`
 - `.onto/roles/axiology.md`
-- `process.md`의 `Teammate Initial Prompt Template`
-- `process.md`의 `Codex Reviewer Prompt Template`
-- `.onto/processes/review/review.md`의 Round 1 task directives
+- `src/core-runtime/cli/materialize-review-prompt-packets.ts`의 lens packet materializer
+- `.onto/processes/review/productized-live-path.md`의 canonical review flow
 
 ---
 
@@ -61,11 +58,10 @@
 2. Round 1에서는 다른 lens output을 보지 않는다
 3. 자기 perspective와 observation focus만 따른다
 4. target과 system purpose를 읽고 자기 관점의 finding을 만든다
-5. domain document와 learnings는 self-loading context로만 사용한다
+5. domain document는 계약된 입력으로만 사용한다
 
 가능한 realization 예:
 
-- Agent Teams teammate
 - worker
 - `MCP`로 분리된 `LLM`
 - external model worker
@@ -77,13 +73,9 @@
 
 ## 3.1 Language Policy
 
-Lens output 은 `.onto/principles/output-language-boundary.md` 의 two-axis 정책을 따른다.
+Lens output body 는 **English 고정**이다. 이 body 는 synthesize 가 다시 읽고 deliberation · adjudication · shared-phenomenon 분류 등에 활용하는 downstream agent hand-off 이므로, runtime translation path를 두지 않는다.
 
-- **Lens output body (structural inspection, finding sections, newly learned, applied learnings)** 는 **English 고정**. 이 body 는 synthesize 가 다시 읽고 deliberation · adjudication · shared-phenomenon 분류 등에 활용하는 **downstream agent hand-off** 이므로, 번역 텍스트가 섞이면 multi-agent semantic drift 가 발생한다.
-- **Principal 직접 소비 섹션 (해당 시)**: round1 lens 파일 자체가 principal 에게 노출되는 경로가 있다면, 그 "user-visible summary" 영역만 구조적으로 분리하여 Runtime Coordinator 의 render seat (`src/core-runtime/translate/render-for-user.ts`) 를 통해 번역한다. **lens 프롬프트가 직접 번역하지 않는다**. 현재 프로토타입에는 summary 영역이 명시 분리되어 있지 않으며, 분리 여부는 후속 PR 의 scope 다 (`.onto/principles/output-language-boundary.md` §3.3 이중목적 case).
-- 따라서 본 계약은 lens 프롬프트 템플릿에 `output_language` 를 **주입하지 않는다**. `output_language` 는 Runtime Coordinator 가 보유하고, render seat 에서만 사용한다.
-
-Lens 내부 추론 언어 (chain-of-thought, reasoning 단계) 도 English 로 유지한다. 다른 agent 가 본 lens 의 reasoning log 를 참조할 가능성이 있고, 언어 혼재 시 해석 품질이 낮아진다.
+Lens 프롬프트 템플릿에는 language setting을 주입하지 않는다. Principal-facing 설명은 lens 산출물이 아니라 최종 review output에서 bounded summary로 제공한다.
 
 ---
 
@@ -98,14 +90,10 @@ Lens 내부 추론 언어 (chain-of-thought, reasoning 단계) 도 English 로 �
 5. `session_domain`
 6. `resolved execution mode`
 7. `lens_output_path`
-8. self-loading context refs
-   - global learnings
-   - project learnings
-   - communication learning
+8. contracted context refs
    - corresponding domain document
-   - learning rules
-
-`output_language` 는 의도적으로 본 목록에서 제외되었다 — §3.1 Language Policy 참조.
+   - role definition
+   - execution rule
 
 ### 4.1 `review target materialized input` shape
 
@@ -167,8 +155,7 @@ review_target_materialized_input:
 6. issue가 없으면
    - 왜 맞는지의 근거
    를 적는다
-7. `Newly Learned`
-8. `Applied Learnings`
+7. domain provenance sections
 
 ---
 
@@ -180,7 +167,6 @@ review_target_materialized_input:
 - CE violation
 - definition explicitness
 - axis explicitness
-- learning type tag validity
 - domain cross-reference validity
 - ghost sub-area check
 - rule-CQ linkage
@@ -207,10 +193,8 @@ Lens markdown output 은 아래 section 구조를 따른다. Section 수준 구�
      - `why` (문제 이유 + **evidence-to-claim derivation** — evidence_anchor 의 어느 부분이 claim 의 어느 주장을 직접 뒷받침하는가. §9.2 #6 onus probandi)
      - `how to fix` (수정 방향)
 3. no-issue case 라면 rationale
-4. `### Newly Learned`
-5. `### Applied Learnings`
-6. `### Domain Constraints Used` — 검증에 사용한 domain rule 의 durable provenance 기록 (domain-document-backed lenses 만 해당, axiology 제외). 본문은 YAML list 이며, 각 항목은 `{source_doc, source_version_or_snapshot_id, anchor}` object 형식이다. `session_domain=none` 또는 domain document 미사용 시 정확히 `[]` 를 쓴다
-7. `### Domain Context Assumptions` — 검증에 사용한 비형식적 domain usage-context 가정 기록 (해당 시). 본문은 YAML string list 이며, 없으면 정확히 `[]` 를 쓴다
+4. `### Domain Constraints Used` — 검증에 사용한 domain rule 의 durable provenance 기록 (domain-document-backed lenses 만 해당, axiology 제외). 본문은 YAML list 이며, 각 항목은 `{source_doc, source_version_or_snapshot_id, anchor}` object 형식이다. `session_domain=none` 또는 domain document 미사용 시 정확히 `[]` 를 쓴다
+5. `### Domain Context Assumptions` — 검증에 사용한 비형식적 domain usage-context 가정 기록 (해당 시). 본문은 YAML string list 이며, 없으면 정확히 `[]` 를 쓴다
 
 ### 8.2 Enforced Fields
 
@@ -240,46 +224,40 @@ structured lens artifact의 source가 된다.
 현재 기준의 aggregate primary artifact는
 `.onto/processes/review/record-contract.md`에서 정의하는 `ReviewRecord`다.
 
-### 8.5 Internal Body vs Principal Summary (Output Structural Split)
+### 8.5 Internal Body vs Final Review Summary (Output Structural Split)
 
-> **Status**: contract established, implementation deferred. 본 절은 trigger 도달 시 (Phase 2 번역 backend + 비영어 review 소비 요구) 구현 PR 이 참조할 stable contract 을 선언한다. 실제 lens prompt 변경 + test validation 은 후속 PR scope. 현재 동작은 "§8.1 전체가 English" 로 유지.
+> **Status**: current runtime contract. Lens output is an internal artifact and remains English-only.
 
 #### 8.5.1 두 층의 경계
 
 | 층 | 섹션 범위 | 소비자 | 언어 정책 |
 |---|---|---|---|
-| **Internal Body** | §8.1 의 7 항목 전체 (structural inspection / findings / rationale / newly learned / applied learnings / domain constraints used / domain context assumptions) | synthesize (다음 agent), experience capture, audit, learning extraction | English 고정. `output_language` 영향 받지 않음 |
-| **Principal Summary** (선택적 신설 섹션) | `## Principal Summary` — 주요 finding 의 prose 요약 | Principal 직접 소비 | `output_language` 에 따라 translation target. `en` 일 때는 섹션 생략 가능 |
+| **Internal Body** | §8.1 의 5 항목 전체 (structural inspection / findings / rationale / domain constraints used / domain context assumptions) | synthesize, review record assembly, audit | English 고정 |
+| **Final Review Summary** | lens별 핵심 결과를 synthesize 이후 bounded summary로 재진술 | Principal 직접 소비 | runtime이 최종 출력에서 제공 |
 
 #### 8.5.2 왜 structural split 인가
 
-Experience 수집 + learn 파이프라인 전수에서 **"어느 섹션이 canonical observation 인가"** 를 deterministic 으로 확정하기 위함. 본 split 없이 lens output 이 혼재 언어로 생성되면:
+ReviewRecord assembly와 audit에서 **"어느 섹션이 canonical observation 인가"** 를 deterministic 으로 확정하기 위함. lens output 이 혼재 언어로 생성되면:
 
-1. Experience capture 가 mixed-language body 를 저장 → learning 의 언어 drift
-2. Lexicon term 은 영어 canonical 이므로 비영어 learning 은 `lexicon-citation-check` 회피 → 개념 SSOT 와의 연결 단절
-3. Cross-session pattern 비교 (learning extraction / audit) 가 언어별로 fragment
+1. ReviewRecord가 mixed-language body를 저장한다
+2. Lexicon term은 영어 canonical이므로 비영어 evidence가 개념 SSOT와 느슨해진다
+3. Cross-session audit 비교가 언어별로 fragment된다
 
-즉 본 split 은 Phase 2 번역 기능의 prerequisite 가 아니라 **experience → learn 체인 의 언어 일관성 장치**.
+즉 본 split은 review artifact의 언어 일관성 장치다.
 
-#### 8.5.3 Contract invariant (구현 시)
+#### 8.5.3 Contract invariant
 
-- **Internal Body 는 English 단일 언어**. 다음 agent hand-off 경로에 있으므로 `.onto/principles/output-language-boundary.md §3.1` 의 Internal 범주.
-- **Principal Summary 는 Internal Body 의 요약 재서술** 이지 새 정보원이 아님. Internal Body 에 없는 claim 을 Principal Summary 에 도입 금지.
-- Translation 은 `src/core-runtime/translate/render-for-user.ts` 의 render seat 를 통해서만. renderPointId 는 본 섹션 활성 시점에 `.onto/authority/external-render-points.yaml` 에 `review_lens_principal_summary` 신설.
-- `output_language: en` 일 때 Principal Summary 섹션은 **선택적 생략** — Internal Body 자체가 이미 영어이므로 중복.
+- **Internal Body 는 English 단일 언어**.
+- lens output 자체에 Final Review Summary를 만들지 않는다.
+- 최종 사용자 설명은 synthesize 이후 final output에서 제공한다.
 
 #### 8.5.4 Lexicon term 취급 (translation policy 연동)
 
-Principal Summary 에서 lexicon term 등장 시 `.onto/authority/core-lexicon.yaml §authoring_rules.translation_policy` 규칙 따라 번역:
-- `translation_mode: preserved` → 원어 유지 (예: `ontology`, `entrypoint`)
-- `translation_mode: translated` → korean_label 치환
-- `translation_mode: bilingual` → 첫 등장 병기 (예: `principle (규범)`)
+Final Review Summary에서 lexicon term을 다룰 때도 canonical identifier를 우선 보존한다.
 
 #### 8.5.5 ReviewRecord 영향
 
-`.onto/processes/review/record-contract.md` 의 `ReviewRecord.lens_results` 는 Internal Body 만 source 로 본다. Principal Summary 는 **runtime-derived** (필요 시 render-for-user 호출로 재생성). 따라서 ReviewRecord 에 별도 필드 추가 불필요 — Internal Body 의 canonical 성이 보존됨.
-
-선택: `lens_results[].has_principal_summary: boolean` optional 힌트 필드 (기본 false). 본 필드는 runtime-coordinator 가 summary 재생성 시 decision 에 참고.
+`.onto/processes/review/record-contract.md` 의 `ReviewRecord.lens_results` 는 Internal Body 만 source 로 본다. Final Review Summary 는 ReviewRecord 이후 출력 단계에서 생성한다.
 
 ---
 
@@ -300,7 +278,7 @@ Principal Summary 에서 lexicon term 등장 시 `.onto/authority/core-lexicon.y
 | `axiology` | `.onto/roles/axiology.md` |
 
 공통 wrapper rule은 role file이 아니라
-`process.md`와 `.onto/processes/review/review.md`에서 온다.
+`src/core-runtime/cli/materialize-review-prompt-packets.ts`와 review process contracts에서 온다.
 
 ---
 
@@ -385,13 +363,13 @@ You are {role}.
 {Content of .onto/roles/{lens-id}.md}
 
 [Context Self-Loading]
-{learnings/domain/communication/rules}
+{domain documents / role definition / execution rules}
 
 [Language Policy]
 Respond in English. Reasoning, tool arguments, YAML / markdown emits, and
-hand-offs to other agents stay English-only regardless of `output_language`.
-Principal-facing translation happens at the Runtime Coordinator's render seat
-(.onto/principles/output-language-boundary.md).
+hand-offs to other agents stay English-only.
+Final principal-facing explanation is produced after synthesize from bounded
+review artifacts.
 
 [Task Directives]
 - Begin Round 1 review.
@@ -410,7 +388,7 @@ Principal-facing translation happens at the Runtime Coordinator's render seat
 1. 다른 lens 결과를 종합한다
 2. final review output을 작성한다
 3. unresolved disagreement를 adjudicate한다
-4. review의 primary output을 learning으로 정의한다
+4. review 이후의 learn/govern surface를 정의한다
 
 이것들은 `종합 프롬프트 계약 (SynthesizePromptContract)`의 책임이다.
 

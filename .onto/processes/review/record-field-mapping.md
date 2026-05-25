@@ -212,7 +212,7 @@ record_status: completed
 created_at: 2026-04-04T15:20:00+09:00
 updated_at: 2026-04-04T15:31:00+09:00
 
-request_text: "process.md의 review productization 설계를 검토해줘"
+request_text: "onto-mcp review runtime 구현을 검토해줘"
 review_target_scope_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 interpretation_ref: .onto/review/20260404-a1b2c3d4/interpretation.yaml
 binding_ref: .onto/review/20260404-a1b2c3d4/binding.yaml

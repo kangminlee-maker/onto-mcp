@@ -32,12 +32,6 @@ function renderLensOutput(unitId: string, packetPath: string): string {
 ### How To Fix
 - none
 
-### Newly Learned
-- none
-
-### Applied Learnings
-- prompt packet: \`${packetPath}\`
-
 ### Domain Constraints Used
 []
 
@@ -83,7 +77,7 @@ deliberation_status: performed
 ### Unique Finding Tagging
 - mock-runner-generated
 
-### Applied Learnings
+### Execution Trace
 - prompt packet: \`${packetPath}\`
 `;
 }

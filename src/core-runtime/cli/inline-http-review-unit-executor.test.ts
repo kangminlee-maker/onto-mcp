@@ -99,8 +99,6 @@ function add(a: number, b: number): number {
 ## Required Output Sections
 - Structural Inspection
 - Findings
-- Newly Learned
-- Applied Learnings
 - Domain Constraints Used
 - Domain Context Assumptions
 `;
@@ -249,7 +247,6 @@ You are the synthesize actor. Consolidate lens outputs.
 - Deliberation Decision
 - Unique Finding Tagging
 - Axiology Integration
-- Newly Learned
 - Degraded Lens Failures
 `;
 
@@ -381,7 +378,6 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
       "- Deliberation Decision",
       "- Unique Finding Tagging",
       "- Axiology Integration",
-      "- Newly Learned",
       "- Degraded Lens Failures",
       "",
     ].join("\n");
@@ -558,7 +554,6 @@ You are the synthesize actor. Lens outputs live on disk.
 - Deliberation Decision
 - Unique Finding Tagging
 - Axiology Integration
-- Newly Learned
 - Degraded Lens Failures
 `;
 

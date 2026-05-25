@@ -6,7 +6,6 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import YAML from "yaml";
 import type {
-  CoordinatorStateFile,
   InvocationBindingArtifact,
   ReviewLensDomainConstraint,
   ReviewLensProvenance,
@@ -43,27 +42,6 @@ function requireString(
     throw new Error(`Missing required option --${optionName}`);
   }
   return value;
-}
-
-/**
- * Read `orchestrator_reported_realization` from coordinator-state.yaml if
- * the orchestrator self-reported via `coordinator next --orchestrator-reported-realization`
- * (see contract §18). Returns a spreadable partial so callers can conditionally
- * include the field in the ReviewRecord object literal without introducing
- * `undefined` values in the emitted YAML.
- */
-async function readOrchestratorReportedRealization(
-  sessionRoot: string,
-): Promise<{ orchestrator_reported_realization?: string }> {
-  const coordinatorStatePath = path.join(sessionRoot, "coordinator-state.yaml");
-  if (!(await fileExists(coordinatorStatePath))) {
-    return {};
-  }
-  const stateFile = await readYamlDocument<CoordinatorStateFile>(
-    coordinatorStatePath,
-  );
-  const value = stateFile.orchestrator_reported_realization;
-  return value ? { orchestrator_reported_realization: value } : {};
 }
 
 async function detectDeliberationStatus(
@@ -536,7 +514,6 @@ export async function runAssembleReviewRecordCli(
     resolved_execution_realization:
       invocationBindingArtifact.resolved_execution_realization,
     resolved_host_runtime: invocationBindingArtifact.resolved_host_runtime,
-    ...(await readOrchestratorReportedRealization(sessionRoot)),
     resolved_lens_ids: invocationBindingArtifact.resolved_lens_set,
     execution_result_ref: toRelativePath(executionResultPath, projectRoot),
     session_metadata_ref: toRelativePath(sessionMetadataPath, projectRoot),

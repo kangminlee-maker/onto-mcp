@@ -31,9 +31,9 @@ import type { OntoConfig } from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   callLlm,
-  resolveLearningProviderConfig,
+  resolveLlmProviderConfig,
   type LlmCallConfig,
-} from "../learning/shared/llm-caller.js";
+} from "../llm/llm-caller.js";
 
 // Load core-axis composition from SSOT at module init — keeps prompt text
 // and core-axis set in sync with .onto/authority/core-lens-registry.yaml (v0.2.1:
@@ -65,7 +65,7 @@ export interface LensSelectionResult {
 // ---------------------------------------------------------------------------
 
 function resolveMainLlmConfig(ontoConfig: OntoConfig): Partial<LlmCallConfig> {
-  return resolveLearningProviderConfig({ config: ontoConfig, cliOverrides: {} });
+  return resolveLlmProviderConfig({ config: ontoConfig, cliOverrides: {} });
 }
 
 // ---------------------------------------------------------------------------

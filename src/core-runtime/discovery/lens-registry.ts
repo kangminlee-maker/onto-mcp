@@ -10,18 +10,14 @@ interface CoreLensRegistry {
   always_include_lens_ids: string[];
 }
 
-/**
- * Strip "onto_" prefix from a lens/role ID, yielding the canonical bare form.
- * Idempotent: bare IDs pass through unchanged.
- */
 export function canonicalizeLensId(id: string): string {
-  return id.startsWith("onto_") ? id.slice(5) : id;
+  return id;
 }
 
 let cached: CoreLensRegistry | null = null;
 
 function findRegistryPath(): string {
-  // Walk up from this file to find {installRoot}/{.onto/,}.onto/authority/core-lens-registry.yaml.
+  // Walk up from this file to find {installRoot}/.onto/authority/core-lens-registry.yaml.
   // resolveInstallationPath is the single installation-resource resolver.
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   let current = __dirname;

@@ -502,7 +502,7 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
         serverInfo: {
-          name: "onto-core",
+          name: "onto-mcp",
           version: await readPackageVersion(),
         },
       });

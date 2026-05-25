@@ -123,8 +123,6 @@ const SettingsSchema = z
     max_listing_depth: z.union([z.number(), z.string()]).optional(),
     max_listing_entries: z.union([z.number(), z.string()]).optional(),
     max_embed_lines: z.union([z.number(), z.string()]).optional(),
-    output_language: z.string().min(1).optional(),
-    learning_extract_mode: z.enum(["disabled", "shadow", "active"]).optional(),
   })
   .strict();
 
@@ -160,8 +158,6 @@ export interface OntoSettings {
   max_listing_depth?: number | string;
   max_listing_entries?: number | string;
   max_embed_lines?: number | string;
-  output_language?: string;
-  learning_extract_mode?: "disabled" | "shadow" | "active";
 }
 
 export type OntoConfig = OntoSettings;
@@ -452,11 +448,4 @@ export async function resolveSettingsChain(
     });
   }
   return merged;
-}
-
-export async function resolveOrthogonalSettingsChain(
-  ontoHome: string,
-  projectRoot: string,
-): Promise<Partial<OntoSettings>> {
-  return resolveSettingsChain(ontoHome, projectRoot);
 }

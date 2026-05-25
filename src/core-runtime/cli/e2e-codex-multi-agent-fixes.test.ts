@@ -7,8 +7,6 @@
  *   B. OntoSettings llm model switcher (settings-chain.ts)
  *   C. appendExecutorModelArgs llm precedence (review-invoke.ts)
  *   D. Synthesize retry (run-review-prompt-execution.ts)
- *   E. Coordinator agent prompt — Write tool removed (coordinator-state-machine.ts)
- *   F. process.md ToolSearch instruction
  *
  * Isolation strategy:
  *   Each test builds minimal tmpdir fixtures. Tests that exercise the
@@ -21,6 +19,7 @@
  */
 
 import { describe, it, afterAll } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import fsAsync from "node:fs/promises";
 import os from "node:os";
@@ -58,6 +57,10 @@ function assertNotIncludes(text: string, needle: string, message: string): void 
   if (text.includes(needle)) {
     throw new Error(`${message} — text unexpectedly includes ${JSON.stringify(needle)}`);
   }
+}
+
+function sha256File(filePath: string): string {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
 // ---------------------------------------------------------------------------
@@ -469,7 +472,21 @@ describe("D. Synthesize retry", () => {
     const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
     const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
     const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
+    const executionPreparationRoot = path.join(sessionRoot, "execution-preparation");
+    const reviewContextManifestPath = path.join(
+      executionPreparationRoot,
+      "review-context-manifest.yaml",
+    );
+    const materializedInputPath = path.join(
+      executionPreparationRoot,
+      "materialized-input.md",
+    );
+    const reviewTargetProfilePath = path.join(
+      executionPreparationRoot,
+      "review-target-profile.yaml",
+    );
     fs.mkdirSync(packetRoot, { recursive: true });
+    fs.mkdirSync(executionPreparationRoot, { recursive: true });
     fs.mkdirSync(round1Root, { recursive: true });
     fs.mkdirSync(deliberationRound1Root, { recursive: true });
 
@@ -485,6 +502,68 @@ describe("D. Synthesize retry", () => {
       "# Synthesize\nCombine.\n",
       "utf8",
     );
+    fs.writeFileSync(materializedInputPath, "# Target\nMinimal fixture.\n", "utf8");
+    fs.writeFileSync(
+      reviewTargetProfilePath,
+      "schema_version: 1\nprofile_id: test\n",
+      "utf8",
+    );
+
+    const staticPacketRefs = [
+      { consumer_id: "lens:logic", packet_ref: path.join(packetRoot, "logic.prompt.md") },
+      { consumer_id: "lens:pragmatics", packet_ref: path.join(packetRoot, "pragmatics.prompt.md") },
+      { consumer_id: "synthesize", packet_ref: path.join(packetRoot, "synthesize.prompt.md") },
+    ];
+    const allowedConsumers = [
+      "lens:logic",
+      "lens:pragmatics",
+      "deliberation:logic",
+      "deliberation:pragmatics",
+      "controlled-deliberation",
+      "issue-artifact:finding-ledger",
+      "issue-artifact:finding-relation-graph",
+      "issue-artifact:issue-ledger",
+      "issue-artifact:issue-stance-matrix",
+      "issue-artifact:deliberation-plan",
+      "issue-artifact:problem-framing",
+      "synthesize",
+    ];
+    await writeYamlDocument(reviewContextManifestPath, {
+      schema_version: "1",
+      producer: "onto-review-runtime",
+      producer_version: "test",
+      settings_schema_version: "1",
+      domain_registry_version: "test",
+      alignment_contract_version: "test",
+      lifecycle_state: "dispatched",
+      session_id: path.basename(sessionRoot),
+      target_refs: [materializedInputPath],
+      domain_binding_ref: "",
+      review_value_alignment_criteria_ref: "",
+      actor_consumer_bindings_ref: "",
+      context_sources: [
+        {
+          context_source_id: "target",
+          source_kind: "materialized_input",
+          source_ref: materializedInputPath,
+          source_sha256: sha256File(materializedInputPath),
+          required: true,
+          sensitivity: "internal",
+          allowed_consumers: allowedConsumers,
+        },
+      ],
+      derived_context_access_matrix: Object.fromEntries(
+        allowedConsumers.map((consumerId) => [consumerId, ["target"]]),
+      ),
+      packet_refs: staticPacketRefs.map((ref) => ({
+        ...ref,
+        packet_sha256: sha256File(ref.packet_ref),
+        consumed_context_refs: ["target"],
+        forbidden_context_refs: [],
+      })),
+      validation_results: ["fixture_manifest_ready"],
+      failure_record_refs: [],
+    });
 
     const synthesizeOutputPath = path.join(sessionRoot, "synthesis-output.md");
     await writeYamlDocument(
@@ -498,7 +577,9 @@ describe("D. Synthesize retry", () => {
         interpretation_artifact_path: path.join(sessionRoot, "interpretation.yaml"),
         binding_output_path: path.join(sessionRoot, "binding.yaml"),
         session_metadata_path: path.join(sessionRoot, "session-metadata.yaml"),
-        execution_preparation_root: path.join(sessionRoot, "execution-preparation"),
+        execution_preparation_root: executionPreparationRoot,
+        review_context_manifest_path: reviewContextManifestPath,
+        review_target_profile_path: reviewTargetProfilePath,
         round1_root: round1Root,
         lens_execution_seats: [
           {
@@ -603,7 +684,10 @@ describe("D. Synthesize retry", () => {
   }
 
   /** Always-succeed executor script (for lenses). */
-  function createSucceedScript(dir: string): string {
+  function createSucceedScript(
+    dir: string,
+    options?: { hangUnitId?: string; failUnitId?: string },
+  ): string {
     const scriptPath = path.join(dir, "succeed-executor.mjs");
     fs.writeFileSync(scriptPath, `
 import fs from "node:fs";
@@ -614,6 +698,15 @@ const unitKind = args[args.indexOf("--unit-kind") + 1];
 const sessionRoot = args[args.indexOf("--session-root") + 1];
 const sessionId = path.basename(sessionRoot);
 const outputPath = args[args.indexOf("--output-path") + 1];
+const hangUnitId = ${JSON.stringify(options?.hangUnitId ?? null)};
+const failUnitId = ${JSON.stringify(options?.failUnitId ?? null)};
+if (hangUnitId && unitId === hangUnitId) {
+  setInterval(() => {}, 1000);
+}
+if (failUnitId && unitId === failUnitId) {
+  process.stderr.write("Simulated failure for " + unitId + "\\n");
+  process.exit(1);
+}
 function issueArtifactOutput(artifactId) {
   if (artifactId === "finding-ledger") {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    severity: low\\nvalidation:\\n  unaddressable_findings: []\\n";
@@ -631,7 +724,7 @@ function issueArtifactOutput(artifactId) {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nplanned_issues: []\\nskipped_issues:\\n  - issue_id: issue-001\\n    reason: no material conflict\\n";
   }
   if (artifactId === "problem-framing") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    closure_obligation: out_of_scope\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
   }
   throw new Error("unsupported issue artifact: " + artifactId);
 }
@@ -685,7 +778,7 @@ function issueArtifactOutput(artifactId) {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nplanned_issues: []\\nskipped_issues:\\n  - issue_id: issue-001\\n    reason: no material conflict\\n";
   }
   if (artifactId === "problem-framing") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nclassification_context:\\n  common_spine_version: 1\\n  session_domain: none\\n  domain_profile_ref: \\"\\"\\n  domain_profile_doc_type: custom:problem_framing_profile\\n  domain_profile_status: not_requested\\nclassifications:\\n  - issue_id: issue-001\\n    problem_definition: mock problem\\n    issue_role: independent_issue\\n    judgment_state: observed\\n    impact_kind: maintainability_evolvability\\n    timing_class: defer_watch\\n    closure_class: watch\\n    closure_obligation: out_of_scope\\n    domain_axes: {}\\n    rationale: mock rationale\\n    related_surface_finding_ids: [finding-001]\\n";
   }
   throw new Error("unsupported issue artifact: " + artifactId);
 }
@@ -827,167 +920,63 @@ fs.writeFileSync(outputPath, output, "utf8");
     assertIncludes(resultText, "completed", "status is completed");
     assertNotIncludes(resultText, "halted_partial", "not halted");
   });
-});
 
-// ---------------------------------------------------------------------------
-// E. Coordinator agent prompt — Write tool removed
-// ---------------------------------------------------------------------------
+  it("D-6: deliberation unit timeout writes halted execution result", async () => {
+    const { sessionRoot } = await buildMinimalSession("d6");
+    const execDir = trackCleanup(makeTmpDir("d6-exec"));
+    const hangScript = createSucceedScript(execDir, {
+      hangUnitId: "deliberation-logic",
+    });
 
-describe("E. Coordinator agent prompt", () => {
-  // Read the coordinator source to verify prompt template
-  const coordinatorSource = fs.readFileSync(
-    path.join(
-      process.cwd(),
-      "src/core-runtime/cli/coordinator-state-machine.ts",
-    ),
-    "utf8",
-  );
+    const result = await executeReviewPromptExecution({
+      projectRoot,
+      sessionRoot,
+      defaultExecutorConfig: { bin: "node", args: [hangScript] },
+      unitTimeoutMs: 50,
+    });
 
-  it("E-1: prompt does NOT contain 'using the Write tool'", () => {
-    // Extract the AGENT_PROMPT_TEMPLATE string
-    const templateMatch = coordinatorSource.match(
-      /const AGENT_PROMPT_TEMPLATE = `([\s\S]*?)`;/,
-    );
-    assert(templateMatch !== null, "AGENT_PROMPT_TEMPLATE found in source");
-    const template = templateMatch?.[1] ?? "";
-
-    assertNotIncludes(
-      template,
-      "using the Write tool",
-      "prompt should not mention Write tool (Codex incompatible)",
-    );
-  });
-
-  it("E-2: prompt still instructs writing to output path", () => {
-    const templateMatch = coordinatorSource.match(
-      /const AGENT_PROMPT_TEMPLATE = `([\s\S]*?)`;/,
-    );
-    const template = templateMatch?.[1] ?? "";
-
-    assertIncludes(
-      template,
-      "write the complete output to {output_path}",
-      "output path write instruction preserved",
-    );
-  });
-
-  it("E-3: prompt contains all required rule keywords", () => {
-    const templateMatch = coordinatorSource.match(
-      /const AGENT_PROMPT_TEMPLATE = `([\s\S]*?)`;/,
-    );
-    const template = templateMatch?.[1] ?? "";
-
-    const requiredPhrases = [
-      "prompt packet",
-      "Boundary Policy",
-      "Effective Boundary State",
-      "hard constraints",
-      "Do not modify repository files",
-      "insufficient access or insufficient evidence",
-    ];
-    for (const phrase of requiredPhrases) {
-      assertIncludes(template, phrase, `required phrase: "${phrase}"`);
-    }
-  });
-
-  it("E-4: buildAgentPrompt replaces all placeholders", () => {
-    // Import and call the actual function
-    // Since buildAgentPrompt is not exported, verify via template regex
-    const templateMatch = coordinatorSource.match(
-      /const AGENT_PROMPT_TEMPLATE = `([\s\S]*?)`;/,
-    );
-    const template = templateMatch?.[1] ?? "";
-
-    // All placeholders should be {unit_id}, {unit_kind}, {packet_path}, {output_path}
-    const placeholders = template.match(/\{[a-z_]+\}/g) ?? [];
-    const uniquePlaceholders = [...new Set(placeholders)];
-    const expected = new Set(["{unit_id}", "{unit_kind}", "{packet_path}", "{output_path}"]);
-
-    for (const placeholder of uniquePlaceholders) {
-      assert(
-        expected.has(placeholder),
-        `unexpected placeholder: ${placeholder}`,
-      );
-    }
-    for (const exp of expected) {
-      assert(
-        uniquePlaceholders.includes(exp),
-        `missing expected placeholder: ${exp}`,
-      );
-    }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// F. process.md ToolSearch instruction
-// ---------------------------------------------------------------------------
-
-describe("F. process.md ToolSearch", () => {
-  const processContent = fs.readFileSync(
-    path.join(process.cwd(), "process.md"),
-    "utf8",
-  );
-
-  it("F-1: ToolSearch instruction exists before Team Creation", () => {
-    const toolSearchPos = processContent.indexOf(
-      'ToolSearch("select:TeamCreate,SendMessage,TeamDelete")',
-    );
-    const teamCreationPos = processContent.indexOf("#### Team Creation");
-
-    assert(toolSearchPos !== -1, "ToolSearch instruction found");
-    assert(teamCreationPos !== -1, "Team Creation section found");
+    assertEqual(result.synthesis_executed, false, "synthesis skipped after timeout");
     assert(
-      toolSearchPos < teamCreationPos,
-      "ToolSearch appears before Team Creation",
+      result.halt_reason?.includes("Controlled lens deliberation failed") === true,
+      "controlled deliberation halt reason",
     );
+    assertIncludes(result.halt_reason!, "timed out", "timeout included in halt reason");
+
+    const errorLog = fs.readFileSync(path.join(sessionRoot, "error-log.md"), "utf8");
+    assertIncludes(errorLog, "deliberation failure: deliberation-logic", "timeout failure logged");
+    assertIncludes(errorLog, "timed out", "timeout message logged");
+
+    const resultPath = path.join(sessionRoot, "execution-result.yaml");
+    assert(fs.existsSync(resultPath), "execution-result.yaml created");
+    const resultText = fs.readFileSync(resultPath, "utf8");
+    assertIncludes(resultText, "halted_partial", "timeout result is halted");
+    assertIncludes(resultText, "synthesis_executed: false", "synthesis not executed");
   });
 
-  it("F-2: ToolSearch section marked as mandatory", () => {
-    assertIncludes(
-      processContent,
-      "Tool Availability Check (mandatory",
-      "section marked mandatory",
-    );
-  });
+  it("D-7: issue artifact failure writes halted execution result", async () => {
+    const { sessionRoot } = await buildMinimalSession("d7");
+    const execDir = trackCleanup(makeTmpDir("d7-exec"));
+    const failScript = createSucceedScript(execDir, {
+      failUnitId: "issue-ledger",
+    });
 
-  it("F-3: deferred tools explanation present", () => {
-    assertIncludes(
-      processContent,
-      "deferred tools",
-      "deferred tools concept explained",
-    );
-  });
+    const result = await executeReviewPromptExecution({
+      projectRoot,
+      sessionRoot,
+      defaultExecutorConfig: { bin: "node", args: [failScript] },
+    });
 
-  it("F-4: tool-unavailable instruction on ToolSearch failure", () => {
-    // Find the ToolSearch section
-    const sectionStart = processContent.indexOf("#### Tool Availability Check");
-    const sectionEnd = processContent.indexOf("#### Team Creation");
-    const section = processContent.slice(sectionStart, sectionEnd);
+    assertEqual(result.synthesis_executed, false, "synthesis skipped after issue artifact failure");
+    assertIncludes(result.halt_reason!, "Issue artifact generation failed", "issue artifact halt reason");
+    assertIncludes(result.halt_reason!, "issue-ledger", "failed artifact named");
 
-    assertIncludes(
-      section,
-      "stop execution and report the unavailable tool surface",
-      "tool-unavailable instruction on ToolSearch failure",
-    );
-  });
-
-  it("F-5: once-per-session note present", () => {
-    assertIncludes(
-      processContent,
-      "once per conversation session",
-      "once-per-session guidance",
-    );
-  });
-
-  it("F-6: ToolSearch targets all three team tools", () => {
-    const toolSearchLine = processContent.match(
-      /ToolSearch\("select:([^"]+)"\)/,
-    );
-    assert(toolSearchLine !== null, "ToolSearch call found");
-    const tools = (toolSearchLine?.[1] ?? "").split(",");
-    assert(tools.includes("TeamCreate"), "TeamCreate in ToolSearch");
-    assert(tools.includes("SendMessage"), "SendMessage in ToolSearch");
-    assert(tools.includes("TeamDelete"), "TeamDelete in ToolSearch");
+    const resultPath = path.join(sessionRoot, "execution-result.yaml");
+    assert(fs.existsSync(resultPath), "execution-result.yaml created");
+    const resultText = fs.readFileSync(resultPath, "utf8");
+    assertIncludes(resultText, "halted_partial", "issue artifact failure result is halted");
+    assertIncludes(resultText, "synthesis_executed: false", "synthesis not executed");
+    assertIncludes(resultText, "unit_id: issue-ledger", "failed artifact result recorded");
+    assertIncludes(resultText, "status: failed", "failed unit status recorded");
   });
 });
 

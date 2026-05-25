@@ -75,6 +75,17 @@ function toActorProfiles(
   }));
 }
 
+function sharedActorProfileString(
+  profiles: ReviewRouteVisibility["actorProfiles"],
+  pick: (profile: ReviewRouteVisibility["actorProfiles"][number]) => string | null,
+): string | null {
+  if (profiles.length === 0) return null;
+  const [firstProfile] = profiles;
+  if (!firstProfile) return null;
+  const first = pick(firstProfile);
+  return profiles.every((profile) => pick(profile) === first) ? first : null;
+}
+
 async function readActorProfiles(
   actorProfilesPath: string | null,
 ): Promise<ReviewActorInvocationProfilesArtifact | null> {
@@ -143,8 +154,9 @@ export async function buildReviewRouteVisibilityFromSession(
     const actorProfilesPath =
       executionPlan.actor_invocation_profiles_path ??
       actorProfilesPathFromSession(resolvedSessionRoot);
-    const actorProfiles = await readActorProfiles(actorProfilesPath);
-    const firstActorProfile = actorProfiles?.profiles[0] ?? null;
+    const actorProfiles = toActorProfiles(
+      await readActorProfiles(actorProfilesPath),
+    );
     return {
       schemaVersion: "1",
       source: "execution-plan",
@@ -152,10 +164,19 @@ export async function buildReviewRouteVisibilityFromSession(
       sessionRoot: resolvedSessionRoot,
       executionRealization: executionPlan.execution_realization,
       hostRuntime: executionPlan.host_runtime,
-      workerExecutor: firstActorProfile?.effective_worker_executor ?? null,
-      runtimeProvider: firstActorProfile?.runtime_provider ?? null,
-      authMode: firstActorProfile?.auth_mode ?? null,
-      actorProfiles: toActorProfiles(actorProfiles),
+      workerExecutor: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.effectiveWorkerExecutor,
+      ),
+      runtimeProvider: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.runtimeProvider,
+      ),
+      authMode: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.authMode,
+      ),
+      actorProfiles,
       artifactRefs: {
         executionPlan: executionPlanPath,
         ...(actorProfilesPath ? { actorInvocationProfiles: actorProfilesPath } : {}),

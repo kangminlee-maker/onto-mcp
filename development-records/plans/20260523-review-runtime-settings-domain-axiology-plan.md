@@ -815,6 +815,9 @@ MCP and security tests:
 
 ## 7. Open Follow-Ups
 
+- Review profile generalization and explicit profile override / confirmation UX
+  are captured in
+  `development-records/plans/20260525-review-profile-generalization-confirmation-ux.md`.
 - Decide whether `llm-native-development` needs a domain-specific problem
   framing profile now or after review runtime stabilization.
 - Decide whether future non-canonical alternate provider policies are ever

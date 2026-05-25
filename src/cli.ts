@@ -82,7 +82,7 @@ async function main(): Promise<number> {
     case "--version":
     case "-v": {
       const version = await readOntoVersion();
-      console.log(`onto-core ${version}`);
+      console.log(`onto-mcp ${version}`);
       return 0;
     }
 

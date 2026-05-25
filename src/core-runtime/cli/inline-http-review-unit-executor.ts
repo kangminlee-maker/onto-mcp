@@ -36,7 +36,7 @@
  *
  * # Provider selection
  *
- * Reuses `learning/shared/llm-caller.ts` resolution:
+ * Reuses the core LLM caller resolution:
  *   1. --provider flag (caller-explicit)
  *   2. `.onto/settings.json` `llm` switcher
  *   3. explicit provider validation
@@ -51,15 +51,15 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import {
   callLlm,
-  resolveLearningProviderConfig,
+  resolveLlmProviderConfig,
   type LlmCallConfig,
-  type LearningProviderConfigInputs,
-  type LearningProviderCliOverrides,
-} from "../learning/shared/llm-caller.js";
+  type LlmProviderConfigInputs,
+  type LlmProviderCliOverrides,
+} from "../llm/llm-caller.js";
 import {
   callLlmWithTools,
   type ToolLoopProvider,
-} from "../learning/shared/llm-tool-loop.js";
+} from "../llm/llm-tool-loop.js";
 import { ONTO_DEFAULT_TOOLS } from "./onto-tools.js";
 import { embedInlineContext } from "../review/inline-context-embedder.js";
 import { parsePacketBoundaryPolicy } from "../review/packet-boundary-policy.js";
@@ -356,13 +356,13 @@ function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | nu
   return null;
 }
 
-async function loadOntoConfig(projectRoot: string): Promise<LearningProviderConfigInputs> {
+async function loadOntoConfig(projectRoot: string): Promise<LlmProviderConfigInputs> {
   await assertNoUnsupportedConfigFiles(projectRoot);
   const configPath = projectSettingsPath(projectRoot);
   try {
     const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
     if (parsed && typeof parsed === "object") {
-      return parsed as LearningProviderConfigInputs;
+      return parsed as LlmProviderConfigInputs;
     }
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -457,7 +457,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
 
   // Resolve LLM provider config: CLI flags → OntoConfig.
   const ontoConfig = await loadOntoConfig(projectRoot);
-  const cliOverrides: LearningProviderCliOverrides = {};
+  const cliOverrides: LlmProviderCliOverrides = {};
   const providerValue = values.provider;
   if (
     providerValue === "anthropic" ||
@@ -485,7 +485,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     cliOverrides.reasoning_effort = values["reasoning-effort"];
   }
 
-  const llmPartial = resolveLearningProviderConfig({
+  const llmPartial = resolveLlmProviderConfig({
     config: ontoConfig,
     cliOverrides,
   });

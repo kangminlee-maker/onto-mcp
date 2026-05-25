@@ -222,17 +222,17 @@ Issue-stance deliberation이 구현되면 `ReviewRecord`는 상세 내용을 복
 - `deliberation_result_ref`는 계속 `deliberation.md`를 가리킨다.
 - `synthesize_result_ref`는 issue status를 변경한 source가 될 수 없다.
 
-### 4.6 Internal Body vs Principal Summary 경계 (Cross-reference)
+### 4.6 Internal Body vs Final Review Summary 경계 (Cross-reference)
 
 > **Status**: contract-level 선언. 구현 deferred.
 
-ReviewRecord 는 **Internal Body** 만 source 로 본다 — lens output 과 synthesis output 의 canonical English 섹션들이 ReviewRecord 의 lens_results + synthesis 필드를 구성한다. **Principal Summary** (lens/synthesize output 의 선택적 신설 섹션, `output_language` 번역 target) 는 ReviewRecord 에 저장되지 않음 — runtime-derived (필요 시 render seat 을 통해 재생성).
+ReviewRecord 는 **Internal Body** 만 source 로 본다 — lens output 과 synthesis output 의 canonical English 섹션들이 ReviewRecord 의 lens_results + synthesis 필드를 구성한다. **Final Review Summary** 는 ReviewRecord 이후 final output stage에서 생성되며 ReviewRecord 에 저장되지 않는다.
 
 본 경계의 canonical 정의:
-- lens 쪽: `.onto/processes/review/lens-prompt-contract.md §8.5 Internal Body vs Principal Summary (Output Structural Split)`
-- synthesize 쪽: `.onto/processes/review/synthesize-prompt-contract.md §5.2.1 Internal Body vs Principal Summary (Output Structural Split)`
+- lens 쪽: `.onto/processes/review/lens-prompt-contract.md §8.5 Internal Body vs Final Review Summary (Output Structural Split)`
+- synthesize 쪽: `.onto/processes/review/synthesize-prompt-contract.md §5.2.1 Internal Body vs Final Review Summary (Output Structural Split)`
 
-ReviewRecord 는 두 계약의 "Internal Body = canonical source" 입장을 따른다. Principal Summary 를 ReviewRecord 에 별도 저장할 필요가 없으므로 schema 확장 불필요. 향후 runtime-coordinator 가 has_principal_summary 같은 힌트 필드를 요구하면 optional 로 추가 가능 (현재는 deferred).
+ReviewRecord 는 두 계약의 "Internal Body = canonical source" 입장을 따른다. Final Review Summary 를 ReviewRecord 에 별도 저장하지 않는다.
 
 ---
 
@@ -246,7 +246,7 @@ record_status: completed
 created_at: 2026-04-04T15:20:00+09:00
 updated_at: 2026-04-04T15:28:00+09:00
 
-request_text: "process.md의 review productization 설계를 검토해줘"
+request_text: "onto-mcp review runtime 구현을 검토해줘"
 review_target_scope_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 interpretation_ref: .onto/review/20260404-a1b2c3d4/interpretation.yaml
 binding_ref: .onto/review/20260404-a1b2c3d4/binding.yaml

@@ -71,7 +71,7 @@ export async function readOntoReleaseChannelInfo(): Promise<OntoReleaseChannelIn
 }
 
 /**
- * Read the installation's `package.json` version (onto-core semver).
+ * Read the installation's `package.json` version (onto-mcp semver).
  * Walks up from this module's directory — same strategy as release channel info.
  * Returns "unknown" if package.json cannot be located or parsed (non-fatal
  * fallback; callers log the string as-is).

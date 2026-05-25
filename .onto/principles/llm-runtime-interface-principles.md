@@ -500,11 +500,6 @@ execution_realization: worker
 host_runtime: codex
 ```
 
-```yaml
-execution_realization: host-team
-host_runtime: claude
-```
-
 interface contract는 이 두 축을 분리해서 유지해야 한다.
 
 ### 3.16 process identity preservation

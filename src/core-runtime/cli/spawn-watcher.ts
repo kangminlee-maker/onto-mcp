@@ -73,9 +73,8 @@ export function spawnWatcherPane(
   //   1. <projectRoot>/scripts/onto-review-watch.sh — co-located with the
   //      review target (onto repo invocations, full-repo projects).
   //   2. <ontoHome>/scripts/onto-review-watch.sh   — install-local script when
-  //      projectRoot is an isolated workspace (e.g. scripts/review-pr.sh's
-  //      tmp dir that only carries .onto/settings.json + target) and the
-  //      watcher helper lives in the repo home.
+  //      projectRoot is an isolated workspace and the watcher helper lives in
+  //      the repo home.
   // Without the install-local script branch, any invocation with --project-root pointed at a
   // non-repo location silently degrades to "watcher script not found"
   // (observed 2026-04-22 self-review finding). The two-slot search keeps

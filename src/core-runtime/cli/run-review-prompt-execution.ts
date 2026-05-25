@@ -42,6 +42,7 @@ import {
   writeIssueArtifactPromptPacket,
 } from "../review/issue-artifact-runtime.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
+import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
 import {
   buildLensControlledDeliberationPrompt,
   buildTeamleadControlledDeliberationPrompt,
@@ -51,7 +52,10 @@ import {
 import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
-import { writeAndThrowStructuredFailureRecord } from "../review/failure-records.js";
+import {
+  ReviewStructuredFailureError,
+  writeAndThrowStructuredFailureRecord,
+} from "../review/failure-records.js";
 
 export interface ReviewUnitExecutorConfig {
   bin: string;
@@ -90,6 +94,10 @@ interface ExecutionOutcome {
   startedAtMs: number;
   completedAtMs: number;
   failure?: ExecutionFailure;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function isSuccessfulOutcome(
@@ -311,14 +319,50 @@ function defaultStaggerDelayMsForExecutorConfig(
 
 /** Default retry count for individual lens execution failures.
  *  Set high (10) to absorb transient network timeouts and CLI crashes
- *  without losing a lens to degraded status. Each retry uses exponential
- *  backoff (8s, 16s, 24s, ...) so the worst-case total wait before
- *  final failure is ~7 minutes — acceptable for a lens that normally
- *  takes 3-5 minutes. */
+ *  without losing a lens to degraded status. Retries use a bounded linear
+ *  delay based on the attempt number. */
 const DEFAULT_LENS_MAX_RETRIES = 10;
 
-/** Delay before first retry (ms). Doubles on each subsequent retry. */
+/** Base delay for bounded linear retries. Synthesize reuses the base delay. */
 const DEFAULT_LENS_RETRY_INITIAL_DELAY_MS = 8000;
+const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 600_000;
+
+class ReviewUnitTimeoutError extends Error {
+  readonly timeoutMs: number;
+
+  constructor(unitId: string, timeoutMs: number) {
+    super(`Review unit ${unitId} timed out after ${timeoutMs}ms.`);
+    this.name = "ReviewUnitTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+function isReviewUnitTimeoutError(error: unknown): boolean {
+  return error instanceof ReviewUnitTimeoutError;
+}
+
+class ReviewIssueArtifactDispatchError extends Error {
+  readonly outcome: ExecutionOutcome | null;
+  readonly originalError: unknown;
+
+  constructor(
+    message: string,
+    outcome: ExecutionOutcome | null,
+    originalError: unknown,
+  ) {
+    super(message);
+    this.name = "ReviewIssueArtifactDispatchError";
+    this.outcome = outcome;
+    this.originalError = originalError;
+  }
+}
+
+function issueArtifactOutcomeFromError(error: unknown): ExecutionOutcome | null {
+  if (error instanceof ReviewIssueArtifactDispatchError) {
+    return error.outcome;
+  }
+  return null;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -340,9 +384,11 @@ async function invokeExecutor(
   projectRoot: string,
   sessionRoot: string,
   dispatch: ExecutionDispatchResult,
+  timeoutMs: number = DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
 ): Promise<void> {
   await fs.mkdir(path.dirname(dispatch.output_path), { recursive: true });
 
+  const detached = process.platform !== "win32";
   const child = spawn(
     executorConfig.bin,
     [
@@ -363,6 +409,7 @@ async function invokeExecutor(
     {
       cwd: projectRoot,
       stdio: ["ignore", "pipe", "pipe"],
+      detached,
       env: {
         ...process.env,
         ...(process.env.ONTO_HOME ? { ONTO_HOME: process.env.ONTO_HOME } : {}),
@@ -380,10 +427,43 @@ async function invokeExecutor(
     stderr += String(chunk);
   });
 
+  let timedOut = false;
+  let forceKillTimer: NodeJS.Timeout | null = null;
+  const terminateChild = (signal: NodeJS.Signals): void => {
+    if (child.pid === undefined) return;
+    try {
+      if (detached) {
+        process.kill(-child.pid, signal);
+      } else {
+        child.kill(signal);
+      }
+    } catch {
+      // Process may have exited between timeout and signal delivery.
+    }
+  };
+
   const exitCode = await new Promise<number>((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? 1));
+    const timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      terminateChild("SIGTERM");
+      forceKillTimer = setTimeout(() => terminateChild("SIGKILL"), 2_000);
+    }, timeoutMs);
+    child.on("error", (error) => {
+      clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      resolve(code ?? 1);
+    });
   });
+
+  if (timedOut) {
+    await removeFileIfExists(dispatch.output_path);
+    throw new ReviewUnitTimeoutError(dispatch.unit_id, timeoutMs);
+  }
 
   if (exitCode !== 0) {
     const stderrMessage = stderr.trim();
@@ -558,20 +638,6 @@ async function optionalFileDigest(filePath: string): Promise<string | null> {
   if (!(await fileExists(filePath))) return null;
   const content = await fs.readFile(filePath);
   return crypto.createHash("sha256").update(content).digest("hex");
-}
-
-function runtimeProviderForProfile(profile: ReviewExecutionProfile): string {
-  if (profile.worker_executor === "mock") return "mock";
-  if (profile.worker_executor === "codex") {
-    return profile.host === "claude" ? "claude" : "codex";
-  }
-  return profile.provider ?? profile.host;
-}
-
-function authModeForProfile(profile: ReviewExecutionProfile): string | null {
-  if (profile.worker_executor === "mock") return null;
-  if (profile.worker_executor === "codex") return profile.auth ?? "oauth";
-  return profile.auth ?? null;
 }
 
 function consumerIdForLens(lensId: string): string {
@@ -1156,25 +1222,28 @@ async function writeReviewRunManifest(
       duplicate_dispatch_policy: "session_id_collision_blocks",
     },
     review_execution_profile: reviewExecutionProfile
-      ? {
-          mode: reviewExecutionProfile.mode,
-          teamlead: reviewExecutionProfile.teamlead,
-          lens: reviewExecutionProfile.lens,
-          synthesize: reviewExecutionProfile.synthesize,
-          deliberation: reviewExecutionProfile.deliberation,
-          runtime_route: {
-            execution_realization: executionPlan.execution_realization,
-            host_runtime: reviewExecutionProfile.host,
-            worker_executor: reviewExecutionProfile.worker_executor,
-            runtime_provider: runtimeProviderForProfile(reviewExecutionProfile),
-            auth_mode: authModeForProfile(reviewExecutionProfile),
-          },
-          model: reviewExecutionProfile.model ?? null,
-          effort: reviewExecutionProfile.effort ?? null,
-          service_tier: reviewExecutionProfile.service_tier ?? null,
-          base_url: reviewExecutionProfile.base_url ?? null,
-          trace: reviewExecutionProfile.trace,
-        }
+      ? (() => {
+          const route = buildReviewExecutionRoute(reviewExecutionProfile);
+          return {
+            mode: reviewExecutionProfile.mode,
+            teamlead: reviewExecutionProfile.teamlead,
+            lens: reviewExecutionProfile.lens,
+            synthesize: reviewExecutionProfile.synthesize,
+            deliberation: reviewExecutionProfile.deliberation,
+            runtime_route: {
+              execution_realization: executionPlan.execution_realization,
+              host_runtime: route.artifact_host_runtime,
+              worker_executor: route.executor,
+              runtime_provider: route.resolved_provider,
+              auth_mode: route.auth_mode,
+            },
+            model: reviewExecutionProfile.model ?? null,
+            effort: reviewExecutionProfile.effort ?? null,
+            service_tier: reviewExecutionProfile.service_tier ?? null,
+            base_url: reviewExecutionProfile.base_url ?? null,
+            trace: reviewExecutionProfile.trace,
+          };
+        })()
       : null,
     artifact_refs: {
       session_metadata: executionPlan.session_metadata_path,
@@ -1296,6 +1365,7 @@ async function runSingleDispatchWithRetries(args: {
   dispatch: ExecutionDispatchResult;
   maxRetries: number;
   retryInitialDelayMs: number;
+  unitTimeoutMs?: number;
 }): Promise<ExecutionOutcome> {
   const {
     projectRoot,
@@ -1305,6 +1375,7 @@ async function runSingleDispatchWithRetries(args: {
     dispatch,
     maxRetries,
     retryInitialDelayMs,
+    unitTimeoutMs = DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
   } = args;
   console.log(`[review runner] starting ${dispatch.unit_kind}: ${dispatch.unit_id}`);
   await appendExecutionProgress(
@@ -1322,7 +1393,13 @@ async function runSingleDispatchWithRetries(args: {
   let lastError: unknown = undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      await invokeExecutor(executorConfig, projectRoot, sessionRoot, dispatch);
+      await invokeExecutor(
+        executorConfig,
+        projectRoot,
+        sessionRoot,
+        dispatch,
+        unitTimeoutMs,
+      );
       const completedAtMs = Date.now();
       console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
       await appendExecutionProgress(
@@ -1342,7 +1419,7 @@ async function runSingleDispatchWithRetries(args: {
       };
     } catch (error: unknown) {
       lastError = error;
-      if (attempt < maxRetries) {
+      if (!isReviewUnitTimeoutError(error) && attempt < maxRetries) {
         const retryDelay = retryInitialDelayMs * (attempt + 1);
         console.log(
           `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -1358,6 +1435,7 @@ async function runSingleDispatchWithRetries(args: {
         );
         await sleep(retryDelay);
       }
+      if (isReviewUnitTimeoutError(error)) break;
     }
   }
 
@@ -1427,6 +1505,7 @@ async function runIssueArtifactDispatch(args: {
   deliberationResponsePaths?: string[];
   deliberationOutputPath?: string;
   problemFramingProfileRef?: string | null;
+  unitTimeoutMs: number;
 }): Promise<ExecutionOutcome> {
   const seat = await writeIssueArtifactPromptPacket({
     artifactId: args.artifactId,
@@ -1495,11 +1574,14 @@ async function runIssueArtifactDispatch(args: {
       dispatch,
       maxRetries: 1,
       retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+      unitTimeoutMs: args.unitTimeoutMs,
     });
     lastOutcome = outcome;
     if (!outcome.success) {
-      throw new Error(
+      throw new ReviewIssueArtifactDispatchError(
         `Issue artifact generation failed for ${args.artifactId}: ${outcome.failure?.message ?? "unknown error"}`,
+        outcome,
+        outcome.failure?.message ?? "unknown error",
       );
     }
     try {
@@ -1519,17 +1601,42 @@ async function runIssueArtifactDispatch(args: {
       await removeFileIfExists(seat.output_path);
     }
   }
-  return await throwMalformedOutputFailure({
-    executionPlan: args.executionPlan,
-    phase: `execution.issue_artifact.${args.artifactId}`,
-    unitId: args.artifactId,
-    unitKind: "issue_artifact",
-    packetPath: seat.packet_path,
-    outputPath: seat.output_path,
-    humanMessage:
-      "An issue artifact review unit produced malformed output after validation retry.",
-    error: lastValidationError,
-  });
+  const failureMessage =
+    "An issue artifact review unit produced malformed output after validation retry.";
+  const failedOutcome =
+    lastOutcome === null
+      ? null
+      : {
+          dispatch,
+          success: false,
+          startedAtMs: lastOutcome.startedAtMs,
+          completedAtMs: Date.now(),
+          failure: {
+            unit_id: dispatch.unit_id,
+            unit_kind: dispatch.unit_kind,
+            packet_path: dispatch.packet_path,
+            output_path: dispatch.output_path,
+            message: `${failureMessage}: ${errorMessage(lastValidationError)}`,
+          },
+        };
+  try {
+    return await throwMalformedOutputFailure({
+      executionPlan: args.executionPlan,
+      phase: `execution.issue_artifact.${args.artifactId}`,
+      unitId: args.artifactId,
+      unitKind: "issue_artifact",
+      packetPath: seat.packet_path,
+      outputPath: seat.output_path,
+      humanMessage: failureMessage,
+      error: lastValidationError,
+    });
+  } catch (error) {
+    throw new ReviewIssueArtifactDispatchError(
+      `${failureMessage}: ${errorMessage(error)}`,
+      failedOutcome,
+      error,
+    );
+  }
 }
 
 async function runControlledLensDeliberation(args: {
@@ -1540,6 +1647,7 @@ async function runControlledLensDeliberation(args: {
   teamleadExecutorConfig: ReviewUnitExecutorConfig;
   successfulLensDispatches: ExecutionDispatchResult[];
   maxConcurrentLenses: number;
+  unitTimeoutMs: number;
   issueArtifactContext?: string;
 }): Promise<{
   deliberationDispatches: ExecutionDispatchResult[];
@@ -1554,6 +1662,7 @@ async function runControlledLensDeliberation(args: {
     teamleadExecutorConfig,
     successfulLensDispatches,
     maxConcurrentLenses,
+    unitTimeoutMs,
     issueArtifactContext,
   } = args;
   if (executionPlan.deliberation_mode !== "controlled-lens-deliberation") {
@@ -1638,6 +1747,7 @@ async function runControlledLensDeliberation(args: {
         dispatch,
         maxRetries: DEFAULT_LENS_MAX_RETRIES,
         retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+        unitTimeoutMs,
       });
     }
   }
@@ -1711,6 +1821,7 @@ async function runControlledLensDeliberation(args: {
     dispatch: teamleadDispatch,
     maxRetries: 1,
     retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+    unitTimeoutMs,
   });
   if (!teamleadOutcome.success) {
     throw new Error(
@@ -1743,6 +1854,7 @@ export async function executeReviewPromptExecution(
     synthesizeExecutorConfig?: ReviewUnitExecutorConfig;
     reviewExecutionProfile?: ReviewExecutionProfile;
     ontoConfig?: OntoConfig;
+    unitTimeoutMs?: number;
   },
 ): Promise<ReviewPromptExecutionResult> {
   const projectRoot = path.resolve(params.projectRoot);
@@ -1779,6 +1891,7 @@ export async function executeReviewPromptExecution(
     params.teamleadExecutorConfig ?? defaultExecutorConfig;
   const synthesizeExecutorConfig =
     params.synthesizeExecutorConfig ?? defaultExecutorConfig;
+  const unitTimeoutMs = params.unitTimeoutMs ?? DEFAULT_REVIEW_UNIT_TIMEOUT_MS;
 
   const lensDispatches: ExecutionDispatchResult[] =
     executionPlan.lens_prompt_packet_seats.map((seat) => ({
@@ -1860,12 +1973,18 @@ export async function executeReviewPromptExecution(
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
         try {
-          await invokeExecutor(defaultExecutorConfig, projectRoot, sessionRoot, dispatch);
+          await invokeExecutor(
+            defaultExecutorConfig,
+            projectRoot,
+            sessionRoot,
+            dispatch,
+            unitTimeoutMs,
+          );
           succeeded = true;
           break;
         } catch (error: unknown) {
           lastError = error;
-          if (attempt < maxRetries) {
+          if (!isReviewUnitTimeoutError(error) && attempt < maxRetries) {
             const retryDelay = retryInitialDelayMs * (attempt + 1);
             console.log(
               `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -1881,6 +2000,7 @@ export async function executeReviewPromptExecution(
             );
             await sleep(retryDelay);
           }
+          if (isReviewUnitTimeoutError(error)) break;
         }
       }
 
@@ -2116,36 +2236,195 @@ export async function executeReviewPromptExecution(
   const lensOutputPaths = successfulLensDispatches.map(
     (dispatch) => dispatch.output_path,
   );
+  const haltAfterIssueArtifactFailure = async (args: {
+    error: unknown;
+    deliberationStatus: DeliberationStatus | null;
+    deliberationExecutionResults?: ExecutionOutcome[];
+  }): Promise<ReviewPromptExecutionResult> => {
+    const failureOutcome = issueArtifactOutcomeFromError(args.error);
+    if (
+      failureOutcome &&
+      !issueArtifactOutcomes.some(
+        (outcome) => outcome.dispatch.unit_id === failureOutcome.dispatch.unit_id,
+      )
+    ) {
+      issueArtifactOutcomes.push(failureOutcome);
+    }
+    const failureMessage = errorMessage(args.error);
+    await appendMarkdownLogEntry(
+      executionPlan.error_log_path,
+      "runner halted during issue artifact generation",
+      failureMessage,
+    );
+    const degradedLensIds = executionFailures
+      .filter((failure) => failure.unit_kind === "lens")
+      .map((failure) => failure.unit_id);
+    const executionCompletedAtMs = Date.now();
+    const haltReason = `Issue artifact generation failed: ${failureMessage}`;
+    await writeExecutionResultArtifact(executionPlan, {
+      session_id: executionPlan.session_id,
+      session_root: sessionRoot,
+      execution_realization: executionPlan.execution_realization,
+      host_runtime: executionPlan.host_runtime,
+      review_mode: executionPlan.review_mode,
+      execution_status: deriveExecutionStatus({
+        synthesisExecuted: false,
+        degradedLensIds,
+      }),
+      execution_started_at: isoFromTimestamp(executionStartedAtMs),
+      execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
+      total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+      max_concurrent_lenses: maxConcurrentLenses,
+      observed_dispatch_width: maxConcurrentLenses,
+      planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
+      participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+      degraded_lens_ids: degradedLensIds,
+      excluded_lens_ids: lensDispatches
+        .map((dispatch) => dispatch.unit_id)
+        .filter(
+          (lensId) =>
+            !successfulLensDispatches.some((dispatch) => dispatch.unit_id === lensId) &&
+            !degradedLensIds.includes(lensId),
+        ),
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_executed: false,
+      deliberation_status: args.deliberationStatus,
+      halt_reason: haltReason,
+      error_log_path: executionPlan.error_log_path,
+      lens_completion_barrier_ref:
+        executionPlan.lens_completion_barrier_path ??
+        path.join(sessionRoot, "lens-completion-barrier.yaml"),
+      lens_execution_results: executionOutcomes
+        .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
+        .map(toUnitExecutionResult),
+      issue_artifact_execution_results:
+        issueArtifactOutcomes.map(toUnitExecutionResult),
+      deliberation_execution_results:
+        args.deliberationExecutionResults?.map(toUnitExecutionResult) ?? [],
+      synthesize_execution_result: null,
+    }, params.reviewExecutionProfile);
+    const originalError =
+      args.error instanceof ReviewIssueArtifactDispatchError
+        ? args.error.originalError
+        : args.error;
+    if (originalError instanceof ReviewStructuredFailureError) {
+      throw originalError;
+    }
+    return {
+      session_root: sessionRoot,
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_output_path: executionPlan.synthesis_output_path,
+      participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+      degraded_lens_ids: degradedLensIds,
+      synthesis_executed: false,
+      error_log_path: executionPlan.error_log_path,
+      halt_reason: haltReason,
+    };
+  };
   for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
-    issueArtifactOutcomes.push(
-      await runIssueArtifactDispatch({
+    try {
+      issueArtifactOutcomes.push(await runIssueArtifactDispatch({
         projectRoot,
         sessionRoot,
         executionPlan,
         executorConfig: teamleadExecutorConfig,
         artifactId,
         lensOutputPaths,
-      }),
-    );
+        unitTimeoutMs,
+      }));
+    } catch (error) {
+      return haltAfterIssueArtifactFailure({
+        error,
+        deliberationStatus: null,
+      });
+    }
   }
   const issueArtifactContext = await renderIssueArtifactContext({
     projectRoot,
     executionPlan,
   });
 
-  const controlledDeliberation = await runControlledLensDeliberation({
-    projectRoot,
-    sessionRoot,
-    executionPlan,
-    lensExecutorConfig: defaultExecutorConfig,
-    teamleadExecutorConfig,
-    successfulLensDispatches,
-    maxConcurrentLenses,
-    issueArtifactContext,
-  });
+  let controlledDeliberation: Awaited<
+    ReturnType<typeof runControlledLensDeliberation>
+  >;
+  try {
+    controlledDeliberation = await runControlledLensDeliberation({
+      projectRoot,
+      sessionRoot,
+      executionPlan,
+      lensExecutorConfig: defaultExecutorConfig,
+      teamleadExecutorConfig,
+      successfulLensDispatches,
+      maxConcurrentLenses,
+      unitTimeoutMs,
+      issueArtifactContext,
+    });
+  } catch (error) {
+    const failureMessage = error instanceof Error ? error.message : String(error);
+    await appendMarkdownLogEntry(
+      executionPlan.error_log_path,
+      "runner halted during controlled deliberation",
+      failureMessage,
+    );
+    const degradedLensIds = executionFailures
+      .filter((failure) => failure.unit_kind === "lens")
+      .map((failure) => failure.unit_id);
+    const executionCompletedAtMs = Date.now();
+    await writeExecutionResultArtifact(executionPlan, {
+      session_id: executionPlan.session_id,
+      session_root: sessionRoot,
+      execution_realization: executionPlan.execution_realization,
+      host_runtime: executionPlan.host_runtime,
+      review_mode: executionPlan.review_mode,
+      execution_status: deriveExecutionStatus({
+        synthesisExecuted: false,
+        degradedLensIds,
+      }),
+      execution_started_at: isoFromTimestamp(executionStartedAtMs),
+      execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
+      total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+      max_concurrent_lenses: maxConcurrentLenses,
+      observed_dispatch_width: maxConcurrentLenses,
+      planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
+      participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+      degraded_lens_ids: degradedLensIds,
+      excluded_lens_ids: lensDispatches
+        .map((dispatch) => dispatch.unit_id)
+        .filter(
+          (lensId) =>
+            !successfulLensDispatches.some((dispatch) => dispatch.unit_id === lensId) &&
+            !degradedLensIds.includes(lensId),
+        ),
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_executed: false,
+      deliberation_status: null,
+      halt_reason: `Controlled lens deliberation failed: ${failureMessage}`,
+      error_log_path: executionPlan.error_log_path,
+      lens_completion_barrier_ref:
+        executionPlan.lens_completion_barrier_path ??
+        path.join(sessionRoot, "lens-completion-barrier.yaml"),
+      lens_execution_results: executionOutcomes
+        .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
+        .map(toUnitExecutionResult),
+      issue_artifact_execution_results:
+        issueArtifactOutcomes.map(toUnitExecutionResult),
+      deliberation_execution_results: [],
+      synthesize_execution_result: null,
+    }, params.reviewExecutionProfile);
+    return {
+      session_root: sessionRoot,
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_output_path: executionPlan.synthesis_output_path,
+      participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+      degraded_lens_ids: degradedLensIds,
+      synthesis_executed: false,
+      error_log_path: executionPlan.error_log_path,
+      halt_reason: `Controlled lens deliberation failed: ${failureMessage}`,
+    };
+  }
 
-  issueArtifactOutcomes.push(
-    await runIssueArtifactDispatch({
+  try {
+    issueArtifactOutcomes.push(await runIssueArtifactDispatch({
       projectRoot,
       sessionRoot,
       executionPlan,
@@ -2161,8 +2440,18 @@ export async function executeReviewPromptExecution(
         projectRoot,
         executionPlan,
       }),
-    }),
-  );
+      unitTimeoutMs,
+    }));
+  } catch (error) {
+    return haltAfterIssueArtifactFailure({
+      error,
+      deliberationStatus: "performed",
+      deliberationExecutionResults: [
+        ...controlledDeliberation.deliberationOutcomes,
+        controlledDeliberation.teamleadOutcome,
+      ],
+    });
+  }
 
   const synthesizePacketRuntimePath = path.join(
     executionPlan.prompt_packets_root,
@@ -2225,7 +2514,7 @@ export async function executeReviewPromptExecution(
     ],
   );
   const synthesizeStartedAtMs = Date.now();
-  const synthesizeMaxRetries = 1; // process.md: "Retry once before halting"
+  const synthesizeMaxRetries = 1;
   let synthesizeOutcome: ExecutionOutcome | null = null;
   let synthesizeLastError: unknown = undefined;
   let synthesizeSucceeded = false;
@@ -2237,12 +2526,13 @@ export async function executeReviewPromptExecution(
         projectRoot,
         sessionRoot,
         synthesizeDispatch,
+        unitTimeoutMs,
       );
       synthesizeSucceeded = true;
       break;
     } catch (error: unknown) {
       synthesizeLastError = error;
-      if (attempt < synthesizeMaxRetries) {
+      if (!isReviewUnitTimeoutError(error) && attempt < synthesizeMaxRetries) {
         const retryDelay = DEFAULT_LENS_RETRY_INITIAL_DELAY_MS;
         console.log(
           `[review runner] synthesize attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -2258,6 +2548,7 @@ export async function executeReviewPromptExecution(
         );
         await sleep(retryDelay);
       }
+      if (isReviewUnitTimeoutError(error)) break;
     }
   }
 

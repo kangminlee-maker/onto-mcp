@@ -27,13 +27,13 @@ Done when:
 - `onto.review`, `onto.review_status`, and `onto.review_result` work with a
   mock/local provider.
 
-## Stage 3 — Provider Contract
+## Stage 3 — Execution Profiles
 
 Done when:
 
-- `src/providers/` defines capability reporting and execution methods.
-- Local/mock provider has conformance tests.
-- Codex and Claude provider strategies are documented before implementation.
+- `settings.json` resolves to worker, direct-call, or mock execution.
+- Local/mock and Codex worker paths have conformance tests.
+- Additional provider guarantees are documented before implementation.
 
 ## Stage 4 — Controlled Deliberation
 

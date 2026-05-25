@@ -154,8 +154,8 @@ domain_final_selection:
   final_value: ontology
   selection_mode: user_confirmed_recommendation
 resolved_session_domain: ontology
-resolved_execution_realization: host-team
-resolved_host_runtime: claude
+resolved_execution_realization: worker
+resolved_host_runtime: codex
 resolved_review_mode: full
 resolved_lens_set:
   - logic
@@ -267,5 +267,4 @@ artifact seat를 포함한 deterministic shell materialization이다.
 이 문서 다음 단계는 아래다.
 
 1. `src/core-api/review-api.ts`와 `src/mcp/server.ts`가 interpretation -> binding 순서를 보존한다
-2. `.onto/processes/review/review.md` Step 0/1/1.5/2의 설명을 이 계약에 맞게 정리한다
-3. 이후 `lens prompt contract`와 `synthesize prompt contract`를 분리한다
+2. 이후 `lens prompt contract`와 `synthesize prompt contract`를 분리한다

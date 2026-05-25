@@ -16,7 +16,6 @@ export type ReviewWorkerExecutor = "codex" | "direct_call" | "mock";
 
 export type ReviewExecutionHost =
   | "codex"
-  | "claude"
   | "standalone"
   | "openai"
   | "anthropic"
@@ -53,7 +52,6 @@ export interface ResolveReviewExecutionProfileArgs {
   explicitCodex: boolean;
   settings: OntoSettings;
   env?: NodeJS.ProcessEnv;
-  claudeHost?: boolean;
   codexAvailable?: boolean;
 }
 
@@ -96,7 +94,6 @@ function hostFromEnv(env: NodeJS.ProcessEnv): ReviewExecutionHost | null {
   const value = env.ONTO_HOST_RUNTIME?.trim().toLowerCase();
   if (
     value === "codex" ||
-    value === "claude" ||
     value === "standalone" ||
     value === "openai" ||
     value === "anthropic" ||
@@ -174,11 +171,17 @@ export function resolveReviewExecutionProfile(
     };
   }
 
-  const claudeHost = args.claudeHost ?? env.CLAUDECODE === "1";
   const codexAvailable =
     args.codexAvailable ?? detectCodexBinaryAvailable();
   const envHost = hostFromEnv(env);
   const selection = normalizeLlmModelSwitcher(args.settings.llm);
+
+  if (env.ONTO_HOST_RUNTIME?.trim().toLowerCase() === "claude") {
+    return noHost(
+      trace,
+      "ONTO_HOST_RUNTIME=claude is not a wired onto-mcp runtime path. Use Codex OAuth, API-key direct-call, local direct-call, or mock.",
+    );
+  }
 
   if (selection && selection.auth !== "oauth") {
     log(
@@ -223,21 +226,6 @@ export function resolveReviewExecutionProfile(
           settings: args.settings,
           workerExecutor: "codex",
           host: "codex",
-          trace,
-        }),
-      };
-    }
-    if (envHost === "claude") {
-      if (!claudeHost) {
-        return noHost(trace, "ONTO_HOST_RUNTIME=claude requires a Claude host session.");
-      }
-      log("host-bound Claude worker selected by ONTO_HOST_RUNTIME=claude");
-      return {
-        type: "resolved",
-        profile: buildProfile({
-          settings: args.settings,
-          workerExecutor: "codex",
-          host: "claude",
           trace,
         }),
       };
@@ -290,13 +278,6 @@ export function resolveReviewExecutionProfile(
         trace,
       }),
     };
-  }
-
-  if (claudeHost) {
-    return noHost(
-      trace,
-      "Claude host worker execution is not wired in the TS runtime. Use API-key/local direct-call settings or Codex.",
-    );
   }
 
   return noHost(

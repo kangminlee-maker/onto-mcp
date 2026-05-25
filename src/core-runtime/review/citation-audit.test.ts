@@ -12,10 +12,10 @@ describe("extractSignificantQuotes", () => {
 
   it("extracts backtick code spans above threshold", () => {
     const text =
-      "The evidence is at `src/core-runtime/scope-runtime/state-machine.ts` in the module.";
+      "The evidence is at `src/core-runtime/review/review-state-machine.ts` in the module.";
     const quotes = extractSignificantQuotes(text);
     expect(quotes.map((q) => q.text)).toContain(
-      "src/core-runtime/scope-runtime/state-machine.ts",
+      "src/core-runtime/review/review-state-machine.ts",
     );
   });
 

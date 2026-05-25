@@ -1,16 +1,11 @@
 # onto runtime data — per-session / ephemeral artifacts only.
-# Structural resources migrated under `.onto/` by the repo-layout migration
-# (Phase 1~6: commands/, domains/, roles/, processes/, principles/, authority/)
-# are versioned and intentionally NOT ignored. If a new runtime-ephemeral
+# Structural resources under `.onto/` (domains/, roles/, processes/,
+# principles/, authority/) are versioned and intentionally NOT ignored.
+# If a new runtime-ephemeral
 # subdirectory is added under `.onto/`, add its pattern here explicitly.
 # CI guard: scripts/check-onto-allowlist.sh fails when a tracked `.onto/` path
 # is neither in its structural allowlist nor covered by this file.
 #
-# Dogfooding exception: `.onto/config.yml` is *tracked* in this repo as a
-# canonical reference for other onto-X consumers (dogfooding self-consistency,
-# 2026-04-22). It is registered in the allowlist script's exact-match list.
-# Other onto-X repos that consume this package can keep their own
-# `.onto/config.yml` ignored locally — this exception is repo-scoped.
 .onto/review/
 .onto/builds/
 .onto/learnings/

@@ -13,9 +13,9 @@ notes:
 legacy_alias_governance:
   owner: "core-lexicon.yaml (this file)"
   precedence: "canonical_label always wins. legacy_aliases exist for comprehension bridging only."
-  lifecycle: "A legacy alias is retired when zero prototype files reference it."
-  retire_gate: "Dual-read fallback code (lens-registry.ts canonicalizeLensId, paths.ts resolveWithFallback) may be removed when: (1) zero onto_* learning files exist in project AND user seats (active review/promote sessions 제외), AND (2) at least one successful full review session has run with bare IDs."
-  relation_to_translation_reference: "translation-reference.yaml is a NON-AUTHORITATIVE onboarding aid. This governance block is the canonical bridge."
+  lifecycle: "A legacy alias is documentation-only and never extends runtime authority."
+  retire_gate: "Runtime canonical IDs are bare IDs. Legacy aliases remain only as comprehension notes."
+  relation_to_translation_reference: "retired from current runtime; historical translation reference is archived under development-records/archive/retired-runtime-legacy-20260526/."
   scope_migration:
     introduced_in: "v0.15.0 (2026-04-20) — framework v1.0 sync"
     rule: "shared_attributes.scope.values 가 재정의됨. legacy identifier 는 semantic 이 다른 canonical value 로 mapping."
@@ -45,7 +45,7 @@ legacy_alias_governance:
         canonical: "domain"
         reason: "identifier 보존. 의미만 '저장 경계 레이블' 에서 '적용 범위 frame' 으로 재정의."
         semantics_change: "저장 경계 → 분야 frame. 기존 instance 는 그대로 유효 (분야 차원 지식)."
-    fallback_read_rule: "legacy value 를 참조하는 코드·문서는 본 mapping 에 따라 canonical 로 dual-read. runtime 소비자 (src/core-runtime/) 마이그레이션은 framework §12.6 에 따라 별도 PR."
+    runtime_rule: "runtime 소비자(src/core-runtime/)는 canonical value만 읽는다."
   deprecated_vocabulary:
     introduced_in: "v0.15.0 (2026-04-20)"
     items:
@@ -58,7 +58,7 @@ legacy_alias_governance:
         prior_seat: "learning 파일 본문 tag 표기"
         deprecated_at: "v0.15.0"
         replacement: "frontmatter primary_scope + secondary_scopes (framework §7.4)"
-        reason: "framework v1.0 §8.4 — frontmatter scope 가 canonical, inline tag 는 legacy fallback 해석 대상 (framework §7.6)."
+        reason: "framework v1.0 §8.4 — frontmatter scope 가 canonical."
 # review_taxonomy_migration: removed in v0.2.0. Canonical aliases are owned by each entity/term's legacy_aliases field.
 
 # ---------------------------------------------------------------------------
@@ -72,35 +72,30 @@ authoring_rules:
     required_slots: [term_id, canonical_label, korean_label, definition, term_status]
     optional_slots: [axis, allowed_values, notes, legacy_aliases, contract_ref, translation_mode]
   translation_policy:
-    # 용어 번역 정책 (.onto/principles/output-language-boundary.md §9 Layer 1).
-    # Principal-facing 텍스트 렌더링 시 canonical identifier 가 mode 따라 처리됨.
+    # 용어 표시 정책. Current onto-mcp review runtime does not implement
+    # runtime translation or render-point registries.
     introduced_in: "v0.20.0 (2026-04-20) — 3-mode 초판"
-    revised_in: "v0.21.0 (2026-04-20) — bilingual 완전 제거, default preserved 로 flip"
+    revised_in: "v0.22.0 (2026-05-26) — runtime translation registry retired"
     modes:
       preserved: "원어 유지. default. rank 1-4 정의 개념 + command 어휘 전수."
-      translated: "korean_label 로 치환. 비-core Korean prose 렌더링 시 explicit opt-in."
+      translated: "future/non-runtime prose에서만 explicit opt-in 가능. current review artifacts는 canonical identifier를 유지."
     default_mode: "preserved"
     explicit_declaration_required:
       - "translated mode 는 해당 entity/term 에 `translation_mode: translated` 필드로 명시 (default preserved 의 예외)"
       - "preserved (default) 는 필드 생략 허용. 강조 목적의 explicit 선언도 허용"
     korean_label_role:
       - "각 entity/term 의 korean_label 은 **descriptive 참조용**. Korean-speaking 기여자의 개념 이해를 돕는 label"
-      - "default mode=preserved 인 현재 정책에서는 렌더링에 쓰이지 않음"
-      - "translation_mode: translated 가 explicit 선언되면 그 시점에 korean_label 또는 glossary translated_label 이 렌더링 source 로 활용"
+      - "default mode=preserved 인 현재 정책에서는 runtime 렌더링에 쓰이지 않음"
+      - "translation_mode: translated 는 현재 review runtime artifact에 적용되지 않는다"
     bilingual_abolition_note:
       - "v0.21.0 에서 bilingual mode 완전 제거. 기존 v0.20.0 의 6 bilingual 항목 (principal, principle, product, experience, medium, provenance) 은 모두 preserved (새 default) 로 흡수"
       - "이유: rank 1-4 authority 정의 개념 + command 어휘는 원어 통일이 일관성 원칙. 중간 지점 (첫 등장 병기) 을 별도 mode 로 유지할 경우 policy complexity 대비 실익 미미"
     scope_policy:
       principle: "rank 1 (lexicon entities/terms) + rank 2-4 (.onto/principles/ + productization-charter + interface specs) 정의 개념 + CLI command 어휘는 전수 preserved"
       rank5_and_lower: ".onto/processes/*.md + development-records/ 등은 정의보다 서술 성격. 개별 term 의 mode 는 rank 1-4 정의가 canonical"
-    glossary_seat: ".onto/authority/translation-glossary/{lang}.yaml"
-    glossary_role_v0_21:
-      - "preserved (default 또는 explicit) 항목은 rationale 기록용 (optional)"
-      - "translated (explicit opt-in) 항목은 translated_label + rationale 필수 (lint R3 enforce)"
+    glossary_seat: "retired from current runtime; archived under development-records/archive/retired-runtime-legacy-20260526/"
     lint_rules:
-      R3: "entity/term 이 explicit translation_mode=translated 선언 시 glossary 에 대응 entry + translated_label 존재"
-      R4: "glossary entry 의 mode 가 lexicon 의 declared mode 와 일치"
-      R5: "glossary term_id 가 lexicon 의 entity key 또는 term_id 에 존재"
+      R3: "runtime translation lint is retired from current onto-mcp review runtime"
   relation_ownership: "source entity(및 그 instances)가 outbound relation만 소유. inverse는 derived, authored하지 않음."
   relation_ownership_interpretation: >
     "inverse 는 derived" 의 의미 명확화 (v0.18.0, framework v1.0.1 sync).
@@ -280,7 +275,7 @@ provisional_lifecycle:
   cross_references:
     shared_attributes_lifecycle_status: "shared_attributes.lifecycle_status — 상태 값 정의 원천"
     term_status_vocabulary: "authoring_rules.term_status_vocabulary — promoted 후 정식 등록 시 적용"
-    citation_check_tool: "W-D-02 — seed/candidate/provisional 인용 금지 검증 도구"
+    citation_check_tool: "not wired in the current onto-mcp review runtime"
     recording_seat_structure: "W-D-03 — provisional_terms section 4 seat 구조 확정"
     refresh_protocol: "development-records/plan/20260413-refresh-protocol.md"
 
@@ -308,7 +303,7 @@ provisional_terms:
         ref: "development-records/plan/20260413-refresh-protocol.md §3"
       - id: citation_check
         role: "seed/candidate/provisional term 인용 금지 검증"
-        ref: "src/core-runtime/readers/lexicon-citation-check.ts (W-D-02)"
+        ref: "not wired in the current onto-mcp review runtime"
       - id: work_item_author
         role: "다른 축 work item 작성자 — provisional term 존재 확인 후 인용 회피"
     promotion_path:
@@ -331,14 +326,14 @@ provisional_terms:
         구조적으로 읽어 점진성(progressiveness) metric 을 산출한다.
         없으면 반복 review 의 비용·시간 변화를 계량할 수 없다.
       evidence:
-        - "src/core-runtime/readers/review-log.ts (reader 구현)"
-        - ".onto/processes/review/review-log-contract.md (계약 문서)"
+        - ".onto/processes/review/record-contract.md (current review record contract)"
+        - "src/core-runtime/cli/assemble-review-record.ts (current ReviewRecord assembly)"
       notes:
         - "DL-017 점진성 seat 3건 중 review 담당"
         - "W-A-75/76 (review-r+/r−) 의 선행 의존"
     learning_usage_hitrate:
       term_id: learning_usage_hitrate
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-72"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -347,13 +342,13 @@ provisional_terms:
         토큰 효율, tier/role 분포를 수집하여 학습 기제 신뢰도 proxy 를 산출한다.
         없으면 학습 축적이 실제로 활동 비용을 줄이는지 판단할 수 없다.
       evidence:
-        - "src/core-runtime/learning/usage-tracker.ts (tracker 구현)"
+        - "archived legacy learning tracker (not current runtime authority)"
       notes:
-        - "DL-017 기제 seat 3건 중 learn 담당"
-        - "§1.4 측면 3 — 기제 신뢰도"
+        - "Not wired in the current onto-mcp review runtime."
+        - "learn/govern will require separate design after review/reconstruct/evolve are productized."
     domain_validation_accuracy:
       term_id: domain_validation_accuracy
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-73"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -362,13 +357,13 @@ provisional_terms:
         기록하고 정확도 비율을 산출한다.
         없으면 domain assumption 의 신뢰성을 판단할 수 없다.
       evidence:
-        - "src/core-runtime/scope-runtime/domain-validation-log.ts (tracker 구현)"
+        - "archived legacy domain-validation tracker (not current runtime authority)"
       notes:
-        - "DL-017 기제 seat 3건 중 reconstruct 담당"
-        - "W-A-74 (reconstruct-cli) 에서 파이프라인 연동 예정"
+        - "Not wired in the current onto-mcp review runtime."
+        - "reconstruct will require separate productized design."
     review_ontology_present_path:
       term_id: review_ontology_present_path
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-75"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -377,15 +372,14 @@ provisional_terms:
         code location·action·transition 을 grounding 으로 사용할 수 있는 경우의 수행 계약.
         없으면 ontology 투자의 비용·품질 효과를 정의·계량할 수 없다.
       evidence:
-        - ".onto/processes/review/ontology-path.md (계약 문서)"
-        - "src/core-runtime/review/ontology-path-classifier.ts (classifier 구현)"
+        - "development-records/archive/retired-processes-20260526/review/ontology-path.md (archived legacy contract)"
       notes:
         - "DL-029 해소 2-path split 중 r+ 담당"
         - "쌍: review_ontology_absent_path (W-A-76)"
-        - "현재는 환경 수준 분기. per-session 라벨링은 향후 확장."
+        - "Not wired in the current onto-mcp review runtime."
     review_path_label:
       term_id: review_path_label
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-75"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -393,13 +387,13 @@ provisional_terms:
         classifyReviewPaths() 가 프로젝트의 ontology seat 존재 여부를 기준으로 부여한다.
         없으면 cohort 간 비용·품질 delta 를 계산할 대상이 정의되지 않는다.
       evidence:
-        - "src/core-runtime/review/ontology-path-classifier.ts (ReviewPathLabel 타입 + LabeledReviewSession)"
+        - "development-records/archive/retired-processes-20260526/review/ontology-path.md (archived legacy classifier contract)"
       notes:
         - "값: r+ (ontology-present), r- (ontology-absent), unknown (향후 per-session 분기 시 사용)"
         - "cohort 집계는 PathCohortMetric, 비교는 PathDeltaMetric 에 노출"
     review_ontology_absent_path:
       term_id: review_ontology_absent_path
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-76"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -408,16 +402,14 @@ provisional_terms:
         의존하여 grounding 하는 ad-hoc 경로.
         없으면 ontology 투자 효과를 측정할 baseline 이 정의되지 않는다.
       evidence:
-        - ".onto/processes/review/ontology-absent-path.md (계약 문서)"
-        - "src/core-runtime/readers/scan-local.ts (fallback grounding reader)"
-        - "src/core-runtime/readers/scan-local.test.ts §W-A-76 (fallback surface 증빙)"
+        - "development-records/archive/retired-processes-20260526/review/ontology-absent-path.md (archived legacy contract)"
       notes:
         - "DL-029 해소 2-path split 중 r− 담당"
         - "쌍: review_ontology_present_path (W-A-75)"
-        - "r+ 대비 품질 저하는 PathDeltaMetric.degraded_ratio_delta 로 관측"
+        - "Not wired in the current onto-mcp review runtime."
     reconstruct_bounded_path:
       term_id: reconstruct_bounded_path
-      lifecycle_status: seed
+      lifecycle_status: deprecated
       registered_by: "W-A-74"
       registered_date: "2026-04-14"
       definition_draft: >
@@ -427,13 +419,12 @@ provisional_terms:
         없으면 reconstruct runtime 방법론 호출 경로가 ad-hoc 이어서 post-PR 결함 cluster (reconstruct-runtime 40 BL) 의
         구조적 원인이 유지된다.
       evidence:
-        - "src/core-runtime/evolve/commands/reconstruct.ts (handler)"
-        - "src/core-runtime/evolve/commands/reconstruct.test.ts (17 tests)"
-        - ".onto/processes/reconstruct.md (activity=reconstruct, process_name=reconstruct)"
+        - "archived legacy reconstruct handler (not current runtime authority)"
+        - "archived legacy reconstruct process contract (not current runtime authority)"
       notes:
         - "DL-020 해소"
         - "§1.4 reconstruct 완료 기준 3축 (초안·why 추정·Principal 검증) 이 3-step 에 매핑됨"
-        - "reconstruct runtime 의 실제 Explorer/lens loop 은 후속 W-ID 범위"
+        - "Not wired in the current onto-mcp review runtime."
     invoke_surface:
       term_id: invoke_surface
       lifecycle_status: seed
@@ -443,8 +434,8 @@ provisional_terms:
         주체자가 진입하는 runtime/tool 표면. MCP-native 방향에서는 `src/mcp/` tool schema가 public
         invoke surface이고, process 문서는 의미론 authority seat를 제공한다.
       evidence:
-        - "src/mcp/tool-schemas.ts (public tool schema)"
-        - ".onto/processes/evolve.md (future evolve semantic authority)"
+        - "src/mcp/server.ts (current MCP tool surface)"
+        - "src/core-api/review-api.ts (current review API facade)"
       notes:
         - "R-4 성문화 seed. authority seat 는 기존 rank 1 authority 파일 개념이므로 별도 seed 없음."
         - "MCP-native public surface는 command document가 아니라 tool schema로 고정한다."
@@ -460,8 +451,8 @@ provisional_terms:
         independent authority 를 갖지 않는다 (non-mutation). drift 는 재설치로만 보정된다.
         없으면 install tree 에 대한 현장 수정이 authority seat 를 우회할 수 있다.
       evidence:
-        - ".onto/processes/evolve.md §9.2 (4 불변식)"
         - "package.json files list"
+        - ".onto/processes/review/productized-live-path.md (current review process authority)"
       notes:
         - "R-4 성문화 seed. invoke_surface 와 한 쌍으로 alignment 모델의 축을 형성."
         - "runtime-bound 경로에서도 동일 불변식 적용 (§9.4)."
@@ -473,26 +464,14 @@ provisional_terms:
       registered_by: "Phase 1 host-decoupling (2026-04-17)"
       registered_date: "2026-04-17"
       definition_draft: >
-        onto runtime이 어떤 host 환경에서 실행되는지 결정하는 우선순위 기반 detection 절차.
-        canonical seat: src/core-runtime/discovery/host-detection.ts:detectHostRuntime().
-        반환 값은 3-host 분류 — claude (Claude Code session) | codex (Codex CLI session 또는
-        passive availability) | standalone (TS process, no host LLM).
-        priority order:
-          1. ONTO_HOST_RUNTIME env var (explicit override)
-          2. config.host_runtime in .onto/settings.json
-          3. CLAUDECODE / CLAUDE_PROJECT_DIR → claude
-          4. CODEX_THREAD_ID / CODEX_CI → codex
-          5. codex binary on PATH + ~/.codex/auth.json → codex
-          6. (none) → standalone (default)
-        없으면 host-coupled detection 코드가 review-invoke / bootstrap-review-binding /
-        prepare-review-session 3 곳에 중복되며, 새 host (standalone, 향후 추가) 도입 시
-        모든 위치를 수정해야 한다.
+        onto-mcp runtime이 Codex worker를 사용할 수 있는지 판정하는 detection 절차.
+        canonical seat: src/core-runtime/discovery/host-detection.ts.
+        현재 runtime은 Codex worker availability와 Codex session signal만 판정한다.
+        API key / local provider는 host detection이 아니라 settings-driven LLM switcher가 판정한다.
       evidence:
         - "src/core-runtime/discovery/host-detection.ts (canonical seat)"
-        - "src/core-runtime/discovery/host-detection.test.ts (24 unit tests)"
       notes:
-        - "Phase 1: detection + capability matrix + override mechanism 만 구현. Phase 2 에서 host_runtime: standalone 시 main_llm/worker_llm 직접 호출 wire."
-        - "host capability (hasTeamCreate, hasAgentSpawn) 는 host_runtime 에 종속 — claude 만 true. LLM provider capability (hasAnthropicApiKey, hasOpenAiApiKey, hasLiteLlmEndpoint, hasCodexExec) 는 환경 독립적 — host 와 무관하게 detection 됨."
+        - "Host/team capability matrix는 canonical runtime path에서 제거했다. 현재 execution route는 worker, direct-call, mock 세 경로로 닫는다."
 
     main_worker_llm_axis:
       term_id: main_worker_llm_axis
@@ -511,8 +490,8 @@ provisional_terms:
         없으면 host_runtime 단일 축이 main 과 worker 결정을 모두 묶어버려, cross-host 조합이
         type 차원에서 표현 불가능.
       evidence:
-        - ".onto/processes/configuration.md §llm (canonical model switcher)"
-        - "src/core-runtime/review/execution-plan-resolver.ts (review-time LLM execution plan resolver)"
+        - "src/core-runtime/discovery/settings-chain.ts (settings contract)"
+        - "src/core-runtime/llm/model-switcher.ts (LLM provider/auth normalization)"
       notes:
         - "Phase 1: schema + 문서화만. Phase 2: worker_llm 직접 호출 (direct-call) 구현."
         - "Phase 2 결정 1 (inline content vs function-calling loop): inline content mode 우선 — 8B 모델은 function-calling 신뢰도 낮음. function-calling loop 는 Phase 3."
@@ -569,7 +548,7 @@ entities:
     execution_rules_ref:
       data_accumulation: ".onto/principles/product-locality-principle.md §2.2"
       consumption_precondition: ".onto/principles/product-locality-principle.md §2.2"
-      lifecycle_transition: ".onto/processes/learn/promote.md"
+      lifecycle_transition: "not wired in the current onto-mcp review runtime"
       storage_derivation: "framework v1.0 §12.7 — (tier, primary_scope) + maturity 로 디렉토리 결정. 예: primary_scope=product → {product}/.onto/learnings/, primary_scope=medium → ~/.onto/mediums/{X}/learnings/"
     notes:
       - "framework v1.0 §8.2 에서 refine: 정의를 'promoted 검증된 cost-saver' 로 좁힘 (기존 '축적된 경험 지식' 에서 범위 축소). Experience 는 별도 entity 로 분리."
@@ -617,7 +596,7 @@ entities:
         note: "전체 lens 결과를 통합하는 비-lens 단계. lens 완료 후 순차 실행"
       - type: creates
         target: experience
-        note: "lens 실행 중 raw 관찰 생성 (Tier 1, maturity=Experience). learning 승격은 별도 promote flow 의 책임 (framework v1.0 §6.1, .onto/processes/learn/promote.md). review_process 는 experience 생성까지만 담당. ReviewRecord 는 별도의 primary artifact 이며 experience 생성을 매개하지 않는다. (v0.16.0 재조정, re-review 20260420-b74e947f logic F2·dependency F3 반영: 기존 `creates learning` 은 learning 의 'promoted post-verdict' 정의와 graph-satisfiability 충돌.)"
+        note: "lens 실행 중 raw 관찰 생성 (Tier 1, maturity=Experience). current onto-mcp review runtime은 ReviewRecord를 primary artifact로 만들며 learning 승격을 수행하지 않는다."
       - type: consumes
         target: learning
         note: "consumption precondition 은 learning.execution_rules_ref.consumption_precondition 참조. promoted learning 만 소비 대상."
@@ -643,13 +622,13 @@ entities:
         target: drift_queue_entry
         note: "submit 서브커맨드가 새 entry 생성. origin=human → tag=norm_change, origin=system → tag=drift"
     execution_rules_ref:
-      process_contract: ".onto/processes/govern.md"
-      tool_surface: "future MCP govern tool"
-      storage_path: ".onto/govern/queue.ndjson (project-local)"
+      process_contract: "not wired in the current onto-mcp review runtime"
+      tool_surface: "future MCP govern tool after separate design"
+      storage_path: "not active in the current runtime"
     notes:
       - "W-C-01 v0 (2026-04-16): bounded minimum surface. 큐 기록만 제공. 승인 강제 차단은 W-C-02, 승급 경로·cross-project 규범은 W-C-03."
       - "CLI-agent 책임 분리: CLI 는 이벤트 append + projection + 렌더링. agent 는 payload 작성 + 판정 근거 text 구성."
-      - "W-C-02 v0 (2026-04-16): drift engine classifier/router 추가 (src/core-runtime/govern/drift-engine.ts). §1.3 3 분기 (self_apply / queue / principal_direct) deterministic 분류 + queue append. `onto govern route` CLI subcommand 로 소비. §1.3 수준 0→1 gate 도달."
+      - "Archived legacy govern code is isolated under development-records/archive/retired-runtime-legacy-20260526/. No govern runtime path is wired in current onto-mcp."
       - "승인 강제 차단 (pre-commit/CI/merge gate), 실제 diff 분석 drift probe 는 W-C-02 v1 이후."
 
   domain_document:
@@ -675,7 +654,7 @@ entities:
         note: "Tier 2 → Tier 3 승격. snapshot copy (framework §6.3)."
     execution_rules_ref:
       resolution_order: ".onto/principles/product-locality-principle.md §2.3"
-      lifecycle_transition: ".onto/processes/learn/promote-domain.md"
+      lifecycle_transition: "not wired in the current onto-mcp review runtime"
     notes:
       - "도메인 귀속은 파일 경로 규약 ({domain}/ 디렉토리) 에 의해 결정됨."
       - "framework v1.0 §8.2 refine (2026-04-20, v0.15.0): grain 명확화 (1 file = 1 instance). doc_type local attribute 추가. belongs_to domain 및 canonicalized_to principle relation 명시. shared [scope] 제거 — primary_scope 는 belongs_to domain 으로 implicit, framework scope 는 domain 으로 고정."
@@ -821,7 +800,7 @@ entities:
           definition: "엔드포인트 결정 경로"
           values: ["cli_flag", "env", "project_config", "onto_home_config"]
     execution_rules_ref:
-      provider_resolution: "src/core-runtime/learning/shared/llm-caller.ts:resolveProvider"
+      provider_resolution: "src/core-runtime/llm/llm-caller.ts:resolveLlmProviderConfig"
       config_schema: "src/core-runtime/discovery/settings-chain.ts:OntoConfig"
     notes:
       - "구현 인스턴스 예: LM Studio local endpoint (openai wire-format). 벤더 이름은 lexicon에 직접 넣지 않는다"
@@ -847,8 +826,8 @@ entities:
         # `api_provider` config나 `--codex` 같은 명시적 override로 조정한다.
         # 근거: 20260415T1700-execution-realization-priority-design.md D7.
     execution_rules_ref:
-      classification_consumer: "src/core-runtime/learning/shared/llm-caller.ts:resolveProvider (provider 해소 정책에서 billing mode 분류를 참조)"
-      design_record: ".onto/processes/configuration.md §llm"
+      classification_consumer: "src/core-runtime/llm/llm-caller.ts (provider 해소 정책에서 billing mode 분류를 참조)"
+      design_record: "archived legacy learning rules (not current runtime authority)"
     notes:
       - "이 entry는 billing 속성 분류만 담는다. Provider 해소·선호 순서는 resolver 정책 층(llm-caller.ts resolveProvider)이 관리하며 사용자 상황에 따라 달라진다."
       - "local provider를 variable로 분류하는 이유: 로컬 endpoint 뒤의 실제 backend가 로컬 모델이면 0, 유료 API backend면 per-token일 수 있다. 감사 관점에서는 보수적으로 per-token 신호를 기록(LlmCallResult.declared_billing_mode)"
@@ -856,69 +835,60 @@ entities:
   LlmAgentSpawnRealization:
     canonical_label: "LlmAgentSpawnRealization"
     korean_label: "LLM 에이전트 생성 실현"
-    definition: "review agentic 작업에서 lens reasoning unit을 어떤 기제로 spawn하고 누가 orchestration하는가를 규정하는 축. execution_realization × host_runtime 2-axis의 세 유효 조합(host_team_claude, worker_claude, worker_codex)에 대한 의미론적 seat — codex 조합은 billing_source rail에 따라 worker_codex_oauth / worker_codex_apikey 두 instance로 세분화된다."
-    core_value: "이 개념이 없으면 2-axis 조합의 의미가 타입 정의에만 존재해, '세 조합이 왜 서로 다른가'를 설명하는 rank-1 자리가 없다. 특히 orchestrator 소재·context 비용·billing source의 차이가 운영 의사결정 근거인데 authority에 부재"
+    definition: "review 작업에서 lens reasoning unit을 어떤 실행 경로로 호출하는가를 규정하는 축. 현재 onto-mcp canonical route는 worker_codex, direct_call_provider, mock 세 instance로 닫는다."
+    core_value: "이 개념이 없으면 execution_realization과 provider/auth 설정이 단순 문자열 조합으로 흩어져, 어떤 경로가 독립 context를 제공하고 어떤 경로가 direct HTTP 호출인지 판단하기 어렵다."
     attributes:
       shared: []
       local:
         orchestration_locus:
-          definition: "lens dispatch와 state 전이를 담당하는 주체의 소재"
+          definition: "lens dispatch와 unit 실행을 담당하는 주체의 소재"
           values:
-            coordinator_worker: "main이 TeamCreate로 spawn한 별도 worker가 orchestration 담당"
-            main_session: "주체자 세션 자체가 Agent tool 호출로 orchestration"
+            runtime_main: "TS runtime main path가 session과 dispatch를 준비"
             external_worker: "외부 worker가 자체 orchestration"
+            direct_runtime_call: "TS runtime이 provider API/local endpoint를 직접 호출"
         context_cost:
           definition: "메인 세션 context 소비 특성"
           values:
             independent: "orchestration·lens reasoning 모두 메인 외부 context"
-            orchestration_only: "orchestration만 메인 소비, lens reasoning은 독립 context"
+            bounded_direct_call: "runtime이 packet text를 provider 호출로 전달하며 artifact boundary로 context를 제한"
         billing_source:
           definition: "실행 비용이 청구되는 자원 rail (누가·어떤 계정이 지불하느냐). 과금 방식(subscription vs per-token 등) 자체의 분류는 별도 개념 `LlmBillingMode`가 담당 — 이 필드는 rail 식별만 한다."
           values:
-            claude_code_subscription: "주체자의 Claude Code 세션이 지불"
             chatgpt_account: "~/.codex/auth.json OAuth mode 경유 chatgpt 계정이 지불"
-            openai_account: "~/.codex/auth.json API-key mode의 OpenAI 계정이 지불"
+            api_provider_account: "OPENAI/ANTHROPIC/XAI 등 provider API key 계정이 지불"
             local_or_self_hosted: "로컬 모델 또는 자체 호스팅 (외부 지불 없음)"
     instances:
-      host_team_claude:
-        execution_realization: "host-team"
-        host_runtime: "claude"
-        orchestration_locus: "coordinator_worker"
-        context_cost: "independent"
-        billing_source: "claude_code_subscription"
-        notes: "Coordinator state machine + 주체자의 TeamCreate + nested Agent tool. 주체자 메인 context 거의 무소비."
-      worker_claude:
-        execution_realization: "worker"
-        host_runtime: "claude"
-        orchestration_locus: "main_session"
-        context_cost: "orchestration_only"
-        billing_source: "claude_code_subscription"
-        notes: "주체자가 TeamCreate 없이 Agent tool을 직접 사용해 lens worker를 flat spawn. 같은 coordinator-state-machine.ts 재활용. 주체자 context가 orchestration에 사용되지만 lens reasoning은 독립 worker context."
-      worker_codex_oauth:
+      worker_codex:
         execution_realization: "worker"
         host_runtime: "codex"
         orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "chatgpt_account"
         notes: "`llm.auth=oauth` + `llm.provider=openai` 경로. codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
-      worker_codex_apikey:
-        execution_realization: "worker"
-        host_runtime: "codex"
-        orchestration_locus: "external_worker"
-        context_cost: "independent"
-        billing_source: "openai_account"
-        notes: "OpenAI API key 기반 worker 경로. codex CLI가 api.openai.com 사용. 과금 모드 분류는 LlmBillingMode.per_token 참조. 타입 space에서는 worker_codex_oauth와 동일한 (worker, codex) 조합이지만 billing_source rail이 다르므로 별도 instance."
+      direct_call_provider:
+        execution_realization: "direct-call"
+        host_runtime: "openai | anthropic | grok | lmstudio"
+        orchestration_locus: "direct_runtime_call"
+        context_cost: "bounded_direct_call"
+        billing_source: "api_provider_account | local_or_self_hosted"
+        notes: "`llm.auth=api_key` 또는 `llm.auth=local` 경로. Provider/model/base_url은 settings switcher가 해소한다."
+      mock:
+        execution_realization: "direct-call"
+        host_runtime: "standalone"
+        orchestration_locus: "direct_runtime_call"
+        context_cost: "bounded_direct_call"
+        billing_source: "local_or_self_hosted"
+        notes: "테스트 전용 deterministic executor."
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"
-      state_machine: "src/core-runtime/cli/coordinator-state-machine.ts (host_team_claude + worker_claude 공용)"
-      codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts (worker_codex_* 전용)"
+      codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts"
+      direct_call_executor: "src/core-runtime/cli/inline-http-review-unit-executor.ts"
       design_record: "development-records/plan/20260415T1700-execution-realization-priority-design.md"
     notes:
       - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/settings.json` 의 `review.execution`, `llm` switcher."
       - "Provider resolution 축(LlmBillingMode, LlmCompatibleProxy)과 직교 — background task의 단일-턴 API call 경로와 review의 agentic 실행 경로는 서로 영향 주지 않음"
       - "Local model access is represented by `llm.auth: local` + `llm.provider: lmstudio`. Review orchestration remains selected by the `review:` block."
-      - "TeamCreate 가용성은 onto child process가 introspect할 수 없으므로 nested(host_team_claude) vs flat(worker_claude) 최종 선택은 주체자 세션의 판단. onto는 handoff JSON의 orchestration_guidance로 힌트만 제공"
 
   # -------------------------------------------------------------------------
   # Framework v1.0 entities (§8.1, §8.6) — scope axis + Tier 1/2 types
@@ -1005,7 +975,7 @@ entities:
         transition_kind: "medium_norm_update"
         state: "definition_only"
         path: null
-        note: "framework §6.6 전이 (Tier 1 medium Learning → Tier 2 medium reference 갱신) 의 실행 좌표. v1 은 definition only — activation 시 .onto/processes/learn/ 하위에 promote-medium.md (또는 동류 파일) 신설하여 path 지정."
+        note: "framework §6.6 전이 (Tier 1 medium Learning → Tier 2 medium reference 갱신) 의 실행 좌표. Not wired in the current onto-mcp review runtime."
     notes:
       - "framework v1.0 §12.4 에서 기본 6 유형 정의. medium-specific 유형 추가 허용 (예: excel 의 formula_audit). domain_document 보다 자유도 높음."
       - "v0.19.0 (2026-04-20, UF-evolution 해소): medium_norm_update transition 의 execution_rules_ref.lifecycle_transition_seat 예약 — transition_kind enum 에 정의된 이름에 대응하는 target entity 좌표 확보. re-review 20260420-b74e947f unique finding evolution 해소."
@@ -1365,19 +1335,14 @@ terms:
         retire_date: "2026-04-13"
         context: >
           Legacy activity name retired 2026-04-13 via DR-M00-04 homonym mapping.
-          Scope: (1) activity 분류 시 build→reconstruct 로 계산, (2) 현재 canonical process seat 는 `.onto/processes/reconstruct.md`; `npm run build:ts-core` 는 TypeScript 컴파일 명령으로 activity 와 무관하며 유지,
-          (3) state-machine 코드 식별자 (`RECONSTRUCT_TRANSITIONS` / `ReconstructState` / `reconstruct_exploring` / `reconstruct_failed` 등) 도 W-A-77 에서 전수 rename 완료 — legacy `BUILD_*` / `build_*` 식별자는 제거됨,
-          (4) 관용 표현 ("build 프로세스") 은 legacy 명칭 유지 가능, (5) promoted learning artifact 의 source token 은 retire 이후에도 historical record 로 보존.
+          Scope: build 명칭은 activity 지칭에서 retired 됐다. 현재 onto-mcp runtime은 review만 wired 상태이며 reconstruct는 별도 설계 후 다시 도입한다. `npm run build:ts-core` 는 TypeScript 컴파일 명령으로 activity 와 무관하다.
       - alias: "design"
         retire_kind: "renamed"
         canonical_replacement: "evolve"
         retire_date: "2026-04-15"
         context: >
           Legacy activity name retired 2026-04-15 via W-A-78 (entrypoint-only rename).
-          Scope: (1) activity_enum·W-ID activity field·TS handler 는 W-A-78 에서 `evolve` 로 전수 치환 — current canonical: `.onto/processes/evolve.md`, `src/core-runtime/evolve/`, `development-records/evolve/`, `handleEvolve*`,
-          (2) 방법론 term (`design_target`, `design_area`, `design_constraint`, `design_gap`) 은 entrypoint 가 아닌 lexicon entity 이므로 legacy 명칭 유지 — Perl word boundary (`\b`) 매칭에서 `_` 가 word char 이므로 자동 보존,
-          (3) 한국어 자연어 "설계" (e.g., "설계 대상", "설계 방식") 는 자연어 번역어로 보존. entrypoint 지칭 맥락의 한국어 "설계" 는 향후 Phase B 에서 영문 "evolve" 로 통일 예정,
-          (4) 관용 표현 ("design 프로세스") 은 legacy 명칭 유지 가능, (5) promoted learning artifact 의 source token 은 retire 이후에도 historical record 로 보존.
+          Scope: design entrypoint 명칭은 evolve로 대체 예정이나 현재 onto-mcp runtime에는 evolve 경로가 wired 되지 않았다. 방법론 term의 자연어 "설계"는 entrypoint 명칭과 별개로 유지할 수 있다.
       - alias: "ask"
         retire_kind: "retired"
         canonical_replacement: null
@@ -1431,10 +1396,10 @@ terms:
     legacy_aliases: []  # v0.6.1 slot 신설 (E-05). 현재 empty. 축 rename·retire 발생 시 activity_enum 과 동일 구조로 기록.
     notes:
       - "A = entrypoint 구현 (활동별). 다섯 활동의 command·process·calling convention."
-      - "B = 기반 인프라 (공통). product·ontology·learning 저장·처리 공통 인프라 (scope-runtime, readers, middleware)."
+      - "B = 기반 인프라 (공통). product·ontology·review runtime 저장·처리 공통 인프라."
       - "C = 자율성 진화 (메타). self-application 메커니즘 + drift 판정 + 큐·승인 흐름 + 수준 0→1→2 엔진."
       - "D = 상시 원칙 (교차). lexicon provisional lifecycle. 모든 축 교차 원칙, 독립 축 아님."
-      - "Axis 간 의존 (§1.5 derived): A→B (활동 구현은 인프라 위에서 작동, A0=scope-runtime framework 추출은 A 선행), C→{A,B} (자율성은 A·B 최소 1사이클 운영 후 설계), D→{A,B,C} (모든 축 교차)."
+      - "Axis 간 의존 (§1.5 derived): A→B (활동 구현은 인프라 위에서 작동), C→{A,B} (자율성은 A·B 최소 1사이클 운영 후 설계), D→{A,B,C} (모든 축 교차)."
       - "Canonical definition source: development-records/evolve/20260413-onto-direction.md#§1.5 (as_of=2026-04-13)."
       - "Consumers: M-05/M-06/M-07/M-08 work items (axis field + W-ID token), consolidated.md frontmatter axis_enum_ref, Expansion Protocol 축 추가·삭제·병합 trigger."
       - "Reference format: `.onto/authority/core-lexicon.yaml#axis_enum.v<lexicon_version>` (DR-M04-02)."
@@ -1473,13 +1438,11 @@ terms:
     notes:
       - "Stage 1 (Structure) = source 가 무엇인가 (names, fields, relations, schemas) 분류. Explorer 가 Stage 1 라운드에서 우선 보고."
       - "Stage 2 (Behavior) = source 가 무엇을 하는가 (state transitions, methods, flows) 분류. Stage 1 entity 확정 후 Stage 2 라운드에서 보고."
-      - "Stage 2 coverage 정의: 한 entity 가 ≥1 fact (state_transition | command | query) 를 가지면 covered. policy_constant + flow 는 cross-cutting, coverage 에 산입 안 됨 (reconstruct.md L747)."
-      - "Producer: Explorer (reconstruct.md L395-400). Consumer: Lenses (label assignment), Runtime Coordinator (patch generation), Phase 3 Observation Aspect Distribution table 간접 참조."
-      - "Schema location: `.onto/processes/reconstruct.md` L1003 의 Delta schema 가 본 enum 의 schema-level 적용 위치. 본 lexicon term 이 값 정의의 SSOT, reconstruct.md 는 schema 적용처."
-      - "Canonical definition source: 본 lexicon term (v0.10.0). reconstruct.md L1003 은 본 term 을 참조."
-      - "Consumers: .onto/processes/reconstruct.md (Delta schema)."
+      - "Stage 2 coverage 정의: 한 entity 가 ≥1 fact (state_transition | command | query) 를 가지면 covered. policy_constant + flow 는 cross-cutting, coverage 에 산입 안 됨."
+      - "Producer/consumer path is not wired in the current onto-mcp review runtime. Reconstruct will require a separate productized contract."
+      - "Canonical definition source: 본 lexicon term (v0.10.0)."
       - "Reference format: `.onto/authority/core-lexicon.yaml#fact_type.v<lexicon_version>` (DR-M04-02 패턴 동일)."
-      - "Extension policy: 신규 fact_type 추가 시 (1) 본 term allowed_values 에 추가 + stage_partition 에 배정, (2) reconstruct.md L1004-1014 structured_data 명세에 schema 추가, (3) Explorer/Lens prompt 가 새 type 인식하도록 갱신, (4) lexicon_version bump."
+      - "Extension policy: 신규 fact_type 추가 시 본 term allowed_values 에 추가 + stage_partition 에 배정하고 reconstruct productized contract 도 함께 갱신한다."
 
   - term_id: "competency_question"
     canonical_label: "competency question"
@@ -1489,7 +1452,7 @@ terms:
     definition: "도메인 ontology 가 답할 수 있어야 하는 질문. ontology 의 범위와 충분성을 검증하는 기준. pragmatics lens 의 주요 검증 대상."
     notes:
       - "Source: DDD/ontology engineering 표준 개념 (Brank: Application-based validation)."
-      - "Consumers: .onto/domains/{domain}/competency_qs.md (파일별 CQ 등재), pragmatics lens (CQ testing), process.md §lens coverage."
+      - "Consumers: .onto/domains/{domain}/competency_qs.md (파일별 CQ 등재), pragmatics lens (CQ testing), .onto/processes/review/lens-registry.md."
       - "관련 term: competency_scope (한 ontology 의 CQ 유효 범위)."
       - "Promotion trajectory: 현재 SE + business 도메인이 competency_qs.md 로 이 개념 소비. 향후 CQ 메타-구조 (CQ id, tier, applicability) 공식화 시 entity 승격 검토."
   - term_id: "competency_scope"
@@ -1510,7 +1473,7 @@ terms:
     notes:
       - "Source: .onto/principles/llm-runtime-interface-principles.md (runtime 인터페이스 정책) + llm-native-development-guideline.md §항목 8 (declared boundary · provenance · degraded handling)."
       - "Consumers: review activity 의 binding.yaml, execution-preparation/target-snapshot.md, final-output.md, synthesis.md — 모든 산출물에 provenance 기록."
-      - "관련 개념: evidence_seat (W-ID seat schema), dual-read fallback (canonical vs legacy path provenance)."
+      - "관련 개념: evidence_seat (W-ID seat schema), canonical artifact provenance."
       - "Degraded policy: provenance 기록 실패 시 artifact 는 runtime-generated 로 기록 + log entry. Halt 하지 않음 (degraded handling)."
   - term_id: "modularity_boundary"
     canonical_label: "modularity boundary"
@@ -1532,7 +1495,7 @@ terms:
     notes:
       - "W-D-05 (2026-04-16) 신설 — 'promoted' 용어 3분리 중 1/3 (Semantic drift 해소)."
       - "Source of truth: .onto/authority/core-lexicon.yaml#provisional_lifecycle (W-D-01)."
-      - "Consumer: src/core-runtime/readers/lexicon-citation-check.ts (W-D-02), M-08 refresh protocol (provisional_terms scan)."
+      - "Consumer is not wired in the current onto-mcp review runtime; future lexicon lifecycle checks should be implemented as a review-runtime conformance check."
       - "기존 'promoted' 일반 명칭은 대상 모호성 유발. 본 term 이 lexicon term 대상의 promotion 만 지칭."
 
   - term_id: "learning_scope_promotion"
@@ -1549,7 +1512,7 @@ terms:
       methodology_target_legacy: "legacy user-scope 중 methodology (cross-everything frame) 로 재분류되는 case 는 v1 active transition 없음 — Principal manual 등재만 가능 (framework §6.4). 이 재분류 자체는 transition_kind 없이 legacy_alias_governance.scope_migration.migrations[legacy=user] 의 instance_routing 으로 처리."
     notes:
       - "W-D-05 (2026-04-16) 신설 — 'promoted' 용어 3분리 중 2/3."
-      - "v0.15.0 (2026-04-20) deprecated — framework v1.0 의 4-scope model (product/medium/domain/methodology) 은 project→user 1-step path 와 semantics 가 다름. runtime 소비자 (src/core-runtime/learning/loader.ts, src/core-runtime/learning/shared/paths.ts) 의 scope migration 은 framework §12.6 에 따라 별도 PR 에서 집행. 해당 migration 이 완료되면 본 term 은 retire 로 전이."
+      - "v0.15.0 (2026-04-20) deprecated — framework v1.0 의 4-scope model (product/medium/domain/methodology) 은 project→user 1-step path 와 semantics 가 다름. Legacy learning runtime consumers were archived in 2026-05-26 cleanup."
       - "v0.16.0 (2026-04-20) replacement refine — re-review (20260420-b74e947f) 의 logic F1 지적 반영. promote_and_generalize (Exp→Learn) 가 아니라 generalize (already-Learning scope 축 이동) 가 semantic mapping. methodology-target legacy 는 transition 없이 scope_migration instance_routing 경로로 분리."
       - "소비 정책: deprecated term 은 authority file 내 참조만 허용. 신규 문서·코드는 transition_kind=generalize 를 사용하고 primary_scope/secondary_scopes 로 scope 축을 표현."
 
@@ -1562,22 +1525,20 @@ terms:
     allowed_values: []
     notes:
       - "W-D-05 (2026-04-16) 신설 — 'promoted' 용어 3분리 중 3/3 (Semantic drift 해소)."
-      - "Source of truth (planned): .onto/processes/govern.md (W-C-03 완료 시 §N 신설). 현재 onto-direction §1.1/§1.2 '보류 중' 상태 — W-D-05 는 도착지 (principle entity) 만 정의, 실 경로는 W-C-03 이 설계."
-      - "Consumer: govern CLI (W-C-03 의 promote-principle subcommand — W-C-03 구현 시)."
+      - "Source of truth is not wired in the current onto-mcp review runtime; govern requires separate design."
+      - "Consumer: future govern MCP surface after separate design."
       - "W-C-03 blocker 해소를 위해 도착지 명시 (principle entity 신설) + 용어 canonical 확립 목적."
 
   - term_id: "drift_queue_entry"
     canonical_label: "drift_queue_entry"
     korean_label: "거버넌스 큐 항목"
     axis: "governance"
-    term_status: "active"
+    term_status: "deprecated"
     definition: "govern_process 가 소유하는 큐의 단일 항목. 규범 변경 제안(origin=human, tag=norm_change) 또는 drift 감지(origin=system, tag=drift) 가 하나의 entry 로 기록된다. pending → decided 의 단순 생애주기."
     allowed_values: []
     notes:
       - "Introduced by W-C-01 (2026-04-16) bounded minimum surface."
       - "Origin → tag deterministic mapping: human → norm_change, system → drift."
       - "사람이 drift 를 계기로 올린 제안: tag=norm_change + prompted_by_drift_id 로 원본 drift entry 를 링크."
-      - "Storage: .onto/govern/queue.ndjson (product-local, product-locality-principle 준수). Cross-product 규범은 W-C-03 에서 설계."
-      - "Event types: submit (base), decide (pending → decided transition). Append-only."
-      - "Schema location (code SSOT): src/core-runtime/govern/types.ts (GovernSubmitEvent, GovernDecideEvent, GovernQueueEntry)."
-      - "Consumers: govern_process (dispatches from govern entrypoint instance), drift engine (src/core-runtime/govern/drift-engine.ts — W-C-02 v0 producer for origin=system entries), .onto/processes/govern.md §7 (storage contract) + §11 (drift engine)."
+      - "Not wired in the current onto-mcp review runtime."
+      - "Archived legacy govern code is isolated under development-records/archive/retired-runtime-legacy-20260526/."

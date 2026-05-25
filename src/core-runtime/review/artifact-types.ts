@@ -1,12 +1,9 @@
-import type { FrameworkScope } from "../learning/shared/scope.js";
-
 export type ReviewEntrypoint = "review";
 export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
-export type ReviewExecutionRealization = "worker" | "host-team" | "direct-call";
+export type ReviewExecutionRealization = "worker" | "direct-call";
 /**
  * Host runtime for review execution.
  * - "codex":      Codex host-bound worker path.
- * - "claude":     Claude host session.
  * - "anthropic":  Anthropic SDK direct call from TS process.
  * - "openai":     OpenAI SDK direct call.
  * - "grok":       xAI/Grok OpenAI-style API via TS process direct HTTP.
@@ -15,7 +12,6 @@ export type ReviewExecutionRealization = "worker" | "host-team" | "direct-call";
  */
 export type ReviewHostRuntime =
   | "codex"
-  | "claude"
   | "anthropic"
   | "openai"
   | "grok"
@@ -527,9 +523,7 @@ export interface ReviewSessionMetadata {
   project_root: string;
   requested_target: string;
   requested_domain_token: string;
-  plugin_root: string;
-  /** Phase 2: persisted extract mode (validated at session start). */
-  learning_extract_mode?: string;
+  onto_home: string;
   /** Effort persist (Option A): plan-time resolved LLM values from OntoConfig. */
   resolved_llm_plan?: ResolvedLlmPlan;
 }
@@ -583,7 +577,6 @@ export interface ReviewTargetProfileArtifact {
 export interface ContextCandidateAssembly {
   system_purpose_refs: string[];
   domain_context_refs: string[];
-  learning_context_refs: string[];
   role_definition_refs: string[];
   execution_rule_refs: string[];
 }
@@ -603,23 +596,11 @@ export interface ContextCandidateAssembly {
  *   time. Both `started_at` and `completed_at` are exact within millisecond
  *   precision. Source: run-review-prompt-execution.ts (TS runner path).
  *
- * - `coordinator_derived`: `started_at` from coordinator-state.yaml
- *   transition timestamps (awaiting_lens_dispatch /
- *   awaiting_synthesize_dispatch), `completed_at` from
- *   fs.stat(output_path).mtime. Systematically over-estimates `duration_ms`
- *   by dispatch latency + agent boot time. Platform-dependent mtime
- *   precision (e.g. HFS+ 1s). Source: coordinator-helpers.ts when the
- *   state-transition read AND the mtime read both succeed for a
- *   participating unit.
- *
  * - `batch_window`: session-level window used when a unit does not have
  *   comparable per-unit timing. NOT a per-unit measurement — `duration_ms`
  *   reflects the enclosing session's wall-clock window.
  */
-export type UnitTimestampProvenance =
-  | "runner_wallclock"
-  | "coordinator_derived"
-  | "batch_window";
+export type UnitTimestampProvenance = "runner_wallclock" | "batch_window";
 
 /**
  * Predicate for consumers: returns true when `duration_ms` is a real per-unit
@@ -633,9 +614,7 @@ export type UnitTimestampProvenance =
 export function isPerUnitComparableProvenance(
   provenance: UnitTimestampProvenance | undefined | null,
 ): boolean {
-  return (
-    provenance === "runner_wallclock" || provenance === "coordinator_derived"
-  );
+  return provenance === "runner_wallclock";
 }
 
 export interface ReviewUnitExecutionResult {
@@ -756,13 +735,6 @@ export interface ReviewRecord {
   resolved_review_mode?: string;
   resolved_execution_realization?: string;
   resolved_host_runtime?: string;
-  /**
-   * Optional mirror of `CoordinatorStateFile.orchestrator_reported_realization`
-   * (see contract §18). Distinct from `resolved_execution_realization` which
-   * records plan-time preference; this records the caller's actual dispatch
-   * mechanism if self-reported. Absent when no self-report was provided.
-   */
-  orchestrator_reported_realization?: string;
   resolved_lens_ids: string[];
   execution_result_ref: string;
   session_metadata_ref: string;
@@ -791,75 +763,13 @@ export interface ReviewRecord {
   shared_phenomenon_summary: SharedPhenomenonSummaryEntry[];
 }
 
-// ─────────────────────────────────────────────
-// Coordinator State Machine types
-// ─────────────────────────────────────────────
-
-// CoordinatorStateName: canonical definition is in scope-runtime/state-machine.ts (REVIEW_STATES).
-import type { ReviewState } from "../scope-runtime/state-machine.js";
-export type CoordinatorStateName = ReviewState;
-
-export interface CoordinatorStateTransition {
-  from: CoordinatorStateName | "(init)";
-  to: CoordinatorStateName;
-  at: string;
-}
-
-export interface CoordinatorStateFile {
-  schema_version: string;
-  current_state: CoordinatorStateName;
-  session_root: string;
-  /** Source: PrepareOnlyResult.request_text */
-  request_text: string;
-  started_at: string;
-  halt_reason: string | null;
-  error_message: string | null;
-  transitions: CoordinatorStateTransition[];
-  /** Realization self-reported by the caller-side orchestrator. */
-  orchestrator_reported_realization?: string;
-}
-
-export interface CoordinatorAgentInstruction {
-  lens_id: string;
-  description: string;
-  prompt: string;
-  output_path: string;
-  packet_path?: string;
-}
-
-export interface CoordinatorStartResult {
-  state: "awaiting_lens_dispatch";
-  session_root: string;
-  request_text: string;
-  agents: CoordinatorAgentInstruction[];
-  /** Maximum number of lens workers the orchestrator may dispatch in parallel. */
-  max_concurrent_lenses: number;
-}
-
-export interface CoordinatorNextResult {
-  state: CoordinatorStateName;
-  session_root: string;
-  agent?: CoordinatorAgentInstruction | undefined;
-  agents?: CoordinatorAgentInstruction[] | undefined;
-  final_output_path?: string | undefined;
-  review_record_path?: string | undefined;
-  record_status?: string | undefined;
-  halt_reason?: string | undefined;
-  error_message?: string | undefined;
-  participating_lens_ids?: string[] | undefined;
-  degraded_lens_ids?: string[] | undefined;
-}
-
-// ALLOWED_TRANSITIONS: canonical definition is in scope-runtime/state-machine.ts (REVIEW_TRANSITIONS).
-// Re-exported here for backward compatibility. W-B-02 dedup.
-export { REVIEW_TRANSITIONS as ALLOWED_TRANSITIONS } from "../scope-runtime/state-machine.js";
+export { REVIEW_TRANSITIONS as ALLOWED_TRANSITIONS } from "./review-state-machine.js";
 
 /**
  * Output of `review:invoke --prepare-only`.
  *
  * Runs all pre-processing and session preparation, then returns without
- * executing lenses or completing the session. The Nested Spawn Coordinator
- * uses this to get `session_root` and then dispatches lenses via Agent tool.
+ * executing lenses or completing the session.
  *
  * `request_text` is the **only** value not derivable from session artifacts
  * (not present in execution-plan.yaml). It must be preserved and passed to
@@ -872,103 +782,4 @@ export interface PrepareOnlyResult {
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
   review_mode: ReviewMode;
-}
-
-// ─────────────────────────────────────────────
-// Learning Extraction types (Phase 2)
-// ─────────────────────────────────────────────
-
-// Re-export canonical types from semantic-classifier (CONS-5: single definition)
-export type {
-  SemanticDecision,
-  ConflictKind,
-} from "../learning/shared/semantic-classifier.js";
-
-/** Classified item trace — A-8 pass → A-11 executed */
-export interface ClassifiedItemTrace {
-  kind: "classified";
-  lens_id: string;
-  raw_line: string;
-  assembled_line: string;
-  repaired: boolean;
-  repaired_line?: string;
-  decision: import("../learning/shared/semantic-classifier.js").SemanticDecision;
-  conflict_kind?: import("../learning/shared/semantic-classifier.js").ConflictKind;
-  matched_existing_line?: string;
-  reason: string;
-  write_path: string | null;
-  write_scope: FrameworkScope | null;
-  learning_id: string | null;
-  persistence_result:
-    | "written"
-    | "skipped_shadow"
-    | "skipped_conflict"
-    | "skipped_duplicate"
-    | "skipped_unclassified"
-    | "write_error";
-  write_error?: string;
-  model_id: string;
-  prompt_hash: string;
-}
-
-/** Quarantined item trace — validation failed (CC-2: no semantic decision) */
-export interface QuarantinedItemTrace {
-  kind: "quarantined";
-  lens_id: string;
-  raw_line: string;
-  assembled_line: string | null;
-  failure_stage: "A-8" | "A-8f" | "A-9" | "A-9f";
-  failure_reason: string;
-  repaired_line?: string;
-}
-
-export type ExtractionItemTrace = ClassifiedItemTrace | QuarantinedItemTrace;
-
-/** Conflict proposal (D-1: 저장 안 함 — manifest에만 기록) */
-export interface ConflictProposal {
-  lens_id: string;
-  new_item_line: string;
-  matched_existing_line: string;
-  decision: "conflict_propose_replace" | "conflict_propose_keep" | "conflict_propose_coexist";
-  conflict_kind: import("../learning/shared/semantic-classifier.js").ConflictKind;
-  reason: string;
-}
-
-/** Event marker trace — C-11 */
-export interface MarkerTrace {
-  lens_id: string;
-  marker_type: "applied-then-found-invalid";
-  learning_excerpt: string;
-  target_learning_id: string | null;
-  resolution:
-    | "attached"
-    | "skipped_shadow"
-    | "unresolved_no_id"
-    | "unresolved_not_found";
-  target_file?: string;
-}
-
-/** Extraction manifest — single owner (R1-U5). R5-IA-R5-2: items_unclassified_pending */
-export interface ExtractionManifest {
-  schema_version: "1";
-  session_id: string;
-  extract_mode: "shadow" | "active";
-  taxonomy_version: "phase2-v1";
-  timestamp: string;
-
-  items_parsed: number;
-  items_saved: number;
-  items_quarantined: number;
-  items_duplicate_skipped: number;
-  items_conflict_proposed: number;
-  items_unclassified_pending: number;
-  markers_found: number;
-  markers_attached: number;
-  markers_skipped_shadow: number;
-  markers_unresolved: number;
-
-  item_traces: ExtractionItemTrace[];
-  marker_traces: MarkerTrace[];
-  conflict_proposals: ConflictProposal[];
-  errors: string[];
 }

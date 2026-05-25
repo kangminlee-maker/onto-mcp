@@ -30,17 +30,6 @@ import {
 } from "../review/review-artifact-utils.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { writeAndThrowStructuredFailureRecord } from "../review/failure-records.js";
-import {
-  loadLearningsForSession,
-  renderLearningSection,
-  formatLoadingSummary,
-  type LearningLoadManifest,
-} from "../learning/loader.js";
-import { readExtractMode } from "../learning/shared/mode.js";
-import {
-  renderNewlyLearnedInstructions,
-  renderEventMarkerInstructions,
-} from "../learning/prompt-sections.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
 import { isOntoRoot } from "../discovery/onto-home.js";
 import {
@@ -920,30 +909,6 @@ export async function runMaterializeReviewPromptPacketsCli(
     domainAllFiles = scanDomainFiles(resolvedDomainDir);
   }
 
-  // Phase 2: Read extract mode from session metadata (R5-IA-R5-1: readExtractMode, no raw cast)
-  const extractMode = readExtractMode(sessionMetadata);
-  const extractEnabled = extractMode === "shadow" || extractMode === "active";
-
-  // C-1~C-4, C-7: Load learnings for all lens agents
-  // ONTO_LEARNING_LOAD_DISABLED=1: skip learning loading entirely
-  const learningDisabled = process.env.ONTO_LEARNING_LOAD_DISABLED === "1";
-  const learningDomain = isNoDomain ? null : sessionDomain;
-  const { results: learningResults, manifest: learningManifest } = learningDisabled
-    ? { results: [], manifest: { session_domain: learningDomain ?? "none", agents_loaded: 0, total_items_loaded: 0, total_items_parsed: 0, total_items_skipped: 0, per_agent: [] as LearningLoadManifest["per_agent"], learning_file_paths: [] as string[], degraded: false, degradation_reason: null } }
-    : loadLearningsForSession(lensIds, projectRoot, learningDomain);
-  const learningsByAgent = new Map(learningResults.map((r) => [r.agent_id, r]));
-
-  // C-7: Print loading summary
-  if (learningManifest.total_items_loaded > 0 || learningManifest.total_items_skipped > 0) {
-    console.error(formatLoadingSummary(learningManifest));
-  }
-  // Print warnings
-  for (const r of learningResults) {
-    for (const w of r.warnings) {
-      console.error(w);
-    }
-  }
-
   if (domainAllFiles.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
     const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
     const existingRefs = Array.isArray(assembly?.domain_context_refs) ? assembly.domain_context_refs as string[] : [];
@@ -952,21 +917,6 @@ export async function runMaterializeReviewPromptPacketsCli(
       (assembly as Record<string, unknown>).domain_context_refs = mergedRefs;
       await writeYamlDocument(contextCandidateAssemblyPath, assembly);
     }
-  }
-
-  if (learningManifest.learning_file_paths.length > 0 && await fileExists(contextCandidateAssemblyPath)) {
-    const assembly = await readYamlDocument<Record<string, unknown>>(contextCandidateAssemblyPath);
-    const existingLearningRefs = Array.isArray(assembly?.learning_context_refs) ? assembly.learning_context_refs as string[] : [];
-    const mergedLearningRefs = [...new Set([...existingLearningRefs, ...learningManifest.learning_file_paths])];
-    if (mergedLearningRefs.length > existingLearningRefs.length) {
-      (assembly as Record<string, unknown>).learning_context_refs = mergedLearningRefs;
-      await writeYamlDocument(contextCandidateAssemblyPath, assembly);
-    }
-  }
-
-  if (learningManifest.total_items_loaded > 0) {
-    const manifestPath = path.join(sessionRoot, "execution-preparation", "learning-manifest.yaml");
-    await writeYamlDocument(manifestPath, learningManifest);
   }
 
   const reviewContextManifest = await writePreManifestContextArtifacts({
@@ -1078,9 +1028,6 @@ ${binding.resolved_target_scope.resolved_refs
 ${renderLensOutputSchemaGate(binding.resolved_session_domain)}
 
 ${renderDomainDocumentRefsSection(seat.lens_id, resolvedDomainDir, allowedDomainFiles, projectRoot)}
-${renderLearningSection(learningsByAgent.get(seat.lens_id)?.items ?? [])}
-${extractEnabled ? renderNewlyLearnedInstructions(learningDomain) : ""}
-${extractEnabled ? renderEventMarkerInstructions() : ""}
 `;
 
     await fs.writeFile(seat.packet_path, lensPacketText.trimEnd() + "\n", "utf8");

@@ -118,12 +118,12 @@ Reverse application 은 §2–§3 규칙을 새로 만들지 않고 동일 규�
 
 ### 7.4 Consumer 분리
 
-- 본 절은 판정 규칙만 소유한다. 판정을 언제 실행할지의 orchestration (Principal option, pre-trigger 절차) 은 `review.md §1.5` 가 소유한다
+- 본 절은 판정 규칙만 소유한다. 판정을 언제 실행할지의 orchestration은 `interpretation-contract.md §4.7`이 소유한다
 - 판정 결과의 output schema (`lens_selection_plan`) 는 `interpretation-contract.md §4.7` 이 소유한다
 - 본 절은 세 소유자 중 **판단 규칙** 층의 단일 normative seat 이다
 
 ### 7.5 Authority
 
 - 본 절은 pre-review lens relevance 판정 규칙의 **유일한 normative seat** 이다
-- `review.md §1.5` 와 `interpretation-contract.md §4.7` 은 본 절을 참조만 한다
+- `interpretation-contract.md §4.7` 은 본 절을 참조만 한다
 - 동일 판정 규칙이 다른 문서에 normative 로 존재하면 authority violation 이다

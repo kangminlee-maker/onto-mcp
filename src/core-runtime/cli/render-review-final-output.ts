@@ -5,7 +5,6 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import type {
-  CoordinatorStateFile,
   InvocationBindingArtifact,
   ReviewExecutionPlan,
   ReviewExecutionResultArtifact,
@@ -155,22 +154,6 @@ export async function runRenderReviewFinalOutputCli(
   const bindingArtifact = await readYamlDocument<InvocationBindingArtifact>(bindingPath);
   const sessionMetadata = await readYamlDocument<ReviewSessionMetadata>(sessionMetadataPath);
 
-  // Optional orchestrator self-report from coordinator-state.yaml (contract §18).
-  // Absent when the session used self-path execution or when the orchestrator
-  // did not pass `--orchestrator-reported-realization`.
-  const coordinatorStatePath = path.join(sessionRoot, "coordinator-state.yaml");
-  let orchestratorReportedRealization: string | undefined;
-  if (await fileExists(coordinatorStatePath)) {
-    try {
-      const coordinatorState = await readYamlDocument<CoordinatorStateFile>(
-        coordinatorStatePath,
-      );
-      orchestratorReportedRealization =
-        coordinatorState.orchestrator_reported_realization;
-    } catch {
-      // Ignore — optional field
-    }
-  }
   const executionResultPath =
     bindingArtifact.execution_result_path ??
     path.join(sessionRoot, "execution-result.yaml");
@@ -284,7 +267,7 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 ### Verification Context
 - Domain: ${bindingArtifact.resolved_session_domain}
 - Review mode: ${bindingArtifact.resolved_review_mode}
-- Execution realization: ${bindingArtifact.resolved_execution_realization}${orchestratorReportedRealization ? ` (orchestrator reported: ${orchestratorReportedRealization})` : ""}
+- Execution realization: ${bindingArtifact.resolved_execution_realization}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
 - Finding ledger: \`${toRelativePath(bindingArtifact.finding_ledger_path, projectRoot)}\`
 - Issue ledger: \`${toRelativePath(bindingArtifact.issue_ledger_path, projectRoot)}\`

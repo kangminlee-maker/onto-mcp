@@ -206,7 +206,7 @@ LLM 기능은 아래 순서로 개발한다.
 
 이 규칙이 없으면 치환과 진화가 섞이면서 runtime infrastructure는 커지는데 실제 실행은 작동하지 않는 상태가 오래 유지된다.
 
-발견한 enhancement의 추적 seat 경로는 `process.md`가 소유한다.
+발견한 enhancement의 추적 seat 경로는 `development-records/`의 dated plan/handoff 문서가 소유한다.
 
 이 원칙을 더 일반화하면 아래 루프가 된다.
 
