@@ -1,0 +1,219 @@
+# Review Target Profile Contract
+
+> Status: Active
+> Purpose: Fix the review target's artifact role, closure level, and boundary obligation before lens dispatch.
+> Scope: `review` only.
+
+---
+
+## 1. Position
+
+`review-target-profile.yaml` is a runtime-owned execution-preparation artifact.
+
+It answers a question that `target-snapshot.md` and `materialized-input.md` do
+not answer:
+
+```text
+What kind of artifact is being reviewed, and what must this artifact be
+responsible for closing inside the current review boundary?
+```
+
+This is not a new reasoning stage. The current v1 profile is deterministic and
+heuristic. It exists so lens, issue-artifact, deliberation, and synthesize
+stages evaluate the target against the same bounded target obligation.
+
+---
+
+## 2. Relation To Existing Artifacts
+
+| Artifact | Role |
+|---|---|
+| `interpretation.yaml` | LLM-owned target and intent interpretation candidate. |
+| `binding.yaml` | Runtime-owned resolved target refs, lens set, domain, and boundary. |
+| `target-snapshot.md` | Preserved review-time target basis. |
+| `materialized-input.md` | Execution-friendly normalized target input. |
+| `review-target-profile.yaml` | Runtime-owned artifact role, target input kind, closure level, goals, and obligation policy. |
+| `review-context-manifest.yaml` | Context admission, consumer allowlist, and packet provenance. |
+
+`review-target-profile.yaml` does not replace any of the above. It is admitted
+through `review-context-manifest.yaml` as an explicit context source.
+
+---
+
+## 3. Filesystem Seat
+
+```text
+{session_root}/execution-preparation/review-target-profile.yaml
+```
+
+`binding.yaml`, `execution-plan.yaml`, `target-snapshot-manifest.yaml`,
+`review-run-manifest.yaml`, and `review-record.yaml` must preserve the profile
+ref when the session reaches the corresponding phase. The profile ref is a
+required runtime contract field; a canonical review session must not continue as
+though the profile were optional.
+
+---
+
+## 4. Shape
+
+```yaml
+schema_version: "1"
+session_id: "20260524-example"
+created_at: "2026-05-24T12:00:00+09:00"
+target_scope_kind: bundle
+materialized_input_kind: bundle_member_texts
+target_input_kind: explicit_bundle
+requested_target: package.json
+review_intent_summary: "review implementation change"
+artifact_roles:
+  primary: computational_artifact
+  secondary:
+    - configuration_artifact
+domain: software-engineering
+maturity: review_candidate
+closure_level: bounded_partial
+review_goal:
+  - correctness
+  - verifiability
+  - runtime_contract
+closure_obligation_policy:
+  - must_close_in_target
+  - must_close_before_next_stage
+  - may_close_during_next_stage
+  - planned_later
+  - out_of_scope
+target_refs:
+  - ref: /abs/project/package.json
+    role: primary
+    kind: file
+    exists: true
+    sha256: "..."
+boundary:
+  filesystem_allowed_roots:
+    - /abs/project
+  source: binding
+inference:
+  owner: runtime_heuristic
+  confidence: 0.8
+  confidence_basis: explicit bundle target with primary/supporting refs
+```
+
+---
+
+## 5. Target Input Kind
+
+Allowed values:
+
+| Value | Meaning |
+|---|---|
+| `single_file` | One file is the review target. |
+| `directory` | A directory listing/content snapshot is the review target. |
+| `explicit_bundle` | User or host supplied primary and supporting refs. |
+| `git_diff` | Runtime materialized a git diff patch as the target basis. |
+| `generated_packet` | Host supplied a generated review packet as the target basis. |
+
+`git_diff` target refs must be materialized inside the active session root as
+`{session_root}/diff-target.patch`. Creating the diff under a different review
+session would break artifact truth and must fail review target profiling.
+
+`generated_packet` is allowed for explicit packet review, but it is lower
+confidence than `explicit_bundle` because the reviewed basis is a generated
+representation rather than the original artifact set.
+
+---
+
+## 6. Artifact Roles
+
+Roles are role-based, not file-extension based:
+
+```text
+knowledge_artifact
+decision_artifact
+procedural_artifact
+computational_artifact
+record_artifact
+contract_artifact
+creative_artifact
+presentation_artifact
+data_artifact
+configuration_artifact
+```
+
+The current runtime uses a deterministic heuristic from target input kind,
+bundle kind, and file extension. The profile records `inference.confidence` and
+`inference.confidence_basis` so downstream review can preserve uncertainty.
+
+---
+
+## 7. Closure Level And Obligation
+
+Allowed closure levels:
+
+| Value | Meaning |
+|---|---|
+| `bounded_closed` | The target is expected to close its own correctness inside the declared boundary. |
+| `bounded_partial` | The target is bounded but may intentionally leave next-stage implementation or decision details open. |
+| `open_partial` | The target is a partial representation or packet, so review must preserve representation limits. |
+
+Issue classification may use:
+
+```text
+must_close_in_target
+must_close_before_next_stage
+may_close_during_next_stage
+planned_later
+out_of_scope
+```
+
+These values are distinct from severity, timing, and closure class.
+
+---
+
+## 8. Consumer Policy
+
+The review target profile is admitted to:
+
+- all selected lens consumers
+- issue-artifact consumers
+- per-lens deliberation consumers
+- controlled deliberation
+- synthesize
+- final output and review record
+
+The profile does not authorize new filesystem reads. It only classifies the
+already bound target refs and the already declared filesystem boundary.
+
+---
+
+## 9. Binding Rules
+
+Review target binding is fail-loud.
+
+1. Runtime fixes `session_id` before target resolution.
+2. `diffRange` materializes `diff-target.patch` under the same `session_id`
+   that `binding.yaml`, `execution-plan.yaml`, and `review-target-profile.yaml`
+   use.
+3. `diffRange` must not be combined with explicit bundle fields.
+4. If `targetScopeKind=file` or `targetScopeKind=directory` is provided, the
+   resolved filesystem target must match that shape.
+5. `primaryRef`, `memberRefs`, and `bundleKind` are explicit bundle inputs.
+   They must not drift interpretation away from binding for a non-bundle review.
+6. Every explicit bundle primary/supporting ref must exist and be inside the
+   declared filesystem boundary before materialized input is rendered.
+7. Project-external bundle refs require an explicit filesystem allowed root.
+   Runtime must not silently read them because multi-artifact review depends on
+   bounded context.
+8. Target binding violations surface as structured MCP failures with
+   `mcp_error_code=ONTO_REVIEW_TARGET_BINDING_FAILED`.
+
+---
+
+## 10. Verification Surface
+
+The MCP review conformance suite must cover:
+
+- `review-target-profile` artifact refs in MCP results and run manifests
+- explicit bundle primary/supporting refs and hashes
+- explicit target shape mismatch failure
+- project-external bundle ref boundary failure
+- `git_diff` target refs using the active session root

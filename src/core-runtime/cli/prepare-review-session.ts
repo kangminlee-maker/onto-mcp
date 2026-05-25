@@ -383,6 +383,13 @@ export async function runPrepareReviewSessionCli(
       materializedKind: requireMaterializedInputKind(
         requireString(values["materialized-kind"], "materialized-kind"),
       ),
+      requestedTarget: requireString(values["requested-target"], "requested-target"),
+      reviewIntentSummary: requireString(values["intent-summary"], "intent-summary"),
+      sessionDomain: requireString(values["domain-final-value"], "domain-final-value"),
+      filesystemAllowedRoots: values["filesystem-allowed-root"],
+      ...(typeof values["bundle-kind"] === "string" && values["bundle-kind"].length > 0
+        ? { bundleKind: values["bundle-kind"] }
+        : {}),
       materializedRefs: values["materialized-ref"],
       systemPurposeRefs: values["system-purpose-ref"],
       domainContextRefs: values["domain-context-ref"],

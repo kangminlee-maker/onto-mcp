@@ -24,7 +24,11 @@ import type {
   ReviewMode,
   ReviewResolvedActorInvocationProfile,
   ReviewSessionMetadata,
+  ReviewTargetArtifactRole,
+  ReviewTargetInputKind,
   ReviewTargetMaterializedInputKind,
+  ReviewTargetProfileArtifact,
+  ReviewTargetRefKind,
   ReviewTargetScopeKind,
   TargetSnapshotManifest,
 } from "./artifact-types.js";
@@ -105,6 +109,11 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
   scopeKind: ReviewTargetScopeKind;
   resolvedTargetRefs: string[];
   materializedKind: ReviewTargetMaterializedInputKind;
+  requestedTarget?: string;
+  reviewIntentSummary?: string;
+  sessionDomain?: string;
+  bundleKind?: string;
+  filesystemAllowedRoots?: string[];
   materializedRefs?: string[];
   systemPurposeRefs?: string[];
   domainContextRefs?: string[];
@@ -358,6 +367,25 @@ export function generateReviewSessionId(): string {
   return `${year}${month}${day}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
+async function isReservedDiffTargetSessionRoot(args: {
+  sessionRoot: string;
+  resolvedTargetRefs: string[];
+}): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(args.sessionRoot);
+    const diffTargetPath = path.join(args.sessionRoot, "diff-target.patch");
+    return (
+      entries.length === 1 &&
+      entries[0] === "diff-target.patch" &&
+      args.resolvedTargetRefs
+        .map((ref) => path.resolve(ref))
+        .includes(path.resolve(diffTargetPath))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function resolveBoundaryPolicy(
   params: BootstrapInvocationBindingArtifactsParams,
   projectRoot: string,
@@ -524,9 +552,16 @@ export async function bootstrapInvocationBindingArtifacts(
   const sessionRoot = path.join(projectRoot, ".onto", "review", sessionId);
   try {
     await fs.access(sessionRoot);
-    throw new Error(
-      `Session directory already exists: ${sessionRoot}. Use a different --session-id or remove the existing session.`,
-    );
+    if (
+      !(await isReservedDiffTargetSessionRoot({
+        sessionRoot,
+        resolvedTargetRefs: params.resolvedTargetRefs,
+      }))
+    ) {
+      throw new Error(
+        `Session directory already exists: ${sessionRoot}. Use a different --session-id or remove the existing session.`,
+      );
+    }
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
       throw error;
@@ -566,6 +601,10 @@ export async function bootstrapInvocationBindingArtifacts(
   const reviewValueAlignmentCriteriaPath = path.join(
     executionPreparationRoot,
     "review-value-alignment-criteria.yaml",
+  );
+  const reviewTargetProfilePath = path.join(
+    executionPreparationRoot,
+    "review-target-profile.yaml",
   );
   const reviewContextManifestPath = path.join(
     executionPreparationRoot,
@@ -676,6 +715,7 @@ export async function bootstrapInvocationBindingArtifacts(
     binding_output_path: bindingOutputPath,
     target_snapshot_path: targetSnapshotPath,
     target_snapshot_manifest_path: targetSnapshotManifestPath,
+    review_target_profile_path: reviewTargetProfilePath,
     materialized_input_path: materializedInputPath,
     context_candidate_assembly_path: contextCandidateAssemblyPath,
     actor_invocation_profiles_path: actorInvocationProfilesPath,
@@ -755,6 +795,7 @@ export async function bootstrapInvocationBindingArtifacts(
     actor_invocation_profiles_path: actorInvocationProfilesPath,
     actor_consumer_bindings_path: actorConsumerBindingsPath,
     domain_binding_path: domainBindingPath,
+    review_target_profile_path: reviewTargetProfilePath,
     review_value_alignment_criteria_path: reviewValueAlignmentCriteriaPath,
     review_context_manifest_path: reviewContextManifestPath,
     synthesis_output_path: synthesisOutputPath,
@@ -850,6 +891,340 @@ export async function bootstrapInvocationBindingArtifacts(
   };
 }
 
+const CODE_EXTENSIONS = new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cs",
+  ".go",
+  ".java",
+  ".js",
+  ".jsx",
+  ".kt",
+  ".mjs",
+  ".php",
+  ".py",
+  ".rb",
+  ".rs",
+  ".sh",
+  ".swift",
+  ".ts",
+  ".tsx",
+]);
+
+const CONFIG_EXTENSIONS = new Set([
+  ".env",
+  ".ini",
+  ".json",
+  ".lock",
+  ".toml",
+  ".yaml",
+  ".yml",
+]);
+
+const DATA_EXTENSIONS = new Set([
+  ".csv",
+  ".jsonl",
+  ".ndjson",
+  ".parquet",
+  ".tsv",
+]);
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].filter((value) => value.length > 0);
+}
+
+function uniqueRoles(values: ReviewTargetArtifactRole[]): ReviewTargetArtifactRole[] {
+  return [...new Set(values)];
+}
+
+function inferRoleFromRef(ref: string): ReviewTargetArtifactRole {
+  const extension = path.extname(ref).toLowerCase();
+  if (CODE_EXTENSIONS.has(extension)) return "computational_artifact";
+  if (CONFIG_EXTENSIONS.has(extension)) return "configuration_artifact";
+  if (DATA_EXTENSIONS.has(extension)) return "data_artifact";
+  if (extension === ".xlsx" || extension === ".xlsm") return "computational_artifact";
+  if (extension === ".md" || extension === ".txt") return "knowledge_artifact";
+  if (extension === ".patch" || extension === ".diff") return "record_artifact";
+  if (extension === ".pdf" || extension === ".docx" || extension === ".pptx") {
+    return "presentation_artifact";
+  }
+  return "knowledge_artifact";
+}
+
+function isGeneratedReviewPacketRef(ref: string): boolean {
+  const normalized = path.resolve(ref);
+  return normalized.includes(`${path.sep}.onto${path.sep}review${path.sep}manual-targets${path.sep}`);
+}
+
+function isRuntimeDiffTargetRef(ref: string, sessionRoot: string): boolean {
+  const resolvedRef = path.resolve(ref);
+  const relativeToSession = path.relative(path.resolve(sessionRoot), resolvedRef);
+  return (
+    path.basename(resolvedRef) === "diff-target.patch" &&
+    relativeToSession.length > 0 &&
+    !relativeToSession.startsWith("..") &&
+    !path.isAbsolute(relativeToSession)
+  );
+}
+
+function deriveReviewTargetInputKind(args: {
+  scopeKind: ReviewTargetScopeKind;
+  resolvedTargetRefs: string[];
+  sessionRoot: string;
+}): ReviewTargetInputKind {
+  if (
+    args.resolvedTargetRefs.some((ref) =>
+      isRuntimeDiffTargetRef(ref, args.sessionRoot),
+    )
+  ) {
+    return "git_diff";
+  }
+  if (args.resolvedTargetRefs.some(isGeneratedReviewPacketRef)) {
+    return "generated_packet";
+  }
+  if (args.scopeKind === "bundle") return "explicit_bundle";
+  if (args.scopeKind === "directory") return "directory";
+  return "single_file";
+}
+
+function deriveArtifactRoles(args: {
+  inputKind: ReviewTargetInputKind;
+  scopeKind: ReviewTargetScopeKind;
+  resolvedTargetRefs: string[];
+  bundleKind?: string;
+}): {
+  primary: ReviewTargetArtifactRole;
+  secondary: ReviewTargetArtifactRole[];
+  confidenceBasis: string;
+} {
+  if (args.inputKind === "git_diff") {
+    return {
+      primary: "computational_artifact",
+      secondary: ["record_artifact", "configuration_artifact"],
+      confidenceBasis: "runtime diff target implies implementation-change review",
+    };
+  }
+  if (args.inputKind === "generated_packet") {
+    return {
+      primary: "record_artifact",
+      secondary: ["knowledge_artifact"],
+      confidenceBasis: "target path is an explicit generated review packet",
+    };
+  }
+  if (args.scopeKind === "directory") {
+    return {
+      primary: "computational_artifact",
+      secondary: ["configuration_artifact", "knowledge_artifact"],
+      confidenceBasis: "directory target is treated as a bounded project artifact",
+    };
+  }
+  const primaryRef = args.resolvedTargetRefs[0] ?? "";
+  const primary = args.bundleKind?.includes("implementation")
+    ? "computational_artifact"
+    : inferRoleFromRef(primaryRef);
+  const secondary = uniqueRoles(
+    args.resolvedTargetRefs
+      .slice(1)
+      .map(inferRoleFromRef)
+      .filter((role) => role !== primary),
+  );
+  return {
+    primary,
+    secondary,
+    confidenceBasis:
+      args.scopeKind === "bundle"
+        ? "explicit bundle target with primary/supporting refs"
+        : "runtime file-extension heuristic",
+  };
+}
+
+function goalsForRole(role: ReviewTargetArtifactRole): string[] {
+  switch (role) {
+    case "computational_artifact":
+      return ["correctness", "verifiability", "regression_risk", "maintainability"];
+    case "configuration_artifact":
+      return ["scope_control", "precedence", "invalid_input_behavior"];
+    case "data_artifact":
+      return ["completeness", "consistency", "lineage"];
+    case "record_artifact":
+      return ["provenance", "evidence_preservation", "auditability"];
+    case "contract_artifact":
+      return ["obligations", "exceptions", "failure_conditions"];
+    case "decision_artifact":
+      return ["judgment_criteria", "tradeoff_clarity", "actionability"];
+    case "procedural_artifact":
+      return ["reproducibility", "sequence_integrity", "operator_safety"];
+    case "creative_artifact":
+      return ["coherence", "intended_experience", "continuity"];
+    case "presentation_artifact":
+      return ["audience_decision_support", "clarity", "traceability"];
+    case "knowledge_artifact":
+      return ["conceptual_accuracy", "completeness_for_purpose", "internal_consistency"];
+  }
+}
+
+function domainGoalAdditions(domain: string): string[] {
+  switch (normalizeDomainValue(domain)) {
+    case "software-engineering":
+      return ["runtime_contract", "test_evidence", "error_path_clarity"];
+    case "llm-native-development":
+      return ["context_isolation", "artifact_truth", "fail_loud_behavior"];
+    default:
+      return [];
+  }
+}
+
+function deriveClosureLevel(args: {
+  inputKind: ReviewTargetInputKind;
+  primaryRole: ReviewTargetArtifactRole;
+}): ReviewTargetProfileArtifact["closure_level"] {
+  if (args.inputKind === "generated_packet") return "open_partial";
+  if (
+    args.inputKind === "directory" ||
+    args.inputKind === "explicit_bundle" ||
+    args.inputKind === "git_diff"
+  ) {
+    return "bounded_partial";
+  }
+  if (
+    args.primaryRole === "configuration_artifact" ||
+    args.primaryRole === "contract_artifact" ||
+    args.primaryRole === "data_artifact"
+  ) {
+    return "bounded_closed";
+  }
+  return "bounded_partial";
+}
+
+function confidenceForInputKind(inputKind: ReviewTargetInputKind): number {
+  switch (inputKind) {
+    case "git_diff":
+      return 0.9;
+    case "single_file":
+      return 0.85;
+    case "explicit_bundle":
+      return 0.8;
+    case "directory":
+      return 0.75;
+    case "generated_packet":
+      return 0.65;
+  }
+}
+
+async function targetRefKind(ref: string, sessionRoot: string): Promise<{
+  kind: ReviewTargetRefKind;
+  exists: boolean;
+}> {
+  if (isRuntimeDiffTargetRef(ref, sessionRoot) || isGeneratedReviewPacketRef(ref)) {
+    return { kind: "generated", exists: true };
+  }
+  try {
+    const stat = await fs.stat(ref);
+    return {
+      kind: stat.isDirectory() ? "directory" : "file",
+      exists: true,
+    };
+  } catch {
+    return { kind: "file", exists: false };
+  }
+}
+
+async function targetRefSha256(
+  ref: string,
+  kind: ReviewTargetRefKind,
+  directoryListingOptions?: DirectoryListingOptions,
+): Promise<string | null> {
+  try {
+    const content =
+      kind === "directory"
+        ? Buffer.from(await renderTargetSnapshot([ref], directoryListingOptions), "utf8")
+        : await fs.readFile(ref);
+    return crypto.createHash("sha256").update(content).digest("hex");
+  } catch {
+    return null;
+  }
+}
+
+async function buildReviewTargetProfileArtifact(
+  params: MaterializeReviewExecutionPreparationArtifactsParams,
+): Promise<ReviewTargetProfileArtifact> {
+  const sessionRoot = path.resolve(params.sessionRoot);
+  const sessionId = path.basename(sessionRoot);
+  const resolvedRefs = params.resolvedTargetRefs.map((ref) => path.resolve(ref));
+  const inputKind = deriveReviewTargetInputKind({
+    scopeKind: params.scopeKind,
+    resolvedTargetRefs: resolvedRefs,
+    sessionRoot,
+  });
+  const roles = deriveArtifactRoles({
+    inputKind,
+    scopeKind: params.scopeKind,
+    resolvedTargetRefs: resolvedRefs,
+    ...(params.bundleKind ? { bundleKind: params.bundleKind } : {}),
+  });
+  const closureLevel = deriveClosureLevel({
+    inputKind,
+    primaryRole: roles.primary,
+  });
+  const targetRefs = [];
+  for (const [index, ref] of resolvedRefs.entries()) {
+    const kind = await targetRefKind(ref, sessionRoot);
+    targetRefs.push({
+      ref,
+      role: index === 0 ? "primary" as const : "supporting" as const,
+      kind: kind.kind,
+      exists: kind.exists,
+      sha256: kind.exists
+        ? await targetRefSha256(ref, kind.kind, params.directoryListingOptions)
+        : null,
+    });
+  }
+
+  return {
+    schema_version: "1",
+    session_id: sessionId,
+    created_at: isoNow(),
+    target_scope_kind: params.scopeKind,
+    materialized_input_kind: params.materializedKind,
+    target_input_kind: inputKind,
+    requested_target: params.requestedTarget ?? null,
+    review_intent_summary: params.reviewIntentSummary ?? null,
+    artifact_roles: {
+      primary: roles.primary,
+      secondary: roles.secondary,
+    },
+    domain: normalizeDomainValue(params.sessionDomain ?? "none"),
+    maturity: "review_candidate",
+    closure_level: closureLevel,
+    review_goal: uniqueStrings([
+      ...goalsForRole(roles.primary),
+      ...roles.secondary.flatMap(goalsForRole),
+      ...domainGoalAdditions(params.sessionDomain ?? "none"),
+    ]),
+    closure_obligation_policy: [
+      "must_close_in_target",
+      "must_close_before_next_stage",
+      "may_close_during_next_stage",
+      "planned_later",
+      "out_of_scope",
+    ],
+    target_refs: targetRefs,
+    boundary: {
+      filesystem_allowed_roots:
+        params.filesystemAllowedRoots && params.filesystemAllowedRoots.length > 0
+          ? params.filesystemAllowedRoots.map((rootPath) => path.resolve(rootPath))
+          : [],
+      source: "binding",
+    },
+    inference: {
+      owner: "runtime_heuristic",
+      confidence: confidenceForInputKind(inputKind),
+      confidence_basis: roles.confidenceBasis,
+    },
+  };
+}
+
 export async function materializeReviewExecutionPreparationArtifacts(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
 ): Promise<string> {
@@ -865,6 +1240,10 @@ export async function materializeReviewExecutionPreparationArtifacts(
     "target-snapshot-manifest.yaml",
   );
   const materializedInputPath = path.join(executionPreparationRoot, "materialized-input.md");
+  const reviewTargetProfilePath = path.join(
+    executionPreparationRoot,
+    "review-target-profile.yaml",
+  );
   const contextCandidateAssemblyPath = path.join(
     executionPreparationRoot,
     "context-candidate-assembly.yaml",
@@ -880,9 +1259,12 @@ export async function materializeReviewExecutionPreparationArtifacts(
   const targetSnapshotManifest: TargetSnapshotManifest = {
     review_target_scope_kind: params.scopeKind,
     resolved_target_refs: params.resolvedTargetRefs.map((ref) => path.resolve(ref)),
+    review_target_profile_ref: reviewTargetProfilePath,
     captured_at: isoNow(),
     capture_reason: "prompt-backed review execution",
   };
+
+  const reviewTargetProfile = await buildReviewTargetProfileArtifact(params);
 
   const contextCandidateAssembly: ContextCandidateAssembly = {
     system_purpose_refs: params.systemPurposeRefs ?? [],
@@ -902,6 +1284,7 @@ export async function materializeReviewExecutionPreparationArtifacts(
       "utf8",
     ),
     writeYamlDocument(targetSnapshotManifestPath, targetSnapshotManifest),
+    writeYamlDocument(reviewTargetProfilePath, reviewTargetProfile),
     fs.writeFile(
       materializedInputPath,
       await renderReviewTargetMaterializedInput(

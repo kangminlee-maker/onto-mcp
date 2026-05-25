@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,6 +24,7 @@ interface ReviewRunStructured {
   participatingLensIds: string[];
   degradedLensIds: string[];
   summary?: unknown;
+  artifactRefs?: Record<string, string>;
   routeVisibility?: {
     source?: unknown;
     executionRealization?: unknown;
@@ -273,6 +274,28 @@ async function assertFile(filePath: string, label: string): Promise<void> {
   assert(stat.isFile(), `${label} is not a file: ${filePath}`);
 }
 
+function resolveNonEmptyGitDiffRange(projectRoot: string): string | null {
+  try {
+    const commits = execSync("git rev-list --max-count=2 HEAD", {
+      cwd: projectRoot,
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n")
+      .filter((value) => value.length > 0);
+    const [head, parent] = commits;
+    if (!head || !parent) return null;
+    const range = `${parent}..${head}`;
+    const changedFiles = execSync(`git diff --name-only ${range}`, {
+      cwd: projectRoot,
+      encoding: "utf8",
+    }).trim();
+    return changedFiles.length > 0 ? range : null;
+  } catch {
+    return null;
+  }
+}
+
 async function main(): Promise<void> {
   const projectRoot = process.cwd();
   const testHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-mcp-conformance-home-"));
@@ -316,6 +339,13 @@ async function main(): Promise<void> {
       !("maxConcurrentLenses" in (reviewTool.inputSchema?.properties ?? {})),
       "onto.review schema must not expose maxConcurrentLenses.",
     );
+    assert(
+      "targetScopeKind" in (reviewTool.inputSchema?.properties ?? {}) &&
+        "primaryRef" in (reviewTool.inputSchema?.properties ?? {}) &&
+        "memberRefs" in (reviewTool.inputSchema?.properties ?? {}) &&
+        "diffRange" in (reviewTool.inputSchema?.properties ?? {}),
+      "onto.review schema must expose explicit target contract fields.",
+    );
 
     const callResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.review",
@@ -335,8 +365,43 @@ async function main(): Promise<void> {
     await assertFile(structured.reviewRecordPath, "review record");
     await assertFile(structured.executionResultPath, "execution result");
     await assertFile(structured.reviewRunManifestPath, "review run manifest");
+    const reviewTargetProfilePath = structured.artifactRefs?.review_target_profile;
+    assert(
+      typeof reviewTargetProfilePath === "string",
+      "onto.review structured artifact refs must include review_target_profile.",
+    );
 
     const sessionRoot = path.resolve(structured.sessionRoot);
+    const reviewTargetProfile = await readYaml<{
+      schema_version?: string;
+      target_input_kind?: string;
+      artifact_roles?: { primary?: string; secondary?: unknown };
+      closure_obligation_policy?: unknown;
+      target_refs?: Array<{
+        ref?: string;
+        role?: string;
+        kind?: string;
+        sha256?: string | null;
+      }>;
+    }>(reviewTargetProfilePath);
+    assert(
+      reviewTargetProfile.schema_version === "1" &&
+        reviewTargetProfile.target_input_kind === "single_file" &&
+        reviewTargetProfile.artifact_roles?.primary === "configuration_artifact",
+      "review-target-profile must classify package.json as a configuration single-file target.",
+    );
+    assert(
+      Array.isArray(reviewTargetProfile.target_refs) &&
+        reviewTargetProfile.target_refs.length === 1 &&
+        reviewTargetProfile.target_refs[0]?.role === "primary" &&
+        typeof reviewTargetProfile.target_refs[0]?.sha256 === "string",
+      "review-target-profile must preserve target refs and hashes.",
+    );
+    assert(
+      Array.isArray(reviewTargetProfile.closure_obligation_policy) &&
+        reviewTargetProfile.closure_obligation_policy.includes("must_close_in_target"),
+      "review-target-profile must expose closure obligation policy.",
+    );
     const reviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.review_result",
       arguments: { sessionRoot },
@@ -414,6 +479,7 @@ async function main(): Promise<void> {
       artifact_refs?: {
         actor_invocation_profiles?: string | null;
         actor_consumer_bindings?: string | null;
+        review_target_profile?: string | null;
         review_context_manifest?: string | null;
       };
       worker_units?: Array<{
@@ -483,11 +549,22 @@ async function main(): Promise<void> {
       reviewRunManifest.synthesis_provenance?.deliberation_status === "performed",
       "review-run-manifest synthesis provenance must record performed deliberation.",
     );
+    const reviewContextManifestPath =
+      reviewRunManifest.artifact_refs?.review_context_manifest;
     assert(
-      typeof reviewRunManifest.artifact_refs?.review_context_manifest === "string",
+      typeof reviewContextManifestPath === "string",
       "review-run-manifest must reference review context manifest.",
     );
+    assert(
+      typeof reviewRunManifest.artifact_refs?.review_target_profile === "string",
+      "review-run-manifest must reference review target profile.",
+    );
     const reviewContextManifest = await readYaml<{
+      context_sources?: Array<{
+        context_source_id?: string;
+        source_kind?: string;
+        allowed_consumers?: unknown;
+      }>;
       packet_refs?: Array<{
         consumer_id?: string;
         packet_ref?: string;
@@ -495,7 +572,17 @@ async function main(): Promise<void> {
         consumed_context_refs?: unknown;
         forbidden_context_refs?: unknown;
       }>;
-    }>(reviewRunManifest.artifact_refs.review_context_manifest);
+    }>(reviewContextManifestPath);
+    const targetProfileSource = reviewContextManifest.context_sources?.find(
+      (source) => source.context_source_id === "review-target-profile",
+    );
+    assert(
+      targetProfileSource?.source_kind === "review_target_profile" &&
+        Array.isArray(targetProfileSource.allowed_consumers) &&
+        targetProfileSource.allowed_consumers.includes("lens:logic") &&
+        targetProfileSource.allowed_consumers.includes("synthesize"),
+      "review-context-manifest must admit review-target-profile for review consumers.",
+    );
     const packetRefsByPath = new Map(
       (reviewContextManifest.packet_refs ?? [])
         .filter((ref) => typeof ref.packet_ref === "string")
@@ -726,6 +813,129 @@ async function main(): Promise<void> {
         singleLensBarrier.completed_lens_ids[0] === "logic",
       "single-lens completion barrier must preserve planned/completed lens ids.",
     );
+
+    const bundlePrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto.prepare_review",
+      arguments: {
+        projectRoot,
+        target: "package.json",
+        intent: "MCP conformance explicit bundle target",
+        noDomain: true,
+        targetScopeKind: "bundle",
+        primaryRef: "package.json",
+        memberRefs: ["src/mcp/server.ts", "src/core-api/review-api.ts"],
+        bundleKind: "implementation_change_bundle",
+        lensIds: ["logic"],
+        executorRealization: "mock",
+      },
+    }), "tools/call onto.prepare_review explicit bundle target"));
+    const preparedBundle = requirePreparedReviewStructured(
+      bundlePrepareResult.structuredContent,
+    );
+    const bundleTargetProfilePath = path.join(
+      preparedBundle.sessionRoot,
+      "execution-preparation",
+      "review-target-profile.yaml",
+    );
+    const bundleTargetProfile = await readYaml<{
+      target_input_kind?: string;
+      target_scope_kind?: string;
+      artifact_roles?: { primary?: string };
+      target_refs?: Array<{ role?: string; sha256?: string | null }>;
+    }>(bundleTargetProfilePath);
+    assert(
+      bundleTargetProfile.target_input_kind === "explicit_bundle" &&
+        bundleTargetProfile.target_scope_kind === "bundle" &&
+        bundleTargetProfile.artifact_roles?.primary === "computational_artifact",
+      "explicit bundle prepare must materialize a computational review target profile.",
+    );
+    assert(
+      Array.isArray(bundleTargetProfile.target_refs) &&
+        bundleTargetProfile.target_refs.length === 3 &&
+        bundleTargetProfile.target_refs[0]?.role === "primary" &&
+        bundleTargetProfile.target_refs.slice(1).every(
+          (ref) => ref.role === "supporting" && typeof ref.sha256 === "string",
+        ),
+      "explicit bundle target profile must preserve primary/supporting refs and hashes.",
+    );
+
+    const targetShapeError = requireToolError(requireResult(await client.request("tools/call", {
+      name: "onto.prepare_review",
+      arguments: {
+        projectRoot,
+        target: "package.json",
+        intent: "MCP conformance target shape mismatch",
+        noDomain: true,
+        targetScopeKind: "directory",
+        lensIds: ["logic"],
+        executorRealization: "mock",
+      },
+    }), "tools/call onto.prepare_review target shape mismatch"));
+    assert(
+      requireStructuredFailure(targetShapeError.structuredContent).failure.mcp_error_code ===
+        "ONTO_REVIEW_TARGET_BINDING_FAILED",
+      "target shape mismatch must return structured target binding failure.",
+    );
+
+    const outsideBundleRef = path.join(testHome, "outside-bundle-ref.txt");
+    await fs.writeFile(outsideBundleRef, "outside bundle ref", "utf8");
+    const boundaryError = requireToolError(requireResult(await client.request("tools/call", {
+      name: "onto.prepare_review",
+      arguments: {
+        projectRoot,
+        target: "package.json",
+        intent: "MCP conformance bundle boundary guard",
+        noDomain: true,
+        targetScopeKind: "bundle",
+        primaryRef: "package.json",
+        memberRefs: [outsideBundleRef],
+        lensIds: ["logic"],
+        executorRealization: "mock",
+      },
+    }), "tools/call onto.prepare_review bundle boundary guard"));
+    assert(
+      requireStructuredFailure(boundaryError.structuredContent).failure.mcp_error_code ===
+        "ONTO_REVIEW_TARGET_BINDING_FAILED",
+      "bundle boundary guard must return structured target binding failure.",
+    );
+
+    const diffRange = resolveNonEmptyGitDiffRange(projectRoot);
+    if (diffRange) {
+      const diffPrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
+        name: "onto.prepare_review",
+        arguments: {
+          projectRoot,
+          target: ".",
+          intent: "MCP conformance git diff target profile",
+          noDomain: true,
+          targetScopeKind: "file",
+          diffRange,
+          lensIds: ["logic"],
+          executorRealization: "mock",
+        },
+      }), "tools/call onto.prepare_review git diff target profile"));
+      const preparedDiff = requirePreparedReviewStructured(
+        diffPrepareResult.structuredContent,
+      );
+      const diffTargetProfile = await readYaml<{
+        target_input_kind?: string;
+        target_refs?: Array<{ ref?: string; kind?: string }>;
+      }>(
+        path.join(
+          preparedDiff.sessionRoot,
+          "execution-preparation",
+          "review-target-profile.yaml",
+        ),
+      );
+      const diffRef = diffTargetProfile.target_refs?.[0]?.ref;
+      assert(
+        diffTargetProfile.target_input_kind === "git_diff" &&
+          typeof diffRef === "string" &&
+          path.dirname(diffRef) === preparedDiff.sessionRoot &&
+          path.basename(diffRef) === "diff-target.patch",
+        "git diff target profile must use the active session root and target_input_kind=git_diff.",
+      );
+    }
 
     const domainPrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.prepare_review",

@@ -238,6 +238,7 @@ classifications:
     impact_kind: maintainability_evolvability
     timing_class: defer_watch
     closure_class: watch
+    closure_obligation: out_of_scope
     domain_axes: {}
     rationale: mock rationale
     related_surface_finding_ids: [finding-001]

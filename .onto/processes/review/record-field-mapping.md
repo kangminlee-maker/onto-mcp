@@ -63,6 +63,7 @@ Issue-stance deliberation target source artifacts:
 | `session-metadata.yaml` | `session_metadata_ref` |
 | `execution-preparation/target-snapshot.md` | `target_snapshot_ref` |
 | `execution-preparation/materialized-input.md` | `materialized_input_ref` |
+| `execution-preparation/review-target-profile.yaml` | `review_target_profile_ref` |
 | `execution-preparation/context-candidate-assembly.yaml` | `context_candidate_assembly_ref` |
 | `round1/{lens-id}.md` | `lens_result_refs.{lens-id}` |
 | `round1/{lens-id}.md` → `Domain Constraints Used` section | `per_lens_provenance.{lens-id}.domain_constraints_used` |
@@ -233,6 +234,7 @@ resolved_lens_ids:
 session_metadata_ref: .onto/review/20260404-a1b2c3d4/session-metadata.yaml
 target_snapshot_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/target-snapshot.md
 materialized_input_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/review-target-profile.yaml
 context_candidate_assembly_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/context-candidate-assembly.yaml
 
 lens_result_refs:

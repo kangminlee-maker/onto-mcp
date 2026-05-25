@@ -189,6 +189,14 @@ const CLOSURE_CLASS_VALUES = new Set([
   "watch",
 ]);
 
+const CLOSURE_OBLIGATION_VALUES = new Set([
+  "must_close_in_target",
+  "must_close_before_next_stage",
+  "may_close_during_next_stage",
+  "planned_later",
+  "out_of_scope",
+]);
+
 const DOMAIN_PROFILE_STATUS_VALUES = new Set([
   "applied",
   "absent",
@@ -321,6 +329,10 @@ export function buildIssueArtifactPrompt(args: {
 }): string {
   const outputRef = toRelativePath(args.outputPath, args.projectRoot);
   const lensRefs = relativeList(args.projectRoot, args.lensOutputPaths);
+  const reviewTargetProfileRef = toRelativePath(
+    args.executionPlan.review_target_profile_path,
+    args.projectRoot,
+  );
   const deliberationResponseRefs = relativeList(
     args.projectRoot,
     args.deliberationResponsePaths ?? [],
@@ -353,6 +365,9 @@ You must derive the requested artifact from existing lens outputs and prior issu
 
 ## Lens Outputs
 ${lensRefs}
+
+## Review Target Profile
+- profile: ${reviewTargetProfileRef}
 `;
 
   switch (args.artifactId) {
@@ -558,6 +573,7 @@ Allowed common spine values:
 - impact_kind: correctness, consistency, completeness, safety_risk, usability, governance_value, maintainability_evolvability
 - timing_class: current_blocker, next_step_blocker, planned_follow_up, defer_watch
 - closure_class: fix_now, carry_forward, document_only, needs_decision, needs_evidence, watch
+- closure_obligation: must_close_in_target, must_close_before_next_stage, may_close_during_next_stage, planned_later, out_of_scope
 
 ## Required YAML Shape
 schema_version: 1
@@ -576,6 +592,7 @@ classifications:
     impact_kind: consistency
     timing_class: next_step_blocker
     closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
     domain_axes: {}
     rationale: "why this classification is appropriate"
     related_surface_finding_ids: [finding-001]
@@ -833,6 +850,7 @@ export function validateIssueArtifactObject(args: {
         requireAllowed(classification.impact_kind, IMPACT_KIND_VALUES, `problem-framing.classifications[${index}].impact_kind`);
         requireAllowed(classification.timing_class, TIMING_CLASS_VALUES, `problem-framing.classifications[${index}].timing_class`);
         requireAllowed(classification.closure_class, CLOSURE_CLASS_VALUES, `problem-framing.classifications[${index}].closure_class`);
+        requireAllowed(classification.closure_obligation, CLOSURE_OBLIGATION_VALUES, `problem-framing.classifications[${index}].closure_obligation`);
         requireRecord(classification.domain_axes, `problem-framing.classifications[${index}].domain_axes`);
         requireString(classification.rationale, `problem-framing.classifications[${index}].rationale`);
         requireStringArray(classification.related_surface_finding_ids, `problem-framing.classifications[${index}].related_surface_finding_ids`);

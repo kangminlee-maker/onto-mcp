@@ -762,6 +762,40 @@ function ensureSessionIdArg(argv: string[]): string[] {
   return [...argv, "--session-id", generateReviewSessionId()];
 }
 
+function requireOptionalTargetScopeKind(
+  value: string | undefined,
+): ReviewTargetScopeKind | undefined {
+  if (value === undefined) return undefined;
+  if (value === "file" || value === "directory" || value === "bundle") {
+    return value;
+  }
+  throw new Error(`Invalid --target-scope-kind value: ${value}. Use file, directory, or bundle.`);
+}
+
+function throwTargetBindingFailure(args: {
+  reasonCode: string;
+  humanMessage: string;
+  requiredUserAction: string;
+  details: Record<string, unknown>;
+}): never {
+  throw new ReviewStructuredFailureError({
+    failureRecord: createStructuredFailureRecord({
+      phase: "pre_manifest.target_binding",
+      reasonCode: args.reasonCode,
+      humanMessage: args.humanMessage,
+      requiredUserAction: args.requiredUserAction,
+      retrySafety: "safe_after_input_change",
+      artifactTrust: "no_artifacts_trusted",
+      dispatchState: "not_dispatched",
+      artifactRefs: {},
+      mcpErrorCode: "ONTO_REVIEW_TARGET_BINDING_FAILED",
+      detailsKind: "schema_validation",
+      details: args.details,
+    }),
+    failureRecordPath: null,
+  });
+}
+
 function appendExecutorModelArgs(
   config: ReviewUnitExecutorConfig,
   argv: string[],
@@ -1630,6 +1664,7 @@ async function resolveTargetInput(
   requestedTarget: string,
   explicitFilesystemAllowedRoots: string[],
   argv: string[],
+  expectedTargetScopeKind?: "file" | "directory",
 ): Promise<{
   absoluteTargetPath: string;
   targetScopeKind: ReviewTargetScopeKind;
@@ -1643,6 +1678,22 @@ async function resolveTargetInput(
   );
   const targetStats = await fs.stat(absoluteTargetPath);
   const targetScopeKind = targetStats.isDirectory() ? "directory" : "file";
+  if (
+    expectedTargetScopeKind !== undefined &&
+    expectedTargetScopeKind !== targetScopeKind
+  ) {
+    throwTargetBindingFailure({
+      reasonCode: "explicit_target_scope_mismatch",
+      humanMessage: "Explicit target scope mismatch.",
+      requiredUserAction:
+        "Change targetScopeKind to match the target, choose a matching target, or omit targetScopeKind to let runtime infer the shape.",
+      details: {
+        requested_target_scope_kind: expectedTargetScopeKind,
+        actual_target_scope_kind: targetScopeKind,
+        target: absoluteTargetPath,
+      },
+    });
+  }
   const materializedKind = targetStats.isDirectory()
     ? "directory_listing"
     : "single_text";
@@ -1748,10 +1799,102 @@ async function resolveTargetInput(
   };
 }
 
+async function assertBundleTargetRefInsideBoundary(args: {
+  ref: string;
+  projectRoot: string;
+  allowedRoots: string[];
+}): Promise<void> {
+  try {
+    await fs.stat(args.ref);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throwTargetBindingFailure({
+      reasonCode: "bundle_target_ref_missing",
+      humanMessage: "Bundle target ref does not exist.",
+      requiredUserAction:
+        "Use existing primary/member refs or remove the missing ref from the explicit bundle.",
+      details: {
+        ref: args.ref,
+        stat_error: message,
+      },
+    });
+  }
+  if (!isInsideAnyDeclaredFilesystemRoot(args.ref, args.allowedRoots)) {
+    throwTargetBindingFailure({
+      reasonCode: "bundle_target_ref_outside_boundary",
+      humanMessage: "Bundle target ref is outside the filesystem boundary.",
+      requiredUserAction:
+        "Add an explicit filesystem allowed root for this ref or choose a target inside the project boundary.",
+      details: {
+        ref: args.ref,
+        project_root: args.projectRoot,
+        allowed_roots: args.allowedRoots,
+      },
+    });
+  }
+}
+
+async function resolveBundleTargetInput(args: {
+  projectRoot: string;
+  requestedTarget?: string;
+  explicitPrimaryRef?: string;
+  explicitMemberRefs: string[];
+  explicitFilesystemAllowedRoots: string[];
+}): Promise<{
+  absoluteTargetPath: string;
+  resolvedTargetRefs: string[];
+  filesystemAllowedRoots: string[];
+}> {
+  const primaryRefRaw =
+    args.explicitPrimaryRef ?? args.requestedTarget ?? args.explicitMemberRefs[0];
+  if (typeof primaryRefRaw !== "string" || primaryRefRaw.length === 0) {
+    throwTargetBindingFailure({
+      reasonCode: "bundle_primary_ref_missing",
+      humanMessage:
+        "Bundle review target requires --primary-ref, target, or at least one --member-ref.",
+      requiredUserAction:
+        "Provide a primary bundle ref, a target, or at least one member ref.",
+      details: {
+        member_ref_count: args.explicitMemberRefs.length,
+      },
+    });
+  }
+
+  const absoluteTargetPath = path.resolve(args.projectRoot, primaryRefRaw);
+  const orderedRefs = [
+    absoluteTargetPath,
+    ...args.explicitMemberRefs.map((memberRef) =>
+      path.resolve(args.projectRoot, memberRef),
+    ),
+  ];
+  const resolvedTargetRefs = orderedRefs.filter(
+    (resolvedRef, index) => orderedRefs.indexOf(resolvedRef) === index,
+  );
+  const filesystemAllowedRoots = normalizeFilesystemAllowedRoots(
+    args.explicitFilesystemAllowedRoots,
+    args.projectRoot,
+  );
+
+  for (const resolvedRef of resolvedTargetRefs) {
+    await assertBundleTargetRefInsideBoundary({
+      ref: resolvedRef,
+      projectRoot: args.projectRoot,
+      allowedRoots: filesystemAllowedRoots,
+    });
+  }
+
+  return {
+    absoluteTargetPath,
+    resolvedTargetRefs,
+    filesystemAllowedRoots,
+  };
+}
+
 async function resolveReviewInvokeInputs(
   argv: string[],
   ontoConfig: OntoConfig,
   projectRoot: string,
+  sessionId: string,
 ): Promise<ResolvedReviewInvokeInputs> {
   const parsedPositionals = parseHostFacingPositionals(
     splitArgvIntoOptionsAndPositionals(
@@ -1762,7 +1905,9 @@ async function resolveReviewInvokeInputs(
   );
 
   const explicitRequestedTarget = readSingleOptionValueFromArgv(argv, "requested-target");
-  const explicitTargetScopeKind = readSingleOptionValueFromArgv(argv, "target-scope-kind");
+  const explicitTargetScopeKind = requireOptionalTargetScopeKind(
+    readSingleOptionValueFromArgv(argv, "target-scope-kind"),
+  );
   const explicitPrimaryRef = readSingleOptionValueFromArgv(argv, "primary-ref");
   const explicitMemberRefs = readMultiOptionValuesFromArgv(argv, "member-ref");
   const explicitBundleKind = readSingleOptionValueFromArgv(argv, "bundle-kind");
@@ -1773,6 +1918,54 @@ async function resolveReviewInvokeInputs(
   const requestedTarget = explicitRequestedTarget ?? parsedPositionals.target;
   const bundleRequested =
     explicitTargetScopeKind === "bundle" || explicitMemberRefs.length > 0;
+  if (
+    explicitTargetScopeKind !== "bundle" &&
+    explicitTargetScopeKind !== undefined &&
+    explicitMemberRefs.length > 0
+  ) {
+    throwTargetBindingFailure({
+      reasonCode: "member_ref_without_bundle_scope",
+      humanMessage: "--member-ref is only valid with --target-scope-kind bundle.",
+      requiredUserAction:
+        "Set targetScopeKind to bundle or remove memberRefs from the request.",
+      details: {
+        target_scope_kind: explicitTargetScopeKind,
+        member_ref_count: explicitMemberRefs.length,
+      },
+    });
+  }
+  if (
+    explicitPrimaryRef !== undefined &&
+    explicitTargetScopeKind !== "bundle" &&
+    explicitMemberRefs.length === 0
+  ) {
+    throwTargetBindingFailure({
+      reasonCode: "primary_ref_without_bundle_scope",
+      humanMessage: "--primary-ref is only valid for explicit bundle review targets.",
+      requiredUserAction:
+        "Set targetScopeKind to bundle or remove primaryRef from the request.",
+      details: {
+        target_scope_kind: explicitTargetScopeKind ?? null,
+        primary_ref: explicitPrimaryRef,
+      },
+    });
+  }
+  if (
+    explicitBundleKind !== undefined &&
+    explicitTargetScopeKind !== "bundle" &&
+    explicitMemberRefs.length === 0
+  ) {
+    throwTargetBindingFailure({
+      reasonCode: "bundle_kind_without_bundle_scope",
+      humanMessage: "--bundle-kind is only valid for explicit bundle review targets.",
+      requiredUserAction:
+        "Set targetScopeKind to bundle or remove bundleKind from the request.",
+      details: {
+        target_scope_kind: explicitTargetScopeKind ?? null,
+        bundle_kind: explicitBundleKind,
+      },
+    });
+  }
   if (
     !bundleRequested &&
     (typeof requestedTarget !== "string" || requestedTarget.length === 0)
@@ -1887,6 +2080,40 @@ async function resolveReviewInvokeInputs(
   let bundleKind: string | undefined;
 
   if (typeof diffRange === "string" && diffRange.length > 0) {
+    if (
+      explicitTargetScopeKind !== undefined &&
+      explicitTargetScopeKind !== "file"
+    ) {
+      throwTargetBindingFailure({
+        reasonCode: "diff_range_scope_conflict",
+        humanMessage:
+          "--diff-range materializes a file target and cannot be combined with the requested target scope.",
+        requiredUserAction:
+          "Use targetScopeKind=file with diffRange, or remove diffRange for bundle/directory review.",
+        details: {
+          target_scope_kind: explicitTargetScopeKind,
+          diff_range: diffRange,
+        },
+      });
+    }
+    if (
+      explicitPrimaryRef !== undefined ||
+      explicitMemberRefs.length > 0 ||
+      explicitBundleKind !== undefined
+    ) {
+      throwTargetBindingFailure({
+        reasonCode: "diff_range_bundle_field_conflict",
+        humanMessage: "--diff-range cannot be combined with bundle target fields.",
+        requiredUserAction:
+          "Run either a git diff review or an explicit bundle review, not both in one invocation.",
+        details: {
+          diff_range: diffRange,
+          primary_ref: explicitPrimaryRef ?? null,
+          member_ref_count: explicitMemberRefs.length,
+          bundle_kind: explicitBundleKind ?? null,
+        },
+      });
+    }
     if (!/^[a-zA-Z0-9_.\/\-~^@{}:]+(?:\.\.[a-zA-Z0-9_.\/\-~^@{}:]+)?$/.test(diffRange)) {
       throw new Error(
         `Invalid --diff-range value: ${diffRange}. Expected a git ref range like "abc123..def456" or "HEAD~3".`,
@@ -1921,7 +2148,6 @@ async function resolveReviewInvokeInputs(
     if (diffOutput.trim().length === 0) {
       throw new Error(`git diff ${diffRange} produced empty output in ${diffTargetDir}`);
     }
-    const sessionId = readSingleOptionValueFromArgv(argv, "session-id") ?? generateReviewSessionId();
     const diffFilePath = path.join(projectRoot, ".onto", "review", sessionId, "diff-target.patch");
     await fs.mkdir(path.dirname(diffFilePath), { recursive: true });
     await fs.writeFile(diffFilePath, diffOutput, "utf8");
@@ -1938,26 +2164,25 @@ async function resolveReviewInvokeInputs(
     bundleKind = explicitBundleKind && explicitBundleKind.length > 0
       ? explicitBundleKind
       : "host_facing_bundle";
-    const primaryRefRaw = explicitPrimaryRef ?? requestedTarget ?? explicitMemberRefs[0];
-    if (typeof primaryRefRaw !== "string" || primaryRefRaw.length === 0) {
-      throw new Error(
-        "Bundle review target requires --primary-ref or at least one --member-ref.",
-      );
-    }
-    absoluteTargetPath = path.resolve(projectRoot, primaryRefRaw);
-    const orderedRefs = [
-      absoluteTargetPath,
-      ...explicitMemberRefs.map((memberRef) => path.resolve(projectRoot, memberRef)),
-    ];
-    resolvedTargetRefs = orderedRefs.filter(
-      (resolvedRef, index) => orderedRefs.indexOf(resolvedRef) === index,
-    );
+    const resolvedBundleTarget = await resolveBundleTargetInput({
+      projectRoot,
+      ...(requestedTarget !== undefined ? { requestedTarget } : {}),
+      ...(explicitPrimaryRef !== undefined ? { explicitPrimaryRef } : {}),
+      explicitMemberRefs,
+      explicitFilesystemAllowedRoots,
+    });
+    absoluteTargetPath = resolvedBundleTarget.absoluteTargetPath;
+    resolvedTargetRefs = resolvedBundleTarget.resolvedTargetRefs;
+    filesystemAllowedRoots = resolvedBundleTarget.filesystemAllowedRoots;
   } else {
-  const resolvedTargetInput = await resolveTargetInput(
+    const resolvedTargetInput = await resolveTargetInput(
       projectRoot,
       requestedTarget as string,
       explicitFilesystemAllowedRoots,
       argv,
+      explicitTargetScopeKind === "file" || explicitTargetScopeKind === "directory"
+        ? explicitTargetScopeKind
+        : undefined,
     );
     absoluteTargetPath = resolvedTargetInput.absoluteTargetPath;
     targetScopeKind = resolvedTargetInput.targetScopeKind;
@@ -2241,6 +2466,11 @@ interface ReviewInvokeSetup {
 
 async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSetup> {
   rejectRemovedFlags(argv);
+  const argvWithSessionId = ensureSessionIdArg(argv);
+  const sessionId = requireString(
+    readSingleOptionValueFromArgv(argvWithSessionId, "session-id"),
+    "session-id",
+  );
   const ontoHomeFlag = readSingleOptionValueFromArgv(argv, "onto-home");
   const ontoHome = resolveOntoHome(ontoHomeFlag);
   const projectRoot = path.resolve(
@@ -2250,25 +2480,24 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     ? await resolveSettingsChain(ontoHome, projectRoot)
     : await readOntoConfig(projectRoot);
   const resolvedInvokeInputs = await resolveReviewInvokeInputs(
-    argv,
+    argvWithSessionId,
     ontoConfig,
     projectRoot,
+    sessionId,
   );
   const maxConcurrentLenses = Math.max(1, resolvedInvokeInputs.resolvedLensIds.length);
 
   const { optionTokens: argvWithoutPositionals } = splitArgvIntoOptionsAndPositionals(
-    argv,
+    argvWithSessionId,
     [...KNOWN_INVOKE_ONLY_OPTION_NAMES, ...KNOWN_PASSTHROUGH_OPTION_NAMES],
     [...KNOWN_INVOKE_ONLY_FLAG_NAMES, ...KNOWN_PASSTHROUGH_FLAG_NAMES],
   );
 
   const normalizedStartArgv = appendReviewInvokeDerivedArgs(
-    ensureSessionIdArg(
-      stripOptionsFromArgv(
-        argvWithoutPositionals,
-        [...KNOWN_INVOKE_ONLY_OPTION_NAMES],
-        [...KNOWN_INVOKE_ONLY_FLAG_NAMES],
-      ),
+    stripOptionsFromArgv(
+      argvWithoutPositionals,
+      [...KNOWN_INVOKE_ONLY_OPTION_NAMES],
+      [...KNOWN_INVOKE_ONLY_FLAG_NAMES],
     ),
     resolvedInvokeInputs,
   );

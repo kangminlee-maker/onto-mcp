@@ -382,6 +382,10 @@ export async function runAssembleReviewRecordCli(
   const executionPreparationRoot = path.join(sessionRoot, "execution-preparation");
   const targetSnapshotPath = path.join(executionPreparationRoot, "target-snapshot.md");
   const materializedInputPath = path.join(executionPreparationRoot, "materialized-input.md");
+  const reviewTargetProfilePath = path.join(
+    executionPreparationRoot,
+    "review-target-profile.yaml",
+  );
   const contextCandidateAssemblyPath = path.join(
     executionPreparationRoot,
     "context-candidate-assembly.yaml",
@@ -406,6 +410,7 @@ export async function runAssembleReviewRecordCli(
     ["session metadata", sessionMetadataPath],
     ["target snapshot", targetSnapshotPath],
     ["materialized input", materializedInputPath],
+    ["review target profile", reviewTargetProfilePath],
     ["context candidate assembly", contextCandidateAssemblyPath],
     ["final output", finalOutputPath],
     ["execution result", executionResultPath],
@@ -537,6 +542,10 @@ export async function runAssembleReviewRecordCli(
     session_metadata_ref: toRelativePath(sessionMetadataPath, projectRoot),
     target_snapshot_ref: toRelativePath(targetSnapshotPath, projectRoot),
     materialized_input_ref: toRelativePath(materializedInputPath, projectRoot),
+    review_target_profile_ref: toRelativePath(
+      reviewTargetProfilePath,
+      projectRoot,
+    ),
     context_candidate_assembly_ref: toRelativePath(
       contextCandidateAssemblyPath,
       projectRoot,

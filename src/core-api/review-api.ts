@@ -5,6 +5,8 @@ import type {
   ReviewMode,
   ReviewRecord,
   ReviewStructuredFailureRecord,
+  ReviewTargetProfileArtifact,
+  ReviewTargetScopeKind,
 } from "../core-runtime/review/artifact-types.js";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -25,6 +27,11 @@ export interface PrepareReviewRequest {
   projectRoot: string;
   target: string;
   intent: string;
+  targetScopeKind?: ReviewTargetScopeKind;
+  primaryRef?: string;
+  memberRefs?: string[];
+  bundleKind?: string;
+  diffRange?: string;
   domain?: string;
   noDomain?: boolean;
   reviewMode?: ReviewMode;
@@ -206,6 +213,21 @@ function appendCommonReviewArgs(
   if (request.reviewMode) {
     result.push("--review-mode", request.reviewMode);
   }
+  if (request.targetScopeKind) {
+    result.push("--target-scope-kind", request.targetScopeKind);
+  }
+  if (request.primaryRef) {
+    result.push("--primary-ref", request.primaryRef);
+  }
+  for (const memberRef of request.memberRefs ?? []) {
+    result.push("--member-ref", memberRef);
+  }
+  if (request.bundleKind) {
+    result.push("--bundle-kind", request.bundleKind);
+  }
+  if (request.diffRange) {
+    result.push("--diff-range", request.diffRange);
+  }
   if (request.executorRealization) {
     result.push("--executor-realization", request.executorRealization);
   }
@@ -266,6 +288,9 @@ async function buildPreparedOpeningBriefInput(
   const binding = await readOptionalYaml<InvocationBindingArtifact>(
     path.join(sessionRoot, "binding.yaml"),
   );
+  const reviewTargetProfile = await readOptionalYaml<ReviewTargetProfileArtifact>(
+    executionPlan.review_target_profile_path,
+  );
 
   return {
     session_id: executionPlan.session_id,
@@ -292,6 +317,20 @@ async function buildPreparedOpeningBriefInput(
           resolved_host_runtime: binding.resolved_host_runtime,
           boundary_policy: binding.boundary_policy,
           effective_boundary_state: binding.effective_boundary_state,
+        }
+      : null,
+    review_target_profile: reviewTargetProfile
+      ? {
+          target_input_kind: reviewTargetProfile.target_input_kind,
+          artifact_roles: reviewTargetProfile.artifact_roles,
+          domain: reviewTargetProfile.domain,
+          maturity: reviewTargetProfile.maturity,
+          closure_level: reviewTargetProfile.closure_level,
+          review_goal: reviewTargetProfile.review_goal,
+          closure_obligation_policy:
+            reviewTargetProfile.closure_obligation_policy,
+          target_refs: reviewTargetProfile.target_refs,
+          inference: reviewTargetProfile.inference,
         }
       : null,
     execution_plan: {
@@ -367,6 +406,11 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
       sessionRoot,
       "execution-preparation",
       "review-value-alignment-criteria.yaml",
+    ),
+    review_target_profile: path.join(
+      sessionRoot,
+      "execution-preparation",
+      "review-target-profile.yaml",
     ),
     review_context_manifest: path.join(
       sessionRoot,

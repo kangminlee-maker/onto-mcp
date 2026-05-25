@@ -476,7 +476,7 @@ echo ""
 
 echo "── Option Interactions ──"
 
-run_expect_pass "E24: diff+bundle-priority" \
+run_expect_fail "E24: diff+bundle-conflict" \
   --diff-range ad8ce13..c19e107 \
   --primary-ref src/core-runtime/cli/review-invoke.ts \
   --member-ref package.json \
@@ -1152,7 +1152,7 @@ write_e49_mock_issue_artifact_output() {
       printf 'schema_version: 1\nsession_id: %s\nplanned_issues: []\nskipped_issues:\n  - issue_id: issue-001\n    reason: no material conflict\n' "$session_id" > "$output_path"
       ;;
     problem-framing.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nclassification_context:\n  common_spine_version: 1\n  session_domain: none\n  domain_profile_ref: ""\n  domain_profile_doc_type: custom:problem_framing_profile\n  domain_profile_status: not_requested\nclassifications:\n  - issue_id: issue-001\n    problem_definition: mock problem\n    issue_role: independent_issue\n    judgment_state: observed\n    impact_kind: maintainability_evolvability\n    timing_class: defer_watch\n    closure_class: watch\n    domain_axes: {}\n    rationale: mock rationale\n    related_surface_finding_ids: [finding-001]\n' "$session_id" > "$output_path"
+      printf 'schema_version: 1\nsession_id: %s\nclassification_context:\n  common_spine_version: 1\n  session_domain: none\n  domain_profile_ref: ""\n  domain_profile_doc_type: custom:problem_framing_profile\n  domain_profile_status: not_requested\nclassifications:\n  - issue_id: issue-001\n    problem_definition: mock problem\n    issue_role: independent_issue\n    judgment_state: observed\n    impact_kind: maintainability_evolvability\n    timing_class: defer_watch\n    closure_class: watch\n    closure_obligation: out_of_scope\n    domain_axes: {}\n    rationale: mock rationale\n    related_surface_finding_ids: [finding-001]\n' "$session_id" > "$output_path"
       ;;
     *)
       echo "unsupported E49 issue artifact: $output_path" >&2

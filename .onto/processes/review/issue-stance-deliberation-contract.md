@@ -452,6 +452,7 @@ Problem framing has two layers:
 
 1. **Common spine**: domain-independent issue classification owned by this contract.
 2. **Domain profile**: domain-specific classification axes owned by `.onto/domains/{domain}/problem_framing_profile.md`.
+3. **Target profile**: artifact role and closure obligation from `review-target-profile.yaml`.
 
 The domain profile document is a `domain_document` with `doc_type: custom:problem_framing_profile`.
 It may add domain-specific axes, but it must not redefine common spine values.
@@ -479,6 +480,7 @@ classifications:
     impact_kind: consistency
     timing_class: next_step_blocker
     closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
     domain_axes:
       implementation_surface: review_runtime
       defect_kind: contract_gap
@@ -544,6 +546,16 @@ Allowed `closure_class` values:
 | `needs_decision` | 구현 전 사용자/maintainer 결정 필요 |
 | `needs_evidence` | 추가 evidence 수집 전 action 금지 |
 | `watch` | 추적만 하고 즉시 action 없음 |
+
+Allowed `closure_obligation` values:
+
+| Value | Meaning |
+|---|---|
+| `must_close_in_target` | 이 target 자체가 현재 boundary 안에서 닫아야 하는 문제 |
+| `must_close_before_next_stage` | 현재 target은 완료 가능하지만 다음 단계 진입 전 닫아야 하는 문제 |
+| `may_close_during_next_stage` | 다음 구현/작성/운영 단계에서 닫아도 되는 문제 |
+| `planned_later` | 현재 계획상 후속 단계로 명시해도 되는 문제 |
+| `out_of_scope` | 현재 target obligation 밖의 문제 |
 
 ### 12.2 Domain Profile Loading
 
@@ -652,6 +664,7 @@ issue_resolution_summary:
     impact_kind: consistency
     timing_class: next_step_blocker
     closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
     domain_axes:
       implementation_surface: review_runtime
       defect_kind: contract_gap

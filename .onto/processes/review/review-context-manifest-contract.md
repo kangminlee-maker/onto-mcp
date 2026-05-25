@@ -12,6 +12,7 @@
 
 It fixes the bounded context that may shape review judgment before lens dispatch:
 
+- target profile: what artifact role and closure obligation apply
 - domain knowledge: what factual/domain rules may be used
 - alignment criteria: what purpose, values, and decision criteria may be used
 - execution gates: what must be confirmed before review may start
@@ -26,12 +27,14 @@ This manifest is not a new reasoning stage. It is a small runtime-owned contract
 Nearest existing concept:
 
 - `context-candidate-assembly`
+- `review-target-profile`
 
 Difference:
 
 | Concept | Role |
 |---|---|
 | `context-candidate-assembly` | Candidate context set assembled before per-lens relevance judgment. |
+| `review-target-profile` | Target artifact role, target input kind, closure level, review goals, and obligation policy. |
 | `review-context-manifest` | Execution contract that fixes domain/alignment sources, stage allowlists, hashes, and confirmation gates for the review run. |
 
 `review-context-manifest.yaml` may eventually absorb or constrain `context-candidate-assembly`, but it should not become a broad dumping ground for context.
@@ -44,6 +47,7 @@ Do not create separate runtime artifacts for every conceptual distinction unless
 
 Conceptually separate:
 
+- target role and obligation
 - domain knowledge
 - alignment criteria
 - lens role context
@@ -99,6 +103,17 @@ context_sources:
     allowed_consumers:
       - lens:logic
       - synthesize
+  - context_source_id: review-target-profile
+    source_kind: review_target_profile
+    source_ref: "{session_root}/execution-preparation/review-target-profile.yaml"
+    source_sha256: "..."
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:logic
+      - issue-artifact:problem-framing
+      - controlled-deliberation
+      - synthesize
 derived_context_access_matrix:
   lens:logic:
     - materialized-input
@@ -115,7 +130,29 @@ After packet materialization, `packet_refs` is filled and lifecycle becomes
 
 ---
 
-## 5. Domain Context Rules
+## 5. Target Profile Rules
+
+Target profile context owns artifact role and closure obligation framing.
+
+Rules:
+
+1. Runtime materializes `review-target-profile.yaml` before manifest creation.
+2. Runtime records target input kind, artifact roles, target refs, hashes, and
+   filesystem boundary source.
+3. The profile is admitted to all review consumers because it affects whether a
+   discovered issue is inside the target's responsibility.
+4. The profile does not grant permission to read outside `binding.yaml`
+   boundary policy.
+5. If a target was supplied as a generated packet, the profile must preserve
+   `target_input_kind=generated_packet` so downstream review can preserve
+   representation limits.
+
+Allowed target input kinds and closure semantics are defined in
+`.onto/processes/review/review-target-profile-contract.md`.
+
+---
+
+## 6. Domain Context Rules
 
 Domain context owns factual and domain-specific review grounding.
 
@@ -140,7 +177,7 @@ Stage defaults:
 
 ---
 
-## 6. Alignment Context Rules
+## 7. Alignment Context Rules
 
 Alignment context owns purpose, values, stakeholder frame, non-goals, and decision criteria.
 
@@ -173,13 +210,14 @@ Confidence-lowering conditions:
 
 ---
 
-## 7. Teamlead Role
+## 8. Teamlead Role
 
 The teamlead is a manifest-based dispatcher and context controller.
 
 The teamlead does:
 
 - present target, boundary, domain, alignment criteria, lens set, and execution settings
+- present target profile, including artifact role and closure level
 - enforce confirmation gates
 - dispatch lenses and axiology with bounded context
 - constrain deliberation context
@@ -193,9 +231,10 @@ The teamlead does not:
 
 ---
 
-## 8. Lens And Axiology Consumption
+## 9. Lens And Axiology Consumption
 
 Core lenses consume domain context according to manifest stage allowlists.
+All selected lenses consume the target profile as shared obligation framing.
 
 `axiology` consumes alignment context and may use selected domain value commitments only when allowed by the manifest.
 
@@ -220,7 +259,7 @@ If required grounding is absent, the finding must be limited to insufficient evi
 
 ---
 
-## 9. Deliberation
+## 10. Deliberation
 
 Controlled deliberation is not a second full review.
 
@@ -229,6 +268,7 @@ Default deliberation shape:
 ```text
 material-conflict issue
 + conflicting stances
++ target profile closure obligation
 + cited domain anchors
 + cited alignment anchors
 + bounded excerpts or refs
@@ -250,7 +290,7 @@ The teamlead records the issue result as:
 
 ---
 
-## 10. Synthesize Seat
+## 11. Synthesize Seat
 
 `synthesize` is a separate non-lens review stage.
 
@@ -260,6 +300,7 @@ Its role:
 
 - read participating lens outputs
 - read axiology output
+- read review target profile
 - read issue artifacts
 - read controlled deliberation result
 - read problem framing
@@ -276,11 +317,12 @@ The teamlead controls process and deliberation. `synthesize` writes the final in
 
 ---
 
-## 11. Opening And Final Output
+## 12. Opening And Final Output
 
 Review opening must show:
 
 - review target and boundary
+- target profile, artifact role, and closure level
 - selected domain and domain document status
 - alignment criteria, confidence, and confirmation status
 - lens set
@@ -293,6 +335,7 @@ Final output must show:
 - issue/root-cause clusters
 - deliberation outcome
 - problem framing classification
+- target closure obligation classification
 - domain evidence summary
 - alignment evidence summary
 - unresolved disagreement
@@ -300,13 +343,14 @@ Final output must show:
 
 ---
 
-## 12. Implementation Order
+## 13. Implementation Order
 
 1. Add `review-context-manifest.yaml` materialization.
-2. Populate domain context from resolved domain docs and selected lens set.
-3. Populate alignment context from explicit request, main context summary, and project authority docs.
-4. Add confirmation gate for low-confidence or high-impact alignment ambiguity.
-5. Render opening brief from the manifest.
-6. Render lens and axiology packets from the manifest.
-7. Restrict synthesize raw context access.
-8. Add final domain/alignment evidence summaries to `ReviewRecord` and human output.
+2. Populate target profile context from resolved target refs and binding boundary.
+3. Populate domain context from resolved domain docs and selected lens set.
+4. Populate alignment context from explicit request, main context summary, and project authority docs.
+5. Add confirmation gate for low-confidence or high-impact alignment ambiguity.
+6. Render opening brief from the manifest.
+7. Render lens and axiology packets from the manifest.
+8. Restrict synthesize raw context access.
+9. Add final domain/alignment evidence summaries to `ReviewRecord` and human output.

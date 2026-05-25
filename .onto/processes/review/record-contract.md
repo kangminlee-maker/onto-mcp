@@ -65,12 +65,13 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 3. `InvocationBinding` artifact
 4. `target snapshot`
 5. `review target materialized input`
-6. `context candidate assembly`
-7. per-lens result artifacts
-8. controlled deliberation result artifact
-9. synthesize result artifact
-10. execution result artifact
-11. human-readable final output
+6. `review target profile`
+7. `context candidate assembly`
+8. per-lens result artifacts
+9. controlled deliberation result artifact
+10. synthesize result artifact
+11. execution result artifact
+12. human-readable final output
 
 즉 `ReviewRecord`는 자기 안에 모든 내용을 복붙하는 문서가 아니라,
 위 artifact들을 묶는 aggregate record다.
@@ -126,6 +127,7 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 - `session_metadata_ref`
 - `target_snapshot_ref`
 - `materialized_input_ref`
+- `review_target_profile_ref`
 - `context_candidate_assembly_ref`
 
 이 layer는 `검토 해석 (InvocationInterpretation)`/`검토 고정 (InvocationBinding)` 이후,
@@ -267,6 +269,7 @@ execution_result_ref: .onto/review/20260404-a1b2c3d4/execution-result.yaml
 session_metadata_ref: .onto/review/20260404-a1b2c3d4/session-metadata.yaml
 target_snapshot_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/target-snapshot.md
 materialized_input_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/review-target-profile.yaml
 context_candidate_assembly_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/context-candidate-assembly.yaml
 
 lens_result_refs:

@@ -49,6 +49,11 @@ async function main(): Promise<number> {
       "scope-kind": { type: "string" },
       "resolved-target-ref": { type: "string", multiple: true, default: [] },
       "materialized-kind": { type: "string" },
+      "requested-target": { type: "string" },
+      "intent-summary": { type: "string" },
+      "session-domain": { type: "string" },
+      "bundle-kind": { type: "string" },
+      "filesystem-allowed-root": { type: "string", multiple: true, default: [] },
       "materialized-ref": { type: "string", multiple: true, default: [] },
       "system-purpose-ref": { type: "string", multiple: true, default: [] },
       "domain-context-ref": { type: "string", multiple: true, default: [] },
@@ -93,6 +98,23 @@ async function main(): Promise<number> {
       materializedKind: requireMaterializedInputKind(
         requireString(values["materialized-kind"], "materialized-kind"),
       ),
+      ...(typeof values["requested-target"] === "string" &&
+      values["requested-target"].length > 0
+        ? { requestedTarget: values["requested-target"] }
+        : {}),
+      ...(typeof values["intent-summary"] === "string" &&
+      values["intent-summary"].length > 0
+        ? { reviewIntentSummary: values["intent-summary"] }
+        : {}),
+      ...(typeof values["session-domain"] === "string" &&
+      values["session-domain"].length > 0
+        ? { sessionDomain: values["session-domain"] }
+        : {}),
+      ...(typeof values["bundle-kind"] === "string" &&
+      values["bundle-kind"].length > 0
+        ? { bundleKind: values["bundle-kind"] }
+        : {}),
+      filesystemAllowedRoots: values["filesystem-allowed-root"],
       materializedRefs: values["materialized-ref"],
       systemPurposeRefs: values["system-purpose-ref"],
       domainContextRefs: values["domain-context-ref"],

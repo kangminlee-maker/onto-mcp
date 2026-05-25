@@ -21,12 +21,13 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
 1. `review_session_metadata`
 2. `target_snapshot`
 3. `review_target_materialized_input`
-4. `context_candidate_assembly`
-5. `actor_invocation_profiles`
-6. `actor_consumer_bindings`
-7. `domain_binding`
-8. `review_value_alignment_criteria`
-9. `review_context_manifest`
+4. `review_target_profile`
+5. `context_candidate_assembly`
+6. `actor_invocation_profiles`
+7. `actor_consumer_bindings`
+8. `domain_binding`
+9. `review_value_alignment_criteria`
+10. `review_context_manifest`
 
 이 artifact들은 이후 `ReviewRecord`의 execution preparation layer를 이룬다.
 
@@ -47,6 +48,7 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
     target-snapshot.md
     target-snapshot-manifest.yaml
     materialized-input.md
+    review-target-profile.yaml
     context-candidate-assembly.yaml
     actor-invocation-profiles.yaml
     actor-consumer-bindings.yaml
@@ -123,6 +125,7 @@ plugin_root: /Users/kangmin/.claude/plugins/onto
 
 - `review_target_scope_kind`
 - `resolved_target_refs`
+- `review_target_profile_ref`
 - `captured_at`
 - `capture_reason`
 
@@ -133,6 +136,7 @@ review_target_scope_kind: bundle
 resolved_target_refs:
   - /Users/kangmin/cowork/onto/process.md
   - /Users/kangmin/cowork/onto/.onto/processes/review/review.md
+review_target_profile_ref: /Users/kangmin/cowork/onto/.onto/review/20260404-a1b2c3d4/execution-preparation/review-target-profile.yaml
 captured_at: 2026-04-04T15:21:00+09:00
 capture_reason: prompt-backed review execution
 ```
@@ -172,7 +176,44 @@ members:
 
 ---
 
-## 6. context_candidate_assembly
+## 6. review_target_profile
+
+`review_target_profile`은 현재 review target의 artifact role과 closure
+obligation을 고정한다.
+
+이 artifact는 target을 다시 읽기 위한 권한이 아니라, 이미 고정된 target refs를
+어떤 종류의 artifact로 평가할지 정하는 runtime-owned profile이다.
+
+최소 필드:
+
+- `target_scope_kind`
+- `materialized_input_kind`
+- `target_input_kind`
+- `artifact_roles`
+- `domain`
+- `maturity`
+- `closure_level`
+- `review_goal`
+- `closure_obligation_policy`
+- `target_refs`
+- `boundary`
+- `inference`
+
+허용 `target_input_kind`:
+
+1. `single_file`
+2. `directory`
+3. `explicit_bundle`
+4. `git_diff`
+5. `generated_packet`
+
+기준 문서:
+
+- `.onto/processes/review/review-target-profile-contract.md`
+
+---
+
+## 7. context_candidate_assembly
 
 `context_candidate_assembly`는 각 lens가 self-loading 또는 main-context loading으로 접근할 수 있는 candidate context set을 적는다.
 
@@ -208,7 +249,7 @@ execution_rule_refs:
 
 ---
 
-## 7. Ownership
+## 8. Ownership
 
 이 artifact들의 owner는 아래다.
 
@@ -219,6 +260,7 @@ execution_rule_refs:
 | `binding.yaml` | runtime/host |
 | `target-snapshot.*` | runtime/host |
 | `materialized-input.md` | runtime/host |
+| `review-target-profile.yaml` | runtime/host |
 | `context-candidate-assembly.yaml` | runtime/host |
 | `actor-invocation-profiles.yaml` | runtime/host |
 | `actor-consumer-bindings.yaml` | runtime/host |
@@ -231,7 +273,7 @@ execution_rule_refs:
 
 ---
 
-## 8. Immediate Follow-up
+## 9. Immediate Follow-up
 
 다음 단계는 아래다.
 

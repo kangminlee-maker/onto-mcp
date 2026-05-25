@@ -1185,6 +1185,7 @@ async function writeReviewRunManifest(
       actor_invocation_profiles: executionPlan.actor_invocation_profiles_path ?? null,
       actor_consumer_bindings: executionPlan.actor_consumer_bindings_path ?? null,
       domain_binding: executionPlan.domain_binding_path ?? null,
+      review_target_profile: executionPlan.review_target_profile_path,
       review_value_alignment_criteria:
         executionPlan.review_value_alignment_criteria_path ?? null,
       review_context_manifest: executionPlan.review_context_manifest_path ?? null,

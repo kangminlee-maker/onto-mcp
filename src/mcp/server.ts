@@ -62,6 +62,33 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       type: "string",
       description: "File, directory, or target token to review.",
     },
+    targetScopeKind: {
+      type: "string",
+      enum: ["file", "directory", "bundle"],
+      description:
+        "Optional explicit target shape. Use bundle with primaryRef/memberRefs for multi-artifact review.",
+    },
+    primaryRef: {
+      type: "string",
+      description:
+        "Primary artifact ref for an explicit bundle target. Defaults to target when omitted.",
+    },
+    memberRefs: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Supporting artifact refs for an explicit bundle target.",
+    },
+    bundleKind: {
+      type: "string",
+      description:
+        "Optional bundle classifier such as implementation_change_bundle.",
+    },
+    diffRange: {
+      type: "string",
+      description:
+        "Optional git diff range. When set, review materializes the diff as the target basis.",
+    },
     intent: {
       type: "string",
       description: "What the review should verify or decide.",
@@ -191,6 +218,13 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
     projectRoot: path.resolve(parsed.projectRoot ?? process.cwd()),
     target: parsed.target,
     intent: parsed.intent,
+    ...(parsed.targetScopeKind !== undefined
+      ? { targetScopeKind: parsed.targetScopeKind }
+      : {}),
+    ...(parsed.primaryRef !== undefined ? { primaryRef: parsed.primaryRef } : {}),
+    ...(parsed.memberRefs !== undefined ? { memberRefs: parsed.memberRefs } : {}),
+    ...(parsed.bundleKind !== undefined ? { bundleKind: parsed.bundleKind } : {}),
+    ...(parsed.diffRange !== undefined ? { diffRange: parsed.diffRange } : {}),
     ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
     ...(parsed.noDomain !== undefined ? { noDomain: parsed.noDomain } : {}),
     ...(parsed.reviewMode !== undefined ? { reviewMode: parsed.reviewMode } : {}),

@@ -548,6 +548,7 @@ async function writePreManifestContextArtifacts(args: {
   const actorConsumerBindingsPath =
     args.executionPlan.actor_consumer_bindings_path ??
     path.join(args.sessionRoot, "execution-preparation", "actor-consumer-bindings.yaml");
+  const reviewTargetProfilePath = args.executionPlan.review_target_profile_path;
   const reviewContextManifestPath =
     args.executionPlan.review_context_manifest_path ??
     path.join(args.sessionRoot, "execution-preparation", "review-context-manifest.yaml");
@@ -682,6 +683,15 @@ async function writePreManifestContextArtifacts(args: {
       allowed_consumers: allConsumers,
     },
     {
+      context_source_id: "review-target-profile",
+      source_kind: "review_target_profile",
+      source_ref: reviewTargetProfilePath,
+      source_sha256: await optionalFileSha256(reviewTargetProfilePath),
+      required: true,
+      sensitivity: "internal",
+      allowed_consumers: allConsumers,
+    },
+    {
       context_source_id: "review-value-alignment-criteria",
       source_kind: "review_value_alignment_criteria",
       source_ref: reviewValueAlignmentCriteriaPath,
@@ -724,6 +734,7 @@ async function writePreManifestContextArtifacts(args: {
     validation_results: [
       "domain_binding_valid",
       "review_value_alignment_dispatch_allowed",
+      "review_target_profile_admitted",
       "context_access_matrix_valid",
     ],
     failure_record_refs: [],
@@ -1020,6 +1031,7 @@ ${roleDefinitionText.trim().length > 0 ? `${roleDefinitionText.trim()}\n` : ""}
 - role definition: ${toRelativePath(roleDefinitionPath, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- review target profile: ${toRelativePath(binding.review_target_profile_path, projectRoot)}
 - review context manifest: ${toRelativePath(reviewContextManifestPath, projectRoot)}
 
 ## Embedded Materialized Input
@@ -1104,6 +1116,7 @@ You must preserve lens evidence and must not invent new independent perspectives
 - materialized input: ${toRelativePath(binding.materialized_input_path, projectRoot)}
 - interpretation: ${toRelativePath(interpretationPath, projectRoot)}
 - binding: ${toRelativePath(bindingPath, projectRoot)}
+- review target profile: ${toRelativePath(binding.review_target_profile_path, projectRoot)}
 - review context manifest: ${toRelativePath(reviewContextManifestPath, projectRoot)}
 - finding ledger: ${toRelativePath(executionPlan.finding_ledger_path, projectRoot)}
 - finding relation graph: ${toRelativePath(executionPlan.finding_relation_graph_path, projectRoot)}

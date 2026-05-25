@@ -47,10 +47,11 @@
 8. [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
 9. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
 10. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-11. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-12. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
-13. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-14. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+11. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
+12. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
+13. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
+14. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+15. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
 
 ---
 
@@ -154,6 +155,7 @@ issue-stance deliberation target artifact:
 - `issue-stance-matrix.yaml`
 - `deliberation-plan.yaml`
 - `problem-framing.yaml`
+- `review-target-profile.yaml`
 
 `problem-framing.yaml` uses a common spine owned by the review contract and optional domain axes owned by `.onto/domains/{domain}/problem_framing_profile.md`.
 

@@ -48,6 +48,29 @@ export type ReviewTargetMaterializedInputKind =
   | "single_text"
   | "directory_listing"
   | "bundle_member_texts";
+export type ReviewTargetInputKind =
+  | "single_file"
+  | "directory"
+  | "explicit_bundle"
+  | "git_diff"
+  | "generated_packet";
+export type ReviewTargetArtifactRole =
+  | "knowledge_artifact"
+  | "decision_artifact"
+  | "procedural_artifact"
+  | "computational_artifact"
+  | "record_artifact"
+  | "contract_artifact"
+  | "creative_artifact"
+  | "presentation_artifact"
+  | "data_artifact"
+  | "configuration_artifact";
+export type ReviewTargetClosureLevel =
+  | "bounded_closed"
+  | "bounded_partial"
+  | "open_partial";
+export type ReviewTargetRefRole = "primary" | "supporting";
+export type ReviewTargetRefKind = "file" | "directory" | "generated";
 export type ReviewActorKind =
   | "teamlead"
   | "lens"
@@ -210,6 +233,7 @@ export interface InvocationBindingArtifact {
   binding_output_path: string;
   target_snapshot_path: string;
   target_snapshot_manifest_path: string;
+  review_target_profile_path: string;
   materialized_input_path: string;
   context_candidate_assembly_path: string;
   actor_invocation_profiles_path?: string;
@@ -285,6 +309,7 @@ export interface ReviewExecutionPlan {
   actor_invocation_profiles_path?: string;
   actor_consumer_bindings_path?: string;
   domain_binding_path?: string;
+  review_target_profile_path: string;
   review_value_alignment_criteria_path?: string;
   review_context_manifest_path?: string;
   synthesis_output_path: string;
@@ -512,8 +537,47 @@ export interface ReviewSessionMetadata {
 export interface TargetSnapshotManifest {
   review_target_scope_kind: ReviewTargetScopeKind;
   resolved_target_refs: string[];
+  review_target_profile_ref: string;
   captured_at: string;
   capture_reason: string;
+}
+
+export interface ReviewTargetProfileRef {
+  ref: string;
+  role: ReviewTargetRefRole;
+  kind: ReviewTargetRefKind;
+  exists: boolean;
+  sha256: string | null;
+}
+
+export interface ReviewTargetProfileArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  target_scope_kind: ReviewTargetScopeKind;
+  materialized_input_kind: ReviewTargetMaterializedInputKind;
+  target_input_kind: ReviewTargetInputKind;
+  requested_target: string | null;
+  review_intent_summary: string | null;
+  artifact_roles: {
+    primary: ReviewTargetArtifactRole;
+    secondary: ReviewTargetArtifactRole[];
+  };
+  domain: string;
+  maturity: "review_candidate";
+  closure_level: ReviewTargetClosureLevel;
+  review_goal: string[];
+  closure_obligation_policy: string[];
+  target_refs: ReviewTargetProfileRef[];
+  boundary: {
+    filesystem_allowed_roots: string[];
+    source: "binding";
+  };
+  inference: {
+    owner: "runtime_heuristic";
+    confidence: number;
+    confidence_basis: string;
+  };
 }
 
 export interface ContextCandidateAssembly {
@@ -704,6 +768,7 @@ export interface ReviewRecord {
   session_metadata_ref: string;
   target_snapshot_ref: string;
   materialized_input_ref: string;
+  review_target_profile_ref: string;
   context_candidate_assembly_ref: string;
   lens_result_refs: Record<string, string>;
   lens_output_schema_version: number;

@@ -184,7 +184,7 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Principal Su
 8. recommendations
 9. unique finding tagging
 10. deliberation decision
-11. final review result — principal-facing comprehensive explanation of the bounded review result. It explains what to conclude from the target/boundary, root-cause issue clusters, lens agreement and disagreement, controlled deliberation outcome, problem-framing classification, closure/timing, and practical next step. It must be grounded in lens outputs and issue artifacts and must not introduce independent findings
+11. final review result — principal-facing comprehensive explanation of the bounded review result. It explains what to conclude from the target/boundary, review target profile, root-cause issue clusters, lens agreement and disagreement, controlled deliberation outcome, problem-framing classification, closure/timing/obligation, and practical next step. It must be grounded in lens outputs and issue artifacts and must not introduce independent findings
 12. shared phenomenon summary — 동일 phenomenon에 대한 다중 lens claim이 있는 경우, claim relation 분류 결과를 명시한다 (corroboration / disagreement / partial overlap / dedup). 분류 규칙은 `.onto/processes/review/shared-phenomenon-contract.md` §4를 따른다. 이 계약은 분류 규칙을 재정의하지 않는다
 
 ### 5.4 Alias map (IA-3)
@@ -272,11 +272,12 @@ Issue-stance deliberation target에서는 synthesize가 추가로 아래 artifac
 - `{session_root}/deliberation-plan.yaml`
 - `{session_root}/deliberation.md`
 - `{session_root}/problem-framing.yaml`
+- `{session_root}/execution-preparation/review-target-profile.yaml`
 
 이 경우 synthesize는 issue status를 새로 판정하지 않는다.
 `no-deliberation-needed`, `resolved`, `narrowed`, `unresolved-with-reason`은
 `.onto/processes/review/issue-stance-deliberation-contract.md`가 소유한다.
-또한 synthesize는 `problem-framing.yaml`의 common spine, timing, closure, domain axes classification을 변경하지 않는다.
+또한 synthesize는 `problem-framing.yaml`의 common spine, timing, closure, closure obligation, domain axes classification을 변경하지 않는다.
 Domain-specific axes are loaded and applied before synthesize from `.onto/domains/{domain}/problem_framing_profile.md`.
 
 ### 6.2 frontmatter `deliberation_status`

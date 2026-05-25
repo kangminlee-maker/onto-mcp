@@ -198,7 +198,15 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
         binding.actor_consumer_bindings_path!,
       );
     expect(bindings.bindings.some((entry) => entry.consumer_id === "axiology"))
-      .toBe(true);
+      .toBe(false);
+    expect(
+      bindings.bindings.some(
+        (entry) =>
+          entry.consumer_id === "lens:axiology" &&
+          entry.consumer_kind === "lens" &&
+          entry.actor_profile_id === "actor:lens",
+      ),
+    ).toBe(true);
     expect(
       bindings.bindings.some(
         (entry) =>

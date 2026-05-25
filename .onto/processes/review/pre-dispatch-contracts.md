@@ -48,6 +48,7 @@ Canonical seats:
     actor-invocation-profiles.yaml
     actor-consumer-bindings.yaml
     domain-binding.yaml
+    review-target-profile.yaml
     review-value-alignment-criteria.yaml
     review-context-manifest.yaml
     target-snapshot.md
@@ -65,6 +66,7 @@ Ownership:
 | `actor-invocation-profiles.yaml` | runtime | resolved actor LLM invocation profiles |
 | `actor-consumer-bindings.yaml` | runtime | actor profile to context consumer binding |
 | `domain-binding.yaml` | runtime | selected domain docs, required status, hashes |
+| `review-target-profile.yaml` | runtime | artifact role, target input kind, closure level, target refs, and hashes |
 | `review-value-alignment-criteria.yaml` | runtime with user authority | purpose/value dispatch gate |
 | `review-context-manifest.yaml` | runtime | context source eligibility and packet provenance |
 | `lens-completion-barrier.yaml` | runtime | lens completion gate for downstream stages |
@@ -203,7 +205,7 @@ criteria.
 - `actor-consumer-bindings.yaml`
 - `domain-binding.yaml`
 - `review-value-alignment-criteria.yaml`
-- target snapshot and materialized input
+- target snapshot, materialized input, and review target profile
 
 At creation, lifecycle is:
 
@@ -252,7 +254,14 @@ and appends/upserts the generated packet ref before invoking the unit.
 
 ### 5.3 Freshness And Resume
 
-A resumed or reused session validates:
+Current canonical MCP review does not expose an explicit resume tool.
+
+`review-run-manifest.yaml` records a `resume_token` for audit, idempotency, and
+future operator-controlled resume design only. The token is not a dispatch
+capability and must not be accepted as authorization to restart, skip, or reuse
+worker stages.
+
+A future resumed or reused session must validate:
 
 - manifest schema version
 - source hash for every required `context_source`
@@ -264,6 +273,11 @@ A resumed or reused session validates:
 
 Any mismatch stops before lens execution and writes a `manifest_lifecycle` or
 `context_eligibility` failure record.
+
+Until an explicit resume contract is implemented, MCP callers must start a new
+review session after changing inputs, settings, target scope, provider route, or
+manifest-governed artifacts. Runtime status/result tools may read existing
+session artifacts, but they do not resume execution.
 
 ### 5.4 Synthesize Context
 

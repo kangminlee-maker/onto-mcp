@@ -66,6 +66,11 @@ Latest validation result:
   `.onto/processes/review/pre-dispatch-contracts.md`: failure/lifecycle phase
   boundary, value-alignment dispatch gate, manifest/packet phase boundary,
   lens completion barrier, and retired entry policy.
+- Current implementation also introduces a runtime-owned
+  `review-target-profile.yaml` so single-file, directory, explicit bundle,
+  git-diff, and generated-packet targets carry artifact role, target refs,
+  hashes, closure level, and closure-obligation policy into manifest-governed
+  review execution.
 
 ## 2. Non-Negotiable Criteria
 
@@ -260,7 +265,7 @@ Rules:
 ### 3.5 Review Context Manifest
 
 Create only after domain binding, value-alignment dispatch gate, actor-consumer
-bindings, and context eligibility validate:
+bindings, review target profile materialization, and context eligibility validate:
 
 `{session_root}/execution-preparation/review-context-manifest.yaml`
 
@@ -268,6 +273,7 @@ Purpose:
 
 - Bind selected domain context and review value-alignment context for this
   session.
+- Bind review target artifact role, closure level, and target-ref provenance.
 - Define the context each consumer may receive.
 - Provide provenance and hash evidence for prompt packets and final records.
 
@@ -526,6 +532,28 @@ Implemented remaining runtime/MCP contract closure on 2026-05-24:
 - MCP conformance now covers execution contract fields and security-disclosure
   failure output.
 
+Implemented MCP target-profile slice on 2026-05-24:
+
+- MCP/core API accepts explicit target shape fields:
+  `targetScopeKind`, `primaryRef`, `memberRefs`, `bundleKind`, and `diffRange`.
+- Runtime writes
+  `{session_root}/execution-preparation/review-target-profile.yaml` with
+  target input kind, artifact roles, closure level, review goals,
+  closure-obligation policy, target refs, hashes, and binding-derived boundary.
+- Target binding now fixes `session_id` before target resolution, materializes
+  git diff targets under the active session root, rejects diff+bundle input
+  conflicts, fails explicit file/directory shape mismatches, and blocks
+  project-external bundle refs unless they are inside an explicit filesystem
+  allowed root. Target binding violations now surface as structured MCP
+  failures with `ONTO_REVIEW_TARGET_BINDING_FAILED`.
+- `review-context-manifest.yaml` admits `review-target-profile` as a required
+  context source for selected lenses, issue artifacts, deliberation,
+  synthesize, final output, and review record.
+- `problem-framing.yaml` now includes `closure_obligation` alongside timing and
+  closure class.
+- ReviewRecord, review-run manifest, MCP artifact refs, and opening brief input
+  expose the review target profile ref and bounded summary.
+
 Verified with:
 
 - `npm run check:ts-core`
@@ -660,6 +688,10 @@ Current status:
 - MCP status/result enforce project-boundary disclosure.
 - `review-run-manifest.yaml` exposes durable execution step ids, resume token,
   idempotency key, and duplicate-dispatch policy.
+- Explicit resume is intentionally not exposed as an MCP tool yet. The current
+  resume token is audit/idempotency evidence only; execution resume requires a
+  later contract that closes replay, stale artifact, partial worker, and
+  duplicate-dispatch semantics.
 
 ### Phase 5: Domain/Axiology Completion And Deprecation Cleanup
 

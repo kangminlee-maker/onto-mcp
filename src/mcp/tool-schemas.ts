@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
+const ReviewTargetScopeKindSchema = z.enum(["file", "directory", "bundle"]);
 const ExecutorRealizationSchema = z.enum(["codex", "mock", "ts_inline_http"]);
 const DeliberationModeSchema = z.enum([
   "controlled_lens_deliberation",
@@ -9,6 +10,11 @@ const DeliberationModeSchema = z.enum([
 const OntoReviewToolInputBaseSchema = z.object({
   target: z.string().min(1),
   intent: z.string().min(1),
+  targetScopeKind: ReviewTargetScopeKindSchema.optional(),
+  primaryRef: z.string().min(1).optional(),
+  memberRefs: z.array(z.string().min(1)).optional(),
+  bundleKind: z.string().min(1).optional(),
+  diffRange: z.string().min(1).optional(),
   projectRoot: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
   noDomain: z.boolean().optional(),
