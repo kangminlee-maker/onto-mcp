@@ -82,7 +82,7 @@ export interface BootstrapInvocationBindingArtifactsParams {
   ontoConfig?: OntoSettings;
   requestedTarget: string;
   requestedDomainToken?: string;
-  pluginRoot?: string;
+  ontoHome?: string;
   sessionId?: string;
   targetScopeKind: ReviewTargetScopeKind;
   bundleKind?: string;
@@ -92,9 +92,6 @@ export interface BootstrapInvocationBindingArtifactsParams {
   domainSelectionMode: string;
   executionRealization: ReviewExecutionRealization;
   hostRuntime: ReviewHostRuntime;
-  runtimeProvider?: string | null | undefined;
-  authMode?: string | null | undefined;
-  effectiveWorkerExecutor?: string | undefined;
   reviewMode: ReviewMode;
   resolvedLensIds: string[];
   webResearchPolicy?: BoundaryAccessPolicy;
@@ -117,7 +114,6 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
   materializedRefs?: string[];
   systemPurposeRefs?: string[];
   domainContextRefs?: string[];
-  learningContextRefs?: string[];
   roleDefinitionRefs?: string[];
   executionRuleRefs?: string[];
   directoryListingOptions?: DirectoryListingOptions;
@@ -201,14 +197,18 @@ function workerExecutorForRealization(
   executionRealization: ReviewExecutionRealization,
   hostRuntime: ReviewHostRuntime,
 ): string {
+  if (hostRuntime === "standalone") return "mock";
   if (executionRealization === "direct-call") return "direct_call";
-  if (hostRuntime === "standalone") return "mock_or_standalone";
-  return hostRuntime;
+  return "codex";
 }
 
-function defaultAuthForHostRuntime(hostRuntime: ReviewHostRuntime): string | null {
+function defaultAuthForExecutionContext(
+  executionRealization: ReviewExecutionRealization,
+  hostRuntime: ReviewHostRuntime,
+): string | null {
   if (hostRuntime === "standalone") return null;
   if (hostRuntime === "lmstudio") return "local";
+  if (executionRealization === "direct-call") return "api_key";
   return "oauth";
 }
 
@@ -230,9 +230,6 @@ function buildActorInvocationProfile(args: {
   inheritedLlm: OntoSettings["llm"];
   executionRealization: ReviewExecutionRealization;
   hostRuntime: ReviewHostRuntime;
-  runtimeProvider?: string | null | undefined;
-  authMode?: string | null | undefined;
-  effectiveWorkerExecutor?: string | undefined;
   sourceSettingsRefs: string[];
 }): ReviewResolvedActorInvocationProfile {
   const resolvedLlm = resolveActorLlmForArtifact(
@@ -240,13 +237,24 @@ function buildActorInvocationProfile(args: {
     args.inheritedLlm,
   );
   const normalized = normalizeLlmModelSwitcher(resolvedLlm);
-  const auth = normalized?.auth ?? defaultAuthForHostRuntime(args.hostRuntime);
-  const provider = normalized?.provider ?? args.hostRuntime;
-  const runtimeProvider = args.runtimeProvider ?? provider;
-  const authMode = args.authMode !== undefined ? args.authMode : auth;
-  const effectiveWorkerExecutor =
-    args.effectiveWorkerExecutor ??
-    workerExecutorForRealization(args.executionRealization, args.hostRuntime);
+  const effectiveWorkerExecutor = workerExecutorForRealization(
+    args.executionRealization,
+    args.hostRuntime,
+  );
+  const routeForcesMock = effectiveWorkerExecutor === "mock";
+  const directCallWithoutSelection =
+    args.executionRealization === "direct-call" && normalized === null;
+  const auth =
+    directCallWithoutSelection || routeForcesMock
+      ? null
+      : normalized?.auth ??
+        defaultAuthForExecutionContext(args.executionRealization, args.hostRuntime);
+  const provider =
+    directCallWithoutSelection || routeForcesMock
+      ? null
+      : normalized?.provider ?? args.hostRuntime;
+  const runtimeProvider = routeForcesMock ? "mock" : provider;
+  const authMode = routeForcesMock ? null : auth;
   const apiKeyEnv = normalized?.api_key_env ?? resolvedLlm?.api_key_env;
   return {
     actor_profile_id: `actor:${args.actorKind}`,
@@ -653,9 +661,9 @@ export async function bootstrapInvocationBindingArtifacts(
     ensureDirectory(promptPacketsRoot),
   ]);
 
-  const pluginRoot = params.pluginRoot
-    ? path.resolve(params.pluginRoot)
-    : path.resolve(projectRoot, ".claude-plugin");
+  const ontoHome = params.ontoHome
+    ? path.resolve(params.ontoHome)
+    : path.resolve(projectRoot);
 
   const ontoConfigSubset = await loadOntoConfigForPlan(projectRoot);
   const ontoConfig = params.ontoConfig ?? ontoConfigSubset;
@@ -673,7 +681,7 @@ export async function bootstrapInvocationBindingArtifacts(
     project_root: projectRoot,
     requested_target: params.requestedTarget,
     requested_domain_token: params.requestedDomainToken ?? "",
-    plugin_root: pluginRoot,
+    onto_home: ontoHome,
     ...(resolvedLlmPlan ? { resolved_llm_plan: resolvedLlmPlan } : {}),
   };
 
@@ -832,9 +840,6 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        runtimeProvider: params.runtimeProvider,
-        authMode: params.authMode,
-        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
         sourceSettingsRefs: ["review.execution.teamlead.llm", "llm"],
       }),
       buildActorInvocationProfile({
@@ -844,9 +849,6 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        runtimeProvider: params.runtimeProvider,
-        authMode: params.authMode,
-        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
         sourceSettingsRefs: ["review.execution.lens.llm", "llm"],
       }),
       buildActorInvocationProfile({
@@ -856,9 +858,6 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        runtimeProvider: params.runtimeProvider,
-        authMode: params.authMode,
-        effectiveWorkerExecutor: params.effectiveWorkerExecutor,
         sourceSettingsRefs: ["review.execution.synthesize.llm", "llm"],
       }),
     ],
@@ -1269,7 +1268,6 @@ export async function materializeReviewExecutionPreparationArtifacts(
   const contextCandidateAssembly: ContextCandidateAssembly = {
     system_purpose_refs: params.systemPurposeRefs ?? [],
     domain_context_refs: params.domainContextRefs ?? [],
-    learning_context_refs: params.learningContextRefs ?? [],
     role_definition_refs: params.roleDefinitionRefs ?? [],
     execution_rule_refs: params.executionRuleRefs ?? [],
   };

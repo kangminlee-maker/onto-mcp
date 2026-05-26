@@ -11,11 +11,8 @@
  *
  * # Why it exists
  *
- * Two packet generators in the codebase emit these sections:
- *   - `materialize-review-prompt-packets.ts` — pre-run template with
- *     `## Participating Lens Outputs` listing expected output paths.
- *   - `coordinator-helpers.ts` — post-run runtime-enriched packet with
- *     `## Runtime Participating Lens Outputs` listing actual output paths.
+ * The packet generator emits `## Participating Lens Outputs` with the expected
+ * output paths that synthesize must consume.
  *
  * Bench packets (e.g. `/tmp/onto-benchmark/packets/synthesize.packet.md`) also
  * use this format. The parser accepts both heading variants and tolerates

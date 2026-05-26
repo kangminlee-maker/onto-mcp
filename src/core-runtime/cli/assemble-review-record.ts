@@ -6,7 +6,6 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import YAML from "yaml";
 import type {
-  CoordinatorStateFile,
   InvocationBindingArtifact,
   ReviewLensDomainConstraint,
   ReviewLensProvenance,
@@ -24,6 +23,8 @@ import {
   toRelativePath,
   writeYamlDocument,
 } from "../review/review-artifact-utils.js";
+import { validateReviewRecordObject } from "../review/review-record-validation.js";
+import { readReviewResultClassification } from "../review/review-result-classification.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 
 const LENS_OUTPUT_SCHEMA_VERSION = 2;
@@ -43,27 +44,6 @@ function requireString(
     throw new Error(`Missing required option --${optionName}`);
   }
   return value;
-}
-
-/**
- * Read `orchestrator_reported_realization` from coordinator-state.yaml if
- * the orchestrator self-reported via `coordinator next --orchestrator-reported-realization`
- * (see contract §18). Returns a spreadable partial so callers can conditionally
- * include the field in the ReviewRecord object literal without introducing
- * `undefined` values in the emitted YAML.
- */
-async function readOrchestratorReportedRealization(
-  sessionRoot: string,
-): Promise<{ orchestrator_reported_realization?: string }> {
-  const coordinatorStatePath = path.join(sessionRoot, "coordinator-state.yaml");
-  if (!(await fileExists(coordinatorStatePath))) {
-    return {};
-  }
-  const stateFile = await readYamlDocument<CoordinatorStateFile>(
-    coordinatorStatePath,
-  );
-  const value = stateFile.orchestrator_reported_realization;
-  return value ? { orchestrator_reported_realization: value } : {};
 }
 
 async function detectDeliberationStatus(
@@ -357,6 +337,40 @@ async function deriveRecordStatus(
   return "halted_partial";
 }
 
+function hasDegradationSource(args: {
+  executionResult: ReviewExecutionResultArtifact | null;
+  errorLogSummary: ErrorLogSummary;
+  degradedLensIds: string[];
+}): boolean {
+  if (args.executionResult) {
+    return (
+      args.executionResult.execution_status !== "completed" ||
+      args.degradedLensIds.length > 0
+    );
+  }
+  return args.errorLogSummary.hasExecutionFailure || args.errorLogSummary.hasRunnerHalt;
+}
+
+async function deriveDegradationNotesRef(args: {
+  sessionRoot: string;
+  projectRoot: string;
+  executionResult: ReviewExecutionResultArtifact | null;
+  errorLogSummary: ErrorLogSummary;
+  degradedLensIds: string[];
+}): Promise<string | null> {
+  if (!hasDegradationSource(args)) return null;
+  const degradationSummaryPath = path.join(
+    args.sessionRoot,
+    "degradation-summary.yaml",
+  );
+  if (!(await fileExists(degradationSummaryPath))) {
+    throw new Error(
+      `degradation-summary.yaml is required when review execution is degraded or halted: ${degradationSummaryPath}`,
+    );
+  }
+  return toRelativePath(degradationSummaryPath, args.projectRoot);
+}
+
 export async function runAssembleReviewRecordCli(
   argv: string[],
 ): Promise<number> {
@@ -506,6 +520,24 @@ export async function runAssembleReviewRecordCli(
   const problemFraming = synthesisExecuted
     ? await readYamlDocument<Record<string, unknown>>(problemFramingPath)
     : null;
+  const resultClassificationSummary =
+    await readReviewResultClassification(sessionRoot);
+  const optionalArtifactRef = async (artifactPath: string): Promise<string | null> =>
+    (await fileExists(artifactPath))
+      ? toRelativePath(artifactPath, projectRoot)
+      : null;
+  const findingLedgerRef = await optionalArtifactRef(findingLedgerPath);
+  const findingRelationGraphRef = await optionalArtifactRef(findingRelationGraphPath);
+  const issueLedgerRef = await optionalArtifactRef(issueLedgerPath);
+  const issueStanceMatrixRef = await optionalArtifactRef(issueStanceMatrixPath);
+  const deliberationPlanRef = await optionalArtifactRef(deliberationPlanPath);
+  const problemFramingRef = await optionalArtifactRef(problemFramingPath);
+  const synthesisResultRef = (await fileExists(synthesisPath))
+    ? toRelativePath(synthesisPath, projectRoot)
+    : null;
+  const deliberationResultRef = (await fileExists(deliberationPath))
+    ? toRelativePath(deliberationPath, projectRoot)
+    : null;
   if (
     synthesisExecuted &&
     !Array.isArray(problemFraming?.classifications)
@@ -536,7 +568,6 @@ export async function runAssembleReviewRecordCli(
     resolved_execution_realization:
       invocationBindingArtifact.resolved_execution_realization,
     resolved_host_runtime: invocationBindingArtifact.resolved_host_runtime,
-    ...(await readOrchestratorReportedRealization(sessionRoot)),
     resolved_lens_ids: invocationBindingArtifact.resolved_lens_set,
     execution_result_ref: toRelativePath(executionResultPath, projectRoot),
     session_metadata_ref: toRelativePath(sessionMetadataPath, projectRoot),
@@ -555,36 +586,32 @@ export async function runAssembleReviewRecordCli(
     participating_lens_ids: participatingLensIds,
     excluded_lens_ids: excludedLensIds,
     degraded_lens_ids: degradedLensIds,
-    degradation_notes_ref:
-      ((executionResult?.execution_status !== "completed") ||
-        errorLogSummary.hasExecutionFailure ||
-        errorLogSummary.hasRunnerHalt) &&
-      (await fileExists(errorLogPath))
-      ? toRelativePath(errorLogPath, projectRoot)
-      : null,
+    degradation_notes_ref: await deriveDegradationNotesRef({
+      sessionRoot,
+      projectRoot,
+      executionResult,
+      errorLogSummary,
+      degradedLensIds,
+    }),
     per_lens_provenance: perLensProvenance,
-    ...(synthesisExecuted
-      ? {
-          finding_ledger_ref: toRelativePath(findingLedgerPath, projectRoot),
-          finding_relation_graph_ref: toRelativePath(
-            findingRelationGraphPath,
-            projectRoot,
-          ),
-          issue_ledger_ref: toRelativePath(issueLedgerPath, projectRoot),
-          issue_stance_matrix_ref: toRelativePath(issueStanceMatrixPath, projectRoot),
-          deliberation_plan_ref: toRelativePath(deliberationPlanPath, projectRoot),
-          problem_framing_ref: toRelativePath(problemFramingPath, projectRoot),
-          issue_resolution_summary: problemFraming?.classifications as unknown[],
-        }
-      : {}),
-    synthesis_result_ref: toRelativePath(synthesisPath, projectRoot),
+    finding_ledger_ref: findingLedgerRef,
+    finding_relation_graph_ref: findingRelationGraphRef,
+    issue_ledger_ref: issueLedgerRef,
+    issue_stance_matrix_ref: issueStanceMatrixRef,
+    deliberation_plan_ref: deliberationPlanRef,
+    problem_framing_ref: problemFramingRef,
+    issue_resolution_summary: Array.isArray(problemFraming?.classifications)
+      ? problemFraming.classifications
+      : [],
+    result_classification_summary: resultClassificationSummary,
+    synthesis_result_ref: synthesisResultRef,
     deliberation_status: await detectDeliberationStatus(executionResult),
-    deliberation_result_ref: toRelativePath(deliberationPath, projectRoot),
+    deliberation_result_ref: deliberationResultRef,
     final_output_ref: toRelativePath(finalOutputPath, projectRoot),
     shared_phenomenon_summary: sharedPhenomenonSummary,
   };
 
-  await writeYamlDocument(reviewRecordPath, reviewRecord);
+  await writeYamlDocument(reviewRecordPath, validateReviewRecordObject(reviewRecord));
   console.log(reviewRecordPath);
   return 0;
 }

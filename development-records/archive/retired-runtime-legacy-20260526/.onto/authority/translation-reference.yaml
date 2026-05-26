@@ -1,0 +1,1018 @@
+# Translation Reference — legacy/prototype terminology aid (NON-AUTHORITATIVE)
+#
+# Authority status: NOT a SSOT. Productization terminology authority is owned by
+# `.onto/authority/core-lexicon.yaml`. This file is a legacy translation aid that
+# documents the prototype-era English terms still used in legacy commands,
+# processes, and roles. Terms here that conflict with `core-lexicon.yaml`
+# (e.g. `agent panel`, `Philosopher`, `team review`) are LEGACY and must not
+# be treated as canonical productization vocabulary.
+#
+# When in doubt, consult `.onto/authority/core-lexicon.yaml` first.
+
+metadata:
+  created: "2026-03-27"
+  source_language: ko
+  target_language: en
+  plugin: onto
+
+concepts:
+
+  # ==========================================================================
+  # Agent System
+  # ==========================================================================
+
+  - ko: "검증 에이전트"
+    en: "verification agent"
+    definition: >
+      Agent that examines a specific dimension of an ontology.
+      Each verification agent has a dedicated verification dimension
+      (e.g., logical consistency, structural completeness) and operates
+      independently during Round 1 of a team review.
+    relations:
+      - is_member_of: "agent panel"
+      - produces: "review finding"
+      - constrained_by: "domain document"
+      - has_role_definition_at: ".onto/roles/{agent-id}.md"
+    disambiguation: >
+      Not 'validator' (too narrow, implies pass/fail only).
+      Not 'reviewer' (that describes the panel process, not a single agent).
+      'Verification' emphasizes multi-dimensional examination rather than binary acceptance.
+
+  - ko: "에이전트 패널"
+    en: "agent panel"
+    definition: >
+      The full set of verification agents plus the Philosopher,
+      assembled to perform a multi-perspective review or build.
+      In review mode the panel has 8 verification agents + 1 Philosopher.
+    relations:
+      - composed_of: "verification agent"
+      - composed_of: "Philosopher"
+      - executes: "team review"
+      - executes: "ontology build"
+    disambiguation: >
+      Not 'committee' (implies voting/majority rule; the panel uses
+      Philosopher-mediated synthesis). Not 'board' (implies governance authority).
+
+  - ko: "Philosopher"
+    en: "Philosopher"
+    definition: >
+      A non-standard proper noun. The single meta-reviewer that synthesizes
+      verification agents' findings from the perspective of the system's
+      purpose, axioms, and values. Functionally a mediator and meta-reviewer.
+      Produces the final review result including consensus, conditional
+      consensus, and disagreement sections.
+    relations:
+      - is_member_of: "agent panel"
+      - synthesizes: "review finding"
+      - produces: "review result"
+      - mediates: "deliberation"
+      - judges: "adjudication"
+    disambiguation: >
+      Capitalized as a proper noun because it is a unique role, not a generic term.
+      Not 'judge' or 'arbiter' (the Philosopher does not override agents but
+      reframes findings through the lens of system purpose).
+
+  - ko: "Explorer"
+    en: "Explorer"
+    definition: >
+      A build-only agent that directly traverses the source material
+      (codebase, spreadsheet, database, document) and produces deltas
+      (domain fact reports). Does structural recognition but not
+      ontological interpretation. Operates only in the build process.
+    relations:
+      - is_member_of: "agent panel (build mode only)"
+      - produces: "delta"
+      - has_profile_at: "development-records/archive/retired-runtime-legacy-20260526/explorers/{source_type}.md"
+      - guided_by: "epsilon"
+    disambiguation: >
+      Capitalized as a proper noun. Not 'crawler' (implies automated, non-intelligent
+      traversal). Not 'scanner' (implies superficial pass). Explorer performs
+      intelligent, directed source traversal.
+
+  - ko: "team lead (구조 조율자)"
+    en: "team lead"
+    definition: >
+      The main context agent that orchestrates team structure, not content.
+      Responsible for context gathering, teammate creation, message routing,
+      error handling, and team lifecycle management. Does NOT modify or
+      summarize agent outputs during the relay phase.
+    relations:
+      - orchestrates: "team"
+      - creates: "teammate"
+      - routes_messages_between: "teammate"
+      - manages: "session"
+    disambiguation: >
+      The parenthetical '구조 조율자' (structure coordinator) clarifies the role.
+      Not 'manager' (implies content authority). Not 'coordinator' alone
+      (too generic). 'Team lead' is the Agent Teams platform term.
+
+  - ko: "teammate"
+    en: "teammate"
+    definition: >
+      An agent instance spawned by the team lead within an Agent Teams
+      session. Each verification agent and the Philosopher are teammates.
+      Receives an initial prompt containing identity, self-loading
+      instructions, and Round 1 task directives.
+    relations:
+      - created_by: "team lead"
+      - instance_of: "verification agent | Philosopher | Explorer"
+      - belongs_to: "team"
+      - writes_output_to: "session directory"
+    disambiguation: >
+      Platform-specific term from Agent Teams. Not 'worker' or 'agent instance'
+      (teammate is the canonical Agent Teams vocabulary).
+
+  # ==========================================================================
+  # Process System
+  # ==========================================================================
+
+  - ko: "팀 리뷰"
+    en: "team review"
+    definition: >
+      The multi-perspective review process where the full agent panel
+      examines a target. Consists of Context Gathering, Round 1 (independent
+      review), Philosopher synthesis, optional deliberation, final output,
+      and wrap-up (learning storage + team shutdown).
+    relations:
+      - executed_by: "agent panel"
+      - defined_at: ".onto/processes/review/productized-live-path.md"
+      - produces: "review result"
+      - triggers: "learning promotion (when learnings accumulate)"
+    disambiguation: >
+      Not 'peer review' (agents are not peers; each has a distinct dimension).
+      Not 'panel review' alone (the process includes deliberation and synthesis
+      beyond the panel stage).
+
+  - ko: "개별 질문"
+    en: "individual query"
+    definition: >
+      A process where a single verification agent answers a question from
+      its specialized perspective. Uses Agent tool (worker), not Agent Teams.
+      Simpler than team review; no Philosopher synthesis.
+    relations:
+      - executed_by: "verification agent (single)"
+      - defined_at: ".onto/processes/question.md"
+      - triggers: "learning promotion (when learnings accumulate)"
+    disambiguation: >
+      'Query' has homonym risk with 'ontology query' (SPARQL, competency question).
+      In this system, 'individual query' always means a user question directed
+      at one agent. Context resolves the ambiguity.
+
+  - ko: "온톨로지 구축"
+    en: "ontology build"
+    definition: >
+      The process of constructing an ontology from a non-ontology source
+      (codebase, spreadsheet, database, document). Uses an integral
+      exploration structure where the Explorer traverses source material,
+      verification agents label findings and suggest directions, and the
+      Philosopher coordinates convergence.
+    relations:
+      - input: "non-ontology source"
+      - executed_by: "agent panel (build mode)"
+      - defined_at: ".onto/processes/reconstruct.md"
+      - produces: "Raw Ontology (raw.yml)"
+      - followed_by: "transform"
+    disambiguation: >
+      Not 'ontology creation' (too vague). Not 'ontology extraction' (implies
+      the ontology pre-exists in the source). 'Build' reflects the constructive,
+      iterative nature of the process.
+
+  - ko: "변환"
+    en: "transform"
+    definition: >
+      The process of converting a Raw Ontology (raw.yml) into a user-specified
+      format (Markdown, Mermaid, JSON-LD, OWL/RDF, etc.). Preserves
+      information to the extent the target format allows.
+    relations:
+      - input: "Raw Ontology"
+      - defined_at: ".onto/processes/transform.md"
+      - preceded_by: "ontology build"
+    disambiguation: >
+      Not 'convert' (transform implies structural reshaping, not just format change).
+      Not 'export' (the output is a first-class artifact, not a secondary copy).
+
+  - ko: "온보딩"
+    en: "onboarding"
+    definition: >
+      The one-time setup process for a project to use the onto plugin.
+      Creates the project learning directory, configures domain settings,
+      installs global domain documents, and optionally generates a
+      domain_scope.md draft.
+    relations:
+      - defined_at: ".onto/processes/onboard.md"
+      - creates: "project learning directory"
+      - configures: "domain determination"
+      - enables: "team review, individual query, ontology build"
+    disambiguation: >
+      Standard term. Not 'initialization' (onboarding includes user interaction
+      and domain setup, not just file creation).
+
+  - ko: "학습 승격"
+    en: "learning promotion"
+    definition: >
+      The process of reviewing project-level learnings and promoting
+      qualified ones to global-level. A 3-agent panel (the originating agent,
+      Philosopher, and one related agent) examines each learning for
+      generalizability, accuracy, and axis tag correctness.
+    relations:
+      - input: "project-level learning"
+      - output: "global-level learning"
+      - defined_at: ".onto/processes/learn/promote.md"
+      - preceded_by: "team review | individual query"
+    disambiguation: >
+      Not 'learning escalation' (no hierarchy of authority is involved).
+      Not 'learning migration' (promotion implies a quality gate, not mere relocation).
+
+  # ==========================================================================
+  # Learning System
+  # ==========================================================================
+
+  - ko: "학습"
+    en: "learning"
+    definition: >
+      A piece of knowledge acquired by an agent during review or query
+      execution. Stored as a tagged entry in a learning file. Each learning
+      has a type tag (fact or judgment) and one or more axis tags
+      (methodology, domain).
+    relations:
+      - produced_by: "verification agent | Philosopher"
+      - stored_at: "learnings/{agent-id}.md"
+      - tagged_with: "fact | judgment"
+      - tagged_with: "methodology | domain/{name}"
+      - subject_to: "learning promotion"
+    disambiguation: >
+      NOT 'training' (training implies supervised data input to a model;
+      learning here is experiential knowledge from review/query execution).
+
+  - ko: "방법론 학습"
+    en: "methodology learning"
+    definition: >
+      A learning tagged with [methodology]. Applies across domains:
+      if you remove domain-specific terms, the principle still holds.
+      Always applied regardless of current domain.
+    relations:
+      - is_a: "learning"
+      - axis_tag: "[methodology]"
+    disambiguation: >
+      Not 'method learning' (methodology is the standard term for
+      domain-independent verification techniques).
+
+  - ko: "도메인 학습"
+    en: "domain learning"
+    definition: >
+      A learning tagged with [domain/{name}]. Valid within the context
+      of a specific domain. Applied when the current domain matches;
+      reviewed-then-judged when from a different domain.
+    relations:
+      - is_a: "learning"
+      - axis_tag: "[domain/{name}]"
+    disambiguation: >
+      Not 'field learning' or 'area learning'. 'Domain' is the established
+      term in ontology engineering.
+
+  - ko: "소통 학습"
+    en: "communication learning"
+    definition: >
+      Knowledge about the user's communication preferences, work style,
+      and feedback patterns. Stored in a separate file
+      (~/.onto/communication/common.md) and applied to all agents.
+    relations:
+      - is_a: "learning"
+      - stored_at: "~/.onto/communication/common.md"
+      - applies_to: "all agents"
+    disambiguation: >
+      Not 'interaction learning'. 'Communication' specifically covers
+      user preferences and feedback style, not agent-to-agent interaction.
+
+  - ko: "세션 도메인"
+    en: "session domain"
+    definition: >
+      The single domain selected for the current process execution session.
+      Not the same as a Claude Code conversation session. Determined via
+      @{domain} argument, @- (no-domain), or interactive Domain Selection Flow.
+      Referenced as {session_domain} variable in templates.
+    relations:
+      - selected_from: "project domains | global domains"
+      - used_by: "domain document loading | learning storage tags"
+      - empty_means: "no-domain mode"
+    disambiguation: >
+      Not 'current domain' (implies persistence across sessions).
+      'Session domain' emphasizes per-execution selection.
+
+  - ko: "프로젝트 도메인"
+    en: "project domains"
+    definition: >
+      The set of domains declared in settings.json under the domains: key.
+      An unordered set — [A, B] and [B, A] are identical. Declares
+      which domains are relevant to the project, not which one is primary.
+    relations:
+      - declared_in: "settings.json domains:"
+      - subset_of: "global domains"
+      - used_in: "Domain Selection Flow (display order: project section)"
+    disambiguation: >
+      Not 'primary domain' or 'secondary domain' (old model). The unordered
+      set model has no priority ranking between domains.
+
+  - ko: "글로벌 도메인"
+    en: "global domains"
+    definition: >
+      All domains with documents installed at ~/.onto/domains/. Includes
+      but is not limited to project domains. Shown in the Domain Selection
+      Flow's global section.
+    relations:
+      - installed_at: "~/.onto/domains/{domain}/"
+      - superset_of: "project domains"
+    disambiguation: >
+      Not 'available domains' (which includes both project and global).
+
+  - ko: "노도메인 모드"
+    en: "no-domain mode"
+    definition: >
+      The state where {session_domain} is empty. Agents verify using their
+      default ontological methodology without loading any domain rule documents.
+      Selected via [-] interactively or @- non-interactively.
+    relations:
+      - triggered_by: "[-] selection | @- argument"
+      - skips: "domain document loading"
+      - tags_with: "[methodology] only"
+    disambiguation: >
+      Not 'general mode' (agents still use ontological methodology).
+      'No-domain' means no domain-specific rule documents, not no methodology.
+
+  - ko: "가드레일"
+    en: "guardrail"
+    definition: >
+      A purpose type tag for learnings derived from failure experiences.
+      Requires 3 elements: failure situation (action + context),
+      observed result (negative outcome), and corrective action
+      (what to do instead). Tagged with [guardrail].
+    relations:
+      - is_a: "purpose type tag"
+      - requires: "3 guardrail elements"
+      - tier: "Tier-2 (Phase 1)"
+    disambiguation: >
+      Not 'warning' or 'rule'. A guardrail specifically encodes a failure
+      experience, not a general prohibition.
+
+  - ko: "기반 지식"
+    en: "foundation"
+    definition: >
+      A purpose type tag for learnings that serve as prerequisites for
+      other learnings. Tagged with [foundation].
+    relations:
+      - is_a: "purpose type tag"
+      - tier: "Tier-1 (Phase 1)"
+    disambiguation: >
+      Not 'base' or 'core'. Foundation specifically means other learnings
+      depend on this one for context.
+
+  - ko: "합의 사항"
+    en: "convention"
+    definition: >
+      A purpose type tag for learnings about terminology, notation, or
+      procedure agreements. Tagged with [convention].
+    relations:
+      - is_a: "purpose type tag"
+      - tier: "Tier-1 (Phase 1)"
+    disambiguation: >
+      Not 'standard' (too authoritative). Convention implies agreement,
+      not mandate.
+
+  - ko: "인사이트"
+    en: "insight"
+    definition: >
+      The default purpose type tag for learnings that do not qualify as
+      guardrail, foundation, or convention. Tagged with [insight].
+    relations:
+      - is_a: "purpose type tag"
+      - tier: "Tier-3 (Phase 1)"
+    disambiguation: >
+      Not 'observation' or 'note'. Insight is the catch-all default.
+
+  - ko: "영향도"
+    en: "impact severity"
+    definition: >
+      A metadata field set once at learning creation time (immutable).
+      Values: high (ignoring causes data loss/system failure or requires
+      significant investigation to rediscover) or normal (neither criterion met).
+      Tagged as [impact:high] or [impact:normal].
+    relations:
+      - set_at: "learning creation"
+      - immutable: true
+      - tier: "Tier-2 (Phase 1, when high)"
+    disambiguation: >
+      Not 'surprise factor' (deprecated term with different semantics).
+      Not 'priority' (impact_severity is about consequence, not ordering).
+
+  - ko: "실패경험"
+    en: "failure experience"
+    deprecated: true
+    merged_into: "guardrail"
+    definition: >
+      A boolean metadata field auto-determined at learning creation.
+      True when all 3 guardrail elements are present in the content.
+      Replaces the former conflict_resolution field.
+    relations:
+      - determined_by: "presence of 3 guardrail elements"
+      - replaces: "conflict_resolution"
+      - tier: "Tier-2 (Phase 1)"
+    disambiguation: >
+      Not 'error' or 'bug'. Failure experience specifically means an agent
+      took an action that produced a negative result, with a known correction.
+
+  - ko: "프로젝트 수준"
+    en: "project-level"
+    definition: >
+      The storage scope where learnings are kept within a specific project
+      directory ({project}/.onto/learnings/). These learnings are candidates
+      for promotion to global-level.
+    relations:
+      - stored_at: "{project}/.onto/learnings/{agent-id}.md"
+      - promoted_to: "global-level"
+    disambiguation: >
+      Not 'local' (could be confused with machine-local vs. remote).
+      'Project-level' explicitly names the scope boundary.
+
+  - ko: "글로벌 수준"
+    en: "global-level"
+    definition: >
+      The storage scope where learnings persist across all projects
+      (~/.onto/learnings/). Global learnings are applied in every
+      project within the same domain.
+    relations:
+      - stored_at: "~/.onto/learnings/{agent-id}.md"
+      - receives_from: "project-level (via learning promotion)"
+    disambiguation: >
+      Not 'universal' (learnings are still domain-scoped within global storage).
+      'Global' means cross-project, not cross-domain.
+
+  - ko: "사실 (tag)"
+    en: "fact"
+    definition: >
+      A learning type tag indicating objective description of definitions,
+      structures, or relations. Accumulating fact-tagged learnings does not
+      introduce judgment bias.
+    relations:
+      - is_a: "learning type tag"
+      - contrasts_with: "judgment"
+    disambiguation: >
+      Standard epistemological term. Used as a tag, not a standalone concept.
+
+  - ko: "판단 (tag)"
+    en: "judgment"
+    definition: >
+      A learning type tag indicating a value judgment such as
+      'this pattern is problematic'. Subject to re-verification when context
+      changes, as validity may shift. Agents with 10+ judgment learnings
+      trigger re-verification during learning promotion.
+    relations:
+      - is_a: "learning type tag"
+      - contrasts_with: "fact"
+      - triggers: "judgment re-verification (at 10+ entries)"
+    disambiguation: >
+      Not 'opinion' (too informal). Not 'assessment' (too neutral).
+      'Judgment' captures the evaluative nature and the need for periodic
+      re-verification.
+
+  # ==========================================================================
+  # Domain System
+  # ==========================================================================
+
+  - ko: "도메인 문서"
+    en: "domain document"
+    definition: >
+      A set of domain-specific rule and reference files stored at
+      ~/.onto/domains/{domain}/. Each verification agent has a corresponding
+      domain document (e.g., logic_rules.md for logic). Protected by
+      the domain document protection principle: never auto-modified without
+      explicit user approval.
+    relations:
+      - constrains: "verification agent"
+      - stored_at: "~/.onto/domains/{domain}/"
+      - protected_by: "domain document protection principle"
+      - types: "scope-defining | accumulable | rule-defining"
+    disambiguation: >
+      Not 'domain file' (too generic). Not 'domain config' (these are
+      reference documents, not configuration). 'Domain document' reflects
+      that these are curated knowledge artifacts.
+
+  - ko: "도메인 판별"
+    en: "domain determination"
+    definition: >
+      The process of identifying which domain(s) apply to a project.
+      Checks settings.json first, then CLAUDE.md, supports multiple domains
+      (primary + secondary), and asks the user if no declaration is found.
+    relations:
+      - performed_during: "onboarding | team review (Context Gathering)"
+      - reads_from: ".onto/settings.json | CLAUDE.md"
+      - determines: "domain document path"
+    disambiguation: >
+      Not 'domain detection' (implies automated inference only).
+      'Determination' includes user interaction when declarations are absent.
+
+  - ko: "역량 질문"
+    en: "competency question"
+    definition: >
+      A question that the ontology should be able to answer. Standard
+      ontology engineering term. Used by pragmatics as the primary
+      verification criterion: can the ontology answer this question by
+      tracing a path through its structure?
+    relations:
+      - used_by: "pragmatics"
+      - stored_at: ".onto/domains/{domain}/competency_qs.md"
+      - standard_term_in: "ontology engineering"
+    disambiguation: >
+      Established term in ontology engineering (Gruninger & Fox, 1995).
+      Not 'capability question' or 'test question'. Must be preserved as-is.
+
+  # ==========================================================================
+  # Execution System
+  # ==========================================================================
+
+  - ko: "세션"
+    en: "session"
+    definition: >
+      A single execution instance of a process. Identified by a session ID
+      (format: YYYYMMDD-{hash8}). Each session has a dedicated directory
+      for storing intermediate and final outputs.
+    relations:
+      - identified_by: "session ID"
+      - has_directory: "{project}/.onto/{process}/{session-id}/"
+      - contains: "round outputs, final result"
+    disambiguation: >
+      Not 'run' (too informal). Not 'execution' (session implies persistent
+      state and directory). Session ID is the canonical identifier.
+
+  - ko: "팀"
+    en: "team"
+    definition: >
+      A bounded set of context-isolated review workers coordinated by the
+      review runtime or host adapter.
+    relations:
+      - contains: "teamlead + worker lenses"
+      - identified_by: "team_name ({process}-{session-id})"
+    disambiguation: >
+      Not an implementation-specific platform team. The current canonical
+      runtime records the coordination through review artifacts.
+
+  - ko: "라운드"
+    en: "round"
+    definition: >
+      A discrete phase within a review or build session. Round 1 is the
+      only independent round where agents work without seeing others'
+      results. Subsequent rounds receive Philosopher synthesis. In build
+      mode, rounds are Explorer-driven iteration cycles.
+    relations:
+      - part_of: "session"
+      - round_1: "independent review"
+      - round_2_plus: "post-synthesis review"
+    disambiguation: >
+      Not 'iteration' (round implies a structured phase with defined inputs
+      and outputs, not arbitrary repetition). Not 'cycle' (too generic).
+
+  # ==========================================================================
+  # Output System
+  # ==========================================================================
+
+  - ko: "에이전트 발견"
+    en: "review finding"
+    definition: >
+      An individual agent's output from reviewing a target. Contains the
+      agent's analysis from its specialized dimension, identified issues,
+      rationale, and newly learned items. Written to a file in the session
+      directory.
+    relations:
+      - produced_by: "verification agent"
+      - stored_at: "{session}/round1/{agent-id}.md"
+      - consumed_by: "Philosopher"
+      - classified_as: "unique finding | shared finding | cross-verified finding"
+    disambiguation: >
+      Not 'review result' (that is the Philosopher's synthesis).
+      Not 'report' (too generic). 'Finding' emphasizes discovery from
+      a specific verification dimension.
+
+  - ko: "최종 결과"
+    en: "review result"
+    definition: >
+      The Philosopher's synthesized output combining all agents' findings.
+      Contains consensus items, conditional consensus, disagreements,
+      purpose alignment verification, immediate actions, and recommendations.
+      This is the artifact delivered to the user.
+    relations:
+      - produced_by: "Philosopher"
+      - synthesizes: "review finding"
+      - delivered_to: "user"
+      - stored_at: "{session}/result.md"
+    disambiguation: >
+      Not 'final report' (too generic). Not 'verdict' (implies binary
+      judgment). 'Review result' is the structured synthesis output.
+
+  - ko: "판정"
+    en: "adjudication"
+    definition: >
+      The Philosopher's act of mediating between conflicting agent findings
+      and producing a reasoned resolution. Not a unilateral verdict but
+      a plural-perspective mediation grounded in system purpose.
+    relations:
+      - performed_by: "Philosopher"
+      - resolves: "contested point"
+      - guided_by: "system purpose"
+    disambiguation: >
+      NOT 'verdict' (implies finality and authority of a single judge).
+      NOT 'judgment' (already used as a learning type tag).
+      'Adjudication' captures the mediation aspect of resolving
+      multi-perspective disagreements.
+
+  - ko: "합의"
+    en: "consensus"
+    definition: >
+      A finding on which all participating agents agree. Even unanimous
+      consensus requires separate verification of logical rationale
+      (to prevent groupthink).
+    relations:
+      - produced_in: "team review"
+      - verified_by: "Philosopher (logical rationale check)"
+    disambiguation: >
+      Standard term. Not 'agreement' (too informal for a structured process output).
+
+  - ko: "조건부 합의"
+    en: "conditional consensus"
+    definition: >
+      A finding on which a majority of agents agree, but a minority
+      holds reservations. The reservation reasons are explicitly stated
+      in the review result.
+    relations:
+      - is_a: "consensus (partial)"
+      - includes: "minority reservation with stated reasons"
+    disambiguation: >
+      Not 'partial agreement'. 'Conditional consensus' is precise:
+      the majority view holds under stated conditions/caveats.
+
+  - ko: "미합의"
+    en: "disagreement"
+    definition: >
+      A finding on which agents could not reach consensus even after
+      deliberation. Each disagreement item is tagged with a type:
+      factual discrepancy, criteria discrepancy, or value discrepancy.
+      These tags guide the user's resolution action.
+    relations:
+      - result_of: "deliberation (failed to converge)"
+      - tagged_with: "factual | criteria | value discrepancy"
+      - requires: "user decision"
+    disambiguation: >
+      Not 'conflict' (too adversarial). Not 'dispute' (implies contention
+      rather than collaborative failure to converge). 'Disagreement' is
+      neutral and descriptive.
+
+  - ko: "쟁점"
+    en: "contested point"
+    definition: >
+      A specific item where agents hold opposing views that require
+      deliberation to resolve. Identified by the Philosopher during
+      synthesis. May be a contradicting opinion, an overlooked premise,
+      or a new perspective requiring additional examination.
+    relations:
+      - identified_by: "Philosopher"
+      - resolved_through: "deliberation"
+      - may_become: "consensus | conditional consensus | disagreement"
+    disambiguation: >
+      NOT 'dispute' (dispute implies adversarial framing).
+      'Contested point' is neutral and focuses on the item, not the conflict.
+
+  - ko: "쟁점 토론"
+    en: "deliberation"
+    definition: >
+      The optional phase (Step 4 in team review) where agents with
+      opposing views exchange arguments directly via SendMessage.
+      Limited to 3 round-trips. Begins with term definition alignment.
+      A collaborative process, not adversarial debate.
+    relations:
+      - occurs_in: "team review (Step 4, conditional)"
+      - resolves: "contested point"
+      - limited_to: "3 round-trips"
+      - recorded_in: "deliberation.md"
+    disambiguation: >
+      NOT 'debate' (debate implies winning/losing; deliberation implies
+      collaborative reasoning toward resolution). NOT 'discussion'
+      (too informal for a structured, round-limited process).
+
+  - ko: "고유 발견"
+    en: "unique finding"
+    definition: >
+      A finding that only one specific agent discovered. No other agent
+      reported the same issue. Demonstrates that agent's irreplaceable
+      contribution from its verification dimension.
+    relations:
+      - is_a: "review finding (classification)"
+      - contrasts_with: "shared finding, cross-verified finding"
+    disambiguation: >
+      Not 'exclusive finding' (implies intentional exclusion).
+      'Unique' simply means no other agent found the same issue.
+
+  - ko: "공유 발견"
+    en: "shared finding"
+    definition: >
+      A finding that two or more agents independently reported from
+      their respective perspectives. Indicates a robust issue visible
+      across multiple verification dimensions.
+    relations:
+      - is_a: "review finding (classification)"
+      - reported_by: "2+ agents independently"
+    disambiguation: >
+      Not 'common finding' (implies ordinariness).
+      'Shared' emphasizes independent convergence from different perspectives.
+
+  - ko: "교차 검증"
+    en: "cross-verified finding"
+    definition: >
+      A finding where one agent's discovery combines with another agent's
+      discovery to produce a new insight that neither could have reached
+      alone. Represents emergent value from multi-agent review.
+    relations:
+      - is_a: "review finding (classification)"
+      - emerges_from: "combination of 2+ agents' findings"
+    disambiguation: >
+      Not 'corroborated finding' (corroboration is confirmation;
+      cross-verification produces new insight through combination).
+
+  # ==========================================================================
+  # Error System
+  # ==========================================================================
+
+  - ko: "프로세스 중단형"
+    en: "process-halting"
+    definition: >
+      An error category where the process cannot continue meaningfully.
+      Examples: review target read failure, agent definition file read failure,
+      irreplaceable single-role failure (Explorer in build, Philosopher).
+      Action: halt the process and inform the user.
+    relations:
+      - contrasts_with: "graceful degradation"
+      - triggers: "process halt + user notification"
+    disambiguation: >
+      Not 'fatal error' (too dramatic; the system is not crashing).
+      'Process-halting' precisely describes the consequence.
+
+  - ko: "graceful degradation형"
+    en: "graceful degradation"
+    definition: >
+      An error category where the process can continue with reduced
+      capability. Examples: teammate non-response, learning file absence,
+      domain document absence. Action: exclude the affected agent or
+      mark as 'not yet available' and adjust the consensus denominator.
+    relations:
+      - contrasts_with: "process-halting"
+      - triggers: "continue with reduced scope + denominator adjustment"
+    disambiguation: >
+      Standard software engineering term. Kept in English even in Korean source
+      files. Not 'soft error' or 'warning'.
+
+  # ==========================================================================
+  # General
+  # ==========================================================================
+
+  - ko: "검증"
+    en: "verification"
+    definition: >
+      The act of examining whether an ontology or system meets its
+      specified requirements and is internally consistent. The core
+      activity of all verification agents.
+    relations:
+      - performed_by: "verification agent"
+      - has_dimensions: "7 verification dimensions"
+    disambiguation: >
+      NOT 'validation' (validation checks fitness for purpose against
+      external needs; verification checks internal correctness against
+      specification). In this system, pragmatics comes closest to
+      validation, but the umbrella term is verification.
+
+  - ko: "범용 원칙"
+    en: "general principle"
+    definition: >
+      The general verification basis used when the selected review profile has
+      no domain document.
+    relations:
+      - used_when: "domain document is absent"
+      - less_precise_than: "domain document"
+    disambiguation: >
+      Not 'default rules' (there are no hardcoded defaults).
+      'General principle' means domain-independent ontology engineering knowledge.
+
+  - ko: "검증 차원"
+    en: "verification dimension"
+    definition: >
+      A specific perspective or aspect along which an ontology is examined.
+      The 7 dimensions are: logical consistency, structural completeness,
+      dependency integrity, semantic accuracy, pragmatic fitness,
+      evolution fitness, domain coverage, and conciseness. Agents and
+      dimensions have an N:M relationship.
+    relations:
+      - examined_by: "verification agent (N:M relationship)"
+      - listed_in: ".onto/processes/review/lens-registry.md"
+    disambiguation: >
+      Not 'verification axis' (axis is used for learning axis tags).
+      Not 'verification aspect' (too vague). 'Dimension' conveys
+      an independent, measurable direction of examination.
+
+  # ==========================================================================
+  # Build-specific concepts
+  # ==========================================================================
+
+  - ko: "delta (도메인 사실 보고)"
+    en: "delta"
+    definition: >
+      The Explorer's output: a report of domain facts observed from
+      the source. Contains structural observations with certainty tags
+      (observed/pending) but no ontological interpretation.
+    relations:
+      - produced_by: "Explorer"
+      - consumed_by: "verification agent (for labeling)"
+      - contains: "domain facts with certainty tags"
+    disambiguation: >
+      Mathematical metaphor from integral calculus (the infinitesimal
+      increment). Each delta is an incremental addition to the
+      accumulated ontology knowledge.
+
+  - ko: "epsilon (탐색 방향)"
+    en: "epsilon"
+    definition: >
+      A verification agent's suggestion for the next exploration direction.
+      Identifies gaps or areas needing deeper investigation from that
+      agent's verification dimension.
+    relations:
+      - produced_by: "verification agent"
+      - consumed_by: "Philosopher (for coordination)"
+      - guides: "Explorer (next round)"
+    disambiguation: >
+      Mathematical metaphor paired with delta. Epsilon represents the
+      directional guidance for the next exploration increment.
+
+  - ko: "label (온톨로지 요소)"
+    en: "label"
+    definition: >
+      An ontological classification attached by a verification agent
+      to a delta's facts. Transforms raw domain facts into typed
+      ontology elements according to the negotiated schema.
+    relations:
+      - attached_by: "verification agent"
+      - attached_to: "delta facts"
+      - conforms_to: "schema (from Phase 0)"
+    disambiguation: >
+      Not 'tag' (tag is used for learning axis tags). Not 'annotation'
+      (too generic). 'Label' is the build-process-specific term for
+      ontological classification.
+
+  - ko: "수렴"
+    en: "convergence"
+    definition: >
+      The state where the build process has covered all domain areas
+      and no new facts are being discovered. Termination condition:
+      (coverage satisfied) AND (new facts = 0).
+    relations:
+      - judged_by: "Philosopher"
+      - terminates: "ontology build"
+    disambiguation: >
+      Standard mathematical/engineering term. Not 'completion' (the
+      ontology may still have pending items even when exploration converges).
+
+  - ko: "Raw Ontology"
+    en: "Raw Ontology"
+    definition: >
+      The primary output of the ontology build process, stored as raw.yml.
+      Contains all discovered ontology elements with certainty tags,
+      rationale, and provenance. Input to the transform process.
+    relations:
+      - produced_by: "ontology build"
+      - stored_at: "{project}/.onto/builds/{session-id}/raw.yml"
+      - input_to: "transform"
+    disambiguation: >
+      'Raw' indicates this is the unformatted, comprehensive output
+      before any transform. Not 'draft ontology' (it is complete within
+      its certainty scope).
+
+  - ko: "certainty (확실성 등급)"
+    en: "certainty"
+    definition: >
+      A classification system for how confidently a fact or ontology
+      element can be asserted. Two-stage: Explorer assigns binary
+      (observed/pending), then verification agents refine pending into
+      rationale-absent, inferred, ambiguous, or not-in-source.
+    relations:
+      - assigned_by: "Explorer (stage 1) + verification agent (stage 2)"
+      - levels: "observed, rationale-absent, inferred, ambiguous, not-in-source"
+      - defined_at: ".onto/processes/reconstruct.md (SSOT)"
+    disambiguation: >
+      Not 'confidence' (implies probabilistic scoring).
+      'Certainty' is categorical, not continuous.
+
+# ==============================================================================
+# Phrases
+# ==============================================================================
+
+phrases:
+  - ko: "~를 검증합니다"
+    en: "Verifies ~"
+
+  - ko: "~가 존재하는가?"
+    en: "Does ~ exist?"
+
+  - ko: "~를 담당합니다"
+    en: "Responsible for ~"
+
+  - ko: "~를 담당하지 않는 것"
+    en: "NOT responsible for ~ (-> handled by {agent})"
+
+  - ko: "파일이 없으면 무시하세요"
+    en: "Skip if file does not exist"
+
+  - ko: "~를 읽고 실행하세요"
+    en: "Read ~ and execute"
+
+  - ko: "~에 저장합니다"
+    en: "Stored at ~"
+
+  - ko: "주체자에게 질문합니다"
+    en: "Ask the principal"
+
+  - ko: "~를 종합합니다"
+    en: "Synthesizes ~"
+
+  - ko: "시스템 목적에 비추어"
+    en: "In light of the system's purpose"
+
+  - ko: "도메인 규칙 없이 범용 원칙으로 검증합니다"
+    en: "Verified using general principles (no domain document)"
+
+  - ko: "프로세스를 중단합니다"
+    en: "Halts the process"
+
+  - ko: "나머지로 계속 진행"
+    en: "Continues with remaining agents"
+
+  - ko: "분모를 조정"
+    en: "Adjusts the consensus denominator"
+
+  - ko: "승격이 필요하면"
+    en: "If promotion is needed"
+
+  - ko: "세부에 매몰되어"
+    en: "Fixated on details (losing sight of system purpose)"
+
+  - ko: "비유/은유를 사용하지 않습니다"
+    en: "Does not use metaphors or analogies"
+
+  - ko: "기술 용어는 유지하고 설명을 붙입니다"
+    en: "Preserves technical terms and adds explanations"
+
+  - ko: "결과를 수정 없이 전달합니다"
+    en: "Relays the result without modification"
+
+  - ko: "자기 로딩"
+    en: "Self-loading (agent reads its own context files)"
+
+  - ko: "구조 점검 체크리스트"
+    en: "Structural inspection checklist"
+
+# ==============================================================================
+# Templates
+# ==============================================================================
+
+templates:
+  role_definition: |
+    # {agent_id} ({role_name})
+    - **Specialization**: {what this agent verifies}
+    - **Role**: Verifies whether {core question}. If issues found, specifies {what conflicts with what}.
+    - **Core questions**:
+      - {question}?
+    - **Boundary -- NOT responsible for**:
+      - {concern} -> handled by {other_agent}
+    - **Domain examples**:
+      - Software: {example}
+      - Law: {example}
+      - Accounting: {example}
+    - **Domain document**: `.onto/domains/{domain}/{file}.md`
+
+  review_result: |
+    ---
+    session_id: {session_id}
+    process: review
+    target: "{target_summary}"
+    domain: {domain}
+    date: {YYYY-MM-DD}
+    ---
+
+    ## Agent Panel Review Result
+
+    ### Review Target
+    ### Verification Context
+    ### Consensus (N/{agent_count})
+    ### Conditional Consensus
+    ### Disagreement
+    ### Unverified
+    ### Purpose Alignment Verification
+    ### Immediate Actions Required
+    ### Recommendations
+    ### Unique Finding Tagging
+
+  learning_entry: |
+    - [{type}] [{axis_tag}] {content} (source: {project}, {domain}, {date})

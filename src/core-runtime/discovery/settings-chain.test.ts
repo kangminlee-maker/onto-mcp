@@ -33,7 +33,6 @@ describe("resolveSettingsChain", () => {
   it("merges user defaults and project settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(userSettingsPath(), {
-      output_language: "ko",
       domains: ["software-engineering"],
       llm: {
         auth: "oauth",
@@ -57,7 +56,6 @@ describe("resolveSettingsChain", () => {
 
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
-    expect(settings.output_language).toBe("ko");
     expect(settings.domains).toEqual(["ontology"]);
     expect(settings.review_mode).toBe("full");
     expect(settings.llm?.model).toBe("gpt-5.5");

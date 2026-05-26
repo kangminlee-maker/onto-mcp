@@ -5,10 +5,11 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import type {
-  CoordinatorStateFile,
   InvocationBindingArtifact,
   ReviewExecutionPlan,
   ReviewExecutionResultArtifact,
+  ReviewResultClassificationSummary,
+  ReviewResultIssueProjection,
   ReviewSessionMetadata,
 } from "../review/artifact-types.js";
 import {
@@ -16,6 +17,7 @@ import {
   readYamlDocument,
   toRelativePath,
 } from "../review/review-artifact-utils.js";
+import { readReviewResultClassification } from "../review/review-result-classification.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 
 function requireString(
@@ -123,6 +125,75 @@ function renderConsensusHeading(
   return `### Consensus (${participatingLensCount}/${plannedLensCount}, ${reviewMode} mode)`;
 }
 
+function renderSeverityCounts(
+  summary: ReviewResultClassificationSummary,
+): string {
+  return [
+    `blocker=${summary.severity_counts.blocker}`,
+    `high=${summary.severity_counts.high}`,
+    `medium=${summary.severity_counts.medium}`,
+    `low=${summary.severity_counts.low}`,
+    `info=${summary.severity_counts.info}`,
+  ].join(", ");
+}
+
+function renderRefs(refs: string[]): string {
+  return refs.length > 0 ? refs.map((ref) => `\`${ref}\``).join(", ") : "none";
+}
+
+function renderIssueProjection(
+  projection: ReviewResultIssueProjection,
+): string {
+  const lines = [
+    `- ${projection.issue_id} (${projection.severity})`,
+    `  - affected purpose: ${projection.affected_purpose}`,
+    `  - failure condition: ${projection.failure_condition}`,
+    `  - impact: ${projection.impact}`,
+    `  - evidence: ${renderRefs(projection.evidence_refs)}`,
+    `  - source lenses: ${projection.source_lens_ids.join(", ") || "none"}`,
+    `  - action candidates: ${projection.action_candidates.join(", ") || "none"}`,
+  ];
+  if (projection.problem_definition) {
+    lines.push(`  - problem definition: ${projection.problem_definition}`);
+  }
+  if (projection.timing_class || projection.closure_class) {
+    lines.push(
+      `  - problem framing: ${[
+        projection.timing_class,
+        projection.closure_class,
+        projection.closure_obligation,
+        projection.judgment_state,
+      ].filter((value): value is string => typeof value === "string").join(" / ")}`,
+    );
+  }
+  if (projection.domain_threshold_used) {
+    lines.push(`  - domain threshold: ${projection.domain_threshold_used}`);
+  }
+  return lines.join("\n");
+}
+
+function renderIssueProjectionList(
+  projections: ReviewResultIssueProjection[],
+): string {
+  if (projections.length === 0) return "- none";
+  return projections.map(renderIssueProjection).join("\n\n");
+}
+
+function renderActionCandidates(
+  summary: ReviewResultClassificationSummary,
+): string {
+  if (summary.action_candidates.length === 0) return "- none";
+  return summary.action_candidates
+    .map((candidate) =>
+      [
+        `- ${candidate.issue_id}: ${candidate.candidates.join(", ") || "none"}`,
+        `  - rationale: ${candidate.rationale}`,
+        `  - derivation refs: ${renderRefs(candidate.derivation_refs)}`,
+      ].join("\n"),
+    )
+    .join("\n");
+}
+
 export async function runRenderReviewFinalOutputCli(
   argv: string[],
 ): Promise<number> {
@@ -155,22 +226,6 @@ export async function runRenderReviewFinalOutputCli(
   const bindingArtifact = await readYamlDocument<InvocationBindingArtifact>(bindingPath);
   const sessionMetadata = await readYamlDocument<ReviewSessionMetadata>(sessionMetadataPath);
 
-  // Optional orchestrator self-report from coordinator-state.yaml (contract §18).
-  // Absent when the session used self-path execution or when the orchestrator
-  // did not pass `--orchestrator-reported-realization`.
-  const coordinatorStatePath = path.join(sessionRoot, "coordinator-state.yaml");
-  let orchestratorReportedRealization: string | undefined;
-  if (await fileExists(coordinatorStatePath)) {
-    try {
-      const coordinatorState = await readYamlDocument<CoordinatorStateFile>(
-        coordinatorStatePath,
-      );
-      orchestratorReportedRealization =
-        coordinatorState.orchestrator_reported_realization;
-    } catch {
-      // Ignore — optional field
-    }
-  }
   const executionResultPath =
     bindingArtifact.execution_result_path ??
     path.join(sessionRoot, "execution-result.yaml");
@@ -198,7 +253,19 @@ export async function runRenderReviewFinalOutputCli(
     executionResult?.planned_lens_ids.length ?? bindingArtifact.resolved_lens_set.length;
   const degradedLensIds = executionResult?.degraded_lens_ids ?? [];
   const haltReason = executionResult?.halt_reason ?? null;
+  const haltDetailLines = [
+    executionResult?.halt_phase
+      ? `- halt phase: ${executionResult.halt_phase}`
+      : null,
+    executionResult?.halt_unit_id
+      ? `- halt unit: ${executionResult.halt_unit_id}`
+      : null,
+    executionResult?.halt_lens_id
+      ? `- halt lens: ${executionResult.halt_lens_id}`
+      : null,
+  ].filter((line): line is string => line !== null);
   const executionStatus = executionResult?.execution_status ?? "completed";
+  const classificationSummary = await readReviewResultClassification(sessionRoot);
 
   const consensus = sectionOrDefault(sourceText, [
     "Consensus",
@@ -258,6 +325,7 @@ export async function runRenderReviewFinalOutputCli(
             ? `- degraded lens count: ${degradedLensIds.length}`
             : null,
           haltReason ? `- halt reason: ${haltReason}` : null,
+          ...haltDetailLines,
         ]
           .filter((line): line is string => line !== null)
           .join("\n") || "- none";
@@ -284,7 +352,7 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 ### Verification Context
 - Domain: ${bindingArtifact.resolved_session_domain}
 - Review mode: ${bindingArtifact.resolved_review_mode}
-- Execution realization: ${bindingArtifact.resolved_execution_realization}${orchestratorReportedRealization ? ` (orchestrator reported: ${orchestratorReportedRealization})` : ""}
+- Execution realization: ${bindingArtifact.resolved_execution_realization}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
 - Finding ledger: \`${toRelativePath(bindingArtifact.finding_ledger_path, projectRoot)}\`
 - Issue ledger: \`${toRelativePath(bindingArtifact.issue_ledger_path, projectRoot)}\`
@@ -294,7 +362,32 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Execution status: ${executionStatus}
 
 ### Final Review Result
+#### Review Basis
+- Execution status: ${executionStatus}
+- Deliberation status: ${executionResult?.deliberation_status ?? "unknown"}
+- Participating lenses: ${participatingLensCount}/${plannedLensCount}
+- Degraded lenses: ${degradedLensIds.join(", ") || "none"}
+${executionStatus === "halted_partial" ? `- Halt reason: ${haltReason ?? "unknown"}\n${haltDetailLines.join("\n") || "- halt detail: unavailable"}` : "- Halt reason: none"}
+
+#### Synthesis Summary
 ${sourceText.length > 0 ? finalReviewResult : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts"}
+
+#### Classification Summary
+- Highest severity: ${classificationSummary.highest_severity ?? "none"}
+- Severity counts: ${renderSeverityCounts(classificationSummary)}
+- Finding count: ${classificationSummary.finding_count}
+- Root-cause issue count: ${classificationSummary.issue_count}
+- Material issue count: ${classificationSummary.material_issue_count}
+- Non-material finding count: ${classificationSummary.non_material_finding_count}
+
+#### Material Issues
+${renderIssueProjectionList(classificationSummary.material_issues)}
+
+#### Non-Material Findings
+${renderIssueProjectionList(classificationSummary.non_material_findings)}
+
+#### Action Candidates
+${renderActionCandidates(classificationSummary)}
 
 ${renderConsensusHeading(
     participatingLensCount,

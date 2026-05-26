@@ -6,7 +6,7 @@ import { walkUpFor } from "./walk-up.js";
 /**
  * Validates whether a directory is an onto installation root.
  *
- * Marker: package.json with name "onto-core" AND `.onto/roles/` AND
+ * Marker: package.json with name "onto-mcp" AND `.onto/roles/` AND
  * `.onto/authority/`. An install must be on the canonical `.onto/`
  * layout to be recognized.
  */
@@ -15,7 +15,7 @@ export function isOntoRoot(dir: string): boolean {
     const pkgPath = path.join(dir, "package.json");
     if (!fs.existsSync(pkgPath)) return false;
     const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    if (pkg.name !== "onto-core") return false;
+    if (pkg.name !== "onto-mcp") return false;
     if (!fs.existsSync(path.join(dir, ".onto", "roles"))) return false;
     if (!fs.existsSync(path.join(dir, ".onto", "authority"))) return false;
     return true;
@@ -24,38 +24,11 @@ export function isOntoRoot(dir: string): boolean {
   }
 }
 
-/**
- * Detects a pre-migration onto install that would have been recognized
- * before the layout migration: package.json with name "onto-core" plus top-level
- * `roles/` and `authority/` at the given dir. Used to surface a migration
- * hint when the canonical check fails.
- */
-function isPreMigrationOntoRoot(dir: string): boolean {
-  try {
-    const pkgPath = path.join(dir, "package.json");
-    if (!fs.existsSync(pkgPath)) return false;
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    if (pkg.name !== "onto-core") return false;
-    const rolesPreMigration = fs.existsSync(path.join(dir, "roles"));
-    const authorityPreMigration = fs.existsSync(path.join(dir, "authority"));
-    return rolesPreMigration || authorityPreMigration;
-  } catch {
-    return false;
-  }
-}
-
 function buildInvalidHomeError(label: string, resolved: string): string {
-  const base =
+  return (
     `Invalid ${label}: ${resolved}. ` +
-    `Expected package.json with name "onto-core", .onto/roles/ and .onto/authority/ directories.`;
-  if (isPreMigrationOntoRoot(resolved)) {
-    return (
-      base +
-      ` This directory looks like a pre-migration onto install (top-level roles/ or authority/ at root). ` +
-      `Run scripts/repo-layout-migration-replace.py to migrate to the .onto/ layout.`
-    );
-  }
-  return base;
+    `Expected package.json with name "onto-mcp", .onto/roles/ and .onto/authority/ directories.`
+  );
 }
 
 /**
@@ -65,7 +38,7 @@ function buildInvalidHomeError(label: string, resolved: string): string {
  * 1. --onto-home CLI flag
  * 2. ONTO_HOME environment variable
  * 3. Walk up from executing script location
- * 4. Walk up from CWD (backward compat when running from onto repo)
+ * 4. Walk up from CWD
  */
 export function resolveOntoHome(
   ontoHomeFlag: string | undefined,
@@ -100,6 +73,6 @@ export function resolveOntoHome(
   if (fromCwd) return fromCwd;
 
   throw new Error(
-    "Cannot locate onto installation. Set ONTO_HOME environment variable, pass --onto-home, or run from the onto repository.",
+    "Cannot locate onto-mcp installation. Set ONTO_HOME, pass --onto-home, or run from the onto-mcp repository.",
   );
 }

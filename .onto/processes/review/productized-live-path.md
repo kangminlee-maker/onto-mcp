@@ -2,9 +2,6 @@
 
 > 상태: Active
 > 목적: `검토 (review)`의 `제품화된 실시간 경로 (productized live path)`를 canonical 실행 경로로 고정한다.
-> 하위 실행 계약:
-> - `.onto/processes/review/nested-spawn-coordinator-contract.md` — Claude Code 세션에서 Agent tool 기반 lens dispatch coordinator
->
 > 기준 문서:
 > - `.onto/processes/review/interpretation-contract.md`
 > - `.onto/processes/review/binding-contract.md`
@@ -17,6 +14,7 @@
 > - `.onto/processes/review/issue-stance-deliberation-contract.md`
 > - `.onto/processes/review/review-context-manifest-contract.md`
 > - `.onto/processes/review/pre-dispatch-contracts.md`
+> - `.onto/processes/review/review-execution-ux-contract.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -27,8 +25,7 @@
 
 즉 실제 productization target은 이 문서의 순서를 따른다.
 
-`.onto/processes/review/review.md`는 prompt-backed reference execution의 source와 절차를 담되,
-live path authority는 이 문서가 가진다.
+live path authority는 이 문서와 하위 review contracts가 가진다.
 
 ---
 
@@ -120,12 +117,8 @@ Preferred repo-local combined entrypoint는 아래다.
 
 - `npm run review:start-session -- ...`
 
-필요하면 아래 분해된 step도 내부 bounded step으로 사용할 수 있다.
-
-- `npm run review:write-interpretation -- ...`
-- `npm run review:bootstrap-binding -- ...`
-- `npm run review:materialize-execution-preparation -- ...`
-- `npm run review:materialize-prompt-packets -- ...`
+`review:start-session` 내부에서 interpretation, binding, execution preparation,
+prompt packet materialization을 순서대로 수행한다.
 
 ### 3.5 Execution Preparation Artifacts
 
@@ -204,7 +197,7 @@ canonical requirement:
 현재 repo-local TS bounded path에서 연결된 `ReviewExecutionProfile` mode는 아래다.
 
 - `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
-- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer coordinator worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
+- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
 - `synthesize.llm`: deliberation 이후 별도 synthesize unit에 적용된다. synthesize는 모든 lens output, issue artifacts, deliberation, problem framing을 통합하므로 높은 effort가 기본적으로 적합하다.
 
 worker executor는 profile resolution에서 아래 중 하나로 고정된다.
@@ -212,9 +205,6 @@ worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 - `codex`: host-bound OAuth 또는 Codex worker path.
 - `direct_call`: `api_key` 또는 `local` provider path.
 - `mock`: `ONTO_LLM_MOCK=1` 또는 explicit test override.
-
-Claude host의 Agent tool dispatch는 같은 semantic을 따르되, TypeScript runner가
-해당 host 도구를 직접 보장하지 않는다.
 
 중요한 점은 host-specific naming이 아니라:
 
@@ -253,8 +243,7 @@ canonical requirement:
 5. `deliberation.md`는 synthesize보다 앞선 authoritative conflict-resolution artifact다.
 6. `synthesize`는 이 결과를 소비하며, 독자적으로 새 resolution을 만들지 않는다.
 
-Claude Code Agent Teams 환경에서는 이 단계가 SendMessage transport 방식으로 실현될 수 있다.
-MCP/TS runtime에서는 같은 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
+MCP/TS runtime에서는 이 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
 중요한 것은 기능명이 아니라 `분리된 관점 + 제한 context + teamlead 통제 + 기록 가능한 resolution`이다.
 
 #### 3.7.1 Issue-Stance Deliberation Target
@@ -356,16 +345,54 @@ later system handoff artifact를 분리한다.
 
 중요:
 
-- degraded case가 발생하면 `review:run-prompt-execution`은 `error-log.md`를 기록한다
+- degraded case가 발생하면 `review:run-prompt-execution`은 `degradation-summary.yaml`을 구조화 source로 기록하고 `error-log.md`에는 실행 로그를 남긴다
 - `review:complete-session`은 `final-output.md`와 `review-record.yaml`을 모두 필수 산출물로 취급한다
 - 필수 artifact가 없으면 해당 단계는 즉시 실패한다
+
+### 3.11 Execution UX Presentation Target
+
+Review 진행 UX의 design target은 `.onto/processes/review/review-execution-ux-contract.md`를 따른다.
+
+이 UX contract는 final output만이 아니라 setup, pre-dispatch readiness, lens
+execution, issue construction, controlled deliberation, synthesize, halted partial
+result 전 구간에서 주체자가 판단 가능한 상태를 받도록 하는 presentation target이다.
+
+현재 active runtime truth는 기존 artifacts와 CLI/MCP 결과가 소유한다.
+`onto.review_status`는 artifact-backed `llmPresentation.progress`를 반환하며,
+그 안에는 polling liveness state, latest review signal, progress stepper가
+포함된다. halted partial일 때는 `llmPresentation.halt`도 반환한다. completed result는
+`llmPresentation.finalResult`, `final-output.md`, `review-record.yaml`에서 같은
+result classification projection을 노출한다.
+Progress step id/label/total truth는 runtime review progress contract와
+`review-run-manifest.yaml.execution_contract`가 소유한다.
+
+Severity/result classification은 runtime active projection이다. Projection source는
+`finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`,
+`execution-result.yaml`이다.
+
+Target rules:
+
+- `severity`가 finding의 materiality boundary를 포함한다
+- `blocker`, `high`, `medium`은 material issue로 파생된다
+- `low`, `info`는 non-material finding 또는 evidence observation이다
+- 모든 material issue는 affected purpose, failure condition, impact, evidence refs를 가져야 한다
+- 시작 시점에는 환경, 방식, non-secret 모델/profile, 도메인, target, review direction을 짧게 제시해야 한다
+- 긴 실행 중에는 stepwise/progress-bar 형태로 진행 상태와 새로 수집된 review 정보를 함께 제시해야 하며, 새 정보가 없더라도 bounded liveness update를 제공해야 한다
+- issue-stage artifact가 생성되면 progress update는 finding/issue count, highest severity, material issue count 같은 새 review signal을 함께 제시해야 한다
+- 중간 finding-like update는 `lens_local`, `issue_candidate`, `deliberation_pending`, `deliberated`, `finalized` 같은 interim signal status를 표시해야 한다
+- halted partial result는 halt identity와 produced/absent artifact truth를 먼저 보여줘야 한다
+- CLI가 보이지 않는 MCP/host 환경에서는 `onto.review_status` polling을 기본 경로로 host LLM presentation input을 갱신해야 한다
+- 별도 HTML/UI 구현은 요구하지 않는다. CLI, MCP, `final-output.md`, `review-record.yaml`은 같은 bounded facts를 제시해야 한다
 
 ---
 
 ## 4. Immediate Follow-up
 
-이 문서 다음 우선순위는 아래다.
+이 문서의 productized live path는 현재 MCP `onto.review`에서
+`review:invoke`를 통해 `review:start-session`, `review:run-prompt-execution`,
+`review:complete-session` bounded steps를 유지한다.
 
-1. `.onto/processes/review/review.md`를 이 live path에 맞는 reference execution 문서로 더 축소한다
-2. `review:invoke`를 host command path에 직접 연결하고, 내부에서는 `review:start-session` / `review:run-prompt-execution` / `review:complete-session` bounded steps를 유지한다
-3. deprecated Python prototypes를 제거하고 TS core path만 canonical path로 남긴다
+남은 follow-up은 live path 자체의 구조 변경이 아니라 운영/확장 품질이다.
+
+1. provider credentials/endpoints가 의도적으로 준비된 환경에서 provider별 live conformance를 수행한다.
+2. replay, stale artifact, partial worker, duplicate-dispatch semantics가 닫힌 뒤 explicit resume command를 설계한다.

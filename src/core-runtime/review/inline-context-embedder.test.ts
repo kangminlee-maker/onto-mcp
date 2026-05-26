@@ -68,27 +68,23 @@ describe("embedInlineContext — domain doc embedding", () => {
     expect(matches!.length).toBe(2);
   });
 
-  it("leaves missing file refs unchanged with `not-found` comment", () => {
+  it("fails loud when a referenced file is missing", () => {
     const packet = `## Domain Documents
 - Primary: ~/.onto/domains/nonexistent/missing.md
 `;
 
-    const result = embedInlineContext(packet, { ontoHome, projectRoot });
-
-    expect(result).toContain("- Primary: ~/.onto/domains/nonexistent/missing.md");
-    expect(result).toContain("inline-embed: not-found");
-    expect(result).not.toContain("Inline content");
+    expect(() => embedInlineContext(packet, { ontoHome, projectRoot })).toThrow(
+      "Inline context reference does not exist",
+    );
   });
 
   it("does not add header when no embeddings happened", () => {
     const packet = `## Notes
 Some unrelated content.
-- Primary: ~/.onto/domains/missing/x.md
 `;
 
     const result = embedInlineContext(packet, { ontoHome, projectRoot });
 
-    // Failed embed does not add the "expansion happened" header
     expect(result).not.toContain("inline-context-embedder: domain doc references expanded");
   });
 
@@ -121,34 +117,6 @@ Some unrelated content.
     expect(result).toContain("Line 50");
     expect(result).not.toContain("Line 51");
     expect(result).toContain("...truncated: 950 more lines omitted");
-  });
-
-  it("expands ${ONTO_PLUGIN_DIR:-default} default-value notation", () => {
-    // Set ONTO_PLUGIN_DIR to a real dir with a doc.
-    // Phase 4 layout: processes/ moved to .onto/processes/, so fixture
-    // must create the file at the new canonical location to match the
-    // packet path below.
-    const pluginDir = path.join(scratchDir, "plugin");
-    mkdirSync(path.join(pluginDir, ".onto", "processes"), { recursive: true });
-    writeFileSync(
-      path.join(pluginDir, ".onto", "processes", "test.md"),
-      "## Test Process\n",
-      "utf8",
-    );
-    process.env.ONTO_PLUGIN_DIR = pluginDir;
-
-    try {
-      const packet = `## Domain Documents
-- Primary: \${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}/.onto/processes/test.md
-`;
-
-      const result = embedInlineContext(packet, { ontoHome, projectRoot });
-
-      expect(result).toContain("Inline content (test.md)");
-      expect(result).toContain("## Test Process");
-    } finally {
-      delete process.env.ONTO_PLUGIN_DIR;
-    }
   });
 
   it("preserves untouched packet content surrounding refs", () => {

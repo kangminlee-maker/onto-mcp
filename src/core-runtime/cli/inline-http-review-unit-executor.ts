@@ -20,7 +20,7 @@
  *
  * - Materialized input (target content): already inline in the prompt packet
  * - Domain documents: NOT inlined by default — packet only references them
- * - Learning context: already inline in the prompt packet
+ * - Review context: already bounded by the prompt packet contract
  *
  * Phase 2 inline embedding is **opt-in** via `--embed-domain-docs` flag.
  * When enabled, domain doc references in the packet are expanded into inline
@@ -36,7 +36,7 @@
  *
  * # Provider selection
  *
- * Reuses `learning/shared/llm-caller.ts` resolution:
+ * Reuses the core LLM caller resolution:
  *   1. --provider flag (caller-explicit)
  *   2. `.onto/settings.json` `llm` switcher
  *   3. explicit provider validation
@@ -51,15 +51,15 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import {
   callLlm,
-  resolveLearningProviderConfig,
+  resolveLlmProviderConfig,
   type LlmCallConfig,
-  type LearningProviderConfigInputs,
-  type LearningProviderCliOverrides,
-} from "../learning/shared/llm-caller.js";
+  type LlmProviderConfigInputs,
+  type LlmProviderCliOverrides,
+} from "../llm/llm-caller.js";
 import {
   callLlmWithTools,
   type ToolLoopProvider,
-} from "../learning/shared/llm-tool-loop.js";
+} from "../llm/llm-tool-loop.js";
 import { ONTO_DEFAULT_TOOLS } from "./onto-tools.js";
 import { embedInlineContext } from "../review/inline-context-embedder.js";
 import { parsePacketBoundaryPolicy } from "../review/packet-boundary-policy.js";
@@ -356,13 +356,13 @@ function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | nu
   return null;
 }
 
-async function loadOntoConfig(projectRoot: string): Promise<LearningProviderConfigInputs> {
+async function loadOntoConfig(projectRoot: string): Promise<LlmProviderConfigInputs> {
   await assertNoUnsupportedConfigFiles(projectRoot);
   const configPath = projectSettingsPath(projectRoot);
   try {
     const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
     if (parsed && typeof parsed === "object") {
-      return parsed as LearningProviderConfigInputs;
+      return parsed as LlmProviderConfigInputs;
     }
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -457,7 +457,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
 
   // Resolve LLM provider config: CLI flags → OntoConfig.
   const ontoConfig = await loadOntoConfig(projectRoot);
-  const cliOverrides: LearningProviderCliOverrides = {};
+  const cliOverrides: LlmProviderCliOverrides = {};
   const providerValue = values.provider;
   if (
     providerValue === "anthropic" ||
@@ -485,7 +485,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     cliOverrides.reasoning_effort = values["reasoning-effort"];
   }
 
-  const llmPartial = resolveLearningProviderConfig({
+  const llmPartial = resolveLlmProviderConfig({
     config: ontoConfig,
     cliOverrides,
   });
@@ -679,10 +679,10 @@ export async function runInlineHttpReviewUnitExecutorCli(
       toolModeUsed = "native";
       // Empty final text after a tool loop usually means the model only ever
       // returned tool_use blocks and never produced a final answer (or hit
-      // the iteration cap). In auto mode we fall back to inline; in native
-      // mode we surface the failure.
+      // the iteration cap). In ordinary auto mode we fall back to inline; when
+      // the packet declares Tools: required, native execution is the boundary.
       if (outputText.length === 0) {
-        if (requestedToolMode === "auto") {
+        if (requestedToolMode === "auto" && !packetForcedNative) {
           nativeAttemptError = `tool-native produced empty final text${
             loopResult.truncated_by_iteration_cap ? " (iteration cap hit)" : ""
           }`;
@@ -694,7 +694,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
         }
       }
     } catch (err) {
-      if (requestedToolMode === "auto") {
+      if (requestedToolMode === "auto" && !packetForcedNative) {
         nativeAttemptError = err instanceof Error ? err.message : String(err);
         toolModeUsed = "inline";
         toolIterations = undefined;

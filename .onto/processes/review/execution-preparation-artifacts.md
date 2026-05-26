@@ -66,7 +66,8 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
   - `BoundaryPresentation`
   - `BoundaryEnforcementProfile`
   - `EffectiveBoundaryState`
-- `error-log.md`는 degraded case / partial failure를 기록하는 deterministic conformance log seat다
+- `error-log.md`는 deterministic conformance log seat다
+- `degradation-summary.yaml`은 degraded case / partial failure를 기록하는 structured source seat다
 - `execution-preparation/` 아래 artifact들은 lens 실행 직전 basis artifact다
 - `pre-dispatch-contracts.md`가 정한 gate를 통과하지 못하면 lens dispatch를 시작하지 않는다
 - later runtime implementation도 이 구분은 유지해야 한다
@@ -88,7 +89,7 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
 - `project_root`
 - `requested_target`
 - `requested_domain_token`
-- `plugin_root`
+- `onto_home`
 
 예시:
 
@@ -99,13 +100,13 @@ execution_realization: worker
 host_runtime: codex
 review_mode: full
 created_at: 2026-04-04T15:20:00+09:00
-project_root: /Users/kangmin/cowork/onto
-requested_target: process.md
+project_root: /Users/kangmin/cowork/onto-mcp
+requested_target: src/core-runtime/review
 requested_domain_token: "@ontology"
-plugin_root: /Users/kangmin/.claude/plugins/onto
+onto_home: /Users/kangmin/cowork/onto-mcp
 ```
 
-`plugin_root`는 review 실행 시점에 resolve 된 install path 의 snapshot 이다. 위 예시는 default Claude Code install 경로이며, 현재 canonical 표기는 `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}` 이다. 새 review session 의 metadata 는 resolve 된 절대경로를 기록한다.
+`onto_home`는 review 실행 시점에 resolve 된 onto-mcp runtime resource root의 snapshot 이다.
 
 ---
 
@@ -134,9 +135,9 @@ plugin_root: /Users/kangmin/.claude/plugins/onto
 ```yaml
 review_target_scope_kind: bundle
 resolved_target_refs:
-  - /Users/kangmin/cowork/onto/process.md
-  - /Users/kangmin/cowork/onto/.onto/processes/review/review.md
-review_target_profile_ref: /Users/kangmin/cowork/onto/.onto/review/20260404-a1b2c3d4/execution-preparation/review-target-profile.yaml
+  - /Users/kangmin/cowork/onto-mcp/src/core-runtime/review
+  - /Users/kangmin/cowork/onto-mcp/.onto/processes/review
+review_target_profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260404-a1b2c3d4/execution-preparation/review-target-profile.yaml
 captured_at: 2026-04-04T15:21:00+09:00
 capture_reason: prompt-backed review execution
 ```
@@ -166,12 +167,12 @@ capture_reason: prompt-backed review execution
 ```yaml
 kind: bundle_member_texts
 members:
-  - ref: /Users/kangmin/cowork/onto/process.md
-    label: process
-    content_path: execution-preparation/materialized-input.md#process
-  - ref: /Users/kangmin/cowork/onto/.onto/processes/review/review.md
-    label: review_process
-    content_path: execution-preparation/materialized-input.md#review_process
+  - ref: /Users/kangmin/cowork/onto-mcp/src/core-runtime/review
+    label: review_runtime
+    content_path: execution-preparation/materialized-input.md#review_runtime
+  - ref: /Users/kangmin/cowork/onto-mcp/.onto/processes/review
+    label: review_contracts
+    content_path: execution-preparation/materialized-input.md#review_contracts
 ```
 
 ---
@@ -221,7 +222,6 @@ obligation을 고정한다.
 
 - `system_purpose_refs`
 - `domain_context_refs`
-- `learning_context_refs`
 - `role_definition_refs`
 - `execution_rule_refs`
 
@@ -229,16 +229,14 @@ obligation을 고정한다.
 
 ```yaml
 system_purpose_refs:
-  - /Users/kangmin/cowork/onto/README.md
+  - /Users/kangmin/cowork/onto-mcp/README.md
 domain_context_refs:
   - /Users/kangmin/.onto/domains/ontology/domain_scope.md
-learning_context_refs:
-  - /Users/kangmin/.onto/projects/onto/learnings/logic.md
 role_definition_refs:
-  - /Users/kangmin/cowork/onto/.onto/roles/logic.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/roles/logic.md
 execution_rule_refs:
-  - /Users/kangmin/cowork/onto/process.md
-  - /Users/kangmin/cowork/onto/.onto/processes/review/review.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md
 ```
 
 원칙:
@@ -277,6 +275,5 @@ execution_rule_refs:
 
 다음 단계는 아래다.
 
-1. `.onto/processes/review/review.md`의 session directory wording을 이 artifact seats와 맞춘다
-2. prompt-backed path에서 이 artifact 내용을 실제 field shape로 안정화한다
-3. later runtime replacement에서 file generator를 하나씩 치환한다
+1. prompt-backed path에서 이 artifact 내용을 실제 field shape로 안정화한다
+2. later runtime replacement에서 file generator를 하나씩 치환한다

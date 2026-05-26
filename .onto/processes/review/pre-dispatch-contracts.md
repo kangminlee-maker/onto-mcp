@@ -347,6 +347,19 @@ Timeout must be recorded as:
 
 The runtime does not synthesize a final review from a partial lens set.
 
+Controlled deliberation timeout follows the same fail-loud closure shape:
+
+- synthesize is not executed
+- `execution_status=halted_partial`
+- `deliberation_status=not_performed`
+- `halt_phase=controlled_lens_deliberation`
+- `halt_unit_id`, `halt_unit_kind`, and lens-bound `halt_lens_id` identify the
+  failed deliberation unit
+- `deliberation_execution_results` preserve completed and failed deliberation
+  unit results, including timeout `failure_message`
+- `ReviewRecord` preserves refs for issue-stage artifacts already produced in
+  the same run and uses `null` for output artifacts that were not produced
+
 ---
 
 ## 7. Contract 5: Retired Entry Policy

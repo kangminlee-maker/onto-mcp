@@ -80,6 +80,9 @@ run_expect_status() {
 
 FIXTURE_DIR="/tmp/onto-e2e-fixtures-$$"
 mkdir -p "$FIXTURE_DIR"
+ORIGINAL_HOME="${HOME:-}"
+export HOME="$FIXTURE_DIR/home"
+mkdir -p "$HOME/.onto"
 
 setup_fixtures() {
   # binary file
@@ -120,6 +123,9 @@ setup_fixtures() {
 }
 
 cleanup_fixtures() {
+  if [ -n "$ORIGINAL_HOME" ]; then
+    export HOME="$ORIGINAL_HOME"
+  fi
   rm -rf "$FIXTURE_DIR"
   # Clean up collision test session
   rm -rf "$PROJECT_ROOT/.onto/review/e2e-collision-test"
@@ -430,7 +436,10 @@ fi
 
 echo "=== E23d: codex-actor-route-mismatch ==="
 E23D_ROOT="$FIXTURE_DIR/codex-actor-route-mismatch"
-mkdir -p "$E23D_ROOT/.onto"
+mkdir -p "$E23D_ROOT/.onto" "$E23D_ROOT/bin" "$HOME/.codex"
+printf '#!/bin/sh\nexit 99\n' > "$E23D_ROOT/bin/codex"
+chmod +x "$E23D_ROOT/bin/codex"
+printf '{}\n' > "$HOME/.codex/auth.json"
 printf 'codex actor mismatch\n' > "$E23D_ROOT/target.txt"
 cat > "$E23D_ROOT/.onto/settings.json" <<'JSON'
 {
@@ -454,7 +463,7 @@ cat > "$E23D_ROOT/.onto/settings.json" <<'JSON'
   }
 }
 JSON
-E23D_OUT=$(npm run review:invoke -- \
+E23D_OUT=$(PATH="$E23D_ROOT/bin:$PATH" npm run review:invoke -- \
   target.txt "codex actor route mismatch must fail before dispatch" \
   --project-root "$E23D_ROOT" --onto-home "$PROJECT_ROOT" \
   --no-domain --review-mode core-axis --no-watch \
@@ -828,7 +837,7 @@ echo "=== E39: onto-version ==="
 E39_OUT=$(onto --version 2>&1)
 E39_EXIT=$?
 
-if [ $E39_EXIT -eq 0 ] && echo "$E39_OUT" | grep -q "onto-core"; then
+if [ $E39_EXIT -eq 0 ] && echo "$E39_OUT" | grep -q "onto-mcp"; then
   echo "  PASS  E39: onto-version"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -912,361 +921,6 @@ else
   UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
 fi
 rm -rf "$E44_TMPDIR"
-
-echo ""
-
-# ─────────────────────────────────────────────
-# 12. COORDINATOR STATE MACHINE
-# ─────────────────────────────────────────────
-
-echo "── Coordinator State Machine ──"
-
-# E45: coordinator start (mock, light)
-echo "=== E45: coordinator-start ==="
-E45_OUT=$(npm run coordinator:start -- \
-  src/ "coordinator test" \
-  --executor-realization mock --review-mode core-axis \
-  --project-root "$PROJECT_ROOT" 2>&1)
-E45_EXIT=$?
-E45_STATE=$(echo "$E45_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-E45_SESSION_ROOT=$(echo "$E45_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
-E45_AGENTS=$(echo "$E45_OUT" | grep '"lens_id"' | wc -l | tr -d ' ')
-
-if [ $E45_EXIT -eq 0 ] && [ "$E45_STATE" = "awaiting_lens_dispatch" ] && [ -n "$E45_SESSION_ROOT" ] && [ "$E45_AGENTS" -gt 0 ]; then
-  echo "  PASS  E45: coordinator-start (state=$E45_STATE, agents=$E45_AGENTS)"
-  PASS_COUNT=$((PASS_COUNT + 1))
-else
-  echo "  FAIL! E45: coordinator-start (exit=$E45_EXIT, state=$E45_STATE, agents=$E45_AGENTS)"
-  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-fi
-
-# E46: coordinator status
-echo "=== E46: coordinator-status ==="
-if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E46_OUT=$(npm run coordinator:status -- --session-root "$E45_SESSION_ROOT" 2>&1)
-  E46_EXIT=$?
-  E46_STATE=$(echo "$E46_OUT" | grep '"current_state"' | head -1 | sed 's/.*: "//;s/".*//')
-
-  if [ $E46_EXIT -eq 0 ] && [ "$E46_STATE" = "awaiting_lens_dispatch" ]; then
-    echo "  PASS  E46: coordinator-status (current_state=$E46_STATE)"
-    PASS_COUNT=$((PASS_COUNT + 1))
-  else
-    echo "  FAIL! E46: coordinator-status (exit=$E46_EXIT, state=$E46_STATE)"
-    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-  fi
-else
-  echo "  SKIP  E46: no session from E45"
-fi
-
-# E47: coordinator next (lens validation → halted_partial since mock executor didn't write lens outputs)
-echo "=== E47: coordinator-next-halt ==="
-if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E47_OUT=$(npm run coordinator:next -- \
-    --session-root "$E45_SESSION_ROOT" \
-    --project-root "$PROJECT_ROOT" 2>&1)
-  E47_EXIT=$?
-  E47_STATE=$(echo "$E47_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-
-  if [ $E47_EXIT -eq 0 ] && [ "$E47_STATE" = "halted_partial" ]; then
-    echo "  PASS  E47: coordinator-next-halt (state=$E47_STATE — no lens outputs)"
-    PASS_COUNT=$((PASS_COUNT + 1))
-  else
-    echo "  FAIL! E47: coordinator-next-halt (exit=$E47_EXIT, state=$E47_STATE)"
-    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-  fi
-else
-  echo "  SKIP  E47: no session from E45"
-fi
-
-# E48: coordinator next on terminal state → error
-echo "=== E48: coordinator-next-terminal ==="
-if [ -n "$E45_SESSION_ROOT" ] && [ -d "$E45_SESSION_ROOT" ]; then
-  E48_OUT=$(npm run coordinator:next -- \
-    --session-root "$E45_SESSION_ROOT" \
-    --project-root "$PROJECT_ROOT" 2>&1)
-  E48_EXIT=$?
-
-  if [ $E48_EXIT -ne 0 ]; then
-    echo "  PASS  E48: coordinator-next-terminal (expected fail on terminal state)"
-    PASS_COUNT=$((PASS_COUNT + 1))
-  else
-    echo "  FAIL! E48: coordinator-next-terminal (should fail on terminal state)"
-    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-  fi
-else
-  echo "  SKIP  E48: no session from E45"
-fi
-
-# E49: coordinator full cycle with mock lens outputs
-echo "=== E49: coordinator-full-cycle ==="
-write_e49_mock_lens_output() {
-  local output_path="$1"
-  local lens_name
-  lens_name=$(basename "$output_path" .md)
-  printf '%s\n' \
-    "# Mock ${lens_name} Review Result" \
-    "" \
-    "### Structural Inspection" \
-    "- Mock structural inspection." \
-    "" \
-    "### Finding" \
-    "- Mock finding." \
-    "" \
-    "### Why" \
-    "- Mock reason." \
-    "" \
-    "### How To Fix" \
-    "- none" \
-    "" \
-    "### Newly Learned" \
-    "- none" \
-    "" \
-    "### Applied Learnings" \
-    "- none" \
-    "" \
-    "### Domain Constraints Used" \
-    "[]" \
-    "" \
-    "### Domain Context Assumptions" \
-    "[]" \
-    > "$output_path"
-}
-write_e49_mock_lens_deliberation_output() {
-  local output_path="$1"
-  printf '%s\n' \
-    "## Re-evaluation Summary" \
-    "- mock deliberation response" \
-    "" \
-    "## Accepted From Other Lenses" \
-    "- none" \
-    "" \
-    "## Contested Points" \
-    "- none" \
-    "" \
-    "## Position Changes" \
-    "- none" \
-    "" \
-    "## Final Lens Position" \
-    "- unchanged" \
-    > "$output_path"
-}
-write_e49_mock_teamlead_deliberation_output() {
-  local output_path="$1"
-  printf '%s\n' \
-    '---' \
-    'deliberation_status: performed' \
-    '---' \
-    '' \
-    '## Consensus' \
-    '- mock deliberation' \
-    '' \
-    '## Conditional Consensus' \
-    '- none' \
-    '' \
-    '## Disagreement' \
-    '- none' \
-    '' \
-    '## Deliberation Decision' \
-    '- mock' \
-    '' \
-    '## Axiology-Proposed Additional Perspectives' \
-    '- none' \
-    '' \
-    '## Purpose Alignment Verification' \
-    '- mock' \
-    '' \
-    '## Final Review Result' \
-    '- mock final review result' \
-    '' \
-    '## Immediate Actions Required' \
-    '- none' \
-    '' \
-    '## Recommendations' \
-    '- none' \
-    '' \
-    '## Unique Finding Tagging' \
-    '- mock' \
-    > "$output_path"
-}
-write_e49_mock_synthesis_output() {
-  local output_path="$1"
-  printf '%s\n' \
-    '---' \
-    'deliberation_status: performed' \
-    '---' \
-    '' \
-    '## Consensus' \
-    '- mock synthesis' \
-    '' \
-    '## Conditional Consensus' \
-    '- none' \
-    '' \
-    '## Disagreement' \
-    '- none' \
-    '' \
-    '## Deliberation Decision' \
-    '- mock' \
-    '' \
-    '## Axiology-Proposed Additional Perspectives' \
-    '- none' \
-    '' \
-    '## Purpose Alignment Verification' \
-    '- mock' \
-    '' \
-    '## Final Review Result' \
-    '- mock final review result' \
-    '' \
-    '## Immediate Actions Required' \
-    '- none' \
-    '' \
-    '## Recommendations' \
-    '- none' \
-    '' \
-    '## Unique Finding Tagging' \
-    '- mock' \
-    > "$output_path"
-}
-write_e49_mock_issue_artifact_output() {
-  local output_path="$1"
-  local session_id="$2"
-  local primary_lens="$3"
-  mkdir -p "$(dirname "$output_path")"
-  case "$(basename "$output_path")" in
-    finding-ledger.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nfindings:\n  - finding_id: finding-001\n    lens_id: %s\n    source_ref: round1/%s.md#finding-1\n    target: mock-target\n    evidence_anchor: mock-anchor\n    claim: mock finding\n    proposed_action: none\n    severity: low\nvalidation:\n  unaddressable_findings: []\n' "$session_id" "$primary_lens" "$primary_lens" > "$output_path"
-      ;;
-    finding-relation-graph.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nrelations: []\nsingleton_findings:\n  - finding_id: finding-001\n    reason: mock singleton\n' "$session_id" > "$output_path"
-      ;;
-    issue-ledger.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nissues:\n  - issue_id: issue-001\n    root_cause_hypothesis: mock root\n    root_confidence: low\n    surface_finding_ids: [finding-001]\n    relation_refs: []\n    raised_by_lens_ids: [%s]\n    issue_statement: mock issue\n    proposed_action: none\n    severity: low\n    singleton_reason: mock singleton\nvalidation:\n  unclustered_finding_ids: []\n' "$session_id" "$primary_lens" > "$output_path"
-      ;;
-    issue-stance-matrix.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nissues:\n  - issue_id: issue-001\n    stances:\n' "$session_id" > "$output_path"
-      for lens_id in $E49_LENS_IDS; do
-        printf '      - lens_id: %s\n        stance: support\n        rationale: mock stance\n        root_hypothesis_position: accepts\n        severity_position: keeps\n        evidence_refs: [round1/%s.md]\n' "$lens_id" "$lens_id" >> "$output_path"
-      done
-      printf 'validation:\n  missing_stances: []\n' >> "$output_path"
-      ;;
-    deliberation-plan.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nplanned_issues: []\nskipped_issues:\n  - issue_id: issue-001\n    reason: no material conflict\n' "$session_id" > "$output_path"
-      ;;
-    problem-framing.yaml)
-      printf 'schema_version: 1\nsession_id: %s\nclassification_context:\n  common_spine_version: 1\n  session_domain: none\n  domain_profile_ref: ""\n  domain_profile_doc_type: custom:problem_framing_profile\n  domain_profile_status: not_requested\nclassifications:\n  - issue_id: issue-001\n    problem_definition: mock problem\n    issue_role: independent_issue\n    judgment_state: observed\n    impact_kind: maintainability_evolvability\n    timing_class: defer_watch\n    closure_class: watch\n    closure_obligation: out_of_scope\n    domain_axes: {}\n    rationale: mock rationale\n    related_surface_finding_ids: [finding-001]\n' "$session_id" > "$output_path"
-      ;;
-    *)
-      echo "unsupported E49 issue artifact: $output_path" >&2
-      return 1
-      ;;
-  esac
-}
-E49_START_OUT=$(npm run coordinator:start -- \
-  src/core-runtime/cli/review-invoke.ts "full cycle test" \
-  --executor-realization mock --review-mode core-axis \
-  --project-root "$PROJECT_ROOT" 2>&1)
-E49_START_EXIT=$?
-E49_SESSION_ROOT=$(echo "$E49_START_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
-
-if [ $E49_START_EXIT -eq 0 ] && [ -n "$E49_SESSION_ROOT" ] && [ -d "$E49_SESSION_ROOT" ]; then
-  E49_SESSION_ID=$(basename "$E49_SESSION_ROOT")
-  E49_LENS_IDS=$(grep 'lens_id:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*lens_id: //' | tr -d '"' | tr -d "'" | awk '!seen[$0]++' | tr '\n' ' ')
-  E49_PRIMARY_LENS_ID=$(echo "$E49_LENS_IDS" | awk '{print $1}')
-
-  E49_LENS_OUTPUT_PATHS=$(grep 'output_path:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*output_path: //' | tr -d '"' | tr -d "'" | grep '/round1/' | grep -v '/deliberation/')
-  for op in $E49_LENS_OUTPUT_PATHS; do
-    mkdir -p "$(dirname "$op")"
-    write_e49_mock_lens_output "$op"
-  done
-
-  # Step 2: next through issue artifact agents → awaiting_deliberation
-  E49_NEXT1_OUT=$(npm run coordinator:next -- \
-    --session-root "$E49_SESSION_ROOT" \
-    --project-root "$PROJECT_ROOT" 2>&1)
-  E49_NEXT1_EXIT=$?
-  E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-
-  while [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_adjudication" ]; do
-    E49_ARTIFACT_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
-    if [ -n "$E49_ARTIFACT_OUTPUT" ]; then
-      write_e49_mock_issue_artifact_output "$E49_ARTIFACT_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
-    fi
-    E49_NEXT1_OUT=$(npm run coordinator:next -- \
-      --session-root "$E49_SESSION_ROOT" \
-      --project-root "$PROJECT_ROOT" 2>&1)
-    E49_NEXT1_EXIT=$?
-    E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-  done
-
-  if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ]; then
-    E49_DELIBERATION_RESPONSE_PATHS=$(grep 'output_path:' "$E49_SESSION_ROOT/execution-plan.yaml" | sed 's/.*output_path: //' | tr -d '"' | tr -d "'" | grep '/deliberation/round1/')
-    for op in $E49_DELIBERATION_RESPONSE_PATHS; do
-      mkdir -p "$(dirname "$op")"
-      write_e49_mock_lens_deliberation_output "$op"
-    done
-
-    E49_NEXT1_OUT=$(npm run coordinator:next -- \
-      --session-root "$E49_SESSION_ROOT" \
-      --project-root "$PROJECT_ROOT" 2>&1)
-    E49_NEXT1_EXIT=$?
-    E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-    E49_TEAMLEAD_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
-    if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ -n "$E49_TEAMLEAD_OUTPUT" ]; then
-      mkdir -p "$(dirname "$E49_TEAMLEAD_OUTPUT")"
-      write_e49_mock_teamlead_deliberation_output "$E49_TEAMLEAD_OUTPUT"
-      E49_NEXT1_OUT=$(npm run coordinator:next -- \
-        --session-root "$E49_SESSION_ROOT" \
-        --project-root "$PROJECT_ROOT" 2>&1)
-      E49_NEXT1_EXIT=$?
-      E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-    fi
-
-    E49_PROBLEM_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
-    if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_deliberation" ] && [ "$(basename "$E49_PROBLEM_OUTPUT")" = "problem-framing.yaml" ]; then
-      write_e49_mock_issue_artifact_output "$E49_PROBLEM_OUTPUT" "$E49_SESSION_ID" "$E49_PRIMARY_LENS_ID"
-      E49_NEXT1_OUT=$(npm run coordinator:next -- \
-        --session-root "$E49_SESSION_ROOT" \
-        --project-root "$PROJECT_ROOT" 2>&1)
-      E49_NEXT1_EXIT=$?
-      E49_NEXT1_STATE=$(echo "$E49_NEXT1_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-    fi
-  fi
-
-  if [ $E49_NEXT1_EXIT -eq 0 ] && [ "$E49_NEXT1_STATE" = "awaiting_synthesize_dispatch" ]; then
-    # Write mock synthesis output
-    E49_SYNTH_OUTPUT=$(echo "$E49_NEXT1_OUT" | grep '"output_path"' | head -1 | sed 's/.*: "//;s/".*//')
-    if [ -n "$E49_SYNTH_OUTPUT" ]; then
-      mkdir -p "$(dirname "$E49_SYNTH_OUTPUT")"
-      write_e49_mock_synthesis_output "$E49_SYNTH_OUTPUT"
-    fi
-
-    # Step 3: next → completed
-    E49_NEXT2_OUT=$(npm run coordinator:next -- \
-      --session-root "$E49_SESSION_ROOT" \
-      --project-root "$PROJECT_ROOT" 2>&1)
-    E49_NEXT2_EXIT=$?
-    E49_NEXT2_STATE=$(echo "$E49_NEXT2_OUT" | grep '"state"' | head -1 | sed 's/.*: "//;s/".*//')
-
-    if [ $E49_NEXT2_EXIT -eq 0 ] && [ "$E49_NEXT2_STATE" = "completed" ]; then
-      E49_FINAL=$(echo "$E49_NEXT2_OUT" | grep '"final_output_path"' | head -1 | sed 's/.*: "//;s/".*//')
-      if [ -n "$E49_FINAL" ] && [ -f "$E49_FINAL" ]; then
-        echo "  PASS  E49: coordinator-full-cycle (start→lens→synthesize→completed)"
-        PASS_COUNT=$((PASS_COUNT + 1))
-      else
-        echo "  FAIL! E49: coordinator-full-cycle (final_output missing: $E49_FINAL)"
-        UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-      fi
-    else
-      echo "  FAIL! E49: coordinator-full-cycle step3 (exit=$E49_NEXT2_EXIT, state=$E49_NEXT2_STATE)"
-      UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-    fi
-  else
-    echo "  FAIL! E49: coordinator-full-cycle step2 (exit=$E49_NEXT1_EXIT, state=$E49_NEXT1_STATE)"
-    UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-  fi
-else
-  echo "  FAIL! E49: coordinator-full-cycle step1 (exit=$E49_START_EXIT)"
-  UNEXPECTED_COUNT=$((UNEXPECTED_COUNT + 1))
-fi
 
 echo ""
 

@@ -148,7 +148,7 @@ run_self_test() {
     ".onto/domains/software-engineering/concepts.md"
     ".onto/domains/nested/deep/path/file.md"
     ".onto/roles/logic.md"
-    ".onto/processes/review.md"
+    ".onto/processes/review/productized-live-path.md"
     ".onto/principles/ontology-as-code-guideline.md"
     ".onto/authority/core-lexicon.yaml"
   )

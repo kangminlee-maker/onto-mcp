@@ -352,7 +352,7 @@ canonical execution profile은 아래 두 축으로 표현한다.
 기본 매핑은 아래다.
 
 - `codex` host runtime → `worker`
-- `claude` host runtime → `host-team`
+- `api_key` 또는 `local` provider runtime → `direct-call`
 
 하지만 이건 절대 우선순위나 품질 위계가 아니다.
 주체자가 명시적으로 설정하면 그것이 우선한다.
@@ -360,8 +360,7 @@ canonical execution profile은 아래 두 축으로 표현한다.
 즉 현재 채택된 원칙은:
 
 - `codex` 환경에서 `worker`가 기본
-- `claude` 환경에서 `host-team`가 기본
-- `claude` 환경에서도 `worker`를 선택할 수 있음
+- API key / local provider 환경에서 `direct-call`이 기본
 
 이다.
 
@@ -480,7 +479,7 @@ canonical execution profile은 아래 두 축으로 표현한다.
 
 **Reshuffle convention**: 후속 reshuffle이 발생하면 본 §17을 덮어쓰지 말고 새 dated section(`### Reshuffle 2026-MM-DD`)을 append한다. 본 표는 2026-04-06 시점의 결정 기록이며, 시간 순서대로 누적되어야 reshuffle 이력을 잃지 않는다.
 
-**Drift risk 알림**: enhancement tracking seat의 active 경로는 `process.md`가 단일 소유한다. OaC §6.2와 llm-native §10.1은 `process.md`를 가리키는 포인터만 둔다.
+**Drift risk 알림**: enhancement tracking seat의 active 경로는 `development-records/`의 dated plan/handoff 문서가 소유한다. Active runtime contracts에는 현재 실행 규칙만 남긴다.
 
 ### 삭제된 authority 파일
 
@@ -502,7 +501,7 @@ canonical execution profile은 아래 두 축으로 표현한다.
 | 파일 | 역할 |
 |---|---|
 | `.onto/authority/core-lens-registry.yaml` | lens 설정. 런타임 전용 |
-| `.onto/authority/translation-reference.yaml` | legacy/prototype 용어 번역 보조. **NON-AUTHORITATIVE**. canonical SSOT는 `core-lexicon.yaml` |
+| archived legacy translation aid | legacy/prototype 용어 번역 보조. **NON-AUTHORITATIVE**. current runtime authority 아님 |
 
 ### 의도적 de-scope (재배치 아님)
 

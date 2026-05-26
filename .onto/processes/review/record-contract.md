@@ -9,6 +9,7 @@
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
 > - `.onto/processes/review/issue-stance-deliberation-contract.md`
+> - `.onto/processes/review/review-execution-ux-contract.md`
 > - `.onto/processes/review/execution-preparation-artifacts.md`
 > - `.onto/processes/review/record-field-mapping.md`
 > - `.onto/authority/core-lexicon.yaml`
@@ -151,6 +152,7 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 - `core-axis` 모드와 degraded case를 구분할 수 있어야 한다
 - `axiology`는 canonical lens set에 항상 포함되어야 한다
 - degraded case가 발생하면 later audit가 그 원인을 다시 읽을 수 있어야 한다
+- `degradation-summary.yaml`이 degraded/halted 판단의 구조화 source다
 - `error-log.md`가 boundary/conformance state만 담는 경우에는 `degradation_notes_ref`로 간주하지 않는다
 - `lens_output_schema_version`은 lens output의 schema version을 기록한다 (v2부터 적용)
 - `per_lens_provenance`는 각 lens의 `domain_constraints_used`, `domain_context_assumptions`를 보존한다. pre-v2 artifact에서는 해당 필드가 `null`일 수 있다
@@ -187,23 +189,26 @@ degraded_lens_ids: []
 허용되는 `deliberation_status` 값:
 
 - `performed`
+- `not_performed`
 
 원칙:
 
-- `synthesis_result_ref`는 `synthesis.md`를 가리킨다
+- `synthesis_result_ref`는 생성된 `synthesis.md`를 가리킨다. synthesize가 실행되지 않았거나 출력이 생성되지 않은 `halted_partial` review에서는 `null`이다
 - `deliberation_status`는 `execution-result.yaml`의 `deliberation_status`를 따른다
-- `deliberation_result_ref`는 `deliberation.md`를 가리킨다
+- `deliberation_result_ref`는 생성된 `deliberation.md`를 가리킨다. controlled deliberation이 완료되지 않은 `halted_partial` review에서는 `null`이다
 - `deliberation.md`는 completed review에서 필수 artifact다
 - `synthesis.md`는 frontmatter로 `deliberation_status: performed`를 선언해야 한다
+- `halted_partial` review에서 controlled deliberation이 완료되지 않았으면 `deliberation_status: not_performed`를 기록하고, synthesize를 실행하지 않는다
+- controlled deliberation timeout은 unresolved stance continuation으로 승격하지 않는다. `execution-result.yaml`과 `review-run-manifest.yaml`에 halt phase, failed unit id/kind, lens-bound unit의 lens id, failure message를 보존한다
 - `final_output_ref`는 주체자에게 보여주는 rendered output을 가리킨다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
 - `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없으면 (pre-v2 또는 shared phenomenon 미발생) 빈 배열이다
 
-### 4.5.1 Issue-Stance Deliberation Layer Target
+### 4.5.1 Issue-Stance Deliberation Layer
 
-> Status: design target. 구현 시 `.onto/processes/review/issue-stance-deliberation-contract.md`를 따른다.
+> Status: active. 구현은 `.onto/processes/review/issue-stance-deliberation-contract.md`와 `.onto/processes/review/review-execution-ux-contract.md`를 따른다.
 
-Issue-stance deliberation이 구현되면 `ReviewRecord`는 상세 내용을 복붙하지 않고 아래 refs를 추가한다.
+`ReviewRecord`는 상세 내용을 복붙하지 않고 아래 refs와 result classification projection을 추가한다.
 
 - `finding_ledger_ref`
 - `finding_relation_graph_ref`
@@ -212,27 +217,32 @@ Issue-stance deliberation이 구현되면 `ReviewRecord`는 상세 내용을 복
 - `deliberation_plan_ref`
 - `problem_framing_ref`
 - `issue_resolution_summary`
+- `result_classification_summary`
 
 원칙:
 
 - 모든 surface finding과 relation/root-cause 해석은 `finding-ledger.yaml`, `finding-relation-graph.yaml`, `issue-ledger.yaml`에 남긴다.
 - 모든 issue의 상세 stance와 설명은 `issue-stance-matrix.yaml`에 남긴다.
 - 공통 spine, domain profile ref, domain-specific axis 분류는 `problem-framing.yaml`에 남긴다.
-- `ReviewRecord`는 issue별 최종 status, classification, lens 참여 요약만 구조화한다.
-- `deliberation_result_ref`는 계속 `deliberation.md`를 가리킨다.
-- `synthesize_result_ref`는 issue status를 변경한 source가 될 수 없다.
+- `ReviewRecord`는 issue별 최종 status, classification, lens 참여 요약과 result classification summary만 구조화한다.
+- issue-stage artifact ref는 synthesize 실행 여부가 아니라 현재 run에서 해당 파일이 실제 생성되었는지에 따라 기록한다. 생성되지 않은 ref는 `null`이다.
+- `deliberation_result_ref`는 controlled deliberation이 생성한 `deliberation.md`를 가리키며, 생성되지 않았으면 `null`이다.
+- `synthesis_result_ref`는 issue status를 변경한 source가 될 수 없다.
+- `result_classification_summary`는 `finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`, `execution-result.yaml`에서 파생되는 presentation projection이다.
+- `material_issue_count`와 `material_issues`는 별도 materiality 필드가 아니라 severity에서 파생한다. `blocker`, `high`, `medium`은 material issue이고 `low`, `info`는 non-material finding이다.
+- action candidates는 severity 자체가 아니라 `problem-framing.yaml`의 timing/closure/judgment fields와 runtime halt state에서 파생한다.
 
-### 4.6 Internal Body vs Principal Summary 경계 (Cross-reference)
+### 4.6 Internal Body vs Final Review Summary 경계 (Cross-reference)
 
 > **Status**: contract-level 선언. 구현 deferred.
 
-ReviewRecord 는 **Internal Body** 만 source 로 본다 — lens output 과 synthesis output 의 canonical English 섹션들이 ReviewRecord 의 lens_results + synthesis 필드를 구성한다. **Principal Summary** (lens/synthesize output 의 선택적 신설 섹션, `output_language` 번역 target) 는 ReviewRecord 에 저장되지 않음 — runtime-derived (필요 시 render seat 을 통해 재생성).
+ReviewRecord 는 **Internal Body** 만 source 로 본다 — lens output 과 synthesis output 의 canonical English 섹션들이 ReviewRecord 의 lens_results + synthesis 필드를 구성한다. **Final Review Summary** 는 ReviewRecord 이후 final output stage에서 생성되며 ReviewRecord 에 저장되지 않는다.
 
 본 경계의 canonical 정의:
-- lens 쪽: `.onto/processes/review/lens-prompt-contract.md §8.5 Internal Body vs Principal Summary (Output Structural Split)`
-- synthesize 쪽: `.onto/processes/review/synthesize-prompt-contract.md §5.2.1 Internal Body vs Principal Summary (Output Structural Split)`
+- lens 쪽: `.onto/processes/review/lens-prompt-contract.md §8.5 Internal Body vs Final Review Summary (Output Structural Split)`
+- synthesize 쪽: `.onto/processes/review/synthesize-prompt-contract.md §5.2.1 Internal Body vs Final Review Summary (Output Structural Split)`
 
-ReviewRecord 는 두 계약의 "Internal Body = canonical source" 입장을 따른다. Principal Summary 를 ReviewRecord 에 별도 저장할 필요가 없으므로 schema 확장 불필요. 향후 runtime-coordinator 가 has_principal_summary 같은 힌트 필드를 요구하면 optional 로 추가 가능 (현재는 deferred).
+ReviewRecord 는 두 계약의 "Internal Body = canonical source" 입장을 따른다. Final Review Summary 를 ReviewRecord 에 별도 저장하지 않는다.
 
 ---
 
@@ -246,7 +256,7 @@ record_status: completed
 created_at: 2026-04-04T15:20:00+09:00
 updated_at: 2026-04-04T15:28:00+09:00
 
-request_text: "process.md의 review productization 설계를 검토해줘"
+request_text: "onto-mcp review runtime 구현을 검토해줘"
 review_target_scope_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 interpretation_ref: .onto/review/20260404-a1b2c3d4/interpretation.yaml
 binding_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
@@ -308,6 +318,54 @@ per_lens_provenance:
   axiology:
     domain_constraints_used: []
     domain_context_assumptions: []
+
+finding_ledger_ref: .onto/review/20260404-a1b2c3d4/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260404-a1b2c3d4/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260404-a1b2c3d4/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260404-a1b2c3d4/issue-stance-matrix.yaml
+deliberation_plan_ref: .onto/review/20260404-a1b2c3d4/deliberation-plan.yaml
+problem_framing_ref: .onto/review/20260404-a1b2c3d4/problem-framing.yaml
+issue_resolution_summary:
+  - issue_id: issue-001
+    problem_definition: "Root-level problem definition"
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "Why the classification is appropriate"
+    related_surface_finding_ids: [finding-001]
+result_classification_summary:
+  highest_severity: high
+  finding_count: 1
+  issue_count: 1
+  severity_counts:
+    blocker: 0
+    high: 1
+    medium: 0
+    low: 0
+    info: 0
+  material_issue_count: 1
+  non_material_finding_count: 0
+  material_issues:
+    - issue_id: issue-001
+      severity: high
+      material: true
+      affected_purpose: "Declared review purpose affected by issue-001"
+      failure_condition: "Supported condition where the purpose cannot be trusted"
+      impact: "Why trust is materially weakened"
+      evidence_refs: [round1/logic.md#finding-1]
+      source_lens_ids: [logic]
+      action_candidates: [fix_before_release]
+      rationale: "Derived from problem-framing timing/closure fields"
+  non_material_findings: []
+  action_candidates:
+    - issue_id: issue-001
+      candidates: [fix_before_release]
+      derivation_refs: [issue-ledger.yaml, problem-framing.yaml]
+      rationale: "Derived from problem-framing timing/closure fields"
 synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis.md
 deliberation_status: performed
 deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation.md
@@ -366,6 +424,4 @@ npm run review:assemble-record -- \
 
 다음 단계는 아래다.
 
-1. degraded case source를 `error-log.md` 외의 structured artifact로 더 명확히 분리한다
-2. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
-3. host command path와 MCP path가 같은 `ReviewRecord` validation을 공유하게 한다
+1. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다

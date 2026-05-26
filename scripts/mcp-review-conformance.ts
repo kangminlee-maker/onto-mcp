@@ -12,6 +12,12 @@ interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
+interface JsonRpcNotification {
+  jsonrpc: "2.0";
+  method: string;
+  params?: unknown;
+}
+
 interface ReviewRunStructured {
   sessionId: string;
   sessionRoot: string;
@@ -25,6 +31,7 @@ interface ReviewRunStructured {
   degradedLensIds: string[];
   summary?: unknown;
   artifactRefs?: Record<string, string>;
+  resultClassificationSummary?: unknown;
   routeVisibility?: {
     source?: unknown;
     executionRealization?: unknown;
@@ -36,6 +43,8 @@ interface ReviewRunStructured {
   };
   llmPresentation?: {
     openingBrief?: { prompt?: unknown; input?: unknown };
+    progress?: { prompt?: unknown; input?: unknown };
+    halt?: { prompt?: unknown; input?: unknown };
     finalResult?: { prompt?: unknown; input?: unknown };
   };
 }
@@ -46,9 +55,12 @@ interface ToolCallResult {
   structuredContent?: unknown;
 }
 
+type McpProgressToken = string | number;
+
 class McpClient {
   private nextId = 1;
   private buffer = Buffer.alloc(0);
+  readonly notifications: JsonRpcNotification[] = [];
   private pending = new Map<number, {
     resolve: (value: JsonRpcResponse) => void;
     reject: (error: Error) => void;
@@ -98,11 +110,19 @@ class McpClient {
         .subarray(headerEnd.index + headerEnd.length, totalLength)
         .toString("utf8");
       this.buffer = this.buffer.subarray(totalLength);
-      const response = JSON.parse(body) as JsonRpcResponse;
+      const response = JSON.parse(body) as JsonRpcResponse | JsonRpcNotification;
+      if (
+        !("id" in response) &&
+        "method" in response &&
+        typeof response.method === "string"
+      ) {
+        this.notifications.push(response);
+        continue;
+      }
       const waiter = this.pending.get(response.id);
       if (!waiter) continue;
       this.pending.delete(response.id);
-      waiter.resolve(response);
+      waiter.resolve(response as JsonRpcResponse);
     }
   }
 
@@ -165,7 +185,12 @@ function requireToolError(value: unknown): ToolCallResult {
 }
 
 function requireStructuredFailure(value: unknown): {
-  failure: { mcp_error_code?: unknown; details_kind?: unknown; dispatch_state?: unknown };
+  failure: {
+    mcp_error_code?: unknown;
+    details_kind?: unknown;
+    dispatch_state?: unknown;
+    artifact_refs?: Record<string, unknown>;
+  };
   routeVisibility?: {
     source?: unknown;
     executionRealization?: unknown;
@@ -175,7 +200,12 @@ function requireStructuredFailure(value: unknown): {
 } {
   assert(value !== null && typeof value === "object", "structured failure content must be an object.");
   const structured = value as {
-    failure?: { mcp_error_code?: unknown; details_kind?: unknown; dispatch_state?: unknown };
+    failure?: {
+      mcp_error_code?: unknown;
+      details_kind?: unknown;
+      dispatch_state?: unknown;
+      artifact_refs?: Record<string, unknown>;
+    };
     routeVisibility?: {
       source?: unknown;
       executionRealization?: unknown;
@@ -185,7 +215,12 @@ function requireStructuredFailure(value: unknown): {
   };
   assert(structured.failure !== undefined, "structuredContent.failure missing.");
   return structured as {
-    failure: { mcp_error_code?: unknown; details_kind?: unknown; dispatch_state?: unknown };
+    failure: {
+      mcp_error_code?: unknown;
+      details_kind?: unknown;
+      dispatch_state?: unknown;
+      artifact_refs?: Record<string, unknown>;
+    };
     routeVisibility?: {
       source?: unknown;
       executionRealization?: unknown;
@@ -219,6 +254,280 @@ function assertCompletedRouteVisibility(
   );
 }
 
+function assertProgressPresentation(
+  presentation: ReviewRunStructured["llmPresentation"],
+  label: string,
+  expectedStatus?: string,
+): void {
+  const progress = presentation?.progress;
+  assert(typeof progress?.prompt === "string", `${label} progress prompt missing.`);
+  assert(progress.input !== undefined, `${label} progress input missing.`);
+  assert(
+    progress.input !== null && typeof progress.input === "object",
+    `${label} progress input must be an object.`,
+  );
+  const input = progress.input as {
+    presentation_contract_version?: unknown;
+    presentation_kind?: unknown;
+    status?: unknown;
+    progress?: unknown;
+    liveness?: unknown;
+    generated_from_artifact_refs?: unknown;
+    result_classification_summary?: unknown;
+  };
+  assert(
+    input.presentation_contract_version === "1" &&
+      input.presentation_kind === "progress",
+    `${label} progress input must expose versioned presentation envelope.`,
+  );
+  if (expectedStatus) {
+    assert(input.status === expectedStatus, `${label} progress status mismatch.`);
+  }
+  assert(
+    input.progress !== null && typeof input.progress === "object",
+    `${label} progress state missing.`,
+  );
+  assertLivenessState(input.liveness, `${label} liveness state`);
+  assert(
+    input.generated_from_artifact_refs !== null &&
+      typeof input.generated_from_artifact_refs === "object",
+    `${label} generated artifact refs missing.`,
+  );
+  assertClassificationSummary(
+    input.result_classification_summary,
+    `${label} progress result classification summary`,
+  );
+}
+
+function assertLivenessState(value: unknown, label: string): void {
+  assert(value !== null && typeof value === "object", `${label} missing.`);
+  const liveness = value as {
+    generated_at?: unknown;
+    poll_after_seconds?: unknown;
+    state?: unknown;
+    last_observed_artifact_key?: unknown;
+    last_observed_artifact_ref?: unknown;
+    last_observed_artifact_mtime?: unknown;
+    seconds_since_last_observed_artifact?: unknown;
+    summary?: unknown;
+  };
+  assert(typeof liveness.generated_at === "string", `${label} generated_at missing.`);
+  assert(typeof liveness.state === "string", `${label} state missing.`);
+  assert(
+    liveness.poll_after_seconds === null ||
+      typeof liveness.poll_after_seconds === "number",
+    `${label} poll_after_seconds invalid.`,
+  );
+  assert(
+    liveness.last_observed_artifact_key === null ||
+      typeof liveness.last_observed_artifact_key === "string",
+    `${label} last_observed_artifact_key invalid.`,
+  );
+  assert(
+    liveness.last_observed_artifact_ref === null ||
+      typeof liveness.last_observed_artifact_ref === "string",
+    `${label} last_observed_artifact_ref invalid.`,
+  );
+  assert(
+    liveness.last_observed_artifact_mtime === null ||
+      typeof liveness.last_observed_artifact_mtime === "string",
+    `${label} last_observed_artifact_mtime invalid.`,
+  );
+  assert(
+    liveness.seconds_since_last_observed_artifact === null ||
+      typeof liveness.seconds_since_last_observed_artifact === "number",
+    `${label} seconds_since_last_observed_artifact invalid.`,
+  );
+  assert(typeof liveness.summary === "string", `${label} summary missing.`);
+}
+
+function assertClassificationSummary(value: unknown, label: string): void {
+  assert(value !== null && typeof value === "object", `${label} missing.`);
+  const summary = value as {
+    highest_severity?: unknown;
+    severity_counts?: unknown;
+    material_issue_count?: unknown;
+    non_material_finding_count?: unknown;
+    material_issues?: unknown;
+    non_material_findings?: unknown;
+    action_candidates?: unknown;
+  };
+  assert(
+    summary.highest_severity === null || typeof summary.highest_severity === "string",
+    `${label} highest_severity invalid.`,
+  );
+  assert(
+    summary.severity_counts !== null && typeof summary.severity_counts === "object",
+    `${label} severity_counts missing.`,
+  );
+  assert(
+    typeof summary.material_issue_count === "number" &&
+      typeof summary.non_material_finding_count === "number",
+    `${label} material/non-material counts missing.`,
+  );
+  assert(Array.isArray(summary.material_issues), `${label} material_issues missing.`);
+  assert(Array.isArray(summary.non_material_findings), `${label} non_material_findings missing.`);
+  assert(Array.isArray(summary.action_candidates), `${label} action_candidates missing.`);
+}
+
+function assertProgressNotifications(
+  notifications: JsonRpcNotification[],
+  progressToken: McpProgressToken,
+): JsonRpcNotification[] {
+  const progressNotifications = notifications.filter((notification) => {
+    if (notification.method !== "notifications/progress") return false;
+    const params = notification.params as { progressToken?: unknown } | undefined;
+    return params?.progressToken === progressToken;
+  });
+  assert(
+    progressNotifications.length > 0,
+    "onto.review must emit notifications/progress when _meta.progressToken is supplied.",
+  );
+  const stages = new Set<string>();
+  let previousSequence = -1;
+  for (const [index, notification] of progressNotifications.entries()) {
+    const params = notification.params as {
+      progressToken?: unknown;
+      progress?: unknown;
+      total?: unknown;
+      message?: unknown;
+      _meta?: {
+        ontoReviewProgress?: {
+          presentation_contract_version?: unknown;
+          event_kind?: unknown;
+          sequence?: unknown;
+          generated_at?: unknown;
+          source?: unknown;
+          stage?: unknown;
+          session_root?: unknown;
+          message?: unknown;
+          progress?: {
+            current?: unknown;
+            total?: unknown;
+            exact_step?: unknown;
+            exact_total?: unknown;
+            label?: unknown;
+          };
+        };
+      };
+    };
+    assert(
+      params.progressToken === progressToken,
+      `progress notification ${index} must preserve the requested progress token.`,
+    );
+    assert(
+      typeof params.progress === "number" &&
+        typeof params.total === "number" &&
+        params.total > 0 &&
+        params.progress >= 0 &&
+        params.progress <= params.total,
+      `progress notification ${index} progress/total invalid.`,
+    );
+    assert(
+      typeof params.message === "string" && params.message.length > 0,
+      `progress notification ${index} message missing.`,
+    );
+    const structured = params._meta?.ontoReviewProgress;
+    assert(
+      structured?.presentation_contract_version === "1" &&
+        structured.event_kind === "mcp_progress" &&
+        typeof structured.sequence === "number" &&
+        typeof structured.generated_at === "string" &&
+        typeof structured.source === "string" &&
+        typeof structured.stage === "string" &&
+        (structured.session_root === null || typeof structured.session_root === "string") &&
+        structured.progress !== null &&
+        typeof structured.progress === "object",
+      `progress notification ${index} must carry versioned ontoReviewProgress metadata.`,
+    );
+    assert(
+      structured.sequence > previousSequence,
+      `progress notification ${index} sequence must be strictly increasing.`,
+    );
+    previousSequence = structured.sequence;
+    stages.add(structured.stage);
+    assert(
+      structured.progress.current === params.progress &&
+        structured.progress.total === params.total,
+      `progress notification ${index} top-level progress must match metadata progress.`,
+    );
+  }
+  assert(stages.has("session_planned"), "progress notifications must include session_planned.");
+  assert(stages.has("runtime_step"), "progress notifications must include runtime_step.");
+  assert(stages.has("final_status"), "progress notifications must include final_status.");
+  const finalParams = progressNotifications.at(-1)?.params as {
+    progress?: unknown;
+    total?: unknown;
+    _meta?: {
+      ontoReviewProgress?: {
+        stage?: unknown;
+        session_root?: unknown;
+      };
+    };
+  };
+  assert(
+    finalParams._meta?.ontoReviewProgress?.stage === "final_status" &&
+      typeof finalParams._meta.ontoReviewProgress.session_root === "string" &&
+      finalParams.progress === 100 &&
+      finalParams.total === 100,
+    "final progress notification must close with final_status and full progress.",
+  );
+  return progressNotifications;
+}
+
+function assertNoProgressNotifications(
+  notifications: JsonRpcNotification[],
+  label: string,
+): void {
+  assert(
+    !notifications.some((notification) => notification.method === "notifications/progress"),
+    `${label} must not emit notifications/progress.`,
+  );
+}
+
+function assertProgressNotificationsMatchReview(
+  progressNotifications: JsonRpcNotification[],
+  review: ReviewRunStructured,
+  status: {
+    sessionRoot?: unknown;
+    status?: unknown;
+    llmPresentation?: ReviewRunStructured["llmPresentation"];
+  },
+): void {
+  const finalParams = progressNotifications.at(-1)?.params as {
+    message?: unknown;
+    _meta?: {
+      ontoReviewProgress?: {
+        session_root?: unknown;
+      };
+    };
+  };
+  const finalSessionRoot = finalParams._meta?.ontoReviewProgress?.session_root;
+  assert(
+    typeof finalSessionRoot === "string" &&
+      path.resolve(finalSessionRoot) === path.resolve(review.sessionRoot),
+    "final progress notification session_root must match the review result.",
+  );
+  assert(
+    status.status === review.status &&
+      typeof status.sessionRoot === "string" &&
+      path.resolve(status.sessionRoot) === path.resolve(review.sessionRoot),
+    "polling review_status must agree with the completed progress notification.",
+  );
+  const progressInput = status.llmPresentation?.progress?.input as
+    | { status?: unknown }
+    | undefined;
+  assert(
+    progressInput?.status === review.status,
+    "polling progress presentation status must agree with the completed review result.",
+  );
+  assert(
+    typeof finalParams.message === "string" &&
+      finalParams.message.includes(review.status),
+    "final progress notification message must include the terminal review status.",
+  );
+}
+
 function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(value !== null && typeof value === "object", "structuredContent must be an object.");
   const result = value as Partial<ReviewRunStructured>;
@@ -232,10 +541,15 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(Array.isArray(result.participatingLensIds), "participatingLensIds missing.");
   assert(Array.isArray(result.degradedLensIds), "degradedLensIds missing.");
   assert(result.summary !== undefined, "summary missing.");
+  assertClassificationSummary(
+    result.resultClassificationSummary,
+    "structuredContent resultClassificationSummary",
+  );
   const presentation = result.llmPresentation;
   assert(presentation !== undefined, "llmPresentation missing.");
   assertCompletedRouteVisibility(result.routeVisibility, "onto.review");
   const openingBrief = presentation.openingBrief;
+  assertProgressPresentation(presentation, "llmPresentation", "completed");
   const finalResult = presentation.finalResult;
   assert(
     typeof openingBrief?.prompt === "string",
@@ -253,6 +567,18 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
     finalResult.input !== undefined,
     "llmPresentation.finalResult.input missing.",
   );
+  assert(
+    finalResult.input !== null &&
+      typeof finalResult.input === "object" &&
+      (finalResult.input as { presentation_contract_version?: unknown })
+        .presentation_contract_version === "1",
+    "llmPresentation.finalResult.input must expose presentation_contract_version.",
+  );
+  assertClassificationSummary(
+    (finalResult.input as { result_classification_summary?: unknown })
+      .result_classification_summary,
+    "llmPresentation.finalResult result classification summary",
+  );
   return result as ReviewRunStructured;
 }
 
@@ -260,8 +586,30 @@ function requirePreparedReviewStructured(value: unknown): {
   sessionRoot: string;
 } {
   assert(value !== null && typeof value === "object", "prepared structuredContent must be an object.");
-  const result = value as { sessionRoot?: unknown };
+  const result = value as {
+    sessionRoot?: unknown;
+    llmPresentation?: ReviewRunStructured["llmPresentation"];
+  };
   assert(typeof result.sessionRoot === "string", "prepared sessionRoot missing.");
+  const openingBrief = result.llmPresentation?.openingBrief;
+  assert(
+    typeof openingBrief?.prompt === "string" &&
+      openingBrief.input !== undefined,
+    "prepared review must expose llmPresentation.openingBrief.",
+  );
+  assert(
+    openingBrief.input !== null &&
+      typeof openingBrief.input === "object" &&
+      (openingBrief.input as {
+        presentation_contract_version?: unknown;
+        presentation_kind?: unknown;
+      }).presentation_contract_version === "1" &&
+      (openingBrief.input as {
+        presentation_contract_version?: unknown;
+        presentation_kind?: unknown;
+      }).presentation_kind === "opening_brief",
+    "prepared opening brief must expose versioned presentation envelope.",
+  );
   return { sessionRoot: result.sessionRoot };
 }
 
@@ -347,8 +695,10 @@ async function main(): Promise<void> {
       "onto.review schema must expose explicit target contract fields.",
     );
 
+    const reviewProgressToken = "onto-review-conformance-progress";
     const callResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.review",
+      _meta: { progressToken: reviewProgressToken },
       arguments: {
         projectRoot,
         target: "package.json",
@@ -359,6 +709,10 @@ async function main(): Promise<void> {
         executorRealization: "mock",
       },
     }), "tools/call onto.review"));
+    const progressNotifications = assertProgressNotifications(
+      client.notifications,
+      reviewProgressToken,
+    );
     const structured = requireReviewRunStructured(callResult.structuredContent);
 
     await assertFile(structured.finalOutputPath, "final output");
@@ -369,6 +723,35 @@ async function main(): Promise<void> {
     assert(
       typeof reviewTargetProfilePath === "string",
       "onto.review structured artifact refs must include review_target_profile.",
+    );
+
+    const numericProgressToken = 42;
+    const beforeNumericProgress = client.notifications.length;
+    const numericTokenCallResult = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto.review",
+      _meta: { progressToken: numericProgressToken },
+      arguments: {
+        projectRoot,
+        target: "package.json",
+        intent: "MCP conformance numeric progress token",
+        noDomain: true,
+        reviewMode: "core-axis",
+        lensIds: ["logic"],
+        deliberation: "controlled_lens_deliberation",
+        executorRealization: "mock",
+      },
+    }), "tools/call onto.review numeric progress token"));
+    assertProgressNotifications(
+      client.notifications.slice(beforeNumericProgress),
+      numericProgressToken,
+    );
+    const numericTokenStructured = requireReviewRunStructured(
+      numericTokenCallResult.structuredContent,
+    );
+    assert(
+      numericTokenStructured.participatingLensIds.length === 1 &&
+        numericTokenStructured.participatingLensIds[0] === "logic",
+      "numeric progress token review must still complete the requested single lens.",
     );
 
     const sessionRoot = path.resolve(structured.sessionRoot);
@@ -411,6 +794,8 @@ async function main(): Promise<void> {
           reviewRunManifestPath?: unknown;
           reviewRecord?: unknown;
           finalOutputText?: unknown;
+          resultClassificationSummary?: unknown;
+          llmPresentation?: ReviewRunStructured["llmPresentation"];
           routeVisibility?: ReviewRunStructured["routeVisibility"];
         }
       | undefined;
@@ -427,6 +812,14 @@ async function main(): Promise<void> {
     assert(
       typeof reviewResultStructured.finalOutputText === "string",
       "onto.review_result must expose finalOutputText.",
+    );
+    assertClassificationSummary(
+      reviewResultStructured.resultClassificationSummary,
+      "onto.review_result resultClassificationSummary",
+    );
+    assert(
+      typeof reviewResultStructured.llmPresentation?.finalResult?.prompt === "string",
+      "onto.review_result must expose llmPresentation.finalResult.",
     );
     assertCompletedRouteVisibility(
       reviewResultStructured.routeVisibility,
@@ -525,6 +918,24 @@ async function main(): Promise<void> {
     assert(
       reviewRunManifest.review_execution_profile?.runtime_route?.host_runtime === "standalone",
       "review-run-manifest must record standalone host runtime for mock execution.",
+    );
+    assert(
+      reviewRunManifest.review_execution_profile?.runtime_route?.runtime_provider === "mock" &&
+        reviewRunManifest.review_execution_profile.runtime_route.auth_mode === null,
+      "review-run-manifest must record mock runtime provider and null auth mode.",
+    );
+    assert(
+      structured.routeVisibility?.executionRealization ===
+        reviewRunManifest.review_execution_profile?.runtime_route?.execution_realization &&
+        structured.routeVisibility.hostRuntime ===
+          reviewRunManifest.review_execution_profile.runtime_route.host_runtime &&
+        structured.routeVisibility.workerExecutor ===
+          reviewRunManifest.review_execution_profile.runtime_route.worker_executor &&
+        structured.routeVisibility.runtimeProvider ===
+          reviewRunManifest.review_execution_profile.runtime_route.runtime_provider &&
+        structured.routeVisibility.authMode ===
+          reviewRunManifest.review_execution_profile.runtime_route.auth_mode,
+      "MCP routeVisibility must match review-run-manifest runtime_route.",
     );
     assert(
       reviewRunManifest.review_execution_profile?.deliberation === "controlled-lens-deliberation",
@@ -732,6 +1143,7 @@ async function main(): Promise<void> {
       "synthesis.md frontmatter must declare performed.",
     );
 
+    const beforeNoTokenProgress = client.notifications.length;
     const singleLensCallResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.review",
       arguments: {
@@ -744,6 +1156,10 @@ async function main(): Promise<void> {
         executorRealization: "mock",
       },
     }), "tools/call onto.review single lens"));
+    assertNoProgressNotifications(
+      client.notifications.slice(beforeNoTokenProgress),
+      "onto.review without _meta.progressToken",
+    );
     const singleLensStructured = requireReviewRunStructured(
       singleLensCallResult.structuredContent,
     );
@@ -1016,8 +1432,10 @@ async function main(): Promise<void> {
       "utf8",
     );
     try {
+      const beforeInvalidTokenProgress = client.notifications.length;
       const retiredConfigError = requireToolError(requireResult(await client.request("tools/call", {
         name: "onto.review",
+        _meta: { progressToken: { invalid: true } },
         arguments: {
           projectRoot: retiredProjectRoot,
           target: "target.txt",
@@ -1027,6 +1445,10 @@ async function main(): Promise<void> {
           executorRealization: "mock",
         },
       }), "tools/call onto.review retired config"));
+      assertNoProgressNotifications(
+        client.notifications.slice(beforeInvalidTokenProgress),
+        "onto.review with invalid _meta.progressToken",
+      );
       const structuredFailure = requireStructuredFailure(
         retiredConfigError.structuredContent,
       );
@@ -1106,6 +1528,7 @@ async function main(): Promise<void> {
           sessionRoot?: unknown;
           status?: unknown;
           routeVisibility?: ReviewRunStructured["routeVisibility"];
+          llmPresentation?: ReviewRunStructured["llmPresentation"];
         }
       | undefined;
     assert(
@@ -1120,6 +1543,16 @@ async function main(): Promise<void> {
     assertCompletedRouteVisibility(
       relativeStatus.routeVisibility,
       "onto.review_status",
+    );
+    assertProgressPresentation(
+      relativeStatus.llmPresentation,
+      "onto.review_status",
+      "completed",
+    );
+    assertProgressNotificationsMatchReview(
+      progressNotifications,
+      structured,
+      relativeStatus,
     );
 
     const blockedSessionRead = requireToolError(requireResult(await client.request("tools/call", {
@@ -1190,11 +1623,45 @@ async function main(): Promise<void> {
         "malformed output dispatch_state must be dispatched.",
       );
       assert(
-        malformedFailure.routeVisibility?.source === "execution-plan" &&
+        malformedFailure.routeVisibility?.source === "review-run-manifest" &&
           malformedFailure.routeVisibility.executionRealization === "direct-call" &&
           malformedFailure.routeVisibility.hostRuntime === "standalone" &&
           malformedFailure.routeVisibility.workerExecutor === "mock",
-        "malformed output failure must expose execution-plan routeVisibility.",
+        "malformed output failure must expose review-run-manifest routeVisibility.",
+      );
+      const malformedExecutionPlan =
+        malformedFailure.failure.artifact_refs?.execution_plan;
+      assert(
+        typeof malformedExecutionPlan === "string",
+        "malformed output failure must expose execution_plan ref.",
+      );
+      const malformedSessionRoot = path.dirname(malformedExecutionPlan);
+      const malformedStatusResult = requireToolResult(requireResult(await malformedClient.request("tools/call", {
+        name: "onto.review_status",
+        arguments: {
+          sessionRoot: malformedSessionRoot,
+          projectRoot,
+        },
+      }), "tools/call onto.review_status malformed halted session"));
+      const malformedStatus = malformedStatusResult.structuredContent as
+        | {
+            status?: unknown;
+            llmPresentation?: ReviewRunStructured["llmPresentation"];
+          }
+        | undefined;
+      assert(
+        malformedStatus?.status === "halted_partial",
+        "malformed halted session must report halted_partial status.",
+      );
+      assertProgressPresentation(
+        malformedStatus.llmPresentation,
+        "malformed onto.review_status",
+        "halted_partial",
+      );
+      assert(
+        typeof malformedStatus.llmPresentation?.halt?.prompt === "string" &&
+          malformedStatus.llmPresentation.halt.input !== undefined,
+        "malformed halted session must expose llmPresentation.halt.",
       );
     } finally {
       malformedChild.stdin.end();

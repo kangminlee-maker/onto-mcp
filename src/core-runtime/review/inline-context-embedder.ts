@@ -9,8 +9,6 @@
  *
  * Phase 2 scope: domain documents only. The packet typically references:
  * - `~/.onto/domains/{domain}/{file}.md`
- * - `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}/.onto/processes/...`
- * - `~/.onto/learnings/...` (already inline; not re-embedded)
  *
  * Materialized input (target content) is already inlined in the packet
  * itself by `materialize-review-prompt-packets.ts` — no re-processing.
@@ -52,9 +50,9 @@
  *
  * # Failure modes
  *
- * - Path expansion fails (env var unset, file missing): leaves the original
- *   reference unchanged + appends a `<!-- inline-embed: not-found -->` comment
- * - File too large after truncation: uses truncated content + warning comment
+ * - Missing referenced file: throws before dispatch so direct-call review does
+ *   not reason over an incomplete packet.
+ * - File too large after truncation: uses truncated content + warning marker.
  *
  * The executor proceeds either way — embedding is best-effort. The LLM's
  * "insufficient content within boundary" rule (see executor system prompt)
@@ -81,8 +79,7 @@ const DEFAULT_MAX_EMBED_LINES = 500;
  * Matches markdown bullet lines that look like:
  *   - Primary: <path>.md
  *   - Supplementary: <path>.md
- * where <path> may contain `~/`, `${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}`,
- * or absolute paths. The match is intentionally narrow to avoid embedding
+ * where <path> may contain `~/` or absolute paths. The match is intentionally narrow to avoid embedding
  * arbitrary paths mentioned elsewhere in the packet.
  */
 export function embedInlineContext(
@@ -98,12 +95,11 @@ export function embedInlineContext(
   let modified = false;
   const result = packetText.replace(refLineRegex, (_match, prefix, refPath) => {
     const resolved = expandPath(refPath, options);
-    if (!resolved) {
-      return `${prefix}${refPath}\n  <!-- inline-embed: path-expansion-failed -->`;
-    }
     const content = readFileSafe(resolved, maxLines);
     if (!content) {
-      return `${prefix}${refPath}\n  <!-- inline-embed: not-found (resolved=${resolved}) -->`;
+      throw new Error(
+        `Inline context reference does not exist or is unreadable: ref=${refPath}, resolved=${resolved}`,
+      );
     }
     modified = true;
     const filename = path.basename(resolved);
@@ -123,17 +119,8 @@ export function embedInlineContext(
   ].join("\n");
 }
 
-function expandPath(refPath: string, options: EmbedderOptions): string | null {
+function expandPath(refPath: string, options: EmbedderOptions): string {
   let p = refPath.trim();
-
-  // Expand ${ONTO_PLUGIN_DIR:-~/.claude/plugins/onto}
-  p = p.replace(
-    /\$\{ONTO_PLUGIN_DIR:-([^}]+)\}/g,
-    (_match, defaultPath) => {
-      const env = process.env.ONTO_PLUGIN_DIR;
-      return typeof env === "string" && env.length > 0 ? env : defaultPath;
-    },
-  );
 
   // Expand ~ to home dir
   if (p.startsWith("~/")) {

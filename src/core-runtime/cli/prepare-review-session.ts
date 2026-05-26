@@ -23,10 +23,7 @@ import {
   writeInvocationInterpretationArtifact,
 } from "../review/materializers.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
-import {
-  detectClaudeCodeEnvSignal,
-  detectCodexEnvSignal,
-} from "../discovery/host-detection.js";
+import { detectCodexEnvSignal } from "../discovery/host-detection.js";
 import { resolveOntoHome } from "../discovery/onto-home.js";
 import { resolveSettingsChain } from "../discovery/settings-chain.js";
 
@@ -61,7 +58,7 @@ function requireReviewMode(value: string): ReviewMode {
 function requireExecutionRealization(
   value: string,
 ): ReviewExecutionRealization {
-  if (value === "worker" || value === "host-team" || value === "direct-call") {
+  if (value === "worker" || value === "direct-call") {
     return value;
   }
   throw new Error(`Invalid execution realization: ${value}`);
@@ -73,7 +70,7 @@ function normalizeHostRuntime(
   if (typeof hostRuntimeValue !== "string" || hostRuntimeValue.length === 0) {
     return undefined;
   }
-  if (hostRuntimeValue === "codex" || hostRuntimeValue === "claude") {
+  if (hostRuntimeValue === "codex") {
     return hostRuntimeValue;
   }
   if (
@@ -95,9 +92,6 @@ function detectHostRuntimeFromEnvironment(): ReviewHostRuntime | undefined {
   if (detectCodexEnvSignal()) {
     return "codex";
   }
-  if (detectClaudeCodeEnvSignal()) {
-    return "claude";
-  }
   return undefined;
 }
 
@@ -113,17 +107,12 @@ function resolveHostRuntime(
   if (hasOptionFlag(argv, "codex")) {
     return "codex";
   }
-  if (hasOptionFlag(argv, "claude")) {
-    return "claude";
-  }
-
   const normalizedExecutionRealization =
     typeof executionRealizationValue === "string" && executionRealizationValue.length > 0
       ? requireExecutionRealization(executionRealizationValue)
       : undefined;
   if (normalizedExecutionRealization) {
     if (normalizedExecutionRealization === "worker") return "codex";
-    if (normalizedExecutionRealization === "host-team") return "claude";
     return "standalone";
   }
 
@@ -144,11 +133,7 @@ function resolveExecutionRealization(
   if (hasOptionFlag(argv, "codex")) {
     return "worker";
   }
-  if (hasOptionFlag(argv, "claude")) {
-    return "host-team";
-  }
   if (hostRuntime === "codex") return "worker";
-  if (hostRuntime === "claude") return "host-team";
   return "direct-call";
 }
 
@@ -187,7 +172,6 @@ export async function runPrepareReviewSessionCli(
     options: {
       "project-root": { type: "string", default: "." },
       "onto-home": { type: "string" },
-      "plugin-root": { type: "string" },
       "session-id": { type: "string" },
       "requested-target": { type: "string" },
       "requested-domain-token": { type: "string", default: "" },
@@ -211,11 +195,7 @@ export async function runPrepareReviewSessionCli(
       "execution-realization": { type: "string" },
       "execution-mode": { type: "string" },
       "host-runtime": { type: "string" },
-      "runtime-provider": { type: "string" },
-      "auth-mode": { type: "string" },
-      "effective-worker-executor": { type: "string" },
       codex: { type: "boolean", default: false },
-      claude: { type: "boolean", default: false },
       "review-mode": { type: "string" },
       "lens-id": { type: "string", multiple: true, default: [] },
       "binding-note": { type: "string", multiple: true, default: [] },
@@ -230,7 +210,6 @@ export async function runPrepareReviewSessionCli(
       "materialized-ref": { type: "string", multiple: true, default: [] },
       "system-purpose-ref": { type: "string", multiple: true, default: [] },
       "domain-context-ref": { type: "string", multiple: true, default: [] },
-      "learning-context-ref": { type: "string", multiple: true, default: [] },
       "role-definition-ref": { type: "string", multiple: true, default: [] },
       "execution-rule-ref": { type: "string", multiple: true, default: [] },
       "excluded-name": { type: "string", multiple: true, default: [] },
@@ -286,17 +265,6 @@ export async function runPrepareReviewSessionCli(
     ),
     executionRealization,
     hostRuntime,
-    ...(typeof values["runtime-provider"] === "string" &&
-    values["runtime-provider"].length > 0
-      ? { runtimeProvider: values["runtime-provider"] }
-      : {}),
-    ...(typeof values["auth-mode"] === "string" && values["auth-mode"].length > 0
-      ? { authMode: values["auth-mode"] === "none" ? null : values["auth-mode"] }
-      : {}),
-    ...(typeof values["effective-worker-executor"] === "string" &&
-    values["effective-worker-executor"].length > 0
-      ? { effectiveWorkerExecutor: values["effective-worker-executor"] }
-      : {}),
     reviewMode: requireReviewMode(requireString(values["review-mode"], "review-mode")),
     resolvedLensIds: values["lens-id"],
     webResearchPolicy: requireBoundaryAccessPolicy(
@@ -316,9 +284,7 @@ export async function runPrepareReviewSessionCli(
     ),
     filesystemAllowedRoots: values["filesystem-allowed-root"],
     bindingNotes: values["binding-note"],
-    ...(typeof values["plugin-root"] === "string" && values["plugin-root"].length > 0
-      ? { pluginRoot: values["plugin-root"] }
-      : {}),
+    ontoHome,
     ...(typeof values["session-id"] === "string" && values["session-id"].length > 0
       ? { sessionId: values["session-id"] }
       : {}),
@@ -393,7 +359,6 @@ export async function runPrepareReviewSessionCli(
       materializedRefs: values["materialized-ref"],
       systemPurposeRefs: values["system-purpose-ref"],
       domainContextRefs: values["domain-context-ref"],
-      learningContextRefs: values["learning-context-ref"],
       roleDefinitionRefs: values["role-definition-ref"],
       executionRuleRefs: values["execution-rule-ref"],
       directoryListingOptions,

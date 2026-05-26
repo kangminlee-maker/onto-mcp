@@ -50,9 +50,9 @@ onto MCP server
         v
 execution providers
   - codex
-  - claude
+  - api-key direct call
+  - local direct call
   - local/mock
-  - future hosts
 ```
 
 ## Boundary Rules

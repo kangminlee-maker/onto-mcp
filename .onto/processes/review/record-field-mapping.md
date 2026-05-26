@@ -10,6 +10,7 @@
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
 > - `.onto/processes/review/issue-stance-deliberation-contract.md`
+> - `.onto/processes/review/review-execution-ux-contract.md`
 
 ---
 
@@ -68,25 +69,26 @@ Issue-stance deliberation target source artifacts:
 | `round1/{lens-id}.md` | `lens_result_refs.{lens-id}` |
 | `round1/{lens-id}.md` → `Domain Constraints Used` section | `per_lens_provenance.{lens-id}.domain_constraints_used` |
 | `round1/{lens-id}.md` → `Domain Context Assumptions` section | `per_lens_provenance.{lens-id}.domain_context_assumptions` |
-| `synthesis.md` | `synthesis_result_ref` |
+| `synthesis.md` if produced, otherwise `null` | `synthesis_result_ref` |
 | `synthesis.md` → shared phenomenon classification | `shared_phenomenon_summary` |
-| `deliberation.md` | `deliberation_result_ref` |
+| `deliberation.md` if produced, otherwise `null` | `deliberation_result_ref` |
 | `final-output.md` | `final_output_ref` |
-| `error-log.md` | `degradation_notes_ref` |
+| `degradation-summary.yaml` if produced, otherwise `null` | `degradation_notes_ref` |
 
 Issue-stance deliberation target mapping:
 
 | Source artifact | ReviewRecord field |
 |---|---|
-| `finding-ledger.yaml` | `finding_ledger_ref` |
-| `finding-relation-graph.yaml` | `finding_relation_graph_ref` |
-| `issue-ledger.yaml` | `issue_ledger_ref` |
-| `issue-stance-matrix.yaml` | `issue_stance_matrix_ref` |
-| `deliberation-plan.yaml` | `deliberation_plan_ref` |
+| `finding-ledger.yaml` if produced, otherwise `null` | `finding_ledger_ref` |
+| `finding-relation-graph.yaml` if produced, otherwise `null` | `finding_relation_graph_ref` |
+| `issue-ledger.yaml` if produced, otherwise `null` | `issue_ledger_ref` |
+| `issue-stance-matrix.yaml` if produced, otherwise `null` | `issue_stance_matrix_ref` |
+| `deliberation-plan.yaml` if produced, otherwise `null` | `deliberation_plan_ref` |
 | `deliberation.md` → issue status entries | `issue_resolution_summary` |
-| `problem-framing.yaml` → classification context | `problem_framing_ref` source metadata |
+| `problem-framing.yaml` if produced, otherwise `null` | `problem_framing_ref` |
 | `problem-framing.yaml` → common spine classification | `issue_resolution_summary.*.issue_role`, `issue_resolution_summary.*.judgment_state`, `issue_resolution_summary.*.impact_kind`, `issue_resolution_summary.*.timing_class`, `issue_resolution_summary.*.closure_class` |
 | `problem-framing.yaml` → domain axes classification | `issue_resolution_summary.*.domain_axes` |
+| `finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`, `execution-result.yaml` → result classification projection | `result_classification_summary` |
 
 ---
 
@@ -139,7 +141,30 @@ lens_output_schema_version derive rule:
 - 각 `round1/{lens-id}.md`가 독자적으로 declare할 필요는 없다
 - future schema bump 시 `lens-prompt-contract.md` §8만 수정하면 mapping이 자동 전파된다
 
-### 4.3 From `execution-result.yaml`, `deliberation.md`, and `synthesis.md`
+### 4.3 From issue-stage artifacts
+
+아래는 issue-stage artifacts에서 derive된다.
+
+- `result_classification_summary.highest_severity`
+- `result_classification_summary.finding_severity_counts`
+- `result_classification_summary.issue_severity_counts`
+- `result_classification_summary.severity_counts`
+- `result_classification_summary.material_issue_count`
+- `result_classification_summary.non_material_finding_count`
+- `result_classification_summary.material_issues`
+- `result_classification_summary.non_material_findings`
+- `result_classification_summary.action_candidates`
+
+derive rule:
+
+- `finding-ledger.yaml`는 finding-level severity count와 finding-only fallback projection의 source다.
+- `issue-ledger.yaml`가 있으면 issue-level severity가 final result classification의 primary severity source다.
+- `problem-framing.yaml`는 action candidate derivation의 primary source다. `timing_class`, `closure_class`, `closure_obligation`, `judgment_state`가 action candidates로 project된다.
+- `execution-result.yaml`가 `halted_partial`이면 runtime-level `retry_execution`/`continue_review` action candidate가 추가된다.
+- `material_issue` 여부는 severity에서 파생한다. `blocker`, `high`, `medium`은 material issue이고 `low`, `info`는 non-material finding이다.
+- `domain_threshold_used`는 severity를 설명하는 보조 값이며, 별도 materiality 축을 만들지 않는다.
+
+### 4.4 From `execution-result.yaml`, `deliberation.md`, and `synthesis.md`
 
 아래는 종합 단계 artifact에서 derive된다.
 
@@ -156,11 +181,46 @@ lens_output_schema_version derive rule:
 완료된 review record의 값은 `performed`여야 한다.
 `deliberation.md`가 없거나 `synthesis.md`가 `performed`를 선언하지 않으면 assemble은 실패한다.
 
-### 4.4 From `error-log.md`
+`halted_partial` review에서 controlled deliberation이 완료되지 않았으면 값은
+`not_performed`다. 이 경우 `execution-result.yaml`이 source authority이며
+`synthesis.md` frontmatter 검증은 실행되지 않는다. Runtime은
+`halt_phase`, `halt_unit_id`, `halt_unit_kind`, `halt_lens_id`와
+`deliberation_execution_results[*].failure_message`로 실패한 deliberation unit을
+구조화해 남겨야 한다. 생성되지 않은 `synthesis.md` 또는 `deliberation.md`는
+ReviewRecord에서 required-looking ref로 노출하지 않고 `null`로 둔다.
+Issue-stage artifact refs도 현재 run의 파일 존재 여부를 source authority로
+삼는다. synthesize가 실행되지 않아도 이미 생성된 finding/issue/deliberation-plan
+artifact refs는 보존하고, 생성되지 않은 artifact만 `null`로 둔다.
 
-아래는 `error-log.md`에서 derive된다.
+### 4.5 From `degradation-summary.yaml`
+
+아래는 `degradation-summary.yaml`에서 derive된다.
 
 - `degradation_notes_ref`
+
+`degradation-summary.yaml`은 `execution-result.yaml`에서 파생되는 구조화
+source다. degraded/halted 판단에 필요한 최소 근거는 아래다.
+
+- `execution_status`
+- `degradation_kinds`
+- `degraded_lens_ids`
+- `halt_reason`
+- `halt_phase`
+- `halt_unit_id`
+- `halt_unit_kind`
+- `halt_lens_id`
+- `failed_units`
+
+`error-log.md`는 실행 로그와 boundary/conformance 관찰 기록이다. Runtime은
+degraded/halted 실행에서 `degradation-summary.yaml`을 생성해야 하며,
+`ReviewRecord.degradation_notes_ref`는 `error-log.md`가 아니라 이 구조화
+artifact를 가리킨다.
+
+### 4.6 From `execution-result.yaml` and `error-log.md`
+
+아래는 `execution-result.yaml`을 우선 source로 삼고, pre-result 상태에서만
+`error-log.md`를 참고한다.
+
 - `record_status`
 
 예:
@@ -176,7 +236,8 @@ lens_output_schema_version derive rule:
 
 - `error-log.md`는 이제 boundary/conformance log seat이기도 하다
 - 따라서 파일 존재 자체가 곧 degraded를 뜻하지는 않는다
-- 실제 degradation은 `lens failure`, `synthesize failure`, `runner halted` 같은 실행 실패 entry가 있을 때만 의미한다
+- 실제 degradation은 `execution-result.yaml`의 degraded/halted 상태와
+  `degradation-summary.yaml`의 구조화 근거가 있을 때 의미한다
 
 ---
 
@@ -212,7 +273,7 @@ record_status: completed
 created_at: 2026-04-04T15:20:00+09:00
 updated_at: 2026-04-04T15:31:00+09:00
 
-request_text: "process.md의 review productization 설계를 검토해줘"
+request_text: "onto-mcp review runtime 구현을 검토해줘"
 review_target_scope_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 interpretation_ref: .onto/review/20260404-a1b2c3d4/interpretation.yaml
 binding_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
@@ -273,6 +334,4 @@ final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 
 다음 단계는 아래다.
 
-1. degraded case source를 `error-log.md` 외의 structured artifact로 더 명확히 분리한다
-2. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
-3. host command path와 MCP path가 같은 `ReviewRecord` validation을 공유하게 한다
+1. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다

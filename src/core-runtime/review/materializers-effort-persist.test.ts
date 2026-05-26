@@ -123,7 +123,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
   it("omits resolved_llm_plan field when settings.json has no LLM fields", async () => {
     // Fixture writes an orthogonal-only field so the settings JSON is
     // non-empty but carries no LLM profile information.
-    await writeConfig(tmp, { output_language: "en" });
+    await writeConfig(tmp, { domains: ["software-engineering"] });
 
     const { sessionMetadataPath } =
       await bootstrapInvocationBindingArtifacts(commonParams(tmp));
@@ -215,5 +215,122 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
           entry.actor_kind === "lens",
       ),
     ).toBe(true);
+  });
+
+  it("derives direct-call actor routes from each actor LLM selection", async () => {
+    await writeConfig(
+      tmp,
+      {
+        llm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+          effort: "medium",
+        },
+        review: {
+          execution: {
+            mode: "main-workers",
+            teamlead: { seat: "main", llm: "inherit" },
+            lens: { seat: "worker", llm: "inherit" },
+            synthesize: {
+              seat: "worker",
+              llm: {
+                auth: "api_key",
+                provider: "anthropic",
+                model: "claude-sonnet-4-6",
+                effort: "xhigh",
+              },
+            },
+            deliberation: "controlled-lens-deliberation",
+          },
+        },
+      },
+    );
+
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      executionRealization: "direct-call",
+      hostRuntime: "openai",
+    });
+
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const profiles =
+      await readYaml<ReviewActorInvocationProfilesArtifact>(
+        binding.actor_invocation_profiles_path!,
+      );
+    const teamlead = profiles.profiles.find(
+      (profile) => profile.actor_kind === "teamlead",
+    );
+    const lens = profiles.profiles.find(
+      (profile) => profile.actor_kind === "lens",
+    );
+    const synthesize = profiles.profiles.find(
+      (profile) => profile.actor_kind === "synthesize",
+    );
+
+    expect(teamlead?.runtime_provider).toBe("openai");
+    expect(teamlead?.auth_mode).toBe("api_key");
+    expect(teamlead?.effective_worker_executor).toBe("direct_call");
+    expect(lens?.runtime_provider).toBe("openai");
+    expect(lens?.auth_mode).toBe("api_key");
+    expect(lens?.effective_worker_executor).toBe("direct_call");
+    expect(synthesize?.runtime_provider).toBe("anthropic");
+    expect(synthesize?.auth_mode).toBe("api_key");
+    expect(synthesize?.effective_worker_executor).toBe("direct_call");
+    expect(synthesize?.model).toBe("claude-sonnet-4-6");
+    expect(synthesize?.effort).toBe("xhigh");
+  });
+
+  it("records mock actor route from executor without accepting provider/auth inputs", async () => {
+    await writeConfig(
+      tmp,
+      {
+        llm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+        },
+      },
+    );
+
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      executionRealization: "direct-call",
+      hostRuntime: "standalone",
+    });
+
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const profiles =
+      await readYaml<ReviewActorInvocationProfilesArtifact>(
+        binding.actor_invocation_profiles_path!,
+      );
+
+    for (const profile of profiles.profiles) {
+      expect(profile.runtime_provider).toBe("mock");
+      expect(profile.auth_mode).toBeNull();
+      expect(profile.effective_worker_executor).toBe("mock");
+      expect(profile.credential_ref).toBeNull();
+    }
+  });
+
+  it("leaves direct-call actor route unresolved when actor LLM selection is absent", async () => {
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      executionRealization: "direct-call",
+      hostRuntime: "openai",
+    });
+
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const profiles =
+      await readYaml<ReviewActorInvocationProfilesArtifact>(
+        binding.actor_invocation_profiles_path!,
+      );
+
+    for (const profile of profiles.profiles) {
+      expect(profile.runtime_provider).toBeNull();
+      expect(profile.auth_mode).toBeNull();
+      expect(profile.effective_worker_executor).toBe("direct_call");
+      expect(profile.credential_ref).toBeNull();
+    }
   });
 });

@@ -183,8 +183,8 @@ ambiguity_notes:
 
 현재 runtime에서는 아래가 interpretation source material이다.
 
-- `process.md`의 domain determination rules
-- `.onto/processes/review/review.md`의 Step 0, Step 1.5
+- `src/core-runtime/cli/review-invoke.ts`의 invocation interpretation path
+- `src/core-runtime/cli/start-review-session.ts`의 session preparation path
 
 즉 현재 review preparation은 먼저 아래 순서를 따라야 한다.
 
@@ -194,8 +194,7 @@ ambiguity_notes:
 4. lens selection plan을 정리한다
 5. 그 다음에만 binding 단계로 넘어간다
 
-이때 productized prompt path에서는 이 단계가
-`.onto/processes/review/review.md`의 live step보다 먼저 한 번 실행된 것으로 간주한다.
+이때 productized prompt path에서는 이 단계가 binding보다 먼저 한 번 실행된다.
 
 ---
 
@@ -244,4 +243,3 @@ prompt-backed path에서는 이 중 interpretation 결과를
 
 1. `검토 고정 계약 (review binding contract)`을 고정한다
 2. `src/core-api/review-api.ts`와 materializer가 이 두 단계를 명시적으로 보존한다
-3. 이후 `.onto/processes/review/review.md` Step 0/1/1.5를 interpretation/binding 기준으로 다시 정리한다

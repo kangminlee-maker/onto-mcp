@@ -107,7 +107,7 @@ controlled deliberation은 관점 간 충돌을 제한 맥락에서 정리하며
 현재 `review`의 prompt-backed reference path에서
 각 lens와 synthesize 단계의 source material은 아래다.
 
-- 공통 lens wrapper: `process.md`, `.onto/processes/review/review.md`
+- 공통 lens wrapper: `src/core-runtime/cli/materialize-review-prompt-packets.ts`
 - 개별 lens perspective: `.onto/roles/{lens-id}.md`
 - synthesize specialization: `.onto/roles/synthesize.md`
 

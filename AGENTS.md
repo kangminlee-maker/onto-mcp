@@ -38,7 +38,7 @@
 `review` 작업 시 추가로 읽을 문서:
 
 1. [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
-2. [nested-spawn-coordinator-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/nested-spawn-coordinator-contract.md)
+2. [review-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-execution-ux-contract.md)
 3. [lens-registry.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-registry.md)
 4. [interpretation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/interpretation-contract.md)
 5. [binding-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/binding-contract.md)
@@ -142,6 +142,7 @@ DO:
 - `session-metadata.yaml`
 - `execution-plan.yaml`
 - `execution-preparation/*`
+- `degradation-summary.yaml` when execution is degraded or halted
 - `deliberation/round1/*`
 - `deliberation.md`
 - `final-output.md`
@@ -190,7 +191,7 @@ core 제품화 계층은 TypeScript다.
 .onto YAML/MD contracts
         -> TS core runtime
         -> MCP tool surface
-        -> provider adapters
+        -> bounded worker/direct-call execution
 ```
 
 경계:
@@ -198,8 +199,8 @@ core 제품화 계층은 TypeScript다.
 - `.onto/`와 `src/core-runtime/`이 `onto` 의미론을 소유한다.
 - `src/core-api/`는 기존 runtime을 library처럼 부르는 facade다.
 - `src/mcp/`는 tool schema와 server surface만 소유한다.
-- `src/providers/`는 host별 실행 능력만 소유한다.
-- External host integration은 provider evidence 또는 conformance harness로만 취급한다.
+- Provider execution은 현재 `src/core-runtime/cli`와 `src/core-runtime/llm`의 bounded adapters가 소유한다.
+- External host integration은 evidence 또는 conformance harness로만 취급한다.
 
 기준 문서:
 

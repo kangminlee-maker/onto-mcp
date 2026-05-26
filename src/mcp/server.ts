@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import {
   createOntoReviewCoreApi,
   type PrepareReviewRequest,
+  type ReviewNativeProgressEvent,
 } from "../core-api/review-api.js";
 import {
   OntoSettingsValidationError,
@@ -43,6 +44,8 @@ interface JsonRpcRequest {
   method?: string;
   params?: unknown;
 }
+
+type McpProgressToken = string | number;
 
 interface ToolDefinition {
   [key: string]: JsonValue;
@@ -247,6 +250,39 @@ function formatToolResult(data: unknown): JsonValue {
   };
 }
 
+function progressTokenFromToolCallParams(
+  params: unknown,
+): McpProgressToken | null {
+  if (params === null || typeof params !== "object" || Array.isArray(params)) {
+    return null;
+  }
+  const meta = (params as { _meta?: unknown })._meta;
+  if (meta === null || typeof meta !== "object" || Array.isArray(meta)) {
+    return null;
+  }
+  const token = (meta as { progressToken?: unknown }).progressToken;
+  return typeof token === "string" || typeof token === "number" ? token : null;
+}
+
+function sendMcpProgressNotification(
+  progressToken: McpProgressToken,
+  event: ReviewNativeProgressEvent,
+): void {
+  writeMessage({
+    jsonrpc: "2.0",
+    method: "notifications/progress",
+    params: {
+      progressToken,
+      progress: event.progress.current,
+      total: event.progress.total,
+      message: event.message,
+      _meta: {
+        ontoReviewProgress: event as unknown as JsonValue,
+      },
+    },
+  });
+}
+
 function structuredFailureFromError(error: unknown): {
   failure: ReviewStructuredFailureRecord;
   failureRecordPath: string | null;
@@ -430,7 +466,11 @@ async function resolveAllowedSessionRoot(args: {
   return canonicalSessionRoot;
 }
 
-async function callTool(name: string, args: unknown): Promise<JsonValue> {
+async function callTool(
+  name: string,
+  args: unknown,
+  options: { progressToken?: McpProgressToken | null } = {},
+): Promise<JsonValue> {
   try {
     switch (name) {
       case "onto.review": {
@@ -439,7 +479,17 @@ async function callTool(name: string, args: unknown): Promise<JsonValue> {
           const prepared = await api.prepareReview(toReviewRequest(parsed));
           return formatToolResult(prepared);
         }
-        const result = await api.runReview(toReviewRequest(parsed));
+        const request = toReviewRequest(parsed);
+        const progressToken = options.progressToken;
+        const result = await api.runReview({
+          ...request,
+          ...(progressToken !== undefined && progressToken !== null
+            ? {
+                progressObserver: (event) =>
+                  sendMcpProgressNotification(progressToken, event),
+              }
+            : {}),
+        });
         return formatToolResult(result);
       }
       case "onto.prepare_review": {
@@ -502,7 +552,7 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
         protocolVersion: "2024-11-05",
         capabilities: { tools: {} },
         serverInfo: {
-          name: "onto-core",
+          name: "onto-mcp",
           version: await readPackageVersion(),
         },
       });
@@ -519,7 +569,9 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
       }
       return jsonRpcResult(
         message.id,
-        await callTool(params.name, params.arguments ?? {}),
+        await callTool(params.name, params.arguments ?? {}, {
+          progressToken: progressTokenFromToolCallParams(params),
+        }),
       );
     }
     default:

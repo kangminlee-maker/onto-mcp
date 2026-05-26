@@ -4,15 +4,8 @@ import path from "node:path";
 /**
  * Installation resource path resolver — canonical `.onto/` layout only.
  *
- * Phase 0-6 (2026-04-20 / 2026-04-21) migrated every top-level structural
- * directory (commands / domains / roles / processes / principles / authority)
- * into the `.onto/` namespace. The resolver accepts only the current
- * branch — projects must be on the `.onto/` layout to be recognized as
- * an onto installation root. There is no more dual-path dispatch.
- *
- * If a project has not yet migrated, the intended escalation path is to
- * run `scripts/repo-layout-migration-replace.py` (retained for future
- * similar migrations) and move the directories under `.onto/`.
+ * The resolver accepts only the current branch: install resources live under
+ * `.onto/`. Missing resources are treated as corrupted installation state.
  */
 
 export type InstallationResourceKind =
@@ -43,9 +36,7 @@ export function resolveInstallationPath(
 
   throw new Error(
     `[installation-paths] .onto/${kind}/ not found under ${installRoot}. ` +
-      `Installation may be corrupted, or the project may still be on a ` +
-      `pre-migration layout — run scripts/repo-layout-migration-replace.py ` +
-      `to migrate to the .onto/ layout.`,
+      `Installation resources must live under the .onto/ layout.`,
   );
 }
 
