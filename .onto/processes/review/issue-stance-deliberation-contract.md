@@ -1,14 +1,15 @@
 # Issue-Stance Deliberation Contract
 
-> 상태: Design target
+> 상태: Active
 > 목적: review에서 제기된 surface finding들을 관계 그래프로 묶어 공통 root-cause issue를 도출하고, 그 issue에 대해 모든 lens의 입장을 수집한 뒤 material conflict가 있는 issue만 통제된 숙의로 수렴시키는 계약을 정의한다.
-> 구현 상태: TS runtime 반영 전. 이 문서는 다음 구현 target의 normative design이다.
+> 구현 상태: TS runtime active. 이 문서는 issue artifact prompt, validation, result classification projection의 normative contract다.
 > 기준 문서:
 > - `.onto/processes/review/productized-live-path.md`
 > - `.onto/processes/review/shared-phenomenon-contract.md`
 > - `.onto/processes/review/lens-prompt-contract.md`
 > - `.onto/processes/review/synthesize-prompt-contract.md`
 > - `.onto/processes/review/record-contract.md`
+> - `.onto/processes/review/review-execution-ux-contract.md`
 
 ---
 
@@ -50,9 +51,23 @@ finding 간 연결관계를 먼저 파악해 공통 원인을 가진 문제끼�
 | root-cause issue | 본 계약 | 공통 root hypothesis 아래 묶인 문제 cluster |
 | lens stance | 본 계약 | root-cause issue에 대한 각 lens의 입장 |
 | issue resolution | 본 계약 | deliberation 후 root-cause issue가 어떤 상태로 닫혔는지 |
+| severity presentation | `review-execution-ux-contract.md` | finding/issue가 review 목적의 신뢰성을 얼마나 훼손하는지 표시하는 scale |
 
 `shared phenomenon`은 같은 위치를 보는 claim을 묶는다.
 `root-cause issue`는 서로 다른 위치의 finding이라도 같은 근본 원인에서 비롯되었다면 묶을 수 있다.
+`material issue` 여부는 별도 필드가 아니라 severity에서 파생된다.
+
+Severity values are:
+
+| Severity | Meaning |
+|---|---|
+| `blocker` | Declared primary happy path cannot be achieved by any intended user, or the result appears trustworthy while breaking a core contract. |
+| `high` | A supported user group, environment, data condition, or execution path cannot achieve the declared purpose. |
+| `medium` | The happy path is possible, but trust, auditability, reproducibility, completeness, or decision quality is meaningfully weakened. |
+| `low` | Improvement opportunity that does not make the reviewed result unsafe for its declared purpose. |
+| `info` | Observation, question, or evidence gap that is not yet an issue. |
+
+`blocker`, `high`, and `medium` are material issues. `low` and `info` are non-material findings. Every material severity claim must include `affected_purpose`, `failure_condition`, `impact`, and concrete `evidence_refs`.
 
 예:
 
@@ -117,7 +132,12 @@ findings:
     evidence_anchor: "package.json:scripts.mcp:server"
     claim: "mcp:server points at a source-only path while package execution expects built output."
     proposed_action: "Align MCP entrypoint with package/build boundary."
+    affected_purpose: "MCP server can be invoked from the packaged runtime surface."
+    failure_condition: "Package consumers run the declared MCP command after build/package installation."
+    impact: "The command can look trustworthy but fail at runtime because the source/package boundary is unresolved."
+    evidence_refs: [round1/logic.md#finding-1]
     severity: medium
+    domain_threshold_used: null
 ```
 
 Rules:
@@ -125,7 +145,10 @@ Rules:
 1. Every Round 1 issue/finding claim that may affect final output must receive a stable `finding_id`.
 2. `finding_id` is session-local and stable across downstream artifacts.
 3. A finding is not a root-cause issue by itself.
-4. If a lens output lacks a stable anchor, ledger construction must fail loudly or mark the finding as unaddressable with a reason in a validation section.
+4. `severity` must use `blocker`, `high`, `medium`, `low`, or `info`; legacy `critical` is not a valid output value.
+5. Every material finding must explain the affected purpose, failure condition, impact, and evidence refs.
+6. If a lens output lacks enough evidence for a material severity, use `severity: info` and record the evidence gap instead of inventing a material issue.
+7. If a lens output lacks a stable anchor, ledger construction must fail loudly or mark the finding as unaddressable with a reason in a validation section.
 
 ---
 
@@ -201,7 +224,12 @@ issues:
     raised_by_lens_ids: [logic, dependency, axiology]
     issue_statement: "Multiple surface defects stem from an unresolved boundary between source-time implementation paths and packaged MCP runtime paths."
     proposed_action: "Choose the canonical package/runtime seat and align scripts, exports, docs, and tests to it."
+    affected_purpose: "MCP-native review runtime can be invoked through its declared package surface."
+    failure_condition: "Users or hosts invoke the packaged command instead of a repo-local source path."
+    impact: "The system may appear deployable while the declared runtime path cannot be trusted."
+    evidence_refs: [round1/logic.md#finding-1, round1/dependency.md#finding-2]
     severity: high
+    domain_threshold_used: null
     singleton_reason: null
 ```
 
@@ -213,6 +241,15 @@ Singleton issue shape:
     root_confidence: low
     surface_finding_ids: [finding-009]
     relation_refs: []
+    raised_by_lens_ids: [structure]
+    issue_statement: "The finding remains an independent issue after relation-graph review."
+    proposed_action: "Preserve the issue for final classification."
+    affected_purpose: "Declared review purpose"
+    failure_condition: "Boundary condition from finding-009"
+    impact: "Impact carried from finding-009"
+    evidence_refs: [round1/structure.md#finding-9]
+    severity: low
+    domain_threshold_used: null
     singleton_reason: "No causal, dependency, ownership, or same-root relation was supported by the available evidence."
 ```
 
@@ -224,6 +261,8 @@ Rules:
 4. Singleton issues are allowed only after relation-graph review and must include `singleton_reason`.
 5. The issue statement should describe the root, not merely restate a surface symptom.
 6. If the root hypothesis is uncertain, keep the uncertainty rather than flattening it into a confident issue.
+7. Every issue must carry the severity contract fields: `affected_purpose`, `failure_condition`, `impact`, `evidence_refs`, `severity`, and optional `domain_threshold_used`.
+8. `material issue` is derived from severity. Do not add a second materiality enum.
 
 ---
 
@@ -677,7 +716,34 @@ The detailed human-readable reasoning remains in the source artifacts.
 
 ---
 
-## 15. Implementation Order
+## 15. Runtime Timeout Policy
+
+Controlled deliberation timeout is a hard halt, not an unresolved-stance
+continuation path.
+
+If any per-lens deliberation response or teamlead controlled deliberation unit
+times out or fails:
+
+- synthesize MUST NOT run
+- `execution-result.yaml.execution_status` MUST be `halted_partial`
+- `execution-result.yaml.deliberation_status` MUST be `not_performed`
+- `execution-result.yaml.halt_phase` MUST identify `controlled_lens_deliberation`
+- `execution-result.yaml.halt_unit_id` and `halt_unit_kind` MUST identify the
+  failed deliberation unit
+- lens-bound deliberation failures SHOULD expose `halt_lens_id` as the
+  lens id derived from `deliberation-{lens_id}`
+- `deliberation_execution_results` MUST preserve completed and failed
+  deliberation unit results, including timeout `failure_message`
+- `review-run-manifest.yaml` MUST mirror the halt phase, unit, lens, and reason
+- `review-record.yaml` MUST NOT expose produced-artifact refs for
+  `synthesis.md` or `deliberation.md` when those files were not produced
+- `review-record.yaml` MUST preserve refs for issue-stage artifacts that were
+  produced before the halt, independent of whether synthesize ran
+
+This preserves the context-isolated lens outputs and failure identity without
+letting synthesize infer a final review from incomplete deliberation truth.
+
+## 16. Implementation Order
 
 Recommended TS implementation sequence:
 

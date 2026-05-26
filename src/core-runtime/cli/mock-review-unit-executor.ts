@@ -159,7 +159,12 @@ findings:
     evidence_anchor: mock-anchor
     claim: mock finding
     proposed_action: none
+    affected_purpose: declared review purpose
+    failure_condition: mock supported path
+    impact: mock finding does not make the declared purpose unsafe
+    evidence_refs: [round1/${primaryLensId}.md#finding-1]
     severity: low
+    domain_threshold_used: null
 validation:
   unaddressable_findings: []
 `;
@@ -183,7 +188,12 @@ issues:
     raised_by_lens_ids: [${primaryLensId}]
     issue_statement: mock issue
     proposed_action: none
+    affected_purpose: declared review purpose
+    failure_condition: mock supported path
+    impact: mock issue does not make the declared purpose unsafe
+    evidence_refs: [round1/${primaryLensId}.md#finding-1]
     severity: low
+    domain_threshold_used: null
     singleton_reason: mock singleton
 validation:
   unclustered_finding_ids: []

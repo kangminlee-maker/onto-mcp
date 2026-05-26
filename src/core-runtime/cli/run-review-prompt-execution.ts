@@ -13,6 +13,9 @@ import type {
   ReviewContextManifestArtifact,
   ReviewContextManifestPacketRef,
   ReviewContextSource,
+  ReviewDegradationKind,
+  ReviewDegradationSummaryArtifact,
+  ReviewDegradationUnitFailure,
   ReviewExecutionRealization,
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
@@ -50,6 +53,10 @@ import {
   type LensDeliberationResponseForTeamlead,
 } from "../review/controlled-lens-deliberation.js";
 import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
+import {
+  REVIEW_EXECUTION_STEP_IDS,
+  REVIEW_PROGRESS_TOTAL_STEPS,
+} from "../review/review-progress-contract.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
 import {
@@ -78,6 +85,10 @@ export interface ReviewPromptExecutionResult {
   synthesis_executed: boolean;
   error_log_path: string | null;
   halt_reason?: string;
+  halt_phase?: string | null;
+  halt_unit_id?: string | null;
+  halt_unit_kind?: ReviewUnitKind | null;
+  halt_lens_id?: string | null;
 }
 
 interface ExecutionFailure {
@@ -123,22 +134,6 @@ async function appendExecutionProgress(
 ): Promise<void> {
   await appendMarkdownLogEntry(errorLogPath, title, bodyLines.join("\n"));
 }
-
-const REVIEW_PROGRESS_TOTAL_STEPS = 12;
-const REVIEW_EXECUTION_STEP_IDS = [
-  "manifest_validation",
-  "lens_dispatch",
-  "lens_completion_barrier",
-  "finding_ledger",
-  "finding_relation_graph",
-  "issue_ledger",
-  "issue_stance_matrix",
-  "deliberation_plan",
-  "lens_deliberation_responses",
-  "controlled_deliberation",
-  "problem_framing",
-  "synthesize",
-] as const;
 
 async function emitReviewProgress(args: {
   executionPlan: ReviewExecutionPlan;
@@ -364,6 +359,69 @@ function issueArtifactOutcomeFromError(error: unknown): ExecutionOutcome | null 
   return null;
 }
 
+class ReviewControlledDeliberationDispatchError extends Error {
+  readonly outcomes: ExecutionOutcome[];
+  readonly failedOutcome: ExecutionOutcome | null;
+
+  constructor(
+    message: string,
+    outcomes: ExecutionOutcome[],
+    failedOutcome: ExecutionOutcome | null,
+  ) {
+    super(message);
+    this.name = "ReviewControlledDeliberationDispatchError";
+    this.outcomes = outcomes;
+    this.failedOutcome = failedOutcome;
+  }
+}
+
+function controlledDeliberationOutcomesFromError(
+  error: unknown,
+): ExecutionOutcome[] {
+  if (error instanceof ReviewControlledDeliberationDispatchError) {
+    return error.outcomes;
+  }
+  return [];
+}
+
+function controlledDeliberationFailedOutcomeFromError(
+  error: unknown,
+): ExecutionOutcome | null {
+  if (error instanceof ReviewControlledDeliberationDispatchError) {
+    return error.failedOutcome;
+  }
+  return null;
+}
+
+function haltLensIdFromOutcome(outcome: ExecutionOutcome | null): string | null {
+  if (!outcome) return null;
+  if (outcome.dispatch.unit_kind === "lens") {
+    return outcome.dispatch.unit_id;
+  }
+  if (
+    outcome.dispatch.unit_kind === "deliberation" &&
+    outcome.dispatch.unit_id.startsWith("deliberation-")
+  ) {
+    return outcome.dispatch.unit_id.replace(/^deliberation-/, "");
+  }
+  return null;
+}
+
+function haltArtifactFields(
+  haltPhase: string,
+  outcome: ExecutionOutcome | null,
+): Pick<
+  ReviewExecutionResultArtifact,
+  "halt_phase" | "halt_unit_id" | "halt_unit_kind" | "halt_lens_id"
+> {
+  return {
+    halt_phase: haltPhase,
+    halt_unit_id: outcome?.dispatch.unit_id ?? null,
+    halt_unit_kind: outcome?.dispatch.unit_kind ?? null,
+    halt_lens_id: haltLensIdFromOutcome(outcome),
+  };
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -553,6 +611,93 @@ async function readStructuredDeliberationStatus(
   );
 }
 
+function degradationSummaryPathForSession(sessionRoot: string): string {
+  return path.join(sessionRoot, "degradation-summary.yaml");
+}
+
+function inferFailureLensId(
+  artifact: ReviewExecutionResultArtifact,
+  result: ReviewUnitExecutionResult,
+): string | null {
+  if (result.unit_kind === "lens") return result.unit_id;
+  if (artifact.halt_unit_id === result.unit_id) {
+    return artifact.halt_lens_id ?? null;
+  }
+  if (
+    result.unit_kind === "deliberation" &&
+    result.unit_id.startsWith("deliberation-")
+  ) {
+    return result.unit_id.slice("deliberation-".length) || null;
+  }
+  return null;
+}
+
+function collectFailedUnits(
+  artifact: ReviewExecutionResultArtifact,
+): ReviewDegradationUnitFailure[] {
+  const synthesizeResult = artifact.synthesize_execution_result ?? null;
+  const unitResults = [
+    ...artifact.lens_execution_results,
+    ...(artifact.issue_artifact_execution_results ?? []),
+    ...(artifact.deliberation_execution_results ?? []),
+    ...(synthesizeResult ? [synthesizeResult] : []),
+  ];
+  return unitResults
+    .filter((result) => result.status === "failed")
+    .map((result) => ({
+      unit_id: result.unit_id,
+      unit_kind: result.unit_kind,
+      lens_id: inferFailureLensId(artifact, result),
+      packet_path: result.packet_path,
+      output_path: result.output_path,
+      failure_message: result.failure_message ?? "unknown failure",
+    }));
+}
+
+function degradationKindsFor(
+  artifact: ReviewExecutionResultArtifact,
+  failedUnits: ReviewDegradationUnitFailure[],
+): ReviewDegradationKind[] {
+  const kinds: ReviewDegradationKind[] = [];
+  if (artifact.degraded_lens_ids.length > 0) kinds.push("lens_degradation");
+  if (artifact.execution_status === "halted_partial") kinds.push("halted_partial");
+  if (failedUnits.length > 0) kinds.push("unit_failure");
+  return kinds;
+}
+
+async function writeDegradationSummaryArtifact(
+  executionPlan: ReviewExecutionPlan,
+  artifact: ReviewExecutionResultArtifact,
+): Promise<void> {
+  const summaryPath = degradationSummaryPathForSession(executionPlan.session_root);
+  const failedUnits = collectFailedUnits(artifact);
+  const degradationKinds = degradationKindsFor(artifact, failedUnits);
+  if (degradationKinds.length === 0) {
+    await removeFileIfExists(summaryPath);
+    return;
+  }
+  const summary: ReviewDegradationSummaryArtifact = {
+    schema_version: "1",
+    session_id: artifact.session_id,
+    created_at: artifact.execution_completed_at,
+    source_execution_result_ref: executionPlan.execution_result_path,
+    source_error_log_ref: (await fileExists(executionPlan.error_log_path))
+      ? executionPlan.error_log_path
+      : null,
+    execution_status: artifact.execution_status,
+    degradation_kinds: degradationKinds,
+    degraded_lens_ids: artifact.degraded_lens_ids,
+    excluded_lens_ids: artifact.excluded_lens_ids,
+    halt_reason: artifact.halt_reason ?? null,
+    halt_phase: artifact.halt_phase ?? null,
+    halt_unit_id: artifact.halt_unit_id ?? null,
+    halt_unit_kind: artifact.halt_unit_kind ?? null,
+    halt_lens_id: artifact.halt_lens_id ?? null,
+    failed_units: failedUnits,
+  };
+  await writeYamlDocument(summaryPath, summary);
+}
+
 async function writeExecutionResultArtifact(
   executionPlan: ReviewExecutionPlan,
   artifact: ReviewExecutionResultArtifact,
@@ -560,6 +705,7 @@ async function writeExecutionResultArtifact(
 ): Promise<void> {
   try {
     await writeYamlDocument(executionPlan.execution_result_path, artifact);
+    await writeDegradationSummaryArtifact(executionPlan, artifact);
     await writeReviewRunManifest(executionPlan, artifact, reviewExecutionProfile);
   } catch (error) {
     await writeAndThrowStructuredFailureRecord({
@@ -576,6 +722,9 @@ async function writeExecutionResultArtifact(
       artifactRefs: {
         execution_plan: path.join(executionPlan.session_root, "execution-plan.yaml"),
         execution_result: executionPlan.execution_result_path,
+        degradation_summary: degradationSummaryPathForSession(
+          executionPlan.session_root,
+        ),
         review_run_manifest: path.join(
           executionPlan.session_root,
           "review-run-manifest.yaml",
@@ -585,6 +734,9 @@ async function writeExecutionResultArtifact(
       detailsKind: "artifact_write",
       details: {
         execution_result_path: executionPlan.execution_result_path,
+        degradation_summary_path: degradationSummaryPathForSession(
+          executionPlan.session_root,
+        ),
         review_run_manifest_path: path.join(
           executionPlan.session_root,
           "review-run-manifest.yaml",
@@ -1251,6 +1403,10 @@ async function writeReviewRunManifest(
       binding: executionPlan.binding_output_path,
       execution_plan: path.join(executionPlan.session_root, "execution-plan.yaml"),
       execution_result: executionPlan.execution_result_path,
+      degradation_summary:
+        degradationKindsFor(artifact, collectFailedUnits(artifact)).length > 0
+          ? degradationSummaryPathForSession(executionPlan.session_root)
+          : null,
       actor_invocation_profiles: executionPlan.actor_invocation_profiles_path ?? null,
       actor_consumer_bindings: executionPlan.actor_consumer_bindings_path ?? null,
       domain_binding: executionPlan.domain_binding_path ?? null,
@@ -1270,6 +1426,15 @@ async function writeReviewRunManifest(
       problem_framing: executionPlan.problem_framing_path,
     },
     worker_units: workerUnits,
+    halt: artifact.halt_reason
+      ? {
+          phase: artifact.halt_phase ?? null,
+          unit_id: artifact.halt_unit_id ?? null,
+          unit_kind: artifact.halt_unit_kind ?? null,
+          lens_id: artifact.halt_lens_id ?? null,
+          reason: artifact.halt_reason,
+        }
+      : null,
     synthesis_provenance: {
       synthesis_executed: artifact.synthesis_executed,
       synthesis_output_path: executionPlan.synthesis_output_path,
@@ -1297,6 +1462,7 @@ async function resetExecutionOutputs(
 ): Promise<void> {
   const pathsToClear = [
     executionPlan.execution_result_path,
+    degradationSummaryPathForSession(executionPlan.session_root),
     executionPlan.error_log_path,
     executionPlan.synthesis_output_path,
     executionPlan.deliberation_output_path,
@@ -1766,8 +1932,10 @@ async function runControlledLensDeliberation(args: {
     (outcome) => !outcome.success,
   );
   if (failedDeliberation?.failure) {
-    throw new Error(
+    throw new ReviewControlledDeliberationDispatchError(
       `Controlled lens deliberation failed for ${failedDeliberation.dispatch.unit_id}: ${failedDeliberation.failure.message}`,
+      completedDeliberationOutcomes,
+      failedDeliberation,
     );
   }
 
@@ -1824,8 +1992,10 @@ async function runControlledLensDeliberation(args: {
     unitTimeoutMs,
   });
   if (!teamleadOutcome.success) {
-    throw new Error(
+    throw new ReviewControlledDeliberationDispatchError(
       `Teamlead controlled deliberation failed: ${teamleadOutcome.failure?.message ?? "unknown error"}`,
+      [...completedDeliberationOutcomes, teamleadOutcome],
+      teamleadOutcome,
     );
   }
 
@@ -1901,6 +2071,7 @@ export async function executeReviewPromptExecution(
       output_path: seat.output_path,
     }));
   const maxConcurrentLenses = Math.max(1, lensDispatches.length);
+  const observedDispatchWidth = lensDispatches.length;
 
   await emitReviewProgress({
     executionPlan,
@@ -2157,7 +2328,7 @@ export async function executeReviewPromptExecution(
     resolveRequiredParticipatingLensCount(executionPlan);
   const lensCompletionBarrier = await writeLensCompletionBarrier({
     executionPlan,
-    observedDispatchWidth: maxConcurrentLenses,
+    observedDispatchWidth,
     minimumParticipatingLenses,
     lensDispatches,
     successfulLensDispatches,
@@ -2194,7 +2365,7 @@ export async function executeReviewPromptExecution(
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
       max_concurrent_lenses: maxConcurrentLenses,
-      observed_dispatch_width: maxConcurrentLenses,
+      observed_dispatch_width: observedDispatchWidth,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -2207,8 +2378,9 @@ export async function executeReviewPromptExecution(
         ),
       executed_lens_count: successfulLensDispatches.length,
       synthesis_executed: false,
-      deliberation_status: null,
+      deliberation_status: "not_performed",
       halt_reason: haltReason,
+      ...haltArtifactFields("lens_completion_barrier", null),
       error_log_path: executionPlan.error_log_path,
       lens_completion_barrier_ref:
         executionPlan.lens_completion_barrier_path ??
@@ -2229,6 +2401,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       error_log_path: executionPlan.error_log_path,
       halt_reason: haltReason,
+      ...haltArtifactFields("lens_completion_barrier", null),
     };
   }
 
@@ -2275,7 +2448,7 @@ export async function executeReviewPromptExecution(
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
       max_concurrent_lenses: maxConcurrentLenses,
-      observed_dispatch_width: maxConcurrentLenses,
+      observed_dispatch_width: observedDispatchWidth,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -2290,6 +2463,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       deliberation_status: args.deliberationStatus,
       halt_reason: haltReason,
+      ...haltArtifactFields("issue_artifact", failureOutcome),
       error_log_path: executionPlan.error_log_path,
       lens_completion_barrier_ref:
         executionPlan.lens_completion_barrier_path ??
@@ -2319,6 +2493,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       error_log_path: executionPlan.error_log_path,
       halt_reason: haltReason,
+      ...haltArtifactFields("issue_artifact", failureOutcome),
     };
   };
   for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
@@ -2335,7 +2510,7 @@ export async function executeReviewPromptExecution(
     } catch (error) {
       return haltAfterIssueArtifactFailure({
         error,
-        deliberationStatus: null,
+        deliberationStatus: "not_performed",
       });
     }
   }
@@ -2361,10 +2536,21 @@ export async function executeReviewPromptExecution(
     });
   } catch (error) {
     const failureMessage = error instanceof Error ? error.message : String(error);
+    const deliberationExecutionOutcomes =
+      controlledDeliberationOutcomesFromError(error);
+    const failedDeliberationOutcome =
+      controlledDeliberationFailedOutcomeFromError(error);
     await appendMarkdownLogEntry(
       executionPlan.error_log_path,
       "runner halted during controlled deliberation",
-      failureMessage,
+      [
+        failureMessage,
+        "",
+        "halt_phase: controlled_lens_deliberation",
+        `halt_unit_id: ${failedDeliberationOutcome?.dispatch.unit_id ?? "unknown"}`,
+        `halt_unit_kind: ${failedDeliberationOutcome?.dispatch.unit_kind ?? "unknown"}`,
+        `halt_lens_id: ${haltLensIdFromOutcome(failedDeliberationOutcome) ?? "none"}`,
+      ].join("\n"),
     );
     const degradedLensIds = executionFailures
       .filter((failure) => failure.unit_kind === "lens")
@@ -2384,7 +2570,7 @@ export async function executeReviewPromptExecution(
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
       max_concurrent_lenses: maxConcurrentLenses,
-      observed_dispatch_width: maxConcurrentLenses,
+      observed_dispatch_width: observedDispatchWidth,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -2397,8 +2583,12 @@ export async function executeReviewPromptExecution(
         ),
       executed_lens_count: successfulLensDispatches.length,
       synthesis_executed: false,
-      deliberation_status: null,
+      deliberation_status: "not_performed",
       halt_reason: `Controlled lens deliberation failed: ${failureMessage}`,
+      ...haltArtifactFields(
+        "controlled_lens_deliberation",
+        failedDeliberationOutcome,
+      ),
       error_log_path: executionPlan.error_log_path,
       lens_completion_barrier_ref:
         executionPlan.lens_completion_barrier_path ??
@@ -2408,7 +2598,8 @@ export async function executeReviewPromptExecution(
         .map(toUnitExecutionResult),
       issue_artifact_execution_results:
         issueArtifactOutcomes.map(toUnitExecutionResult),
-      deliberation_execution_results: [],
+      deliberation_execution_results:
+        deliberationExecutionOutcomes.map(toUnitExecutionResult),
       synthesize_execution_result: null,
     }, params.reviewExecutionProfile);
     return {
@@ -2420,6 +2611,10 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       error_log_path: executionPlan.error_log_path,
       halt_reason: `Controlled lens deliberation failed: ${failureMessage}`,
+      ...haltArtifactFields(
+        "controlled_lens_deliberation",
+        failedDeliberationOutcome,
+      ),
     };
   }
 
@@ -2602,7 +2797,7 @@ export async function executeReviewPromptExecution(
       execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
       total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
       max_concurrent_lenses: maxConcurrentLenses,
-      observed_dispatch_width: maxConcurrentLenses,
+      observed_dispatch_width: observedDispatchWidth,
       planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
       participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
       degraded_lens_ids: degradedLensIds,
@@ -2617,6 +2812,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       deliberation_status: "performed",
       halt_reason: `Synthesize execution failed: ${failure.message}`,
+      ...haltArtifactFields("synthesize", synthesizeOutcome),
       error_log_path: executionPlan.error_log_path,
       lens_completion_barrier_ref:
         executionPlan.lens_completion_barrier_path ??
@@ -2645,6 +2841,7 @@ export async function executeReviewPromptExecution(
       synthesis_executed: false,
       error_log_path: executionPlan.error_log_path,
       halt_reason: `Synthesize execution failed: ${failure.message}`,
+      ...haltArtifactFields("synthesize", synthesizeOutcome),
     };
   }
 
@@ -2692,7 +2889,7 @@ export async function executeReviewPromptExecution(
     execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
     total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
     max_concurrent_lenses: maxConcurrentLenses,
-    observed_dispatch_width: maxConcurrentLenses,
+    observed_dispatch_width: observedDispatchWidth,
     planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
     participating_lens_ids: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
     degraded_lens_ids: degradedLensIds,

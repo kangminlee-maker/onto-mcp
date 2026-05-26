@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type {
   ReviewExecutionPlan,
+  ReviewFindingSeverity,
   ReviewIssueArtifactId,
   ReviewIssueArtifactPromptPacketSeat,
 } from "./artifact-types.js";
@@ -10,6 +11,11 @@ import {
   readYamlDocument,
   toRelativePath,
 } from "./review-artifact-utils.js";
+import {
+  isMaterialSeverity,
+  REVIEW_SEVERITY_ORDER,
+} from "./review-result-classification.js";
+import { reviewProgressStepByIssueArtifact } from "./review-progress-contract.js";
 
 export interface IssueArtifactSpec {
   artifact_id: ReviewIssueArtifactId;
@@ -28,8 +34,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "finding-ledger.prompt.md",
     ref_key: "finding_ledger",
     phase: "pre_deliberation",
-    progress_step: 4,
-    progress_label: "finding ledger",
+    progress_step: reviewProgressStepByIssueArtifact("finding-ledger").step,
+    progress_label: reviewProgressStepByIssueArtifact("finding-ledger").label,
   },
   {
     artifact_id: "finding-relation-graph",
@@ -37,8 +43,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "finding-relation-graph.prompt.md",
     ref_key: "finding_relation_graph",
     phase: "pre_deliberation",
-    progress_step: 5,
-    progress_label: "finding relation graph",
+    progress_step: reviewProgressStepByIssueArtifact("finding-relation-graph").step,
+    progress_label: reviewProgressStepByIssueArtifact("finding-relation-graph").label,
   },
   {
     artifact_id: "issue-ledger",
@@ -46,8 +52,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "issue-ledger.prompt.md",
     ref_key: "issue_ledger",
     phase: "pre_deliberation",
-    progress_step: 6,
-    progress_label: "issue ledger",
+    progress_step: reviewProgressStepByIssueArtifact("issue-ledger").step,
+    progress_label: reviewProgressStepByIssueArtifact("issue-ledger").label,
   },
   {
     artifact_id: "issue-stance-matrix",
@@ -55,8 +61,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "issue-stance-matrix.prompt.md",
     ref_key: "issue_stance_matrix",
     phase: "pre_deliberation",
-    progress_step: 7,
-    progress_label: "issue stance matrix",
+    progress_step: reviewProgressStepByIssueArtifact("issue-stance-matrix").step,
+    progress_label: reviewProgressStepByIssueArtifact("issue-stance-matrix").label,
   },
   {
     artifact_id: "deliberation-plan",
@@ -64,8 +70,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "deliberation-plan.prompt.md",
     ref_key: "deliberation_plan",
     phase: "pre_deliberation",
-    progress_step: 8,
-    progress_label: "deliberation plan",
+    progress_step: reviewProgressStepByIssueArtifact("deliberation-plan").step,
+    progress_label: reviewProgressStepByIssueArtifact("deliberation-plan").label,
   },
   {
     artifact_id: "problem-framing",
@@ -73,8 +79,8 @@ export const ISSUE_ARTIFACT_REGISTRY = [
     prompt_packet_file_name: "problem-framing.prompt.md",
     ref_key: "problem_framing",
     phase: "post_deliberation",
-    progress_step: 11,
-    progress_label: "problem framing",
+    progress_step: reviewProgressStepByIssueArtifact("problem-framing").step,
+    progress_label: reviewProgressStepByIssueArtifact("problem-framing").label,
   },
 ] as const satisfies readonly IssueArtifactSpec[];
 
@@ -127,7 +133,7 @@ const RELATION_VALUES = new Set([
 
 const CONFIDENCE_VALUES = new Set(["low", "medium", "high"]);
 
-const SEVERITY_VALUES = new Set(["low", "medium", "high", "critical"]);
+const SEVERITY_VALUES = new Set(REVIEW_SEVERITY_ORDER);
 
 const ROOT_HYPOTHESIS_POSITION_VALUES = new Set([
   "accepts",
@@ -241,6 +247,11 @@ function requireStringArray(value: unknown, label: string): string[] {
   return requireArray(value, label).map((item, index) =>
     requireString(item, `${label}[${index}]`),
   );
+}
+
+function requireOptionalStringOrNull(value: unknown, label: string): void {
+  if (value === undefined || value === null) return;
+  requireString(value, label);
 }
 
 function requireAllowed(
@@ -363,6 +374,23 @@ You must derive the requested artifact from existing lens outputs and prior issu
 - If evidence is insufficient, encode that explicitly in the YAML instead of inventing facts.
 - Enum fields must use exactly one listed token. Do not append explanation text to enum values; put explanations in rationale fields.
 
+## Severity Contract
+\`severity\` is the review result classification axis. It also determines whether an issue is material.
+
+Allowed severity values:
+- blocker: the declared primary happy path cannot be achieved by any intended user, or the result appears trustworthy while breaking a core contract.
+- high: a supported user group, environment, data condition, or execution path cannot achieve the declared purpose.
+- medium: the happy path is possible, but trust, auditability, reproducibility, completeness, or decision quality is meaningfully weakened.
+- low: an improvement opportunity that does not make the reviewed result unsafe for its declared purpose.
+- info: an observation, question, or evidence gap that is not yet an issue.
+
+Derived materiality:
+- material issue: blocker, high, medium
+- non-material finding: low, info
+
+Every blocker/high/medium severity claim must cite concrete evidence and explain affected_purpose, failure_condition, and impact.
+If evidence is insufficient, use severity: info and explain the evidence gap.
+
 ## Lens Outputs
 ${lensRefs}
 
@@ -389,7 +417,12 @@ findings:
     evidence_anchor: "stable evidence anchor"
     claim: "surface finding claim"
     proposed_action: "stated or inferred action"
+    affected_purpose: "declared purpose or contract affected by this finding"
+    failure_condition: "user group, environment, data condition, execution path, or boundary where trust fails"
+    impact: "why this changes trust for the declared review purpose"
+    evidence_refs: [round1/logic.md#finding-1]
     severity: medium
+    domain_threshold_used: null
 validation:
   unaddressable_findings: []
 `;
@@ -451,7 +484,12 @@ issues:
     raised_by_lens_ids: [logic]
     issue_statement: "root-level issue statement"
     proposed_action: "action framing from source findings, not a detailed fix"
+    affected_purpose: "declared purpose or contract affected by this root-cause issue"
+    failure_condition: "user group, environment, data condition, execution path, or boundary where trust fails"
+    impact: "why this changes trust for the declared review purpose"
+    evidence_refs: [round1/logic.md#finding-1]
     severity: medium
+    domain_threshold_used: null
     singleton_reason: null
 validation:
   unclustered_finding_ids: []
@@ -667,7 +705,27 @@ export function validateIssueArtifactObject(args: {
         requireString(finding.lens_id, `finding-ledger.findings[${index}].lens_id`);
         requireString(finding.source_ref, `finding-ledger.findings[${index}].source_ref`);
         requireString(finding.claim, `finding-ledger.findings[${index}].claim`);
-        requireAllowed(finding.severity, SEVERITY_VALUES, `finding-ledger.findings[${index}].severity`);
+        requireString(finding.affected_purpose, `finding-ledger.findings[${index}].affected_purpose`);
+        requireString(finding.failure_condition, `finding-ledger.findings[${index}].failure_condition`);
+        requireString(finding.impact, `finding-ledger.findings[${index}].impact`);
+        const evidenceRefs = requireStringArray(
+          finding.evidence_refs,
+          `finding-ledger.findings[${index}].evidence_refs`,
+        );
+        const severity = requireAllowed(
+          finding.severity,
+          SEVERITY_VALUES,
+          `finding-ledger.findings[${index}].severity`,
+        ) as ReviewFindingSeverity;
+        if (isMaterialSeverity(severity) && evidenceRefs.length === 0) {
+          throw new Error(
+            `finding-ledger.findings[${index}].evidence_refs must not be empty for severity=${severity}.`,
+          );
+        }
+        requireOptionalStringOrNull(
+          finding.domain_threshold_used,
+          `finding-ledger.findings[${index}].domain_threshold_used`,
+        );
       }
       ensureUnique(findingIds, "finding-ledger.finding_id");
       const validation = requireRecord(args.parsed.validation, "finding-ledger.validation");
@@ -715,7 +773,27 @@ export function validateIssueArtifactObject(args: {
         requireString(issue.root_cause_hypothesis, `issue-ledger.issues[${index}].root_cause_hypothesis`);
         requireAllowed(issue.root_confidence, CONFIDENCE_VALUES, `issue-ledger.issues[${index}].root_confidence`);
         requireString(issue.issue_statement, `issue-ledger.issues[${index}].issue_statement`);
-        requireAllowed(issue.severity, SEVERITY_VALUES, `issue-ledger.issues[${index}].severity`);
+        requireString(issue.affected_purpose, `issue-ledger.issues[${index}].affected_purpose`);
+        requireString(issue.failure_condition, `issue-ledger.issues[${index}].failure_condition`);
+        requireString(issue.impact, `issue-ledger.issues[${index}].impact`);
+        const evidenceRefs = requireStringArray(
+          issue.evidence_refs,
+          `issue-ledger.issues[${index}].evidence_refs`,
+        );
+        const severity = requireAllowed(
+          issue.severity,
+          SEVERITY_VALUES,
+          `issue-ledger.issues[${index}].severity`,
+        ) as ReviewFindingSeverity;
+        if (isMaterialSeverity(severity) && evidenceRefs.length === 0) {
+          throw new Error(
+            `issue-ledger.issues[${index}].evidence_refs must not be empty for severity=${severity}.`,
+          );
+        }
+        requireOptionalStringOrNull(
+          issue.domain_threshold_used,
+          `issue-ledger.issues[${index}].domain_threshold_used`,
+        );
         const surfaceFindingIds = requireStringArray(issue.surface_finding_ids, `issue-ledger.issues[${index}].surface_finding_ids`);
         if (surfaceFindingIds.length === 0) {
           throw new Error(`issue-ledger.issues[${index}].surface_finding_ids must not be empty.`);

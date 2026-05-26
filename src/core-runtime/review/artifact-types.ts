@@ -28,6 +28,21 @@ export type ReviewRecordStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial";
+export type ReviewFindingSeverity =
+  | "blocker"
+  | "high"
+  | "medium"
+  | "low"
+  | "info";
+export type ReviewActionCandidate =
+  | "fix_now"
+  | "fix_before_release"
+  | "accept_risk"
+  | "follow_up"
+  | "out_of_scope"
+  | "needs_evidence"
+  | "continue_review"
+  | "retry_execution";
 export type DeliberationStatus = "performed" | "not_performed";
 export type ReviewExecutionStatus =
   | "completed"
@@ -660,6 +675,10 @@ export interface ReviewExecutionResultArtifact {
   synthesis_executed: boolean;
   deliberation_status?: DeliberationStatus | null | undefined;
   halt_reason?: string | null;
+  halt_phase?: string | null;
+  halt_unit_id?: string | null;
+  halt_unit_kind?: ReviewUnitKind | null;
+  halt_lens_id?: string | null;
   error_log_path: string;
   lens_completion_barrier_ref?: string;
   lens_execution_results: ReviewUnitExecutionResult[];
@@ -672,6 +691,38 @@ export interface ReviewExecutionResultArtifact {
    * check before including synthesize timing in any aggregation.
    */
   synthesize_execution_result?: ReviewUnitExecutionResult | null;
+}
+
+export type ReviewDegradationKind =
+  | "lens_degradation"
+  | "halted_partial"
+  | "unit_failure";
+
+export interface ReviewDegradationUnitFailure {
+  unit_id: string;
+  unit_kind: ReviewUnitKind;
+  lens_id?: string | null;
+  packet_path: string;
+  output_path: string;
+  failure_message: string;
+}
+
+export interface ReviewDegradationSummaryArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_execution_result_ref: string;
+  source_error_log_ref: string | null;
+  execution_status: ReviewExecutionStatus;
+  degradation_kinds: ReviewDegradationKind[];
+  degraded_lens_ids: string[];
+  excluded_lens_ids: string[];
+  halt_reason: string | null;
+  halt_phase: string | null;
+  halt_unit_id: string | null;
+  halt_unit_kind: ReviewUnitKind | null;
+  halt_lens_id: string | null;
+  failed_units: ReviewDegradationUnitFailure[];
 }
 
 export interface ReviewLensCompletionBarrierArtifact {
@@ -714,6 +765,47 @@ export interface SharedPhenomenonSummaryEntry {
   claim_relation: SharedPhenomenonClaimRelation;
 }
 
+export interface ReviewResultIssueProjection {
+  issue_id: string;
+  severity: ReviewFindingSeverity;
+  material: boolean;
+  affected_purpose: string;
+  failure_condition: string;
+  impact: string;
+  evidence_refs: string[];
+  source_lens_ids: string[];
+  action_candidates: ReviewActionCandidate[];
+  rationale: string;
+  domain_threshold_used?: string | null;
+  problem_definition?: string;
+  issue_statement?: string;
+  timing_class?: string;
+  closure_class?: string;
+  closure_obligation?: string;
+  judgment_state?: string;
+}
+
+export interface ReviewActionCandidateProjection {
+  issue_id: string;
+  candidates: ReviewActionCandidate[];
+  derivation_refs: string[];
+  rationale: string;
+}
+
+export interface ReviewResultClassificationSummary {
+  highest_severity: ReviewFindingSeverity | null;
+  finding_count: number;
+  issue_count: number;
+  finding_severity_counts: Record<ReviewFindingSeverity, number>;
+  issue_severity_counts: Record<ReviewFindingSeverity, number>;
+  severity_counts: Record<ReviewFindingSeverity, number>;
+  material_issue_count: number;
+  non_material_finding_count: number;
+  material_issues: ReviewResultIssueProjection[];
+  non_material_findings: ReviewResultIssueProjection[];
+  action_candidates: ReviewActionCandidateProjection[];
+}
+
 export interface DirectoryListingOptions {
   excluded_names: string[];
   max_depth: number;
@@ -749,16 +841,17 @@ export interface ReviewRecord {
   degraded_lens_ids: string[];
   degradation_notes_ref?: string | null;
   per_lens_provenance: Record<string, ReviewLensProvenance>;
-  finding_ledger_ref?: string;
-  finding_relation_graph_ref?: string;
-  issue_ledger_ref?: string;
-  issue_stance_matrix_ref?: string;
-  deliberation_plan_ref?: string;
-  problem_framing_ref?: string;
+  finding_ledger_ref?: string | null;
+  finding_relation_graph_ref?: string | null;
+  issue_ledger_ref?: string | null;
+  issue_stance_matrix_ref?: string | null;
+  deliberation_plan_ref?: string | null;
+  problem_framing_ref?: string | null;
   issue_resolution_summary?: unknown[];
-  synthesis_result_ref: string;
+  result_classification_summary?: ReviewResultClassificationSummary | null;
+  synthesis_result_ref: string | null;
   deliberation_status: DeliberationStatus;
-  deliberation_result_ref: string;
+  deliberation_result_ref: string | null;
   final_output_ref: string;
   shared_phenomenon_summary: SharedPhenomenonSummaryEntry[];
 }

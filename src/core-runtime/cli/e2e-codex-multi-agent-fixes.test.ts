@@ -446,7 +446,11 @@ describe("C. llm config precedence", () => {
 // ---------------------------------------------------------------------------
 
 import { executeReviewPromptExecution } from "./run-review-prompt-execution.js";
-import { writeYamlDocument } from "../review/review-artifact-utils.js";
+import { completeReviewSession } from "./complete-review-session.js";
+import {
+  readYamlDocument,
+  writeYamlDocument,
+} from "../review/review-artifact-utils.js";
 
 describe("D. Synthesize retry", () => {
   const projectRoot = process.cwd();
@@ -472,7 +476,15 @@ describe("D. Synthesize retry", () => {
     const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
     const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
     const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
+    const interpretationPath = path.join(sessionRoot, "interpretation.yaml");
+    const bindingPath = path.join(sessionRoot, "binding.yaml");
+    const sessionMetadataPath = path.join(sessionRoot, "session-metadata.yaml");
     const executionPreparationRoot = path.join(sessionRoot, "execution-preparation");
+    const targetSnapshotPath = path.join(executionPreparationRoot, "target-snapshot.md");
+    const targetSnapshotManifestPath = path.join(
+      executionPreparationRoot,
+      "target-snapshot-manifest.yaml",
+    );
     const reviewContextManifestPath = path.join(
       executionPreparationRoot,
       "review-context-manifest.yaml",
@@ -484,6 +496,10 @@ describe("D. Synthesize retry", () => {
     const reviewTargetProfilePath = path.join(
       executionPreparationRoot,
       "review-target-profile.yaml",
+    );
+    const contextCandidateAssemblyPath = path.join(
+      executionPreparationRoot,
+      "context-candidate-assembly.yaml",
     );
     fs.mkdirSync(packetRoot, { recursive: true });
     fs.mkdirSync(executionPreparationRoot, { recursive: true });
@@ -503,11 +519,31 @@ describe("D. Synthesize retry", () => {
       "utf8",
     );
     fs.writeFileSync(materializedInputPath, "# Target\nMinimal fixture.\n", "utf8");
+    fs.writeFileSync(targetSnapshotPath, "# Target Snapshot\nMinimal fixture.\n", "utf8");
     fs.writeFileSync(
       reviewTargetProfilePath,
       "schema_version: 1\nprofile_id: test\n",
       "utf8",
     );
+    await writeYamlDocument(targetSnapshotManifestPath, {
+      schema_version: "1",
+      session_id: path.basename(sessionRoot),
+      target_refs: [materializedInputPath],
+    });
+    await writeYamlDocument(contextCandidateAssemblyPath, {
+      schema_version: "1",
+      session_id: path.basename(sessionRoot),
+      selected_context_refs: [materializedInputPath],
+    });
+    await writeYamlDocument(interpretationPath, {
+      entrypoint: "review",
+      intent_summary: "test",
+      ambiguity_notes: [],
+    });
+    await writeYamlDocument(sessionMetadataPath, {
+      session_id: path.basename(sessionRoot),
+      created_at: "2026-05-26T00:00:00.000Z",
+    });
 
     const staticPacketRefs = [
       { consumer_id: "lens:logic", packet_ref: path.join(packetRoot, "logic.prompt.md") },
@@ -566,6 +602,90 @@ describe("D. Synthesize retry", () => {
     });
 
     const synthesizeOutputPath = path.join(sessionRoot, "synthesis-output.md");
+    await writeYamlDocument(bindingPath, {
+      resolved_target_scope: {
+        kind: "file",
+        resolved_refs: [materializedInputPath],
+      },
+      domain_final_selection: {
+        recommendation: "none",
+        final_value: "none",
+        selection_mode: "not_requested",
+      },
+      resolved_session_domain: "none",
+      resolved_execution_realization: "worker",
+      resolved_host_runtime: "codex",
+      resolved_review_mode: "core-axis",
+      resolved_lens_set: ["logic", "pragmatics"],
+      session_id: path.basename(sessionRoot),
+      session_root: sessionRoot,
+      round1_root: round1Root,
+      execution_preparation_root: executionPreparationRoot,
+      execution_plan_path: path.join(sessionRoot, "execution-plan.yaml"),
+      session_metadata_path: sessionMetadataPath,
+      interpretation_artifact_path: interpretationPath,
+      binding_output_path: bindingPath,
+      target_snapshot_path: targetSnapshotPath,
+      target_snapshot_manifest_path: targetSnapshotManifestPath,
+      review_target_profile_path: reviewTargetProfilePath,
+      materialized_input_path: materializedInputPath,
+      context_candidate_assembly_path: contextCandidateAssemblyPath,
+      review_context_manifest_path: reviewContextManifestPath,
+      synthesis_output_path: synthesizeOutputPath,
+      finding_ledger_path: findingLedgerPath,
+      finding_relation_graph_path: findingRelationGraphPath,
+      issue_ledger_path: issueLedgerPath,
+      issue_stance_matrix_path: issueStanceMatrixPath,
+      deliberation_plan_path: deliberationPlanPath,
+      problem_framing_path: problemFramingPath,
+      deliberation_mode: "controlled-lens-deliberation",
+      deliberation_root_path: deliberationRoot,
+      deliberation_output_path: path.join(sessionRoot, "deliberation.md"),
+      execution_result_path: path.join(sessionRoot, "execution-result.yaml"),
+      error_log_path: path.join(sessionRoot, "error-log.md"),
+      review_record_path: path.join(sessionRoot, "review-record.yaml"),
+      final_output_path: path.join(sessionRoot, "final-output.md"),
+      boundary_policy: {
+        web_research_policy: "denied",
+        repo_exploration_policy: "denied",
+        recursive_reference_expansion_policy: "denied",
+        filesystem_scope: { allowed_roots: [projectRoot] },
+        write_policy: {
+          source_mutation_policy: "denied",
+          allowed_output_refs: [sessionRoot],
+        },
+        provenance_policy: {
+          extra_exploration_citation_required: false,
+          web_source_citation_required: false,
+        },
+      },
+      boundary_presentation: {
+        role_definition_presentation: "embedded_and_ref",
+        primary_target_presentation: "embedded_and_ref",
+        required_context_presentation: "ref_only",
+        output_seat_presentation: "declared",
+        control_policy_presentation: "declared",
+      },
+      boundary_enforcement_profile: {
+        prompt_boundary_enforcement: "prompt_declared_only",
+        filesystem_boundary_enforcement: "prompt_declared_only",
+        network_boundary_enforcement: "prompt_declared_only",
+        write_boundary_enforcement: "prompt_declared_only",
+      },
+      effective_boundary_state: {
+        web_research: BOUNDARY_DECISION,
+        repo_exploration: BOUNDARY_DECISION,
+        recursive_reference_expansion: BOUNDARY_DECISION,
+        source_mutation: BOUNDARY_DECISION,
+        filesystem_scope: {
+          requested_allowed_roots: [projectRoot],
+          effective_allowed_roots: [projectRoot],
+          guarantee_level: "prompt_declared_only",
+          notes: [],
+        },
+      },
+      binding_notes: [],
+    });
     await writeYamlDocument(
       path.join(sessionRoot, "execution-plan.yaml"),
       {
@@ -574,9 +694,9 @@ describe("D. Synthesize retry", () => {
         execution_realization: "worker",
         host_runtime: "codex",
         review_mode: "core-axis",
-        interpretation_artifact_path: path.join(sessionRoot, "interpretation.yaml"),
-        binding_output_path: path.join(sessionRoot, "binding.yaml"),
-        session_metadata_path: path.join(sessionRoot, "session-metadata.yaml"),
+        interpretation_artifact_path: interpretationPath,
+        binding_output_path: bindingPath,
+        session_metadata_path: sessionMetadataPath,
         execution_preparation_root: executionPreparationRoot,
         review_context_manifest_path: reviewContextManifestPath,
         review_target_profile_path: reviewTargetProfilePath,
@@ -709,13 +829,13 @@ if (failUnitId && unitId === failUnitId) {
 }
 function issueArtifactOutput(artifactId) {
   if (artifactId === "finding-ledger") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    severity: low\\nvalidation:\\n  unaddressable_findings: []\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    affected_purpose: declared review purpose\\n    failure_condition: mock supported path\\n    impact: mock finding does not make the declared purpose unsafe\\n    evidence_refs: [round1/logic.md#finding-1]\\n    severity: low\\n    domain_threshold_used: null\\nvalidation:\\n  unaddressable_findings: []\\n";
   }
   if (artifactId === "finding-relation-graph") {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nrelations: []\\nsingleton_findings:\\n  - finding_id: finding-001\\n    reason: mock singleton\\n";
   }
   if (artifactId === "issue-ledger") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    severity: low\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    affected_purpose: declared review purpose\\n    failure_condition: mock supported path\\n    impact: mock issue does not make the declared purpose unsafe\\n    evidence_refs: [round1/logic.md#finding-1]\\n    severity: low\\n    domain_threshold_used: null\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
   }
   if (artifactId === "issue-stance-matrix") {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    stances:\\n      - lens_id: logic\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/logic.md]\\n      - lens_id: pragmatics\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/pragmatics.md]\\nvalidation:\\n  missing_stances: []\\n";
@@ -737,7 +857,7 @@ const output = unitKind === "issue_artifact"
     ? "---\\ndeliberation_status: performed\\n---\\n# Controlled Deliberation\\nResult.\\n"
   : unitKind === "deliberation"
     ? "# " + unitId + "\\nDeliberation response.\\n"
-  : "# " + unitId + "\\nLens result.\\n";
+  : "# " + unitId + "\\nLens result.\\n\\n### Domain Constraints Used\\n- source_doc: fixture\\n  source_version_or_snapshot_id: test\\n  anchor: none\\n\\n### Domain Context Assumptions\\n- none\\n";
 fs.writeFileSync(outputPath, output, "utf8");
 `, "utf8");
     return scriptPath;
@@ -763,13 +883,13 @@ const counterPath = ${JSON.stringify(counterPath)};
 const mode = ${JSON.stringify(mode)};
 function issueArtifactOutput(artifactId) {
   if (artifactId === "finding-ledger") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    severity: low\\nvalidation:\\n  unaddressable_findings: []\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nfindings:\\n  - finding_id: finding-001\\n    lens_id: logic\\n    source_ref: round1/logic.md#finding-1\\n    target: mock-target\\n    evidence_anchor: mock-anchor\\n    claim: mock finding\\n    proposed_action: none\\n    affected_purpose: declared review purpose\\n    failure_condition: mock supported path\\n    impact: mock finding does not make the declared purpose unsafe\\n    evidence_refs: [round1/logic.md#finding-1]\\n    severity: low\\n    domain_threshold_used: null\\nvalidation:\\n  unaddressable_findings: []\\n";
   }
   if (artifactId === "finding-relation-graph") {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nrelations: []\\nsingleton_findings:\\n  - finding_id: finding-001\\n    reason: mock singleton\\n";
   }
   if (artifactId === "issue-ledger") {
-    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    severity: low\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
+    return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    root_cause_hypothesis: mock root\\n    root_confidence: low\\n    surface_finding_ids: [finding-001]\\n    relation_refs: []\\n    raised_by_lens_ids: [logic]\\n    issue_statement: mock issue\\n    proposed_action: none\\n    affected_purpose: declared review purpose\\n    failure_condition: mock supported path\\n    impact: mock issue does not make the declared purpose unsafe\\n    evidence_refs: [round1/logic.md#finding-1]\\n    severity: low\\n    domain_threshold_used: null\\n    singleton_reason: mock singleton\\nvalidation:\\n  unclustered_finding_ids: []\\n";
   }
   if (artifactId === "issue-stance-matrix") {
     return "schema_version: 1\\nsession_id: " + sessionId + "\\nissues:\\n  - issue_id: issue-001\\n    stances:\\n      - lens_id: logic\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/logic.md]\\n      - lens_id: pragmatics\\n        stance: support\\n        rationale: mock stance\\n        root_hypothesis_position: accepts\\n        severity_position: keeps\\n        evidence_refs: [round1/pragmatics.md]\\nvalidation:\\n  missing_stances: []\\n";
@@ -801,7 +921,7 @@ const output = unitKind === "issue_artifact"
     ? "---\\ndeliberation_status: performed\\n---\\n# Controlled Deliberation\\nResult.\\n"
   : unitKind === "deliberation"
     ? "# " + unitId + "\\nDeliberation response.\\n"
-  : "# " + unitId + "\\nLens.\\n";
+  : "# " + unitId + "\\nLens.\\n\\n### Domain Constraints Used\\n- source_doc: fixture\\n  source_version_or_snapshot_id: test\\n  anchor: none\\n\\n### Domain Context Assumptions\\n- none\\n";
 fs.writeFileSync(outputPath, output, "utf8");
 `, "utf8");
     return { scriptPath, counterPath };
@@ -895,6 +1015,32 @@ fs.writeFileSync(outputPath, output, "utf8");
     const resultText = fs.readFileSync(resultPath, "utf8");
     assertIncludes(resultText, "halted_partial", "status is halted_partial");
     assertIncludes(resultText, "Synthesize execution failed", "halt_reason in artifact");
+    const degradationSummaryPath = path.join(sessionRoot, "degradation-summary.yaml");
+    assert(fs.existsSync(degradationSummaryPath), "degradation-summary.yaml created");
+    const degradationSummary = await readYamlDocument<{
+      execution_status?: string;
+      degradation_kinds?: string[];
+      halt_phase?: string | null;
+      failed_units?: Array<{ unit_id?: string; unit_kind?: string }>;
+    }>(degradationSummaryPath);
+    assertEqual(
+      degradationSummary.execution_status,
+      "halted_partial",
+      "degradation summary status",
+    );
+    assert(
+      degradationSummary.degradation_kinds?.includes("halted_partial") === true,
+      "halt degradation kind recorded",
+    );
+    assert(
+      degradationSummary.degradation_kinds?.includes("unit_failure") === true,
+      "unit failure degradation kind recorded",
+    );
+    assertEqual(degradationSummary.halt_phase, "synthesize", "summary halt phase");
+    assert(
+      degradationSummary.failed_units?.some((unit) => unit.unit_id === "synthesize") === true,
+      "summary failed unit recorded",
+    );
   });
 
   // ── D-5: successful retry still produces correct execution-result ──
@@ -919,6 +1065,10 @@ fs.writeFileSync(outputPath, output, "utf8");
     const resultText = fs.readFileSync(resultPath, "utf8");
     assertIncludes(resultText, "completed", "status is completed");
     assertNotIncludes(resultText, "halted_partial", "not halted");
+    assert(
+      !fs.existsSync(path.join(sessionRoot, "degradation-summary.yaml")),
+      "no degradation summary for completed run",
+    );
   });
 
   it("D-6: deliberation unit timeout writes halted execution result", async () => {
@@ -951,6 +1101,121 @@ fs.writeFileSync(outputPath, output, "utf8");
     const resultText = fs.readFileSync(resultPath, "utf8");
     assertIncludes(resultText, "halted_partial", "timeout result is halted");
     assertIncludes(resultText, "synthesis_executed: false", "synthesis not executed");
+    assertIncludes(resultText, "deliberation_status: not_performed", "deliberation not performed");
+    assertIncludes(resultText, "halt_phase: controlled_lens_deliberation", "halt phase recorded");
+    assertIncludes(resultText, "halt_unit_id: deliberation-logic", "halt unit recorded");
+    assertIncludes(resultText, "halt_lens_id: logic", "halt lens recorded");
+
+    const execution = await readYamlDocument<{
+      deliberation_execution_results?: Array<{
+        unit_id?: string;
+        unit_kind?: string;
+        status?: string;
+        failure_message?: string | null;
+      }>;
+    }>(resultPath);
+    const failedDeliberation = execution.deliberation_execution_results?.find(
+      (unit) => unit.unit_id === "deliberation-logic",
+    );
+    assert(failedDeliberation !== undefined, "failed deliberation result preserved");
+    assertEqual(failedDeliberation.unit_kind, "deliberation", "failed unit kind");
+    assertEqual(failedDeliberation.status, "failed", "failed deliberation status");
+    assertIncludes(
+      failedDeliberation.failure_message ?? "",
+      "timed out",
+      "failed deliberation timeout message",
+    );
+
+    const manifestText = fs.readFileSync(
+      path.join(sessionRoot, "review-run-manifest.yaml"),
+      "utf8",
+    );
+    assertIncludes(manifestText, "phase: controlled_lens_deliberation", "manifest halt phase");
+    assertIncludes(manifestText, "unit_id: deliberation-logic", "manifest halt unit");
+
+    await completeReviewSession([
+      "--project-root",
+      projectRoot,
+      "--session-root",
+      sessionRoot,
+      "--request-text",
+      "test controlled deliberation timeout",
+    ]);
+    const reviewRecord = await readYamlDocument<{
+      record_status?: string;
+      deliberation_status?: string;
+      finding_ledger_ref?: string | null;
+      finding_relation_graph_ref?: string | null;
+      issue_ledger_ref?: string | null;
+      issue_stance_matrix_ref?: string | null;
+      deliberation_plan_ref?: string | null;
+      problem_framing_ref?: string | null;
+      degradation_notes_ref?: string | null;
+      synthesis_result_ref?: string | null;
+      deliberation_result_ref?: string | null;
+    }>(path.join(sessionRoot, "review-record.yaml"));
+    assertEqual(reviewRecord.record_status, "halted_partial", "record status is halted");
+    assertEqual(
+      reviewRecord.deliberation_status,
+      "not_performed",
+      "record deliberation not performed",
+    );
+    assertEqual(reviewRecord.synthesis_result_ref, null, "missing synthesis ref stays null");
+    assertEqual(
+      reviewRecord.deliberation_result_ref,
+      null,
+      "missing deliberation ref stays null",
+    );
+    assert(typeof reviewRecord.finding_ledger_ref === "string", "finding ledger ref preserved");
+    assert(
+      typeof reviewRecord.finding_relation_graph_ref === "string",
+      "finding relation graph ref preserved",
+    );
+    assert(typeof reviewRecord.issue_ledger_ref === "string", "issue ledger ref preserved");
+    assert(
+      typeof reviewRecord.issue_stance_matrix_ref === "string",
+      "issue stance matrix ref preserved",
+    );
+    assert(
+      typeof reviewRecord.deliberation_plan_ref === "string",
+      "deliberation plan ref preserved",
+    );
+    assertEqual(reviewRecord.problem_framing_ref, null, "missing problem framing ref stays null");
+    assert(
+      reviewRecord.degradation_notes_ref?.endsWith("degradation-summary.yaml") === true,
+      "record points to structured degradation summary",
+    );
+    const degradationSummary = await readYamlDocument<{
+      halt_unit_id?: string | null;
+      halt_lens_id?: string | null;
+      failed_units?: Array<{
+        unit_id?: string;
+        lens_id?: string | null;
+        failure_message?: string | null;
+      }>;
+    }>(path.join(sessionRoot, "degradation-summary.yaml"));
+    assertEqual(
+      degradationSummary.halt_unit_id,
+      "deliberation-logic",
+      "summary halt unit",
+    );
+    assertEqual(degradationSummary.halt_lens_id, "logic", "summary halt lens");
+    assert(
+      degradationSummary.failed_units?.some(
+        (unit) =>
+          unit.unit_id === "deliberation-logic" &&
+          unit.lens_id === "logic" &&
+          unit.failure_message?.includes("timed out") === true,
+      ) === true,
+      "summary failed deliberation unit",
+    );
+    const finalOutputText = fs.readFileSync(
+      path.join(sessionRoot, "final-output.md"),
+      "utf8",
+    );
+    assertIncludes(finalOutputText, "halt phase: controlled_lens_deliberation", "final output halt phase");
+    assertIncludes(finalOutputText, "halt unit: deliberation-logic", "final output halt unit");
+    assertIncludes(finalOutputText, "halt lens: logic", "final output halt lens");
   });
 
   it("D-7: issue artifact failure writes halted execution result", async () => {
@@ -977,6 +1242,47 @@ fs.writeFileSync(outputPath, output, "utf8");
     assertIncludes(resultText, "synthesis_executed: false", "synthesis not executed");
     assertIncludes(resultText, "unit_id: issue-ledger", "failed artifact result recorded");
     assertIncludes(resultText, "status: failed", "failed unit status recorded");
+  });
+
+  it("D-8: teamlead deliberation timeout records controlled unit identity", async () => {
+    const { sessionRoot } = await buildMinimalSession("d8");
+    const execDir = trackCleanup(makeTmpDir("d8-exec"));
+    const hangScript = createSucceedScript(execDir, {
+      hangUnitId: "controlled-deliberation",
+    });
+
+    const result = await executeReviewPromptExecution({
+      projectRoot,
+      sessionRoot,
+      defaultExecutorConfig: { bin: "node", args: [hangScript] },
+      unitTimeoutMs: 500,
+    });
+
+    assertEqual(result.synthesis_executed, false, "synthesis skipped after teamlead timeout");
+    assertEqual(result.halt_phase, "controlled_lens_deliberation", "teamlead halt phase");
+    assertEqual(result.halt_unit_id, "controlled-deliberation", "teamlead halt unit");
+    assertEqual(result.halt_unit_kind, "deliberation", "teamlead halt kind");
+    assertEqual(result.halt_lens_id, null, "teamlead halt has no lens id");
+
+    const execution = await readYamlDocument<{
+      halt_phase?: string | null;
+      halt_unit_id?: string | null;
+      halt_lens_id?: string | null;
+      deliberation_execution_results?: Array<{
+        unit_id?: string;
+        status?: string;
+        failure_message?: string | null;
+      }>;
+    }>(path.join(sessionRoot, "execution-result.yaml"));
+    assertEqual(execution.halt_phase, "controlled_lens_deliberation", "artifact halt phase");
+    assertEqual(execution.halt_unit_id, "controlled-deliberation", "artifact halt unit");
+    assertEqual(execution.halt_lens_id, null, "artifact halt lens");
+    const teamlead = execution.deliberation_execution_results?.find(
+      (unit) => unit.unit_id === "controlled-deliberation",
+    );
+    assert(teamlead !== undefined, "teamlead execution result preserved");
+    assertEqual(teamlead.status, "failed", "teamlead result failed");
+    assertIncludes(teamlead.failure_message ?? "", "timed out", "teamlead timeout message");
   });
 });
 

@@ -66,7 +66,8 @@ lens가 실제로 무엇을 읽어야 하는지가 닫히지 않는다.
   - `BoundaryPresentation`
   - `BoundaryEnforcementProfile`
   - `EffectiveBoundaryState`
-- `error-log.md`는 degraded case / partial failure를 기록하는 deterministic conformance log seat다
+- `error-log.md`는 deterministic conformance log seat다
+- `degradation-summary.yaml`은 degraded case / partial failure를 기록하는 structured source seat다
 - `execution-preparation/` 아래 artifact들은 lens 실행 직전 basis artifact다
 - `pre-dispatch-contracts.md`가 정한 gate를 통과하지 못하면 lens dispatch를 시작하지 않는다
 - later runtime implementation도 이 구분은 유지해야 한다

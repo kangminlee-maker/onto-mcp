@@ -12,7 +12,10 @@ import {
   executeReviewPromptExecution,
   type ReviewUnitExecutorConfig,
 } from "./run-review-prompt-execution.js";
-import type { PrepareOnlyResult } from "../review/artifact-types.js";
+import type {
+  PrepareOnlyResult,
+  ReviewResultClassificationSummary,
+} from "../review/artifact-types.js";
 import { startReviewSession } from "./start-review-session.js";
 import { spawnWatcherPane } from "./spawn-watcher.js";
 import { generateReviewSessionId } from "../review/materializers.js";
@@ -34,6 +37,8 @@ import {
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
 import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
+import { readValidatedReviewRecord } from "../review/review-record-validation.js";
+import { readReviewResultClassification } from "../review/review-result-classification.js";
 import {
   createStructuredFailureRecord,
   ReviewStructuredFailureError,
@@ -121,9 +126,13 @@ interface ReviewInvokeRouteSummary {
 
 interface ReviewResultClosureSummary {
   issue_count: number;
+  material_issue_count: number;
+  non_material_finding_count: number;
+  highest_severity: string | null;
   severity_counts: Record<string, number>;
   timing_counts: Record<string, number>;
   closure_counts: Record<string, number>;
+  action_candidates: ReviewResultClassificationSummary["action_candidates"];
   problem_definitions: Array<{
     issue_id: string;
     problem_definition: string;
@@ -558,23 +567,15 @@ async function readReviewResultExplanationSummary(
 async function readReviewResultClosureSummary(
   sessionRoot: string,
 ): Promise<ReviewResultClosureSummary> {
-  const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
   const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
-  const issueLedger = (await fileExists(issueLedgerPath))
-    ? await readYamlDocument<{ issues?: unknown[] }>(issueLedgerPath)
-    : {};
+  const resultClassification =
+    await readReviewResultClassification(sessionRoot);
   const problemFraming = (await fileExists(problemFramingPath))
     ? await readYamlDocument<{ classifications?: unknown[] }>(problemFramingPath)
     : {};
-  const issues = Array.isArray(issueLedger.issues) ? issueLedger.issues : [];
   const classifications = Array.isArray(problemFraming.classifications)
     ? problemFraming.classifications
     : [];
-  const severityValues = issues.map((issue) =>
-    issue !== null && typeof issue === "object"
-      ? stringValue((issue as Record<string, unknown>).severity)
-      : "unknown",
-  );
   const classificationRecords = classifications
     .filter(
       (classification): classification is Record<string, unknown> =>
@@ -583,8 +584,11 @@ async function readReviewResultClosureSummary(
         !Array.isArray(classification),
     );
   return {
-    issue_count: Math.max(issues.length, classificationRecords.length),
-    severity_counts: countStringValues(severityValues),
+    issue_count: Math.max(resultClassification.issue_count, classificationRecords.length),
+    material_issue_count: resultClassification.material_issue_count,
+    non_material_finding_count: resultClassification.non_material_finding_count,
+    highest_severity: resultClassification.highest_severity,
+    severity_counts: resultClassification.severity_counts,
     timing_counts: countStringValues(
       classificationRecords.map((classification) =>
         stringValue(classification.timing_class),
@@ -595,6 +599,7 @@ async function readReviewResultClosureSummary(
         stringValue(classification.closure_class),
       ),
     ),
+    action_candidates: resultClassification.action_candidates,
     problem_definitions: classificationRecords.slice(0, 5).map((classification) => ({
       issue_id: stringValue(classification.issue_id),
       problem_definition: stringValue(classification.problem_definition),
@@ -635,6 +640,13 @@ function renderReviewResultOverview(args: {
             `    - ${problem.issue_id}: ${problem.problem_definition} (${problem.issue_role}, ${problem.judgment_state}, ${problem.timing_class}/${problem.closure_class})`,
         )
       : ["    - (none)"];
+  const actionCandidateLines =
+    args.closureSummary.action_candidates.length > 0
+      ? args.closureSummary.action_candidates.slice(0, 5).map(
+          (candidate) =>
+            `    - ${candidate.issue_id}: ${candidate.candidates.join(", ") || "none"}`,
+        )
+      : ["    - (none)"];
   return [
     "[review result]",
     "outcome:",
@@ -653,9 +665,14 @@ function renderReviewResultOverview(args: {
     ...args.explanationSummary.screen_lines,
     "issues:",
     `  count: ${args.closureSummary.issue_count}`,
+    `  highest_severity: ${args.closureSummary.highest_severity ?? "none"}`,
+    `  material_issue_count: ${args.closureSummary.material_issue_count}`,
+    `  non_material_finding_count: ${args.closureSummary.non_material_finding_count}`,
     `  severity: ${renderCountMap(args.closureSummary.severity_counts)}`,
     `  timing: ${renderCountMap(args.closureSummary.timing_counts)}`,
     `  closure: ${renderCountMap(args.closureSummary.closure_counts)}`,
+    "  action_candidates:",
+    ...actionCandidateLines,
     "  problem_definitions:",
     ...problemLines,
     "artifacts:",
@@ -2220,6 +2237,17 @@ async function readOptionalReviewSummary(
         execution_result_ref?: string | null;
       }
     | null;
+  executionResult:
+    | {
+        execution_status?: string;
+        deliberation_status?: string | null;
+        halt_reason?: string | null;
+        halt_phase?: string | null;
+        halt_unit_id?: string | null;
+        halt_unit_kind?: string | null;
+        halt_lens_id?: string | null;
+      }
+    | null;
   binding:
     | {
         review_record_path?: string;
@@ -2239,18 +2267,25 @@ async function readOptionalReviewSummary(
       }>(bindingPath)
     : null;
   const reviewRecord = (await fileExists(reviewRecordPath))
+    ? await readValidatedReviewRecord(reviewRecordPath)
+    : null;
+  const executionResultPath =
+    binding?.execution_result_path ?? path.join(sessionRoot, "execution-result.yaml");
+  const executionResult = (await fileExists(executionResultPath))
     ? await readYamlDocument<{
-        record_status?: string;
-        deliberation_status?: string;
-        participating_lens_ids?: string[];
-        degraded_lens_ids?: string[];
-        final_output_ref?: string | null;
-        execution_result_ref?: string | null;
-      }>(reviewRecordPath)
+        execution_status?: string;
+        deliberation_status?: string | null;
+        halt_reason?: string | null;
+        halt_phase?: string | null;
+        halt_unit_id?: string | null;
+        halt_unit_kind?: string | null;
+        halt_lens_id?: string | null;
+      }>(executionResultPath)
     : null;
 
   return {
     reviewRecord,
+    executionResult,
     binding,
   };
 }
@@ -2690,12 +2725,43 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const degradedLensIds =
     reviewSummary.reviewRecord?.degraded_lens_ids ??
     promptExecutionResult.degraded_lens_ids;
-  const recordStatus = reviewSummary.reviewRecord?.record_status ?? null;
+  const recordStatus =
+    reviewSummary.reviewRecord?.record_status ??
+    reviewSummary.executionResult?.execution_status ??
+    null;
   const deliberationStatus =
-    reviewSummary.reviewRecord?.deliberation_status ?? null;
+    reviewSummary.reviewRecord?.deliberation_status ??
+    reviewSummary.executionResult?.deliberation_status ??
+    null;
+  const haltSummary =
+    reviewSummary.executionResult?.halt_reason || promptExecutionResult.halt_reason
+      ? {
+          reason:
+            reviewSummary.executionResult?.halt_reason ??
+            promptExecutionResult.halt_reason ??
+            null,
+          phase:
+            reviewSummary.executionResult?.halt_phase ??
+            promptExecutionResult.halt_phase ??
+            null,
+          unit_id:
+            reviewSummary.executionResult?.halt_unit_id ??
+            promptExecutionResult.halt_unit_id ??
+            null,
+          unit_kind:
+            reviewSummary.executionResult?.halt_unit_kind ??
+            promptExecutionResult.halt_unit_kind ??
+            null,
+          lens_id:
+            reviewSummary.executionResult?.halt_lens_id ??
+            promptExecutionResult.halt_lens_id ??
+            null,
+        }
+      : null;
   const executionSummary = {
     status: recordStatus,
     deliberation_status: deliberationStatus,
+    halt: haltSummary,
     review_mode: setup.resolvedInvokeInputs.reviewMode,
     lens: {
       participating_count: participatingLensIds.length,
@@ -2724,6 +2790,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     outcome: {
       status: recordStatus,
       deliberation_status: deliberationStatus,
+      halt: haltSummary,
       review_mode: setup.resolvedInvokeInputs.reviewMode,
     },
     scope: {
@@ -2793,6 +2860,11 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
           review_run_manifest_path: reviewRunManifestPath,
           record_status: recordStatus,
           deliberation_status: deliberationStatus,
+          halt_reason: haltSummary?.reason ?? null,
+          halt_phase: haltSummary?.phase ?? null,
+          halt_unit_id: haltSummary?.unit_id ?? null,
+          halt_unit_kind: haltSummary?.unit_kind ?? null,
+          halt_lens_id: haltSummary?.lens_id ?? null,
           participating_lens_ids: participatingLensIds,
           degraded_lens_ids: degradedLensIds,
           summary: executionSummary,

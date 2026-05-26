@@ -125,10 +125,21 @@ Live controlled deliberation has a tail-latency halt risk.
 The halt is explicit and artifact-backed, but the review produces no synthesize result.
 ```
 
-Do not solve this by adding inline fallback. The next policy needs to decide whether a deliberation timeout should:
+Do not solve this by adding inline fallback. Policy decision after this handoff:
 
-1. remain a hard halt for contested deliberation, or
-2. be recorded as an unresolved lens stance so synthesize can continue with bounded disclosure.
+- A deliberation timeout remains a hard halt for contested deliberation.
+- It is not recorded as an unresolved stance continuation path.
+- Synthesize must not run after incomplete controlled deliberation.
+- Runtime artifacts must preserve `halt_phase`, failed deliberation unit id/kind, lens-bound `halt_lens_id`, and per-unit `failure_message`.
+- ReviewRecord must leave `synthesis_result_ref` and `deliberation_result_ref`
+  as `null` when those files were not produced by the halted run.
+- ReviewRecord must preserve refs for issue-stage artifacts that were produced
+  before the halt.
+- Degraded or halted runs must write `degradation-summary.yaml` as the
+  structured source for halt/degradation truth; `error-log.md` remains an
+  execution log.
+- `observed_dispatch_width` is the planned/observed lens dispatch breadth;
+  scheduler concurrency remains `max_concurrent_lenses`.
 
 ## 5. Current Changed Files
 
@@ -146,12 +157,27 @@ src/core-runtime/llm/llm-tool-loop.ts
 development-records/handoff/20260526-review-runtime-hardening-handoff.md
 ```
 
+Additional files touched by the controlled deliberation hard-halt policy
+continuation:
+
+```text
+.onto/processes/review/issue-stance-deliberation-contract.md
+.onto/processes/review/pre-dispatch-contracts.md
+.onto/processes/review/record-contract.md
+.onto/processes/review/record-field-mapping.md
+src/core-runtime/review/artifact-types.ts
+src/core-runtime/cli/run-review-prompt-execution.ts
+src/core-runtime/cli/review-invoke.ts
+src/core-runtime/cli/render-review-final-output.ts
+src/core-runtime/cli/assemble-review-record.ts
+```
+
 ## 6. Recommended Next Work
 
 Recommended next task:
 
 ```text
-Design and implement controlled deliberation timeout policy.
+Implement and verify controlled deliberation hard-halt artifact precision.
 ```
 
 Acceptance direction:
@@ -160,8 +186,8 @@ Acceptance direction:
 - Preserve timeout identity and timed-out lens id in artifacts.
 - Avoid silent synthesis drift.
 - Avoid compatibility shims or fallback paths.
-- Decide whether synthesize is allowed after a deliberation timeout.
-- If synthesize proceeds, its prompt packet must include the unresolved/timeout stance as explicit input truth.
+- Keep synthesize blocked after a deliberation timeout.
+- Record `deliberation_status: not_performed` for halted controlled deliberation.
 - MCP/CLI result must show the timeout state clearly.
 - Add deterministic tests before relying on live review evidence.
 
@@ -218,3 +244,34 @@ ONTO_REVIEW_HARDENING_KEEP_TMP=1 npm run test:review:hardening
 
 Avoid treating `.onto/review/20260526-1e6159f0` as a successful final review. It is useful evidence for latency/failure behavior only.
 
+## 8. Continuation Update
+
+The follow-up implementation added:
+
+- shared `ReviewRecord` validation in `src/core-runtime/review/review-record-validation.ts`, used by record assembly and core API/MCP result reads
+- `degradation-summary.yaml` as the structured degraded/halted source derived from `execution-result.yaml`
+- deterministic fixtures proving `domain_threshold_used` for ontology, software-engineering, and spreadsheet/accounting-style thresholds remains a severity explanation, not a second materiality axis
+- native MCP `notifications/progress` for `onto.review` calls that supply
+  `_meta.progressToken`, with versioned `ontoReviewProgress` metadata
+- shared runtime progress step contract used by issue artifacts, execution
+  manifests, Core API progress projection, and MCP progress conformance
+
+Representative checks run during this continuation:
+
+```bash
+npm run check:ts-core
+npm run build:ts-core
+npx vitest run src/core-api/review-api.test.ts
+npx vitest run src/core-runtime/review/review-result-classification.test.ts src/core-runtime/review/review-record-validation.test.ts
+npm run test:e2e
+npm run test:e2e:codex-multi-agent-fixes
+npm run test:mcp:review
+npm run test:review:hardening
+git diff --check
+```
+
+Latest MCP representative session after the final cleanup pass:
+
+```text
+.onto/review/20260526-db400dda
+```
