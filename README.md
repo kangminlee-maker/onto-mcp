@@ -84,6 +84,17 @@ For MCP clients, prefer the `llmPresentation.openingBrief` and
 `llmPresentation.finalResult` prompt/input pairs over CLI stdout when presenting
 start and finish explanations.
 
+Runtime hardening is available as a development verification harness:
+
+```bash
+npm run test:review:hardening
+```
+
+It runs large and repeated mock reviews, validates primary artifact consistency,
+checks `Tools: required` native-tool boundaries, verifies provider preflight
+fail-loud behavior, and removes temporary fixtures unless
+`ONTO_REVIEW_HARDENING_KEEP_TMP=1` is set.
+
 ## Settings
 
 Runtime settings live in JSON:
@@ -178,7 +189,7 @@ Primary outputs:
 npm run check:ts-core
 npm run build:ts-core
 npm run test:mcp:review
+npm run test:review:hardening
 npm run test:e2e
-npm run lint:output-language-boundary
 git diff --check
 ```

@@ -483,6 +483,21 @@ async function callMockToolLoop(
   config: ToolLoopConfig,
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
+  if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW === "1") {
+    throw new Error("mock tool-loop failure");
+  }
+  if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY === "1") {
+    return {
+      text: "",
+      iterations: 1,
+      tool_calls: 0,
+      input_tokens: 1,
+      output_tokens: 0,
+      model_id: config.model_id,
+      truncated_by_iteration_cap: false,
+    };
+  }
+
   let toolCalls = 0;
 
   // Step 1: list_directory(projectRoot) — exercise the dispatch path.

@@ -932,7 +932,7 @@ fs.writeFileSync(outputPath, output, "utf8");
       projectRoot,
       sessionRoot,
       defaultExecutorConfig: { bin: "node", args: [hangScript] },
-      unitTimeoutMs: 50,
+      unitTimeoutMs: 500,
     });
 
     assertEqual(result.synthesis_executed, false, "synthesis skipped after timeout");

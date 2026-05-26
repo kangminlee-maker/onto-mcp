@@ -20,7 +20,7 @@
  *
  * - Materialized input (target content): already inline in the prompt packet
  * - Domain documents: NOT inlined by default — packet only references them
- * - Learning context: already inline in the prompt packet
+ * - Review context: already bounded by the prompt packet contract
  *
  * Phase 2 inline embedding is **opt-in** via `--embed-domain-docs` flag.
  * When enabled, domain doc references in the packet are expanded into inline
@@ -679,10 +679,10 @@ export async function runInlineHttpReviewUnitExecutorCli(
       toolModeUsed = "native";
       // Empty final text after a tool loop usually means the model only ever
       // returned tool_use blocks and never produced a final answer (or hit
-      // the iteration cap). In auto mode we fall back to inline; in native
-      // mode we surface the failure.
+      // the iteration cap). In ordinary auto mode we fall back to inline; when
+      // the packet declares Tools: required, native execution is the boundary.
       if (outputText.length === 0) {
-        if (requestedToolMode === "auto") {
+        if (requestedToolMode === "auto" && !packetForcedNative) {
           nativeAttemptError = `tool-native produced empty final text${
             loopResult.truncated_by_iteration_cap ? " (iteration cap hit)" : ""
           }`;
@@ -694,7 +694,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
         }
       }
     } catch (err) {
-      if (requestedToolMode === "auto") {
+      if (requestedToolMode === "auto" && !packetForcedNative) {
         nativeAttemptError = err instanceof Error ? err.message : String(err);
         toolModeUsed = "inline";
         toolIterations = undefined;

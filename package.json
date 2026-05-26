@@ -25,6 +25,7 @@
     "build:ts-core": "tsc -p tsconfig.json",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
     "test:mcp:review": "tsx scripts/mcp-review-conformance.ts",
+    "test:review:hardening": "tsx scripts/review-runtime-hardening.ts",
     "test:e2e": "bash src/core-runtime/cli/e2e-review-invoke.test.sh",
     "test:e2e:codex-multi-agent-fixes": "vitest run src/core-runtime/cli/e2e-codex-multi-agent-fixes.test.ts",
     "review:prepare-session": "tsx src/core-runtime/cli/prepare-review-session.ts",

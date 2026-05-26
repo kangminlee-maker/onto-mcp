@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runInlineHttpReviewUnitExecutorCli } from "./inline-http-review-unit-executor.js";
@@ -611,6 +611,70 @@ You are the synthesize actor. Lens outputs live on disk.
       expect(result.tool_mode).toBe("native");
     } finally {
       process.stderr.write = originalWrite;
+    }
+  });
+
+  it("keeps packet-forced native as fail-loud when native auto execution fails", async () => {
+    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const savedHook = process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW;
+    process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW = "1";
+
+    try {
+      await expect(
+        runInlineHttpReviewUnitExecutorCli([
+          "--project-root", projectRoot,
+          "--session-root", sessionRoot,
+          "--onto-home", ontoHome,
+          "--unit-id", "synthesize",
+          "--unit-kind", "synthesize",
+          "--packet-path", packetPath,
+          "--output-path", outputPath,
+          "--provider", "openai",
+          "--model", "mock-model",
+          "--tool-mode", "auto",
+        ]),
+      ).rejects.toThrow(/mock tool-loop failure/);
+      expect(existsSync(outputPath)).toBe(false);
+      expect(consoleLogSpy.getOutput().join("")).not.toContain('"tool_mode":"inline"');
+    } finally {
+      if (savedHook === undefined) {
+        delete process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW;
+      } else {
+        process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW = savedHook;
+      }
+    }
+  });
+
+  it("keeps packet-forced native as fail-loud when native auto returns empty output", async () => {
+    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const savedHook = process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY;
+    process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY = "1";
+
+    try {
+      await expect(
+        runInlineHttpReviewUnitExecutorCli([
+          "--project-root", projectRoot,
+          "--session-root", sessionRoot,
+          "--onto-home", ontoHome,
+          "--unit-id", "synthesize",
+          "--unit-kind", "synthesize",
+          "--packet-path", packetPath,
+          "--output-path", outputPath,
+          "--provider", "openai",
+          "--model", "mock-model",
+          "--tool-mode", "auto",
+        ]),
+      ).rejects.toThrow(/tool-native mode produced empty final text/);
+      expect(existsSync(outputPath)).toBe(false);
+      expect(consoleLogSpy.getOutput().join("")).not.toContain('"tool_mode":"inline"');
+    } finally {
+      if (savedHook === undefined) {
+        delete process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY;
+      } else {
+        process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY = savedHook;
+      }
     }
   });
 
