@@ -51,11 +51,15 @@ import {
   reviewProgressStepById,
   reviewProgressStepIdFromHalt,
 } from "../core-runtime/review/review-progress-contract.js";
+import {
+  collectReviewInvocationArtifactRefs,
+  prepareReviewInvocationRequest,
+  runReviewInvocation,
+  type ReviewInvocationProgressEvent,
+} from "../core-runtime/review/review-invocation-runner.js";
 import { completeReviewSession } from "../core-runtime/cli/complete-review-session.js";
 import {
   buildExecutorConfigFromRealization,
-  reviewPrepareOnly,
-  runReviewInvokeCli,
 } from "../core-runtime/cli/review-invoke.js";
 import {
   executeReviewPromptExecution,
@@ -119,7 +123,7 @@ export interface ReviewNativeProgressEvent {
   event_kind: "mcp_progress";
   sequence: number;
   generated_at: string;
-  source: "review_invoke_console" | "artifact_status";
+  source: "artifact_status";
   stage: ReviewNativeProgressStage;
   session_root: string | null;
   message: string;
@@ -572,60 +576,6 @@ async function withCapturedConsole<T>(
 
 function resolveRequiredOntoHome(explicit?: string): string {
   return resolveOntoHome(explicit);
-}
-
-function appendCommonReviewArgs(
-  args: string[],
-  request: PrepareReviewRequest,
-  ontoHome: string,
-): string[] {
-  const result = [
-    ...args,
-    request.target,
-    request.intent,
-    "--project-root",
-    path.resolve(request.projectRoot),
-  ];
-
-  result.push("--onto-home", ontoHome);
-  if (request.domain && request.noDomain) {
-    throw new Error("Use either domain or noDomain, not both.");
-  }
-  if (request.domain) {
-    result.push("--domain", normalizeDomainValue(request.domain));
-    result.push("--requested-domain-token", request.domain);
-  }
-  if (request.noDomain) {
-    result.push("--no-domain");
-  }
-  if (request.reviewMode) {
-    result.push("--review-mode", request.reviewMode);
-  }
-  if (request.targetScopeKind) {
-    result.push("--target-scope-kind", request.targetScopeKind);
-  }
-  if (request.primaryRef) {
-    result.push("--primary-ref", request.primaryRef);
-  }
-  for (const memberRef of request.memberRefs ?? []) {
-    result.push("--member-ref", memberRef);
-  }
-  if (request.bundleKind) {
-    result.push("--bundle-kind", request.bundleKind);
-  }
-  if (request.diffRange) {
-    result.push("--diff-range", request.diffRange);
-  }
-  if (request.executorRealization) {
-    result.push("--executor-realization", request.executorRealization);
-  }
-  for (const lensId of request.lensIds ?? []) {
-    result.push("--lens-id", lensId);
-  }
-  if (request.confirmValueAlignment) {
-    result.push("--confirm-value-alignment");
-  }
-  return result;
 }
 
 function basenameSessionId(sessionRoot: string): string {
@@ -1397,167 +1347,6 @@ function buildHaltPresentation(input: unknown): LlmPresentationPrompt {
     ].join("\n"),
     input,
   };
-}
-
-function progressEvent(args: {
-  sequence: number;
-  source: ReviewNativeProgressEvent["source"];
-  stage: ReviewNativeProgressStage;
-  sessionRoot: string | null;
-  message: string;
-  current: number;
-  total?: number;
-  exactStep?: number;
-  exactTotal?: number;
-  label?: string;
-}): ReviewNativeProgressEvent {
-  return {
-    presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
-    event_kind: "mcp_progress",
-    sequence: args.sequence,
-    generated_at: isoNow(),
-    source: args.source,
-    stage: args.stage,
-    session_root: args.sessionRoot,
-    message: args.message,
-    progress: {
-      current: args.current,
-      total: args.total ?? 100,
-      ...(args.exactStep !== undefined ? { exact_step: args.exactStep } : {}),
-      ...(args.exactTotal !== undefined ? { exact_total: args.exactTotal } : {}),
-      ...(args.label !== undefined ? { label: args.label } : {}),
-    },
-  };
-}
-
-function progressUnitsForInvokeStep(step: number): number {
-  switch (step) {
-    case 1:
-      return 5;
-    case 2:
-      return 10;
-    case 3:
-      return 90;
-    default:
-      return 0;
-  }
-}
-
-function progressUnitsForRuntimeStep(step: number, total: number): number {
-  if (total <= 0) return 10;
-  return Math.min(89, 10 + Math.round((step / total) * 75));
-}
-
-function parseSessionRootLine(projectRoot: string, line: string): string | null {
-  const match = /^\s*session_root:\s+(.+?)\s*$/.exec(line);
-  if (!match?.[1]) return null;
-  const rawSessionRoot = match[1];
-  return path.isAbsolute(rawSessionRoot)
-    ? rawSessionRoot
-    : path.resolve(projectRoot, rawSessionRoot);
-}
-
-function consoleLineProgressEvent(args: {
-  line: string;
-  projectRoot: string;
-  sessionRoot: string | null;
-  sequence: number;
-}): { event: ReviewNativeProgressEvent; sessionRoot: string | null } | null {
-  const plannedSessionRoot = parseSessionRootLine(args.projectRoot, args.line);
-  if (plannedSessionRoot) {
-    return {
-      sessionRoot: plannedSessionRoot,
-      event: progressEvent({
-        sequence: args.sequence,
-        source: "review_invoke_console",
-        stage: "session_planned",
-        sessionRoot: plannedSessionRoot,
-        message: `Review session planned at ${plannedSessionRoot}.`,
-        current: 1,
-        label: "session planned",
-      }),
-    };
-  }
-
-  if (args.line.trim() === "[review start]") {
-    return {
-      sessionRoot: args.sessionRoot,
-      event: progressEvent({
-        sequence: args.sequence,
-        source: "review_invoke_console",
-        stage: "start_preview",
-        sessionRoot: args.sessionRoot,
-        message: "Review start preview generated.",
-        current: 0,
-        label: "start preview",
-      }),
-    };
-  }
-
-  const invokeStepMatch =
-    /^\[review invoke\] step (\d+)\/3\s+(.+?)\s*$/.exec(args.line);
-  if (invokeStepMatch?.[1] && invokeStepMatch[2]) {
-    const step = Number.parseInt(invokeStepMatch[1], 10);
-    const label = invokeStepMatch[2];
-    return {
-      sessionRoot: args.sessionRoot,
-      event: progressEvent({
-        sequence: args.sequence,
-        source: "review_invoke_console",
-        stage: "invoke_step",
-        sessionRoot: args.sessionRoot,
-        message: label,
-        current: progressUnitsForInvokeStep(step),
-        exactStep: step,
-        exactTotal: 3,
-        label,
-      }),
-    };
-  }
-
-  const runtimeStepMatch =
-    /^\[review progress\]\s+(\d+)\/(\d+)\s+(.+?)\s*$/.exec(args.line);
-  if (runtimeStepMatch?.[1] && runtimeStepMatch[2] && runtimeStepMatch[3]) {
-    const step = Number.parseInt(runtimeStepMatch[1], 10);
-    const total = Number.parseInt(runtimeStepMatch[2], 10);
-    const label = runtimeStepMatch[3];
-    return {
-      sessionRoot: args.sessionRoot,
-      event: progressEvent({
-        sequence: args.sequence,
-        source: "review_invoke_console",
-        stage: "runtime_step",
-        sessionRoot: args.sessionRoot,
-        message: label,
-        current: progressUnitsForRuntimeStep(step, total),
-        exactStep: step,
-        exactTotal: total,
-        label,
-      }),
-    };
-  }
-
-  const completedMatch =
-    /^\[review invoke\] completed 3\/3\s+(.+?)\s*$/.exec(args.line);
-  if (completedMatch?.[1]) {
-    const label = completedMatch[1];
-    return {
-      sessionRoot: args.sessionRoot,
-      event: progressEvent({
-        sequence: args.sequence,
-        source: "review_invoke_console",
-        stage: "completed",
-        sessionRoot: args.sessionRoot,
-        message: label,
-        current: 98,
-        exactStep: 3,
-        exactTotal: 3,
-        label,
-      }),
-    };
-  }
-
-  return null;
 }
 
 function generatedFromArtifactRefs(
@@ -2590,105 +2379,8 @@ async function buildRunningReviewRunResult(args: {
   };
 }
 
-function parseReviewInvokeOutput(stdout: string[]): unknown {
-  for (const line of [...stdout].reverse()) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith("{")) continue;
-    try {
-      return JSON.parse(trimmed) as unknown;
-    } catch {
-      // Keep looking: progress messages are not JSON.
-    }
-  }
-  throw new Error("review invocation completed without a structured JSON result.");
-}
-
-function isReviewInvokeShape(value: unknown): value is {
-  review_result: {
-    session_root: string;
-    final_output_path: string;
-    review_record_path: string;
-    execution_result_path: string;
-    review_run_manifest_path?: string;
-    record_status: "completed" | "completed_with_degradation" | "halted_partial" | null;
-    deliberation_status?: string | null;
-    participating_lens_ids?: string[];
-    degraded_lens_ids?: string[];
-    summary?: unknown;
-  };
-  result_overview?: unknown;
-  entrypoint_plan?: unknown;
-  route_summary?: unknown;
-  bounded_invoke_steps?: string[];
-} {
-  if (value === null || typeof value !== "object") return false;
-  const reviewResult = (value as { review_result?: unknown }).review_result;
-  return reviewResult !== null && typeof reviewResult === "object";
-}
-
 async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, string>> {
-  const candidates: Record<string, string> = {
-    session_metadata: path.join(sessionRoot, "session-metadata.yaml"),
-    interpretation: path.join(sessionRoot, "interpretation.yaml"),
-    binding: path.join(sessionRoot, "binding.yaml"),
-    execution_plan: path.join(sessionRoot, "execution-plan.yaml"),
-    execution_result: path.join(sessionRoot, "execution-result.yaml"),
-    actor_invocation_profiles: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "actor-invocation-profiles.yaml",
-    ),
-    actor_consumer_bindings: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "actor-consumer-bindings.yaml",
-    ),
-    domain_binding: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "domain-binding.yaml",
-    ),
-    review_value_alignment_criteria: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "review-value-alignment-criteria.yaml",
-    ),
-    review_target_profile: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "review-target-profile.yaml",
-    ),
-    review_context_manifest: path.join(
-      sessionRoot,
-      "execution-preparation",
-      "review-context-manifest.yaml",
-    ),
-    lens_completion_barrier: path.join(
-      sessionRoot,
-      "lens-completion-barrier.yaml",
-    ),
-    finding_ledger: path.join(sessionRoot, "finding-ledger.yaml"),
-    finding_relation_graph: path.join(sessionRoot, "finding-relation-graph.yaml"),
-    issue_ledger: path.join(sessionRoot, "issue-ledger.yaml"),
-    issue_stance_matrix: path.join(sessionRoot, "issue-stance-matrix.yaml"),
-    deliberation_plan: path.join(sessionRoot, "deliberation-plan.yaml"),
-    problem_framing: path.join(sessionRoot, "problem-framing.yaml"),
-    deliberation_output: path.join(sessionRoot, "deliberation.md"),
-    synthesis_output: path.join(sessionRoot, "synthesis.md"),
-    review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
-    degradation_summary: path.join(sessionRoot, "degradation-summary.yaml"),
-    active_review_attempt: activeAttemptPath(sessionRoot),
-    review_cancel_request: reviewCancelRequestPath(sessionRoot),
-    environment_warnings: environmentWarningsPath(sessionRoot),
-    error_log: path.join(sessionRoot, "error-log.md"),
-    final_output: path.join(sessionRoot, "final-output.md"),
-    review_record: path.join(sessionRoot, "review-record.yaml"),
-  };
-  const entries: [string, string][] = [];
-  for (const [key, filePath] of Object.entries(candidates)) {
-    if (await fileExists(filePath)) entries.push([key, filePath]);
-  }
-  return Object.fromEntries(entries);
+  return collectReviewInvocationArtifactRefs(sessionRoot);
 }
 
 async function buildPipelineExecutionLedgerIfPossible(args: {
@@ -3078,8 +2770,7 @@ export function createOntoReviewCoreApi(
   const api: OntoReviewCoreApi = {
     async prepareReview(request: PrepareReviewRequest): Promise<PreparedReview> {
       await validateRequestedDomainForDispatch(request, ontoHome);
-      const argv = appendCommonReviewArgs([], request, ontoHome);
-      const { result } = await withCapturedConsole(() => reviewPrepareOnly(argv));
+      const result = await prepareReviewInvocationRequest(request, { ontoHome });
       const sessionRoot = path.resolve(result.session_root);
       const executionPlan = await readYamlDocument<ReviewExecutionPlan>(
         path.join(sessionRoot, "execution-plan.yaml"),
@@ -3099,7 +2790,6 @@ export function createOntoReviewCoreApi(
 
     async runReview(request: RunReviewRequest): Promise<ReviewRunResult> {
       await validateRequestedDomainForDispatch(request, ontoHome);
-      const argv = appendCommonReviewArgs(["--no-watch"], request, ontoHome);
       const requestHash = requestHashForReviewInput(request);
       const invocationId = `initial-${continuationAttemptId()}`;
       let progressSequence = 0;
@@ -3154,40 +2844,47 @@ export function createOntoReviewCoreApi(
           // execution remains artifact-truthful even if this write fails.
         });
       };
-      const captureObserver = {
-        stdout: (text: string): void => {
-          for (const line of text.split(/\r?\n/)) {
-            const parsed = consoleLineProgressEvent({
-              line,
-              projectRoot: request.projectRoot,
-              sessionRoot: observedSessionRoot,
-              sequence: progressSequence + 1,
-            });
-            if (!parsed) continue;
-            if (parsed.sessionRoot) noteSessionRoot(parsed.sessionRoot);
-            try {
-              request.progressObserver?.(parsed.event);
-            } catch {
-              // Progress notifications are transport-only and must not affect review execution.
-            }
-            progressSequence = parsed.event.sequence;
-          }
-        },
+      const runnerProgressObserver = (event: ReviewInvocationProgressEvent): void => {
+        if (event.sessionRoot) noteSessionRoot(event.sessionRoot);
+        const stage: ReviewNativeProgressStage =
+          event.phase === "prepare"
+            ? "session_planned"
+            : event.phase === "execute"
+              ? "runtime_step"
+              : event.phase === "project"
+                ? "completed"
+                : "invoke_step";
+        const current =
+          event.phase === "resolve"
+            ? 5
+            : event.phase === "prepare"
+              ? 20
+              : event.phase === "execute"
+                ? event.status === "completed" ? 80 : 40
+                : event.phase === "complete"
+                  ? event.status === "completed" ? 95 : 85
+                  : 100;
+        emitProgress({
+          source: "artifact_status",
+          stage,
+          session_root: event.sessionRoot ?? observedSessionRoot,
+          message: event.message,
+          progress: {
+            current,
+            total: 100,
+            label: event.phase,
+          },
+        });
       };
 
       const fullRun = (async (): Promise<ReviewRunResult> => {
         try {
-          const captured = await withCapturedConsole(async () => {
-            const exitCode = await runReviewInvokeCli(argv);
-            if (exitCode !== 0) {
-              throw new Error(`review invocation failed with exit code ${exitCode}`);
-            }
-            return exitCode;
-          }, captureObserver);
-          const parsed = parseReviewInvokeOutput(captured.stdout);
-          if (!isReviewInvokeShape(parsed)) {
-            throw new Error("review invocation returned an unexpected result shape.");
-          }
+          const invocation = await runReviewInvocation(request, {
+            ontoHome,
+            noWatch: true,
+            progressObserver: runnerProgressObserver,
+          });
+          const parsed = invocation.output;
           const result = parsed.review_result;
           const status = result.record_status ?? "halted_partial";
           const startPreview: ReviewRunResult["startPreview"] = {
@@ -3202,7 +2899,7 @@ export function createOntoReviewCoreApi(
           await activeAttemptWrite;
           await writeEnvironmentWarningsFromStderr({
             sessionRoot: resolvedResultSessionRoot,
-            stderr: captured.stderr,
+            stderr: invocation.stderr,
           });
           await updateActiveAttemptTerminal({
             sessionRoot: resolvedResultSessionRoot,

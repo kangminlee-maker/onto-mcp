@@ -45,6 +45,10 @@ import {
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
 import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
+import {
+  prepareReviewInvocationArgv,
+  runReviewInvocationArgv,
+} from "../review/review-invocation-runner.js";
 import { readValidatedReviewRecord } from "../review/review-record-validation.js";
 import { readReviewResultClassification } from "../review/review-result-classification.js";
 import {
@@ -64,7 +68,7 @@ import { assessComplexity, selectLenses } from "./complexity-assessment.js";
  *                      OntoConfig.llm selects an API-key/local provider.
  *                      See `inline-http-review-unit-executor.ts`.
  */
-type ExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ExecutorRealization = "codex" | "mock" | "ts_inline_http";
 type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 type ReviewMode = "core-axis" | "full";
 type BoundaryDecisionAction = "approve_external_boundary" | "rerun_target" | "cancel";
@@ -78,7 +82,7 @@ interface HostFacingPositionals {
   intentText?: string;
 }
 
-interface ResolvedReviewInvokeInputs {
+export interface ResolvedReviewInvokeInputs {
   requestedTarget: string;
   targetPath: string;
   resolvedTargetRefs: string[];
@@ -105,7 +109,7 @@ interface ResolvedReviewInvokeInputs {
   filesystemAllowedRoots: string[];
 }
 
-interface ReviewInvokeRouteSummary {
+export interface ReviewInvokeRouteSummary {
   combined_entrypoint: "review:invoke";
   bounded_invoke_steps: string[];
   execution_realization: "worker" | "direct-call";
@@ -134,7 +138,7 @@ interface ReviewInvokeRouteSummary {
   synthesize_waits_for_all_lenses: true;
 }
 
-interface ReviewResultClosureSummary {
+export interface ReviewResultClosureSummary {
   issue_count: number;
   material_issue_count: number;
   non_material_finding_count: number;
@@ -153,7 +157,7 @@ interface ReviewResultClosureSummary {
   }>;
 }
 
-interface ReviewResultExplanationSummary {
+export interface ReviewResultExplanationSummary {
   final_review_result: string;
   screen_lines: string[];
 }
@@ -302,7 +306,7 @@ export function buildExecutorConfigFromRealization(
   throw new Error("ontoHome is required to resolve review executor script paths.");
 }
 
-function inferExecutorRealization(
+export function inferExecutorRealization(
   config: ReviewUnitExecutorConfig,
 ): ExecutorRealization | "custom" {
   const joinedArgs = config.args.join(" ");
@@ -544,7 +548,7 @@ function renderScreenBoundedLines(text: string, maxLines = 10): string[] {
   return bounded;
 }
 
-async function readReviewResultExplanationSummary(
+export async function readReviewResultExplanationSummary(
   finalOutputPath: string,
 ): Promise<ReviewResultExplanationSummary> {
   if (!(await fileExists(finalOutputPath))) {
@@ -570,7 +574,7 @@ async function readReviewResultExplanationSummary(
   };
 }
 
-async function readReviewResultClosureSummary(
+export async function readReviewResultClosureSummary(
   sessionRoot: string,
 ): Promise<ReviewResultClosureSummary> {
   const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
@@ -942,7 +946,7 @@ function buildNoHostDetectedError(): Error {
   );
 }
 
-function resolveExecutorConfig(
+export function resolveExecutorConfig(
   argv: string[],
   optionPrefix: "" | "synthesize-",
   ontoConfig?: OntoConfig,
@@ -1073,7 +1077,7 @@ function assertValidLocalBaseUrl(baseUrl: string | undefined): void {
   }
 }
 
-async function ensureProviderRouteReadyForDispatch(args: {
+export async function ensureProviderRouteReadyForDispatch(args: {
   sessionRoot: string;
   executionPlanPath: string;
   reviewExecutionProfile: ReviewExecutionProfile;
@@ -2666,7 +2670,7 @@ function appendReviewInvokeDerivedArgs(
   return appended;
 }
 
-async function readOptionalReviewSummary(
+export async function readOptionalReviewSummary(
   sessionRoot: string,
 ): Promise<{
   reviewRecord:
@@ -2835,7 +2839,7 @@ function appendDirectoryListingConfigArgs(
   return result;
 }
 
-interface ReviewInvokeSetup {
+export interface ReviewInvokeSetup {
   ontoHome: string | undefined;
   projectRoot: string;
   ontoConfig: OntoConfig;
@@ -2850,7 +2854,7 @@ interface ReviewInvokeSetup {
   executionProfile: ResolvedExecutionProfile;
 }
 
-async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSetup> {
+export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSetup> {
   rejectRemovedFlags(argv);
   const argvWithSessionId = ensureSessionIdArg(argv);
   const sessionId = requireString(
@@ -2936,22 +2940,17 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
  * values written into the prepared session artifacts.
  */
 export async function reviewPrepareOnly(argv: string[]): Promise<PrepareOnlyResult> {
-  const setup = await resolveReviewInvokeSetup(argv);
-  const startResult = await startReviewSession(setup.startArgv);
-  const sessionRoot = path.resolve(startResult.session_root);
-  const profile: ResolvedExecutionProfile = setup.executionProfile;
-  return {
-    prepare_only: true,
-    session_root: sessionRoot,
-    request_text: setup.resolvedInvokeInputs.requestText,
-    execution_realization: profile.execution_realization,
-    host_runtime: profile.host_runtime,
-    review_mode: setup.resolvedInvokeInputs.reviewMode,
-  };
+  return prepareReviewInvocationArgv(argv);
 }
 
 export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const prepareOnly = hasOptionFlag(argv, "prepare-only");
+
+  if (!prepareOnly) {
+    const output = await runReviewInvocationArgv(argv);
+    console.log(JSON.stringify(output, null, 2));
+    return 0;
+  }
 
   const setup = await resolveReviewInvokeSetup(argv);
 
