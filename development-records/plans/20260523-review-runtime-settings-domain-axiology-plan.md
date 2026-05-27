@@ -3,6 +3,7 @@
 > Status: Draft, strengthened after four onto reviews, runtime/MCP failure slice implemented
 > Review runs: `domain=none`, `domain=software-engineering`, `domain=llm-native-development`, strengthened-plan `domain=software-engineering`, re-review `.onto/review/20260523-47cf305e`
 > Goal: make review execution MCP-native, context-isolated, fail-loud, and simple enough to implement safely.
+> 2026-05-27 note: `llm-native-development` is now retired as a separate selectable domain and normalizes to `software-engineering`. Historical review references below remain evidence, not current domain-routing guidance.
 
 ## 1. Consolidated Conclusion
 
@@ -202,10 +203,9 @@ Domain-specific problem framing:
 
 - `software-engineering` has a problem framing profile and produces useful
   domain axes.
-- `llm-native-development` currently has no problem framing profile, so domain
-  axes are empty even though domain docs are consumed.
-- Add `.onto/domains/llm-native-development/problem_framing_profile.md` later if
-  LLM-native issue axes are needed.
+- As of 2026-05-27, LLM-native issue axes are folded into
+  `.onto/domains/software-engineering/problem_framing_profile.md`; the retired
+  `llm-native-development` token normalizes to `software-engineering`.
 
 ### 3.4 Review Value-Alignment Criteria
 
@@ -748,7 +748,8 @@ Domain and value-alignment tests:
 
 - `domain=none`.
 - `domain=software-engineering`.
-- `domain=llm-native-development`.
+- retired `domain=llm-native-development` alias normalizes to
+  `software-engineering`.
 - invalid domain id.
 - missing required domain doc.
 - high-confidence confirmed criteria dispatch.
@@ -799,7 +800,8 @@ MCP and security tests:
 - Review can run full-scale through Codex workers with 9 isolated lenses,
   controlled deliberation, and synthesize.
 - The same target can be reviewed with `domain=none`,
-  `domain=software-engineering`, and `domain=llm-native-development`.
+  `domain=software-engineering`, and the retired
+  `domain=llm-native-development` alias.
 - Domain and value-alignment gates are resolved before manifest and packet
   generation.
 - Domain changes affect only bounded domain context and problem framing, not

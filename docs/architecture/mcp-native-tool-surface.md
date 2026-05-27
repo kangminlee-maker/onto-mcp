@@ -7,11 +7,12 @@ small set of tools with a stable MCP surface.
 
 | Tool | Purpose | Primary output |
 |---|---|---|
-| `onto.review` | Start and optionally run a review | session id, status, artifact refs, `resultClassificationSummary`, `llmPresentation` prompts |
+| `onto.review` | Start and optionally run a review | session id, status, run handle, artifact refs, `resultClassificationSummary`, `llmPresentation` prompts |
 | `onto.prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs, opening brief prompt |
-| `onto.review_status` | Read progress for a review session | structured status plus `llmPresentation.progress` with liveness state and current classification signal |
-| `onto.review_continue` | Continue a halted/prepared review from existing artifacts without re-running trusted units | continuation plan, continuation attempt refs, updated artifact refs, status |
-| `onto.review_result` | Read final result and artifact refs | `review-record.yaml`, `final-output.md`, `resultClassificationSummary` |
+| `onto.review_status` | Read progress for a review session or recover the latest matching session | structured status plus `llmPresentation.progress`, liveness, run-control, material-support, warning, and latest-session projections |
+| `onto.review_continue` | Continue a review when `runControl.continuationAvailable` is true without re-running trusted or active units | continuation plan, continuation attempt refs, updated artifact refs, status, or `already_running` decision |
+| `onto.review_cancel` | Request cancellation for a running review session | cancellation request artifact ref plus updated status/run-control projection |
+| `onto.review_result` | Read final result and artifact refs | compact/standard/full projection over `review-record.yaml`, `final-output.md`, `resultClassificationSummary`, material support, and warnings |
 | `onto.list_lenses` | Show canonical lens sets | full/core-axis lens IDs |
 | `onto.list_domains` | Show available domains | domain IDs and source dirs |
 | `onto.list_source_profiles` | Show reconstruct source profiles | source profile refs keyed by `target_material_kind` |
@@ -20,6 +21,61 @@ small set of tools with a stable MCP surface.
 | `onto.reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with explicit mock semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
 | `onto.reconstruct_status` | Read reconstruct progress/result state | record stage, stage progress, liveness, count summary, and artifact refs |
 | `onto.reconstruct_result` | Read reconstruct result artifacts | record, run manifest, progress projection, and final output text |
+
+## Long-Running Review Recovery
+
+`onto.review` uses a bounded synchronous window for MCP hosts. Once session
+metadata and the execution plan exist, the Core API can return a versioned
+`runHandle` with `sessionId`, `sessionRoot`, `requestHash`, current status,
+domain resolution, target summary, key artifact refs, and a poll interval.
+When the review finishes before that window closes, the response remains the
+completed review result. When the window closes first, the response has
+`status: running`; execution continues under the same session.
+
+The handle is not review truth. It is a projection over session artifacts plus
+active attempt metadata. The artifact truth remains the session root:
+`session-metadata.yaml`, `execution-plan.yaml`, `execution-result.yaml`,
+`review-run-manifest.yaml`, `review-record.yaml`, and related review artifacts.
+
+`onto.review_status` is the canonical polling and recovery surface. Callers can
+pass `sessionRoot`, or pass `latest=true` with optional `target`, `domain`, and
+`requestHash` filters to recover the newest matching session under
+`projectRoot`. The latest-session lookup does not infer review findings; it only
+returns session identity, status, request hash, and artifact refs. The request
+hash is a canonical request identity hash derived from session artifacts,
+including target scope, bundle refs, resolved domain, review mode, and selected
+lenses when available.
+
+Status now exposes `runControl.lifecycleState`, `runControl.activeAttempt`,
+`alreadyRunning`, cancellation/continuation availability, retry semantics,
+host-timeout semantics, target material support from
+`review-target-profile.yaml`, and `environmentWarnings` from
+`environment-warnings.yaml` when non-fatal worker warnings are observed.
+
+`onto.review_cancel` writes a session-local `review-cancel-request.yaml`.
+Cancellation is cooperative: the runner checks for that request at runtime
+cancellation checkpoints and, when observed, closes through
+`execution-result.yaml` with `execution_status=halted_partial` and
+`halt_phase=cancellation`. Cancellation is accepted only when run-control reports
+an active cancellable attempt; prepared, terminal, failed, or stale sessions do
+not receive orphan cancellation-request artifacts. This keeps cancellation
+separate from host-call timeouts and unit timeouts.
+
+Explicit domain tokens are normalized before dispatch. Exact and alias matches
+proceed; unknown explicit tokens fail before dispatch with
+`ReviewDomainTokenResolution.resolution` set to `suggestion` when safe
+suggestions exist, or `unknown` when they do not.
+
+Result readers validate resolved `ReviewRecord.final_output_ref` paths against
+the session disclosure boundary before returning final output paths or content.
+Core API, MCP, and CLI callers share the canonical lexical and realpath-aware
+boundary primitive in `src/core-runtime/path-boundary.ts`; each surface only
+owns its error shape. Review execution-plan path validation is centralized in
+`src/core-runtime/review/execution-plan-boundary.ts` and is used before Core API
+continuation and direct prompt-runner dispatch consume plan-owned paths.
+Code targets report `targetMaterialSupport.supportStatus="supported"`; document
+and mixed material targets remain visible as partial where material-specific
+validation is not implemented.
 
 ## Review Continuation
 
@@ -37,11 +93,12 @@ The public concept is `review_continue`, not subagent management. The runtime
 continues artifact-backed review units: lens units, issue artifact units,
 per-lens deliberation units, teamlead controlled deliberation, and synthesize.
 
-`onto.review_status` remains the read surface. For `halted_partial` and
-`prepared` sessions it exposes a derived `continuationPlan` projection:
-which artifacts are reusable, which unit is missing or failed, which units would
-run, a derived pipeline execution ledger that marks artifact trust boundaries, and
-whether manifest/context/route validation blocks continuation.
+`onto.review_status` remains the read surface. When
+`runControl.continuationAvailable` is true, including prepared, halted, failed
+attempt, and stale-active states, it exposes a derived `continuationPlan`
+projection: which artifacts are reusable, which unit is missing or failed, which
+units would run, a derived pipeline execution ledger that marks artifact trust
+boundaries, and whether manifest/context/route validation blocks continuation.
 
 `onto.review_continue`:
 
@@ -57,7 +114,15 @@ whether manifest/context/route validation blocks continuation.
 - preserve malformed or partial failed outputs before replacing them;
 - write continuation attempt provenance under the same review session;
 - back up session-level execution artifacts before dispatch and restore those
-  backups if the continuation attempt fails.
+  backups if the continuation attempt fails;
+- return `decision: already_running` instead of dispatching when an active
+  attempt already owns the requested frontier.
+
+The MCP response is a projection over the Core API `ReviewContinueResult`:
+`decision` is `"executed"` or `"already_running"`, while session identity,
+status, artifact refs, failure refs, optional continuation attempt/plan facts,
+route/presentation projections, and active-attempt facts remain available in the
+structured result.
 
 Continuation must not accept `resume_token` as authorization. The token remains
 audit/idempotency data.
@@ -137,6 +202,7 @@ host LLM and user-mediated flow.
   material; `low` and `info` are non-material.
 - MCP does not add generic public concepts for timeout or retry policy. Long
   running review units halt through the existing execution result artifacts;
+  host-call timeout leaves the review running under the same session handle;
   malformed output and artifact write failures continue to use structured
   failure records. Review continuation is a bounded artifact-backed continuation
   surface, not a generic retry policy or subagent lifecycle API.

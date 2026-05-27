@@ -47,6 +47,25 @@ interface ReviewRunStructured {
     halt?: { prompt?: unknown; input?: unknown };
     finalResult?: { prompt?: unknown; input?: unknown };
   };
+  runHandle?: {
+    sessionId?: unknown;
+    sessionRoot?: unknown;
+    requestHash?: unknown;
+    pollAfterSeconds?: unknown;
+  };
+  runControl?: {
+    alreadyRunning?: unknown;
+    activeAttempt?: {
+      attemptId?: unknown;
+      attemptKind?: unknown;
+      status?: unknown;
+      activeUnits?: unknown;
+    } | null;
+  };
+  targetMaterialSupport?: {
+    targetMaterialKind?: unknown;
+    supportStatus?: unknown;
+  } | null;
 }
 
 interface ReviewContinueStructured {
@@ -600,6 +619,31 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   return result as ReviewRunStructured;
 }
 
+function requireReviewRunningStructured(value: unknown): ReviewRunStructured {
+  assert(value !== null && typeof value === "object", "running structuredContent must be an object.");
+  const result = value as Partial<ReviewRunStructured>;
+  assert(typeof result.sessionRoot === "string", "running sessionRoot missing.");
+  assert(result.status === "running", `Expected running status, got ${String(result.status)}.`);
+  assert(
+    typeof result.runHandle?.sessionRoot === "string" &&
+      path.resolve(result.runHandle.sessionRoot) === path.resolve(result.sessionRoot),
+    "running result must expose a durable runHandle.",
+  );
+  assert(
+    typeof result.runHandle.requestHash === "string" &&
+      result.runHandle.requestHash.length >= 32,
+    "running runHandle must expose requestHash.",
+  );
+  assert(
+    result.runControl?.alreadyRunning === true &&
+      result.runControl.activeAttempt?.attemptKind === "initial_review" &&
+      Array.isArray(result.runControl.activeAttempt.activeUnits),
+    "running result must expose active initial attempt metadata.",
+  );
+  assertProgressPresentation(result.llmPresentation, "running llmPresentation", "running");
+  return result as ReviewRunStructured;
+}
+
 function requirePreparedReviewStructured(value: unknown): {
   sessionRoot: string;
 } {
@@ -673,6 +717,36 @@ async function assertFile(filePath: string, label: string): Promise<void> {
   assert(stat.isFile(), `${label} is not a file: ${filePath}`);
 }
 
+async function waitForMcpReviewStatus(args: {
+  client: McpClient;
+  projectRoot: string;
+  sessionRoot: string;
+  expectedStatus: string;
+  label: string;
+}): Promise<unknown> {
+  const deadline = Date.now() + 30_000;
+  let latest: unknown;
+  while (Date.now() < deadline) {
+    const statusResult = requireToolResult(requireResult(await args.client.request("tools/call", {
+      name: "onto.review_status",
+      arguments: {
+        projectRoot: args.projectRoot,
+        sessionRoot: args.sessionRoot,
+      },
+    }), `${args.label} status poll`));
+    latest = statusResult.structuredContent;
+    if (
+      latest !== null &&
+      typeof latest === "object" &&
+      (latest as { status?: unknown }).status === args.expectedStatus
+    ) {
+      return latest;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`${args.label} did not reach ${args.expectedStatus}.`);
+}
+
 function resolveNonEmptyGitDiffRange(projectRoot: string): string | null {
   try {
     const commits = execSync("git rev-list --max-count=2 HEAD", {
@@ -742,12 +816,30 @@ async function main(): Promise<void> {
       "targetScopeKind" in (reviewTool.inputSchema?.properties ?? {}) &&
         "primaryRef" in (reviewTool.inputSchema?.properties ?? {}) &&
         "memberRefs" in (reviewTool.inputSchema?.properties ?? {}) &&
-        "diffRange" in (reviewTool.inputSchema?.properties ?? {}),
+        "diffRange" in (reviewTool.inputSchema?.properties ?? {}) &&
+        "returnRunningAfterMs" in (reviewTool.inputSchema?.properties ?? {}),
       "onto.review schema must expose explicit target contract fields.",
     );
+    const reviewResultToolDefinition = toolsResult.tools?.find((tool) => tool.name === "onto.review_result");
+    const projectionSchema = reviewResultToolDefinition?.inputSchema?.properties?.projectionLevel as
+      | { enum?: unknown[] }
+      | undefined;
     assert(
-      toolsResult.tools?.some((tool) => tool.name === "onto.list_source_profiles") &&
+      projectionSchema?.enum?.includes("compact") &&
+        projectionSchema.enum.includes("standard") &&
+        projectionSchema.enum.includes("full"),
+      "onto.review_result schema must expose compact/standard/full projection levels.",
+    );
+    const reviewStatusTool = toolsResult.tools?.find((tool) => tool.name === "onto.review_status");
+    assert(
+      "latest" in (reviewStatusTool?.inputSchema?.properties ?? {}) &&
+        "requestHash" in (reviewStatusTool?.inputSchema?.properties ?? {}),
+      "onto.review_status schema must expose latest-session recovery filters.",
+    );
+    assert(
+        toolsResult.tools?.some((tool) => tool.name === "onto.list_source_profiles") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.review_continue") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.review_cancel") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.observe_source") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.validate_reconstruct_directive") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct") &&
@@ -1245,7 +1337,7 @@ async function main(): Promise<void> {
     );
     const reviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto.review_result",
-      arguments: { sessionRoot },
+      arguments: { sessionRoot, projectionLevel: "full" },
     }), "tools/call onto.review_result"));
     const reviewResultStructured = reviewResultTool.structuredContent as
       | {
@@ -1282,6 +1374,33 @@ async function main(): Promise<void> {
     assertCompletedRouteVisibility(
       reviewResultStructured.routeVisibility,
       "onto.review_result",
+    );
+    const compactReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto.review_result",
+      arguments: { sessionRoot, projectionLevel: "compact" },
+    }), "tools/call onto.review_result compact"));
+    const compactReviewResult = compactReviewResultTool.structuredContent as
+      | {
+          projectionLevel?: unknown;
+          reviewRecord?: unknown;
+          finalOutputText?: unknown;
+          resultClassificationSummary?: unknown;
+          targetMaterialSupport?: { supportStatus?: unknown } | null;
+        }
+      | undefined;
+    assert(
+      compactReviewResult?.projectionLevel === "compact" &&
+        compactReviewResult.reviewRecord === undefined &&
+        compactReviewResult.finalOutputText === undefined,
+      "compact onto.review_result must omit ReviewRecord and final output text.",
+    );
+    assertClassificationSummary(
+      compactReviewResult.resultClassificationSummary,
+      "compact onto.review_result resultClassificationSummary",
+    );
+    assert(
+      compactReviewResult.targetMaterialSupport?.supportStatus === "supported",
+      "compact onto.review_result must expose supported code material support.",
     );
 
     const deliberationPath = path.join(sessionRoot, "deliberation.md");
@@ -2028,6 +2147,167 @@ async function main(): Promise<void> {
       structured,
       relativeStatus,
     );
+    const completedRequestHash = structured.runHandle?.requestHash;
+    assert(
+      typeof completedRequestHash === "string" && completedRequestHash.length >= 32,
+      "completed onto.review must expose runHandle.requestHash for recovery.",
+    );
+    const latestStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto.review_status",
+      arguments: {
+        projectRoot,
+        latest: true,
+        target: "package.json",
+        domain: "none",
+        requestHash: completedRequestHash,
+      },
+    }), "tools/call onto.review_status latest recovery"));
+    const latestStatus = latestStatusResult.structuredContent as
+      | {
+          sessionRoot?: unknown;
+          status?: unknown;
+          latestSessionMatches?: Array<{ sessionRoot?: unknown; requestHash?: unknown }>;
+        }
+      | undefined;
+    assert(
+      latestStatus?.status === "completed" &&
+        typeof latestStatus.sessionRoot === "string" &&
+        path.resolve(latestStatus.sessionRoot) === sessionRoot &&
+        latestStatus.latestSessionMatches?.[0]?.requestHash === completedRequestHash,
+      "onto.review_status latest recovery must return the matching completed session.",
+    );
+
+    const delayedHome = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-mcp-delayed-home-"),
+    );
+    const delayedChild = spawn("npm", ["run", "--silent", "mcp:server"], {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        HOME: delayedHome,
+        USERPROFILE: delayedHome,
+        ONTO_LLM_MOCK: "1",
+        ONTO_REVIEW_MOCK_UNIT_DELAY_MS: "750",
+      },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const delayedClient = new McpClient(delayedChild);
+    try {
+      requireResult(await delayedClient.request("initialize", {
+        protocolVersion: "2024-11-05",
+        capabilities: {},
+        clientInfo: { name: "onto-mcp-delayed-conformance", version: "0.0.0" },
+      }), "initialize delayed server");
+      const runningCall = requireToolResult(requireResult(await delayedClient.request("tools/call", {
+        name: "onto.review",
+        arguments: {
+          projectRoot,
+          target: "package.json",
+          intent: "MCP conformance delayed running handle",
+          noDomain: true,
+          reviewMode: "core-axis",
+          lensIds: ["logic"],
+          executorRealization: "mock",
+          returnRunningAfterMs: 0,
+        },
+      }), "tools/call onto.review delayed running"));
+      const runningStructured = requireReviewRunningStructured(
+        runningCall.structuredContent,
+      );
+      const runningRequestHash = runningStructured.runHandle?.requestHash;
+      assert(
+        typeof runningRequestHash === "string",
+        "running delayed review must expose requestHash.",
+      );
+      const runningLatest = requireToolResult(requireResult(await delayedClient.request("tools/call", {
+        name: "onto.review_status",
+        arguments: {
+          projectRoot,
+          latest: true,
+          target: "package.json",
+          domain: "none",
+          requestHash: runningRequestHash,
+        },
+      }), "tools/call onto.review_status delayed latest"));
+      const runningLatestStructured = runningLatest.structuredContent as
+        | { status?: unknown; sessionRoot?: unknown }
+        | undefined;
+      assert(
+        (runningLatestStructured?.status === "running" ||
+          runningLatestStructured?.status === "completed") &&
+          typeof runningLatestStructured.sessionRoot === "string" &&
+          path.resolve(runningLatestStructured.sessionRoot) ===
+            path.resolve(runningStructured.sessionRoot),
+        "latest recovery must find the delayed review session.",
+      );
+      const duplicateContinue = requireToolResult(requireResult(await delayedClient.request("tools/call", {
+        name: "onto.review_continue",
+        arguments: {
+          projectRoot,
+          sessionRoot: runningStructured.sessionRoot,
+          executorRealization: "mock",
+        },
+      }), "tools/call onto.review_continue delayed active"));
+      const duplicateStructured = duplicateContinue.structuredContent as
+        | { decision?: unknown; activeAttempt?: { attemptId?: unknown } }
+        | undefined;
+      assert(
+        duplicateStructured?.decision === "already_running" &&
+          typeof duplicateStructured.activeAttempt?.attemptId === "string",
+        "review_continue must report already_running for an active review.",
+      );
+      const cancelResult = requireToolResult(requireResult(await delayedClient.request("tools/call", {
+        name: "onto.review_cancel",
+        arguments: {
+          projectRoot,
+          sessionRoot: runningStructured.sessionRoot,
+          reason: "MCP conformance cancellation request",
+        },
+      }), "tools/call onto.review_cancel delayed active"));
+      assert(
+        typeof (cancelResult.structuredContent as { cancelRequestPath?: unknown })
+          .cancelRequestPath === "string",
+        "review_cancel must return the cancellation request artifact ref.",
+      );
+      const cancelledDelayedStatus = await waitForMcpReviewStatus({
+        client: delayedClient,
+        projectRoot,
+        sessionRoot: runningStructured.sessionRoot,
+        expectedStatus: "halted_partial",
+        label: "delayed running review",
+      }) as {
+        artifactRefs?: { execution_result?: string };
+        runControl?: { alreadyRunning?: unknown };
+      };
+      assert(
+        cancelledDelayedStatus.runControl?.alreadyRunning === false,
+        "cancelled delayed review must clear alreadyRunning.",
+      );
+      assert(
+        typeof cancelledDelayedStatus.artifactRefs?.execution_result === "string",
+        "cancelled delayed review must expose execution result.",
+      );
+      const cancelledExecution = await readYaml<{
+        execution_status?: unknown;
+        halt_phase?: unknown;
+        halt_reason?: unknown;
+      }>(cancelledDelayedStatus.artifactRefs.execution_result);
+      assert(
+        cancelledExecution.execution_status === "halted_partial" &&
+          cancelledExecution.halt_phase === "cancellation" &&
+          typeof cancelledExecution.halt_reason === "string" &&
+          cancelledExecution.halt_reason.includes("MCP conformance cancellation request"),
+        "cancelled delayed review must write a halted cancellation execution result.",
+      );
+    } finally {
+      delayedChild.stdin.end();
+      if (delayedChild.exitCode === null && delayedChild.signalCode === null) {
+        await withTimeout(new Promise<void>((resolve) => {
+          delayedChild.once("exit", () => resolve());
+        }), 10_000, "delayed MCP server did not exit.");
+      }
+      await fs.rm(delayedHome, { recursive: true, force: true });
+    }
 
     const blockedSessionRead = requireToolError(requireResult(await client.request("tools/call", {
       name: "onto.review_status",

@@ -64,6 +64,9 @@ import {
   ReviewStructuredFailureError,
   writeAndThrowStructuredFailureRecord,
 } from "../review/failure-records.js";
+import {
+  assertReviewExecutionPlanSessionBoundary,
+} from "../review/execution-plan-boundary.js";
 
 export interface ReviewUnitExecutorConfig {
   bin: string;
@@ -323,6 +326,15 @@ const DEFAULT_LENS_MAX_RETRIES = 10;
 /** Base delay for bounded linear retries. Synthesize reuses the base delay. */
 const DEFAULT_LENS_RETRY_INITIAL_DELAY_MS = 8000;
 const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 600_000;
+const REVIEW_CANCEL_REQUEST_FILENAME = "review-cancel-request.yaml";
+
+interface ReviewCancelRequestArtifact {
+  schema_version: "1";
+  session_id: string;
+  requested_at: string;
+  requested_by: "mcp";
+  reason: string;
+}
 
 class ReviewUnitTimeoutError extends Error {
   readonly timeoutMs: number;
@@ -426,6 +438,14 @@ function haltArtifactFields(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function readReviewCancelRequest(
+  sessionRoot: string,
+): Promise<ReviewCancelRequestArtifact | null> {
+  const cancelPath = path.join(sessionRoot, REVIEW_CANCEL_REQUEST_FILENAME);
+  if (!(await fileExists(cancelPath))) return null;
+  return readYamlDocument<ReviewCancelRequestArtifact>(cancelPath);
 }
 
 async function ensureNonEmptyOutputFile(outputPath: string): Promise<void> {
@@ -536,6 +556,10 @@ async function invokeExecutor(
         ? combinedMessage
         : `Executor exited with code ${exitCode} for ${dispatch.unit_id}`,
     );
+  }
+
+  if (stderr.trim().length > 0) {
+    console.warn(`[review runner warning] ${dispatch.unit_id}: ${stderr.trim()}`);
   }
 
   await ensureNonEmptyOutputFile(dispatch.output_path);
@@ -2124,6 +2148,7 @@ export async function executeReviewPromptExecution(
   const sessionRoot = path.resolve(params.sessionRoot);
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
+  await assertReviewExecutionPlanSessionBoundary({ sessionRoot, executionPlan });
   const executionStartedAtMs = Date.now();
   const continuationPlan = params.continuationPlan;
   const continuationMode = continuationPlan !== undefined;
@@ -2246,6 +2271,102 @@ export async function executeReviewPromptExecution(
   );
   let nextLensIndex = 0;
 
+  async function haltForCancellation(args: {
+    cancelRequest: ReviewCancelRequestArtifact;
+    phase: string;
+    issueArtifactOutcomes?: ExecutionOutcome[];
+    deliberationExecutionResults?: ExecutionOutcome[];
+    synthesizeOutcome?: ExecutionOutcome | null;
+    deliberationStatus?: DeliberationStatus | null;
+  }): Promise<ReviewPromptExecutionResult> {
+    const completedLensOutcomes = executionOutcomes.filter(isSuccessfulOutcome);
+    const successfulLensDispatches = completedLensOutcomes.map(
+      (outcome) => outcome.dispatch,
+    );
+    const executionFailures = executionOutcomes
+      .filter(isFailureOutcome)
+      .map((outcome) => outcome.failure);
+    const degradedLensIds = executionFailures
+      .filter((failure) => failure.unit_kind === "lens")
+      .map((failure) => failure.unit_id);
+    const haltReason = `Review cancelled by MCP request: ${args.cancelRequest.reason}`;
+    await appendMarkdownLogEntry(
+      executionPlan.error_log_path,
+      "runner cancelled",
+      [
+        haltReason,
+        `requested_at: ${args.cancelRequest.requested_at}`,
+        `phase: ${args.phase}`,
+      ].join("\n"),
+    );
+    const executionCompletedAtMs = Date.now();
+    await writeExecutionResultArtifact(executionPlan, {
+      session_id: executionPlan.session_id,
+      session_root: sessionRoot,
+      execution_realization: executionPlan.execution_realization,
+      host_runtime: executionPlan.host_runtime,
+      review_mode: executionPlan.review_mode,
+      execution_status: "halted_partial",
+      execution_started_at: isoFromTimestamp(executionStartedAtMs),
+      execution_completed_at: isoFromTimestamp(executionCompletedAtMs),
+      total_duration_ms: Math.max(0, executionCompletedAtMs - executionStartedAtMs),
+      max_concurrent_lenses: maxConcurrentLenses,
+      observed_dispatch_width: observedDispatchWidth,
+      planned_lens_ids: lensDispatches.map((dispatch) => dispatch.unit_id),
+      participating_lens_ids: successfulLensDispatches.map(
+        (dispatch) => dispatch.unit_id,
+      ),
+      degraded_lens_ids: degradedLensIds,
+      excluded_lens_ids: lensDispatches
+        .map((dispatch) => dispatch.unit_id)
+        .filter(
+          (lensId) =>
+            !successfulLensDispatches.some((dispatch) => dispatch.unit_id === lensId) &&
+            !degradedLensIds.includes(lensId),
+        ),
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_executed: false,
+      deliberation_status: args.deliberationStatus ?? "not_performed",
+      halt_reason: haltReason,
+      ...haltArtifactFields("cancellation", null),
+      error_log_path: executionPlan.error_log_path,
+      lens_completion_barrier_ref:
+        executionPlan.lens_completion_barrier_path ??
+        path.join(sessionRoot, "lens-completion-barrier.yaml"),
+      lens_execution_results: executionOutcomes
+        .filter((outcome): outcome is ExecutionOutcome => outcome !== undefined)
+        .map(toUnitExecutionResult),
+      issue_artifact_execution_results:
+        args.issueArtifactOutcomes?.map(toUnitExecutionResult) ?? [],
+      deliberation_execution_results:
+        args.deliberationExecutionResults?.map(toUnitExecutionResult) ?? [],
+      synthesize_execution_result: args.synthesizeOutcome
+        ? toUnitExecutionResult(args.synthesizeOutcome)
+        : null,
+    }, params.reviewExecutionProfile);
+    return {
+      session_root: sessionRoot,
+      executed_lens_count: successfulLensDispatches.length,
+      synthesis_output_path: executionPlan.synthesis_output_path,
+      participating_lens_ids: successfulLensDispatches.map(
+        (dispatch) => dispatch.unit_id,
+      ),
+      degraded_lens_ids: degradedLensIds,
+      synthesis_executed: false,
+      error_log_path: executionPlan.error_log_path,
+      halt_reason: haltReason,
+      ...haltArtifactFields("cancellation", null),
+    };
+  }
+
+  const initialCancelRequest = await readReviewCancelRequest(sessionRoot);
+  if (initialCancelRequest) {
+    return haltForCancellation({
+      cancelRequest: initialCancelRequest,
+      phase: "before_lens_dispatch",
+    });
+  }
+
   async function runLensWorker(workerIndex: number): Promise<void> {
     // Stagger initial dispatch to avoid thundering-herd on external APIs.
     // Only the very first dispatch of each worker is staggered; subsequent
@@ -2264,6 +2385,9 @@ export async function executeReviewPromptExecution(
 
       const dispatch = lensDispatches[currentIndex];
       if (!dispatch) {
+        return;
+      }
+      if (await readReviewCancelRequest(sessionRoot)) {
         return;
       }
       if (!shouldRunUnit(dispatch.unit_id)) {
@@ -2463,6 +2587,14 @@ export async function executeReviewPromptExecution(
     );
   }
 
+  const postLensCancelRequest = await readReviewCancelRequest(sessionRoot);
+  if (postLensCancelRequest) {
+    return haltForCancellation({
+      cancelRequest: postLensCancelRequest,
+      phase: "after_lens_dispatch",
+    });
+  }
+
   const successfulLensDispatches = executionOutcomes
     .filter(isSuccessfulOutcome)
     .map((outcome) => outcome.dispatch);
@@ -2642,6 +2774,14 @@ export async function executeReviewPromptExecution(
     };
   };
   for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    const cancelRequest = await readReviewCancelRequest(sessionRoot);
+    if (cancelRequest) {
+      return haltForCancellation({
+        cancelRequest,
+        phase: `before_issue_artifact:${artifactId}`,
+        issueArtifactOutcomes,
+      });
+    }
     if (!shouldRunUnit(artifactId)) {
       issueArtifactOutcomes.push(
         preservedOutcomeForDispatch({
@@ -2685,6 +2825,14 @@ export async function executeReviewPromptExecution(
   let controlledDeliberation: Awaited<
     ReturnType<typeof runControlledLensDeliberation>
   >;
+  const preDeliberationCancelRequest = await readReviewCancelRequest(sessionRoot);
+  if (preDeliberationCancelRequest) {
+    return haltForCancellation({
+      cancelRequest: preDeliberationCancelRequest,
+      phase: "before_controlled_deliberation",
+      issueArtifactOutcomes,
+    });
+  }
   try {
     controlledDeliberation = await runControlledLensDeliberation({
       projectRoot,
@@ -2877,6 +3025,20 @@ export async function executeReviewPromptExecution(
     packet_path: synthesizePacketRuntimePath,
     output_path: executionPlan.synthesis_output_path,
   };
+
+  const preSynthesizeCancelRequest = await readReviewCancelRequest(sessionRoot);
+  if (preSynthesizeCancelRequest) {
+    return haltForCancellation({
+      cancelRequest: preSynthesizeCancelRequest,
+      phase: "before_synthesize",
+      issueArtifactOutcomes,
+      deliberationExecutionResults: [
+        ...controlledDeliberation.deliberationOutcomes,
+        controlledDeliberation.teamleadOutcome,
+      ],
+      deliberationStatus: "performed",
+    });
+  }
 
   if (shouldRunUnit("synthesize")) {
     await emitReviewProgress({

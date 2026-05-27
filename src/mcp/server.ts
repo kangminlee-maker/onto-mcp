@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 
-import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -27,14 +26,21 @@ import {
 import type { ReviewStructuredFailureRecord } from "../core-runtime/review/artifact-types.js";
 import { fileExists, readYamlDocument } from "../core-runtime/review/review-artifact-utils.js";
 import {
+  isPathInsideRoot,
+  realpathIfExists,
+} from "../core-runtime/path-boundary.js";
+import {
   OntoListDomainsToolInputSchema,
   OntoListSourceProfilesToolInputSchema,
   OntoObserveSourceToolInputSchema,
   OntoPrepareReviewToolInputSchema,
   OntoReconstructSessionInputSchema,
   OntoReconstructToolInputSchema,
+  OntoReviewCancelToolInputSchema,
   OntoReviewContinueToolInputSchema,
+  OntoReviewResultInputSchema,
   OntoReviewSessionInputSchema,
+  OntoReviewStatusInputSchema,
   OntoReviewToolInputSchema,
   OntoValidateReconstructDirectiveToolInputSchema,
   type OntoToolName,
@@ -148,6 +154,11 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       type: "boolean",
       description: "When true, materialize artifacts without executing lens units.",
     },
+    returnRunningAfterMs: {
+      type: "number",
+      description:
+        "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto.review returns a running handle and background execution continues.",
+    },
   },
 };
 
@@ -164,6 +175,59 @@ const SESSION_INPUT_SCHEMA: JsonValue = {
       type: "string",
       description:
         "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description:
+        "Absolute or project-relative review session root. Omit only when latest=true.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+    latest: {
+      type: "boolean",
+      description:
+        "When true, recover the newest matching review session under projectRoot.",
+    },
+    target: {
+      type: "string",
+      description: "Optional latest-session target filter.",
+    },
+    domain: {
+      type: "string",
+      description: "Optional latest-session canonical or alias domain filter.",
+    },
+    requestHash: {
+      type: "string",
+      description: "Optional latest-session request hash filter returned by a run handle.",
+    },
+    limit: {
+      type: "number",
+      description: "Maximum latest-session matches to include. Defaults to 5.",
+    },
+  },
+};
+
+const REVIEW_RESULT_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    ...((SESSION_INPUT_SCHEMA as { properties: Record<string, JsonValue> }).properties),
+    projectionLevel: {
+      type: "string",
+      enum: ["compact", "standard", "full"],
+      description:
+        "Result projection size. compact omits final output text and ReviewRecord; full includes complete artifacts.",
     },
   },
 };
@@ -198,6 +262,27 @@ const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
       enum: ["codex", "mock", "ts_inline_http"],
       description:
         "Executor realization for resumed units. Required for prepared sessions that have no prior review-run-manifest.",
+    },
+  },
+};
+
+const REVIEW_CANCEL_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description: "Absolute or project-relative review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+    reason: {
+      type: "string",
+      description: "Optional cancellation reason recorded in the session.",
     },
   },
 };
@@ -395,18 +480,26 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto.review_continue",
     description:
-      "Continue a prepared or halted review session by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
+      "Continue a review session when runControl.continuationAvailable is true by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
     inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
   },
   {
+    name: "onto.review_cancel",
+    description:
+      "Request cancellation for a running review session. The runner writes a halted cancellation result at the next runtime cancellation checkpoint.",
+    inputSchema: REVIEW_CANCEL_INPUT_SCHEMA,
+  },
+  {
     name: "onto.review_status",
-    description: "Read structured status and artifact refs for a review session.",
-    inputSchema: SESSION_INPUT_SCHEMA,
+    description:
+      "Read structured status and artifact refs for a review session, or recover the latest matching session.",
+    inputSchema: REVIEW_STATUS_INPUT_SCHEMA,
   },
   {
     name: "onto.review_result",
-    description: "Read the ReviewRecord and rendered final output for a completed review session.",
-    inputSchema: SESSION_INPUT_SCHEMA,
+    description:
+      "Read the ReviewRecord and rendered final output for a completed review session with compact/standard/full projections.",
+    inputSchema: REVIEW_RESULT_INPUT_SCHEMA,
   },
   {
     name: "onto.list_lenses",
@@ -517,6 +610,13 @@ function progressTokenFromToolCallParams(
   return typeof token === "string" || typeof token === "number" ? token : null;
 }
 
+function defaultReviewReturnRunningAfterMs(): number {
+  const raw = process.env.ONTO_MCP_REVIEW_RETURN_RUNNING_AFTER_MS;
+  if (raw === undefined || raw.trim().length === 0) return 25_000;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 25_000;
+}
+
 function sendMcpProgressNotification(
   progressToken: McpProgressToken,
   event: ReviewNativeProgressEvent,
@@ -594,19 +694,6 @@ async function formatToolError(error: unknown): Promise<JsonValue> {
         }
       : {}),
   };
-}
-
-function isInsidePath(root: string, candidate: string): boolean {
-  const relative = path.relative(path.resolve(root), path.resolve(candidate));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-async function realpathIfExists(targetPath: string): Promise<string | null> {
-  try {
-    return await fs.realpath(targetPath);
-  } catch {
-    return null;
-  }
 }
 
 function throwSessionDisclosureBlocked(args: {
@@ -697,7 +784,7 @@ async function resolveAllowedSessionRoot(args: {
   const realProjectRoot = await realpathIfExists(projectRoot);
   const realAllowedRoot = await realpathIfExists(allowedRoot);
 
-  if (!isInsidePath(allowedRoot, resolvedSessionRoot)) {
+  if (!isPathInsideRoot(allowedRoot, resolvedSessionRoot)) {
     throwSessionDisclosureBlocked({
       requestedSessionRoot: args.sessionRoot,
       resolvedSessionRoot,
@@ -716,7 +803,7 @@ async function resolveAllowedSessionRoot(args: {
   if (
     realSessionRoot &&
     realAllowedRoot &&
-    !isInsidePath(realAllowedRoot, realSessionRoot)
+    !isPathInsideRoot(realAllowedRoot, realSessionRoot)
   ) {
     throwSessionDisclosureBlocked({
       requestedSessionRoot: args.sessionRoot,
@@ -780,7 +867,7 @@ function resolveInsideProject(args: {
   const resolved = path.isAbsolute(args.ref)
     ? path.resolve(args.ref)
     : path.resolve(args.projectRoot, args.ref);
-  if (!isInsidePath(args.projectRoot, resolved)) {
+  if (!isPathInsideRoot(args.projectRoot, resolved)) {
     throw new Error(`${args.label} must stay inside projectRoot.`);
   }
   return resolved;
@@ -795,7 +882,7 @@ function resolveReconstructSessionRoot(args: {
   const resolved = path.isAbsolute(args.sessionRoot)
     ? path.resolve(args.sessionRoot)
     : path.resolve(args.projectRoot, args.sessionRoot);
-  if (!isInsidePath(allowedRoot, resolved)) {
+  if (!isPathInsideRoot(allowedRoot, resolved)) {
     throw new Error("sessionRoot must stay inside projectRoot/.onto/reconstruct.");
   }
   return resolved;
@@ -824,7 +911,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
   const realProjectRoot = await realpathIfExists(projectRoot);
   const realAllowedRoot = await realpathIfExists(allowedRoot);
 
-  if (!isInsidePath(allowedRoot, resolvedSessionRoot)) {
+  if (!isPathInsideRoot(allowedRoot, resolvedSessionRoot)) {
     throwReconstructSessionDisclosureBlocked({
       requestedSessionRoot: args.sessionRoot,
       resolvedSessionRoot,
@@ -843,7 +930,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
   if (
     realSessionRoot &&
     realAllowedRoot &&
-    !isInsidePath(realAllowedRoot, realSessionRoot)
+    !isPathInsideRoot(realAllowedRoot, realSessionRoot)
   ) {
     throwReconstructSessionDisclosureBlocked({
       requestedSessionRoot: args.sessionRoot,
@@ -888,7 +975,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
     for (const [artifactKey, artifactRef] of Object.entries(record.artifact_refs ?? {})) {
       if (typeof artifactRef !== "string" || artifactRef.length === 0) continue;
       const resolvedArtifactRef = path.resolve(artifactRef);
-      if (!isInsidePath(resolvedSessionRoot, resolvedArtifactRef)) {
+      if (!isPathInsideRoot(resolvedSessionRoot, resolvedArtifactRef)) {
         throwReconstructSessionDisclosureBlocked({
           requestedSessionRoot: args.sessionRoot,
           resolvedSessionRoot,
@@ -910,7 +997,7 @@ async function resolveAllowedReconstructSessionRoot(args: {
       if (
         realArtifactRef &&
         realSessionRoot &&
-        !isInsidePath(realSessionRoot, realArtifactRef)
+        !isPathInsideRoot(realSessionRoot, realArtifactRef)
       ) {
         throwReconstructSessionDisclosureBlocked({
           requestedSessionRoot: args.sessionRoot,
@@ -953,6 +1040,8 @@ async function callTool(
         const progressToken = options.progressToken;
         const result = await reviewApi.runReview({
           ...request,
+          returnRunningAfterMs:
+            parsed.returnRunningAfterMs ?? defaultReviewReturnRunningAfterMs(),
           ...(progressToken !== undefined && progressToken !== null
             ? {
                 progressObserver: (event) =>
@@ -989,15 +1078,69 @@ async function callTool(
         });
         return formatToolResult(result);
       }
+      case "onto.review_cancel": {
+        const parsed = OntoReviewCancelToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: parsed.sessionRoot,
+          projectRoot,
+        });
+        return formatToolResult(
+          await reviewApi.cancelReview({
+            projectRoot,
+            sessionRoot,
+            ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+          }),
+        );
+      }
       case "onto.review_status": {
-        const parsed = OntoReviewSessionInputSchema.parse(args);
-        const sessionRoot = await resolveAllowedSessionRoot(parsed);
-        return formatToolResult(await reviewApi.getReviewStatus(sessionRoot));
+        const parsed = OntoReviewStatusInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        if (parsed.sessionRoot) {
+          const sessionRoot = await resolveAllowedSessionRoot({
+            sessionRoot: parsed.sessionRoot,
+            projectRoot,
+          });
+          return formatToolResult(await reviewApi.getReviewStatus(sessionRoot));
+        }
+        const latestSessionMatches = await reviewApi.findLatestReviewSessions({
+          projectRoot,
+          ...(parsed.target !== undefined ? { target: parsed.target } : {}),
+          ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
+          ...(parsed.requestHash !== undefined
+            ? { requestHash: parsed.requestHash }
+            : {}),
+          ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+        });
+        const latest = latestSessionMatches[0];
+        if (!latest) {
+          return formatToolResult({
+            sessionId: null,
+            sessionRoot: null,
+            status: "unknown",
+            artifactRefs: {},
+            failureRefs: [],
+            structuredFailures: [],
+            latestSessionMatches,
+          });
+        }
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: latest.sessionRoot,
+          projectRoot,
+        });
+        return formatToolResult({
+          ...(await reviewApi.getReviewStatus(sessionRoot)),
+          latestSessionMatches,
+        });
       }
       case "onto.review_result": {
-        const parsed = OntoReviewSessionInputSchema.parse(args);
+        const parsed = OntoReviewResultInputSchema.parse(args);
         const sessionRoot = await resolveAllowedSessionRoot(parsed);
-        return formatToolResult(await reviewApi.getReviewResult(sessionRoot));
+        return formatToolResult(
+          await reviewApi.getReviewResult(sessionRoot, {
+            projectionLevel: parsed.projectionLevel ?? "standard",
+          }),
+        );
       }
       case "onto.list_lenses":
         return formatToolResult(await reviewApi.listLenses());

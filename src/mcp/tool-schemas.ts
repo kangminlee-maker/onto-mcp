@@ -3,6 +3,7 @@ import { z } from "zod";
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
 const ReviewTargetScopeKindSchema = z.enum(["file", "directory", "bundle"]);
 const ExecutorRealizationSchema = z.enum(["codex", "mock", "ts_inline_http"]);
+const ReviewResultProjectionLevelSchema = z.enum(["compact", "standard", "full"]);
 const DeliberationModeSchema = z.enum([
   "controlled_lens_deliberation",
 ]);
@@ -24,6 +25,7 @@ const OntoReviewToolInputBaseSchema = z.object({
   executorRealization: ExecutorRealizationSchema.optional(),
   confirmValueAlignment: z.boolean().optional(),
   prepareOnly: z.boolean().optional(),
+  returnRunningAfterMs: z.number().int().min(0).optional(),
 }).strict();
 
 export const OntoReviewToolInputSchema = OntoReviewToolInputBaseSchema.refine((input) => !(input.domain && input.noDomain), {
@@ -41,6 +43,29 @@ export const OntoReviewSessionInputSchema = z.object({
   sessionRoot: z.string().min(1),
   projectRoot: z.string().min(1).optional(),
 });
+
+export const OntoReviewStatusInputSchema = z.object({
+  sessionRoot: z.string().min(1).optional(),
+  projectRoot: z.string().min(1).optional(),
+  latest: z.boolean().optional(),
+  target: z.string().min(1).optional(),
+  domain: z.string().min(1).optional(),
+  requestHash: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(20).optional(),
+}).strict().refine((input) => (
+  typeof input.sessionRoot === "string" || input.latest === true
+), {
+  message: "Pass sessionRoot, or latest=true with optional target/domain/requestHash filters.",
+});
+
+export const OntoReviewResultInputSchema = OntoReviewSessionInputSchema.extend({
+  projectionLevel: ReviewResultProjectionLevelSchema.optional(),
+}).strict();
+
+export const OntoReviewCancelToolInputSchema =
+  OntoReviewSessionInputSchema.extend({
+    reason: z.string().min(1).optional(),
+  }).strict();
 
 export const OntoReviewContinueToolInputSchema =
   OntoReviewSessionInputSchema.extend({
@@ -106,6 +131,7 @@ export const OntoToolNames = [
   "onto.review",
   "onto.prepare_review",
   "onto.review_continue",
+  "onto.review_cancel",
   "onto.review_status",
   "onto.review_result",
   "onto.list_lenses",
@@ -124,6 +150,11 @@ export type OntoPrepareReviewToolInput = z.infer<
   typeof OntoPrepareReviewToolInputSchema
 >;
 export type OntoReviewSessionInput = z.infer<typeof OntoReviewSessionInputSchema>;
+export type OntoReviewStatusInput = z.infer<typeof OntoReviewStatusInputSchema>;
+export type OntoReviewResultInput = z.infer<typeof OntoReviewResultInputSchema>;
+export type OntoReviewCancelToolInput = z.infer<
+  typeof OntoReviewCancelToolInputSchema
+>;
 export type OntoReviewContinueToolInput = z.infer<
   typeof OntoReviewContinueToolInputSchema
 >;

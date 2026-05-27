@@ -97,6 +97,7 @@ fi
 # Make absolute
 SESSION_ROOT="$(cd "$SESSION_ROOT" && pwd)"
 ERROR_LOG="$SESSION_ROOT/error-log.md"
+EXECUTION_PLAN="$SESSION_ROOT/execution-plan.yaml"
 FINAL_OUTPUT="$SESSION_ROOT/final-output.md"
 SESSION_ID="$(basename "$SESSION_ROOT")"
 # Real-time outer codex stream (nested-workers Codex path only).
@@ -134,6 +135,184 @@ read_yaml_scalar() {
   local file="$1" key="$2"
   [ -f "$file" ] || { echo ""; return; }
   sed -n "s/^${key}: *//p" "$file" | head -n 1 | sed 's/^"\(.*\)"$/\1/'
+}
+
+file_mtime_epoch() {
+  local file="$1"
+  local value=""
+  [ -e "$file" ] || { echo ""; return; }
+  value="$(stat -f %m "$file" 2>/dev/null || true)"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "$value"
+    return
+  fi
+  value="$(stat -c %Y "$file" 2>/dev/null || true)"
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    echo "$value"
+    return
+  fi
+  echo ""
+}
+
+format_age() {
+  local epoch="$1"
+  [ -n "$epoch" ] || { echo ""; return; }
+  local now age
+  now="$(date +%s)"
+  age=$((now - epoch))
+  if [ "$age" -lt 60 ]; then
+    echo "${age}s"
+  elif [ "$age" -lt 3600 ]; then
+    echo "$((age / 60))m"
+  else
+    echo "$((age / 3600))h"
+  fi
+}
+
+execution_plan_lens_rows() {
+  [ -f "$EXECUTION_PLAN" ] || return
+  awk '
+    function strip(v) {
+      gsub(/^[ \t]+|[ \t]+$/, "", v)
+      gsub(/^"/, "", v)
+      gsub(/"$/, "", v)
+      return v
+    }
+    function flush() {
+      if (lens != "") print lens "|" output
+      lens = ""
+      output = ""
+    }
+    /^lens_execution_seats:/ {
+      in_lens = 1
+      next
+    }
+    in_lens && /^[^ \t-]/ {
+      flush()
+      in_lens = 0
+    }
+    in_lens && /^[ \t]*-[ \t]*lens_id:/ {
+      flush()
+      value = $0
+      sub(/^[ \t]*-[ \t]*lens_id:[ \t]*/, "", value)
+      lens = strip(value)
+      next
+    }
+    in_lens && /^[ \t]*lens_id:/ {
+      value = $0
+      sub(/^[ \t]*lens_id:[ \t]*/, "", value)
+      lens = strip(value)
+      next
+    }
+    in_lens && /^[ \t]*output_path:/ {
+      value = $0
+      sub(/^[ \t]*output_path:[ \t]*/, "", value)
+      output = strip(value)
+      next
+    }
+    END {
+      if (in_lens) flush()
+    }
+  ' "$EXECUTION_PLAN"
+}
+
+latest_lens_runtime_event() {
+  local lens="$1"
+  [ -f "$ERROR_LOG" ] || { echo ""; return; }
+  awk -v lens="$lens" '
+    /^## / {
+      if ($0 ~ ("runner dispatch started: " lens "$") ||
+          $0 ~ ("runner dispatch retry: " lens "$") ||
+          $0 ~ ("runner dispatch completed: " lens "$") ||
+          $0 ~ ("runner nested dispatch completed: " lens "$") ||
+          $0 ~ ("lens failure: " lens "$")) {
+        latest = $0
+      }
+    }
+    END { print latest }
+  ' "$ERROR_LOG"
+}
+
+unit_signal_epoch() {
+  local running_log="$1"
+  local latest_epoch=""
+  local candidate=""
+  if [ -n "$running_log" ]; then
+    candidate="$(file_mtime_epoch "$running_log")"
+    [ -n "$candidate" ] && latest_epoch="$candidate"
+  fi
+  candidate="$(file_mtime_epoch "$ERROR_LOG")"
+  if [ -n "$candidate" ] && { [ -z "$latest_epoch" ] || [ "$candidate" -gt "$latest_epoch" ]; }; then
+    latest_epoch="$candidate"
+  fi
+  echo "$latest_epoch"
+}
+
+LAST_SNAPSHOT=""
+print_lens_snapshot() {
+  local rows
+  rows="$(execution_plan_lens_rows)"
+  [ -n "$rows" ] || return
+
+  local snapshot=""
+  local lens output running_log event status label color detail epoch age
+  while IFS='|' read -r lens output; do
+    [ -n "$lens" ] || continue
+    running_log=""
+    if [ -n "$output" ]; then
+      running_log="$(dirname "$output")/.${lens}.running.log"
+    fi
+    event="$(latest_lens_runtime_event "$lens")"
+    status="pending"
+    if [ -n "$output" ] && [ -s "$output" ]; then
+      status="completed"
+    elif [[ "$event" == *"runner dispatch completed:"* ]] || [[ "$event" == *"runner nested dispatch completed:"* ]]; then
+      status="completed"
+    elif [[ "$event" == *"lens failure:"* ]]; then
+      status="failed"
+    elif [[ "$event" == *"runner dispatch retry:"* ]]; then
+      status="retrying"
+    elif [[ "$event" == *"runner dispatch started:"* ]] || { [ -n "$running_log" ] && [ -f "$running_log" ]; }; then
+      status="running"
+    fi
+
+    epoch="$(unit_signal_epoch "$running_log")"
+    age="$(format_age "$epoch")"
+    if { [ "$status" = "running" ] || [ "$status" = "retrying" ]; } && [ -n "$epoch" ]; then
+      local now stale_age
+      now="$(date +%s)"
+      stale_age=$((now - epoch))
+      if [ "$stale_age" -gt 300 ]; then
+        status="running_stale"
+      fi
+    fi
+
+    case "$status" in
+      completed) label="DONE";  color="$C_GREEN" ;;
+      failed) label="FAIL"; color="$C_RED" ;;
+      retrying) label="RETRY"; color="$C_YELLOW" ;;
+      running_stale) label="STALE"; color="$C_YELLOW" ;;
+      running) label="RUN"; color="$C_BLUE" ;;
+      *) label="WAIT"; color="$C_DIM" ;;
+    esac
+
+    detail=""
+    if [ -n "$running_log" ] && [ -f "$running_log" ]; then
+      detail="$running_log"
+    elif [ -n "$output" ] && [ -f "$output" ]; then
+      detail="$output"
+    fi
+    [ -n "$age" ] && age=" ${C_DIM}${age}${C_RESET}"
+    [ -n "$detail" ] && detail=" ${C_DIM}${detail}${C_RESET}"
+    snapshot+="  ${color}${label}${C_RESET}  ${lens}${age}${detail}"$'\n'
+  done <<< "$rows"
+
+  [ -n "$snapshot" ] || return
+  if [ "$snapshot" != "$LAST_SNAPSHOT" ]; then
+    echo "${C_CYAN}──────────────── lens snapshot ────────────────${C_RESET}"
+    printf "%s" "$snapshot"
+    LAST_SNAPSHOT="$snapshot"
+  fi
 }
 
 print_header() {
@@ -187,6 +366,7 @@ print_footer_complete() {
 }
 
 print_header
+print_lens_snapshot
 
 # Session-directory disappearance guard.
 #
@@ -223,6 +403,8 @@ trap 'echo ""; echo "${C_DIM}Watcher stopped (review may still be running).${C_R
 
 # Poll loop
 LAST_LINE=0
+LAST_SNAPSHOT_EPOCH=0
+SNAPSHOT_INTERVAL_SECONDS=5
 while true; do
   check_session_alive
   CURRENT_LINES=$(wc -l < "$ERROR_LOG" 2>/dev/null || echo 0)
@@ -273,6 +455,14 @@ while true; do
       }
     '
     LAST_LINE=$CURRENT_LINES
+    print_lens_snapshot
+    LAST_SNAPSHOT_EPOCH="$(date +%s)"
+  else
+    CURRENT_EPOCH="$(date +%s)"
+    if [ $((CURRENT_EPOCH - LAST_SNAPSHOT_EPOCH)) -ge "$SNAPSHOT_INTERVAL_SECONDS" ]; then
+      print_lens_snapshot
+      LAST_SNAPSHOT_EPOCH="$CURRENT_EPOCH"
+    fi
   fi
 
   if [ -f "$FINAL_OUTPUT" ]; then
@@ -287,6 +477,7 @@ while true; do
         }
       '
     fi
+    print_lens_snapshot
     print_footer_complete
     exit 0
   fi

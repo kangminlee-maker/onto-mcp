@@ -1070,9 +1070,14 @@ function goalsForRole(role: ReviewTargetArtifactRole): string[] {
 function domainGoalAdditions(domain: string): string[] {
   switch (normalizeDomainValue(domain)) {
     case "software-engineering":
-      return ["runtime_contract", "test_evidence", "error_path_clarity"];
-    case "llm-native-development":
-      return ["context_isolation", "artifact_truth", "fail_loud_behavior"];
+      return [
+        "runtime_contract",
+        "test_evidence",
+        "error_path_clarity",
+        "context_isolation",
+        "artifact_truth",
+        "fail_loud_behavior",
+      ];
     default:
       return [];
   }

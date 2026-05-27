@@ -17,6 +17,16 @@ function requireString(
   return value;
 }
 
+function parseOptionalNonNegativeInteger(value: string | undefined): number {
+  if (value === undefined || value.trim().length === 0) return 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function renderLensOutput(unitId: string, packetPath: string): string {
   return `# ${unitId} Review Result
 
@@ -283,6 +293,16 @@ export async function runMockReviewUnitExecutorCli(
       : null;
   const participatingLensIds =
     executionPlan?.lens_prompt_packet_seats.map((seat) => seat.lens_id) ?? [];
+  const delayMs = parseOptionalNonNegativeInteger(
+    process.env.ONTO_REVIEW_MOCK_UNIT_DELAY_MS,
+  );
+  if (delayMs > 0) {
+    await delay(delayMs);
+  }
+  const warningMessage = process.env.ONTO_REVIEW_MOCK_ENV_WARNING;
+  if (warningMessage && warningMessage.trim().length > 0) {
+    console.warn(warningMessage.trim());
+  }
 
   const outputText =
     unitKind === "synthesize"

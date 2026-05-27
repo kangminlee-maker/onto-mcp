@@ -24,6 +24,7 @@ import { generateReviewSessionId } from "../review/materializers.js";
 import {
   fileExists,
   hasOptionFlag,
+  isDeprecatedDomainAlias,
   normalizeDomainValue,
   readMultiOptionValuesFromArgv,
   readYamlDocument,
@@ -34,6 +35,10 @@ import { isOntoRoot, resolveOntoHome } from "../discovery/onto-home.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
 import { resolveSettingsChain, type OntoConfig } from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
+import {
+  isPathInsideRoot,
+  isPathInsideRootRealpathAwareSync,
+} from "../path-boundary.js";
 import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import {
   resolveReviewExecutionProfile,
@@ -347,11 +352,6 @@ function applyExecutorOverrideToProfile(
   return profile;
 }
 
-function isInsidePath(root: string, candidate: string): boolean {
-  const relative = path.relative(path.resolve(root), path.resolve(candidate));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
 function displayPathFromProject(projectRoot: string, candidate: string): string {
   if (!path.isAbsolute(candidate)) return candidate;
   const relative = path.relative(projectRoot, candidate);
@@ -396,7 +396,7 @@ function renderReviewStartPreview(args: {
   const { projectRoot, sessionRoot, setup, reviewExecutionProfile } = args;
   const inputs = setup.resolvedInvokeInputs;
   const targetPath = path.resolve(inputs.targetPath);
-  const boundaryLabel = isInsidePath(projectRoot, targetPath)
+  const boundaryLabel = isPathInsideRoot(projectRoot, targetPath)
     ? "project"
     : "external";
   const projectSettingsPath = path.join(projectRoot, ".onto", "settings.json");
@@ -1278,26 +1278,6 @@ function parseHostFacingPositionals(positionals: string[]): HostFacingPositional
   };
 }
 
-function isPathInsideRoot(candidatePath: string, rootPath: string): boolean {
-  let resolvedCandidate: string;
-  let resolvedRoot: string;
-  try {
-    resolvedCandidate = fsSync.realpathSync(candidatePath);
-    resolvedRoot = fsSync.realpathSync(rootPath);
-  } catch {
-    resolvedCandidate = path.resolve(candidatePath);
-    resolvedRoot = path.resolve(rootPath);
-  }
-  const relative = path.relative(resolvedRoot, resolvedCandidate);
-  if (relative === "") {
-    return true;
-  }
-  if (relative.startsWith("..")) {
-    return false;
-  }
-  return !path.isAbsolute(relative);
-}
-
 function normalizeFilesystemAllowedRoot(
   root: string,
   defaultProjectRoot: string,
@@ -1331,7 +1311,9 @@ function isInsideAnyDeclaredFilesystemRoot(
   targetPath: string,
   allowedRoots: string[],
 ): boolean {
-  return allowedRoots.some((allowedRoot) => isPathInsideRoot(targetPath, allowedRoot));
+  return allowedRoots.some((allowedRoot) =>
+    isPathInsideRootRealpathAwareSync(allowedRoot, targetPath),
+  );
 }
 
 function deriveFilesystemBoundaryFromTarget(
@@ -1417,10 +1399,11 @@ function normalizeDomainToken(domainValue: string): string | null {
   if (trimmed.length === 0) {
     return null;
   }
-  if (["-", "@-", "none"].includes(trimmed)) {
+  const normalized = normalizeDomainValue(trimmed);
+  if (normalized === "none") {
     return "@-";
   }
-  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+  return `@${normalized}`;
 }
 
 function collectConfiguredDomainTokens(ontoConfig: OntoConfig): string[] {
@@ -1557,6 +1540,7 @@ function addDomainRootCandidates(args: {
   entries.sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (isDeprecatedDomainAlias(entry.name)) continue;
     if (args.seenIds.has(entry.name)) continue;
     args.seenIds.add(entry.name);
     args.candidates.push({

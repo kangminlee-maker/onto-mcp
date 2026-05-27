@@ -44,6 +44,7 @@
     "review:codex-unit-executor": "tsx src/core-runtime/cli/codex-review-unit-executor.ts",
     "review:inline-http-unit-executor": "tsx src/core-runtime/cli/inline-http-review-unit-executor.ts",
     "review:invoke": "tsx src/core-runtime/cli/review-invoke.ts",
+    "review:watch": "bash scripts/onto-review-watch.sh",
     "mcp:server": "tsx src/mcp/server.ts",
     "review:render-final-output": "tsx src/core-runtime/cli/render-review-final-output.ts",
     "review:finalize-session": "tsx src/core-runtime/cli/assemble-review-record.ts",

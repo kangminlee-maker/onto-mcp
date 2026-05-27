@@ -158,7 +158,7 @@ run_expect_pass "T3: external-dir/auto-approve" \
   /tmp "external dir review" \
   --executor-realization mock
 
-run_expect_pass "T4: domain-token" \
+run_expect_pass "T4: retired-domain-token-alias" \
   src/ "ontology check" \
   --domain llm-native-development --executor-realization mock --review-mode core-axis
 

@@ -12,6 +12,7 @@ import type {
   ReviewStructuredFailureRecord,
   ReviewTargetProfileArtifact,
   ReviewTargetScopeKind,
+  ReviewUnitExecutionResult,
 } from "../core-runtime/review/artifact-types.js";
 import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
 import crypto from "node:crypto";
@@ -22,11 +23,20 @@ import { resolveOntoHome } from "../core-runtime/discovery/onto-home.js";
 import { loadCoreLensRegistry } from "../core-runtime/discovery/lens-registry.js";
 import {
   fileExists,
+  isDeprecatedDomainAlias,
   isoFromTimestamp,
   isoNow,
+  normalizeDomainValue,
   readYamlDocument,
   writeYamlDocument,
 } from "../core-runtime/review/review-artifact-utils.js";
+import {
+  assertPathInsideRoot,
+  realpathIfExists,
+} from "../core-runtime/path-boundary.js";
+import {
+  assertReviewExecutionPlanSessionBoundary,
+} from "../core-runtime/review/execution-plan-boundary.js";
 import {
   buildReviewRouteVisibilityFromSession,
   type ReviewRouteVisibility,
@@ -126,9 +136,146 @@ export type ReviewProgressObserver = (
   event: ReviewNativeProgressEvent,
 ) => void;
 
+export type ReviewResultProjectionLevel = "compact" | "standard" | "full";
+
+export interface ReviewDomainTokenResolution {
+  requestedToken: string;
+  normalizedDomain: string | null;
+  resolution: "exact" | "alias" | "suggestion" | "no_domain" | "unknown";
+  suggestionIds: string[];
+}
+
+export interface ReviewTargetMaterialSupportProjection {
+  targetMaterialKind: string | null;
+  supportStatus: string | null;
+  unsupportedReason: string | null;
+  detectionConfidence: number | null;
+  detectionConfidenceBasis: string | null;
+}
+
+export interface ReviewEnvironmentWarningProjection {
+  warningId: string;
+  source: string;
+  message: string;
+  fatality: "non_fatal";
+  affectedCapability: string;
+  outputTrustImpact: "none" | "unknown";
+  observedAt: string;
+}
+
+export type ReviewRuntimeUnitStatus =
+  | "pending"
+  | "running"
+  | "retrying"
+  | "running_stale"
+  | "completed"
+  | "failed";
+
+export interface ReviewRuntimeUnitProgressProjection {
+  unitId: string;
+  publicAlias: string;
+  unitKind: string;
+  progressStepId: ReviewProgressStepId | null;
+  status: ReviewRuntimeUnitStatus;
+  packetPath: string | null;
+  outputPath: string | null;
+  runningLogRef: string | null;
+  latestSignal: string | null;
+  latestSignalAt: string | null;
+  secondsSinceLatestSignal: number | null;
+  attemptCount: number;
+  failureMessage: string | null;
+}
+
+export interface ReviewRunHandle {
+  schemaVersion: "1";
+  sessionId: string;
+  sessionRoot: string;
+  invocationId: string;
+  status: ReviewStatus["status"];
+  projectRoot: string | null;
+  target: {
+    requestedTarget: string | null;
+    targetScopeKind: ReviewTargetScopeKind | null;
+    targetMaterialKind: string | null;
+  };
+  domain: ReviewDomainTokenResolution;
+  artifactRefs: {
+    sessionMetadata: string | null;
+    executionPlan: string | null;
+    reviewRunManifest: string | null;
+    executionResult: string | null;
+    finalOutput: string | null;
+    reviewRecord: string | null;
+  };
+  requestHash: string | null;
+  pollAfterSeconds: number | null;
+}
+
+export interface ReviewActiveAttemptProjection {
+  attemptId: string;
+  attemptKind: "initial_review" | "continuation";
+  status: "started" | "completed" | "halted_partial" | "failed";
+  sessionId: string;
+  sessionRoot: string;
+  startedAt: string;
+  updatedAt: string;
+  activeUnits: string[];
+  requestedFrontierUnits: string[];
+  latestObservedArtifactRef: string | null;
+  staleAfterSeconds: number;
+  secondsSinceUpdated: number | null;
+  isStale: boolean;
+  attemptManifestRef: string;
+}
+
+export interface ReviewRunControlProjection {
+  activeAttempt: ReviewActiveAttemptProjection | null;
+  lifecycleState:
+    | "prepared"
+    | "active"
+    | "stale_active"
+    | "cancellation_requested"
+    | "failed_attempt"
+    | "halted"
+    | "completed"
+    | "unknown";
+  alreadyRunning: boolean;
+  cancellationAvailable: boolean;
+  cancellationRequested: boolean;
+  cancellationRequestRef: string | null;
+  continuationAvailable: boolean;
+  retryAvailable: boolean;
+  retrySemantics: "use_review_continue";
+  hostTimeoutSemantics: "review_continues_under_session";
+  statusReason: string;
+}
+
+export interface ReviewSessionLookupQuery {
+  projectRoot: string;
+  target?: string;
+  domain?: string;
+  requestHash?: string;
+  createdAfter?: string;
+  limit?: number;
+}
+
+export interface ReviewSessionLookupResult {
+  sessionId: string;
+  sessionRoot: string;
+  createdAt: string | null;
+  requestedTarget: string | null;
+  requestedDomainToken: string | null;
+  normalizedDomain: string | null;
+  requestHash: string | null;
+  status: ReviewStatus["status"];
+  artifactRefs: Record<string, string>;
+}
+
 export interface RunReviewRequest extends PrepareReviewRequest {
   providerId?: string;
   progressObserver?: ReviewProgressObserver;
+  returnRunningAfterMs?: number;
 }
 
 export interface ContinueReviewRequest {
@@ -139,10 +286,16 @@ export interface ContinueReviewRequest {
   executorRealization?: ReviewExecutorRealization;
 }
 
+export interface CancelReviewRequest {
+  sessionRoot: string;
+  projectRoot?: string;
+  reason?: string;
+}
+
 export interface ReviewRunResult {
   sessionId: string;
   sessionRoot: string;
-  status: "completed" | "completed_with_degradation" | "halted_partial";
+  status: "running" | "completed" | "completed_with_degradation" | "halted_partial";
   finalOutputPath: string;
   reviewRecordPath: string;
   executionResultPath: string;
@@ -163,6 +316,10 @@ export interface ReviewRunResult {
     boundedInvokeSteps?: string[];
   };
   llmPresentation?: LlmPresentationPrompts;
+  runHandle?: ReviewRunHandle;
+  runControl?: ReviewRunControlProjection;
+  targetMaterialSupport?: ReviewTargetMaterialSupportProjection | null;
+  environmentWarnings?: ReviewEnvironmentWarningProjection[];
 }
 
 export interface ReviewContinuationAttempt {
@@ -179,15 +336,29 @@ export interface ReviewContinuationAttempt {
 export interface ReviewContinueResult {
   sessionId: string;
   sessionRoot: string;
+  decision: "executed" | "already_running";
   status: ReviewStatus["status"];
-  continuationPlan: ReviewContinuationPlan;
-  continuationAttempt: ReviewContinuationAttempt;
-  promptExecutionResult: ReviewPromptExecutionResult;
+  continuationPlan?: ReviewContinuationPlan;
+  continuationAttempt?: ReviewContinuationAttempt;
+  promptExecutionResult?: ReviewPromptExecutionResult;
   artifactRefs: Record<string, string>;
   pipelineExecutionLedger?: PipelineExecutionLedger;
   resultClassificationSummary?: ReviewResultClassificationSummary;
   failureRefs: string[];
   routeVisibility?: ReviewRouteVisibility | null;
+  llmPresentation?: LlmPresentationPrompts;
+  activeAttempt?: ReviewActiveAttemptProjection;
+}
+
+export interface ReviewCancelResult {
+  sessionId: string;
+  sessionRoot: string;
+  decision: "requested" | "not_cancellable" | "already_terminal";
+  status: ReviewStatus["status"];
+  cancelRequestPath: string;
+  reason: string;
+  artifactRefs: Record<string, string>;
+  runControl?: ReviewRunControlProjection;
   llmPresentation?: LlmPresentationPrompts;
 }
 
@@ -228,6 +399,19 @@ export class ReviewContinuationError extends Error {
   }
 }
 
+export class ReviewDomainResolutionError extends Error {
+  readonly domainResolution: ReviewDomainTokenResolution;
+
+  constructor(args: {
+    message: string;
+    domainResolution: ReviewDomainTokenResolution;
+  }) {
+    super(args.message);
+    this.name = "ReviewDomainResolutionError";
+    this.domainResolution = args.domainResolution;
+  }
+}
+
 export interface LlmPresentationPrompt {
   prompt: string;
   input: unknown;
@@ -258,12 +442,27 @@ export interface ReviewStatus {
   structuredFailures: ReviewStructuredFailureRecord[];
   routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation?: LlmPresentationPrompts;
+  runControl?: ReviewRunControlProjection;
+  targetMaterialSupport?: ReviewTargetMaterialSupportProjection | null;
+  environmentWarnings?: ReviewEnvironmentWarningProjection[];
+  unitProgress?: ReviewRuntimeUnitProgressProjection[];
+  latestSessionMatches?: ReviewSessionLookupResult[];
 }
 
 export interface ReviewResult {
   sessionId: string;
   sessionRoot: string;
-  reviewRecord: ReviewRecord;
+  projectionLevel: ReviewResultProjectionLevel;
+  reviewRecord?: ReviewRecord;
+  reviewRecordSummary: {
+    reviewRecordId: string;
+    recordStatus: ReviewRecord["record_status"];
+    requestText: string;
+    resolvedLensIds: string[];
+    participatingLensIds: string[];
+    degradedLensIds: string[];
+    deliberationStatus: ReviewRecord["deliberation_status"];
+  };
   finalOutputPath: string;
   reviewRunManifestPath: string;
   finalOutputText?: string;
@@ -273,14 +472,23 @@ export interface ReviewResult {
   failureRefs: string[];
   routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation?: LlmPresentationPrompts;
+  targetMaterialSupport?: ReviewTargetMaterialSupportProjection | null;
+  environmentWarnings?: ReviewEnvironmentWarningProjection[];
 }
 
 export interface OntoReviewCoreApi {
   prepareReview(request: PrepareReviewRequest): Promise<PreparedReview>;
   runReview(request: RunReviewRequest): Promise<ReviewRunResult>;
   continueReview(request: ContinueReviewRequest): Promise<ReviewContinueResult>;
+  cancelReview(request: CancelReviewRequest): Promise<ReviewCancelResult>;
   getReviewStatus(sessionRoot: string): Promise<ReviewStatus>;
-  getReviewResult(sessionRoot: string): Promise<ReviewResult>;
+  getReviewResult(
+    sessionRoot: string,
+    options?: { projectionLevel?: ReviewResultProjectionLevel },
+  ): Promise<ReviewResult>;
+  findLatestReviewSessions(
+    query: ReviewSessionLookupQuery,
+  ): Promise<ReviewSessionLookupResult[]>;
   listLenses(): Promise<{ full: string[]; coreAxis: string[] }>;
   listDomains(projectRoot?: string): Promise<string[]>;
 }
@@ -384,7 +592,8 @@ function appendCommonReviewArgs(
     throw new Error("Use either domain or noDomain, not both.");
   }
   if (request.domain) {
-    result.push("--domain", request.domain);
+    result.push("--domain", normalizeDomainValue(request.domain));
+    result.push("--requested-domain-token", request.domain);
   }
   if (request.noDomain) {
     result.push("--no-domain");
@@ -432,7 +641,11 @@ async function readOptionalReviewRecord(
   filePath: string,
 ): Promise<ReviewRecord | null> {
   if (!(await fileExists(filePath))) return null;
-  return readValidatedReviewRecord(filePath);
+  try {
+    return await readValidatedReviewRecord(filePath);
+  } catch {
+    return null;
+  }
 }
 
 async function readOptionalText(filePath: string): Promise<string | undefined> {
@@ -440,28 +653,35 @@ async function readOptionalText(filePath: string): Promise<string | undefined> {
   return fs.readFile(filePath, "utf8");
 }
 
-function isInsidePath(root: string, candidate: string): boolean {
-  const relative = path.relative(path.resolve(root), path.resolve(candidate));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-async function realpathIfExists(targetPath: string): Promise<string | null> {
-  try {
-    return await fs.realpath(targetPath);
-  } catch {
-    return null;
+async function resolveReviewRecordFinalOutputPath(args: {
+  sessionRoot: string;
+  projectRoot: string | null;
+  finalOutputRef: string | null | undefined;
+}): Promise<string> {
+  const sessionRoot = path.resolve(args.sessionRoot);
+  const rawRef = args.finalOutputRef ?? path.join(sessionRoot, "final-output.md");
+  const candidates = path.isAbsolute(rawRef)
+    ? [path.resolve(rawRef)]
+    : [
+        path.resolve(sessionRoot, rawRef),
+        ...(args.projectRoot ? [path.resolve(args.projectRoot, rawRef)] : []),
+      ];
+  for (const candidate of candidates) {
+    if (!(await fileExists(candidate))) continue;
+    await assertPathInsideRoot({
+      root: sessionRoot,
+      candidate,
+      label: "ReviewRecord.final_output_ref",
+    });
+    return candidate;
   }
-}
-
-async function realpathNearestExisting(targetPath: string): Promise<string | null> {
-  let current = path.resolve(targetPath);
-  while (true) {
-    const real = await realpathIfExists(current);
-    if (real) return real;
-    const parent = path.dirname(current);
-    if (parent === current) return null;
-    current = parent;
-  }
+  const fallback = candidates[0] ?? path.join(sessionRoot, "final-output.md");
+  await assertPathInsideRoot({
+    root: sessionRoot,
+    candidate: fallback,
+    label: "ReviewRecord.final_output_ref",
+  });
+  return fallback;
 }
 
 async function assertSamePath(args: {
@@ -480,131 +700,6 @@ async function assertSamePath(args: {
   throw new Error(
     `${args.label} mismatch: expected ${expected}, received ${actual}`,
   );
-}
-
-async function assertRefInsideSession(args: {
-  sessionRoot: string;
-  ref: string;
-  label: string;
-}): Promise<void> {
-  const sessionRoot = path.resolve(args.sessionRoot);
-  const resolvedRef = path.isAbsolute(args.ref)
-    ? path.resolve(args.ref)
-    : path.resolve(sessionRoot, args.ref);
-  if (!isInsidePath(sessionRoot, resolvedRef)) {
-    throw new Error(
-      `Review continuation blocked because ${args.label} escapes the session root: ${resolvedRef}`,
-    );
-  }
-  const realSessionRoot = (await realpathIfExists(sessionRoot)) ?? sessionRoot;
-  const realRef = await realpathIfExists(resolvedRef);
-  if (realRef && !isInsidePath(realSessionRoot, realRef)) {
-    throw new Error(
-      `Review continuation blocked because ${args.label} realpath escapes the session root: ${realRef}`,
-    );
-  }
-  if (!realRef) {
-    const realNearest = await realpathNearestExisting(path.dirname(resolvedRef));
-    if (realNearest && !isInsidePath(realSessionRoot, realNearest)) {
-      throw new Error(
-        `Review continuation blocked because ${args.label} parent realpath escapes the session root: ${realNearest}`,
-      );
-    }
-  }
-}
-
-async function validateReviewExecutionPlanSessionBoundary(args: {
-  sessionRoot: string;
-  executionPlan: ReviewExecutionPlan;
-}): Promise<void> {
-  const { executionPlan, sessionRoot } = args;
-  const plannedSessionRoot = path.isAbsolute(executionPlan.session_root)
-    ? executionPlan.session_root
-    : path.resolve(sessionRoot, executionPlan.session_root);
-  await assertSamePath({
-    label: "ReviewExecutionPlan.session_root",
-    expected: sessionRoot,
-    actual: plannedSessionRoot,
-  });
-
-  const refs: Array<{ label: string; ref: string | undefined }> = [
-    { label: "interpretation_artifact_path", ref: executionPlan.interpretation_artifact_path },
-    { label: "binding_output_path", ref: executionPlan.binding_output_path },
-    { label: "session_metadata_path", ref: executionPlan.session_metadata_path },
-    { label: "execution_preparation_root", ref: executionPlan.execution_preparation_root },
-    { label: "round1_root", ref: executionPlan.round1_root },
-    { label: "prompt_packets_root", ref: executionPlan.prompt_packets_root },
-    {
-      label: "teamlead_deliberation_prompt_packet_path",
-      ref: executionPlan.teamlead_deliberation_prompt_packet_path,
-    },
-    { label: "synthesize_prompt_packet_path", ref: executionPlan.synthesize_prompt_packet_path },
-    { label: "actor_invocation_profiles_path", ref: executionPlan.actor_invocation_profiles_path },
-    { label: "actor_consumer_bindings_path", ref: executionPlan.actor_consumer_bindings_path },
-    { label: "domain_binding_path", ref: executionPlan.domain_binding_path },
-    { label: "review_target_profile_path", ref: executionPlan.review_target_profile_path },
-    {
-      label: "review_value_alignment_criteria_path",
-      ref: executionPlan.review_value_alignment_criteria_path,
-    },
-    { label: "review_context_manifest_path", ref: executionPlan.review_context_manifest_path },
-    { label: "synthesis_output_path", ref: executionPlan.synthesis_output_path },
-    { label: "finding_ledger_path", ref: executionPlan.finding_ledger_path },
-    {
-      label: "finding_relation_graph_path",
-      ref: executionPlan.finding_relation_graph_path,
-    },
-    { label: "issue_ledger_path", ref: executionPlan.issue_ledger_path },
-    { label: "issue_stance_matrix_path", ref: executionPlan.issue_stance_matrix_path },
-    { label: "deliberation_plan_path", ref: executionPlan.deliberation_plan_path },
-    { label: "problem_framing_path", ref: executionPlan.problem_framing_path },
-    { label: "lens_completion_barrier_path", ref: executionPlan.lens_completion_barrier_path },
-    { label: "deliberation_root_path", ref: executionPlan.deliberation_root_path },
-    { label: "deliberation_output_path", ref: executionPlan.deliberation_output_path },
-    { label: "execution_result_path", ref: executionPlan.execution_result_path },
-    { label: "error_log_path", ref: executionPlan.error_log_path },
-    { label: "final_output_path", ref: executionPlan.final_output_path },
-    { label: "review_record_path", ref: executionPlan.review_record_path },
-    ...executionPlan.lens_execution_seats.map((seat) => ({
-      label: `lens_execution_seats.${seat.lens_id}.output_path`,
-      ref: seat.output_path,
-    })),
-    ...executionPlan.lens_prompt_packet_seats.flatMap((seat) => [
-      {
-        label: `lens_prompt_packet_seats.${seat.lens_id}.packet_path`,
-        ref: seat.packet_path,
-      },
-      {
-        label: `lens_prompt_packet_seats.${seat.lens_id}.output_path`,
-        ref: seat.output_path,
-      },
-    ]),
-    ...executionPlan.issue_artifact_prompt_packet_seats.flatMap((seat) => [
-      {
-        label: `issue_artifact_prompt_packet_seats.${seat.artifact_id}.packet_path`,
-        ref: seat.packet_path,
-      },
-      {
-        label: `issue_artifact_prompt_packet_seats.${seat.artifact_id}.output_path`,
-        ref: seat.output_path,
-      },
-    ]),
-    ...executionPlan.lens_deliberation_prompt_packet_seats.flatMap((seat) => [
-      {
-        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.packet_path`,
-        ref: seat.packet_path,
-      },
-      {
-        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.output_path`,
-        ref: seat.output_path,
-      },
-    ]),
-  ];
-
-  for (const { label, ref } of refs) {
-    if (!ref) continue;
-    await assertRefInsideSession({ sessionRoot, ref, label });
-  }
 }
 
 function buildOpeningBriefPresentation(input: unknown): LlmPresentationPrompt {
@@ -653,6 +748,527 @@ const OPENING_PRESENTATION_SOURCE_REF_KEYS = [
   "review_context_manifest",
 ] as const;
 
+const ACTIVE_REVIEW_ATTEMPT_FILENAME = "active-review-attempt.yaml";
+const ENVIRONMENT_WARNINGS_FILENAME = "environment-warnings.yaml";
+const REVIEW_CANCEL_REQUEST_FILENAME = "review-cancel-request.yaml";
+const DEFAULT_ACTIVE_ATTEMPT_STALE_AFTER_SECONDS = 1_200;
+const REVIEW_RUNNER_WARNING_PREFIX = "[review runner warning]";
+
+interface ReviewActiveAttemptArtifact {
+  schema_version: "1";
+  attempt_id: string;
+  attempt_kind: ReviewActiveAttemptProjection["attemptKind"];
+  session_id: string;
+  session_root: string;
+  project_root: string | null;
+  created_at: string;
+  updated_at: string;
+  status: ReviewActiveAttemptProjection["status"];
+  active_units: string[];
+  requested_frontier_units: string[];
+  run_control: {
+    stale_after_seconds: number;
+    source_tool: "onto.review" | "onto.review_continue";
+    request_hash: string | null;
+  };
+  latest_observed_artifact_ref: string | null;
+  error_message?: string | null;
+}
+
+interface ReviewEnvironmentWarningsArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  warnings: ReviewEnvironmentWarningProjection[];
+}
+
+interface ReviewCancelRequestArtifact {
+  schema_version: "1";
+  session_id: string;
+  requested_at: string;
+  requested_by: "mcp";
+  reason: string;
+}
+
+function activeAttemptPath(sessionRoot: string): string {
+  return path.join(sessionRoot, ACTIVE_REVIEW_ATTEMPT_FILENAME);
+}
+
+function environmentWarningsPath(sessionRoot: string): string {
+  return path.join(sessionRoot, ENVIRONMENT_WARNINGS_FILENAME);
+}
+
+function reviewCancelRequestPath(sessionRoot: string): string {
+  return path.join(sessionRoot, REVIEW_CANCEL_REQUEST_FILENAME);
+}
+
+function activeAttemptStaleAfterSeconds(): number {
+  const parsed = Number(process.env.ONTO_REVIEW_ACTIVE_ATTEMPT_STALE_AFTER_SECONDS);
+  return Number.isFinite(parsed) && parsed > 0
+    ? Math.floor(parsed)
+    : DEFAULT_ACTIVE_ATTEMPT_STALE_AFTER_SECONDS;
+}
+
+function stripDomainTokenValue(domainValue: string): string {
+  const trimmed = domainValue.trim();
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableJson(item)).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) =>
+      `${JSON.stringify(key)}:${stableJson(record[key])}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeRefForHash(ref: string | undefined): string | null {
+  if (!ref) return null;
+  return path.normalize(ref).split(path.sep).join(path.posix.sep);
+}
+
+function canonicalReviewRequestIdentity(input: {
+  target: string | null;
+  intent: string | null;
+  domain: string | null;
+  targetScopeKind: string | null;
+  primaryRef: string | null;
+  memberRefs: string[];
+  bundleKind: string | null;
+  reviewMode: string | null;
+  lensIds: string[];
+}): Record<string, unknown> | null {
+  if (!input.target || !input.intent) return null;
+  return {
+    schema: "review-request-identity-v2",
+    target: normalizeRefForHash(input.target),
+    intent: input.intent,
+    domain: input.domain ? normalizeDomainValue(input.domain) : null,
+    targetScopeKind: input.targetScopeKind,
+    primaryRef: normalizeRefForHash(input.primaryRef ?? undefined),
+    memberRefs: input.memberRefs.map((ref) => normalizeRefForHash(ref) ?? ref).sort(),
+    bundleKind: input.bundleKind,
+    reviewMode: input.reviewMode,
+    lensIds: [...input.lensIds].sort(),
+  };
+}
+
+function hashReviewRequestIdentity(identity: Record<string, unknown> | null): string | null {
+  if (!identity) return null;
+  return crypto.createHash("sha256").update(stableJson(identity)).digest("hex");
+}
+
+function requestHashForReviewInput(args: PrepareReviewRequest): string | null {
+  return hashReviewRequestIdentity(
+    canonicalReviewRequestIdentity({
+      target: args.target,
+      intent: args.intent,
+      domain: args.noDomain ? "none" : args.domain ?? null,
+      targetScopeKind: args.targetScopeKind ?? null,
+      primaryRef: args.primaryRef ?? null,
+      memberRefs: args.memberRefs ?? [],
+      bundleKind: args.bundleKind ?? null,
+      reviewMode: args.reviewMode ?? null,
+      lensIds: args.lensIds ?? [],
+    }),
+  );
+}
+
+function requestHashFromArtifacts(args: {
+  metadata: ReviewSessionMetadata | null;
+  interpretation: InvocationInterpretationArtifact | null;
+  binding?: InvocationBindingArtifact | null;
+}): string | null {
+  const scope = args.interpretation?.target_scope_candidate;
+  return hashReviewRequestIdentity(
+    canonicalReviewRequestIdentity({
+      target: args.metadata?.requested_target ?? null,
+      intent: args.interpretation?.intent_summary ?? null,
+      domain: args.binding?.resolved_session_domain ??
+        args.metadata?.requested_domain_token ??
+        null,
+      targetScopeKind: scope?.kind ?? null,
+      primaryRef: scope?.primary_ref ?? null,
+      memberRefs: scope?.member_refs ?? [],
+      bundleKind: scope?.bundle_kind ?? null,
+      reviewMode: args.binding?.resolved_review_mode ??
+        args.interpretation?.review_mode_recommendation ??
+        null,
+      lensIds: args.binding?.resolved_lens_set ??
+        args.interpretation?.lens_selection_plan?.recommended_lenses ??
+        [],
+    }),
+  );
+}
+
+function domainTokenResolution(args: {
+  requestedToken: string | null | undefined;
+  normalizedDomain: string | null | undefined;
+  suggestionIds?: string[];
+}): ReviewDomainTokenResolution {
+  const requestedToken = args.requestedToken ?? "";
+  const stripped = stripDomainTokenValue(requestedToken);
+  const normalized = args.normalizedDomain ?? null;
+  const suggestionIds = args.suggestionIds ?? [];
+  if (normalized === "none") {
+    return {
+      requestedToken,
+      normalizedDomain: null,
+      resolution: "no_domain",
+      suggestionIds,
+    };
+  }
+  if (!normalized) {
+    return {
+      requestedToken,
+      normalizedDomain: null,
+      resolution: suggestionIds.length > 0 ? "suggestion" : "unknown",
+      suggestionIds,
+    };
+  }
+  return {
+    requestedToken,
+    normalizedDomain: normalized,
+    resolution:
+      stripped.length > 0 && normalizeDomainValue(stripped) !== stripped
+        ? "alias"
+        : "exact",
+    suggestionIds,
+  };
+}
+
+async function availableDomainIds(
+  projectRoot: string,
+  ontoHome: string,
+): Promise<string[]> {
+  const roots = [
+    path.join(path.resolve(projectRoot), ".onto", "domains"),
+    path.join(os.homedir(), ".onto", "domains"),
+    path.join(ontoHome, ".onto", "domains"),
+  ];
+  const ids = new Set<string>();
+  for (const root of roots) {
+    for (const id of await listDomainDirs(root)) {
+      ids.add(id);
+    }
+  }
+  return [...ids].sort();
+}
+
+function domainSimilarityScore(requested: string, candidate: string): number {
+  const requestedTokens = new Set(requested.toLowerCase().split(/[-_\s]+/).filter(Boolean));
+  const candidateTokens = new Set(candidate.toLowerCase().split(/[-_\s]+/).filter(Boolean));
+  let overlap = 0;
+  for (const token of requestedTokens) {
+    if (candidateTokens.has(token)) overlap += 1;
+  }
+  if (candidate.toLowerCase().includes(requested.toLowerCase()) ||
+    requested.toLowerCase().includes(candidate.toLowerCase())) {
+    overlap += 2;
+  }
+  return overlap;
+}
+
+function suggestDomainIds(requestedToken: string, availableIds: string[]): string[] {
+  const stripped = stripDomainTokenValue(requestedToken).toLowerCase();
+  if (!stripped) return [];
+  return availableIds
+    .map((id) => ({ id, score: domainSimilarityScore(stripped, id) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .slice(0, 5)
+    .map((entry) => entry.id);
+}
+
+async function validateRequestedDomainForDispatch(
+  request: PrepareReviewRequest,
+  ontoHome: string,
+): Promise<void> {
+  if (!request.domain || request.noDomain) return;
+  const normalizedDomain = normalizeDomainValue(request.domain);
+  if (normalizedDomain === "none") return;
+  const domains = await availableDomainIds(request.projectRoot, ontoHome);
+  if (domains.includes(normalizedDomain)) return;
+  const suggestionIds = suggestDomainIds(request.domain, domains);
+  throw new ReviewDomainResolutionError({
+    message: suggestionIds.length > 0
+      ? `Unknown review domain ${request.domain}. Did you mean: ${suggestionIds.join(", ")}?`
+      : `Unknown review domain ${request.domain}; no safe domain suggestion is available.`,
+    domainResolution: domainTokenResolution({
+      requestedToken: request.domain,
+      normalizedDomain: null,
+      suggestionIds,
+    }),
+  });
+}
+
+function reviewTerminalStatus(status: ReviewStatus["status"]): boolean {
+  return (
+    status === "completed" ||
+    status === "completed_with_degradation" ||
+    status === "halted_partial" ||
+    status === "failed"
+  );
+}
+
+async function readTargetMaterialSupport(
+  sessionRoot: string,
+  executionPlan: ReviewExecutionPlan | null,
+): Promise<ReviewTargetMaterialSupportProjection | null> {
+  const targetProfilePath =
+    executionPlan?.review_target_profile_path ??
+    path.join(sessionRoot, "execution-preparation", "review-target-profile.yaml");
+  const targetProfile =
+    await readOptionalYaml<ReviewTargetProfileArtifact>(targetProfilePath);
+  const profile = targetProfile?.material_profile;
+  if (!profile) return null;
+  return {
+    targetMaterialKind: profile.target_material_kind,
+    supportStatus: profile.support_status,
+    unsupportedReason: profile.unsupported_reason,
+    detectionConfidence: profile.detection.confidence,
+    detectionConfidenceBasis: profile.detection.confidence_basis,
+  };
+}
+
+async function readEnvironmentWarnings(
+  sessionRoot: string,
+): Promise<ReviewEnvironmentWarningProjection[]> {
+  const artifact = await readOptionalYaml<ReviewEnvironmentWarningsArtifact>(
+    environmentWarningsPath(sessionRoot),
+  );
+  return artifact?.warnings ?? [];
+}
+
+async function writeEnvironmentWarningsFromStderr(args: {
+  sessionRoot: string;
+  stderr: string[];
+}): Promise<ReviewEnvironmentWarningProjection[]> {
+  const warningLines = args.stderr
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(REVIEW_RUNNER_WARNING_PREFIX))
+    .map((line) => line.slice(REVIEW_RUNNER_WARNING_PREFIX.length).trim())
+    .filter((line) => line.length > 0);
+  if (warningLines.length === 0) return [];
+
+  const existing = await readEnvironmentWarnings(args.sessionRoot);
+  const seenMessages = new Set(existing.map((warning) => warning.message));
+  const observedAt = isoNow();
+  const additions: ReviewEnvironmentWarningProjection[] = [];
+  for (const [index, message] of warningLines.entries()) {
+    if (seenMessages.has(message)) continue;
+    const digest = crypto
+      .createHash("sha256")
+      .update(`${observedAt}\n${index}\n${message}`)
+      .digest("hex")
+      .slice(0, 12);
+    additions.push({
+      warningId: `environment-warning-${digest}`,
+      source: "review_runner_warning",
+      message,
+      fatality: "non_fatal",
+      affectedCapability: "review_execution_observability",
+      outputTrustImpact: "unknown",
+      observedAt,
+    });
+  }
+  const warnings = [...existing, ...additions];
+  if (warnings.length > 0) {
+    await writeYamlDocument(environmentWarningsPath(args.sessionRoot), {
+      schema_version: "1",
+      session_id: basenameSessionId(args.sessionRoot),
+      created_at: observedAt,
+      warnings,
+    });
+  }
+  return warnings;
+}
+
+function activeUnitsForInitialReview(
+  executionPlan: ReviewExecutionPlan | null,
+): string[] {
+  const lensIds = (executionPlan?.lens_execution_seats ?? []).map(
+    (seat) => seat.lens_id,
+  );
+  return lensIds.length > 0
+    ? lensIds.map((lensId) => `lens:${lensId}`)
+    : ["review_execution"];
+}
+
+function requestedUnitsMatchActive(
+  activeUnits: string[],
+  targetUnits: string[] | undefined,
+): boolean {
+  if (activeUnits.length === 0) return false;
+  if (!targetUnits || targetUnits.length === 0) return true;
+  const normalizedActive = new Set(
+    activeUnits.flatMap((unit) => {
+      const suffix = unit.includes(":") ? unit.split(":").at(-1) ?? unit : unit;
+      return [unit, suffix];
+    }),
+  );
+  return targetUnits.some((unit) => normalizedActive.has(unit));
+}
+
+async function writeActiveAttemptStarted(args: {
+  sessionRoot: string;
+  attemptId: string;
+  attemptKind: ReviewActiveAttemptProjection["attemptKind"];
+  sourceTool: "onto.review" | "onto.review_continue";
+  requestHash: string | null;
+  activeUnits: string[];
+  requestedFrontierUnits?: string[];
+}): Promise<void> {
+  const sessionMetadata = await readOptionalYaml<ReviewSessionMetadata>(
+    path.join(args.sessionRoot, "session-metadata.yaml"),
+  );
+  const artifactRefs = await collectArtifactRefs(args.sessionRoot);
+  const observed = await artifactObservation(artifactRefs);
+  const now = isoNow();
+  const artifact: ReviewActiveAttemptArtifact = {
+    schema_version: "1",
+    attempt_id: args.attemptId,
+    attempt_kind: args.attemptKind,
+    session_id: sessionMetadata?.session_id ?? basenameSessionId(args.sessionRoot),
+    session_root: args.sessionRoot,
+    project_root: sessionMetadata?.project_root ?? null,
+    created_at: now,
+    updated_at: now,
+    status: "started",
+    active_units: args.activeUnits,
+    requested_frontier_units: args.requestedFrontierUnits ?? [],
+    run_control: {
+      stale_after_seconds: activeAttemptStaleAfterSeconds(),
+      source_tool: args.sourceTool,
+      request_hash: args.requestHash,
+    },
+    latest_observed_artifact_ref: observed.ref,
+  };
+  await writeYamlDocument(activeAttemptPath(args.sessionRoot), artifact);
+}
+
+async function updateActiveAttemptTerminal(args: {
+  sessionRoot: string;
+  status: ReviewActiveAttemptProjection["status"];
+  errorMessage?: string;
+}): Promise<void> {
+  const attemptPath = activeAttemptPath(args.sessionRoot);
+  const existing = await readOptionalYaml<ReviewActiveAttemptArtifact>(attemptPath);
+  if (!existing) return;
+  const artifactRefs = await collectArtifactRefs(args.sessionRoot);
+  const observed = await artifactObservation(artifactRefs);
+  await writeYamlDocument(attemptPath, {
+    ...existing,
+    updated_at: isoNow(),
+    status: args.status,
+    latest_observed_artifact_ref: observed.ref,
+    ...(args.errorMessage !== undefined ? { error_message: args.errorMessage } : {}),
+  });
+}
+
+async function activeAttemptProjection(
+  sessionRoot: string,
+): Promise<ReviewActiveAttemptProjection | null> {
+  const attemptPath = activeAttemptPath(sessionRoot);
+  const artifact = await readOptionalYaml<ReviewActiveAttemptArtifact>(attemptPath);
+  if (!artifact) return null;
+  const updatedMs = parseTimestampMs(artifact.updated_at);
+  const secondsSinceUpdated = secondsBetween(Date.now(), updatedMs);
+  const staleAfterSeconds =
+    artifact.run_control?.stale_after_seconds ?? DEFAULT_ACTIVE_ATTEMPT_STALE_AFTER_SECONDS;
+  const isStale =
+    artifact.status === "started" &&
+    secondsSinceUpdated !== null &&
+    secondsSinceUpdated > staleAfterSeconds;
+  return {
+    attemptId: artifact.attempt_id,
+    attemptKind: artifact.attempt_kind,
+    status: artifact.status,
+    sessionId: artifact.session_id,
+    sessionRoot: artifact.session_root,
+    startedAt: artifact.created_at,
+    updatedAt: artifact.updated_at,
+    activeUnits: artifact.active_units ?? [],
+    requestedFrontierUnits: artifact.requested_frontier_units ?? [],
+    latestObservedArtifactRef: artifact.latest_observed_artifact_ref ?? null,
+    staleAfterSeconds,
+    secondsSinceUpdated,
+    isStale,
+    attemptManifestRef: attemptPath,
+  };
+}
+
+async function buildRunControl(
+  sessionRoot: string,
+  status: ReviewStatus["status"],
+): Promise<ReviewRunControlProjection> {
+  const activeAttempt = await activeAttemptProjection(sessionRoot);
+  const cancellationRequestRef = await fileExists(reviewCancelRequestPath(sessionRoot))
+    ? reviewCancelRequestPath(sessionRoot)
+    : null;
+  const cancellationRequested = cancellationRequestRef !== null;
+  const alreadyRunning =
+    status === "running" &&
+    activeAttempt?.status === "started" &&
+    !activeAttempt.isStale;
+  const lifecycleState: ReviewRunControlProjection["lifecycleState"] =
+    status === "completed" || status === "completed_with_degradation"
+      ? "completed"
+      : status === "halted_partial"
+        ? "halted"
+        : activeAttempt?.status === "failed"
+          ? "failed_attempt"
+          : activeAttempt?.status === "started" && activeAttempt.isStale
+            ? "stale_active"
+            : cancellationRequested
+              ? "cancellation_requested"
+              : alreadyRunning
+                ? "active"
+                : status === "prepared"
+                  ? "prepared"
+                  : "unknown";
+  const continuationAvailable =
+    status === "prepared" ||
+    status === "halted_partial" ||
+    lifecycleState === "failed_attempt" ||
+    lifecycleState === "stale_active";
+  const cancellationAvailable = alreadyRunning && !cancellationRequested;
+  const statusReason =
+    lifecycleState === "active"
+      ? "review attempt is actively running and can be cancelled"
+      : lifecycleState === "cancellation_requested"
+        ? "cancellation has already been requested and will be observed at a runtime checkpoint"
+        : lifecycleState === "stale_active"
+          ? "active attempt is stale; use review_status evidence before continuing"
+          : lifecycleState === "failed_attempt"
+            ? "active attempt failed before a stronger terminal execution artifact was written"
+            : lifecycleState === "prepared"
+              ? "review is prepared but no worker attempt is active"
+              : lifecycleState === "halted"
+                ? "review has halted through execution artifacts"
+                : lifecycleState === "completed"
+                  ? "review is terminally completed"
+                  : "no actionable run-control state is available";
+  return {
+    activeAttempt,
+    lifecycleState,
+    alreadyRunning,
+    cancellationAvailable,
+    cancellationRequested,
+    cancellationRequestRef,
+    continuationAvailable,
+    retryAvailable: continuationAvailable,
+    retrySemantics: "use_review_continue",
+    hostTimeoutSemantics: "review_continues_under_session",
+    statusReason,
+  };
+}
+
 type ReviewStatusValue = ReviewStatus["status"];
 type InterimSignalStatus =
   | "lens_local"
@@ -692,6 +1308,7 @@ interface ReviewProgressState {
   completed_steps: string[];
   active_units: string[];
   pending_units: string[];
+  unit_progress: ReviewRuntimeUnitProgressProjection[];
   elapsed_seconds: number | null;
   next_expected_event: string | null;
 }
@@ -736,6 +1353,9 @@ interface ReviewStatusPresentationInput {
   latest_update: ReviewProgressUpdate;
   result_classification_summary: ReviewResultClassificationSummary | null;
   halt: ReviewHaltPresentation | null;
+  run_control: ReviewRunControlProjection;
+  target_material_support: ReviewTargetMaterialSupportProjection | null;
+  environment_warnings: ReviewEnvironmentWarningProjection[];
 }
 
 function compactSeverityCounts(
@@ -1083,6 +1703,288 @@ function livenessSummary(args: {
   }
 }
 
+const RUNTIME_UNIT_STALE_AFTER_SECONDS = 300;
+
+type RuntimeLogSignalKind = "started" | "retry" | "completed" | "failed";
+
+interface RuntimeLogSignal {
+  unitId: string;
+  kind: RuntimeLogSignalKind;
+  summary: string;
+  at: string | null;
+  atMs: number | null;
+  attempt: number | null;
+  failureMessage: string | null;
+}
+
+interface FileObservation {
+  exists: boolean;
+  size: number;
+  mtimeMs: number | null;
+}
+
+async function observeFile(filePath: string | null): Promise<FileObservation> {
+  if (!filePath) return { exists: false, size: 0, mtimeMs: null };
+  try {
+    const stat = await fs.stat(filePath);
+    return {
+      exists: true,
+      size: stat.size,
+      mtimeMs: stat.mtimeMs,
+    };
+  } catch {
+    return { exists: false, size: 0, mtimeMs: null };
+  }
+}
+
+function allReviewUnitResults(
+  executionResult: ReviewExecutionResultArtifact | null,
+): ReviewUnitExecutionResult[] {
+  if (!executionResult) return [];
+  return [
+    ...executionResult.lens_execution_results,
+    ...(executionResult.issue_artifact_execution_results ?? []),
+    ...(executionResult.deliberation_execution_results ?? []),
+    ...(executionResult.synthesize_execution_result
+      ? [executionResult.synthesize_execution_result]
+      : []),
+  ];
+}
+
+function parseRuntimeLogHeading(
+  rawHeading: string,
+): { at: string | null; title: string } | null {
+  const match = /^##\s+(.+?)\s+\|\s+(.+?)\s*$/.exec(rawHeading.trim());
+  if (!match?.[2]) return null;
+  return {
+    at: match[1] ?? null,
+    title: match[2],
+  };
+}
+
+function bodyScalar(body: string, key: string): string | null {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^${escaped}:\\s*(.+?)\\s*$`, "m").exec(body);
+  return match?.[1] ?? null;
+}
+
+function parseAttempt(body: string): number | null {
+  const raw = bodyScalar(body, "attempt");
+  if (!raw) return null;
+  const match = /^(\d+)/.exec(raw.trim());
+  if (!match?.[1]) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function runtimeSignalFromEntry(entry: string): RuntimeLogSignal | null {
+  const [headingLine, ...bodyLines] = entry.split(/\r?\n/);
+  if (!headingLine) return null;
+  const heading = parseRuntimeLogHeading(headingLine);
+  if (!heading) return null;
+  const body = bodyLines.join("\n");
+  const title = heading.title;
+  const titlePatterns: Array<{
+    kind: RuntimeLogSignalKind;
+    pattern: RegExp;
+    summary: string;
+  }> = [
+    {
+      kind: "started",
+      pattern: /^runner dispatch started: (.+?)\s*$/,
+      summary: "runner dispatch started",
+    },
+    {
+      kind: "retry",
+      pattern: /^runner dispatch retry: (.+?)\s*$/,
+      summary: "runner dispatch retry",
+    },
+    {
+      kind: "completed",
+      pattern: /^runner (?:nested )?dispatch completed: (.+?)\s*$/,
+      summary: "runner dispatch completed",
+    },
+    {
+      kind: "failed",
+      pattern: /^(?:lens|deliberation|issue_artifact|synthesize) failure: (.+?)\s*$/,
+      summary: "runner dispatch failed",
+    },
+  ];
+  for (const candidate of titlePatterns) {
+    const match = candidate.pattern.exec(title);
+    if (!match?.[1]) continue;
+    const atMs = parseTimestampMs(heading.at);
+    return {
+      unitId: match[1],
+      kind: candidate.kind,
+      summary: candidate.summary,
+      at: heading.at,
+      atMs,
+      attempt: candidate.kind === "retry" ? parseAttempt(body) : null,
+      failureMessage: candidate.kind === "failed" ? bodyScalar(body, "message") : null,
+    };
+  }
+  return null;
+}
+
+async function runtimeLogSignalsByUnit(
+  errorLogPath: string,
+): Promise<Map<string, RuntimeLogSignal[]>> {
+  const text = await readOptionalText(errorLogPath);
+  const signals = new Map<string, RuntimeLogSignal[]>();
+  if (!text) return signals;
+  for (const rawEntry of text.split(/\n(?=## )/)) {
+    const signal = runtimeSignalFromEntry(rawEntry.trimEnd());
+    if (!signal) continue;
+    signals.set(signal.unitId, [...(signals.get(signal.unitId) ?? []), signal]);
+  }
+  return signals;
+}
+
+function latestRuntimeSignal(
+  signals: RuntimeLogSignal[],
+): RuntimeLogSignal | null {
+  if (signals.length === 0) return null;
+  return signals.reduce((latest, signal) => {
+    const latestMs = latest.atMs ?? -1;
+    const signalMs = signal.atMs ?? -1;
+    return signalMs >= latestMs ? signal : latest;
+  });
+}
+
+function runtimeSignalCount(
+  signals: RuntimeLogSignal[],
+  kind: RuntimeLogSignalKind,
+): number {
+  return signals.filter((signal) => signal.kind === kind).length;
+}
+
+function runtimeUnitAlias(unitKind: string, unitId: string): string {
+  if (unitKind === "lens") return `lens:${unitId}`;
+  if (unitKind === "deliberation" && unitId.startsWith("deliberation-")) {
+    return `deliberation:${unitId.replace(/^deliberation-/, "")}`;
+  }
+  return unitId;
+}
+
+function runtimeUnitStepId(unitKind: string): ReviewProgressStepId | null {
+  if (unitKind === "lens") return "lens_dispatch";
+  if (unitKind === "deliberation") return "lens_deliberation_responses";
+  return null;
+}
+
+async function deriveRuntimeUnitProgress(args: {
+  executionPlan: ReviewExecutionPlan | null;
+  executionResult: ReviewExecutionResultArtifact | null;
+  nowMs: number;
+}): Promise<ReviewRuntimeUnitProgressProjection[]> {
+  const executionPlan = args.executionPlan;
+  if (!executionPlan) return [];
+  const signalsByUnit = await runtimeLogSignalsByUnit(executionPlan.error_log_path);
+  const terminalResultsByUnit = new Map(
+    allReviewUnitResults(args.executionResult).map((result) => [
+      result.unit_id,
+      result,
+    ]),
+  );
+  const lensUnits = executionPlan.lens_execution_seats.map((seat) => {
+    const packetPath =
+      executionPlan.lens_prompt_packet_seats.find(
+        (packetSeat) => packetSeat.lens_id === seat.lens_id,
+      )?.packet_path ?? null;
+    return {
+      unitId: seat.lens_id,
+      unitKind: "lens",
+      packetPath,
+      outputPath: seat.output_path,
+      runningLogRef: path.join(path.dirname(seat.output_path), `.${seat.lens_id}.running.log`),
+    };
+  });
+
+  const projections: ReviewRuntimeUnitProgressProjection[] = [];
+  for (const unit of lensUnits) {
+    const output = await observeFile(unit.outputPath);
+    const runningLog = await observeFile(unit.runningLogRef);
+    const signals = signalsByUnit.get(unit.unitId) ?? [];
+    const latestSignal = latestRuntimeSignal(signals);
+    const terminalResult = terminalResultsByUnit.get(unit.unitId);
+    const retryCount = runtimeSignalCount(signals, "retry");
+    const hasStarted =
+      signals.some((signal) => signal.kind === "started") ||
+      runningLog.exists;
+    const attemptCount = Math.max(
+      terminalResult ? 1 : 0,
+      hasStarted ? retryCount + 1 : 0,
+    );
+
+    let latestSignalName = latestSignal?.summary ?? null;
+    let latestSignalAt = latestSignal?.at ?? null;
+    let latestSignalMs = latestSignal?.atMs ?? null;
+    if (
+      runningLog.exists &&
+      runningLog.mtimeMs !== null &&
+      (latestSignalMs === null || runningLog.mtimeMs > latestSignalMs)
+    ) {
+      latestSignalName = "running log updated";
+      latestSignalAt = isoFromTimestamp(runningLog.mtimeMs);
+      latestSignalMs = runningLog.mtimeMs;
+    }
+
+    let status: ReviewRuntimeUnitStatus = "pending";
+    let failureMessage = latestSignal?.failureMessage ?? null;
+    if (terminalResult?.status === "failed") {
+      status = "failed";
+      latestSignalName = "terminal execution result failed";
+      latestSignalAt = terminalResult.completed_at;
+      latestSignalMs = parseTimestampMs(terminalResult.completed_at);
+      failureMessage = terminalResult.failure_message ?? failureMessage;
+    } else if (
+      terminalResult?.status === "completed" ||
+      latestSignal?.kind === "completed" ||
+      (output.exists && output.size > 0)
+    ) {
+      status = "completed";
+      if (!latestSignalName || (output.mtimeMs !== null && output.mtimeMs > (latestSignalMs ?? -1))) {
+        latestSignalName = "output file present";
+        latestSignalAt = output.mtimeMs === null ? null : isoFromTimestamp(output.mtimeMs);
+        latestSignalMs = output.mtimeMs;
+      }
+    } else if (latestSignal?.kind === "failed") {
+      status = "failed";
+      failureMessage = latestSignal.failureMessage;
+    } else if (latestSignal?.kind === "retry") {
+      const seconds = secondsBetween(args.nowMs, latestSignalMs);
+      status =
+        seconds !== null && seconds > RUNTIME_UNIT_STALE_AFTER_SECONDS
+          ? "running_stale"
+          : "retrying";
+    } else if (hasStarted) {
+      const seconds = secondsBetween(args.nowMs, latestSignalMs);
+      status =
+        seconds !== null && seconds > RUNTIME_UNIT_STALE_AFTER_SECONDS
+          ? "running_stale"
+          : "running";
+    }
+
+    projections.push({
+      unitId: unit.unitId,
+      publicAlias: runtimeUnitAlias(unit.unitKind, unit.unitId),
+      unitKind: unit.unitKind,
+      progressStepId: runtimeUnitStepId(unit.unitKind),
+      status,
+      packetPath: unit.packetPath,
+      outputPath: unit.outputPath,
+      runningLogRef: runningLog.exists ? unit.runningLogRef : null,
+      latestSignal: latestSignalName,
+      latestSignalAt,
+      secondsSinceLatestSignal: secondsBetween(args.nowMs, latestSignalMs),
+      attemptCount,
+      failureMessage,
+    });
+  }
+  return projections;
+}
+
 async function existingSeatIds(
   seats: Array<{ lens_id: string; output_path: string }> | undefined,
 ): Promise<string[]> {
@@ -1106,9 +2008,9 @@ async function completedProgressStepIds(params: {
   const completed: ReviewProgressStepId[] = [];
   if (params.executionPlan) completed.push("manifest_validation");
 
-  const plannedLensIds = params.executionPlan?.lens_execution_seats.map(
+  const plannedLensIds = (params.executionPlan?.lens_execution_seats ?? []).map(
     (seat) => seat.lens_id,
-  ) ?? [];
+  );
   const completedLensIds = await existingSeatIds(params.executionPlan?.lens_execution_seats);
   const allPlannedLensesCompleted =
     plannedLensIds.length > 0 && completedLensIds.length >= plannedLensIds.length;
@@ -1127,8 +2029,9 @@ async function completedProgressStepIds(params: {
     params.executionPlan?.lens_deliberation_prompt_packet_seats,
   );
   const plannedDeliberationIds =
-    params.executionPlan?.lens_deliberation_prompt_packet_seats.map((seat) => seat.lens_id) ??
-    [];
+    (params.executionPlan?.lens_deliberation_prompt_packet_seats ?? []).map(
+      (seat) => seat.lens_id,
+    );
   if (
     (plannedDeliberationIds.length > 0 &&
       deliberationIds.length >= plannedDeliberationIds.length) ||
@@ -1177,7 +2080,9 @@ async function activeUnits(params: {
   }
 
   if (params.currentStepId === "lens_dispatch") {
-    const planned = params.executionPlan?.lens_execution_seats.map((seat) => seat.lens_id) ?? [];
+    const planned = (params.executionPlan?.lens_execution_seats ?? []).map(
+      (seat) => seat.lens_id,
+    );
     const completed = new Set(await existingSeatIds(params.executionPlan?.lens_execution_seats));
     const pending = planned.filter((lensId) => !completed.has(lensId));
     return (pending.length > 0 ? pending : planned).map((lensId) => `lens:${lensId}`);
@@ -1185,8 +2090,9 @@ async function activeUnits(params: {
 
   if (params.currentStepId === "lens_deliberation_responses") {
     const planned =
-      params.executionPlan?.lens_deliberation_prompt_packet_seats.map((seat) => seat.lens_id) ??
-      [];
+      (params.executionPlan?.lens_deliberation_prompt_packet_seats ?? []).map(
+        (seat) => seat.lens_id,
+      );
     const completed = new Set(
       await existingSeatIds(params.executionPlan?.lens_deliberation_prompt_packet_seats),
     );
@@ -1353,6 +2259,27 @@ async function buildReviewStatusPresentationInput(params: {
   const sessionStartMs =
     parseTimestampMs(params.executionResult?.execution_started_at) ??
     parseTimestampMs(sessionMetadata?.created_at);
+  const unitProgress = await deriveRuntimeUnitProgress({
+    executionPlan: params.executionPlan,
+    executionResult: params.executionResult,
+    nowMs,
+  });
+  const runtimeActiveUnits = unitProgress
+    .filter((unit) =>
+      unit.status === "running" ||
+      unit.status === "retrying" ||
+      unit.status === "running_stale",
+    )
+    .map((unit) => unit.publicAlias);
+  const progressActiveUnits =
+    currentStepId === "lens_dispatch" && unitProgress.length > 0
+      ? runtimeActiveUnits
+      : await activeUnits({
+          status: params.status,
+          currentStepId,
+          executionPlan: params.executionPlan,
+          executionResult: params.executionResult,
+        });
   const progress: ReviewProgressState = {
     current_step: completedStatus
       ? totalSteps
@@ -1376,12 +2303,7 @@ async function buildReviewStatusPresentationInput(params: {
           params.artifactRefs.execution_plan ? "execution_plan" : null,
         ].filter((step): step is string => step !== null)
       : completedSteps,
-    active_units: await activeUnits({
-      status: params.status,
-      currentStepId,
-      executionPlan: params.executionPlan,
-      executionResult: params.executionResult,
-    }),
+    active_units: progressActiveUnits,
     pending_units: completedStatus
       ? []
       : params.status === "prepared"
@@ -1400,6 +2322,7 @@ async function buildReviewStatusPresentationInput(params: {
           : currentStepId
             ? `next ${stepById(currentStepId).label} artifact or timeout`
             : null,
+    unit_progress: unitProgress,
   };
   const completedLensIds = await existingSeatIds(params.executionPlan?.lens_execution_seats);
   const halt = haltPresentation({
@@ -1434,6 +2357,11 @@ async function buildReviewStatusPresentationInput(params: {
       secondsSinceLastArtifact,
     }),
   };
+  const runControl = await buildRunControl(params.sessionRoot, params.status);
+  const targetMaterialSupport = await readTargetMaterialSupport(
+    params.sessionRoot,
+    params.executionPlan,
+  );
   return {
     presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
     presentation_kind: "progress",
@@ -1452,6 +2380,9 @@ async function buildReviewStatusPresentationInput(params: {
     }),
     result_classification_summary: resultClassificationSummary,
     halt,
+    run_control: runControl,
+    target_material_support: targetMaterialSupport,
+    environment_warnings: await readEnvironmentWarnings(params.sessionRoot),
   };
 }
 
@@ -1529,6 +2460,133 @@ async function buildPreparedOpeningBriefInput(
       prompt_packets_root: executionPlan.prompt_packets_root,
       review_run_manifest_path: path.join(sessionRoot, "review-run-manifest.yaml"),
     },
+  };
+}
+
+async function buildReviewRunHandle(args: {
+  sessionRoot: string;
+  status: ReviewStatus["status"];
+  invocationId: string;
+  requestHash?: string | null;
+}): Promise<ReviewRunHandle> {
+  const artifactRefs = await collectArtifactRefs(args.sessionRoot);
+  const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
+    path.join(args.sessionRoot, "execution-plan.yaml"),
+  );
+  const metadata = await readOptionalYaml<ReviewSessionMetadata>(
+    path.join(args.sessionRoot, "session-metadata.yaml"),
+  );
+  const interpretation = await readOptionalYaml<InvocationInterpretationArtifact>(
+    path.join(args.sessionRoot, "interpretation.yaml"),
+  );
+  const binding = await readOptionalYaml<InvocationBindingArtifact>(
+    path.join(args.sessionRoot, "binding.yaml"),
+  );
+  const targetProfile = await readOptionalYaml<ReviewTargetProfileArtifact>(
+    executionPlan?.review_target_profile_path ??
+      path.join(args.sessionRoot, "execution-preparation", "review-target-profile.yaml"),
+  );
+  const requestHash =
+    args.requestHash ??
+      requestHashFromArtifacts({ metadata, interpretation, binding });
+  const normalizedDomain =
+    binding?.resolved_session_domain ??
+    targetProfile?.domain ??
+    (metadata?.requested_domain_token
+      ? normalizeDomainValue(metadata.requested_domain_token)
+      : null);
+  return {
+    schemaVersion: "1",
+    sessionId:
+      metadata?.session_id ?? executionPlan?.session_id ?? basenameSessionId(args.sessionRoot),
+    sessionRoot: args.sessionRoot,
+    invocationId: args.invocationId,
+    status: args.status,
+    projectRoot: metadata?.project_root ?? null,
+    target: {
+      requestedTarget:
+        metadata?.requested_target ?? targetProfile?.requested_target ?? null,
+      targetScopeKind: targetProfile?.target_scope_kind ?? null,
+      targetMaterialKind: targetProfile?.target_material_kind ?? null,
+    },
+    domain: domainTokenResolution({
+      requestedToken: metadata?.requested_domain_token ?? null,
+      normalizedDomain,
+    }),
+    artifactRefs: {
+      sessionMetadata: artifactRefs.session_metadata ?? null,
+      executionPlan: artifactRefs.execution_plan ?? null,
+      reviewRunManifest: artifactRefs.review_run_manifest ?? null,
+      executionResult: artifactRefs.execution_result ?? null,
+      finalOutput: artifactRefs.final_output ?? null,
+      reviewRecord: artifactRefs.review_record ?? null,
+    },
+    requestHash,
+    pollAfterSeconds: reviewTerminalStatus(args.status) ? null : 5,
+  };
+}
+
+async function buildRunningReviewRunResult(args: {
+  sessionRoot: string;
+  invocationId: string;
+  requestHash?: string | null;
+}): Promise<ReviewRunResult> {
+  const sessionRoot = path.resolve(args.sessionRoot);
+  const artifactRefs = await collectArtifactRefs(sessionRoot);
+  const failures = await collectStructuredFailures(sessionRoot);
+  const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
+    path.join(sessionRoot, "execution-plan.yaml"),
+  );
+  const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
+    path.join(sessionRoot, "execution-result.yaml"),
+  );
+  const reviewRecord = await readOptionalReviewRecord(
+    path.join(sessionRoot, "review-record.yaml"),
+  );
+  const progressInput = await buildReviewStatusPresentationInput({
+    sessionRoot,
+    status: "running",
+    artifactRefs,
+    executionPlan,
+    executionResult,
+    reviewRecord,
+  });
+  const runHandle = await buildReviewRunHandle({
+    sessionRoot,
+    status: "running",
+    invocationId: args.invocationId,
+    ...(args.requestHash !== undefined ? { requestHash: args.requestHash } : {}),
+  });
+  const llmPresentation: LlmPresentationPrompts = {
+    progress: buildProgressPresentation(progressInput),
+  };
+  if (executionPlan) {
+    llmPresentation.openingBrief = buildOpeningBriefPresentation(
+      await buildPreparedOpeningBriefInput(sessionRoot, executionPlan),
+    );
+  }
+  return {
+    sessionId: runHandle.sessionId,
+    sessionRoot,
+    status: "running",
+    finalOutputPath:
+      executionPlan?.final_output_path ?? path.join(sessionRoot, "final-output.md"),
+    reviewRecordPath:
+      executionPlan?.review_record_path ?? path.join(sessionRoot, "review-record.yaml"),
+    executionResultPath:
+      executionPlan?.execution_result_path ?? path.join(sessionRoot, "execution-result.yaml"),
+    reviewRunManifestPath: path.join(sessionRoot, "review-run-manifest.yaml"),
+    deliberationStatus: null,
+    participatingLensIds: [],
+    degradedLensIds: [],
+    artifactRefs,
+    ...failures,
+    routeVisibility: await buildReviewRouteVisibilityFromSession(sessionRoot),
+    llmPresentation,
+    runHandle,
+    runControl: progressInput.run_control,
+    targetMaterialSupport: progressInput.target_material_support,
+    environmentWarnings: progressInput.environment_warnings,
   };
 }
 
@@ -1619,6 +2677,9 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
     synthesis_output: path.join(sessionRoot, "synthesis.md"),
     review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
     degradation_summary: path.join(sessionRoot, "degradation-summary.yaml"),
+    active_review_attempt: activeAttemptPath(sessionRoot),
+    review_cancel_request: reviewCancelRequestPath(sessionRoot),
+    environment_warnings: environmentWarningsPath(sessionRoot),
     error_log: path.join(sessionRoot, "error-log.md"),
     final_output: path.join(sessionRoot, "final-output.md"),
     review_record: path.join(sessionRoot, "review-record.yaml"),
@@ -1643,15 +2704,19 @@ async function buildPipelineExecutionLedgerIfPossible(args: {
   const lensCompletionBarrier =
     await readOptionalYaml<ReviewLensCompletionBarrierArtifact>(
       path.join(args.sessionRoot, "lens-completion-barrier.yaml"),
-    );
-  return buildReviewPipelineExecutionLedger({
-    sessionRoot: args.sessionRoot,
-    artifactRefs: args.artifactRefs,
-    executionPlan: args.executionPlan,
-    executionResult: args.executionResult,
-    reviewRunManifest,
-    lensCompletionBarrier,
-  });
+  );
+  try {
+    return await buildReviewPipelineExecutionLedger({
+      sessionRoot: args.sessionRoot,
+      artifactRefs: args.artifactRefs,
+      executionPlan: args.executionPlan,
+      executionResult: args.executionResult,
+      reviewRunManifest,
+      lensCompletionBarrier,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 interface ReviewRunManifestForContinue {
@@ -1997,7 +3062,7 @@ async function listDomainDirs(root: string): Promise<string[]> {
   try {
     const entries = await fs.readdir(root, { withFileTypes: true });
     return entries
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => entry.isDirectory() && !isDeprecatedDomainAlias(entry.name))
       .map((entry) => entry.name)
       .sort();
   } catch {
@@ -2012,6 +3077,7 @@ export function createOntoReviewCoreApi(
 
   const api: OntoReviewCoreApi = {
     async prepareReview(request: PrepareReviewRequest): Promise<PreparedReview> {
+      await validateRequestedDomainForDispatch(request, ontoHome);
       const argv = appendCommonReviewArgs([], request, ontoHome);
       const { result } = await withCapturedConsole(() => reviewPrepareOnly(argv));
       const sessionRoot = path.resolve(result.session_root);
@@ -2032,9 +3098,18 @@ export function createOntoReviewCoreApi(
     },
 
     async runReview(request: RunReviewRequest): Promise<ReviewRunResult> {
+      await validateRequestedDomainForDispatch(request, ontoHome);
       const argv = appendCommonReviewArgs(["--no-watch"], request, ontoHome);
+      const requestHash = requestHashForReviewInput(request);
+      const invocationId = `initial-${continuationAttemptId()}`;
       let progressSequence = 0;
       let observedSessionRoot: string | null = null;
+      let sessionRootResolved = false;
+      let activeAttemptWrite: Promise<void> | null = null;
+      let resolveSessionRoot: (sessionRoot: string) => void = () => {};
+      const sessionRootSeen = new Promise<string>((resolve) => {
+        resolveSessionRoot = resolve;
+      });
       const emitProgress = (
         event: Omit<
           ReviewNativeProgressEvent,
@@ -2056,148 +3131,229 @@ export function createOntoReviewCoreApi(
           // Progress notifications are transport-only and must not affect review execution.
         }
       };
-      const captureObserver = request.progressObserver
-        ? {
-            stdout: (text: string): void => {
-              for (const line of text.split(/\r?\n/)) {
-                const parsed = consoleLineProgressEvent({
-                  line,
-                  projectRoot: request.projectRoot,
-                  sessionRoot: observedSessionRoot,
-                  sequence: progressSequence + 1,
-                });
-                if (!parsed) continue;
-                observedSessionRoot = parsed.sessionRoot ?? observedSessionRoot;
-                try {
-                  request.progressObserver?.(parsed.event);
-                } catch {
-                  // Progress notifications are transport-only and must not affect review execution.
-                }
-                progressSequence = parsed.event.sequence;
-              }
-            },
-          }
-        : undefined;
-      const captured = await withCapturedConsole(async () => {
-        const exitCode = await runReviewInvokeCli(argv);
-        if (exitCode !== 0) {
-          throw new Error(`review invocation failed with exit code ${exitCode}`);
-        }
-        return exitCode;
-      }, captureObserver);
-      const parsed = parseReviewInvokeOutput(captured.stdout);
-      if (!isReviewInvokeShape(parsed)) {
-        throw new Error("review invocation returned an unexpected result shape.");
-      }
-      const result = parsed.review_result;
-      const status = result.record_status ?? "halted_partial";
-      const startPreview: ReviewRunResult["startPreview"] = {
-        entrypointPlan: parsed.entrypoint_plan,
-        routeSummary: parsed.route_summary,
-        ...(parsed.bounded_invoke_steps !== undefined
-          ? { boundedInvokeSteps: parsed.bounded_invoke_steps }
-          : {}),
-      };
-      const resolvedResultSessionRoot = path.resolve(result.session_root);
-      const artifactRefs = await collectArtifactRefs(resolvedResultSessionRoot);
-      const failures = await collectStructuredFailures(resolvedResultSessionRoot);
-      const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
-        path.join(resolvedResultSessionRoot, "execution-plan.yaml"),
-      );
-      const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
-        path.join(resolvedResultSessionRoot, "execution-result.yaml"),
-      );
-      const pipelineExecutionLedger =
-        await buildPipelineExecutionLedgerIfPossible({
-          sessionRoot: resolvedResultSessionRoot,
-          artifactRefs,
-          executionPlan,
-          executionResult,
+      const noteSessionRoot = (sessionRoot: string): void => {
+        const resolved = path.resolve(sessionRoot);
+        observedSessionRoot = resolved;
+        if (sessionRootResolved) return;
+        sessionRootResolved = true;
+        resolveSessionRoot(resolved);
+        activeAttemptWrite = (async () => {
+          const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
+            path.join(resolved, "execution-plan.yaml"),
+          );
+          await writeActiveAttemptStarted({
+            sessionRoot: resolved,
+            attemptId: invocationId,
+            attemptKind: "initial_review",
+            sourceTool: "onto.review",
+            requestHash,
+            activeUnits: activeUnitsForInitialReview(executionPlan),
+          });
+        })().catch(() => {
+          // Active-attempt metadata is an operational projection; review
+          // execution remains artifact-truthful even if this write fails.
         });
-      const reviewRecord = await readOptionalReviewRecord(
-        path.join(resolvedResultSessionRoot, "review-record.yaml"),
-      );
-      const resultClassificationSummary =
-        await readReviewResultClassification(resolvedResultSessionRoot);
-      const progressInput = await buildReviewStatusPresentationInput({
-        sessionRoot: resolvedResultSessionRoot,
-        status,
-        artifactRefs,
-        executionPlan,
-        executionResult,
-        reviewRecord,
-      });
-      const openingBriefInput = executionPlan
-        ? await buildPreparedOpeningBriefInput(resolvedResultSessionRoot, executionPlan)
-        : {
+      };
+      const captureObserver = {
+        stdout: (text: string): void => {
+          for (const line of text.split(/\r?\n/)) {
+            const parsed = consoleLineProgressEvent({
+              line,
+              projectRoot: request.projectRoot,
+              sessionRoot: observedSessionRoot,
+              sequence: progressSequence + 1,
+            });
+            if (!parsed) continue;
+            if (parsed.sessionRoot) noteSessionRoot(parsed.sessionRoot);
+            try {
+              request.progressObserver?.(parsed.event);
+            } catch {
+              // Progress notifications are transport-only and must not affect review execution.
+            }
+            progressSequence = parsed.event.sequence;
+          }
+        },
+      };
+
+      const fullRun = (async (): Promise<ReviewRunResult> => {
+        try {
+          const captured = await withCapturedConsole(async () => {
+            const exitCode = await runReviewInvokeCli(argv);
+            if (exitCode !== 0) {
+              throw new Error(`review invocation failed with exit code ${exitCode}`);
+            }
+            return exitCode;
+          }, captureObserver);
+          const parsed = parseReviewInvokeOutput(captured.stdout);
+          if (!isReviewInvokeShape(parsed)) {
+            throw new Error("review invocation returned an unexpected result shape.");
+          }
+          const result = parsed.review_result;
+          const status = result.record_status ?? "halted_partial";
+          const startPreview: ReviewRunResult["startPreview"] = {
+            entrypointPlan: parsed.entrypoint_plan,
+            routeSummary: parsed.route_summary,
+            ...(parsed.bounded_invoke_steps !== undefined
+              ? { boundedInvokeSteps: parsed.bounded_invoke_steps }
+              : {}),
+          };
+          const resolvedResultSessionRoot = path.resolve(result.session_root);
+          noteSessionRoot(resolvedResultSessionRoot);
+          await activeAttemptWrite;
+          await writeEnvironmentWarningsFromStderr({
+            sessionRoot: resolvedResultSessionRoot,
+            stderr: captured.stderr,
+          });
+          await updateActiveAttemptTerminal({
+            sessionRoot: resolvedResultSessionRoot,
+            status: status === "halted_partial" ? "halted_partial" : "completed",
+          });
+          const artifactRefs = await collectArtifactRefs(resolvedResultSessionRoot);
+          const failures = await collectStructuredFailures(resolvedResultSessionRoot);
+          const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
+            path.join(resolvedResultSessionRoot, "execution-plan.yaml"),
+          );
+          const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
+            path.join(resolvedResultSessionRoot, "execution-result.yaml"),
+          );
+          const pipelineExecutionLedger =
+            await buildPipelineExecutionLedgerIfPossible({
+              sessionRoot: resolvedResultSessionRoot,
+              artifactRefs,
+              executionPlan,
+              executionResult,
+            });
+          const reviewRecord = await readOptionalReviewRecord(
+            path.join(resolvedResultSessionRoot, "review-record.yaml"),
+          );
+          const resultClassificationSummary =
+            await readReviewResultClassification(resolvedResultSessionRoot);
+          const progressInput = await buildReviewStatusPresentationInput({
+            sessionRoot: resolvedResultSessionRoot,
+            status,
+            artifactRefs,
+            executionPlan,
+            executionResult,
+            reviewRecord,
+          });
+          const openingBriefInput = executionPlan
+            ? await buildPreparedOpeningBriefInput(resolvedResultSessionRoot, executionPlan)
+            : {
+                presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
+                presentation_kind: "opening_brief",
+                session_id: basenameSessionId(resolvedResultSessionRoot),
+                session_root: resolvedResultSessionRoot,
+                status,
+                generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
+                start_preview: startPreview,
+              };
+          const finalResultInput = {
             presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
-            presentation_kind: "opening_brief",
+            presentation_kind: "final_result",
             session_id: basenameSessionId(resolvedResultSessionRoot),
             session_root: resolvedResultSessionRoot,
             status,
             generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
-            start_preview: startPreview,
+            result_overview: parsed.result_overview ?? null,
+            result_classification_summary: resultClassificationSummary,
+            review_result: result,
           };
-      const finalResultInput = {
-        presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
-        presentation_kind: "final_result",
-        session_id: basenameSessionId(resolvedResultSessionRoot),
-        session_root: resolvedResultSessionRoot,
-        status,
-        generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
-        result_overview: parsed.result_overview ?? null,
-        result_classification_summary: resultClassificationSummary,
-        review_result: result,
-      };
-      const llmPresentation: LlmPresentationPrompts = {
-        openingBrief: buildOpeningBriefPresentation(openingBriefInput),
-        progress: buildProgressPresentation(progressInput),
-        ...(progressInput.halt
-          ? {
-              halt: buildHaltPresentation({
-                ...progressInput,
-                presentation_kind: "halt",
-              }),
-            }
-          : {}),
-        finalResult: buildFinalResultPresentation(finalResultInput),
-      };
-      emitProgress({
-        source: "artifact_status",
-        stage: "final_status",
-        session_root: resolvedResultSessionRoot,
-        message: `Review finished with status ${status}.`,
-        progress: {
-          current: 100,
-          total: 100,
-          label: "final status",
-        },
-      });
-      return {
-        sessionId: basenameSessionId(result.session_root),
-        sessionRoot: resolvedResultSessionRoot,
-        status,
-        finalOutputPath: result.final_output_path,
-        reviewRecordPath: result.review_record_path,
-        executionResultPath: result.execution_result_path,
-        reviewRunManifestPath:
-          result.review_run_manifest_path ??
-          path.join(resolvedResultSessionRoot, "review-run-manifest.yaml"),
-        deliberationStatus: result.deliberation_status ?? null,
-        participatingLensIds: result.participating_lens_ids ?? [],
-        degradedLensIds: result.degraded_lens_ids ?? [],
-        ...(result.summary !== undefined ? { summary: result.summary } : {}),
-        ...(parsed.result_overview !== undefined
-          ? { resultOverview: parsed.result_overview }
-          : {}),
-        artifactRefs,
-        ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
-        resultClassificationSummary,
-        ...failures,
-        routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedResultSessionRoot),
-        startPreview,
-        llmPresentation,
-      };
+          const llmPresentation: LlmPresentationPrompts = {
+            openingBrief: buildOpeningBriefPresentation(openingBriefInput),
+            progress: buildProgressPresentation(progressInput),
+            ...(progressInput.halt
+              ? {
+                  halt: buildHaltPresentation({
+                    ...progressInput,
+                    presentation_kind: "halt",
+                  }),
+                }
+              : {}),
+            finalResult: buildFinalResultPresentation(finalResultInput),
+          };
+          emitProgress({
+            source: "artifact_status",
+            stage: "final_status",
+            session_root: resolvedResultSessionRoot,
+            message: `Review finished with status ${status}.`,
+            progress: {
+              current: 100,
+              total: 100,
+              label: "final status",
+            },
+          });
+          return {
+            sessionId: basenameSessionId(result.session_root),
+            sessionRoot: resolvedResultSessionRoot,
+            status,
+            finalOutputPath: result.final_output_path,
+            reviewRecordPath: result.review_record_path,
+            executionResultPath: result.execution_result_path,
+            reviewRunManifestPath:
+              result.review_run_manifest_path ??
+              path.join(resolvedResultSessionRoot, "review-run-manifest.yaml"),
+            deliberationStatus: result.deliberation_status ?? null,
+            participatingLensIds: result.participating_lens_ids ?? [],
+            degradedLensIds: result.degraded_lens_ids ?? [],
+            ...(result.summary !== undefined ? { summary: result.summary } : {}),
+            ...(parsed.result_overview !== undefined
+              ? { resultOverview: parsed.result_overview }
+              : {}),
+            artifactRefs,
+            ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
+            resultClassificationSummary,
+            ...failures,
+            routeVisibility:
+              await buildReviewRouteVisibilityFromSession(resolvedResultSessionRoot),
+            startPreview,
+            llmPresentation,
+            runHandle: await buildReviewRunHandle({
+              sessionRoot: resolvedResultSessionRoot,
+              status,
+              invocationId,
+            }),
+            runControl: progressInput.run_control,
+            targetMaterialSupport: progressInput.target_material_support,
+            environmentWarnings: progressInput.environment_warnings,
+          };
+        } catch (error) {
+          if (observedSessionRoot) {
+            await updateActiveAttemptTerminal({
+              sessionRoot: observedSessionRoot,
+              status: "failed",
+              errorMessage: error instanceof Error ? error.message : String(error),
+            });
+          }
+          throw error;
+        }
+      })();
+
+      if (request.returnRunningAfterMs !== undefined) {
+        const waitMs = Math.max(0, request.returnRunningAfterMs);
+        const earlyRunning = (async (): Promise<ReviewRunResult> => {
+          const sessionRoot = await sessionRootSeen;
+          if (activeAttemptWrite) await activeAttemptWrite;
+          if (waitMs > 0) {
+            await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
+          }
+          return buildRunningReviewRunResult({
+            sessionRoot,
+            invocationId,
+          });
+        })();
+        const winner = await Promise.race([
+          fullRun.then((result) => ({ kind: "completed" as const, result })),
+          earlyRunning.then((result) => ({ kind: "running" as const, result })),
+        ]);
+        if (winner.kind === "running") {
+          fullRun.catch(() => {
+            // The session artifacts and active-attempt projection record the failure.
+          });
+        }
+        return winner.result;
+      }
+
+      return fullRun;
     },
 
     async continueReview(
@@ -2243,10 +3399,45 @@ export function createOntoReviewCoreApi(
         expected: sessionMetadataPath,
         actual: executionPlan.session_metadata_path,
       });
-      await validateReviewExecutionPlanSessionBoundary({
+      await assertReviewExecutionPlanSessionBoundary({
         sessionRoot: resolvedSessionRoot,
         executionPlan,
       });
+      const activeRunControl = await buildRunControl(
+        resolvedSessionRoot,
+        "running",
+      );
+      if (
+        activeRunControl.alreadyRunning &&
+        requestedUnitsMatchActive(
+          activeRunControl.activeAttempt?.activeUnits ?? [],
+          request.targetUnits,
+        )
+      ) {
+        const status = await api.getReviewStatus(resolvedSessionRoot);
+        return {
+          sessionId: status.sessionId,
+          sessionRoot: resolvedSessionRoot,
+          decision: "already_running",
+          status: "running",
+          artifactRefs: status.artifactRefs,
+          failureRefs: status.failureRefs,
+          ...(status.pipelineExecutionLedger
+            ? { pipelineExecutionLedger: status.pipelineExecutionLedger }
+            : {}),
+          resultClassificationSummary:
+            await readReviewResultClassification(resolvedSessionRoot),
+          ...(status.routeVisibility !== undefined
+            ? { routeVisibility: status.routeVisibility }
+            : {}),
+          ...(status.llmPresentation !== undefined
+            ? { llmPresentation: status.llmPresentation }
+            : {}),
+          ...(activeRunControl.activeAttempt
+            ? { activeAttempt: activeRunControl.activeAttempt }
+            : {}),
+        };
+      }
       const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
         path.join(resolvedSessionRoot, "execution-result.yaml"),
       );
@@ -2366,6 +3557,15 @@ export function createOntoReviewCoreApi(
         });
       };
       await writeAttemptManifest("started");
+      await writeActiveAttemptStarted({
+        sessionRoot: resolvedSessionRoot,
+        attemptId,
+        attemptKind: "continuation",
+        sourceTool: "onto.review_continue",
+        requestHash: null,
+        activeUnits: continuationPlan.frontierUnits.map((unit) => unit.unitId),
+        requestedFrontierUnits: request.targetUnits ?? [],
+      });
 
       let promptExecutionResult: ReviewPromptExecutionResult | undefined;
       try {
@@ -2406,6 +3606,12 @@ export function createOntoReviewCoreApi(
             : "halted_partial",
           { prompt_execution_result: promptExecutionResult },
         );
+        await updateActiveAttemptTerminal({
+          sessionRoot: resolvedSessionRoot,
+          status: promptExecutionResult.synthesis_executed
+            ? "completed"
+            : "halted_partial",
+        });
       } catch (error) {
         const restoredArtifactBackups =
           await restoreSupersededArtifacts(supersededArtifactBackups);
@@ -2416,6 +3622,11 @@ export function createOntoReviewCoreApi(
             ? { prompt_execution_result: promptExecutionResult }
             : {}),
           restored_artifact_backups: restoredArtifactBackups,
+        });
+        await updateActiveAttemptTerminal({
+          sessionRoot: resolvedSessionRoot,
+          status: "failed",
+          errorMessage,
         });
         throw new ReviewContinuationError({
           message: `Review continuation failed: ${errorMessage}`,
@@ -2443,6 +3654,7 @@ export function createOntoReviewCoreApi(
       return {
         sessionId: postStatus.sessionId,
         sessionRoot: resolvedSessionRoot,
+        decision: "executed",
         status: postStatus.status,
         continuationPlan,
         continuationAttempt: {
@@ -2469,6 +3681,84 @@ export function createOntoReviewCoreApi(
       };
     },
 
+    async cancelReview(request: CancelReviewRequest): Promise<ReviewCancelResult> {
+      const resolvedSessionRoot = path.resolve(request.sessionRoot);
+      const sessionMetadata = await readOptionalYaml<ReviewSessionMetadata>(
+        path.join(resolvedSessionRoot, "session-metadata.yaml"),
+      );
+      if (!sessionMetadata) {
+        throw new Error(
+          `Cannot cancel review without session-metadata.yaml: ${resolvedSessionRoot}`,
+        );
+      }
+      const projectRoot = path.resolve(
+        request.projectRoot ?? sessionMetadata.project_root,
+      );
+      await assertSamePath({
+        label: "ReviewSessionMetadata.project_root",
+        expected: projectRoot,
+        actual: sessionMetadata.project_root,
+      });
+      const statusBeforeCancel = await api.getReviewStatus(resolvedSessionRoot);
+      if (reviewTerminalStatus(statusBeforeCancel.status)) {
+        return {
+          sessionId: statusBeforeCancel.sessionId,
+          sessionRoot: resolvedSessionRoot,
+          decision: "already_terminal",
+          status: statusBeforeCancel.status,
+          cancelRequestPath: reviewCancelRequestPath(resolvedSessionRoot),
+          reason: "review is already terminal",
+          artifactRefs: statusBeforeCancel.artifactRefs,
+          ...(statusBeforeCancel.runControl
+            ? { runControl: statusBeforeCancel.runControl }
+            : {}),
+          ...(statusBeforeCancel.llmPresentation
+            ? { llmPresentation: statusBeforeCancel.llmPresentation }
+            : {}),
+        };
+      }
+      if (!statusBeforeCancel.runControl?.cancellationAvailable) {
+        return {
+          sessionId: statusBeforeCancel.sessionId,
+          sessionRoot: resolvedSessionRoot,
+          decision: "not_cancellable",
+          status: statusBeforeCancel.status,
+          cancelRequestPath: reviewCancelRequestPath(resolvedSessionRoot),
+          reason: statusBeforeCancel.runControl?.statusReason ??
+            "review is not currently cancellable",
+          artifactRefs: statusBeforeCancel.artifactRefs,
+          ...(statusBeforeCancel.runControl
+            ? { runControl: statusBeforeCancel.runControl }
+            : {}),
+          ...(statusBeforeCancel.llmPresentation
+            ? { llmPresentation: statusBeforeCancel.llmPresentation }
+            : {}),
+        };
+      }
+      const reason = request.reason?.trim() || "operator requested cancellation";
+      const cancelRequest: ReviewCancelRequestArtifact = {
+        schema_version: "1",
+        session_id: sessionMetadata.session_id,
+        requested_at: isoNow(),
+        requested_by: "mcp",
+        reason,
+      };
+      const cancelRequestPath = reviewCancelRequestPath(resolvedSessionRoot);
+      await writeYamlDocument(cancelRequestPath, cancelRequest);
+      const status = await api.getReviewStatus(resolvedSessionRoot);
+      return {
+        sessionId: status.sessionId,
+        sessionRoot: resolvedSessionRoot,
+        decision: "requested",
+        status: status.status,
+        cancelRequestPath,
+        reason,
+        artifactRefs: status.artifactRefs,
+        ...(status.runControl ? { runControl: status.runControl } : {}),
+        ...(status.llmPresentation ? { llmPresentation: status.llmPresentation } : {}),
+      };
+    },
+
     async getReviewStatus(sessionRoot: string): Promise<ReviewStatus> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
       const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
@@ -2492,15 +3782,23 @@ export function createOntoReviewCoreApi(
       const reviewRecord = await readOptionalReviewRecord(
         path.join(resolvedSessionRoot, "review-record.yaml"),
       );
+      const activeAttempt = await activeAttemptProjection(resolvedSessionRoot);
+      const activeRunInProgress =
+        activeAttempt?.status === "started" && !activeAttempt.isStale;
       const status: ReviewStatus["status"] = reviewRecord
         ? reviewRecord.record_status
         : executionResult?.execution_status === "halted_partial"
           ? "halted_partial"
-          : executionPlan
-            ? await hasRunArtifacts(resolvedSessionRoot, artifactRefs)
-              ? "running"
-              : "prepared"
-            : "unknown";
+          : activeAttempt?.status === "failed"
+            ? "failed"
+            : activeAttempt?.status === "halted_partial"
+              ? "halted_partial"
+              : executionPlan
+                ? (activeRunInProgress ||
+                    await hasRunArtifacts(resolvedSessionRoot, artifactRefs))
+                  ? "running"
+                  : "prepared"
+                : "unknown";
       const progressInput = await buildReviewStatusPresentationInput({
         sessionRoot: resolvedSessionRoot,
         status,
@@ -2534,6 +3832,10 @@ export function createOntoReviewCoreApi(
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
+          runControl: progressInput.run_control,
+          targetMaterialSupport: progressInput.target_material_support,
+          environmentWarnings: progressInput.environment_warnings,
+          unitProgress: progressInput.progress.unit_progress,
         };
       }
 
@@ -2548,6 +3850,10 @@ export function createOntoReviewCoreApi(
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
+          runControl: progressInput.run_control,
+          targetMaterialSupport: progressInput.target_material_support,
+          environmentWarnings: progressInput.environment_warnings,
+          unitProgress: progressInput.progress.unit_progress,
         };
       }
 
@@ -2562,6 +3868,10 @@ export function createOntoReviewCoreApi(
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
+          runControl: progressInput.run_control,
+          targetMaterialSupport: progressInput.target_material_support,
+          environmentWarnings: progressInput.environment_warnings,
+          unitProgress: progressInput.progress.unit_progress,
         };
       }
 
@@ -2575,18 +3885,35 @@ export function createOntoReviewCoreApi(
         ...failures,
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         llmPresentation,
+        runControl: progressInput.run_control,
+        targetMaterialSupport: progressInput.target_material_support,
+        environmentWarnings: progressInput.environment_warnings,
+        unitProgress: progressInput.progress.unit_progress,
       };
     },
 
-    async getReviewResult(sessionRoot: string): Promise<ReviewResult> {
+    async getReviewResult(
+      sessionRoot: string,
+      options: { projectionLevel?: ReviewResultProjectionLevel } = {},
+    ): Promise<ReviewResult> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
+      const projectionLevel = options.projectionLevel ?? "full";
       const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
       const { failureRefs } = await collectStructuredFailures(resolvedSessionRoot);
       const reviewRecordPath = path.join(resolvedSessionRoot, "review-record.yaml");
       const reviewRecord = await readValidatedReviewRecord(reviewRecordPath);
-      const finalOutputPath =
-        reviewRecord.final_output_ref ?? path.join(resolvedSessionRoot, "final-output.md");
-      const finalOutputText = await readOptionalText(finalOutputPath);
+      const resultSessionMetadata = await readOptionalYaml<ReviewSessionMetadata>(
+        path.join(resolvedSessionRoot, "session-metadata.yaml"),
+      );
+      const finalOutputPath = await resolveReviewRecordFinalOutputPath({
+        sessionRoot: resolvedSessionRoot,
+        projectRoot: resultSessionMetadata?.project_root ?? null,
+        finalOutputRef: reviewRecord.final_output_ref,
+      });
+      const finalOutputText =
+        projectionLevel === "compact"
+          ? undefined
+          : await readOptionalText(finalOutputPath);
       const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
         path.join(resolvedSessionRoot, "execution-plan.yaml"),
       );
@@ -2619,12 +3946,35 @@ export function createOntoReviewCoreApi(
         status,
         generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
         result_classification_summary: resultClassificationSummary,
-        review_record: reviewRecord,
+        review_record: projectionLevel === "full" ? reviewRecord : null,
+        review_record_summary: {
+          review_record_id: reviewRecord.review_record_id,
+          record_status: reviewRecord.record_status,
+          resolved_lens_ids: reviewRecord.resolved_lens_ids,
+          participating_lens_ids: reviewRecord.participating_lens_ids,
+          degraded_lens_ids: reviewRecord.degraded_lens_ids,
+          deliberation_status: reviewRecord.deliberation_status,
+        },
       };
+      const targetMaterialSupport = await readTargetMaterialSupport(
+        resolvedSessionRoot,
+        executionPlan,
+      );
+      const environmentWarnings = await readEnvironmentWarnings(resolvedSessionRoot);
       return {
         sessionId: reviewRecord.session_id,
         sessionRoot: resolvedSessionRoot,
-        reviewRecord,
+        projectionLevel,
+        reviewRecordSummary: {
+          reviewRecordId: reviewRecord.review_record_id,
+          recordStatus: reviewRecord.record_status,
+          requestText: reviewRecord.request_text,
+          resolvedLensIds: reviewRecord.resolved_lens_ids,
+          participatingLensIds: reviewRecord.participating_lens_ids,
+          degradedLensIds: reviewRecord.degraded_lens_ids,
+          deliberationStatus: reviewRecord.deliberation_status,
+        },
+        ...(projectionLevel === "full" ? { reviewRecord } : {}),
         finalOutputPath,
         reviewRunManifestPath: path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         artifactRefs,
@@ -2644,8 +3994,102 @@ export function createOntoReviewCoreApi(
             : {}),
           finalResult: buildFinalResultPresentation(finalResultInput),
         },
+        targetMaterialSupport,
+        environmentWarnings,
         ...(finalOutputText !== undefined ? { finalOutputText } : {}),
       };
+    },
+
+    async findLatestReviewSessions(
+      query: ReviewSessionLookupQuery,
+    ): Promise<ReviewSessionLookupResult[]> {
+      const projectRoot = path.resolve(query.projectRoot);
+      const reviewRoot = path.join(projectRoot, ".onto", "review");
+      let entries;
+      try {
+        entries = await fs.readdir(reviewRoot, { withFileTypes: true });
+      } catch {
+        return [];
+      }
+      const createdAfterMs = query.createdAfter
+        ? parseTimestampMs(query.createdAfter)
+        : null;
+      const targetFilter = query.target ? path.normalize(query.target) : null;
+      const domainFilter = query.domain ? normalizeDomainValue(query.domain) : null;
+      const matches: ReviewSessionLookupResult[] = [];
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const sessionRoot = path.join(reviewRoot, entry.name);
+        const metadata = await readOptionalYaml<ReviewSessionMetadata>(
+          path.join(sessionRoot, "session-metadata.yaml"),
+        );
+        if (!metadata) continue;
+        const interpretation = await readOptionalYaml<InvocationInterpretationArtifact>(
+          path.join(sessionRoot, "interpretation.yaml"),
+        );
+        const binding = await readOptionalYaml<InvocationBindingArtifact>(
+          path.join(sessionRoot, "binding.yaml"),
+        );
+        const targetProfile = await readOptionalYaml<ReviewTargetProfileArtifact>(
+          path.join(sessionRoot, "execution-preparation", "review-target-profile.yaml"),
+        );
+        const createdAt = metadata.created_at ?? null;
+        const createdAtMs = parseTimestampMs(createdAt);
+        if (
+          createdAfterMs !== null &&
+          createdAtMs !== null &&
+          createdAtMs < createdAfterMs
+        ) {
+          continue;
+        }
+        if (
+          targetFilter &&
+          path.normalize(metadata.requested_target) !== targetFilter &&
+          path.normalize(targetProfile?.requested_target ?? "") !== targetFilter
+        ) {
+          continue;
+        }
+        const normalizedDomain =
+          binding?.resolved_session_domain ??
+          targetProfile?.domain ??
+          normalizeDomainValue(metadata.requested_domain_token ?? "");
+        if (
+          domainFilter &&
+          normalizeDomainValue(normalizedDomain) !== domainFilter
+        ) {
+          continue;
+        }
+        const requestHash = requestHashFromArtifacts({
+          metadata,
+          interpretation,
+          binding,
+        });
+        if (query.requestHash && requestHash !== query.requestHash) {
+          continue;
+        }
+        const artifactRefs = await collectArtifactRefs(sessionRoot);
+        const status = (await api.getReviewStatus(sessionRoot)).status;
+        matches.push({
+          sessionId: metadata.session_id ?? entry.name,
+          sessionRoot,
+          createdAt,
+          requestedTarget: metadata.requested_target ?? null,
+          requestedDomainToken: metadata.requested_domain_token ?? null,
+          normalizedDomain:
+            normalizedDomain === "none" || normalizedDomain.length === 0
+              ? null
+              : normalizeDomainValue(normalizedDomain),
+          requestHash,
+          status,
+          artifactRefs,
+        });
+      }
+      matches.sort((a, b) => {
+        const left = parseTimestampMs(a.createdAt) ?? 0;
+        const right = parseTimestampMs(b.createdAt) ?? 0;
+        return right - left;
+      });
+      return matches.slice(0, query.limit ?? 5);
     },
 
     async listLenses(): Promise<{ full: string[]; coreAxis: string[] }> {

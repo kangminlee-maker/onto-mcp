@@ -304,6 +304,12 @@ export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
   status: TargetMaterialSupportStatus;
   reason: string | null;
 } {
+  if (kind === "code") {
+    return {
+      status: "supported",
+      reason: null,
+    };
+  }
   if (kind === "unknown") {
     return {
       status: "unknown",
