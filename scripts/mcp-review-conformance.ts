@@ -86,30 +86,20 @@ class McpClient {
       method,
       ...(params === undefined ? {} : { params }),
     });
-    const frame = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
     const responsePromise = new Promise<JsonRpcResponse>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
     });
-    this.child.stdin.write(frame);
+    this.child.stdin.write(`${body}\n`);
     return withTimeout(responsePromise, 120_000, `MCP request timed out: ${method}`);
   }
 
   private drain(): void {
     while (true) {
-      const headerEnd = this.findHeaderEnd();
-      if (!headerEnd) return;
-      const header = this.buffer.subarray(0, headerEnd.index).toString("utf8");
-      const match = /^Content-Length:\s*(\d+)\s*$/im.exec(header);
-      if (!match?.[1]) {
-        throw new Error(`MCP response missing Content-Length header: ${header}`);
-      }
-      const contentLength = Number.parseInt(match[1], 10);
-      const totalLength = headerEnd.index + headerEnd.length + contentLength;
-      if (this.buffer.length < totalLength) return;
-      const body = this.buffer
-        .subarray(headerEnd.index + headerEnd.length, totalLength)
-        .toString("utf8");
-      this.buffer = this.buffer.subarray(totalLength);
+      const lineEnd = this.findLineEnd();
+      if (!lineEnd) return;
+      const body = this.buffer.subarray(0, lineEnd.index).toString("utf8");
+      this.buffer = this.buffer.subarray(lineEnd.index + lineEnd.length);
+      if (body.length === 0) continue;
       const response = JSON.parse(body) as JsonRpcResponse | JsonRpcNotification;
       if (
         !("id" in response) &&
@@ -126,12 +116,13 @@ class McpClient {
     }
   }
 
-  private findHeaderEnd(): { index: number; length: number } | null {
-    const crlf = this.buffer.indexOf("\r\n\r\n");
-    if (crlf >= 0) return { index: crlf, length: 4 };
-    const lf = this.buffer.indexOf("\n\n");
-    if (lf >= 0) return { index: lf, length: 2 };
-    return null;
+  private findLineEnd(): { index: number; length: number } | null {
+    const lf = this.buffer.indexOf("\n");
+    if (lf < 0) return null;
+    if (lf > 0 && this.buffer[lf - 1] === 13) {
+      return { index: lf - 1, length: 2 };
+    }
+    return { index: lf, length: 1 };
   }
 }
 
