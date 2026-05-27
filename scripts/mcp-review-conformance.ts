@@ -49,6 +49,33 @@ interface ReviewRunStructured {
   };
 }
 
+interface ReviewContinueStructured {
+  sessionId: string;
+  sessionRoot: string;
+  status: string;
+  continuationPlan?: {
+    eligible?: unknown;
+    frontierUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
+    downstreamUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
+  };
+  continuationAttempt?: {
+    continuationPlanPath?: unknown;
+    attemptManifestPath?: unknown;
+    supersededArtifactBackups?: Array<{
+      sourceRef?: unknown;
+      backupRef?: unknown;
+    }>;
+  };
+  promptExecutionResult?: {
+    synthesis_executed?: unknown;
+  };
+  pipelineExecutionLedger?: {
+    pipeline?: unknown;
+    units?: Array<{ unitId?: unknown; trustStatus?: unknown }>;
+  };
+  artifactRefs?: Record<string, string>;
+}
+
 interface ToolCallResult {
   isError?: boolean;
   content?: Array<{ type: string; text: string }>;
@@ -86,30 +113,20 @@ class McpClient {
       method,
       ...(params === undefined ? {} : { params }),
     });
-    const frame = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
     const responsePromise = new Promise<JsonRpcResponse>((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
     });
-    this.child.stdin.write(frame);
+    this.child.stdin.write(`${body}\n`);
     return withTimeout(responsePromise, 120_000, `MCP request timed out: ${method}`);
   }
 
   private drain(): void {
     while (true) {
-      const headerEnd = this.findHeaderEnd();
-      if (!headerEnd) return;
-      const header = this.buffer.subarray(0, headerEnd.index).toString("utf8");
-      const match = /^Content-Length:\s*(\d+)\s*$/im.exec(header);
-      if (!match?.[1]) {
-        throw new Error(`MCP response missing Content-Length header: ${header}`);
-      }
-      const contentLength = Number.parseInt(match[1], 10);
-      const totalLength = headerEnd.index + headerEnd.length + contentLength;
-      if (this.buffer.length < totalLength) return;
-      const body = this.buffer
-        .subarray(headerEnd.index + headerEnd.length, totalLength)
-        .toString("utf8");
-      this.buffer = this.buffer.subarray(totalLength);
+      const lineEnd = this.findLineEnd();
+      if (!lineEnd) return;
+      const body = this.buffer.subarray(0, lineEnd.index).toString("utf8");
+      this.buffer = this.buffer.subarray(lineEnd.index + lineEnd.length);
+      if (body.length === 0) continue;
       const response = JSON.parse(body) as JsonRpcResponse | JsonRpcNotification;
       if (
         !("id" in response) &&
@@ -126,12 +143,13 @@ class McpClient {
     }
   }
 
-  private findHeaderEnd(): { index: number; length: number } | null {
-    const crlf = this.buffer.indexOf("\r\n\r\n");
-    if (crlf >= 0) return { index: crlf, length: 4 };
-    const lf = this.buffer.indexOf("\n\n");
-    if (lf >= 0) return { index: lf, length: 2 };
-    return null;
+  private findLineEnd(): { index: number; length: number } | null {
+    const lf = this.buffer.indexOf("\n");
+    if (lf < 0) return null;
+    if (lf > 0 && this.buffer[lf - 1] === 13) {
+      return { index: lf - 1, length: 2 };
+    }
+    return { index: lf, length: 1 };
   }
 }
 
@@ -613,6 +631,39 @@ function requirePreparedReviewStructured(value: unknown): {
   return { sessionRoot: result.sessionRoot };
 }
 
+function requireReviewContinueStructured(value: unknown): ReviewContinueStructured {
+  assert(value !== null && typeof value === "object", "review_continue structuredContent must be an object.");
+  const result = value as Partial<ReviewContinueStructured>;
+  assert(typeof result.sessionRoot === "string", "review_continue sessionRoot missing.");
+  assert(result.status === "completed", `Expected continued status completed, got ${String(result.status)}.`);
+  assert(
+    result.continuationPlan?.eligible === true,
+    "review_continue must return the eligible continuation plan it executed.",
+  );
+  assert(
+    Array.isArray(result.continuationPlan.frontierUnits) &&
+      result.continuationPlan.frontierUnits.length > 0,
+    "review_continue continuationPlan.frontierUnits missing.",
+  );
+  assert(
+    result.promptExecutionResult?.synthesis_executed === true,
+    "review_continue must execute synthesize when continuation completes.",
+  );
+  assert(
+    typeof result.continuationAttempt?.continuationPlanPath === "string" &&
+      typeof result.continuationAttempt.attemptManifestPath === "string",
+    "review_continue must expose continuation attempt artifact refs.",
+  );
+  assert(
+    result.pipelineExecutionLedger?.pipeline === "review" &&
+      result.pipelineExecutionLedger.units?.some(
+        (unit) => unit.unitId === "synthesize" && unit.trustStatus === "trusted",
+      ),
+    "review_continue must return a trusted post-continuation review ledger.",
+  );
+  return result as ReviewContinueStructured;
+}
+
 async function readYaml<T>(filePath: string): Promise<T> {
   return YAML.parse(await fs.readFile(filePath, "utf8")) as T;
 }
@@ -696,12 +747,13 @@ async function main(): Promise<void> {
     );
     assert(
       toolsResult.tools?.some((tool) => tool.name === "onto.list_source_profiles") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.review_continue") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.observe_source") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.validate_reconstruct_directive") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_status") &&
         toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_result"),
-      "reconstruct MCP tool surface must be listed.",
+      "continuation and reconstruct MCP tool surfaces must be listed.",
     );
 
     const reconstructProjectRoot = await fs.mkdtemp(
@@ -2103,6 +2155,85 @@ async function main(): Promise<void> {
               unit.dispatchDecision === "run",
           ),
         "malformed halted status must expose ledger-backed continuation frontier.",
+      );
+      const continuedMalformedResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.review_continue",
+          arguments: {
+            sessionRoot: malformedSessionRoot,
+            projectRoot,
+            executorRealization: "mock",
+          },
+        }), "tools/call onto.review_continue malformed halted session"));
+      const continuedMalformed = requireReviewContinueStructured(
+        continuedMalformedResult.structuredContent,
+      );
+      assert(
+        path.resolve(continuedMalformed.sessionRoot) === path.resolve(malformedSessionRoot),
+        "review_continue must continue the requested halted session.",
+      );
+      assert(
+        continuedMalformed.continuationPlan?.frontierUnits?.some(
+          (unit) =>
+            unit.unitId === "finding-ledger" &&
+            unit.dispatchDecision === "run",
+        ),
+        "review_continue must execute the malformed finding-ledger frontier.",
+      );
+      await assertFile(
+        continuedMalformed.continuationAttempt?.continuationPlanPath as string,
+        "review_continue continuation plan",
+      );
+      await assertFile(
+        continuedMalformed.continuationAttempt?.attemptManifestPath as string,
+        "review_continue attempt manifest",
+      );
+      const continuationBackups =
+        continuedMalformed.continuationAttempt?.supersededArtifactBackups ?? [];
+      assert(
+        continuationBackups.some(
+          (backup) =>
+            typeof backup.sourceRef === "string" &&
+            backup.sourceRef.endsWith("execution-result.yaml"),
+        ) &&
+          continuationBackups.some(
+            (backup) =>
+              typeof backup.sourceRef === "string" &&
+              backup.sourceRef.endsWith("review-run-manifest.yaml"),
+          ),
+        "review_continue must backup session-level execution artifacts before dispatch.",
+      );
+      const attemptManifest = await readYaml<{
+        superseded_artifact_backups?: Array<{ sourceRef?: unknown; backupRef?: unknown }>;
+        execution_route_provenance?: {
+          executor_realization?: unknown;
+          review_execution_profile_source?: unknown;
+        };
+      }>(continuedMalformed.continuationAttempt?.attemptManifestPath as string);
+      assert(
+        Array.isArray(attemptManifest.superseded_artifact_backups) &&
+          attemptManifest.superseded_artifact_backups.length >=
+            continuationBackups.length,
+        "review_continue attempt manifest must persist superseded artifact backups.",
+      );
+      assert(
+        attemptManifest.execution_route_provenance?.executor_realization === "mock" &&
+          typeof attemptManifest.execution_route_provenance
+            .review_execution_profile_source === "string",
+        "review_continue attempt manifest must persist execution route provenance.",
+      );
+      const continuedStatusResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.review_status",
+          arguments: {
+            sessionRoot: malformedSessionRoot,
+            projectRoot,
+          },
+        }), "tools/call onto.review_status continued malformed session"));
+      assert(
+        (continuedStatusResult.structuredContent as { status?: unknown }).status ===
+          "completed",
+        "continued malformed session must report completed status.",
       );
     } finally {
       malformedChild.stdin.end();

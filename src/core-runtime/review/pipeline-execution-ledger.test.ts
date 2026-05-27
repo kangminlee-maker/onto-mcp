@@ -232,6 +232,24 @@ describe("buildReviewPipelineExecutionLedger", () => {
     ]).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("makes each deliberation response depend on every participating lens output", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage", "axiology"]);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+    });
+
+    expect(
+      ledger.units.find((unit) => unit.unitId === "deliberation-logic")
+        ?.upstreamUnitIds,
+    ).toEqual(["deliberation-plan", "logic", "coverage", "axiology"]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "coverage")?.downstreamUnitIds,
+    ).toContain("deliberation-logic");
+  });
+
   it("uses the lens completion barrier to locate failed lenses and block downstream trust", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root);

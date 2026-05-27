@@ -102,6 +102,47 @@ describe("buildReviewContinuationPlan", () => {
     ]);
   });
 
+  it("recomputes every deliberation response downstream of a rerun lens", () => {
+    const plan = buildReviewContinuationPlan({
+      ledger: ledger([
+        trusted("logic"),
+        unit("coverage", {
+          status: "failed",
+          trustStatus: "untrusted",
+          downstreamUnitIds: ["finding-ledger", "deliberation-logic", "deliberation-coverage"],
+        }),
+        unit("finding-ledger", {
+          unitKind: "issue_artifact",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["logic", "coverage"],
+          downstreamUnitIds: ["deliberation-logic", "deliberation-coverage"],
+        }),
+        unit("deliberation-logic", {
+          unitKind: "deliberation",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["finding-ledger", "logic", "coverage"],
+        }),
+        unit("deliberation-coverage", {
+          unitKind: "deliberation",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["finding-ledger", "logic", "coverage"],
+        }),
+      ]),
+      targetUnits: ["lens:coverage"],
+    });
+
+    expect(plan.eligible).toBe(true);
+    expect(plan.frontierUnits.map((unit) => unit.unitId)).toEqual(["coverage"]);
+    expect(plan.downstreamUnits.map((unit) => unit.unitId)).toEqual([
+      "finding-ledger",
+      "deliberation-logic",
+      "deliberation-coverage",
+    ]);
+  });
+
   it("rejects target units that are already trusted", () => {
     const plan = buildReviewContinuationPlan({
       ledger: ledger([trusted("logic")]),
@@ -113,5 +154,46 @@ describe("buildReviewContinuationPlan", () => {
       unitId: "logic",
       dispatchDecision: "reject",
     });
+  });
+
+  it("rejects target units that are downstream of the current frontier", () => {
+    const plan = buildReviewContinuationPlan({
+      ledger: ledger([
+        unit("logic", { downstreamUnitIds: ["synthesize"] }),
+        unit("synthesize", {
+          unitKind: "synthesize",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["logic"],
+        }),
+      ]),
+      targetUnits: ["synthesize"],
+    });
+
+    expect(plan.eligible).toBe(false);
+    expect(plan.frontierUnits[0]).toMatchObject({
+      unitId: "synthesize",
+      dispatchDecision: "reject",
+    });
+  });
+
+  it("rejects partial target unit selections that skip sibling frontier units", () => {
+    const plan = buildReviewContinuationPlan({
+      ledger: ledger([
+        unit("logic", { downstreamUnitIds: ["finding-ledger"] }),
+        unit("coverage", { downstreamUnitIds: ["finding-ledger"] }),
+        unit("finding-ledger", {
+          unitKind: "issue_artifact",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["logic", "coverage"],
+        }),
+      ]),
+      targetUnits: ["logic"],
+    });
+
+    expect(plan.eligible).toBe(false);
+    expect(plan.frontierUnits.map((unit) => unit.unitId)).toEqual(["coverage"]);
+    expect(plan.frontierUnits[0]?.dispatchDecision).toBe("reject");
   });
 });

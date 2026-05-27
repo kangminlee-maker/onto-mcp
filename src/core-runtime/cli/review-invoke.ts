@@ -3,6 +3,8 @@
 import { execSync } from "node:child_process";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -28,7 +30,8 @@ import {
   readSingleOptionValueFromArgv,
 } from "../review/review-artifact-utils.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
-import { resolveOntoHome } from "../discovery/onto-home.js";
+import { isOntoRoot, resolveOntoHome } from "../discovery/onto-home.js";
+import { resolveInstallationPath } from "../discovery/installation-paths.js";
 import { resolveSettingsChain, type OntoConfig } from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
@@ -85,6 +88,8 @@ interface ResolvedReviewInvokeInputs {
   domainFinalValue: string;
   domainSelectionMode: string;
   domainSelectionRequired: boolean;
+  domainSelectionReason: string;
+  bindingNotes: string[];
   bundleKind?: string;
   reviewMode: ReviewMode;
   reviewModeRecommendation: ReviewMode;
@@ -432,6 +437,7 @@ function renderReviewStartPreview(args: {
     `  selected: ${selectedDomain}`,
     `  selection_mode: ${inputs.domainSelectionMode}`,
     `  selection_required: ${String(inputs.domainSelectionRequired)}`,
+    `  selection_reason: ${inputs.domainSelectionReason}`,
     "review_lenses:",
     `  review_mode: ${inputs.reviewMode}`,
     `  lens_count: ${configuredLensIds.length}`,
@@ -616,6 +622,7 @@ function renderReviewResultOverview(args: {
   target: string;
   targetScopeKind: ReviewTargetScopeKind;
   domain: string;
+  domainSelectionReason: string;
   status: string | null;
   deliberationStatus: string | null;
   reviewMode: ReviewMode;
@@ -657,6 +664,7 @@ function renderReviewResultOverview(args: {
     `  target: ${args.target}`,
     `  target_scope_kind: ${args.targetScopeKind}`,
     `  domain: ${args.domain.length > 0 ? args.domain : "none"}`,
+    `  domain_selection_reason: ${args.domainSelectionReason}`,
     "coverage:",
     `  lenses: ${args.participatingLensIds.length}/${args.plannedLensIds.length} participating`,
     `  degraded_lenses: ${degraded}`,
@@ -1448,6 +1456,395 @@ function collectConfiguredDomainTokens(ontoConfig: OntoConfig): string[] {
   return collected;
 }
 
+interface DomainDirectoryCandidate {
+  id: string;
+  dir: string;
+  source: "project" | "user" | "installation" | "dev_install";
+}
+
+interface TargetDomainSignal {
+  text: string;
+  pathText: string;
+  hasCodeSignal: boolean;
+  hasOntologyPathSignal: boolean;
+}
+
+interface InferredDomainSelection {
+  domainToken: string;
+  reason: string;
+}
+
+const DOMAIN_INFERENCE_MAX_FILE_BYTES = 64 * 1024;
+const DOMAIN_INFERENCE_MAX_DIRECTORY_ENTRIES = 200;
+const DOMAIN_INFERENCE_MAX_DIRECTORY_DEPTH = 3;
+const DOMAIN_INFERENCE_MIN_SCORE = 18;
+const DOMAIN_INFERENCE_EXCLUDED_NAMES = new Set([
+  ".git",
+  "node_modules",
+  ".onto/review",
+  "dist",
+  "build",
+  ".next",
+  "coverage",
+]);
+const DOMAIN_INFERENCE_CODE_EXTENSIONS = new Set([
+  ".c",
+  ".cc",
+  ".cpp",
+  ".cs",
+  ".go",
+  ".java",
+  ".js",
+  ".jsx",
+  ".kt",
+  ".mjs",
+  ".py",
+  ".rs",
+  ".swift",
+  ".ts",
+  ".tsx",
+]);
+const DOMAIN_INFERENCE_STOPWORDS = new Set([
+  "a",
+  "an",
+  "and",
+  "are",
+  "as",
+  "be",
+  "by",
+  "can",
+  "code",
+  "content",
+  "data",
+  "doc",
+  "document",
+  "domain",
+  "file",
+  "for",
+  "from",
+  "has",
+  "in",
+  "is",
+  "it",
+  "of",
+  "on",
+  "or",
+  "review",
+  "rule",
+  "should",
+  "system",
+  "target",
+  "that",
+  "the",
+  "this",
+  "to",
+  "with",
+]);
+
+function addDomainRootCandidates(args: {
+  candidates: DomainDirectoryCandidate[];
+  seenIds: Set<string>;
+  root: string;
+  source: DomainDirectoryCandidate["source"];
+}): void {
+  if (!fsSync.existsSync(args.root)) return;
+  let entries: Dirent[];
+  try {
+    entries = fsSync.readdirSync(args.root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
+    if (args.seenIds.has(entry.name)) continue;
+    args.seenIds.add(entry.name);
+    args.candidates.push({
+      id: entry.name,
+      dir: path.join(args.root, entry.name),
+      source: args.source,
+    });
+  }
+}
+
+function collectAvailableDomainCandidates(
+  projectRoot: string,
+  ontoHome: string | undefined,
+): DomainDirectoryCandidate[] {
+  const candidates: DomainDirectoryCandidate[] = [];
+  const seenIds = new Set<string>();
+  const seenRoots = new Set<string>();
+  const addRoot = (
+    root: string,
+    source: DomainDirectoryCandidate["source"],
+  ): void => {
+    const resolvedRoot = path.resolve(root);
+    if (seenRoots.has(resolvedRoot)) return;
+    seenRoots.add(resolvedRoot);
+    addDomainRootCandidates({ candidates, seenIds, root: resolvedRoot, source });
+  };
+
+  addRoot(path.join(projectRoot, ".onto", "domains"), "project");
+  addRoot(path.join(os.homedir(), ".onto", "domains"), "user");
+
+  if (typeof ontoHome === "string" && ontoHome.length > 0) {
+    try {
+      addRoot(resolveInstallationPath("domains", ontoHome), "installation");
+    } catch {
+      // No installation domain seat available.
+    }
+  }
+  if (isOntoRoot(projectRoot)) {
+    try {
+      addRoot(resolveInstallationPath("domains", projectRoot), "dev_install");
+    } catch {
+      // Not a canonical install domain seat.
+    }
+  }
+
+  return candidates;
+}
+
+function tokenizeForDomainInference(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[-_/.:]+/g, " ")
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((token) => token.trim())
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !DOMAIN_INFERENCE_STOPWORDS.has(token) &&
+        !/^\d+$/.test(token),
+    );
+}
+
+async function readFilePrefix(filePath: string, maxBytes: number): Promise<string> {
+  let handle: FileHandle | undefined;
+  try {
+    const stats = await fs.stat(filePath);
+    const byteLength = Math.min(stats.size, maxBytes);
+    if (byteLength <= 0) return "";
+    handle = await fs.open(filePath, "r");
+    const buffer = Buffer.alloc(byteLength);
+    const { bytesRead } = await handle.read(buffer, 0, byteLength, 0);
+    return buffer.subarray(0, bytesRead).toString("utf8");
+  } catch {
+    return "";
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function collectDirectorySignalPaths(
+  root: string,
+  maxEntries = DOMAIN_INFERENCE_MAX_DIRECTORY_ENTRIES,
+  maxDepth = DOMAIN_INFERENCE_MAX_DIRECTORY_DEPTH,
+): Promise<string[]> {
+  const collected: string[] = [];
+  async function walk(current: string, depth: number): Promise<void> {
+    if (collected.length >= maxEntries || depth > maxDepth) return;
+    let entries: Dirent[];
+    try {
+      entries = await fs.readdir(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const entry of entries) {
+      if (collected.length >= maxEntries) return;
+      const relative = path.relative(root, path.join(current, entry.name));
+      const normalizedRelative = relative.split(path.sep).join(path.posix.sep);
+      if (
+        DOMAIN_INFERENCE_EXCLUDED_NAMES.has(entry.name) ||
+        DOMAIN_INFERENCE_EXCLUDED_NAMES.has(normalizedRelative)
+      ) {
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await walk(path.join(current, entry.name), depth + 1);
+        continue;
+      }
+      if (entry.isFile()) {
+        collected.push(normalizedRelative);
+      }
+    }
+  }
+  await walk(root, 0);
+  return collected;
+}
+
+async function buildTargetDomainSignal(args: {
+  projectRoot: string;
+  requestedTarget: string;
+  requestText: string;
+  targetPath: string;
+  targetScopeKind: ReviewTargetScopeKind;
+  resolvedTargetRefs: string[];
+}): Promise<TargetDomainSignal> {
+  const pathParts = [
+    args.requestedTarget,
+    path.relative(args.projectRoot, args.targetPath),
+    ...args.resolvedTargetRefs.map((ref) => path.relative(args.projectRoot, ref)),
+  ].map((part) => part.split(path.sep).join(path.posix.sep));
+  const contentParts: string[] = [args.requestText, ...pathParts];
+  let hasCodeSignal = false;
+  let hasOntologyPathSignal = pathParts.some(
+    (part) =>
+      part === ".onto" ||
+      part.startsWith(".onto/") ||
+      part.includes("/ontology/") ||
+      part.includes("ontology"),
+  );
+
+  for (const ref of args.resolvedTargetRefs) {
+    try {
+      const stats = await fs.stat(ref);
+      if (stats.isDirectory()) {
+        const listedPaths = await collectDirectorySignalPaths(ref);
+        contentParts.push(...listedPaths);
+        hasCodeSignal ||= listedPaths.some((listedPath) =>
+          DOMAIN_INFERENCE_CODE_EXTENSIONS.has(path.extname(listedPath)),
+        );
+        hasOntologyPathSignal ||= listedPaths.some(
+          (listedPath) =>
+            listedPath.startsWith(".onto/") ||
+            listedPath.includes("/ontology/") ||
+            listedPath.includes("ontology"),
+        );
+        continue;
+      }
+      hasCodeSignal ||= DOMAIN_INFERENCE_CODE_EXTENSIONS.has(path.extname(ref));
+      contentParts.push(
+        await readFilePrefix(ref, DOMAIN_INFERENCE_MAX_FILE_BYTES),
+      );
+    } catch {
+      // Target binding already validated refs; inference remains best-effort.
+    }
+  }
+
+  return {
+    text: contentParts.join("\n"),
+    pathText: pathParts.join("\n"),
+    hasCodeSignal,
+    hasOntologyPathSignal,
+  };
+}
+
+async function readDomainCandidateText(
+  candidate: DomainDirectoryCandidate,
+): Promise<string> {
+  const preferredFiles = [
+    "domain_scope.md",
+    "concepts.md",
+    "competency_qs.md",
+    "structure_spec.md",
+    "logic_rules.md",
+  ];
+  const parts = [candidate.id, candidate.id.replace(/-/g, " ")];
+  for (const filename of preferredFiles) {
+    const filePath = path.join(candidate.dir, filename);
+    if (!fsSync.existsSync(filePath)) continue;
+    parts.push(await readFilePrefix(filePath, 24 * 1024));
+  }
+  return parts.join("\n");
+}
+
+function formatInferenceReason(args: {
+  domainToken: string;
+  signalReasons: string[];
+}): string {
+  const reason = args.signalReasons.length > 0
+    ? args.signalReasons.join("; ")
+    : "it had the strongest lexical overlap with the target and intent";
+  return `No explicit domain token or configured domain was provided. Selected ${args.domainToken} because ${reason}.`;
+}
+
+async function inferDomainFromReviewTarget(args: {
+  projectRoot: string;
+  ontoHome?: string;
+  requestedTarget: string;
+  requestText: string;
+  targetPath: string;
+  targetScopeKind: ReviewTargetScopeKind;
+  resolvedTargetRefs: string[];
+}): Promise<InferredDomainSelection | null> {
+  const candidates = collectAvailableDomainCandidates(args.projectRoot, args.ontoHome);
+  if (candidates.length === 0) return null;
+
+  const signal = await buildTargetDomainSignal(args);
+  const targetTokens = new Set(tokenizeForDomainInference(signal.text));
+  const pathTokens = new Set(tokenizeForDomainInference(signal.pathText));
+  const normalizedTargetText = signal.text.toLowerCase();
+  const scored = await Promise.all(
+    candidates.map(async (candidate, index) => {
+      let score = 0;
+      const signalReasons: string[] = [];
+      const domainToken = `@${candidate.id}`;
+      const domainIdTokens = tokenizeForDomainInference(candidate.id);
+
+      if (normalizedTargetText.includes(candidate.id.toLowerCase())) {
+        score += 80;
+        signalReasons.push(`the target mentions "${candidate.id}"`);
+      }
+
+      const matchedIdTokens = domainIdTokens.filter(
+        (token) => targetTokens.has(token) || pathTokens.has(token),
+      );
+      if (matchedIdTokens.length > 0) {
+        score += matchedIdTokens.length * 30;
+        signalReasons.push(
+          `target path or intent matches domain token(s): ${matchedIdTokens.join(", ")}`,
+        );
+      }
+
+      if (candidate.id === "ontology" && signal.hasOntologyPathSignal) {
+        score += 55;
+        signalReasons.push("the target is inside or explicitly references ontology-owned material");
+      }
+      if (candidate.id === "software-engineering" && signal.hasCodeSignal) {
+        score += 45;
+        signalReasons.push("the target contains implementation/code material");
+      }
+
+      const domainText = await readDomainCandidateText(candidate);
+      const domainTokens = new Set(tokenizeForDomainInference(domainText));
+      const overlap = [...targetTokens].filter((token) => domainTokens.has(token));
+      if (overlap.length > 0) {
+        const weightedOverlap = Math.min(overlap.length * 2, 40);
+        score += weightedOverlap;
+        signalReasons.push(
+          `target text overlaps domain document terms: ${overlap.slice(0, 5).join(", ")}`,
+        );
+      }
+
+      return {
+        candidate,
+        domainToken,
+        score,
+        index,
+        signalReasons,
+      };
+    }),
+  );
+
+  scored.sort((left, right) =>
+    right.score - left.score ||
+    left.index - right.index ||
+    left.candidate.id.localeCompare(right.candidate.id),
+  );
+  const best = scored[0];
+  if (!best || best.score < DOMAIN_INFERENCE_MIN_SCORE) return null;
+
+  return {
+    domainToken: best.domainToken,
+    reason: formatInferenceReason({
+      domainToken: best.domainToken,
+      signalReasons: best.signalReasons,
+    }),
+  };
+}
+
 async function promptForDomainSelection(
   configuredDomainTokens: string[],
 ): Promise<string> {
@@ -1497,38 +1894,73 @@ async function promptForDomainSelection(
 async function resolveDomainSelection(
   requestedDomainToken: string,
   ontoConfig: OntoConfig,
+  inferenceContext: {
+    projectRoot: string;
+    ontoHome?: string;
+    requestedTarget: string;
+    requestText: string;
+    targetPath: string;
+    targetScopeKind: ReviewTargetScopeKind;
+    resolvedTargetRefs: string[];
+  },
 ): Promise<{
   domainRecommendation: string;
   domainFinalValue: string;
   domainSelectionMode: string;
   domainSelectionRequired: boolean;
+  domainSelectionReason: string;
+  bindingNotes: string[];
 }> {
   if (requestedDomainToken.length > 0) {
+    const domainFinalValue = normalizeDomainValue(requestedDomainToken);
+    const reason = domainFinalValue === "none"
+      ? "Explicit no-domain token was provided; runtime will run without domain documents."
+      : `Explicit domain token ${requestedDomainToken} was provided; runtime used it without target inference.`;
     return {
       domainRecommendation: requestedDomainToken,
-      domainFinalValue: normalizeDomainValue(requestedDomainToken),
+      domainFinalValue,
       domainSelectionMode: "explicit_token",
       domainSelectionRequired: false,
+      domainSelectionReason: reason,
+      bindingNotes: [reason],
     };
   }
 
   const configuredDomainTokens = collectConfiguredDomainTokens(ontoConfig);
   if (configuredDomainTokens.length === 0) {
+    const inferred = await inferDomainFromReviewTarget(inferenceContext);
+    if (inferred) {
+      return {
+        domainRecommendation: inferred.domainToken,
+        domainFinalValue: normalizeDomainValue(inferred.domainToken),
+        domainSelectionMode: "target_inferred",
+        domainSelectionRequired: false,
+        domainSelectionReason: inferred.reason,
+        bindingNotes: [inferred.reason],
+      };
+    }
+    const reason =
+      "No explicit domain token, configured domain, or confident target-domain match was available; runtime will run without domain documents.";
     return {
       domainRecommendation: "@-",
       domainFinalValue: "none",
       domainSelectionMode: "no_domain_default",
       domainSelectionRequired: false,
+      domainSelectionReason: reason,
+      bindingNotes: [reason],
     };
   }
 
   if (configuredDomainTokens.length === 1) {
     const selectedToken = configuredDomainTokens[0]!;
+    const reason = `Single configured domain ${selectedToken} is available; runtime used the configured default.`;
     return {
       domainRecommendation: selectedToken,
       domainFinalValue: normalizeDomainValue(selectedToken),
       domainSelectionMode: "project_default",
       domainSelectionRequired: false,
+      domainSelectionReason: reason,
+      bindingNotes: [reason],
     };
   }
 
@@ -1544,11 +1976,14 @@ async function resolveDomainSelection(
   }
 
   const selectedToken = await promptForDomainSelection(configuredDomainTokens);
+  const reason = `Interactive domain selection chose ${selectedToken} from configured domains: ${configuredDomainTokens.join(", ")}.`;
   return {
     domainRecommendation,
     domainFinalValue: normalizeDomainValue(selectedToken),
     domainSelectionMode: "interactive_selection",
     domainSelectionRequired: true,
+    domainSelectionReason: reason,
+    bindingNotes: [reason],
   };
 }
 
@@ -1827,6 +2262,7 @@ async function resolveReviewInvokeInputs(
   ontoConfig: OntoConfig,
   projectRoot: string,
   sessionId: string,
+  ontoHome: string | undefined,
 ): Promise<ResolvedReviewInvokeInputs> {
   const parsedPositionals = parseHostFacingPositionals(
     splitArgvIntoOptionsAndPositionals(
@@ -1942,10 +2378,6 @@ async function resolveReviewInvokeInputs(
     readSingleOptionValueFromArgv(argv, "requested-domain-token") ??
     (canonicalDomainToken.length > 0 ? canonicalDomainToken : undefined) ??
     "";
-  const resolvedDomainSelection = await resolveDomainSelection(
-    requestedDomainToken,
-    ontoConfig,
-  );
 
   let reviewMode = resolveReviewMode(argv, ontoConfig);
   const explicitLensIds = readMultiOptionValuesFromArgv(argv, "lens-id");
@@ -2129,6 +2561,20 @@ async function resolveReviewInvokeInputs(
     );
   }
 
+  const resolvedDomainSelection = await resolveDomainSelection(
+    requestedDomainToken,
+    ontoConfig,
+    {
+      projectRoot,
+      ...(ontoHome ? { ontoHome } : {}),
+      requestedTarget: requestedTarget ?? explicitPrimaryRef ?? absoluteTargetPath,
+      requestText,
+      targetPath: absoluteTargetPath,
+      targetScopeKind,
+      resolvedTargetRefs,
+    },
+  );
+
   return {
     requestedTarget: requestedTarget ?? explicitPrimaryRef ?? absoluteTargetPath,
     targetPath: absoluteTargetPath,
@@ -2141,6 +2587,8 @@ async function resolveReviewInvokeInputs(
     domainFinalValue: resolvedDomainSelection.domainFinalValue,
     domainSelectionMode: resolvedDomainSelection.domainSelectionMode,
     domainSelectionRequired: resolvedDomainSelection.domainSelectionRequired,
+    domainSelectionReason: resolvedDomainSelection.domainSelectionReason,
+    bindingNotes: resolvedDomainSelection.bindingNotes,
     ...(bundleKind ? { bundleKind } : {}),
     reviewMode,
     reviewModeRecommendation: reviewMode,
@@ -2179,6 +2627,15 @@ function appendReviewInvokeDerivedArgs(
     }
   };
 
+  const appendMissingMulti = (optionName: string, values: string[]): void => {
+    const existingValues = new Set(readMultiOptionValuesFromArgv(appended, optionName));
+    for (const value of values) {
+      if (existingValues.has(value)) continue;
+      appended.push(`--${optionName}`, value);
+      existingValues.add(value);
+    }
+  };
+
   appendSingleIfAbsent("requested-target", resolvedInputs.requestedTarget);
   appendSingleIfAbsent("target-scope-kind", resolvedInputs.targetScopeKind);
   appendSingleIfAbsent("primary-ref", resolvedInputs.targetPath);
@@ -2203,6 +2660,7 @@ function appendReviewInvokeDerivedArgs(
   );
   appendMultiIfAbsent("lens-id", resolvedInputs.resolvedLensIds);
   appendMultiIfAbsent("materialized-ref", resolvedInputs.resolvedTargetRefs);
+  appendMissingMulti("binding-note", resolvedInputs.bindingNotes);
   if (resolvedInputs.targetScopeKind === "bundle") {
     appendMultiIfAbsent("member-ref", resolvedInputs.resolvedTargetRefs.slice(1));
     if (
@@ -2428,6 +2886,7 @@ async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSet
     ontoConfig,
     projectRoot,
     sessionId,
+    ontoHome,
   );
   const maxConcurrentLenses = Math.max(1, resolvedInvokeInputs.resolvedLensIds.length);
 
@@ -2797,6 +3256,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       target: setup.resolvedInvokeInputs.requestedTarget,
       target_scope_kind: setup.resolvedInvokeInputs.targetScopeKind,
       domain: setup.resolvedInvokeInputs.domainFinalValue,
+      domain_selection_reason: setup.resolvedInvokeInputs.domainSelectionReason,
     },
     coverage: {
       planned_lens_count: setup.resolvedInvokeInputs.resolvedLensIds.length,
@@ -2818,6 +3278,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       target: setup.resolvedInvokeInputs.requestedTarget,
       targetScopeKind: setup.resolvedInvokeInputs.targetScopeKind,
       domain: setup.resolvedInvokeInputs.domainFinalValue,
+      domainSelectionReason: setup.resolvedInvokeInputs.domainSelectionReason,
       status: recordStatus,
       deliberationStatus,
       reviewMode: setup.resolvedInvokeInputs.reviewMode,
@@ -2847,6 +3308,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
               : null,
           domain_selection_required: setup.resolvedInvokeInputs.domainSelectionRequired,
           domain_selection_mode: setup.resolvedInvokeInputs.domainSelectionMode,
+          domain_selection_reason: setup.resolvedInvokeInputs.domainSelectionReason,
           domain_final_value: setup.resolvedInvokeInputs.domainFinalValue,
           review_mode: setup.resolvedInvokeInputs.reviewMode,
         },

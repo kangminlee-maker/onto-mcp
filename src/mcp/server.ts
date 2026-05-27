@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   createOntoReviewCoreApi,
+  ReviewContinuationError,
   type PrepareReviewRequest,
   type ReviewNativeProgressEvent,
 } from "../core-api/review-api.js";
@@ -32,6 +33,7 @@ import {
   OntoPrepareReviewToolInputSchema,
   OntoReconstructSessionInputSchema,
   OntoReconstructToolInputSchema,
+  OntoReviewContinueToolInputSchema,
   OntoReviewSessionInputSchema,
   OntoReviewToolInputSchema,
   OntoValidateReconstructDirectiveToolInputSchema,
@@ -162,6 +164,40 @@ const SESSION_INPUT_SCHEMA: JsonValue = {
       type: "string",
       description:
         "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description: "Absolute or project-relative review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+    targetUnits: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Optional current frontier unit ids or public aliases such as lens:logic and deliberation:logic. Omit to use the full ledger-derived first untrusted frontier.",
+    },
+    requestText: {
+      type: "string",
+      description:
+        "Optional original request text for final ReviewRecord assembly when the session was only prepared.",
+    },
+    executorRealization: {
+      type: "string",
+      enum: ["codex", "mock", "ts_inline_http"],
+      description:
+        "Executor realization for resumed units. Required for prepared sessions that have no prior review-run-manifest.",
     },
   },
 };
@@ -357,6 +393,12 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
+    name: "onto.review_continue",
+    description:
+      "Continue a prepared or halted review session by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
+    inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
+  },
+  {
     name: "onto.review_status",
     description: "Read structured status and artifact refs for a review session.",
     inputSchema: SESSION_INPUT_SCHEMA,
@@ -521,6 +563,15 @@ function structuredFailureFromError(error: unknown): {
 
 async function formatToolError(error: unknown): Promise<JsonValue> {
   const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof ReviewContinuationError) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: message }],
+      structuredContent: {
+        continuationFailure: error.failureContent as unknown as JsonValue,
+      },
+    };
+  }
   const structuredFailure = structuredFailureFromError(error);
   const routeVisibility = structuredFailure
     ? await buildReviewRouteVisibilityFromFailure(
@@ -916,6 +967,28 @@ async function callTool(
         const result = await reviewApi.prepareReview(toReviewRequest(parsed));
         return formatToolResult(result);
       }
+      case "onto.review_continue": {
+        const parsed = OntoReviewContinueToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: parsed.sessionRoot,
+          projectRoot,
+        });
+        const result = await reviewApi.continueReview({
+          projectRoot,
+          sessionRoot,
+          ...(parsed.targetUnits !== undefined
+            ? { targetUnits: parsed.targetUnits }
+            : {}),
+          ...(parsed.requestText !== undefined
+            ? { requestText: parsed.requestText }
+            : {}),
+          ...(parsed.executorRealization !== undefined
+            ? { executorRealization: parsed.executorRealization }
+            : {}),
+        });
+        return formatToolResult(result);
+      }
       case "onto.review_status": {
         const parsed = OntoReviewSessionInputSchema.parse(args);
         const sessionRoot = await resolveAllowedSessionRoot(parsed);
@@ -1164,10 +1237,78 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
   }
 }
 
-function writeMessage(message: JsonValue): void {
+type StdioMessageFraming = "jsonl" | "content-length";
+
+let stdioResponseFraming: StdioMessageFraming = "jsonl";
+
+function writeMessage(
+  message: JsonValue,
+  framing: StdioMessageFraming = stdioResponseFraming,
+): void {
   const body = JSON.stringify(message);
-  process.stdout.write(
-    `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`,
+  if (framing === "content-length") {
+    process.stdout.write(
+      `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`,
+    );
+    return;
+  }
+  process.stdout.write(`${body}\n`);
+}
+
+function lineEndIndex(buffer: Buffer): { index: number; length: number } | null {
+  const lf = buffer.indexOf("\n");
+  if (lf < 0) return null;
+  const crlf = lf > 0 && buffer[lf - 1] === 13;
+  return { index: crlf ? lf - 1 : lf, length: crlf ? 2 : 1 };
+}
+
+function shouldReadContentLengthFrame(buffer: Buffer): boolean {
+  const firstLineEnd = lineEndIndex(buffer);
+  const firstLine = buffer
+    .subarray(0, firstLineEnd?.index ?? buffer.length)
+    .toString("utf8");
+  return /^Content-Length:/i.test(firstLine);
+}
+
+function readNextStdioMessage(
+  buffer: Buffer,
+): {
+  body: string;
+  framing: StdioMessageFraming;
+  rest: Buffer;
+} | null {
+  if (buffer.length === 0) return null;
+  if (!shouldReadContentLengthFrame(buffer)) {
+    const lineEnd = lineEndIndex(buffer);
+    if (!lineEnd) return null;
+    const body = buffer.subarray(0, lineEnd.index).toString("utf8");
+    return {
+      body,
+      framing: "jsonl",
+      rest: buffer.subarray(lineEnd.index + lineEnd.length),
+    };
+  }
+
+  const headerEnd = headerEndIndex(buffer);
+  if (!headerEnd) return null;
+  const header = buffer.subarray(0, headerEnd.index).toString("utf8");
+  const contentLength = parseContentLength(header);
+  const totalLength = headerEnd.index + headerEnd.length + contentLength;
+  if (buffer.length < totalLength) return null;
+  const body = buffer
+    .subarray(headerEnd.index + headerEnd.length, totalLength)
+    .toString("utf8");
+  return {
+    body,
+    framing: "content-length",
+    rest: buffer.subarray(totalLength),
+  };
+}
+
+function writeParseError(error: unknown, framing: StdioMessageFraming): void {
+  writeMessage(
+    jsonRpcError(null, -32700, error instanceof Error ? error.message : String(error)),
+    framing,
   );
 }
 
@@ -1188,41 +1329,43 @@ function parseContentLength(header: string): number {
 }
 
 export async function startMcpServer(): Promise<number> {
-  let buffer = Buffer.alloc(0);
+  let buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   let chain = Promise.resolve();
 
   process.stdin.on("data", (chunk: Buffer) => {
     buffer = Buffer.concat([buffer, chunk]);
     while (true) {
-      const headerEnd = headerEndIndex(buffer);
-      if (!headerEnd) return;
-      const header = buffer.subarray(0, headerEnd.index).toString("utf8");
-      let contentLength: number;
+      let frame:
+        | {
+            body: string;
+            framing: StdioMessageFraming;
+            rest: Buffer;
+          }
+        | null;
       try {
-        contentLength = parseContentLength(header);
+        frame = readNextStdioMessage(buffer);
       } catch (error) {
-        writeMessage(jsonRpcError(null, -32700, error instanceof Error ? error.message : String(error)));
+        writeParseError(error, stdioResponseFraming);
         buffer = Buffer.alloc(0);
         return;
       }
-      const totalLength = headerEnd.index + headerEnd.length + contentLength;
-      if (buffer.length < totalLength) return;
-
-      const body = buffer
-        .subarray(headerEnd.index + headerEnd.length, totalLength)
-        .toString("utf8");
-      buffer = buffer.subarray(totalLength);
+      if (!frame) return;
+      buffer = frame.rest;
+      stdioResponseFraming = frame.framing;
 
       chain = chain.then(async () => {
         let request: JsonRpcRequest;
         try {
-          request = JSON.parse(body) as JsonRpcRequest;
+          request = JSON.parse(frame.body) as JsonRpcRequest;
         } catch (error) {
-          writeMessage(jsonRpcError(null, -32700, error instanceof Error ? error.message : String(error)));
+          writeMessage(
+            jsonRpcError(null, -32700, error instanceof Error ? error.message : String(error)),
+            frame.framing,
+          );
           return;
         }
         const response = await handleRequest(request);
-        if (response) writeMessage(response);
+        if (response) writeMessage(response, frame.framing);
       }).catch((error: unknown) => {
         process.stderr.write(
           `[onto-mcp] request failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`,

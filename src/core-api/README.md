@@ -30,6 +30,13 @@ artifact-backed read surface.
 Progress step ids, labels, and total count come from the shared review progress
 contract used by both runtime manifests and Core API status projection.
 
+`continueReview` is the Core API counterpart to `onto.review_continue`: it
+builds the review continuation plan from the PipelineExecutionLedger, stores an
+attempt manifest, validates session-owned execution-plan paths, backs up
+superseded unit and session-level artifacts that already exist, dispatches only
+the ledger frontier/downstream units, restores backups on failed attempts, and
+reassembles final review artifacts when synthesize completes.
+
 `reconstruct-api.ts` is the bounded facade for the reconstruct MCP surface. It
 lists source profiles, materializes preparation artifacts, validates
 LLM-authored directive files, runs the material-aware post-Seed artifact loop,
