@@ -2,11 +2,19 @@
   "name": "onto-mcp",
   "version": "0.3.0",
   "description": "MCP-native ontology review runtime with context-isolated lenses and controlled deliberation",
+  "homepage": "https://github.com/kangminlee-maker/onto-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/kangminlee-maker/onto-mcp/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kangminlee-maker/onto-mcp.git"
+  },
   "onto_release_channel": "beta",
   "onto_release_label": "onto-mcp-local-reset",
   "type": "module",
   "bin": {
-    "onto": "./bin/onto"
+    "onto": "bin/onto"
   },
   "files": [
     "bin/",

@@ -51,10 +51,24 @@ runtime or MCP tool. `learn` and `govern` remain separate design slices.
 
 ## Public Interface
 
+Install from npm:
+
+```bash
+npm install -g onto-mcp
+```
+
 Start the MCP server:
 
 ```bash
 onto mcp
+```
+
+For project-local installs, add `onto-mcp` to the project and run the local
+binary:
+
+```bash
+npm install --save-dev onto-mcp
+npm exec -- onto mcp
 ```
 
 Available MCP tools:
