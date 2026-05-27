@@ -111,6 +111,15 @@ function renderTargetSummary(
     .join("\n");
 }
 
+function renderDomainSelectionNotes(
+  bindingArtifact: InvocationBindingArtifact,
+): string {
+  const notes = bindingArtifact.binding_notes ?? [];
+  return notes.length > 0
+    ? notes.map((note) => `- ${note}`).join("\n")
+    : "- none";
+}
+
 function renderConsensusHeading(
   participatingLensCount: number,
   plannedLensCount: number,
@@ -360,6 +369,9 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Controlled deliberation: ${synthesisExecuted ? `\`${toRelativePath(deliberationPath, projectRoot)}\`` : "not performed"}
 - Source artifact: ${synthesisExecuted ? `\`${toRelativePath(sourcePath, projectRoot)}\`` : "not produced"}
 - Execution status: ${executionStatus}
+
+### Domain Selection
+${renderDomainSelectionNotes(bindingArtifact)}
 
 ### Final Review Result
 #### Review Basis

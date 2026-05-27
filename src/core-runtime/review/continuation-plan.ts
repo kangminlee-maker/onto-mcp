@@ -35,6 +35,20 @@ export interface BuildReviewContinuationPlanParams {
   targetUnits?: string[];
 }
 
+function normalizeRequestedTargetUnitId(unitId: string): string {
+  if (unitId.startsWith("lens:")) return unitId.slice("lens:".length);
+  if (unitId.startsWith("deliberation:")) {
+    return `deliberation-${unitId.slice("deliberation:".length)}`;
+  }
+  if (unitId.startsWith("issue-artifact:")) {
+    return unitId.slice("issue-artifact:".length);
+  }
+  if (unitId === "controlled-lens-deliberation") {
+    return "controlled-deliberation";
+  }
+  return unitId;
+}
+
 function lensIdFromUnit(unit: PipelineExecutionLedgerUnitEntry): string | null {
   if (unit.unitKind === "lens") return unit.unitId;
   if (unit.unitId.startsWith("deliberation-")) {
@@ -102,6 +116,7 @@ function reachableDownstreamUnitIds(args: {
 function targetRejectedUnits(args: {
   ledger: PipelineExecutionLedger;
   targetUnits: string[];
+  naturalFrontierUnitIds: Set<string>;
 }): ReviewContinuationUnit[] {
   const byId = new Map(args.ledger.units.map((unit) => [unit.unitId, unit]));
   return args.targetUnits.flatMap((unitId) => {
@@ -128,6 +143,15 @@ function targetRejectedUnits(args: {
         ),
       ];
     }
+    if (!args.naturalFrontierUnitIds.has(unitId)) {
+      return [
+        toContinuationUnit(
+          unit,
+          "reject",
+          "Target unit is not the current continuation frontier; continue from the earliest untrusted unit first.",
+        ),
+      ];
+    }
     return [];
   });
 }
@@ -136,15 +160,33 @@ export function buildReviewContinuationPlan(
   params: BuildReviewContinuationPlanParams,
 ): ReviewContinuationPlan {
   const trustedIds = trustedUnitIds(params.ledger);
-  const requestedTargets = params.targetUnits ?? [];
-  const rejectedTargets = targetRejectedUnits({
-    ledger: params.ledger,
-    targetUnits: requestedTargets,
-  });
-  const requestedTargetSet = new Set(requestedTargets);
+  const requestedTargets = (params.targetUnits ?? []).map(
+    normalizeRequestedTargetUnitId,
+  );
   const naturalFrontier = params.ledger.units.filter((unit) =>
     isFrontierUnit(unit, trustedIds),
   );
+  const naturalFrontierUnitIds = new Set(
+    naturalFrontier.map((unit) => unit.unitId),
+  );
+  const rejectedTargets = targetRejectedUnits({
+    ledger: params.ledger,
+    targetUnits: requestedTargets,
+    naturalFrontierUnitIds,
+  });
+  const requestedTargetSet = new Set(requestedTargets);
+  const missingFrontierTargets =
+    requestedTargetSet.size === 0 || rejectedTargets.length > 0
+      ? []
+      : naturalFrontier.filter((unit) => !requestedTargetSet.has(unit.unitId));
+  const rejectedMissingFrontierTargets = missingFrontierTargets.map((unit) =>
+    toContinuationUnit(
+      unit,
+      "reject",
+      "Target units must match the current continuation frontier so no untrusted sibling unit is skipped.",
+    ),
+  );
+  const allRejectedTargets = [...rejectedTargets, ...rejectedMissingFrontierTargets];
   const targetFrontier =
     requestedTargetSet.size === 0
       ? naturalFrontier
@@ -152,8 +194,8 @@ export function buildReviewContinuationPlan(
           (unit) => requestedTargetSet.has(unit.unitId) && !isTrustedLedgerUnit(unit),
         );
   const frontierUnits =
-    rejectedTargets.length > 0
-      ? rejectedTargets
+    allRejectedTargets.length > 0
+      ? allRejectedTargets
       : targetFrontier.map((unit) =>
           toContinuationUnit(
             unit,
@@ -189,10 +231,11 @@ export function buildReviewContinuationPlan(
     .map((unit) => unit.outputPath as string)
     .filter((outputPath) => preservedArtifactRefs.includes(outputPath) === false);
   const eligible =
-    rejectedTargets.length === 0 && (frontierUnits.length > 0 || downstreamUnits.length > 0);
+    allRejectedTargets.length === 0 &&
+    (frontierUnits.length > 0 || downstreamUnits.length > 0);
   const ineligibleReason = eligible
     ? null
-    : rejectedTargets.length > 0
+    : allRejectedTargets.length > 0
       ? "One or more requested target units cannot be continued."
       : "No untrusted continuation frontier remains.";
 

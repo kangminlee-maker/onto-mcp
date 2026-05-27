@@ -344,7 +344,7 @@ echo ""
 
 echo "── Config ──"
 
-run_expect_pass "E21: no-domain-default" \
+run_expect_pass "E21: target-inferred-domain-default" \
   src/core-runtime/cli/review-invoke.ts "no domain" \
   --executor-realization mock --review-mode core-axis
 

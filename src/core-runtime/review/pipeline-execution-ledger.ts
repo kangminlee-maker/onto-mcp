@@ -155,6 +155,7 @@ function plannedReviewUnits(
   const deliberationUnitIds = executionPlan.lens_deliberation_prompt_packet_seats.map(
     (seat) => `deliberation-${seat.lens_id}`,
   );
+  const deliberationInputUnitIds = [deliberationPlanUnitId, ...lensUnitIds];
   for (const seat of executionPlan.lens_deliberation_prompt_packet_seats) {
     units.push({
       unitId: `deliberation-${seat.lens_id}`,
@@ -162,7 +163,7 @@ function plannedReviewUnits(
       owner: "host_llm",
       packetRef: seat.packet_path,
       outputRefs: [seat.output_path],
-      upstreamUnitIds: [deliberationPlanUnitId, seat.lens_id],
+      upstreamUnitIds: deliberationInputUnitIds,
     });
   }
 

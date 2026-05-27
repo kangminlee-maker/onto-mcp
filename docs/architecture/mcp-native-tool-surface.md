@@ -10,7 +10,7 @@ small set of tools with a stable MCP surface.
 | `onto.review` | Start and optionally run a review | session id, status, artifact refs, `resultClassificationSummary`, `llmPresentation` prompts |
 | `onto.prepare_review` | Materialize interpretation, binding, plan, and prompt packets without executing lenses | execution plan refs, opening brief prompt |
 | `onto.review_status` | Read progress for a review session | structured status plus `llmPresentation.progress` with liveness state and current classification signal |
-| `onto.review_continue` | Planned: continue a halted/prepared review from existing artifacts without re-running completed units | continuation plan, executed/reused unit ids, updated artifact refs, status |
+| `onto.review_continue` | Continue a halted/prepared review from existing artifacts without re-running trusted units | continuation plan, continuation attempt refs, updated artifact refs, status |
 | `onto.review_result` | Read final result and artifact refs | `review-record.yaml`, `final-output.md`, `resultClassificationSummary` |
 | `onto.list_lenses` | Show canonical lens sets | full/core-axis lens IDs |
 | `onto.list_domains` | Show available domains | domain IDs and source dirs |
@@ -23,7 +23,7 @@ small set of tools with a stable MCP surface.
 
 ## Review Continuation
 
-Review continuation is the planned MCP surface for operator-controlled resume of
+Review continuation is the MCP surface for operator-controlled resume of
 an existing review session. The canonical design is
 `docs/architecture/review-continuation-surface.md`.
 
@@ -38,24 +38,26 @@ continues artifact-backed review units: lens units, issue artifact units,
 per-lens deliberation units, teamlead controlled deliberation, and synthesize.
 
 `onto.review_status` remains the read surface. For `halted_partial` and
-`prepared` sessions it should expose a derived `continuationPlan` projection:
+`prepared` sessions it exposes a derived `continuationPlan` projection:
 which artifacts are reusable, which unit is missing or failed, which units would
 run, a derived pipeline execution ledger that marks artifact trust boundaries, and
 whether manifest/context/route validation blocks continuation.
 
-`onto.review_continue` should:
+`onto.review_continue`:
 
 - accept `sessionRoot`, optional `projectRoot`, and optional `targetUnits`;
 - derive its continuation frontier from the pipeline execution ledger's trust and
   completion boundary;
-- reuse completed units and reject attempts to overwrite completed outputs;
+- normalize public target aliases such as `lens:{lens_id}` and
+  `deliberation:{lens_id}` to ledger unit ids, then reject requests that do not
+  match the current continuation frontier;
+- reuse trusted completed units and reject requests whose target units are
+  already trusted;
 - derive the minimal continuation frontier when `targetUnits` is omitted;
-- validate manifest source hashes, packet hashes, consumer admission, context
-  eligibility, generated packet refs, and route consistency before dispatch;
 - preserve malformed or partial failed outputs before replacing them;
 - write continuation attempt provenance under the same review session;
-- update the session-level execution result and final artifacts only after the
-  continuation attempt validates.
+- back up session-level execution artifacts before dispatch and restore those
+  backups if the continuation attempt fails.
 
 Continuation must not accept `resume_token` as authorization. The token remains
 audit/idempotency data.

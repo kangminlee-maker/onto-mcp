@@ -89,6 +89,8 @@ prompt-backed path에서도 이 단계의 결과는 최종적으로
 - configured domain이 하나면 바로 사용
 - configured domain이 여러 개면 interactive selection을 수행
 - interactive selection이 불가능한 non-interactive 환경이면 fail-fast 하고 explicit domain selection을 요구
+- explicit token과 configured domain이 모두 없으면 review target path/content/intent를 기반으로 available domain 문서 중 하나를 자동 선택하고, 선택 domain과 이유를 start preview, `binding_notes`, opening brief input, final output에 기록한다
+- target 기반 자동 선택에 충분한 signal이 없거나 available domain seat가 없으면 `session_domain=none`으로 진행하며 그 이유를 같은 표면에 기록한다
 - `--domain` 과 `--no-domain` 동시 지정은 parser layer 에서 fail-fast
 
 ### 3.4 호출 고정 (InvocationBinding)

@@ -1,6 +1,7 @@
 import type {
   InvocationBindingArtifact,
   InvocationInterpretationArtifact,
+  ReviewActorInvocationProfilesArtifact,
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewLensCompletionBarrierArtifact,
@@ -13,6 +14,7 @@ import type {
   ReviewTargetScopeKind,
 } from "../core-runtime/review/artifact-types.js";
 import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +25,7 @@ import {
   isoFromTimestamp,
   isoNow,
   readYamlDocument,
+  writeYamlDocument,
 } from "../core-runtime/review/review-artifact-utils.js";
 import {
   buildReviewRouteVisibilityFromSession,
@@ -38,7 +41,16 @@ import {
   reviewProgressStepById,
   reviewProgressStepIdFromHalt,
 } from "../core-runtime/review/review-progress-contract.js";
-import { reviewPrepareOnly, runReviewInvokeCli } from "../core-runtime/cli/review-invoke.js";
+import { completeReviewSession } from "../core-runtime/cli/complete-review-session.js";
+import {
+  buildExecutorConfigFromRealization,
+  reviewPrepareOnly,
+  runReviewInvokeCli,
+} from "../core-runtime/cli/review-invoke.js";
+import {
+  executeReviewPromptExecution,
+  type ReviewPromptExecutionResult,
+} from "../core-runtime/cli/run-review-prompt-execution.js";
 import {
   buildReviewPipelineExecutionLedger,
   type ReviewRunManifestForLedger,
@@ -47,6 +59,13 @@ import {
   buildReviewContinuationPlan,
   type ReviewContinuationPlan,
 } from "../core-runtime/review/continuation-plan.js";
+import type {
+  ReviewExecutionHost,
+  ReviewExecutionProfile,
+  ReviewWorkerExecutor,
+} from "../core-runtime/review/review-execution-profile.js";
+
+export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
 
 export interface PrepareReviewRequest {
   projectRoot: string;
@@ -112,6 +131,14 @@ export interface RunReviewRequest extends PrepareReviewRequest {
   progressObserver?: ReviewProgressObserver;
 }
 
+export interface ContinueReviewRequest {
+  sessionRoot: string;
+  projectRoot?: string;
+  targetUnits?: string[];
+  requestText?: string;
+  executorRealization?: ReviewExecutorRealization;
+}
+
 export interface ReviewRunResult {
   sessionId: string;
   sessionRoot: string;
@@ -136,6 +163,69 @@ export interface ReviewRunResult {
     boundedInvokeSteps?: string[];
   };
   llmPresentation?: LlmPresentationPrompts;
+}
+
+export interface ReviewContinuationAttempt {
+  attemptId: string;
+  attemptRoot: string;
+  continuationPlanPath: string;
+  attemptManifestPath: string;
+  supersededArtifactBackups: Array<{
+    sourceRef: string;
+    backupRef: string;
+  }>;
+}
+
+export interface ReviewContinueResult {
+  sessionId: string;
+  sessionRoot: string;
+  status: ReviewStatus["status"];
+  continuationPlan: ReviewContinuationPlan;
+  continuationAttempt: ReviewContinuationAttempt;
+  promptExecutionResult: ReviewPromptExecutionResult;
+  artifactRefs: Record<string, string>;
+  pipelineExecutionLedger?: PipelineExecutionLedger;
+  resultClassificationSummary?: ReviewResultClassificationSummary;
+  failureRefs: string[];
+  routeVisibility?: ReviewRouteVisibility | null;
+  llmPresentation?: LlmPresentationPrompts;
+}
+
+export interface ReviewContinuationArtifactRestore {
+  sourceRef: string;
+  backupRef: string;
+  restored: boolean;
+  errorMessage?: string;
+}
+
+export interface ReviewContinuationFailureContent {
+  mcp_error_code: "ONTO_REVIEW_CONTINUATION_FAILED";
+  session_id: string;
+  session_root: string;
+  attempt_id: string;
+  attempt_root: string;
+  attempt_manifest_ref: string;
+  continuation_plan_ref: string;
+  continuation_plan: ReviewContinuationPlan;
+  superseded_artifact_backups: ReviewContinuationAttempt["supersededArtifactBackups"];
+  restored_artifact_backups: ReviewContinuationArtifactRestore[];
+  error_message: string;
+}
+
+export class ReviewContinuationError extends Error {
+  readonly failureContent: ReviewContinuationFailureContent;
+  readonly originalError: unknown;
+
+  constructor(args: {
+    message: string;
+    originalError: unknown;
+    failureContent: ReviewContinuationFailureContent;
+  }) {
+    super(args.message);
+    this.name = "ReviewContinuationError";
+    this.originalError = args.originalError;
+    this.failureContent = args.failureContent;
+  }
 }
 
 export interface LlmPresentationPrompt {
@@ -188,6 +278,7 @@ export interface ReviewResult {
 export interface OntoReviewCoreApi {
   prepareReview(request: PrepareReviewRequest): Promise<PreparedReview>;
   runReview(request: RunReviewRequest): Promise<ReviewRunResult>;
+  continueReview(request: ContinueReviewRequest): Promise<ReviewContinueResult>;
   getReviewStatus(sessionRoot: string): Promise<ReviewStatus>;
   getReviewResult(sessionRoot: string): Promise<ReviewResult>;
   listLenses(): Promise<{ full: string[]; coreAxis: string[] }>;
@@ -349,12 +440,179 @@ async function readOptionalText(filePath: string): Promise<string | undefined> {
   return fs.readFile(filePath, "utf8");
 }
 
+function isInsidePath(root: string, candidate: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+async function realpathIfExists(targetPath: string): Promise<string | null> {
+  try {
+    return await fs.realpath(targetPath);
+  } catch {
+    return null;
+  }
+}
+
+async function realpathNearestExisting(targetPath: string): Promise<string | null> {
+  let current = path.resolve(targetPath);
+  while (true) {
+    const real = await realpathIfExists(current);
+    if (real) return real;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+async function assertSamePath(args: {
+  label: string;
+  expected: string;
+  actual: string;
+}): Promise<void> {
+  const expected = path.resolve(args.expected);
+  const actual = path.resolve(args.actual);
+  if (expected === actual) return;
+  const realExpected = await realpathIfExists(expected);
+  const realActual = await realpathIfExists(actual);
+  if (realExpected && realActual && path.resolve(realExpected) === path.resolve(realActual)) {
+    return;
+  }
+  throw new Error(
+    `${args.label} mismatch: expected ${expected}, received ${actual}`,
+  );
+}
+
+async function assertRefInsideSession(args: {
+  sessionRoot: string;
+  ref: string;
+  label: string;
+}): Promise<void> {
+  const sessionRoot = path.resolve(args.sessionRoot);
+  const resolvedRef = path.isAbsolute(args.ref)
+    ? path.resolve(args.ref)
+    : path.resolve(sessionRoot, args.ref);
+  if (!isInsidePath(sessionRoot, resolvedRef)) {
+    throw new Error(
+      `Review continuation blocked because ${args.label} escapes the session root: ${resolvedRef}`,
+    );
+  }
+  const realSessionRoot = (await realpathIfExists(sessionRoot)) ?? sessionRoot;
+  const realRef = await realpathIfExists(resolvedRef);
+  if (realRef && !isInsidePath(realSessionRoot, realRef)) {
+    throw new Error(
+      `Review continuation blocked because ${args.label} realpath escapes the session root: ${realRef}`,
+    );
+  }
+  if (!realRef) {
+    const realNearest = await realpathNearestExisting(path.dirname(resolvedRef));
+    if (realNearest && !isInsidePath(realSessionRoot, realNearest)) {
+      throw new Error(
+        `Review continuation blocked because ${args.label} parent realpath escapes the session root: ${realNearest}`,
+      );
+    }
+  }
+}
+
+async function validateReviewExecutionPlanSessionBoundary(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+}): Promise<void> {
+  const { executionPlan, sessionRoot } = args;
+  const plannedSessionRoot = path.isAbsolute(executionPlan.session_root)
+    ? executionPlan.session_root
+    : path.resolve(sessionRoot, executionPlan.session_root);
+  await assertSamePath({
+    label: "ReviewExecutionPlan.session_root",
+    expected: sessionRoot,
+    actual: plannedSessionRoot,
+  });
+
+  const refs: Array<{ label: string; ref: string | undefined }> = [
+    { label: "interpretation_artifact_path", ref: executionPlan.interpretation_artifact_path },
+    { label: "binding_output_path", ref: executionPlan.binding_output_path },
+    { label: "session_metadata_path", ref: executionPlan.session_metadata_path },
+    { label: "execution_preparation_root", ref: executionPlan.execution_preparation_root },
+    { label: "round1_root", ref: executionPlan.round1_root },
+    { label: "prompt_packets_root", ref: executionPlan.prompt_packets_root },
+    {
+      label: "teamlead_deliberation_prompt_packet_path",
+      ref: executionPlan.teamlead_deliberation_prompt_packet_path,
+    },
+    { label: "synthesize_prompt_packet_path", ref: executionPlan.synthesize_prompt_packet_path },
+    { label: "actor_invocation_profiles_path", ref: executionPlan.actor_invocation_profiles_path },
+    { label: "actor_consumer_bindings_path", ref: executionPlan.actor_consumer_bindings_path },
+    { label: "domain_binding_path", ref: executionPlan.domain_binding_path },
+    { label: "review_target_profile_path", ref: executionPlan.review_target_profile_path },
+    {
+      label: "review_value_alignment_criteria_path",
+      ref: executionPlan.review_value_alignment_criteria_path,
+    },
+    { label: "review_context_manifest_path", ref: executionPlan.review_context_manifest_path },
+    { label: "synthesis_output_path", ref: executionPlan.synthesis_output_path },
+    { label: "finding_ledger_path", ref: executionPlan.finding_ledger_path },
+    {
+      label: "finding_relation_graph_path",
+      ref: executionPlan.finding_relation_graph_path,
+    },
+    { label: "issue_ledger_path", ref: executionPlan.issue_ledger_path },
+    { label: "issue_stance_matrix_path", ref: executionPlan.issue_stance_matrix_path },
+    { label: "deliberation_plan_path", ref: executionPlan.deliberation_plan_path },
+    { label: "problem_framing_path", ref: executionPlan.problem_framing_path },
+    { label: "lens_completion_barrier_path", ref: executionPlan.lens_completion_barrier_path },
+    { label: "deliberation_root_path", ref: executionPlan.deliberation_root_path },
+    { label: "deliberation_output_path", ref: executionPlan.deliberation_output_path },
+    { label: "execution_result_path", ref: executionPlan.execution_result_path },
+    { label: "error_log_path", ref: executionPlan.error_log_path },
+    { label: "final_output_path", ref: executionPlan.final_output_path },
+    { label: "review_record_path", ref: executionPlan.review_record_path },
+    ...executionPlan.lens_execution_seats.map((seat) => ({
+      label: `lens_execution_seats.${seat.lens_id}.output_path`,
+      ref: seat.output_path,
+    })),
+    ...executionPlan.lens_prompt_packet_seats.flatMap((seat) => [
+      {
+        label: `lens_prompt_packet_seats.${seat.lens_id}.packet_path`,
+        ref: seat.packet_path,
+      },
+      {
+        label: `lens_prompt_packet_seats.${seat.lens_id}.output_path`,
+        ref: seat.output_path,
+      },
+    ]),
+    ...executionPlan.issue_artifact_prompt_packet_seats.flatMap((seat) => [
+      {
+        label: `issue_artifact_prompt_packet_seats.${seat.artifact_id}.packet_path`,
+        ref: seat.packet_path,
+      },
+      {
+        label: `issue_artifact_prompt_packet_seats.${seat.artifact_id}.output_path`,
+        ref: seat.output_path,
+      },
+    ]),
+    ...executionPlan.lens_deliberation_prompt_packet_seats.flatMap((seat) => [
+      {
+        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.packet_path`,
+        ref: seat.packet_path,
+      },
+      {
+        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.output_path`,
+        ref: seat.output_path,
+      },
+    ]),
+  ];
+
+  for (const { label, ref } of refs) {
+    if (!ref) continue;
+    await assertRefInsideSession({ sessionRoot, ref, label });
+  }
+}
+
 function buildOpeningBriefPresentation(input: unknown): LlmPresentationPrompt {
   return {
     prompt: [
       "Explain this onto review opening brief to the user before execution.",
       "Use only the provided input facts. Do not infer or invent target scope, boundary, domain, lens set, model, provider, or execution mode.",
-      "Cover: what is being reviewed, why, filesystem boundary, selected domain, review mode and lens set, execution path, model/provider settings, and where the user can change configuration.",
+      "Cover: what is being reviewed, why, filesystem boundary, selected domain and domain selection reason, review mode and lens set, execution path, model/provider settings, and where the user can change configuration.",
       "Keep it structured and concise. Use the user's conversation language.",
     ].join("\n"),
     input,
@@ -1244,6 +1502,7 @@ async function buildPreparedOpeningBriefInput(
           resolved_host_runtime: binding.resolved_host_runtime,
           boundary_policy: binding.boundary_policy,
           effective_boundary_state: binding.effective_boundary_state,
+          binding_notes: binding.binding_notes ?? [],
         }
       : null,
     review_target_profile: reviewTargetProfile
@@ -1395,6 +1654,285 @@ async function buildPipelineExecutionLedgerIfPossible(args: {
   });
 }
 
+interface ReviewRunManifestForContinue {
+  review_execution_profile?: {
+    mode?: unknown;
+    teamlead?: unknown;
+    lens?: unknown;
+    synthesize?: unknown;
+    deliberation?: unknown;
+    runtime_route?: {
+      worker_executor?: unknown;
+      host_runtime?: unknown;
+      runtime_provider?: unknown;
+      auth_mode?: unknown;
+    };
+    model?: unknown;
+    effort?: unknown;
+    service_tier?: unknown;
+    base_url?: unknown;
+    trace?: unknown;
+  } | null;
+}
+
+function workerExecutorToRealization(
+  workerExecutor: unknown,
+): ReviewExecutorRealization | null {
+  if (workerExecutor === "mock") return "mock";
+  if (workerExecutor === "codex") return "codex";
+  if (workerExecutor === "direct_call") return "ts_inline_http";
+  return null;
+}
+
+function workerExecutorFromRealization(
+  realization: ReviewExecutorRealization,
+): ReviewWorkerExecutor {
+  if (realization === "mock") return "mock";
+  if (realization === "codex") return "codex";
+  return "direct_call";
+}
+
+function reviewExecutionHostFromRuntime(
+  hostRuntime: unknown,
+  workerExecutor: ReviewWorkerExecutor,
+): ReviewExecutionHost {
+  if (workerExecutor === "mock") return "standalone";
+  if (workerExecutor === "codex") return "codex";
+  if (
+    hostRuntime === "openai" ||
+    hostRuntime === "anthropic" ||
+    hostRuntime === "grok" ||
+    hostRuntime === "lmstudio"
+  ) {
+    return hostRuntime;
+  }
+  return "openai";
+}
+
+function reviewExecutionProfileFromManifest(
+  manifest: ReviewRunManifestForContinue | null,
+): ReviewExecutionProfile | undefined {
+  const profile = manifest?.review_execution_profile;
+  const route = profile?.runtime_route;
+  const workerExecutor = route?.worker_executor;
+  if (
+    workerExecutor !== "mock" &&
+    workerExecutor !== "codex" &&
+    workerExecutor !== "direct_call"
+  ) {
+    return undefined;
+  }
+  if (
+    profile?.mode !== "main-workers" &&
+    profile?.mode !== "nested-workers"
+  ) {
+    return undefined;
+  }
+  if (
+    profile.teamlead === null ||
+    typeof profile.teamlead !== "object" ||
+    profile.lens === null ||
+    typeof profile.lens !== "object" ||
+    profile.synthesize === null ||
+    typeof profile.synthesize !== "object" ||
+    typeof profile.deliberation !== "string"
+  ) {
+    return undefined;
+  }
+  const host = reviewExecutionHostFromRuntime(route?.host_runtime, workerExecutor);
+  const runtimeProvider =
+    typeof route?.runtime_provider === "string" &&
+    route.runtime_provider !== "mock" &&
+    route.runtime_provider !== "codex"
+      ? route.runtime_provider
+      : undefined;
+  const authMode =
+    route?.auth_mode === "api_key" ||
+    route?.auth_mode === "oauth" ||
+    route?.auth_mode === "local"
+      ? route.auth_mode
+      : undefined;
+
+  const reconstructed: ReviewExecutionProfile = {
+    mode: profile.mode,
+    teamlead: profile.teamlead as ReviewExecutionProfile["teamlead"],
+    lens: profile.lens as ReviewExecutionProfile["lens"],
+    synthesize: profile.synthesize as ReviewExecutionProfile["synthesize"],
+    deliberation: profile.deliberation as ReviewExecutionProfile["deliberation"],
+    worker_executor: workerExecutor,
+    host,
+    trace: Array.isArray(profile.trace)
+      ? profile.trace.filter((item): item is string => typeof item === "string")
+      : [],
+  };
+  if (runtimeProvider) {
+    reconstructed.provider =
+      runtimeProvider as NonNullable<ReviewExecutionProfile["provider"]>;
+  }
+  if (authMode) {
+    reconstructed.auth =
+      authMode as NonNullable<ReviewExecutionProfile["auth"]>;
+  }
+  if (typeof profile.model === "string") reconstructed.model = profile.model;
+  if (typeof profile.effort === "string") reconstructed.effort = profile.effort;
+  if (typeof profile.service_tier === "string") {
+    reconstructed.service_tier = profile.service_tier;
+  }
+  if (typeof profile.base_url === "string") {
+    reconstructed.base_url = profile.base_url;
+  }
+  return reconstructed;
+}
+
+function reviewExecutionProfileFromActorProfiles(args: {
+  actorProfiles: ReviewActorInvocationProfilesArtifact | null;
+  executorRealization: ReviewExecutorRealization;
+}): ReviewExecutionProfile | undefined {
+  const profiles = args.actorProfiles?.profiles ?? [];
+  const teamlead = profiles.find((profile) => profile.actor_kind === "teamlead");
+  const lens = profiles.find((profile) => profile.actor_kind === "lens");
+  const synthesize = profiles.find((profile) => profile.actor_kind === "synthesize");
+  if (!teamlead || !lens || !synthesize) return undefined;
+  const workerExecutor = workerExecutorFromRealization(args.executorRealization);
+  const host = reviewExecutionHostFromRuntime(
+    teamlead.host_runtime,
+    workerExecutor,
+  );
+  const runtimeProvider =
+    teamlead.runtime_provider &&
+    teamlead.runtime_provider !== "mock" &&
+    teamlead.runtime_provider !== "codex"
+      ? teamlead.runtime_provider
+      : undefined;
+  const reconstructed: ReviewExecutionProfile = {
+    mode: "main-workers",
+    teamlead: { seat: teamlead.seat, llm: "inherit" },
+    lens: { seat: lens.seat, llm: "inherit" },
+    synthesize: { seat: synthesize.seat, llm: "inherit" },
+    deliberation: "controlled-lens-deliberation",
+    worker_executor: workerExecutor,
+    host,
+    trace: ["reconstructed_from_actor_invocation_profiles_for_continuation"],
+  };
+  if (runtimeProvider) {
+    reconstructed.provider =
+      runtimeProvider as NonNullable<ReviewExecutionProfile["provider"]>;
+  }
+  if (
+    teamlead.auth_mode === "api_key" ||
+    teamlead.auth_mode === "oauth" ||
+    teamlead.auth_mode === "local"
+  ) {
+    reconstructed.auth =
+      teamlead.auth_mode as NonNullable<ReviewExecutionProfile["auth"]>;
+  }
+  if (teamlead.model) reconstructed.model = teamlead.model;
+  if (teamlead.effort) reconstructed.effort = teamlead.effort;
+  if (teamlead.service_tier) reconstructed.service_tier = teamlead.service_tier;
+  if (teamlead.base_url) reconstructed.base_url = teamlead.base_url;
+  return reconstructed;
+}
+
+function executorRealizationFromManifest(
+  manifest: ReviewRunManifestForContinue | null,
+): ReviewExecutorRealization | null {
+  return workerExecutorToRealization(
+    manifest?.review_execution_profile?.runtime_route?.worker_executor,
+  );
+}
+
+function continuationAttemptId(): string {
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\..+$/, "Z");
+  return `${timestamp}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+async function copySupersededArtifacts(args: {
+  attemptRoot: string;
+  artifactRefs: string[];
+}): Promise<ReviewContinuationAttempt["supersededArtifactBackups"]> {
+  const backupRoot = path.join(args.attemptRoot, "superseded-artifacts");
+  const backups: ReviewContinuationAttempt["supersededArtifactBackups"] = [];
+  for (const [index, sourceRef] of args.artifactRefs.entries()) {
+    if (!(await fileExists(sourceRef))) continue;
+    await fs.mkdir(backupRoot, { recursive: true });
+    const backupRef = path.join(
+      backupRoot,
+      `${String(index + 1).padStart(3, "0")}-${path.basename(sourceRef)}`,
+    );
+    await fs.copyFile(sourceRef, backupRef);
+    backups.push({ sourceRef, backupRef });
+  }
+  return backups;
+}
+
+async function restoreSupersededArtifacts(
+  backups: ReviewContinuationAttempt["supersededArtifactBackups"],
+): Promise<ReviewContinuationArtifactRestore[]> {
+  const restores: ReviewContinuationArtifactRestore[] = [];
+  for (const backup of backups) {
+    try {
+      await fs.mkdir(path.dirname(backup.sourceRef), { recursive: true });
+      await fs.copyFile(backup.backupRef, backup.sourceRef);
+      restores.push({ ...backup, restored: true });
+    } catch (error) {
+      restores.push({
+        ...backup,
+        restored: false,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return restores;
+}
+
+function continuationSessionArtifactRefs(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+}): string[] {
+  return [
+    args.executionPlan.execution_result_path,
+    path.join(args.sessionRoot, "review-run-manifest.yaml"),
+    path.join(args.sessionRoot, "degradation-summary.yaml"),
+    args.executionPlan.error_log_path,
+    args.executionPlan.synthesis_output_path,
+    args.executionPlan.deliberation_output_path,
+    args.executionPlan.final_output_path,
+    args.executionPlan.review_record_path,
+  ];
+}
+
+async function resolveContinuationRequestText(args: {
+  sessionRoot: string;
+  requestText?: string;
+}): Promise<string> {
+  if (typeof args.requestText === "string" && args.requestText.trim().length > 0) {
+    return args.requestText;
+  }
+  const reviewRecord = await readOptionalReviewRecord(
+    path.join(args.sessionRoot, "review-record.yaml"),
+  );
+  if (reviewRecord?.request_text) return reviewRecord.request_text;
+  const interpretation = await readOptionalYaml<InvocationInterpretationArtifact>(
+    path.join(args.sessionRoot, "interpretation.yaml"),
+  );
+  if (interpretation?.intent_summary) return interpretation.intent_summary;
+  const targetProfile = await readOptionalYaml<ReviewTargetProfileArtifact>(
+    path.join(args.sessionRoot, "execution-preparation", "review-target-profile.yaml"),
+  );
+  if (targetProfile?.review_intent_summary) {
+    return targetProfile.review_intent_summary;
+  }
+  const metadata = await readOptionalYaml<ReviewSessionMetadata>(
+    path.join(args.sessionRoot, "session-metadata.yaml"),
+  );
+  return metadata?.requested_target
+    ? `Continue review for ${metadata.requested_target}`
+    : "Continue review";
+}
+
 async function directoryHasMarkdownFiles(directoryPath: string): Promise<boolean> {
   try {
     const entries = await fs.readdir(directoryPath);
@@ -1472,7 +2010,7 @@ export function createOntoReviewCoreApi(
 ): OntoReviewCoreApi {
   const ontoHome = resolveRequiredOntoHome(options.ontoHome);
 
-  return {
+  const api: OntoReviewCoreApi = {
     async prepareReview(request: PrepareReviewRequest): Promise<PreparedReview> {
       const argv = appendCommonReviewArgs([], request, ontoHome);
       const { result } = await withCapturedConsole(() => reviewPrepareOnly(argv));
@@ -1659,6 +2197,275 @@ export function createOntoReviewCoreApi(
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedResultSessionRoot),
         startPreview,
         llmPresentation,
+      };
+    },
+
+    async continueReview(
+      request: ContinueReviewRequest,
+    ): Promise<ReviewContinueResult> {
+      const resolvedSessionRoot = path.resolve(request.sessionRoot);
+      const sessionMetadataPath = path.join(
+        resolvedSessionRoot,
+        "session-metadata.yaml",
+      );
+      const sessionMetadata = await readOptionalYaml<ReviewSessionMetadata>(
+        sessionMetadataPath,
+      );
+      if (!sessionMetadata) {
+        throw new Error(
+          `Cannot continue review without session-metadata.yaml: ${resolvedSessionRoot}`,
+        );
+      }
+      const projectRoot = path.resolve(
+        request.projectRoot ?? sessionMetadata.project_root,
+      );
+      await assertSamePath({
+        label: "ReviewSessionMetadata.project_root",
+        expected: projectRoot,
+        actual: sessionMetadata.project_root,
+      });
+      const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
+      const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
+        path.join(resolvedSessionRoot, "execution-plan.yaml"),
+      );
+      if (!executionPlan) {
+        throw new Error(
+          `Cannot continue review without execution-plan.yaml: ${resolvedSessionRoot}`,
+        );
+      }
+      if (executionPlan.session_id !== sessionMetadata.session_id) {
+        throw new Error(
+          `Review continuation session id mismatch: metadata=${sessionMetadata.session_id}, executionPlan=${executionPlan.session_id}`,
+        );
+      }
+      await assertSamePath({
+        label: "ReviewExecutionPlan.session_metadata_path",
+        expected: sessionMetadataPath,
+        actual: executionPlan.session_metadata_path,
+      });
+      await validateReviewExecutionPlanSessionBoundary({
+        sessionRoot: resolvedSessionRoot,
+        executionPlan,
+      });
+      const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
+        path.join(resolvedSessionRoot, "execution-result.yaml"),
+      );
+      const pipelineExecutionLedger =
+        await buildPipelineExecutionLedgerIfPossible({
+          sessionRoot: resolvedSessionRoot,
+          artifactRefs,
+          executionPlan,
+          executionResult,
+        });
+      if (!pipelineExecutionLedger) {
+        throw new Error(
+          `Cannot continue review without a PipelineExecutionLedger: ${resolvedSessionRoot}`,
+        );
+      }
+      const continuationPlan = buildReviewContinuationPlan({
+        ledger: pipelineExecutionLedger,
+        ...(request.targetUnits !== undefined
+          ? { targetUnits: request.targetUnits }
+          : {}),
+      });
+      if (!continuationPlan.eligible) {
+        throw new Error(
+          `Review continuation is not eligible: ${continuationPlan.ineligibleReason ?? "unknown reason"}`,
+        );
+      }
+
+      const reviewRunManifest =
+        await readOptionalYaml<ReviewRunManifestForContinue>(
+          path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
+        );
+      const executorRealization =
+        request.executorRealization ??
+        executorRealizationFromManifest(reviewRunManifest);
+      if (!executorRealization) {
+        throw new Error(
+          "Review continuation requires executorRealization when the prior review-run-manifest does not expose a worker executor.",
+        );
+      }
+      const actorProfiles = await readOptionalYaml<ReviewActorInvocationProfilesArtifact>(
+        executionPlan.actor_invocation_profiles_path ??
+          path.join(
+            resolvedSessionRoot,
+            "execution-preparation",
+            "actor-invocation-profiles.yaml",
+          ),
+      );
+      const manifestReviewExecutionProfile =
+        request.executorRealization === undefined
+          ? reviewExecutionProfileFromManifest(reviewRunManifest)
+          : undefined;
+      const actorProfileReviewExecutionProfile = manifestReviewExecutionProfile
+        ? undefined
+        : reviewExecutionProfileFromActorProfiles({
+            actorProfiles,
+            executorRealization,
+          });
+      const reviewExecutionProfile =
+        manifestReviewExecutionProfile ?? actorProfileReviewExecutionProfile;
+      const reviewExecutionProfileSource = manifestReviewExecutionProfile
+        ? "review-run-manifest"
+        : actorProfileReviewExecutionProfile
+          ? "actor-invocation-profiles"
+          : "none";
+      const attemptId = continuationAttemptId();
+      const attemptRoot = path.join(
+        resolvedSessionRoot,
+        "continuation-attempts",
+        attemptId,
+      );
+      const continuationPlanPath = path.join(
+        attemptRoot,
+        "continuation-plan.yaml",
+      );
+      const attemptManifestPath = path.join(
+        attemptRoot,
+        "continuation-attempt.yaml",
+      );
+      await writeYamlDocument(continuationPlanPath, continuationPlan);
+      const supersededArtifactBackups = await copySupersededArtifacts({
+        attemptRoot,
+        artifactRefs: [
+          ...new Set([
+            ...continuationPlan.supersededArtifactRefs,
+            ...continuationSessionArtifactRefs({
+              sessionRoot: resolvedSessionRoot,
+              executionPlan,
+            }),
+          ]),
+        ],
+      });
+      const attemptStartedAt = isoNow();
+      const writeAttemptManifest = async (
+        status: "started" | "completed" | "halted_partial" | "failed",
+        extra: Record<string, unknown> = {},
+      ): Promise<void> => {
+        await writeYamlDocument(attemptManifestPath, {
+          schema_version: "1",
+          attempt_id: attemptId,
+          session_id: executionPlan.session_id,
+          session_root: resolvedSessionRoot,
+          created_at: attemptStartedAt,
+          updated_at: isoNow(),
+          status,
+          executor_realization: executorRealization,
+          target_units: request.targetUnits ?? [],
+          continuation_plan_ref: continuationPlanPath,
+          superseded_artifact_backups: supersededArtifactBackups,
+          execution_route_provenance: {
+            executor_realization: executorRealization,
+            review_execution_profile_source: reviewExecutionProfileSource,
+            requested_executor_realization: request.executorRealization ?? null,
+            previous_execution_realization: executionPlan.execution_realization,
+            previous_host_runtime: executionPlan.host_runtime,
+          },
+          ...extra,
+        });
+      };
+      await writeAttemptManifest("started");
+
+      let promptExecutionResult: ReviewPromptExecutionResult | undefined;
+      try {
+        const executorConfig = buildExecutorConfigFromRealization(
+          executorRealization,
+          ontoHome,
+        );
+        promptExecutionResult = (
+          await withCapturedConsole(() =>
+            executeReviewPromptExecution({
+              projectRoot,
+              sessionRoot: resolvedSessionRoot,
+              defaultExecutorConfig: executorConfig,
+              ...(reviewExecutionProfile ? { reviewExecutionProfile } : {}),
+              continuationPlan,
+            }),
+          )
+        ).result;
+        if (promptExecutionResult.synthesis_executed) {
+          const requestText = await resolveContinuationRequestText({
+            sessionRoot: resolvedSessionRoot,
+            ...(request.requestText ? { requestText: request.requestText } : {}),
+          });
+          await withCapturedConsole(() =>
+            completeReviewSession([
+              "--project-root",
+              projectRoot,
+              "--session-root",
+              resolvedSessionRoot,
+              "--request-text",
+              requestText,
+            ]),
+          );
+        }
+        await writeAttemptManifest(
+          promptExecutionResult.synthesis_executed
+            ? "completed"
+            : "halted_partial",
+          { prompt_execution_result: promptExecutionResult },
+        );
+      } catch (error) {
+        const restoredArtifactBackups =
+          await restoreSupersededArtifacts(supersededArtifactBackups);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        await writeAttemptManifest("failed", {
+          error_message: errorMessage,
+          ...(promptExecutionResult
+            ? { prompt_execution_result: promptExecutionResult }
+            : {}),
+          restored_artifact_backups: restoredArtifactBackups,
+        });
+        throw new ReviewContinuationError({
+          message: `Review continuation failed: ${errorMessage}`,
+          originalError: error,
+          failureContent: {
+            mcp_error_code: "ONTO_REVIEW_CONTINUATION_FAILED",
+            session_id: executionPlan.session_id,
+            session_root: resolvedSessionRoot,
+            attempt_id: attemptId,
+            attempt_root: attemptRoot,
+            attempt_manifest_ref: attemptManifestPath,
+            continuation_plan_ref: continuationPlanPath,
+            continuation_plan: continuationPlan,
+            superseded_artifact_backups: supersededArtifactBackups,
+            restored_artifact_backups: restoredArtifactBackups,
+            error_message: errorMessage,
+          },
+        });
+      }
+      if (!promptExecutionResult) {
+        throw new Error("Review continuation finished without prompt execution result.");
+      }
+
+      const postStatus = await api.getReviewStatus(resolvedSessionRoot);
+      return {
+        sessionId: postStatus.sessionId,
+        sessionRoot: resolvedSessionRoot,
+        status: postStatus.status,
+        continuationPlan,
+        continuationAttempt: {
+          attemptId,
+          attemptRoot,
+          continuationPlanPath,
+          attemptManifestPath,
+          supersededArtifactBackups,
+        },
+        promptExecutionResult,
+        artifactRefs: postStatus.artifactRefs,
+        ...(postStatus.pipelineExecutionLedger
+          ? { pipelineExecutionLedger: postStatus.pipelineExecutionLedger }
+          : {}),
+        resultClassificationSummary:
+          await readReviewResultClassification(resolvedSessionRoot),
+        failureRefs: postStatus.failureRefs,
+        ...(postStatus.routeVisibility !== undefined
+          ? { routeVisibility: postStatus.routeVisibility }
+          : {}),
+        ...(postStatus.llmPresentation !== undefined
+          ? { llmPresentation: postStatus.llmPresentation }
+          : {}),
       };
     },
 
@@ -1864,4 +2671,5 @@ export function createOntoReviewCoreApi(
       return [...names].sort();
     },
   };
+  return api;
 }

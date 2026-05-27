@@ -5,6 +5,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import {
   createOntoReviewCoreApi,
+  ReviewContinuationError,
   type PrepareReviewRequest,
   type ReviewNativeProgressEvent,
 } from "../core-api/review-api.js";
@@ -32,6 +33,7 @@ import {
   OntoPrepareReviewToolInputSchema,
   OntoReconstructSessionInputSchema,
   OntoReconstructToolInputSchema,
+  OntoReviewContinueToolInputSchema,
   OntoReviewSessionInputSchema,
   OntoReviewToolInputSchema,
   OntoValidateReconstructDirectiveToolInputSchema,
@@ -162,6 +164,40 @@ const SESSION_INPUT_SCHEMA: JsonValue = {
       type: "string",
       description:
         "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description: "Absolute or project-relative review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+    targetUnits: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Optional current frontier unit ids or public aliases such as lens:logic and deliberation:logic. Omit to use the full ledger-derived first untrusted frontier.",
+    },
+    requestText: {
+      type: "string",
+      description:
+        "Optional original request text for final ReviewRecord assembly when the session was only prepared.",
+    },
+    executorRealization: {
+      type: "string",
+      enum: ["codex", "mock", "ts_inline_http"],
+      description:
+        "Executor realization for resumed units. Required for prepared sessions that have no prior review-run-manifest.",
     },
   },
 };
@@ -357,6 +393,12 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
+    name: "onto.review_continue",
+    description:
+      "Continue a prepared or halted review session by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
+    inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
+  },
+  {
     name: "onto.review_status",
     description: "Read structured status and artifact refs for a review session.",
     inputSchema: SESSION_INPUT_SCHEMA,
@@ -521,6 +563,15 @@ function structuredFailureFromError(error: unknown): {
 
 async function formatToolError(error: unknown): Promise<JsonValue> {
   const message = error instanceof Error ? error.message : String(error);
+  if (error instanceof ReviewContinuationError) {
+    return {
+      isError: true,
+      content: [{ type: "text", text: message }],
+      structuredContent: {
+        continuationFailure: error.failureContent as unknown as JsonValue,
+      },
+    };
+  }
   const structuredFailure = structuredFailureFromError(error);
   const routeVisibility = structuredFailure
     ? await buildReviewRouteVisibilityFromFailure(
@@ -914,6 +965,28 @@ async function callTool(
       case "onto.prepare_review": {
         const parsed = OntoPrepareReviewToolInputSchema.parse(args);
         const result = await reviewApi.prepareReview(toReviewRequest(parsed));
+        return formatToolResult(result);
+      }
+      case "onto.review_continue": {
+        const parsed = OntoReviewContinueToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: parsed.sessionRoot,
+          projectRoot,
+        });
+        const result = await reviewApi.continueReview({
+          projectRoot,
+          sessionRoot,
+          ...(parsed.targetUnits !== undefined
+            ? { targetUnits: parsed.targetUnits }
+            : {}),
+          ...(parsed.requestText !== undefined
+            ? { requestText: parsed.requestText }
+            : {}),
+          ...(parsed.executorRealization !== undefined
+            ? { executorRealization: parsed.executorRealization }
+            : {}),
+        });
         return formatToolResult(result);
       }
       case "onto.review_status": {

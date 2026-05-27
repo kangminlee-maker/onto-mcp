@@ -79,6 +79,7 @@ Available MCP tools:
 |---|---|
 | `onto.review` | Run the full review path and return artifact refs plus summary |
 | `onto.prepare_review` | Prepare a review session and prompt packets |
+| `onto.review_continue` | Continue a prepared or halted review from the ledger frontier |
 | `onto.review_status` | Read structured status and artifact refs |
 | `onto.review_result` | Read `review-record.yaml` and final output |
 | `onto.list_lenses` | List canonical lens sets |

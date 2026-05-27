@@ -1,6 +1,6 @@
 # Review Continuation Surface
 
-Status: design draft
+Status: active implementation
 
 Date: 2026-05-27
 
@@ -81,9 +81,14 @@ Rules:
 - `sessionRoot` uses the same project-boundary disclosure guard as
   `onto.review_status` and `onto.review_result`.
 - `targetUnits` is optional. When omitted, the runtime derives the minimal
-  continuation frontier from artifacts and `execution-result.yaml`.
-- When provided, every target unit must be failed, missing, or not yet reached.
-  Completed units are rejected rather than overwritten.
+  continuation frontier from artifacts and the pipeline execution ledger.
+- When provided, target units may use public aliases such as `lens:{lens_id}`,
+  `deliberation:{lens_id}`, or `issue-artifact:{artifact_id}`. The normalized
+  target set must match the current ledger-derived continuation frontier so a
+  caller cannot jump directly to `synthesize` or select only one root lens while
+  sibling root lens units are still untrusted.
+- Every target unit must be failed, missing, or not yet reached. Completed units
+  are rejected rather than overwritten.
 - The tool must not accept a `resume_token` as authorization. The existing token
   remains audit/idempotency data only.
 - Provider, model, target scope, lens set, domain, and manifest-governed inputs
@@ -261,8 +266,12 @@ run. Downstream steps run only when all upstream outputs required by their
 packet and artifact contract are present.
 
 If a failed unit has an existing malformed or partial output file, the runtime
-must preserve it before replacement. The replacement becomes visible at the
-canonical output seat only after the new attempt validates.
+must preserve it before replacement. The runtime also backs up session-level
+execution artifacts such as `execution-result.yaml`,
+`review-run-manifest.yaml`, optional `degradation-summary.yaml`, and final or
+record outputs when present. If dispatch or validation fails, copied artifacts
+are restored and the failed attempt manifest records
+`restored_artifact_backups`.
 
 Completed outputs are never overwritten in the first implementation slice.
 Force-rerunning completed units is deferred because it requires explicit
@@ -278,21 +287,25 @@ Recommended filesystem seat:
 ```text
 .onto/review/{session_id}/continuation-attempts/{attempt_id}/
   continuation-plan.yaml
-  execution-result.yaml
+  continuation-attempt.yaml
   superseded-artifacts/
 ```
 
-`review-run-manifest.yaml` should append an attempt summary:
+`continuation-attempt.yaml` records attempt-local provenance:
 
 ```yaml
-continuation_attempts:
-  - attempt_id: 20260527-abcdef12
-    created_at: 2026-05-27T00:00:00+09:00
-    target_units:
-      - deliberation:logic
-    executed_units:
-      - deliberation:logic
-    result_ref: continuation-attempts/20260527-abcdef12/execution-result.yaml
+attempt_id: 20260527-abcdef12
+created_at: 2026-05-27T00:00:00+09:00
+status: completed
+target_units:
+  - deliberation:logic
+continuation_plan_ref: .onto/review/.../continuation-plan.yaml
+superseded_artifact_backups:
+  - sourceRef: .onto/review/.../execution-result.yaml
+    backupRef: .onto/review/.../superseded-artifacts/001-execution-result.yaml
+execution_route_provenance:
+  executor_realization: mock
+  review_execution_profile_source: review-run-manifest
 ```
 
 The session-level `execution-result.yaml` remains the aggregate current truth
@@ -316,21 +329,16 @@ facts. It should use only artifact-backed inputs.
 
 ## Implementation Slices
 
-1. Add `ReviewContinuationPlan` derivation to the core API and expose it from
-   `getReviewStatus`.
-2. Add a dry artifact-only planner test for lens, issue-artifact,
-   deliberation, controlled-deliberation, and synthesize halt shapes.
-3. Implement `continueReview` in `src/core-api/review-api.ts` by calling the
-   same bounded runtime helpers used by the CLI path.
-4. Expose `onto.review_continue` in MCP schemas and server dispatch.
-5. Add conformance tests for:
-   - halted lens with one missing lens output;
-   - halted per-lens deliberation with completed issue artifacts;
-   - halted synthesize after `problem-framing.yaml`;
-   - stale packet hash blocked before dispatch;
-   - completed unit target rejected.
-6. Add a repository-local CLI harness only as a development/debug wrapper over
-   the same core API, not as a separate semantic implementation.
+1. `ReviewContinuationPlan` derivation is implemented in the core runtime and
+   exposed from `getReviewStatus`.
+2. `continueReview` in `src/core-api/review-api.ts` calls the same bounded
+   prompt execution runtime used by the CLI path.
+3. `onto.review_continue` is exposed in MCP schemas and server dispatch.
+4. Conformance covers halted malformed-output continuation and session-level
+   backup provenance. Target selection, alias normalization, and session
+   boundary guards are covered by focused unit tests.
+5. A repository-local CLI harness remains deferred unless debugging needs a thin
+   wrapper over the same core API.
 
 ## Deferred
 

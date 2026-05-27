@@ -58,9 +58,13 @@ Done when:
   only failed or missing review units.
 - Completed unit outputs are reused and completed unit overwrite attempts are
   rejected.
+- Optional continuation targets must match the current ledger frontier; public
+  aliases such as `lens:logic` normalize to canonical ledger unit ids.
 - Manifest, packet, context eligibility, and route drift stop before dispatch
   with structured failure records.
-- Continuation attempt provenance is preserved under the same review session.
+- Continuation attempt provenance, session-level artifact backups, failed-attempt
+  restore evidence, and route provenance are preserved under the same review
+  session.
 
 ## Stage 4.6 — Reconstruct Post-Seed Loop
 

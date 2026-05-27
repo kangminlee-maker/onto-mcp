@@ -3,7 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
-import { resolveExecutionRealizationHandoff } from "./review-invoke.js";
+import type {
+  InvocationBindingArtifact,
+  InvocationInterpretationArtifact,
+} from "../review/artifact-types.js";
+import { readYamlDocument } from "../review/review-artifact-utils.js";
+import {
+  resolveExecutionRealizationHandoff,
+  reviewPrepareOnly,
+} from "./review-invoke.js";
 
 const originalEnv = { ...process.env };
 
@@ -22,6 +30,20 @@ function createTmpHome(): { home: string; cleanup: () => void } {
   return {
     home,
     cleanup: () => fs.rmSync(home, { recursive: true, force: true }),
+  };
+}
+
+function createTmpProjectWithTarget(
+  relativeTarget: string,
+  content: string,
+): { projectRoot: string; cleanup: () => void } {
+  const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-review-target-"));
+  const targetPath = path.join(projectRoot, relativeTarget);
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, content, "utf8");
+  return {
+    projectRoot,
+    cleanup: () => fs.rmSync(projectRoot, { recursive: true, force: true }),
   };
 }
 
@@ -117,6 +139,48 @@ describe("review invoke execution auto-resolution", () => {
       }
     } finally {
       fs.rmSync(binDir, { recursive: true, force: true });
+    }
+  });
+
+  it("infers a review domain from the target when no domain is configured", async () => {
+    const project = createTmpProjectWithTarget(
+      ".onto/processes/review/auto-domain.md",
+      [
+        "# Review contract update",
+        "",
+        "This target changes ontology review binding semantics, canonical concepts, and domain document selection.",
+      ].join("\n"),
+    );
+    try {
+      const result = await reviewPrepareOnly([
+        ".onto/processes/review/auto-domain.md",
+        "Review the ontology runtime contract domain selection behavior.",
+        "--project-root",
+        project.projectRoot,
+        "--onto-home",
+        path.resolve("."),
+        "--executor-realization",
+        "mock",
+        "--review-mode",
+        "core-axis",
+        "--lens-id",
+        "logic",
+      ]);
+      const binding = await readYamlDocument<InvocationBindingArtifact>(
+        path.join(result.session_root, "binding.yaml"),
+      );
+      const interpretation =
+        await readYamlDocument<InvocationInterpretationArtifact>(
+          path.join(result.session_root, "interpretation.yaml"),
+        );
+
+      expect(binding.resolved_session_domain).toBe("ontology");
+      expect(binding.domain_final_selection.selection_mode).toBe("target_inferred");
+      expect(binding.binding_notes.join("\n")).toContain("Selected @ontology");
+      expect(interpretation.domain_recommendation).toBe("@ontology");
+      expect(interpretation.domain_selection_required).toBe(false);
+    } finally {
+      project.cleanup();
     }
   });
 });

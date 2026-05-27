@@ -1430,7 +1430,7 @@ async function writeReviewRunManifest(
             synthesize: reviewExecutionProfile.synthesize,
             deliberation: reviewExecutionProfile.deliberation,
             runtime_route: {
-              execution_realization: executionPlan.execution_realization,
+              execution_realization: route.execution_realization,
               host_runtime: route.artifact_host_runtime,
               worker_executor: route.executor,
               runtime_provider: route.resolved_provider,

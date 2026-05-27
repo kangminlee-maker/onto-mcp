@@ -226,6 +226,14 @@ binding_notes:
 recommendation, explicit token, 주체자 확인 결과를
 최종 값으로 materialize한 결과여야 한다.
 
+단, interpretation/config 단계에서 explicit domain이 없고 configured domain도
+없으면 runtime은 review target의 path/content/intent와 available domain 문서의
+bounded signal을 비교해 `domain_final_selection`을 자동 materialize할 수 있다.
+이 경우 `selection_mode`는 target 기반 자동 선택임을 드러내야 하며,
+왜 해당 domain을 골랐는지는 `binding_notes`에 사용자에게 설명 가능한 문장으로
+남긴다. 충분한 signal이 없어서 `none`으로 가는 경우도 같은 방식으로 이유를
+남긴다.
+
 ---
 
 ## 7. Prompt / MCP / Runtime Effect

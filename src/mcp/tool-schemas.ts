@@ -42,6 +42,13 @@ export const OntoReviewSessionInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 });
 
+export const OntoReviewContinueToolInputSchema =
+  OntoReviewSessionInputSchema.extend({
+    targetUnits: z.array(z.string().min(1)).optional(),
+    requestText: z.string().min(1).optional(),
+    executorRealization: ExecutorRealizationSchema.optional(),
+  }).strict();
+
 export const OntoListDomainsToolInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 });
@@ -98,6 +105,7 @@ export const OntoValidateReconstructDirectiveToolInputSchema = z.discriminatedUn
 export const OntoToolNames = [
   "onto.review",
   "onto.prepare_review",
+  "onto.review_continue",
   "onto.review_status",
   "onto.review_result",
   "onto.list_lenses",
@@ -116,6 +124,9 @@ export type OntoPrepareReviewToolInput = z.infer<
   typeof OntoPrepareReviewToolInputSchema
 >;
 export type OntoReviewSessionInput = z.infer<typeof OntoReviewSessionInputSchema>;
+export type OntoReviewContinueToolInput = z.infer<
+  typeof OntoReviewContinueToolInputSchema
+>;
 export type OntoListDomainsToolInput = z.infer<
   typeof OntoListDomainsToolInputSchema
 >;

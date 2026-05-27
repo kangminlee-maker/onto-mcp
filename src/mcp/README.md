@@ -17,6 +17,13 @@ read model remains `onto.review_status` plus artifact-backed
 `llmPresentation.progress`. The MCP layer forwards Core API progress events and
 does not define its own progress step taxonomy.
 
+`onto.review_continue` is the write surface for a prepared or halted review
+session. It derives the frontier from the session PipelineExecutionLedger, reuses
+trusted units, accepts only the current frontier when `targetUnits` is provided,
+reruns the frontier and downstream units, validates session-owned execution-plan
+paths, backs up/restores superseded artifacts around the attempt, and writes
+continuation attempt provenance inside the review session.
+
 The reconstruct tools are bounded projections over `src/core-api/reconstruct-api.ts`:
 source profile listing, material-aware source observation, LLM-authored
 directive validation, post-Seed run orchestration, status, and result reads.
