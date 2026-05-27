@@ -1,0 +1,11 @@
+schema_version: "1"
+session_id: reconstruct-spreadsheet-session
+created_at: 2026-05-27T00:00:00.000Z
+selected_observations:
+  - observation_id: obs_spreadsheet_b4d5d4be8d0151ec
+    target_material_kind: spreadsheet
+    source_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/accounting-schedule.csv
+    location: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/accounting-schedule.csv
+    selection_rationale: Reference run selects the runtime structural observation as
+      Seed evidence input.
+open_questions: []

@@ -10,9 +10,19 @@ This layer should stay thin:
 - return structured status, result, and artifact refs;
 - emit `notifications/progress` during `onto.review` when the caller supplies
   `_meta.progressToken`;
-- avoid redefining lens, domain, review, or synthesis semantics.
+- avoid redefining lens, domain, review, reconstruct, or synthesis semantics.
 
 Progress notifications are a host transport convenience. The canonical progress
 read model remains `onto.review_status` plus artifact-backed
 `llmPresentation.progress`. The MCP layer forwards Core API progress events and
 does not define its own progress step taxonomy.
+
+The reconstruct tools are bounded projections over `src/core-api/reconstruct-api.ts`:
+source profile listing, material-aware source observation, LLM-authored
+directive validation, happy-path run orchestration, status, and result reads.
+They return artifact refs, validation status, records, manifests, and final
+output text; they do not author ontology Seeds or design decisions.
+`onto.reconstruct` currently requires explicit
+`semanticAuthorRealization="mock"` and `confirmationProviderRealization="mock"`
+arguments. Host/direct-call semantic authoring and user-mediated confirmation
+are intentionally not implied by a completed mock happy-path run.

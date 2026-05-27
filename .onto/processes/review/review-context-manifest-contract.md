@@ -34,7 +34,7 @@ Difference:
 | Concept | Role |
 |---|---|
 | `context-candidate-assembly` | Candidate context set assembled before per-lens relevance judgment. |
-| `review-target-profile` | Target artifact role, target input kind, closure level, review goals, and obligation policy. |
+| `review-target-profile` | Target artifact role, target input kind, target material kind, closure level, review goals, and obligation policy. |
 | `review-context-manifest` | Execution contract that fixes domain/alignment sources, stage allowlists, hashes, and confirmation gates for the review run. |
 
 `review-context-manifest.yaml` may eventually absorb or constrain `context-candidate-assembly`, but it should not become a broad dumping ground for context.
@@ -137,8 +137,8 @@ Target profile context owns artifact role and closure obligation framing.
 Rules:
 
 1. Runtime materializes `review-target-profile.yaml` before manifest creation.
-2. Runtime records target input kind, artifact roles, target refs, hashes, and
-   filesystem boundary source.
+2. Runtime records target input kind, target material kind, artifact roles,
+   target refs, hashes, and filesystem boundary source.
 3. The profile is admitted to all review consumers because it affects whether a
    discovered issue is inside the target's responsibility.
 4. The profile does not grant permission to read outside `binding.yaml`

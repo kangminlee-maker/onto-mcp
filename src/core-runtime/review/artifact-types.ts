@@ -1,3 +1,8 @@
+import type {
+  TargetMaterialKind,
+  TargetMaterialSupportStatus,
+} from "../target-material-kind.js";
+
 export type ReviewEntrypoint = "review";
 export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 export type ReviewExecutionRealization = "worker" | "direct-call";
@@ -559,6 +564,18 @@ export interface ReviewTargetProfileRef {
   sha256: string | null;
 }
 
+export interface ReviewTargetMaterialProfile {
+  target_material_kind: TargetMaterialKind;
+  target_material_kind_candidates: TargetMaterialKind[];
+  support_status: TargetMaterialSupportStatus;
+  unsupported_reason: string | null;
+  detection: {
+    owner: "runtime_heuristic";
+    confidence: number;
+    confidence_basis: string;
+  };
+}
+
 export interface ReviewTargetProfileArtifact {
   schema_version: "1";
   session_id: string;
@@ -566,6 +583,7 @@ export interface ReviewTargetProfileArtifact {
   target_scope_kind: ReviewTargetScopeKind;
   materialized_input_kind: ReviewTargetMaterializedInputKind;
   target_input_kind: ReviewTargetInputKind;
+  target_material_kind: TargetMaterialKind;
   requested_target: string | null;
   review_intent_summary: string | null;
   artifact_roles: {
@@ -578,6 +596,7 @@ export interface ReviewTargetProfileArtifact {
   review_goal: string[];
   closure_obligation_policy: string[];
   target_refs: ReviewTargetProfileRef[];
+  material_profile: ReviewTargetMaterialProfile;
   boundary: {
     filesystem_allowed_roots: string[];
     source: "binding";

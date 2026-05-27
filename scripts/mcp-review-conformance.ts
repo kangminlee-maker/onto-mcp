@@ -694,6 +694,401 @@ async function main(): Promise<void> {
         "diffRange" in (reviewTool.inputSchema?.properties ?? {}),
       "onto.review schema must expose explicit target contract fields.",
     );
+    assert(
+      toolsResult.tools?.some((tool) => tool.name === "onto.list_source_profiles") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.observe_source") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.validate_reconstruct_directive") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_status") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_result"),
+      "reconstruct MCP tool surface must be listed.",
+    );
+
+    const reconstructProjectRoot = await fs.mkdtemp(
+      path.join(os.tmpdir(), "onto-mcp-reconstruct-conformance-"),
+    );
+    try {
+      await fs.writeFile(
+        path.join(reconstructProjectRoot, "schedule.csv"),
+        "month,revenue\n2026-01,100\n",
+        "utf8",
+      );
+      await fs.mkdir(path.join(reconstructProjectRoot, "src"), { recursive: true });
+      await fs.writeFile(
+        path.join(reconstructProjectRoot, "src", "feature.ts"),
+        "export const feature = 'reconstruct';\n",
+        "utf8",
+      );
+      const profilesResult = requireToolResult(requireResult(await client.request("tools/call", {
+        name: "onto.list_source_profiles",
+        arguments: {
+          projectRoot: reconstructProjectRoot,
+        },
+      }), "tools/call onto.list_source_profiles"));
+      assert(
+        Array.isArray(profilesResult.structuredContent) &&
+          profilesResult.structuredContent.some((profile) =>
+            profile !== null &&
+              typeof profile === "object" &&
+              (profile as { target_material_kind?: unknown }).target_material_kind ===
+                "spreadsheet"
+          ),
+        "onto.list_source_profiles must include spreadsheet profile.",
+      );
+
+      const observeResult = requireToolResult(requireResult(await client.request("tools/call", {
+        name: "onto.observe_source",
+        arguments: {
+          projectRoot: reconstructProjectRoot,
+          targetRefs: ["schedule.csv"],
+          sessionRoot: ".onto/reconstruct/mcp-reconstruct-session",
+        },
+      }), "tools/call onto.observe_source"));
+      const observed = observeResult.structuredContent as
+        | {
+            sessionRoot?: unknown;
+            sessionId?: unknown;
+            artifactRefs?: {
+              source_observations?: unknown;
+              source_observation_directive_validation?: unknown;
+              seed_candidate_validation?: unknown;
+              reconstruct_record?: unknown;
+            };
+            reconstructRecord?: {
+              target_material_kind?: unknown;
+              runtime_boundary?: { semantic_generation?: unknown };
+              record_stage?: unknown;
+            };
+          }
+        | undefined;
+      assert(
+        typeof observed?.sessionRoot === "string" &&
+          observed.reconstructRecord?.target_material_kind === "spreadsheet" &&
+          observed.reconstructRecord.runtime_boundary?.semantic_generation ===
+            "not_performed" &&
+          observed.reconstructRecord.record_stage === "preparation_artifacts_written",
+        "onto.observe_source must return spreadsheet reconstruct preparation record without semantic generation.",
+      );
+      assert(
+        typeof observed.artifactRefs?.source_observations === "string",
+        "onto.observe_source must expose source_observations artifact ref.",
+      );
+      const sourceObservations = await readYaml<{
+        observations?: Array<{
+          observation_id?: string;
+          target_material_kind?: string;
+          source_ref?: string;
+          location?: string;
+        }>;
+      }>(observed.artifactRefs.source_observations);
+      const observation = sourceObservations.observations?.[0];
+      assert(
+        observation?.observation_id &&
+          observation.target_material_kind === "spreadsheet" &&
+          observation.source_ref &&
+          observation.location,
+        "source observation must preserve spreadsheet material evidence.",
+      );
+      const directivePath = path.join(
+        observed.sessionRoot,
+        "source-observation-directive.yaml",
+      );
+      const seedCandidatePath = path.join(observed.sessionRoot, "seed-candidate.yaml");
+      const evidenceRef = {
+        observation_id: observation.observation_id,
+        target_material_kind: observation.target_material_kind,
+        source_ref: observation.source_ref,
+        location: observation.location,
+      };
+      await fs.writeFile(
+        directivePath,
+        YAML.stringify({
+          schema_version: "1",
+          session_id: observed.sessionId,
+          created_at: "2026-05-27T00:00:00.000Z",
+          selected_observations: [
+            {
+              ...evidenceRef,
+              selection_rationale:
+                "MCP conformance selects the runtime observation as evidence.",
+            },
+          ],
+          open_questions: [],
+        }),
+        "utf8",
+      );
+      await fs.writeFile(
+        seedCandidatePath,
+        YAML.stringify({
+          schema_version: "1",
+          session_id: observed.sessionId,
+          created_at: "2026-05-27T00:00:00.000Z",
+          purpose: {
+            claim_id: "purpose-1",
+            statement:
+              "Use the observed spreadsheet material as reconstruct seed evidence.",
+            evidence_refs: [evidenceRef],
+          },
+          non_goals: [],
+          entities: [],
+          relations: [],
+          actions: [],
+          properties: [],
+          rules: [],
+          open_questions: [],
+        }),
+        "utf8",
+      );
+      const sourceDirectiveValidationResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.validate_reconstruct_directive",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            directiveKind: "source_observation",
+            directivePath,
+            sourceObservationsPath: observed.artifactRefs.source_observations,
+          },
+        }), "tools/call onto.validate_reconstruct_directive source_observation"));
+      assert(
+        (sourceDirectiveValidationResult.structuredContent as {
+          validation_status?: unknown;
+        }).validation_status === "valid",
+        "source observation directive validation must be valid.",
+      );
+      const seedDirectiveValidationResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.validate_reconstruct_directive",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            directiveKind: "seed_candidate",
+            seedCandidatePath,
+            sourceObservationsPath: observed.artifactRefs.source_observations,
+            sourceObservationDirectivePath: directivePath,
+            sourceObservationDirectiveValidationPath:
+              path.join(
+                observed.sessionRoot,
+                "source-observation-directive-validation.yaml",
+              ),
+          },
+        }), "tools/call onto.validate_reconstruct_directive seed_candidate"));
+      assert(
+        (seedDirectiveValidationResult.structuredContent as {
+          validation_status?: unknown;
+          semantic_claim_count?: unknown;
+        }).validation_status === "valid" &&
+          (seedDirectiveValidationResult.structuredContent as {
+            semantic_claim_count?: unknown;
+          }).semantic_claim_count === 1,
+        "seed candidate validation must be valid and preserve semantic claim count.",
+      );
+
+      const reconstructResult = requireToolResult(requireResult(await client.request("tools/call", {
+        name: "onto.reconstruct",
+        arguments: {
+          projectRoot: reconstructProjectRoot,
+          targetRefs: ["src/feature.ts"],
+          intent: "MCP conformance code happy path reconstruct.",
+          sessionRoot: ".onto/reconstruct/mcp-code-run",
+          semanticAuthorRealization: "mock",
+          confirmationProviderRealization: "mock",
+        },
+      }), "tools/call onto.reconstruct"));
+      const reconstructStructured = reconstructResult.structuredContent as
+        | {
+            sessionRoot?: unknown;
+            status?: unknown;
+            finalOutputPath?: unknown;
+            reconstructRecordPath?: unknown;
+            reconstructRunManifestPath?: unknown;
+            reconstructRecord?: {
+              record_stage?: unknown;
+              target_material_kind?: unknown;
+              runtime_boundary?: {
+                semantic_generation?: unknown;
+                runtime_owned_gates?: unknown;
+                host_user_mediated_artifacts?: unknown;
+              };
+              validation_summary?: { pass_rate?: unknown };
+            };
+            reconstructRunManifest?: {
+              execution_profile?: {
+                semantic_author_realization?: unknown;
+                confirmation_provider_realization?: unknown;
+              };
+              happy_path_scope?: {
+                implemented_artifacts?: unknown;
+                deferred_artifacts?: unknown;
+              };
+              steps?: Array<{
+                step_id?: unknown;
+                owner?: unknown;
+                performed_by?: {
+                  authority?: unknown;
+                  realization?: unknown;
+                  actor_id?: unknown;
+                };
+              }>;
+            };
+            artifactRefs?: {
+              final_output?: unknown;
+              reconstruct_run_manifest?: unknown;
+            };
+          }
+        | undefined;
+      assert(
+        reconstructStructured?.status === "completed" &&
+          reconstructStructured.reconstructRecord?.record_stage === "completed" &&
+          reconstructStructured.reconstructRecord.target_material_kind === "code" &&
+          reconstructStructured.reconstructRecord.runtime_boundary?.semantic_generation ===
+            "not_performed",
+        "onto.reconstruct must complete the code happy path without runtime semantic generation.",
+      );
+      assert(
+        Array.isArray(
+          reconstructStructured.reconstructRecord.runtime_boundary
+            ?.host_user_mediated_artifacts,
+        ) &&
+          reconstructStructured.reconstructRecord.runtime_boundary
+            .host_user_mediated_artifacts.includes("seed_confirmation") &&
+          Array.isArray(
+            reconstructStructured.reconstructRecord.runtime_boundary
+              .runtime_owned_gates,
+          ) &&
+          !reconstructStructured.reconstructRecord.runtime_boundary
+            .runtime_owned_gates.includes("seed_confirmation"),
+        "reconstruct record must model seed_confirmation as host/user mediated, not runtime-owned.",
+      );
+      assert(
+        reconstructStructured.reconstructRunManifest?.execution_profile
+          ?.semantic_author_realization === "mock" &&
+          reconstructStructured.reconstructRunManifest.execution_profile
+            .confirmation_provider_realization === "mock",
+        "onto.reconstruct must expose explicit mock semantic author and confirmation realizations.",
+      );
+      const seedCandidateStep =
+        reconstructStructured.reconstructRunManifest?.steps?.find(
+          (step) => step.step_id === "seed_candidate",
+        );
+      const seedConfirmationStep =
+        reconstructStructured.reconstructRunManifest?.steps?.find(
+          (step) => step.step_id === "seed_confirmation",
+        );
+      assert(
+        seedCandidateStep?.owner === "host_llm" &&
+          seedCandidateStep.performed_by?.authority === "host_llm" &&
+          seedCandidateStep.performed_by.realization === "mock" &&
+          seedConfirmationStep?.owner === "host_or_user" &&
+          seedConfirmationStep.performed_by?.authority === "host_or_user" &&
+          seedConfirmationStep.performed_by.realization === "mock",
+        "reconstruct run manifest must distinguish conceptual owner from actual mock performer.",
+      );
+      assert(
+        Array.isArray(
+          reconstructStructured.reconstructRunManifest?.happy_path_scope
+            ?.deferred_artifacts,
+        ) &&
+          reconstructStructured.reconstructRunManifest.happy_path_scope
+            .deferred_artifacts.includes("domain_context_selection") &&
+          reconstructStructured.reconstructRunManifest.happy_path_scope
+            .deferred_artifacts.includes("failure_classification") &&
+          reconstructStructured.reconstructRunManifest.happy_path_scope
+            .deferred_artifacts.includes("revision_proposal"),
+        "reconstruct run manifest must expose deferred happy-path scope.",
+      );
+      assert(
+        typeof reconstructStructured.finalOutputPath === "string" &&
+          typeof reconstructStructured.reconstructRecordPath === "string" &&
+          typeof reconstructStructured.reconstructRunManifestPath === "string" &&
+          reconstructStructured.artifactRefs?.final_output ===
+            reconstructStructured.finalOutputPath &&
+          reconstructStructured.artifactRefs.reconstruct_run_manifest ===
+            reconstructStructured.reconstructRunManifestPath,
+        "onto.reconstruct must expose final output, record, and run manifest refs.",
+      );
+      await assertFile(reconstructStructured.finalOutputPath, "reconstruct final output");
+      await assertFile(
+        reconstructStructured.reconstructRecordPath,
+        "reconstruct record",
+      );
+      await assertFile(
+        reconstructStructured.reconstructRunManifestPath,
+        "reconstruct run manifest",
+      );
+      const reconstructStatusResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.reconstruct_status",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            sessionRoot: ".onto/reconstruct/mcp-code-run",
+          },
+        }), "tools/call onto.reconstruct_status"));
+      assert(
+        (reconstructStatusResult.structuredContent as { status?: unknown }).status ===
+          "completed",
+        "onto.reconstruct_status must report completed reconstruct status.",
+      );
+      const reconstructResultReadback =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.reconstruct_result",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            sessionRoot: ".onto/reconstruct/mcp-code-run",
+          },
+        }), "tools/call onto.reconstruct_result"));
+      assert(
+        typeof (reconstructResultReadback.structuredContent as {
+          finalOutputText?: unknown;
+          reconstructRunManifest?: unknown;
+        }).finalOutputText === "string" &&
+          (reconstructResultReadback.structuredContent as {
+            reconstructRunManifest?: unknown;
+          }).reconstructRunManifest !== null,
+        "onto.reconstruct_result must expose final output text and run manifest.",
+      );
+
+      const outsideReconstructSessionRoot = await fs.mkdtemp(
+        path.join(os.tmpdir(), "onto-mcp-reconstruct-outside-session-"),
+      );
+      try {
+        await fs.writeFile(
+          path.join(outsideReconstructSessionRoot, "reconstruct-record.yaml"),
+          YAML.stringify({
+            schema_version: "1",
+            session_id: "escaped-session",
+            artifact_refs: {},
+          }),
+          "utf8",
+        );
+        const symlinkSessionRoot = path.join(
+          reconstructProjectRoot,
+          ".onto",
+          "reconstruct",
+          "escaped-session",
+        );
+        await fs.symlink(outsideReconstructSessionRoot, symlinkSessionRoot, "dir");
+        const reconstructBoundaryError =
+          requireToolError(requireResult(await client.request("tools/call", {
+            name: "onto.reconstruct_status",
+            arguments: {
+              projectRoot: reconstructProjectRoot,
+              sessionRoot: ".onto/reconstruct/escaped-session",
+            },
+          }), "tools/call onto.reconstruct_status escaped session"));
+        assert(
+          requireStructuredFailure(reconstructBoundaryError.structuredContent)
+            .failure.mcp_error_code ===
+            "ONTO_RECONSTRUCT_SECURITY_DISCLOSURE_BLOCKED",
+          "reconstruct escaped session read must return structured disclosure failure.",
+        );
+      } finally {
+        await fs.rm(outsideReconstructSessionRoot, {
+          recursive: true,
+          force: true,
+        });
+      }
+    } finally {
+      await fs.rm(reconstructProjectRoot, { recursive: true, force: true });
+    }
 
     const reviewProgressToken = "onto-review-conformance-progress";
     const callResult = requireToolResult(requireResult(await client.request("tools/call", {

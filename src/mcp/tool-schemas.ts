@@ -46,6 +46,55 @@ export const OntoListDomainsToolInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 });
 
+export const OntoListSourceProfilesToolInputSchema = z.object({
+  projectRoot: z.string().min(1).optional(),
+});
+
+export const OntoObserveSourceToolInputSchema = z.object({
+  targetRefs: z.array(z.string().min(1)).min(1),
+  projectRoot: z.string().min(1).optional(),
+  sessionRoot: z.string().min(1).optional(),
+  profilesRoot: z.string().min(1).optional(),
+  filesystemAllowedRoots: z.array(z.string().min(1)).optional(),
+}).strict();
+
+export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.extend({
+  intent: z.string().min(1),
+  semanticAuthorRealization: z.literal("mock"),
+  confirmationProviderRealization: z.literal("mock"),
+}).strict();
+
+export const OntoReconstructSessionInputSchema = z.object({
+  sessionRoot: z.string().min(1),
+  projectRoot: z.string().min(1).optional(),
+}).strict();
+
+const OntoValidateSourceObservationDirectiveToolInputSchema = z.object({
+  directiveKind: z.literal("source_observation"),
+  directivePath: z.string().min(1),
+  sourceObservationsPath: z.string().min(1),
+  outputPath: z.string().min(1).optional(),
+  projectRoot: z.string().min(1).optional(),
+}).strict();
+
+const OntoValidateSeedCandidateToolInputSchema = z.object({
+  directiveKind: z.literal("seed_candidate"),
+  seedCandidatePath: z.string().min(1),
+  sourceObservationsPath: z.string().min(1),
+  sourceObservationDirectivePath: z.string().min(1).optional(),
+  sourceObservationDirectiveValidationPath: z.string().min(1).optional(),
+  outputPath: z.string().min(1).optional(),
+  projectRoot: z.string().min(1).optional(),
+}).strict();
+
+export const OntoValidateReconstructDirectiveToolInputSchema = z.discriminatedUnion(
+  "directiveKind",
+  [
+    OntoValidateSourceObservationDirectiveToolInputSchema,
+    OntoValidateSeedCandidateToolInputSchema,
+  ],
+);
+
 export const OntoToolNames = [
   "onto.review",
   "onto.prepare_review",
@@ -53,6 +102,12 @@ export const OntoToolNames = [
   "onto.review_result",
   "onto.list_lenses",
   "onto.list_domains",
+  "onto.list_source_profiles",
+  "onto.observe_source",
+  "onto.validate_reconstruct_directive",
+  "onto.reconstruct",
+  "onto.reconstruct_status",
+  "onto.reconstruct_result",
 ] as const;
 
 export type OntoToolName = (typeof OntoToolNames)[number];
@@ -63,4 +118,19 @@ export type OntoPrepareReviewToolInput = z.infer<
 export type OntoReviewSessionInput = z.infer<typeof OntoReviewSessionInputSchema>;
 export type OntoListDomainsToolInput = z.infer<
   typeof OntoListDomainsToolInputSchema
+>;
+export type OntoListSourceProfilesToolInput = z.infer<
+  typeof OntoListSourceProfilesToolInputSchema
+>;
+export type OntoObserveSourceToolInput = z.infer<
+  typeof OntoObserveSourceToolInputSchema
+>;
+export type OntoReconstructToolInput = z.infer<
+  typeof OntoReconstructToolInputSchema
+>;
+export type OntoReconstructSessionInput = z.infer<
+  typeof OntoReconstructSessionInputSchema
+>;
+export type OntoValidateReconstructDirectiveToolInput = z.infer<
+  typeof OntoValidateReconstructDirectiveToolInputSchema
 >;

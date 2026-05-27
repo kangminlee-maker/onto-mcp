@@ -9,6 +9,9 @@ import {
   type ReviewNativeProgressEvent,
 } from "../core-api/review-api.js";
 import {
+  createOntoReconstructCoreApi,
+} from "../core-api/reconstruct-api.js";
+import {
   OntoSettingsValidationError,
   UnsupportedOntoConfigFilesError,
 } from "../core-runtime/discovery/settings-chain.js";
@@ -24,9 +27,14 @@ import type { ReviewStructuredFailureRecord } from "../core-runtime/review/artif
 import { fileExists, readYamlDocument } from "../core-runtime/review/review-artifact-utils.js";
 import {
   OntoListDomainsToolInputSchema,
+  OntoListSourceProfilesToolInputSchema,
+  OntoObserveSourceToolInputSchema,
   OntoPrepareReviewToolInputSchema,
+  OntoReconstructSessionInputSchema,
+  OntoReconstructToolInputSchema,
   OntoReviewSessionInputSchema,
   OntoReviewToolInputSchema,
+  OntoValidateReconstructDirectiveToolInputSchema,
   type OntoToolName,
 } from "./tool-schemas.js";
 
@@ -54,7 +62,8 @@ interface ToolDefinition {
   inputSchema: JsonValue;
 }
 
-const api = createOntoReviewCoreApi();
+const reviewApi = createOntoReviewCoreApi();
+const reconstructApi = createOntoReconstructCoreApi();
 
 const REVIEW_INPUT_SCHEMA: JsonValue = {
   type: "object",
@@ -168,6 +177,172 @@ const LIST_DOMAINS_INPUT_SCHEMA: JsonValue = {
   },
 };
 
+const LIST_SOURCE_PROFILES_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    projectRoot: {
+      type: "string",
+      description: "Project root. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const OBSERVE_SOURCE_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["targetRefs"],
+  properties: {
+    targetRefs: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+      description:
+        "Project-relative target refs to classify and observe structurally.",
+    },
+    projectRoot: {
+      type: "string",
+      description: "Project root. Defaults to the MCP server working directory.",
+    },
+    sessionRoot: {
+      type: "string",
+      description:
+        "Optional reconstruct session root. Must stay inside projectRoot/.onto/reconstruct.",
+    },
+    profilesRoot: {
+      type: "string",
+      description:
+        "Optional reconstruct source profile root. Normally omitted.",
+    },
+    filesystemAllowedRoots: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Optional project-relative filesystem roots for observation boundary reporting.",
+    },
+  },
+};
+
+const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "targetRefs",
+    "intent",
+    "semanticAuthorRealization",
+    "confirmationProviderRealization",
+  ],
+  properties: {
+    targetRefs: {
+      type: "array",
+      items: { type: "string" },
+      minItems: 1,
+      description:
+        "Project-relative target refs to classify, observe, and reconstruct.",
+    },
+    projectRoot: {
+      type: "string",
+      description: "Project root. Defaults to the MCP server working directory.",
+    },
+    sessionRoot: {
+      type: "string",
+      description:
+        "Optional reconstruct session root. Must stay inside projectRoot/.onto/reconstruct.",
+    },
+    profilesRoot: {
+      type: "string",
+      description:
+        "Optional reconstruct source profile root. Normally omitted.",
+    },
+    filesystemAllowedRoots: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Optional project-relative filesystem roots for observation boundary reporting.",
+    },
+    intent: {
+      type: "string",
+      description:
+        "Declared reconstruction purpose. The runner passes this to the directive author and does not infer ontology meaning itself.",
+    },
+    semanticAuthorRealization: {
+      type: "string",
+      enum: ["mock"],
+      description:
+        "Explicit semantic author realization. Only mock is currently wired; host/direct-call authoring is not yet exposed.",
+    },
+    confirmationProviderRealization: {
+      type: "string",
+      enum: ["mock"],
+      description:
+        "Explicit confirmation provider realization. Only mock is currently wired; user-mediated confirmation is not yet exposed.",
+    },
+  },
+};
+
+const RECONSTRUCT_SESSION_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description:
+        "Absolute or project-relative reconstruct session root under projectRoot/.onto/reconstruct.",
+    },
+    projectRoot: {
+      type: "string",
+      description: "Project root. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["directiveKind", "sourceObservationsPath"],
+  properties: {
+    directiveKind: {
+      type: "string",
+      enum: ["source_observation", "seed_candidate"],
+      description:
+        "Which LLM-authored reconstruct directive shape to validate.",
+    },
+    projectRoot: {
+      type: "string",
+      description: "Project root. Defaults to the MCP server working directory.",
+    },
+    directivePath: {
+      type: "string",
+      description:
+        "Path to source-observation-directive.yaml when directiveKind=source_observation.",
+    },
+    seedCandidatePath: {
+      type: "string",
+      description:
+        "Path to seed-candidate.yaml when directiveKind=seed_candidate.",
+    },
+    sourceObservationsPath: {
+      type: "string",
+      description: "Path to source-observations.yaml.",
+    },
+    sourceObservationDirectivePath: {
+      type: "string",
+      description:
+        "Optional path to source-observation-directive.yaml for Seed validation.",
+    },
+    sourceObservationDirectiveValidationPath: {
+      type: "string",
+      description:
+        "Optional path to source-observation-directive-validation.yaml for Seed validation.",
+    },
+    outputPath: {
+      type: "string",
+      description: "Optional validation artifact output path.",
+    },
+  },
+};
+
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto.review",
@@ -200,6 +375,42 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     name: "onto.list_domains",
     description: "List available domain ids from project, user, and installation domain seats.",
     inputSchema: LIST_DOMAINS_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.list_source_profiles",
+    description:
+      "List reconstruct source profiles by target_material_kind and support status.",
+    inputSchema: LIST_SOURCE_PROFILES_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.observe_source",
+    description:
+      "Prepare reconstruct material profiling, inventory, structural source observations, and reconstruct-record refs without generating ontology meaning.",
+    inputSchema: OBSERVE_SOURCE_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.validate_reconstruct_directive",
+    description:
+      "Validate LLM-authored reconstruct directive files against runtime observations and evidence refs without repairing or rewriting them.",
+    inputSchema: VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.reconstruct",
+    description:
+      "Run the material-aware reconstruct happy path with explicit mock semantic author and confirmation provider realization, returning final-output.md and reconstruct-record.yaml refs.",
+    inputSchema: RECONSTRUCT_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.reconstruct_status",
+    description:
+      "Read structured status and artifact refs for a reconstruct session.",
+    inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
+  },
+  {
+    name: "onto.reconstruct_result",
+    description:
+      "Read the reconstruct record, run manifest, and final output for a reconstruct session.",
+    inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
   },
 ];
 
@@ -385,6 +596,46 @@ function throwSessionDisclosureBlocked(args: {
   });
 }
 
+function throwReconstructSessionDisclosureBlocked(args: {
+  requestedSessionRoot: string;
+  resolvedSessionRoot: string;
+  realSessionRoot: string | null;
+  projectRoot: string;
+  realProjectRoot: string | null;
+  allowedRoot: string;
+  realAllowedRoot: string | null;
+  reasonCode: string;
+  humanMessage: string;
+  details?: Record<string, JsonValue>;
+}): never {
+  throw new ReviewStructuredFailureError({
+    failureRecord: createStructuredFailureRecord({
+      phase: "mcp.reconstruct_session_disclosure",
+      reasonCode: args.reasonCode,
+      humanMessage: args.humanMessage,
+      requiredUserAction:
+        "Pass a sessionRoot owned by the selected projectRoot .onto/reconstruct directory.",
+      retrySafety: "safe_after_input_change",
+      artifactTrust: "no_artifacts_trusted",
+      dispatchState: "not_dispatched",
+      artifactRefs: {},
+      mcpErrorCode: "ONTO_RECONSTRUCT_SECURITY_DISCLOSURE_BLOCKED",
+      detailsKind: "security_disclosure",
+      details: {
+        requested_session_root: args.requestedSessionRoot,
+        resolved_session_root: args.resolvedSessionRoot,
+        real_session_root: args.realSessionRoot,
+        project_root: args.projectRoot,
+        real_project_root: args.realProjectRoot,
+        allowed_root: args.allowedRoot,
+        real_allowed_root: args.realAllowedRoot,
+        ...(args.details ?? {}),
+      },
+    }),
+    failureRecordPath: null,
+  });
+}
+
 async function resolveAllowedSessionRoot(args: {
   sessionRoot: string;
   projectRoot?: string | undefined;
@@ -466,6 +717,174 @@ async function resolveAllowedSessionRoot(args: {
   return canonicalSessionRoot;
 }
 
+function resolveProjectRoot(projectRoot?: string): string {
+  return path.resolve(projectRoot ?? process.cwd());
+}
+
+function resolveInsideProject(args: {
+  projectRoot: string;
+  ref: string;
+  label: string;
+}): string {
+  const resolved = path.isAbsolute(args.ref)
+    ? path.resolve(args.ref)
+    : path.resolve(args.projectRoot, args.ref);
+  if (!isInsidePath(args.projectRoot, resolved)) {
+    throw new Error(`${args.label} must stay inside projectRoot.`);
+  }
+  return resolved;
+}
+
+function resolveReconstructSessionRoot(args: {
+  projectRoot: string;
+  sessionRoot?: string;
+}): string | undefined {
+  if (!args.sessionRoot) return undefined;
+  const allowedRoot = path.join(args.projectRoot, ".onto", "reconstruct");
+  const resolved = path.isAbsolute(args.sessionRoot)
+    ? path.resolve(args.sessionRoot)
+    : path.resolve(args.projectRoot, args.sessionRoot);
+  if (!isInsidePath(allowedRoot, resolved)) {
+    throw new Error("sessionRoot must stay inside projectRoot/.onto/reconstruct.");
+  }
+  return resolved;
+}
+
+function resolveRequiredReconstructSessionRoot(args: {
+  projectRoot: string;
+  sessionRoot: string;
+}): string {
+  const resolved = resolveReconstructSessionRoot(args);
+  if (!resolved) {
+    throw new Error("sessionRoot is required.");
+  }
+  return resolved;
+}
+
+async function resolveAllowedReconstructSessionRoot(args: {
+  projectRoot: string;
+  sessionRoot: string;
+}): Promise<string> {
+  const projectRoot = path.resolve(args.projectRoot);
+  const allowedRoot = path.join(projectRoot, ".onto", "reconstruct");
+  const resolvedSessionRoot = path.isAbsolute(args.sessionRoot)
+    ? path.resolve(args.sessionRoot)
+    : path.resolve(projectRoot, args.sessionRoot);
+  const realProjectRoot = await realpathIfExists(projectRoot);
+  const realAllowedRoot = await realpathIfExists(allowedRoot);
+
+  if (!isInsidePath(allowedRoot, resolvedSessionRoot)) {
+    throwReconstructSessionDisclosureBlocked({
+      requestedSessionRoot: args.sessionRoot,
+      resolvedSessionRoot,
+      realSessionRoot: null,
+      projectRoot,
+      realProjectRoot,
+      allowedRoot,
+      realAllowedRoot,
+      reasonCode: "reconstruct_session_root_outside_project_boundary",
+      humanMessage:
+        "MCP reconstruct session read was blocked because the sessionRoot is outside the project reconstruct boundary.",
+    });
+  }
+
+  const realSessionRoot = await realpathIfExists(resolvedSessionRoot);
+  if (
+    realSessionRoot &&
+    realAllowedRoot &&
+    !isInsidePath(realAllowedRoot, realSessionRoot)
+  ) {
+    throwReconstructSessionDisclosureBlocked({
+      requestedSessionRoot: args.sessionRoot,
+      resolvedSessionRoot,
+      realSessionRoot,
+      projectRoot,
+      realProjectRoot,
+      allowedRoot,
+      realAllowedRoot,
+      reasonCode: "reconstruct_session_root_realpath_escape",
+      humanMessage:
+        "MCP reconstruct session read was blocked because the sessionRoot realpath escapes the project reconstruct boundary.",
+    });
+  }
+
+  const canonicalSessionRoot = realSessionRoot ?? resolvedSessionRoot;
+  const recordPath = path.join(canonicalSessionRoot, "reconstruct-record.yaml");
+  if (await fileExists(recordPath)) {
+    const record = await readYamlDocument<{
+      session_id?: unknown;
+      artifact_refs?: Record<string, unknown>;
+    }>(recordPath);
+    if (record.session_id !== path.basename(canonicalSessionRoot)) {
+      throwReconstructSessionDisclosureBlocked({
+        requestedSessionRoot: args.sessionRoot,
+        resolvedSessionRoot,
+        realSessionRoot,
+        projectRoot,
+        realProjectRoot,
+        allowedRoot,
+        realAllowedRoot,
+        reasonCode: "reconstruct_session_record_owner_mismatch",
+        humanMessage:
+          "MCP reconstruct session read was blocked because the reconstruct record is owned by a different session.",
+        details: {
+          record_session_id:
+            typeof record.session_id === "string" ? record.session_id : null,
+          expected_session_id: path.basename(canonicalSessionRoot),
+        },
+      });
+    }
+    for (const [artifactKey, artifactRef] of Object.entries(record.artifact_refs ?? {})) {
+      if (typeof artifactRef !== "string" || artifactRef.length === 0) continue;
+      const resolvedArtifactRef = path.resolve(artifactRef);
+      if (!isInsidePath(resolvedSessionRoot, resolvedArtifactRef)) {
+        throwReconstructSessionDisclosureBlocked({
+          requestedSessionRoot: args.sessionRoot,
+          resolvedSessionRoot,
+          realSessionRoot,
+          projectRoot,
+          realProjectRoot,
+          allowedRoot,
+          realAllowedRoot,
+          reasonCode: "reconstruct_artifact_ref_outside_session_boundary",
+          humanMessage:
+            "MCP reconstruct session read was blocked because an artifact ref escapes the session boundary.",
+          details: {
+            artifact_key: artifactKey,
+            artifact_ref: resolvedArtifactRef,
+          },
+        });
+      }
+      const realArtifactRef = await realpathIfExists(resolvedArtifactRef);
+      if (
+        realArtifactRef &&
+        realSessionRoot &&
+        !isInsidePath(realSessionRoot, realArtifactRef)
+      ) {
+        throwReconstructSessionDisclosureBlocked({
+          requestedSessionRoot: args.sessionRoot,
+          resolvedSessionRoot,
+          realSessionRoot,
+          projectRoot,
+          realProjectRoot,
+          allowedRoot,
+          realAllowedRoot,
+          reasonCode: "reconstruct_artifact_ref_realpath_escape",
+          humanMessage:
+            "MCP reconstruct session read was blocked because an artifact ref realpath escapes the session boundary.",
+          details: {
+            artifact_key: artifactKey,
+            artifact_ref: resolvedArtifactRef,
+            real_artifact_ref: realArtifactRef,
+          },
+        });
+      }
+    }
+  }
+
+  return canonicalSessionRoot;
+}
+
 async function callTool(
   name: string,
   args: unknown,
@@ -476,12 +895,12 @@ async function callTool(
       case "onto.review": {
         const parsed = OntoReviewToolInputSchema.parse(args);
         if (parsed.prepareOnly) {
-          const prepared = await api.prepareReview(toReviewRequest(parsed));
+          const prepared = await reviewApi.prepareReview(toReviewRequest(parsed));
           return formatToolResult(prepared);
         }
         const request = toReviewRequest(parsed);
         const progressToken = options.progressToken;
-        const result = await api.runReview({
+        const result = await reviewApi.runReview({
           ...request,
           ...(progressToken !== undefined && progressToken !== null
             ? {
@@ -494,24 +913,186 @@ async function callTool(
       }
       case "onto.prepare_review": {
         const parsed = OntoPrepareReviewToolInputSchema.parse(args);
-        const result = await api.prepareReview(toReviewRequest(parsed));
+        const result = await reviewApi.prepareReview(toReviewRequest(parsed));
         return formatToolResult(result);
       }
       case "onto.review_status": {
         const parsed = OntoReviewSessionInputSchema.parse(args);
         const sessionRoot = await resolveAllowedSessionRoot(parsed);
-        return formatToolResult(await api.getReviewStatus(sessionRoot));
+        return formatToolResult(await reviewApi.getReviewStatus(sessionRoot));
       }
       case "onto.review_result": {
         const parsed = OntoReviewSessionInputSchema.parse(args);
         const sessionRoot = await resolveAllowedSessionRoot(parsed);
-        return formatToolResult(await api.getReviewResult(sessionRoot));
+        return formatToolResult(await reviewApi.getReviewResult(sessionRoot));
       }
       case "onto.list_lenses":
-        return formatToolResult(await api.listLenses());
+        return formatToolResult(await reviewApi.listLenses());
       case "onto.list_domains": {
         const parsed = OntoListDomainsToolInputSchema.parse(args ?? {});
-        return formatToolResult(await api.listDomains(parsed.projectRoot));
+        return formatToolResult(await reviewApi.listDomains(parsed.projectRoot));
+      }
+      case "onto.list_source_profiles": {
+        const parsed = OntoListSourceProfilesToolInputSchema.parse(args ?? {});
+        return formatToolResult(
+          await reconstructApi.listSourceProfiles(parsed.projectRoot),
+        );
+      }
+      case "onto.observe_source": {
+        const parsed = OntoObserveSourceToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = resolveReconstructSessionRoot({
+          projectRoot,
+          ...(parsed.sessionRoot ? { sessionRoot: parsed.sessionRoot } : {}),
+        });
+        const targetRefs = parsed.targetRefs.map((targetRef) =>
+          resolveInsideProject({
+            projectRoot,
+            ref: targetRef,
+            label: "targetRefs[]",
+          })
+        );
+        const filesystemAllowedRoots = parsed.filesystemAllowedRoots?.map((root) =>
+          resolveInsideProject({
+            projectRoot,
+            ref: root,
+            label: "filesystemAllowedRoots[]",
+          })
+        );
+        const profilesRoot = parsed.profilesRoot
+          ? resolveInsideProject({
+              projectRoot,
+              ref: parsed.profilesRoot,
+              label: "profilesRoot",
+            })
+          : undefined;
+        return formatToolResult(
+          await reconstructApi.prepareReconstruct({
+            projectRoot,
+            targetRefs,
+            ...(sessionRoot ? { sessionRoot } : {}),
+            ...(profilesRoot ? { profilesRoot } : {}),
+            ...(filesystemAllowedRoots ? { filesystemAllowedRoots } : {}),
+          }),
+        );
+      }
+      case "onto.validate_reconstruct_directive": {
+        const parsed = OntoValidateReconstructDirectiveToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sourceObservationsPath = resolveInsideProject({
+          projectRoot,
+          ref: parsed.sourceObservationsPath,
+          label: "sourceObservationsPath",
+        });
+        const outputPath = parsed.outputPath
+          ? resolveInsideProject({
+              projectRoot,
+              ref: parsed.outputPath,
+              label: "outputPath",
+            })
+          : undefined;
+        if (parsed.directiveKind === "source_observation") {
+          return formatToolResult(
+            await reconstructApi.validateSourceObservationDirective({
+              directivePath: resolveInsideProject({
+                projectRoot,
+                ref: parsed.directivePath,
+                label: "directivePath",
+              }),
+              sourceObservationsPath,
+              ...(outputPath ? { outputPath } : {}),
+            }),
+          );
+        }
+        return formatToolResult(
+          await reconstructApi.validateSeedCandidate({
+            seedCandidatePath: resolveInsideProject({
+              projectRoot,
+              ref: parsed.seedCandidatePath,
+              label: "seedCandidatePath",
+            }),
+            sourceObservationsPath,
+            ...(parsed.sourceObservationDirectivePath
+              ? {
+                  sourceObservationDirectivePath: resolveInsideProject({
+                    projectRoot,
+                    ref: parsed.sourceObservationDirectivePath,
+                    label: "sourceObservationDirectivePath",
+                  }),
+                }
+              : {}),
+            ...(parsed.sourceObservationDirectiveValidationPath
+              ? {
+                  sourceObservationDirectiveValidationPath: resolveInsideProject({
+                    projectRoot,
+                    ref: parsed.sourceObservationDirectiveValidationPath,
+                    label: "sourceObservationDirectiveValidationPath",
+                  }),
+                }
+              : {}),
+            ...(outputPath ? { outputPath } : {}),
+          }),
+        );
+      }
+      case "onto.reconstruct": {
+        const parsed = OntoReconstructToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = resolveReconstructSessionRoot({
+          projectRoot,
+          ...(parsed.sessionRoot ? { sessionRoot: parsed.sessionRoot } : {}),
+        });
+        const targetRefs = parsed.targetRefs.map((targetRef) =>
+          resolveInsideProject({
+            projectRoot,
+            ref: targetRef,
+            label: "targetRefs[]",
+          })
+        );
+        const filesystemAllowedRoots = parsed.filesystemAllowedRoots?.map((root) =>
+          resolveInsideProject({
+            projectRoot,
+            ref: root,
+            label: "filesystemAllowedRoots[]",
+          })
+        );
+        const profilesRoot = parsed.profilesRoot
+          ? resolveInsideProject({
+              projectRoot,
+              ref: parsed.profilesRoot,
+              label: "profilesRoot",
+            })
+          : undefined;
+        return formatToolResult(
+          await reconstructApi.runReconstruct({
+            projectRoot,
+            targetRefs,
+            intent: parsed.intent,
+            semanticAuthorRealization: parsed.semanticAuthorRealization,
+            confirmationProviderRealization:
+              parsed.confirmationProviderRealization,
+            ...(sessionRoot ? { sessionRoot } : {}),
+            ...(profilesRoot ? { profilesRoot } : {}),
+            ...(filesystemAllowedRoots ? { filesystemAllowedRoots } : {}),
+          }),
+        );
+      }
+      case "onto.reconstruct_status": {
+        const parsed = OntoReconstructSessionInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedReconstructSessionRoot({
+          projectRoot,
+          sessionRoot: parsed.sessionRoot,
+        });
+        return formatToolResult(await reconstructApi.getRunStatus(sessionRoot));
+      }
+      case "onto.reconstruct_result": {
+        const parsed = OntoReconstructSessionInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedReconstructSessionRoot({
+          projectRoot,
+          sessionRoot: parsed.sessionRoot,
+        });
+        return formatToolResult(await reconstructApi.getRunResult(sessionRoot));
       }
       default:
         return formatToolError(`Unknown tool: ${name}`);

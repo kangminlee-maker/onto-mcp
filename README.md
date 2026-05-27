@@ -16,6 +16,13 @@ harnesses for verification and debugging.
 
 The active implementation target is `review`.
 
+Across `review`, `reconstruct`, and future `evolve`, targets are not assumed to
+be code. Runtime contracts classify the material form with
+`target_material_kind` (`code`, `spreadsheet`, `document`, `database`, `mixed`,
+or `unknown`) before choosing observation, validation, or adapter behavior. The
+cross-process goal contract lives at
+`.onto/processes/shared/target-material-kind-contract.md`.
+
 `review` performs:
 
 1. invocation interpretation and binding
@@ -27,8 +34,20 @@ The active implementation target is `review`.
 7. `ReviewRecord` assembly
 8. concise human-readable final output
 
-`learn`, `govern`, `reconstruct`, and `evolve` remain separate design slices.
-They should be added to MCP after review is stable.
+`reconstruct` now has a current design contract under
+`.onto/processes/reconstruct/`, material-aware runtime helpers, and a bounded
+happy-path runner. The runner classifies target material, writes source
+observations, accepts pluggable LLM-owned directive authors and confirmation
+providers, validates evidence refs, computes deterministic metrics, and writes
+`final-output.md`, `reconstruct-run-manifest.yaml`, and the primary
+`reconstruct-record.yaml`. Code is the first fixture; the runner path is shared
+with spreadsheet/document/database material through source profiles and
+material-specific observers. The current public run path is an explicit mock
+semantic/confirmation happy path; domain context selection, failure
+classification, and revision proposal are recorded as deferred scope.
+`evolve` has a future material-kind adapter contract at
+`.onto/processes/evolve/material-kind-adapter-contract.md`, but no active
+runtime or MCP tool. `learn` and `govern` remain separate design slices.
 
 ## Public Interface
 
@@ -48,6 +67,12 @@ Available MCP tools:
 | `onto.review_result` | Read `review-record.yaml` and final output |
 | `onto.list_lenses` | List canonical lens sets |
 | `onto.list_domains` | List available domain ids |
+| `onto.list_source_profiles` | List reconstruct source profiles |
+| `onto.observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
+| `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files |
+| `onto.reconstruct` | Run the material-aware reconstruct happy path with explicit mock semantic/confirmation realization |
+| `onto.reconstruct_status` | Read reconstruct session status and artifact refs |
+| `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, and final output |
 
 MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
@@ -175,7 +200,9 @@ Primary outputs:
 | Path | Role |
 |---|---|
 | `.onto/authority/` | canonical ontology data and runtime registries |
+| `.onto/processes/shared/` | cross-process target and runtime contracts |
 | `.onto/processes/review/` | review contracts |
+| `.onto/processes/reconstruct/` | reconstruct contracts and source profiles |
 | `.onto/domains/` | bundled domain documents |
 | `src/core-runtime/` | TypeScript runtime |
 | `src/core-api/` | library facade used by MCP |

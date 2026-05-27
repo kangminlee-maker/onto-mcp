@@ -1,6 +1,6 @@
 ---
 version: 2
-last_updated: "2026-03-30"
+last_updated: "2026-05-27"
 source: manual
 status: established
 ---
@@ -66,6 +66,7 @@ Each rule is tagged with a strength level:
 
 - [MUST-REMOVE] Change history mixed into navigation index — INDEX.md describing both file lists (navigation) and change logs (history). Since navigation structure and change history have different update cycles and consumption purposes, separation is mandatory.
 - [SHOULD-REMOVE] Change history fields and navigation relationship fields mixed in frontmatter — Frontmatter describes current-state metadata, so change history should be delegated to git or a separate history file.
+- [MUST-REMOVE] Backward-compatibility notes, deprecated behavior, migration rationale, and historical alternatives in documents loaded for current execution — These materials inflate model context with non-current behavior. Keep execution context focused on current behavior, current contracts, current authority, and current failure handling; place historical material in isolated archive, deprecated, or development-record paths and link only when a task needs that history.
 
 ### Structural Duplication
 

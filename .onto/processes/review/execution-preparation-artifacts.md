@@ -179,8 +179,8 @@ members:
 
 ## 6. review_target_profile
 
-`review_target_profile`은 현재 review target의 artifact role과 closure
-obligation을 고정한다.
+`review_target_profile`은 현재 review target의 artifact role, target
+material kind, closure obligation을 고정한다.
 
 이 artifact는 target을 다시 읽기 위한 권한이 아니라, 이미 고정된 target refs를
 어떤 종류의 artifact로 평가할지 정하는 runtime-owned profile이다.
@@ -190,6 +190,7 @@ obligation을 고정한다.
 - `target_scope_kind`
 - `materialized_input_kind`
 - `target_input_kind`
+- `target_material_kind`
 - `artifact_roles`
 - `domain`
 - `maturity`
@@ -197,6 +198,7 @@ obligation을 고정한다.
 - `review_goal`
 - `closure_obligation_policy`
 - `target_refs`
+- `material_profile`
 - `boundary`
 - `inference`
 

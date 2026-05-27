@@ -1,0 +1,15 @@
+schema_version: "1"
+session_id: reconstruct-spreadsheet-session
+created_at: 2026-05-27T04:49:37.555Z
+inventory_units:
+  - ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/accounting-schedule.csv
+    exists: true
+    target_material_kind: spreadsheet
+    inventory_unit: workbook_sheet_or_table_unit
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profiles/spreadsheet.md
+    scan_status: planned
+    skip_reason: null
+scan_boundary:
+  filesystem_allowed_roots:
+    - /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind
+  source: binding

@@ -66,7 +66,7 @@ Ownership:
 | `actor-invocation-profiles.yaml` | runtime | resolved actor LLM invocation profiles |
 | `actor-consumer-bindings.yaml` | runtime | actor profile to context consumer binding |
 | `domain-binding.yaml` | runtime | selected domain docs, required status, hashes |
-| `review-target-profile.yaml` | runtime | artifact role, target input kind, closure level, target refs, and hashes |
+| `review-target-profile.yaml` | runtime | artifact role, target input kind, target material kind, closure level, target refs, and hashes |
 | `review-value-alignment-criteria.yaml` | runtime with user authority | purpose/value dispatch gate |
 | `review-context-manifest.yaml` | runtime | context source eligibility and packet provenance |
 | `lens-completion-barrier.yaml` | runtime | lens completion gate for downstream stages |

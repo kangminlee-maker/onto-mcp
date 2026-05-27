@@ -63,6 +63,7 @@ created_at: "2026-05-24T12:00:00+09:00"
 target_scope_kind: bundle
 materialized_input_kind: bundle_member_texts
 target_input_kind: explicit_bundle
+target_material_kind: code
 requested_target: package.json
 review_intent_summary: "review implementation change"
 artifact_roles:
@@ -88,6 +89,16 @@ target_refs:
     kind: file
     exists: true
     sha256: "..."
+material_profile:
+  target_material_kind: code
+  target_material_kind_candidates:
+    - code
+  support_status: partial
+  unsupported_reason: review records target material kind, but material-specific validation is not implemented yet
+  detection:
+    owner: runtime_heuristic
+    confidence: 0.92
+    confidence_basis: file name or extension indicates code/config material
 boundary:
   filesystem_allowed_roots:
     - /abs/project
@@ -122,7 +133,36 @@ representation rather than the original artifact set.
 
 ---
 
-## 6. Artifact Roles
+## 6. Target Material Kind Compatibility
+
+The current profile fixes how the target entered review, what artifact role it
+carries, what material kind it appears to be, and what closure obligation
+applies.
+
+`target_material_kind` uses the shared values from
+`.onto/authority/core-lexicon.yaml`:
+
+```text
+code | spreadsheet | document | database | mixed | unknown
+```
+
+The cross-process goal and completion conditions for this extension are defined
+in `.onto/processes/shared/target-material-kind-contract.md`.
+
+This axis must stay separate from:
+
+- `domain`: what the target is about
+- `target_input_kind`: how the target entered runtime
+- `artifact_roles`: what responsibility the artifact carries
+- `medium`: a cross-product reference and learning frame
+
+The current runtime records material kind and detection confidence as a bounded
+heuristic. It must not claim material-specific validation until per-material
+validators or adapters are implemented.
+
+---
+
+## 7. Artifact Roles
 
 Roles are role-based, not file-extension based:
 
@@ -145,7 +185,7 @@ bundle kind, and file extension. The profile records `inference.confidence` and
 
 ---
 
-## 7. Closure Level And Obligation
+## 8. Closure Level And Obligation
 
 Allowed closure levels:
 
@@ -169,7 +209,7 @@ These values are distinct from severity, timing, and closure class.
 
 ---
 
-## 8. Consumer Policy
+## 9. Consumer Policy
 
 The review target profile is admitted to:
 
@@ -185,7 +225,7 @@ already bound target refs and the already declared filesystem boundary.
 
 ---
 
-## 9. Binding Rules
+## 10. Binding Rules
 
 Review target binding is fail-loud.
 
@@ -208,7 +248,7 @@ Review target binding is fail-loud.
 
 ---
 
-## 10. Verification Surface
+## 11. Verification Surface
 
 The MCP review conformance suite must cover:
 

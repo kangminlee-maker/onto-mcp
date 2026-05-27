@@ -35,6 +35,10 @@
 | `.onto/principles/` | 개발 규범 — 설계·구현 원칙 (rank 2~4) | 제외 |
 | `development-records/` | 개발 이력 — 감사, 설계, 추적, handoff 기록 | 제외 |
 
+target material 관련 작업 시 추가로 읽을 문서:
+
+1. [target-material-kind-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/target-material-kind-contract.md)
+
 `review` 작업 시 추가로 읽을 문서:
 
 1. [productized-live-path.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/productized-live-path.md)
@@ -52,6 +56,12 @@
 13. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
 14. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
 15. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+
+`reconstruct` 작업 시 추가로 읽을 문서:
+
+1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
+2. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
+3. selected source profile under `.onto/processes/reconstruct/source-profiles/`
 
 ---
 
@@ -75,6 +85,7 @@
 
 - `호출 해석 (InvocationInterpretation)` — LLM 소유
 - `호출 고정 (InvocationBinding)` — runtime 소유
+- `대상물 형식 (TargetMaterialKind)` — code/spreadsheet/document/database/mixed/unknown 처리 축
 - `리뷰 기록 (ReviewRecord)` — primary artifact
 - `맥락 격리 추론 단위 (ContextIsolatedReasoningUnit)` — lens 실행 원칙
 
@@ -223,6 +234,7 @@ core 제품화 계층은 TypeScript다.
 
 1. 어떤 ontology concept를 바꾸는가
 2. canonical seat가 어디인가
-3. `LLM` 소유인가, runtime 소유인가
-4. 먼저 prompt-backed path에서 작동시킬 수 있는가
-5. 이후 어떤 bounded TS runtime step으로 치환할 것인가
+3. 대상물 형식(`target_material_kind`)이 무엇이며 처리 방식이 달라지는가
+4. `LLM` 소유인가, runtime 소유인가
+5. 먼저 prompt-backed path에서 작동시킬 수 있는가
+6. 이후 어떤 bounded TS runtime step으로 치환할 것인가

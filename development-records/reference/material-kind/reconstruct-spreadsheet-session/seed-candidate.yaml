@@ -1,0 +1,35 @@
+schema_version: "1"
+session_id: reconstruct-spreadsheet-session
+created_at: 2026-05-27T00:00:00.000Z
+purpose:
+  claim_id: purpose-1
+  statement: Reconstruct a small evidence-backed ontology seed for the referenced
+    spreadsheet material.
+  evidence_refs:
+    - &a1
+      observation_id: obs_spreadsheet_b4d5d4be8d0151ec
+      target_material_kind: spreadsheet
+      source_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/accounting-schedule.csv
+      location: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/accounting-schedule.csv
+non_goals:
+  - claim_id: non-goal-1
+    statement: Do not treat runtime source observation as accounting-meaning validation.
+    evidence_refs:
+      - *a1
+entities:
+  - claim_id: entity-1
+    statement: The spreadsheet file is a candidate source artifact for later
+      ontology interpretation.
+    evidence_refs:
+      - *a1
+relations: []
+actions: []
+properties:
+  - claim_id: property-1
+    statement: The candidate source artifact carries spreadsheet material kind evidence.
+    evidence_refs:
+      - *a1
+rules: []
+open_questions:
+  - Accounting semantics require a later LLM/user-mediated interpretation step
+    and are not produced by runtime.

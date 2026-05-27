@@ -1,0 +1,3 @@
+account,period,amount,formula_hint
+cash,2026-01,1000,"=SUM(C2:C2)"
+revenue,2026-01,1000,"linked to cash"

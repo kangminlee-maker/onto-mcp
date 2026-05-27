@@ -1235,6 +1235,8 @@ async function buildPreparedOpeningBriefInput(
     review_target_profile: reviewTargetProfile
       ? {
           target_input_kind: reviewTargetProfile.target_input_kind,
+          target_material_kind: reviewTargetProfile.target_material_kind,
+          material_profile: reviewTargetProfile.material_profile,
           artifact_roles: reviewTargetProfile.artifact_roles,
           domain: reviewTargetProfile.domain,
           maturity: reviewTargetProfile.maturity,

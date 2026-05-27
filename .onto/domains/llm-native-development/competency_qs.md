@@ -1,6 +1,6 @@
 ---
 version: 2
-last_updated: "2026-03-30"
+last_updated: "2026-05-27"
 source: manual
 status: established
 ---
@@ -101,6 +101,10 @@ Verifies that model inputs are structured, constrained, and managed to produce r
 - **CQ-P09** [P3] Are prompt injection risks from user-supplied content addressed at the prompt level?
   - Inference path: logic_rules.md 'Safety Logic' → injection defense; logic_rules.md 'Prompt Design Logic' → user input is lowest priority
   - Verification criteria: PASS if user content is delimited or sanitized before inclusion in prompts. FAIL if user content is concatenated without boundary markers
+
+- **CQ-P10** [P2] Is execution context free of non-current compatibility and deprecation material?
+  - Inference path: conciseness_rules.md 'Navigation and History Mixing' → execution context should contain current behavior, contracts, authority, and failure handling; historical material belongs in isolated paths
+  - Verification criteria: PASS if documents loaded for execution contain current behavior only and link to isolated history only when needed. FAIL if backward-compatibility notes, deprecated behavior, migration rationale, or historical alternatives are loaded by default
 
 ---
 

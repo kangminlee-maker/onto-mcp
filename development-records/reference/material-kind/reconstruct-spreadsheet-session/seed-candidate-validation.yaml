@@ -1,0 +1,13 @@
+schema_version: "1"
+session_id: reconstruct-spreadsheet-session
+created_at: 2026-05-27T04:49:37.564Z
+seed_candidate_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/seed-candidate.yaml
+source_observations_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observations.yaml
+source_observation_directive_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observation-directive.yaml
+source_observation_directive_validation_ref: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observation-directive-validation.yaml
+validation_status: valid
+semantic_claim_count: 4
+evidence_ref_count: 4
+validation_results:
+  - seed_candidate_evidence_valid
+violations: []

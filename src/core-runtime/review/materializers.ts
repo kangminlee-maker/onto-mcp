@@ -58,6 +58,10 @@ import {
   issueArtifactConsumerId,
   issueArtifactSpec,
 } from "./issue-artifact-runtime.js";
+import {
+  detectTargetMaterialKind,
+  reviewMaterialSupportStatus,
+} from "../target-material-kind.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
   sessionRoot: string;
@@ -1162,6 +1166,10 @@ async function buildReviewTargetProfileArtifact(
     resolvedTargetRefs: resolvedRefs,
     ...(params.bundleKind ? { bundleKind: params.bundleKind } : {}),
   });
+  const materialDetection = await detectTargetMaterialKind(resolvedRefs);
+  const materialSupport = reviewMaterialSupportStatus(
+    materialDetection.target_material_kind,
+  );
   const closureLevel = deriveClosureLevel({
     inputKind,
     primaryRole: roles.primary,
@@ -1187,6 +1195,7 @@ async function buildReviewTargetProfileArtifact(
     target_scope_kind: params.scopeKind,
     materialized_input_kind: params.materializedKind,
     target_input_kind: inputKind,
+    target_material_kind: materialDetection.target_material_kind,
     requested_target: params.requestedTarget ?? null,
     review_intent_summary: params.reviewIntentSummary ?? null,
     artifact_roles: {
@@ -1209,6 +1218,18 @@ async function buildReviewTargetProfileArtifact(
       "out_of_scope",
     ],
     target_refs: targetRefs,
+    material_profile: {
+      target_material_kind: materialDetection.target_material_kind,
+      target_material_kind_candidates:
+        materialDetection.target_material_kind_candidates,
+      support_status: materialSupport.status,
+      unsupported_reason: materialSupport.reason,
+      detection: {
+        owner: "runtime_heuristic",
+        confidence: materialDetection.confidence,
+        confidence_basis: materialDetection.confidence_basis,
+      },
+    },
     boundary: {
       filesystem_allowed_roots:
         params.filesystemAllowedRoots && params.filesystemAllowedRoots.length > 0

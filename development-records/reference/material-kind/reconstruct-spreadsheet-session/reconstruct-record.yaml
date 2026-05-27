@@ -1,0 +1,48 @@
+schema_version: "1"
+reconstruct_record_id: reconstruct-record:reconstruct-spreadsheet-session
+session_id: reconstruct-spreadsheet-session
+entrypoint: reconstruct
+record_stage: seed_candidate_validated
+created_at: 2026-05-27T04:49:37.564Z
+updated_at: 2026-05-27T04:49:37.564Z
+target_material_kind: spreadsheet
+support_status: partial
+artifact_refs:
+  target_material_profile: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/target-material-profile.yaml
+  source_inventory: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-inventory.yaml
+  source_observations: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observations.yaml
+  source_observation_directive: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observation-directive.yaml
+  source_observation_directive_validation: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/source-observation-directive-validation.yaml
+  domain_context_selection: null
+  seed_candidate: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/seed-candidate.yaml
+  seed_candidate_validation: /Users/kangmin/cowork/onto-mcp/development-records/reference/material-kind/reconstruct-spreadsheet-session/seed-candidate-validation.yaml
+  seed_confirmation: null
+  competency_questions: null
+  failure_classification: null
+  revision_proposal: null
+  reconstruct_metrics: null
+  stop_decision: null
+validation_summary:
+  source_observation_directive_status: valid
+  seed_candidate_status: valid
+  semantic_claim_count: 4
+  evidence_ref_count: 4
+missing_artifacts: []
+runtime_boundary:
+  semantic_generation: not_performed
+  runtime_owned_gates:
+    - target_material_profiling
+    - source_inventory
+    - source_observation
+    - source_observation_directive_validation
+    - seed_candidate_validation
+    - record_assembly
+  llm_owned_directives:
+    - source_observation_directive
+    - domain_context_selection
+    - seed_candidate
+    - competency_questions
+    - failure_classification
+    - revision_proposal
+    - stop_decision
+warnings: []

@@ -152,7 +152,7 @@ Derivation sources:
   `closure_class`, and `closure_obligation`
 - runtime halt and retry state: `execution-result.yaml` and
   `review-run-manifest.yaml`
-- target role and boundary: `review-target-profile.yaml`
+- target role, material kind, and boundary: `review-target-profile.yaml`
 
 Recommended presentation labels:
 
