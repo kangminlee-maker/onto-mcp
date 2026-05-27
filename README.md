@@ -78,6 +78,28 @@ MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
 final result to the user without inventing settings or findings.
 
+Minimal reconstruct MCP call shape:
+
+```json
+{
+  "name": "onto.reconstruct",
+  "arguments": {
+    "projectRoot": "/path/to/project",
+    "targetRefs": ["src/example.ts"],
+    "intent": "Create a bounded reconstruct Seed from this target.",
+    "sessionRoot": ".onto/reconstruct/example-run",
+    "semanticAuthorRealization": "mock",
+    "confirmationProviderRealization": "mock"
+  }
+}
+```
+
+`semanticAuthorRealization` and `confirmationProviderRealization` are required
+so completed reconstruct runs are explicit about their current mock semantics.
+Today this proves the material-aware happy path, artifact gates, and MCP
+surface. It does not claim live host-LLM semantic authorship or live
+user-mediated confirmation.
+
 Repository-local development harness:
 
 ```bash
@@ -194,6 +216,35 @@ Primary outputs:
 | `review-run-manifest.yaml` | packet/output refs and hashes |
 | `review-record.yaml` | primary structured review artifact |
 | `final-output.md` | principal-facing report with `Final Review Result` explanation |
+
+## Reconstruct Artifacts
+
+A reconstruct session writes artifacts under `.onto/reconstruct/<session-id>/`.
+
+Implemented happy-path outputs:
+
+| Artifact | Owner | Purpose |
+|---|---|---|
+| `target-material-profile.yaml` | runtime | detected `target_material_kind`, support status, and selected source profiles |
+| `source-inventory.yaml` | runtime | material-specific inventory units and scan boundary |
+| `source-observations.yaml` | runtime | structural observations with stable evidence ids |
+| `source-observation-directive.yaml` | mock/host author | selected observations for evidence use |
+| `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
+| `seed-candidate.yaml` | mock/host author | evidence-backed Seed candidate |
+| `seed-candidate-validation.yaml` | runtime | Seed claim and evidence-ref validation |
+| `seed-confirmation.yaml` | mock/host/user mediated | accepted, rejected, or partial Seed confirmation |
+| `competency-questions.yaml` | mock/host author | questions linked to confirmed claims |
+| `reconstruct-metrics.yaml` | runtime | deterministic counts, unresolved count, and pass rate |
+| `stop-decision.yaml` | mock/host author | stop, continue, or ask-user decision based on metrics |
+| `final-output.md` | mock/host author | user-facing result grounded in artifacts |
+| `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, and happy-path scope |
+| `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
+
+Current deferred reconstruct artifacts are recorded in
+`reconstruct-run-manifest.yaml` under `happy_path_scope.deferred_artifacts`:
+`domain_context_selection`, `failure_classification`, and `revision_proposal`.
+Those require additional host/user semantic decisions and are outside the
+current mock happy path.
 
 ## Repository Map
 
