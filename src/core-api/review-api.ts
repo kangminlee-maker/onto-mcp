@@ -3,6 +3,7 @@ import type {
   InvocationInterpretationArtifact,
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
+  ReviewLensCompletionBarrierArtifact,
   ReviewMode,
   ReviewRecord,
   ReviewResultClassificationSummary,
@@ -11,6 +12,7 @@ import type {
   ReviewTargetProfileArtifact,
   ReviewTargetScopeKind,
 } from "../core-runtime/review/artifact-types.js";
+import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -37,6 +39,14 @@ import {
   reviewProgressStepIdFromHalt,
 } from "../core-runtime/review/review-progress-contract.js";
 import { reviewPrepareOnly, runReviewInvokeCli } from "../core-runtime/cli/review-invoke.js";
+import {
+  buildReviewPipelineExecutionLedger,
+  type ReviewRunManifestForLedger,
+} from "../core-runtime/review/pipeline-execution-ledger.js";
+import {
+  buildReviewContinuationPlan,
+  type ReviewContinuationPlan,
+} from "../core-runtime/review/continuation-plan.js";
 
 export interface PrepareReviewRequest {
   projectRoot: string;
@@ -116,6 +126,7 @@ export interface ReviewRunResult {
   summary?: unknown;
   resultOverview?: unknown;
   artifactRefs?: Record<string, string>;
+  pipelineExecutionLedger?: PipelineExecutionLedger;
   resultClassificationSummary?: ReviewResultClassificationSummary;
   failureRefs?: string[];
   routeVisibility?: ReviewRouteVisibility | null;
@@ -151,6 +162,8 @@ export interface ReviewStatus {
     | "failed"
     | "unknown";
   artifactRefs: Record<string, string>;
+  pipelineExecutionLedger?: PipelineExecutionLedger;
+  continuationPlan?: ReviewContinuationPlan;
   failureRefs: string[];
   structuredFailures: ReviewStructuredFailureRecord[];
   routeVisibility?: ReviewRouteVisibility | null;
@@ -165,6 +178,7 @@ export interface ReviewResult {
   reviewRunManifestPath: string;
   finalOutputText?: string;
   artifactRefs: Record<string, string>;
+  pipelineExecutionLedger?: PipelineExecutionLedger;
   resultClassificationSummary?: ReviewResultClassificationSummary;
   failureRefs: string[];
   routeVisibility?: ReviewRouteVisibility | null;
@@ -1357,6 +1371,30 @@ async function collectArtifactRefs(sessionRoot: string): Promise<Record<string, 
   return Object.fromEntries(entries);
 }
 
+async function buildPipelineExecutionLedgerIfPossible(args: {
+  sessionRoot: string;
+  artifactRefs: Record<string, string>;
+  executionPlan: ReviewExecutionPlan | null;
+  executionResult: ReviewExecutionResultArtifact | null;
+}): Promise<PipelineExecutionLedger | undefined> {
+  if (!args.executionPlan) return undefined;
+  const reviewRunManifest = await readOptionalYaml<ReviewRunManifestForLedger>(
+    path.join(args.sessionRoot, "review-run-manifest.yaml"),
+  );
+  const lensCompletionBarrier =
+    await readOptionalYaml<ReviewLensCompletionBarrierArtifact>(
+      path.join(args.sessionRoot, "lens-completion-barrier.yaml"),
+    );
+  return buildReviewPipelineExecutionLedger({
+    sessionRoot: args.sessionRoot,
+    artifactRefs: args.artifactRefs,
+    executionPlan: args.executionPlan,
+    executionResult: args.executionResult,
+    reviewRunManifest,
+    lensCompletionBarrier,
+  });
+}
+
 async function directoryHasMarkdownFiles(directoryPath: string): Promise<boolean> {
   try {
     const entries = await fs.readdir(directoryPath);
@@ -1531,6 +1569,13 @@ export function createOntoReviewCoreApi(
       const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
         path.join(resolvedResultSessionRoot, "execution-result.yaml"),
       );
+      const pipelineExecutionLedger =
+        await buildPipelineExecutionLedgerIfPossible({
+          sessionRoot: resolvedResultSessionRoot,
+          artifactRefs,
+          executionPlan,
+          executionResult,
+        });
       const reviewRecord = await readOptionalReviewRecord(
         path.join(resolvedResultSessionRoot, "review-record.yaml"),
       );
@@ -1608,6 +1653,7 @@ export function createOntoReviewCoreApi(
           ? { resultOverview: parsed.result_overview }
           : {}),
         artifactRefs,
+        ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
         resultClassificationSummary,
         ...failures,
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedResultSessionRoot),
@@ -1626,6 +1672,16 @@ export function createOntoReviewCoreApi(
       const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
         path.join(resolvedSessionRoot, "execution-result.yaml"),
       );
+      const pipelineExecutionLedger =
+        await buildPipelineExecutionLedgerIfPossible({
+          sessionRoot: resolvedSessionRoot,
+          artifactRefs,
+          executionPlan,
+          executionResult,
+        });
+      const continuationPlan = pipelineExecutionLedger
+        ? buildReviewContinuationPlan({ ledger: pipelineExecutionLedger })
+        : undefined;
       const reviewRecord = await readOptionalReviewRecord(
         path.join(resolvedSessionRoot, "review-record.yaml"),
       );
@@ -1666,6 +1722,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status,
           artifactRefs,
+          ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
+          ...(continuationPlan ? { continuationPlan } : {}),
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
@@ -1678,6 +1736,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status,
           artifactRefs,
+          ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
+          ...(continuationPlan ? { continuationPlan } : {}),
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
@@ -1690,6 +1750,8 @@ export function createOntoReviewCoreApi(
           sessionRoot: resolvedSessionRoot,
           status,
           artifactRefs,
+          ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
+          ...(continuationPlan ? { continuationPlan } : {}),
           ...failures,
           routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
           llmPresentation,
@@ -1701,6 +1763,8 @@ export function createOntoReviewCoreApi(
         sessionRoot: resolvedSessionRoot,
         status: "unknown",
         artifactRefs,
+        ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
+        ...(continuationPlan ? { continuationPlan } : {}),
         ...failures,
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         llmPresentation,
@@ -1722,6 +1786,13 @@ export function createOntoReviewCoreApi(
       const executionResult = await readOptionalYaml<ReviewExecutionResultArtifact>(
         path.join(resolvedSessionRoot, "execution-result.yaml"),
       );
+      const pipelineExecutionLedger =
+        await buildPipelineExecutionLedgerIfPossible({
+          sessionRoot: resolvedSessionRoot,
+          artifactRefs,
+          executionPlan,
+          executionResult,
+        });
       const resultClassificationSummary =
         await readReviewResultClassification(resolvedSessionRoot);
       const status = reviewRecord.record_status;
@@ -1750,6 +1821,7 @@ export function createOntoReviewCoreApi(
         finalOutputPath,
         reviewRunManifestPath: path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         artifactRefs,
+        ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
         resultClassificationSummary,
         failureRefs,
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),

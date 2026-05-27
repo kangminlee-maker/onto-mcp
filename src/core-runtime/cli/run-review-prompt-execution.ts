@@ -45,6 +45,7 @@ import {
   writeIssueArtifactPromptPacket,
 } from "../review/issue-artifact-runtime.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
+import type { ReviewContinuationPlan } from "../review/continuation-plan.js";
 import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
 import {
   buildLensControlledDeliberationPrompt,
@@ -105,6 +106,7 @@ interface ExecutionOutcome {
   startedAtMs: number;
   completedAtMs: number;
   failure?: ExecutionFailure;
+  preservedResult?: ReviewUnitExecutionResult;
 }
 
 function errorMessage(error: unknown): string {
@@ -542,6 +544,7 @@ async function invokeExecutor(
 function toUnitExecutionResult(
   outcome: ExecutionOutcome,
 ): ReviewUnitExecutionResult {
+  if (outcome.preservedResult) return outcome.preservedResult;
   return {
     unit_id: outcome.dispatch.unit_id,
     unit_kind: outcome.dispatch.unit_kind,
@@ -555,6 +558,50 @@ function toUnitExecutionResult(
     // invokeExecutor; both ends are exact to millisecond precision.
     timestamp_provenance: "runner_wallclock",
     failure_message: outcome.failure?.message ?? null,
+  };
+}
+
+function allUnitExecutionResults(
+  artifact: ReviewExecutionResultArtifact | null,
+): ReviewUnitExecutionResult[] {
+  if (!artifact) return [];
+  return [
+    ...artifact.lens_execution_results,
+    ...(artifact.issue_artifact_execution_results ?? []),
+    ...(artifact.deliberation_execution_results ?? []),
+    ...(artifact.synthesize_execution_result
+      ? [artifact.synthesize_execution_result]
+      : []),
+  ];
+}
+
+function outcomeFromPreviousResult(
+  result: ReviewUnitExecutionResult,
+): ExecutionOutcome {
+  const startedAtMs = Date.parse(result.started_at);
+  const completedAtMs = Date.parse(result.completed_at);
+  return {
+    dispatch: {
+      unit_id: result.unit_id,
+      unit_kind: result.unit_kind,
+      packet_path: result.packet_path,
+      output_path: result.output_path,
+    },
+    success: result.status === "completed",
+    startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : Date.now(),
+    completedAtMs: Number.isFinite(completedAtMs) ? completedAtMs : Date.now(),
+    ...(result.status === "failed"
+      ? {
+          failure: {
+            unit_id: result.unit_id,
+            unit_kind: result.unit_kind,
+            packet_path: result.packet_path,
+            output_path: result.output_path,
+            message: result.failure_message ?? "Previous unit failed.",
+          },
+        }
+      : {}),
+    preservedResult: result,
   };
 }
 
@@ -1661,6 +1708,26 @@ function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
   return { step: spec.progress_step, label: spec.progress_label };
 }
 
+function issueArtifactOutputPath(
+  executionPlan: ReviewExecutionPlan,
+  artifactId: ReviewIssueArtifactId,
+): string {
+  switch (artifactId) {
+    case "finding-ledger":
+      return executionPlan.finding_ledger_path;
+    case "finding-relation-graph":
+      return executionPlan.finding_relation_graph_path;
+    case "issue-ledger":
+      return executionPlan.issue_ledger_path;
+    case "issue-stance-matrix":
+      return executionPlan.issue_stance_matrix_path;
+    case "deliberation-plan":
+      return executionPlan.deliberation_plan_path;
+    case "problem-framing":
+      return executionPlan.problem_framing_path;
+  }
+}
+
 async function runIssueArtifactDispatch(args: {
   projectRoot: string;
   sessionRoot: string;
@@ -1815,6 +1882,8 @@ async function runControlledLensDeliberation(args: {
   maxConcurrentLenses: number;
   unitTimeoutMs: number;
   issueArtifactContext?: string;
+  runUnitIds?: Set<string>;
+  preservedResultsByUnitId?: Map<string, ReviewUnitExecutionResult>;
 }): Promise<{
   deliberationDispatches: ExecutionDispatchResult[];
   deliberationOutcomes: ExecutionOutcome[];
@@ -1869,7 +1938,21 @@ async function runControlledLensDeliberation(args: {
     label: "lens deliberation responses",
     details: [`participating_lens_count=${deliberationDispatches.length}`],
   });
+  const shouldRunUnit = (unitId: string): boolean =>
+    args.runUnitIds === undefined || args.runUnitIds.has(unitId);
+  const preservedOutcomeForDispatch = (
+    dispatch: ExecutionDispatchResult,
+  ): ExecutionOutcome => {
+    const result = args.preservedResultsByUnitId?.get(dispatch.unit_id);
+    if (!result || result.status !== "completed") {
+      throw new Error(
+        `Cannot preserve continuation unit without a completed prior result: ${dispatch.unit_id}`,
+      );
+    }
+    return outcomeFromPreviousResult(result);
+  };
   for (const dispatch of deliberationDispatches) {
+    if (!shouldRunUnit(dispatch.unit_id)) continue;
     const lensId = dispatch.unit_id.replace(/^deliberation-/, "");
     const ownOutput = lensOutputById.get(lensId);
     if (!ownOutput) {
@@ -1905,6 +1988,10 @@ async function runControlledLensDeliberation(args: {
       if (currentIndex >= deliberationDispatches.length) return;
       const dispatch = deliberationDispatches[currentIndex];
       if (!dispatch) return;
+      if (!shouldRunUnit(dispatch.unit_id)) {
+        deliberationOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
+        continue;
+      }
       deliberationOutcomes[currentIndex] = await runSingleDispatchWithRetries({
         projectRoot,
         sessionRoot,
@@ -1951,46 +2038,51 @@ async function runControlledLensDeliberation(args: {
       }),
     );
 
-  const teamleadPacketText = buildTeamleadControlledDeliberationPrompt({
-    session_id: executionPlan.session_id,
-    output_path: executionPlan.deliberation_output_path,
-    lens_outputs: lensOutputs,
-    lens_deliberation_responses: lensDeliberationResponses,
-    ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
-  });
-  await fs.writeFile(
-    executionPlan.teamlead_deliberation_prompt_packet_path,
-    `${teamleadPacketText.trimEnd()}\n`,
-    "utf8",
-  );
-  await registerGeneratedPromptPacketRefForDispatch({
-    executionPlan,
-    consumerId: "controlled-deliberation",
-    packetPath: executionPlan.teamlead_deliberation_prompt_packet_path,
-  });
-
   const teamleadDispatch: ExecutionDispatchResult = {
     unit_id: "controlled-deliberation",
     unit_kind: "deliberation",
     packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
     output_path: executionPlan.deliberation_output_path,
   };
-  await emitReviewProgress({
-    executionPlan,
-    step: 10,
-    label: "teamlead controlled deliberation",
-    details: [`output_path=${executionPlan.deliberation_output_path}`],
-  });
-  const teamleadOutcome = await runSingleDispatchWithRetries({
-    projectRoot,
-    sessionRoot,
-    executionPlan,
-    executorConfig: teamleadExecutorConfig,
-    dispatch: teamleadDispatch,
-    maxRetries: 1,
-    retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
-    unitTimeoutMs,
-  });
+  let teamleadOutcome: ExecutionOutcome;
+  if (shouldRunUnit(teamleadDispatch.unit_id)) {
+    const teamleadPacketText = buildTeamleadControlledDeliberationPrompt({
+      session_id: executionPlan.session_id,
+      output_path: executionPlan.deliberation_output_path,
+      lens_outputs: lensOutputs,
+      lens_deliberation_responses: lensDeliberationResponses,
+      ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
+    });
+    await fs.writeFile(
+      executionPlan.teamlead_deliberation_prompt_packet_path,
+      `${teamleadPacketText.trimEnd()}\n`,
+      "utf8",
+    );
+    await registerGeneratedPromptPacketRefForDispatch({
+      executionPlan,
+      consumerId: "controlled-deliberation",
+      packetPath: executionPlan.teamlead_deliberation_prompt_packet_path,
+    });
+
+    await emitReviewProgress({
+      executionPlan,
+      step: 10,
+      label: "teamlead controlled deliberation",
+      details: [`output_path=${executionPlan.deliberation_output_path}`],
+    });
+    teamleadOutcome = await runSingleDispatchWithRetries({
+      projectRoot,
+      sessionRoot,
+      executionPlan,
+      executorConfig: teamleadExecutorConfig,
+      dispatch: teamleadDispatch,
+      maxRetries: 1,
+      retryInitialDelayMs: DEFAULT_LENS_RETRY_INITIAL_DELAY_MS,
+      unitTimeoutMs,
+    });
+  } else {
+    teamleadOutcome = preservedOutcomeForDispatch(teamleadDispatch);
+  }
   if (!teamleadOutcome.success) {
     throw new ReviewControlledDeliberationDispatchError(
       `Teamlead controlled deliberation failed: ${teamleadOutcome.failure?.message ?? "unknown error"}`,
@@ -2025,6 +2117,7 @@ export async function executeReviewPromptExecution(
     reviewExecutionProfile?: ReviewExecutionProfile;
     ontoConfig?: OntoConfig;
     unitTimeoutMs?: number;
+    continuationPlan?: ReviewContinuationPlan;
   },
 ): Promise<ReviewPromptExecutionResult> {
   const projectRoot = path.resolve(params.projectRoot);
@@ -2032,8 +2125,55 @@ export async function executeReviewPromptExecution(
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   const executionStartedAtMs = Date.now();
-  await resetExecutionOutputs(executionPlan);
-  await pruneGeneratedPromptPacketRefs(executionPlan);
+  const continuationPlan = params.continuationPlan;
+  const continuationMode = continuationPlan !== undefined;
+  const continuationRunUnitIds = new Set(
+    [
+      ...(continuationPlan?.frontierUnits ?? []),
+      ...(continuationPlan?.downstreamUnits ?? []),
+    ]
+      .filter((unit) => unit.dispatchDecision === "run")
+      .map((unit) => unit.unitId),
+  );
+  const previousExecutionResult =
+    continuationMode && await fileExists(executionPlan.execution_result_path)
+      ? await readYamlDocument<ReviewExecutionResultArtifact>(
+          executionPlan.execution_result_path,
+        )
+      : null;
+  const previousResultsByUnitId = new Map(
+    allUnitExecutionResults(previousExecutionResult).map((result) => [
+      result.unit_id,
+      result,
+    ]),
+  );
+  const shouldRunUnit = (unitId: string): boolean =>
+    !continuationMode || continuationRunUnitIds.has(unitId);
+  const preservedOutcomeForDispatch = (
+    dispatch: ExecutionDispatchResult,
+  ): ExecutionOutcome => {
+    const result = previousResultsByUnitId.get(dispatch.unit_id);
+    if (!result || result.status !== "completed") {
+      throw new Error(
+        `Cannot preserve continuation unit without a completed prior result: ${dispatch.unit_id}`,
+      );
+    }
+    return outcomeFromPreviousResult(result);
+  };
+  if (continuationMode) {
+    await appendMarkdownLogEntry(
+      executionPlan.error_log_path,
+      "runner continuation mode",
+      [
+        `frontier_units: ${continuationPlan.frontierUnits.map((unit) => unit.unitId).join(", ")}`,
+        `downstream_units: ${continuationPlan.downstreamUnits.map((unit) => unit.unitId).join(", ")}`,
+        `preserved_artifact_count: ${continuationPlan.preservedArtifactRefs.length}`,
+      ].join("\n"),
+    );
+  } else {
+    await resetExecutionOutputs(executionPlan);
+    await pruneGeneratedPromptPacketRefs(executionPlan);
+  }
   await ensureReviewContextManifestReadyForDispatch(executionPlan);
   await emitReviewProgress({
     executionPlan,
@@ -2125,6 +2265,10 @@ export async function executeReviewPromptExecution(
       const dispatch = lensDispatches[currentIndex];
       if (!dispatch) {
         return;
+      }
+      if (!shouldRunUnit(dispatch.unit_id)) {
+        executionOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
+        continue;
       }
       console.log(`[review runner] starting ${dispatch.unit_kind}: ${dispatch.unit_id}`);
       await appendExecutionProgress(
@@ -2220,6 +2364,7 @@ export async function executeReviewPromptExecution(
   }
 
   if (
+    !continuationMode &&
     params.reviewExecutionProfile?.mode === "nested-workers" &&
     params.reviewExecutionProfile.worker_executor === "codex"
   ) {
@@ -2497,6 +2642,24 @@ export async function executeReviewPromptExecution(
     };
   };
   for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    if (!shouldRunUnit(artifactId)) {
+      issueArtifactOutcomes.push(
+        preservedOutcomeForDispatch({
+          unit_id: artifactId,
+          unit_kind: "issue_artifact",
+          packet_path:
+            executionPlan.issue_artifact_prompt_packet_seats.find(
+              (seat) => seat.artifact_id === artifactId,
+            )?.packet_path ??
+            path.join(
+              executionPlan.prompt_packets_root,
+              issueArtifactSpec(artifactId).prompt_packet_file_name,
+            ),
+          output_path: issueArtifactOutputPath(executionPlan, artifactId),
+        }),
+      );
+      continue;
+    }
     try {
       issueArtifactOutcomes.push(await runIssueArtifactDispatch({
         projectRoot,
@@ -2533,6 +2696,12 @@ export async function executeReviewPromptExecution(
       maxConcurrentLenses,
       unitTimeoutMs,
       issueArtifactContext,
+      ...(continuationMode
+        ? {
+            runUnitIds: continuationRunUnitIds,
+            preservedResultsByUnitId: previousResultsByUnitId,
+          }
+        : {}),
     });
   } catch (error) {
     const failureMessage = error instanceof Error ? error.message : String(error);
@@ -2618,34 +2787,52 @@ export async function executeReviewPromptExecution(
     };
   }
 
-  try {
-    issueArtifactOutcomes.push(await runIssueArtifactDispatch({
-      projectRoot,
-      sessionRoot,
-      executionPlan,
-      executorConfig: teamleadExecutorConfig,
-      artifactId: "problem-framing",
-      lensOutputPaths,
-      deliberationResponsePaths:
-        controlledDeliberation.deliberationDispatches.map(
-          (dispatch) => dispatch.output_path,
-        ),
-      deliberationOutputPath: executionPlan.deliberation_output_path,
-      problemFramingProfileRef: await resolveProblemFramingProfileRef({
-        projectRoot,
-        executionPlan,
+  if (!shouldRunUnit("problem-framing")) {
+    issueArtifactOutcomes.push(
+      preservedOutcomeForDispatch({
+        unit_id: "problem-framing",
+        unit_kind: "issue_artifact",
+        packet_path:
+          executionPlan.issue_artifact_prompt_packet_seats.find(
+            (seat) => seat.artifact_id === "problem-framing",
+          )?.packet_path ??
+          path.join(
+            executionPlan.prompt_packets_root,
+            issueArtifactSpec("problem-framing").prompt_packet_file_name,
+          ),
+        output_path: executionPlan.problem_framing_path,
       }),
-      unitTimeoutMs,
-    }));
-  } catch (error) {
-    return haltAfterIssueArtifactFailure({
-      error,
-      deliberationStatus: "performed",
-      deliberationExecutionResults: [
-        ...controlledDeliberation.deliberationOutcomes,
-        controlledDeliberation.teamleadOutcome,
-      ],
-    });
+    );
+  } else {
+    try {
+      issueArtifactOutcomes.push(await runIssueArtifactDispatch({
+        projectRoot,
+        sessionRoot,
+        executionPlan,
+        executorConfig: teamleadExecutorConfig,
+        artifactId: "problem-framing",
+        lensOutputPaths,
+        deliberationResponsePaths:
+          controlledDeliberation.deliberationDispatches.map(
+            (dispatch) => dispatch.output_path,
+          ),
+        deliberationOutputPath: executionPlan.deliberation_output_path,
+        problemFramingProfileRef: await resolveProblemFramingProfileRef({
+          projectRoot,
+          executionPlan,
+        }),
+        unitTimeoutMs,
+      }));
+    } catch (error) {
+      return haltAfterIssueArtifactFailure({
+        error,
+        deliberationStatus: "performed",
+        deliberationExecutionResults: [
+          ...controlledDeliberation.deliberationOutcomes,
+          controlledDeliberation.teamleadOutcome,
+        ],
+      });
+    }
   }
 
   const synthesizePacketRuntimePath = path.join(
@@ -2691,63 +2878,70 @@ export async function executeReviewPromptExecution(
     output_path: executionPlan.synthesis_output_path,
   };
 
-  await emitReviewProgress({
-    executionPlan,
-    step: 12,
-    label: "synthesize and write execution result",
-    details: [`participating_lens_count=${successfulLensDispatches.length}`],
-  });
-  console.log("[review runner] starting synthesize: synthesize");
-  await appendExecutionProgress(
-    executionPlan.error_log_path,
-    "runner dispatch started: synthesize",
-    [
-      `unit_id: ${synthesizeDispatch.unit_id}`,
-      `unit_kind: ${synthesizeDispatch.unit_kind}`,
-      `packet_path: ${synthesizeDispatch.packet_path}`,
-      `output_path: ${synthesizeDispatch.output_path}`,
-    ],
-  );
+  if (shouldRunUnit("synthesize")) {
+    await emitReviewProgress({
+      executionPlan,
+      step: 12,
+      label: "synthesize and write execution result",
+      details: [`participating_lens_count=${successfulLensDispatches.length}`],
+    });
+    console.log("[review runner] starting synthesize: synthesize");
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner dispatch started: synthesize",
+      [
+        `unit_id: ${synthesizeDispatch.unit_id}`,
+        `unit_kind: ${synthesizeDispatch.unit_kind}`,
+        `packet_path: ${synthesizeDispatch.packet_path}`,
+        `output_path: ${synthesizeDispatch.output_path}`,
+      ],
+    );
+  }
   const synthesizeStartedAtMs = Date.now();
   const synthesizeMaxRetries = 1;
   let synthesizeOutcome: ExecutionOutcome | null = null;
   let synthesizeLastError: unknown = undefined;
   let synthesizeSucceeded = false;
 
-  for (let attempt = 0; attempt <= synthesizeMaxRetries; attempt++) {
-    try {
-      await invokeExecutor(
-        synthesizeExecutorConfig,
-        projectRoot,
-        sessionRoot,
-        synthesizeDispatch,
-        unitTimeoutMs,
-      );
-      synthesizeSucceeded = true;
-      break;
-    } catch (error: unknown) {
-      synthesizeLastError = error;
-      if (!isReviewUnitTimeoutError(error) && attempt < synthesizeMaxRetries) {
-        const retryDelay = DEFAULT_LENS_RETRY_INITIAL_DELAY_MS;
-        console.log(
-          `[review runner] synthesize attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
+  if (shouldRunUnit("synthesize")) {
+    for (let attempt = 0; attempt <= synthesizeMaxRetries; attempt++) {
+      try {
+        await invokeExecutor(
+          synthesizeExecutorConfig,
+          projectRoot,
+          sessionRoot,
+          synthesizeDispatch,
+          unitTimeoutMs,
         );
-        await appendExecutionProgress(
-          executionPlan.error_log_path,
-          "runner synthesize retry",
-          [
-            `attempt: ${attempt + 1}/${synthesizeMaxRetries}`,
-            `retry_delay_ms: ${retryDelay}`,
-            `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
-          ],
-        );
-        await sleep(retryDelay);
+        synthesizeSucceeded = true;
+        break;
+      } catch (error: unknown) {
+        synthesizeLastError = error;
+        if (!isReviewUnitTimeoutError(error) && attempt < synthesizeMaxRetries) {
+          const retryDelay = DEFAULT_LENS_RETRY_INITIAL_DELAY_MS;
+          console.log(
+            `[review runner] synthesize attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
+          );
+          await appendExecutionProgress(
+            executionPlan.error_log_path,
+            "runner synthesize retry",
+            [
+              `attempt: ${attempt + 1}/${synthesizeMaxRetries}`,
+              `retry_delay_ms: ${retryDelay}`,
+              `error: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`,
+            ],
+          );
+          await sleep(retryDelay);
+        }
+        if (isReviewUnitTimeoutError(error)) break;
       }
-      if (isReviewUnitTimeoutError(error)) break;
     }
+  } else {
+    synthesizeOutcome = preservedOutcomeForDispatch(synthesizeDispatch);
+    synthesizeSucceeded = true;
   }
 
-  if (synthesizeSucceeded) {
+  if (synthesizeSucceeded && synthesizeOutcome === null) {
     synthesizeOutcome = {
       dispatch: synthesizeDispatch,
       success: true,

@@ -19,10 +19,12 @@ does not define its own progress step taxonomy.
 
 The reconstruct tools are bounded projections over `src/core-api/reconstruct-api.ts`:
 source profile listing, material-aware source observation, LLM-authored
-directive validation, happy-path run orchestration, status, and result reads.
-They return artifact refs, validation status, records, manifests, and final
-output text; they do not author ontology Seeds or design decisions.
+directive validation, post-Seed run orchestration, status, and result reads.
+They return artifact refs, validation status, stage progress, count summaries,
+records, manifests, and final output text; they do not author ontology Seeds,
+claim realization, failure classifications, revision proposals, or design
+decisions.
 `onto.reconstruct` currently requires explicit
 `semanticAuthorRealization="mock"` and `confirmationProviderRealization="mock"`
 arguments. Host/direct-call semantic authoring and user-mediated confirmation
-are intentionally not implied by a completed mock happy-path run.
+are intentionally not implied by a completed mock run.

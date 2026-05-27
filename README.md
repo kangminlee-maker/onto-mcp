@@ -43,8 +43,10 @@ providers, validates evidence refs, computes deterministic metrics, and writes
 `reconstruct-record.yaml`. Code is the first fixture; the runner path is shared
 with spreadsheet/document/database material through source profiles and
 material-specific observers. The current public run path is an explicit mock
-semantic/confirmation happy path; domain context selection, failure
-classification, and revision proposal are recorded as deferred scope.
+semantic/confirmation post-Seed artifact loop. It implements claim realization,
+confirmation validation, competency-question assessment, failure classification,
+revision proposal, metrics/status projection, and artifact-tethered final
+output; domain context selection remains deferred.
 `evolve` has a future material-kind adapter contract at
 `.onto/processes/evolve/material-kind-adapter-contract.md`, but no active
 runtime or MCP tool. `learn` and `govern` remain separate design slices.
@@ -84,9 +86,9 @@ Available MCP tools:
 | `onto.list_source_profiles` | List reconstruct source profiles |
 | `onto.observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
 | `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files |
-| `onto.reconstruct` | Run the material-aware reconstruct happy path with explicit mock semantic/confirmation realization |
-| `onto.reconstruct_status` | Read reconstruct session status and artifact refs |
-| `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, and final output |
+| `onto.reconstruct` | Run the material-aware reconstruct post-Seed loop with explicit mock semantic/confirmation realization |
+| `onto.reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
+| `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
 
 MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
@@ -110,8 +112,8 @@ Minimal reconstruct MCP call shape:
 
 `semanticAuthorRealization` and `confirmationProviderRealization` are required
 so completed reconstruct runs are explicit about their current mock semantics.
-Today this proves the material-aware happy path, artifact gates, and MCP
-surface. It does not claim live host-LLM semantic authorship or live
+Today this proves the material-aware post-Seed artifact loop, runtime gates, and
+MCP surface. It does not claim live host-LLM semantic authorship or live
 user-mediated confirmation.
 
 Repository-local development harness:
@@ -235,7 +237,7 @@ Primary outputs:
 
 A reconstruct session writes artifacts under `.onto/reconstruct/<session-id>/`.
 
-Implemented happy-path outputs:
+Implemented mock-authored, runtime-gated outputs:
 
 | Artifact | Owner | Purpose |
 |---|---|---|
@@ -246,19 +248,33 @@ Implemented happy-path outputs:
 | `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
 | `seed-candidate.yaml` | mock/host author | evidence-backed Seed candidate |
 | `seed-candidate-validation.yaml` | runtime | Seed claim and evidence-ref validation |
-| `seed-confirmation.yaml` | mock/host/user mediated | accepted, rejected, or partial Seed confirmation |
+| `claim-realization-map.yaml` | mock/host author | claim-level evidence stance |
+| `claim-realization-map-validation.yaml` | runtime | claim id, stance enum, and evidence linkage validation |
+| `seed-confirmation.yaml` | mock/host/user mediated | accepted, rejected, partial, or deferred Seed confirmation |
+| `seed-confirmation-validation.yaml` | runtime | confirmation transition validation and derived claim sets |
 | `competency-questions.yaml` | mock/host author | questions linked to confirmed claims |
-| `reconstruct-metrics.yaml` | runtime | deterministic counts, unresolved count, and pass rate |
+| `competency-questions-validation.yaml` | runtime | CQ id, claim-link, and evidence validation |
+| `competency-question-assessment.yaml` | mock/host author | answer status for every authoritative CQ |
+| `competency-question-assessment-validation.yaml` | runtime | exactly-once CQ assessment validation |
+| `failure-classification.yaml` | mock/host author | material failure and gap classification |
+| `failure-classification-validation.yaml` | runtime | failure enum, linkage, and materiality validation |
+| `revision-proposal.yaml` | mock/host author | bounded revision/deferral proposals |
+| `revision-proposal-validation.yaml` | runtime | proposal id, target, action, and regression guard validation |
+| `reconstruct-metrics.yaml` | runtime | deterministic counts, unresolved/deferred counts, and pass rate |
 | `stop-decision.yaml` | mock/host author | stop, continue, or ask-user decision based on metrics |
-| `final-output.md` | mock/host author | user-facing result grounded in artifacts |
+| `final-output.md` | mock/host author | user-facing result grounded in artifacts and provenance-checked by runtime |
 | `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, and happy-path scope |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
 
 Current deferred reconstruct artifacts are recorded in
 `reconstruct-run-manifest.yaml` under `happy_path_scope.deferred_artifacts`:
-`domain_context_selection`, `failure_classification`, and `revision_proposal`.
-Those require additional host/user semantic decisions and are outside the
-current mock happy path.
+`domain_context_selection` and `domain_context_selection_validation`. Those
+require additional domain selection semantics and are outside the current mock
+path.
+
+The post-Seed design contract also defines validation artifacts for those
+stages, stable reconstruct stage ids, cross-artifact id authority, and progress
+UX expectations in `.onto/processes/reconstruct/reconstruct-execution-ux-contract.md`.
 
 ## Repository Map
 

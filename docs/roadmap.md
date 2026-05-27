@@ -44,6 +44,40 @@ Done when:
   in review artifacts.
 - Lens-to-lens deliberation evidence is preserved separately from synthesis.
 
+## Stage 4.5 — Review Continuation
+
+Done when:
+
+- The shared `PipelineExecutionLedger` contract is implemented as a derived
+  trust/provenance projection for `review`, with the same shape reserved for
+  `reconstruct`, future `evolve`, and later onto pipelines.
+- `onto.review_status` exposes a derived pipeline execution ledger that marks
+  artifact trust boundaries and feeds the continuation plan for prepared and
+  halted review sessions.
+- `onto.review_continue` continues a session from existing artifacts by running
+  only failed or missing review units.
+- Completed unit outputs are reused and completed unit overwrite attempts are
+  rejected.
+- Manifest, packet, context eligibility, and route drift stop before dispatch
+  with structured failure records.
+- Continuation attempt provenance is preserved under the same review session.
+
+## Stage 4.6 — Reconstruct Post-Seed Loop
+
+Done when:
+
+- reconstruct stage ids, artifact authority, and progress UX follow
+  `.onto/processes/reconstruct/reconstruct-boundary-contract.md` and
+  `.onto/processes/reconstruct/reconstruct-execution-ux-contract.md`.
+- Runtime validates claim realization, confirmation-derived claim sets,
+  competency-question assessment, failure classification, revision proposal, and
+  final-output provenance without authoring ontology meaning.
+- `onto.reconstruct_status` and `onto.reconstruct_result` expose bounded facts,
+  counts, liveness, and artifact refs for host-rendered progress and final
+  output.
+- A fixture run produces the full post-Seed artifact set and validates
+  `reconstruct-record.yaml`.
+
 ## Stage 5 — Migration And Cleanup
 
 Done when:

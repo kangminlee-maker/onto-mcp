@@ -20,6 +20,7 @@ The shared material contract is:
 
 ```text
 .onto/processes/shared/target-material-kind-contract.md
+.onto/processes/shared/pipeline-execution-ledger-contract.md
 ```
 
 No `evolve` runtime or MCP tool is active in this repository. This document is
@@ -52,6 +53,7 @@ Runtime may own:
 - source and artifact refs
 - deterministic metrics and validation reports
 - unsupported or unknown material failure records
+- pipeline pipeline execution ledger projection for artifact trust and provenance
 
 Host LLM and user-mediated flow own:
 
@@ -87,6 +89,7 @@ design-stage output:
 | `evolve-adapter-selection.yaml` | runtime | selected adapter id, material kind, support status, and unsupported reason |
 | `evolve-context-observations.yaml` | runtime | material-specific current-state observations without design recommendations |
 | `evolve-specification.yaml` | host LLM, user confirmed | proposed design change after inquiry and scope agreement |
+| future `pipeline-execution-ledger.yaml` or status projection | runtime | trust status for target profile, adapter selection, observations, specification, validation, and final disposition units |
 | `evolve-record.yaml` | runtime assembly | artifact refs, material status, validation summaries, and final disposition refs |
 
 These names are future contract placeholders. Runtime implementation must either
@@ -111,3 +114,6 @@ When future evolve implementation starts, the first tests should prove:
 - unsupported material states produce explicit structured output
 - generated artifacts preserve `target_material_kind`
 - runtime outputs bounded observations and refs, not design decisions
+- status/result surfaces expose an pipeline execution ledger projection so callers
+  can see which evolve artifacts are trusted, untrusted, or blocked by upstream
+  failure

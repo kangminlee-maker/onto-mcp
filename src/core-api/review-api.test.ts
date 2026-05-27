@@ -52,5 +52,21 @@ describe("createOntoReviewCoreApi", () => {
     expect(observedProgressEvents).toBeGreaterThan(0);
     expect(result.status).toBe("completed");
     expect(result.participatingLensIds).toEqual(["logic"]);
+    expect(result.pipelineExecutionLedger?.pipeline).toBe("review");
+    expect(
+      result.pipelineExecutionLedger?.units.find((unit) => unit.unitId === "logic")
+        ?.trustStatus,
+    ).toBe("trusted");
+
+    const status = await api.getReviewStatus(result.sessionRoot);
+    expect(status.pipelineExecutionLedger?.sessionId).toBe(result.sessionId);
+    expect(
+      status.pipelineExecutionLedger?.units.find((unit) => unit.unitId === "synthesize")
+        ?.status,
+    ).toBe("completed");
+    expect(status.continuationPlan?.eligible).toBe(false);
+    expect(status.continuationPlan?.ineligibleReason).toBe(
+      "No untrusted continuation frontier remains.",
+    );
   });
 });

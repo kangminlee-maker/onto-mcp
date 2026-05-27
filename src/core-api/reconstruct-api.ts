@@ -3,10 +3,16 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
+  ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
+  ReconstructRunManifestArtifact,
   ReconstructSeedCandidateValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
+  ReconstructStageId,
+} from "../core-runtime/reconstruct/artifact-types.js";
+import {
+  RECONSTRUCT_STAGE_IDS,
 } from "../core-runtime/reconstruct/artifact-types.js";
 import {
   materializeReconstructPreparationArtifacts,
@@ -32,6 +38,10 @@ import {
   loadReconstructSourceProfiles,
   type ReconstructSourceProfile,
 } from "../core-runtime/reconstruct/source-profiles.js";
+import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
+import {
+  buildReconstructPipelineExecutionLedger,
+} from "../core-runtime/reconstruct/pipeline-execution-ledger.js";
 
 export interface PrepareReconstructRequest {
   projectRoot: string;
@@ -82,6 +92,8 @@ export interface ReconstructSessionStatus {
   sessionRoot: string;
   status: ReconstructRecordArtifact["record_stage"];
   artifactRefs: ReconstructRecordArtifactRefs;
+  progress: ReconstructRunProgressProjection;
+  pipelineExecutionLedger?: PipelineExecutionLedger;
   reconstructRecord: ReconstructRecordArtifact;
 }
 
@@ -90,6 +102,37 @@ export interface ReconstructSessionResult extends ReconstructSessionStatus {
   finalOutputText: string | null;
   reconstructRunManifestPath: string | null;
   reconstructRunManifest: unknown | null;
+}
+
+export interface ReconstructRunStageProjection {
+  stageId: ReconstructStageId;
+  state: "pending" | "completed" | "skipped" | "halted";
+  owner: "runtime" | "host_llm" | "host_or_user" | null;
+  artifactRefs: string[];
+}
+
+export interface ReconstructRunProgressProjection {
+  currentStageId: ReconstructStageId;
+  stageCount: number;
+  liveness: {
+    state: "completed" | "halted_or_partial";
+    recommendedPollIntervalMs: number | null;
+  };
+  countSummary: {
+    sourceObservationCount: number | null;
+    selectedObservationCount: number | null;
+    semanticClaimCount: number | null;
+    confirmedClaimCount: number | null;
+    partialClaimCount: number | null;
+    deferredClaimCount: number | null;
+    competencyQuestionCount: number | null;
+    assessmentCount: number | null;
+    failureCount: number | null;
+    revisionProposalCount: number | null;
+    unresolvedCount: number | null;
+    passRate: number | null;
+  };
+  stages: ReconstructRunStageProjection[];
 }
 
 export interface OntoReconstructCoreApi {
@@ -219,6 +262,76 @@ async function readTextIfPresent(filePath: string | null): Promise<string | null
   } catch {
     return null;
   }
+}
+
+function deriveReconstructProgress(args: {
+  record: ReconstructRecordArtifact;
+  runManifest: ReconstructRunManifestArtifact | null;
+  metrics: ReconstructMetricsArtifact | null;
+}): ReconstructRunProgressProjection {
+  const stepById = new Map(
+    args.runManifest?.steps.map((step) => [step.step_id, step]) ?? [],
+  );
+  const stages = RECONSTRUCT_STAGE_IDS.map((stageId) => {
+    const step = stepById.get(stageId);
+    return {
+      stageId,
+      state: step?.status === "completed"
+        ? "completed" as const
+        : step?.status === "skipped"
+          ? "skipped" as const
+          : step?.status === "failed"
+            ? "halted" as const
+            : "pending" as const,
+      owner: step?.owner ?? null,
+      artifactRefs: step?.artifact_refs ?? [],
+    };
+  });
+  const lastReachedStage =
+    [...stages].reverse().find((stage) => stage.state !== "pending") ??
+    stages[0]!;
+
+  return {
+    currentStageId: lastReachedStage.stageId,
+    stageCount: RECONSTRUCT_STAGE_IDS.length,
+    liveness: {
+      state: args.record.record_stage === "completed"
+        ? "completed"
+        : "halted_or_partial",
+      recommendedPollIntervalMs:
+        args.record.record_stage === "completed" ? null : 1000,
+    },
+    countSummary: {
+      sourceObservationCount: args.metrics?.source_observation_count ?? null,
+      selectedObservationCount: args.metrics?.selected_observation_count ?? null,
+      semanticClaimCount:
+        args.metrics?.semantic_claim_count ??
+        args.record.validation_summary.semantic_claim_count,
+      confirmedClaimCount:
+        args.metrics?.confirmed_claim_count ??
+        args.record.validation_summary.confirmed_claim_count,
+      partialClaimCount:
+        args.metrics?.partial_claim_count ??
+        args.record.validation_summary.partial_claim_count,
+      deferredClaimCount:
+        args.metrics?.deferred_claim_count ??
+        args.record.validation_summary.deferred_claim_count,
+      competencyQuestionCount:
+        args.metrics?.competency_question_count ??
+        args.record.validation_summary.competency_question_count,
+      assessmentCount:
+        args.metrics?.competency_question_assessment_count ??
+        args.record.validation_summary.competency_question_assessment_count,
+      failureCount: args.record.validation_summary.failure_count,
+      revisionProposalCount:
+        args.record.validation_summary.revision_proposal_count,
+      unresolvedCount:
+        args.metrics?.unresolved_question_count ??
+        args.record.validation_summary.unresolved_count,
+      passRate: args.metrics?.pass_rate ?? args.record.validation_summary.pass_rate,
+    },
+    stages,
+  };
 }
 
 function recordArtifactRefsFromPreparation(
@@ -386,11 +499,38 @@ export function createOntoReconstructCoreApi(
       const reconstructRecord = await readYamlArtifact<ReconstructRecordArtifact>(
         path.join(resolvedSessionRoot, "reconstruct-record.yaml"),
       );
+      const reconstructRunManifest =
+        await readYamlArtifactIfPresent<ReconstructRunManifestArtifact>(
+          reconstructRecord.artifact_refs.reconstruct_run_manifest,
+        );
+      const reconstructMetrics =
+        await readYamlArtifactIfPresent<ReconstructMetricsArtifact>(
+          reconstructRecord.artifact_refs.reconstruct_metrics,
+        );
+      const reconstructRecordRef = path.join(
+        resolvedSessionRoot,
+        "reconstruct-record.yaml",
+      );
+      const pipelineExecutionLedger =
+        await buildReconstructPipelineExecutionLedger({
+          sessionRoot: resolvedSessionRoot,
+          reconstructRecord,
+          reconstructRecordRef,
+          reconstructRunManifest,
+          reconstructRunManifestRef:
+            reconstructRecord.artifact_refs.reconstruct_run_manifest,
+        });
       return {
         sessionId: path.basename(resolvedSessionRoot),
         sessionRoot: resolvedSessionRoot,
         status: reconstructRecord.record_stage,
         artifactRefs: reconstructRecord.artifact_refs,
+        progress: deriveReconstructProgress({
+          record: reconstructRecord,
+          runManifest: reconstructRunManifest,
+          metrics: reconstructMetrics,
+        }),
+        pipelineExecutionLedger,
         reconstructRecord,
       };
     },

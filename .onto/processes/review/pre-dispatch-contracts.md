@@ -252,16 +252,32 @@ lifecycle_state: dispatched
 Runtime-generated packet registration preserves `lifecycle_state: dispatched`
 and appends/upserts the generated packet ref before invoking the unit.
 
-### 5.3 Freshness And Resume
+### 5.3 Freshness And Continuation
 
-Current canonical MCP review does not expose an explicit resume tool.
+Current MCP review/status/result can read halted session artifacts. The planned
+explicit continuation surface is `onto.review_continue`; its design lives in
+`docs/architecture/review-continuation-surface.md`.
 
-`review-run-manifest.yaml` records a `resume_token` for audit, idempotency, and
-future operator-controlled resume design only. The token is not a dispatch
-capability and must not be accepted as authorization to restart, skip, or reuse
-worker stages.
+The public concept is review continuation, not subagent management. A
+continuation may re-dispatch failed or missing review execution units while
+reusing completed units from the same session.
 
-A future resumed or reused session must validate:
+Continuation planning should use the shared `PipelineExecutionLedger`
+projection defined in
+`.onto/processes/shared/pipeline-execution-ledger-contract.md`. For
+`review`, the projection derives from the execution plan, run manifest,
+execution result, lens barrier, semantic ledgers, and output seats. The ledger's
+primary purpose is to verify artifact trust boundaries: which outputs were
+produced by completed units, which outputs are untrusted because the producing
+unit failed or upstream work is incomplete, and where execution should continue.
+`finding-ledger.yaml` and `issue-ledger.yaml` remain semantic ledgers; they are
+continuation inputs after they exist, not the full pipeline execution ledger.
+
+`review-run-manifest.yaml` records a `resume_token` for audit and idempotency
+only. The token is not a dispatch capability and must not be accepted as
+authorization to restart, skip, continue, or reuse worker stages.
+
+Any continued or reused session must validate:
 
 - manifest schema version
 - source hash for every required `context_source`
@@ -270,14 +286,19 @@ A future resumed or reused session must validate:
 - consumed context eligibility
 - generated packet refs before invoking issue-artifact, deliberation, or
   synthesize runtime units
+- route consistency against the existing execution plan and actor invocation
+  profiles
 
-Any mismatch stops before lens execution and writes a `manifest_lifecycle` or
-`context_eligibility` failure record.
+Any mismatch stops before continuation dispatch and writes a
+`manifest_lifecycle`, `context_eligibility`, or route-specific failure record.
 
-Until an explicit resume contract is implemented, MCP callers must start a new
-review session after changing inputs, settings, target scope, provider route, or
-manifest-governed artifacts. Runtime status/result tools may read existing
-session artifacts, but they do not resume execution.
+Continuation must not change inputs, settings, target scope, provider route,
+domain, review mode, selected lens set, or manifest-governed artifacts. If any
+of those must change, the caller must start a new review session.
+
+Until `onto.review_continue` is implemented, MCP callers must still start a new
+review session when they need execution to proceed. Runtime status/result tools
+may read existing session artifacts, but they do not resume execution.
 
 ### 5.4 Synthesize Context
 

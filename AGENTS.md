@@ -60,8 +60,9 @@ target material 관련 작업 시 추가로 읽을 문서:
 `reconstruct` 작업 시 추가로 읽을 문서:
 
 1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
-2. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
-3. selected source profile under `.onto/processes/reconstruct/source-profiles/`
+2. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
+3. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
+4. selected source profile under `.onto/processes/reconstruct/source-profiles/`
 
 ---
 
