@@ -1,0 +1,185 @@
+# Pipeline Execution Ledger Contract
+
+> Status: shared design contract.
+> Purpose: define the artifact trust and provenance ledger that every onto
+> pipeline must expose or derive across `review`, `reconstruct`, and future
+> `evolve`.
+
+## 1. Position
+
+`PipelineExecutionLedger` is a shared runtime concept. It records how a
+pipeline produced its artifacts at the unit level so a caller can determine:
+
+- which artifacts are trustworthy;
+- which artifacts are untrusted because their producing unit failed;
+- which artifacts are blocked because upstream units did not complete;
+- which unit is the first incomplete or failed boundary;
+- where a later continuation or repair action may safely begin.
+
+Continuation is one consumer of the ledger. The primary purpose is execution
+audit, trust boundary inspection, and artifact provenance.
+
+This contract applies to:
+
+- `review`;
+- `reconstruct`;
+- future `evolve`;
+- any later onto pipeline that materializes staged artifacts.
+
+## 2. Ownership
+
+Runtime owns the ledger projection because it observes unit dispatch, validation,
+file writes, hashes, and terminal status.
+
+Host LLMs may read the ledger to explain trust boundaries or propose the next
+action, but they do not author ledger truth.
+
+Semantic ledgers remain separate:
+
+- `review` semantic ledgers include `finding-ledger.yaml` and
+  `issue-ledger.yaml`.
+- `reconstruct` semantic or decision artifacts include Seed, confirmation,
+  question, failure, revision, and stop-decision artifacts.
+- future `evolve` may define design-specification or decision ledgers.
+
+Semantic ledgers explain meaning. The pipeline execution ledger explains whether
+the process that produced each artifact can be trusted.
+
+## 3. Minimum Model
+
+Shared ledger shape:
+
+```ts
+interface PipelineExecutionLedger {
+  schemaVersion: "1";
+  pipeline: "review" | "reconstruct" | "evolve" | string;
+  sessionId: string;
+  sourceRefs: string[];
+  units: PipelineExecutionLedgerUnitEntry[];
+}
+
+interface PipelineExecutionLedgerUnitEntry {
+  unitId: string;
+  unitKind: string;
+  owner: "runtime" | "host_llm" | "user_or_host_mediated";
+  producedArtifactRefs: string[];
+  consumedArtifactRefs: string[];
+  packetRef?: string | null;
+  packetSha256?: string | null;
+  outputRefs: string[];
+  outputHashes: Record<string, string | null>;
+  status:
+    | "planned"
+    | "completed"
+    | "failed"
+    | "missing"
+    | "skipped"
+    | "not_reached";
+  trustStatus: "trusted" | "untrusted" | "blocked_by_upstream";
+  trustReason: string;
+  attemptCount: number;
+  lastFailureMessage: string | null;
+  upstreamUnitIds: string[];
+  downstreamUnitIds: string[];
+}
+```
+
+Rules:
+
+- `trusted` requires the producing unit to complete and all required output
+  artifacts to exist and validate.
+- `untrusted` means the unit ran but failed, produced invalid output, or wrote
+  artifacts that failed validation.
+- `blocked_by_upstream` means this unit's trust cannot be established because an
+  upstream required unit is missing, failed, or untrusted.
+- `skipped` must include a reason and must not be confused with trusted output.
+- A missing optional unit may be `skipped`; a missing required unit is
+  `missing` or `blocked_by_upstream`.
+- The ledger is derived from existing run artifacts unless a pipeline contract
+  explicitly promotes it to a durable artifact.
+
+## 4. Source Inputs
+
+Each pipeline maps its own runtime artifacts into the shared ledger.
+
+| Pipeline | Required derivation sources |
+|---|---|
+| `review` | `execution-plan.yaml`, `review-run-manifest.yaml`, `execution-preparation/review-context-manifest.yaml`, `execution-result.yaml`, `lens-completion-barrier.yaml`, semantic ledgers when present, and output seats |
+| `reconstruct` | `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml`, stage registry, validation artifacts, metrics, stop decision, final output, and output seats |
+| `evolve` | future evolve run manifest, target profile, adapter selection, observation/projection artifacts, design specification validation, final disposition, and output seats |
+
+The pipeline-specific source artifacts remain authority. The ledger is a
+normalized projection over them.
+
+## 5. Pipeline Mapping
+
+### Review
+
+`review` units include:
+
+- lens units;
+- issue artifact units;
+- per-lens deliberation units;
+- controlled deliberation;
+- synthesize;
+- record/final-output assembly where runtime treats them as separate stages.
+
+`finding-ledger.yaml` and `issue-ledger.yaml` remain semantic ledgers. They are
+inputs for downstream trust once they exist, not replacements for the execution
+ledger.
+
+### Reconstruct
+
+`reconstruct` units follow stable `ReconstructStageId` values:
+
+- material profiling;
+- source inventory;
+- source observation;
+- LLM-authored directive production;
+- runtime directive validation;
+- Seed candidate, confirmation, competency-question, assessment,
+  failure-classification, revision, metrics, stop-decision, final-output, and
+  record assembly stages as the contract enables them.
+
+Runtime validation units are the trust gates for LLM-authored artifacts. A
+semantic artifact can exist but remain untrusted until its validation unit
+completes.
+
+### Evolve
+
+Future `evolve` units must begin with:
+
+- target profiling;
+- adapter selection;
+- material-specific observation or projection;
+- design inquiry/specification stages;
+- validation and final disposition stages.
+
+No future evolve adapter may bypass the ledger by writing design artifacts
+without a producing unit and trust status.
+
+## 6. Status And Result Surfaces
+
+Status tools should expose the ledger, or a bounded projection of it, whenever a
+pipeline is prepared, running, halted, or completed.
+
+Result tools should expose enough ledger refs or summary fields for callers to
+audit why final artifacts are trusted.
+
+Continuation tools, where implemented, must derive their frontier from the
+ledger's trust and completion boundary rather than from ad hoc file existence.
+
+## 7. Durable Artifact Policy
+
+First implementation may keep the ledger as a derived status projection.
+
+Promote a durable root artifact such as `pipeline-execution-ledger.yaml`
+only when at least one of these is true:
+
+- external audit needs a stable standalone ledger file;
+- continuation attempts need replayable pre/post trust snapshots;
+- result artifacts need to cite a ledger ref as part of their trust contract.
+
+If promoted, the durable artifact must still be derived from the pipeline's run
+manifest, record, validation artifacts, and output seats. It must not become a
+second execution truth.

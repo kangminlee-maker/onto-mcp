@@ -990,10 +990,12 @@ async function main(): Promise<void> {
           reconstructStructured.reconstructRunManifest.happy_path_scope
             .deferred_artifacts.includes("domain_context_selection") &&
           reconstructStructured.reconstructRunManifest.happy_path_scope
+            .deferred_artifacts.includes("domain_context_selection_validation") &&
+          !reconstructStructured.reconstructRunManifest.happy_path_scope
             .deferred_artifacts.includes("failure_classification") &&
           reconstructStructured.reconstructRunManifest.happy_path_scope
-            .deferred_artifacts.includes("revision_proposal"),
-        "reconstruct run manifest must expose deferred happy-path scope.",
+            .implemented_artifacts.includes("revision_proposal"),
+        "reconstruct run manifest must expose post-Seed implemented scope and deferred domain-context scope.",
       );
       assert(
         typeof reconstructStructured.finalOutputPath === "string" &&
@@ -1026,6 +1028,15 @@ async function main(): Promise<void> {
         (reconstructStatusResult.structuredContent as { status?: unknown }).status ===
           "completed",
         "onto.reconstruct_status must report completed reconstruct status.",
+      );
+      assert(
+        (reconstructStatusResult.structuredContent as {
+          pipelineExecutionLedger?: { pipeline?: unknown; units?: unknown };
+        }).pipelineExecutionLedger?.pipeline === "reconstruct" &&
+          Array.isArray((reconstructStatusResult.structuredContent as {
+            pipelineExecutionLedger?: { units?: unknown };
+          }).pipelineExecutionLedger?.units),
+        "onto.reconstruct_status must expose reconstruct PipelineExecutionLedger.",
       );
       const reconstructResultReadback =
         requireToolResult(requireResult(await client.request("tools/call", {
@@ -1922,6 +1933,14 @@ async function main(): Promise<void> {
       | {
           sessionRoot?: unknown;
           status?: unknown;
+          pipelineExecutionLedger?: {
+            pipeline?: unknown;
+            units?: Array<{ unitId?: unknown; trustStatus?: unknown }>;
+          };
+          continuationPlan?: {
+            eligible?: unknown;
+            ineligibleReason?: unknown;
+          };
           routeVisibility?: ReviewRunStructured["routeVisibility"];
           llmPresentation?: ReviewRunStructured["llmPresentation"];
         }
@@ -1943,6 +1962,14 @@ async function main(): Promise<void> {
       relativeStatus.llmPresentation,
       "onto.review_status",
       "completed",
+    );
+    assert(
+      relativeStatus.pipelineExecutionLedger?.pipeline === "review" &&
+        relativeStatus.pipelineExecutionLedger.units?.some(
+          (unit) => unit.unitId === "synthesize" && unit.trustStatus === "trusted",
+        ) &&
+        relativeStatus.continuationPlan?.eligible === false,
+      "onto.review_status must expose review PipelineExecutionLedger and completed continuation projection.",
     );
     assertProgressNotificationsMatchReview(
       progressNotifications,
@@ -2041,6 +2068,13 @@ async function main(): Promise<void> {
       const malformedStatus = malformedStatusResult.structuredContent as
         | {
             status?: unknown;
+            pipelineExecutionLedger?: {
+              units?: Array<{ unitId?: unknown; status?: unknown }>;
+            };
+            continuationPlan?: {
+              eligible?: unknown;
+              frontierUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
+            };
             llmPresentation?: ReviewRunStructured["llmPresentation"];
           }
         | undefined;
@@ -2057,6 +2091,18 @@ async function main(): Promise<void> {
         typeof malformedStatus.llmPresentation?.halt?.prompt === "string" &&
           malformedStatus.llmPresentation.halt.input !== undefined,
         "malformed halted session must expose llmPresentation.halt.",
+      );
+      assert(
+        malformedStatus.pipelineExecutionLedger?.units?.some(
+          (unit) => unit.unitId === "finding-ledger" && unit.status === "failed",
+        ) &&
+          malformedStatus.continuationPlan?.eligible === true &&
+          malformedStatus.continuationPlan.frontierUnits?.some(
+            (unit) =>
+              unit.unitId === "finding-ledger" &&
+              unit.dispatchDecision === "run",
+          ),
+        "malformed halted status must expose ledger-backed continuation frontier.",
       );
     } finally {
       malformedChild.stdin.end();

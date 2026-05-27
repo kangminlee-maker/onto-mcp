@@ -32,10 +32,12 @@ contract used by both runtime manifests and Core API status projection.
 
 `reconstruct-api.ts` is the bounded facade for the reconstruct MCP surface. It
 lists source profiles, materializes preparation artifacts, validates
-LLM-authored directive files, runs the material-aware happy path, assembles
-`reconstruct-record.yaml`, and reads status/result artifacts back. It does not
-author Seed content, competency questions, revisions, or design decisions; those
-come from a pluggable directive author or confirmation provider. The current
-public run path requires explicit `semanticAuthorRealization="mock"` and
-`confirmationProviderRealization="mock"` so mock-authored happy-path output is
-not confused with a live host/user-mediated reconstruct run.
+LLM-authored directive files, runs the material-aware post-Seed artifact loop,
+assembles `reconstruct-record.yaml`, and reads status/result artifacts back.
+It does not author Seed content, claim realization, competency questions,
+assessments, failure classifications, revisions, or design decisions; those come
+from a pluggable directive author or confirmation provider. Runtime validates
+ids, refs, enums, coverage, metrics, stage state, and final-output provenance.
+The current public run path requires explicit `semanticAuthorRealization="mock"`
+and `confirmationProviderRealization="mock"` so mock-authored output is not
+confused with a live host/user-mediated reconstruct run.

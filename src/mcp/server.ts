@@ -397,19 +397,19 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto.reconstruct",
     description:
-      "Run the material-aware reconstruct happy path with explicit mock semantic author and confirmation provider realization, returning final-output.md and reconstruct-record.yaml refs.",
+      "Run the material-aware reconstruct post-Seed artifact loop with explicit mock semantic author and confirmation provider realization, returning final-output.md and reconstruct-record.yaml refs.",
     inputSchema: RECONSTRUCT_INPUT_SCHEMA,
   },
   {
     name: "onto.reconstruct_status",
     description:
-      "Read structured status and artifact refs for a reconstruct session.",
+      "Read structured status, stage progress, liveness, count summary, and artifact refs for a reconstruct session.",
     inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
   },
   {
     name: "onto.reconstruct_result",
     description:
-      "Read the reconstruct record, run manifest, and final output for a reconstruct session.",
+      "Read the reconstruct record, run manifest, stage progress, final output, and artifact refs for a reconstruct session.",
     inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
   },
 ];

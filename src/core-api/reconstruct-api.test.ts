@@ -177,7 +177,7 @@ describe("createOntoReconstructCoreApi", () => {
     expect(readBack.validation_summary.semantic_claim_count).toBe(1);
   });
 
-  it("runs the reconstruct happy path through the core API", async () => {
+  it("runs the reconstruct post-Seed loop through the core API", async () => {
     const projectRoot = await tempProjectRoot();
     const api = createOntoReconstructCoreApi({
       ontoHome: path.resolve("."),
@@ -186,7 +186,7 @@ describe("createOntoReconstructCoreApi", () => {
     const result = await api.runReconstruct({
       projectRoot,
       targetRefs: ["src/feature.ts"],
-      intent: "Core API code happy path fixture.",
+      intent: "Core API code post-Seed fixture.",
       sessionRoot: ".onto/reconstruct/core-api-code-run",
       semanticAuthorRealization: "mock",
       confirmationProviderRealization: "mock",
@@ -198,7 +198,29 @@ describe("createOntoReconstructCoreApi", () => {
     expect(result.reconstructRecord.target_material_kind).toBe("code");
     expect(result.artifactRefs.final_output).toBe(result.finalOutputPath);
     expect(readBack.status).toBe("completed");
-    expect(readBack.finalOutputText).toContain("Core API code happy path fixture.");
+    expect(readBack.finalOutputText).toContain("Core API code post-Seed fixture.");
     expect(readBack.reconstructRunManifest).not.toBeNull();
+    expect(readBack.progress.stageCount).toBeGreaterThan(20);
+    expect(readBack.progress.currentStageId).toBe("record_assembly");
+    expect(readBack.progress.liveness.state).toBe("completed");
+    expect(readBack.progress.countSummary.failureCount).toBeGreaterThan(0);
+    expect(readBack.pipelineExecutionLedger?.pipeline).toBe("reconstruct");
+    expect(
+      readBack.pipelineExecutionLedger?.units.find((unit) =>
+        unit.unitId === "source_observation"
+      )?.trustStatus,
+    ).toBe("trusted");
+    expect(
+      readBack.pipelineExecutionLedger?.units.find((unit) =>
+        unit.unitId === "record_assembly"
+      )?.status,
+    ).toBe("completed");
+    expect(
+      readBack.progress.stages.find((stage) =>
+        stage.stageId === "domain_context_selection"
+      ),
+    ).toMatchObject({
+      state: "skipped",
+    });
   });
 });

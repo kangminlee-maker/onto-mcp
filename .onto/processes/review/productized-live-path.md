@@ -395,4 +395,4 @@ Target rules:
 남은 follow-up은 live path 자체의 구조 변경이 아니라 운영/확장 품질이다.
 
 1. provider credentials/endpoints가 의도적으로 준비된 환경에서 provider별 live conformance를 수행한다.
-2. replay, stale artifact, partial worker, duplicate-dispatch semantics가 닫힌 뒤 explicit resume command를 설계한다.
+2. `.onto/processes/shared/pipeline-execution-ledger-contract.md`의 shared ledger를 `review`에 먼저 투영하고, `docs/architecture/review-continuation-surface.md`의 설계에 따라 `onto.review_status` continuation plan과 `onto.review_continue`를 구현한다.

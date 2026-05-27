@@ -71,9 +71,23 @@ describe("runReconstruct", () => {
       .not.toContain("seed_confirmation");
     expect(result.reconstructRecord.runtime_boundary.host_user_mediated_artifacts)
       .toContain("seed_confirmation");
-    expect(result.metrics.pass_rate).toBe(1);
-    expect(result.stopDecision.decision).toBe("stop");
+    expect(result.metrics.pass_rate).toBeLessThan(1);
+    expect(result.metrics.confirmed_claim_count).toBeGreaterThan(0);
+    expect(result.metrics.partial_claim_count).toBeGreaterThan(0);
+    expect(result.metrics.deferred_claim_count).toBeGreaterThan(0);
+    expect(result.metrics.rejected_claim_count).toBeGreaterThan(0);
+    expect(result.metrics.competency_question_assessment_count)
+      .toBe(result.metrics.competency_question_count);
+    expect(result.metrics.failure_kind_counts.insufficient_evidence)
+      .toBeGreaterThan(0);
+    expect(result.metrics.revision_proposal_action_counts.extend)
+      .toBeGreaterThan(0);
+    expect(result.stopDecision.decision).toBe("ask_user");
     expect(result.finalOutputText).toContain("Confirmed Seed Content");
+    expect(result.finalOutputText).toContain("Claim Realization Summary");
+    expect(result.finalOutputText).toContain("Competency Question Assessment");
+    expect(result.finalOutputText).toContain("Failure Classifications");
+    expect(result.finalOutputText).toContain("Revision Proposals");
 
     const record = await readYaml<ReconstructRecordArtifact>(
       result.reconstructRecordPath,
@@ -88,9 +102,10 @@ describe("runReconstruct", () => {
     expect(record.validation_summary).toMatchObject({
       source_observation_directive_status: "valid",
       seed_candidate_status: "valid",
-      seed_confirmation_status: "accepted",
-      pass_rate: 1,
+      seed_confirmation_status: "partial",
     });
+    expect(record.validation_summary.failure_count).toBeGreaterThan(0);
+    expect(record.validation_summary.revision_proposal_count).toBeGreaterThan(0);
     expect(manifest.runtime_boundary).toMatchObject({
       semantic_generation: "not_performed",
       semantic_authority: "host_llm_or_mock_author",
@@ -101,8 +116,7 @@ describe("runReconstruct", () => {
     });
     expect(manifest.happy_path_scope.deferred_artifacts).toEqual([
       "domain_context_selection",
-      "failure_classification",
-      "revision_proposal",
+      "domain_context_selection_validation",
     ]);
     expect(manifest.steps.find((step) => step.step_id === "seed_candidate"))
       .toMatchObject({
@@ -119,20 +133,32 @@ describe("runReconstruct", () => {
         performed_by: {
           authority: "host_or_user",
           realization: "mock",
-          actor_id: "mock-auto-accept-confirmation-provider",
+          actor_id: "mock-mixed-confirmation-provider",
         },
       });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
-      "target_material_profiling",
+      "target_material_profile",
       "source_inventory",
       "source_observation",
-      "source_observation_directive",
-      "source_observation_directive_validation",
+      "observation_directive",
+      "observation_directive_validation",
+      "domain_context_selection",
+      "domain_context_selection_validation",
       "seed_candidate",
       "seed_candidate_validation",
+      "claim_realization",
+      "claim_realization_validation",
       "seed_confirmation",
+      "seed_confirmation_validation",
       "competency_questions",
-      "reconstruct_metrics",
+      "competency_questions_validation",
+      "competency_question_assessment",
+      "competency_question_assessment_validation",
+      "failure_classification",
+      "failure_classification_validation",
+      "revision_proposal",
+      "revision_proposal_validation",
+      "metrics",
       "stop_decision",
       "final_output",
       "record_assembly",
@@ -196,9 +222,27 @@ describe("runReconstruct", () => {
     expect(result.reconstructRecord.target_material_kind).toBe("mixed");
     expect(result.metrics.source_observation_count).toBe(2);
     expect(result.metrics.selected_observation_count).toBe(2);
-    expect(result.metrics.evidence_ref_count).toBe(2);
+    expect(result.metrics.semantic_claim_count).toBeGreaterThanOrEqual(5);
+    expect(result.metrics.confirmed_claim_count).toBeGreaterThan(0);
+    expect(
+      result.metrics.partial_claim_count +
+      result.metrics.deferred_claim_count +
+      result.metrics.rejected_claim_count,
+    ).toBeGreaterThan(0);
+    expect(result.metrics.competency_question_assessment_count)
+      .toBe(result.metrics.competency_question_count);
+    expect(result.metrics.failure_kind_counts.insufficient_evidence)
+      .toBeGreaterThan(0);
+    expect(result.metrics.revision_proposal_action_counts.extend)
+      .toBeGreaterThan(0);
+    expect(result.metrics.evidence_ref_count).toBeGreaterThanOrEqual(2);
     expect(result.metrics.unresolved_question_count).toBeGreaterThan(0);
     expect(result.stopDecision.decision).toBe("ask_user");
     expect(result.finalOutputText).toContain("Mixed target material requires");
+    expect(result.finalOutputText).toContain("failure-1");
+    expect(result.finalOutputText).toContain("proposal-1");
+    expect(result.finalOutputText).toContain(result.artifactRefs.seed_candidate!);
+    expect(result.finalOutputText)
+      .toContain(result.artifactRefs.revision_proposal!);
   });
 });

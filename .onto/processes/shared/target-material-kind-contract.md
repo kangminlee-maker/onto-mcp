@@ -4,6 +4,12 @@
 > Purpose: define the cross-process goal for material-aware target handling
 > across `review`, `reconstruct`, and future `evolve`.
 
+Related shared contract:
+
+```text
+.onto/processes/shared/pipeline-execution-ledger-contract.md
+```
+
 ## 1. Goal Statement
 
 Establish a material-aware runtime contract so `review`, `reconstruct`, and

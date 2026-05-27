@@ -272,7 +272,7 @@ function resolveDirectExecutorPath(
   return null;
 }
 
-function buildExecutorConfigFromRealization(
+export function buildExecutorConfigFromRealization(
   realization: ExecutorRealization,
   ontoHome?: string,
 ): ReviewUnitExecutorConfig {
