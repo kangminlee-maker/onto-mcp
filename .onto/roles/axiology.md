@@ -61,12 +61,17 @@
 
 현재 lens set 에 빠진 purpose-critical 관점을 이 lens 가 발견하면 여기서 직접 제안한다. `synthesize` 는 이 제안을 보존할 수 있으나 독자적으로 발명할 수 없다. 이 slot 은 axiology 만 사용할 수 있는 의도적 canonical asymmetry 이다.
 
+이 slot 은 domain concern 을 active lens 로 승격하는 장치가 아니다. domain 문서의 concern
+tag, CQ, case evidence 는 원칙적으로 기존 lens/CQ/domain-rule 경로로 소비된다.
+New Perspectives 는 "현재 domain 이 새 lens 를 원한다"는 뜻이 아니라, review process
+governance 에서 별도로 검토할 수 있는 목적상 미커버 관찰을 보존하는 출력이다.
+
 New Perspectives 제안 시 최소 필수 필드:
 
 1. **trigger condition** — 제안을 촉발한 증거 (대상 · 관찰 · authority 미커버 영역)
 2. **proposed perspective** — 무엇을 평가할 것인가 (1~2 문장 perspective 요약)
-3. **insufficiency argument** — 기존 9 lens 각각이 이 관점을 왜 커버하지 못하는지 명시
-4. **intended receiving seat** — 제안이 착지해야 할 위치 (현재 review 의 `synthesize` 보존 / 후속 lens governance / axiology 내부 sub-check 등). 착지 seat 미지정 제안은 orphaned 로 간주하여 `synthesize` 가 거부할 수 있다
+3. **insufficiency argument** — 기존 9 lens, CQ, domain rule 경로가 이 관찰을 왜 충분히 커버하지 못하는지 명시
+4. **intended receiving seat** — 제안이 착지해야 할 위치 (현재 review 의 `synthesize` 보존 / 기존 lens·CQ·domain rule 보강 / 후속 lens governance / axiology 내부 sub-check 등). 착지 seat 미지정 제안은 orphaned 로 간주하여 `synthesize` 가 거부할 수 있다
 
 New Perspectives 제안은 현재 리뷰 실행의 active lens set 을 변경하지 않는다. 실제 lens set 확장은 별도 governance 경로를 통한다.
 

@@ -45,6 +45,7 @@ mixed stage가 보이면 아래 둘로 분리해야 한다.
 7. `script`로 안전하게 자동화할 수 없는 일은 runtime이 아니라 `LLM` 소유로 두는 편이 맞다.
 8. prompt path는 설계의 대략적인 버전이 아니라, 설계된 process의 **기준 실행 (reference realization)** 이어야 한다.
 9. 개발 중인 시스템은 매 단계에서 실제로 작동 가능한 상태를 유지해야 한다.
+10. LLM-native 개발·검토·authority 업데이트 경로에서는 숨겨진 fallback보다 **fail-loud**가 기본값이다.
 
 ## 3. runtime 역할을 과대하게 잡지 말 것
 
@@ -68,6 +69,23 @@ runtime이 하면 안 되는 일:
 
 즉 runtime은 semantic quality를 생산하는 층이 아니라,
 semantic drift가 계약 밖으로 새지 못하게 막는 층이다.
+
+### 3.1 Fail-loud over silent degradation
+
+LLM-native 개발에서는 전통적인 "fail-safe" 직관이 항상 맞지 않는다.
+
+기존 소프트웨어에서는 사용자가 계속 작업할 수 있게 fallback이나 graceful degradation을 넣는 것이 비용을 줄이는 경우가 많다. 하지만 LLM-native 개발·검토·authority 업데이트 경로에서는 silent failure가 더 큰 비용을 만든다. 실패 지점이 prompt인지, context assembly인지, retrieval인지, model/provider인지, tool schema인지, runtime validator인지 다시 탐색해야 하기 때문이다.
+
+이 환경에서는 코딩·보수 비용보다 **실패 원인 탐색 비용**이 더 자주 병목이 된다. LLM과 agent가 수정 비용을 낮춰주기 때문에, 문제가 난 자리에서 loud하게 실패시키고 바로 고치는 편이 보통 더 싸다.
+
+따라서 기본 규칙은 다음과 같다.
+
+- malformed LLM output, missing context, schema mismatch, invalid tool result, provider preflight failure, token budget overflow는 숨기지 말고 실패 위치와 원인을 남긴다.
+- fallback은 "계속 실행하기 위한 내부 꼼수"가 아니라, trigger, lost capability, trust status, diagnostic artifact, recovery path가 선언된 product behavior여야 한다.
+- review, canonicalization, authority update처럼 artifact truth를 만드는 경로에서는 degraded output이 complete output처럼 통과하면 안 된다.
+- user-facing production flow에서만 graceful degradation이 기본값이 될 수 있다. 이때도 부분 결과·품질 저하·근거 부족은 사용자나 운영자가 볼 수 있어야 한다.
+
+`fail-close`는 계약 미달 output을 신뢰 경계 안으로 들이지 않는 gate이고, `fail-loud`는 그 gate가 닫힌 이유를 즉시 고칠 수 있게 드러내는 diagnostic posture다. 둘은 대체 관계가 아니라 함께 쓰는 관계다.
 
 ## 4. 의사결정 프레임
 
@@ -233,6 +251,7 @@ LLM 기능에서는 다음 자산을 코드와 동급으로 취급한다.
 - retrieval policy
 - tool use policy
 - fallback policy
+- fail-loud policy
 - reviewer workflow
 - promote / canonicalize criteria
 - declared boundary policy
@@ -356,6 +375,7 @@ ontology가 너무 일찍 고정하면 안 되는 것:
 - exact-match 테스트만으로 품질을 증명하려고 하기
 - eval 없이 runtime hardening부터 하기
 - uncertainty 표현이나 abstain을 실패로 간주하기
+- silent fallback, hidden output repair, unmarked graceful degradation으로 실패 지점을 숨기기
 - prompt/context/retrieval 실험 없이 schema만 정교하게 만들기
 - 품질이 아니라 형식 안정성만 개선하고 "개선"이라고 부르기
 - runtime이 semantic task를 대신하도록 boundary를 잘못 자르기

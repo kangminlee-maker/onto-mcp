@@ -338,6 +338,12 @@ canonical은:
 `synthesize`는 새 lens가 아니며,
 기존 lens 결과를 보존적으로 종합해야 한다.
 
+`New Perspectives`는 현재 review 실행의 active lens set을 바꾸는 장치가 아니다.
+domain 문서나 domain concern은 lens 추가를 결정하지 않는다. domain은 concern을
+case evidence, CQ, rule, value commitment로 제공하고, 기존 lens가 그 material을
+소비한다. lens 추가/삭제/분할/통합은 domain 작업이 아니라 review process governance
+변경이며, 모든 domain과 runtime artifact에 미치는 영향을 별도 판단해야 한다.
+
 ### 10.3 맥락 격리 추론 단위
 
 → canonical 위치: `.onto/principles/ontology-as-code-guideline.md` §7 (구조 규칙) + `.onto/principles/llm-native-development-guideline.md` (설계 가이드)

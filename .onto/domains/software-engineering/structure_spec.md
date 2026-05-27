@@ -1,6 +1,6 @@
 ---
-version: 2
-last_updated: "2026-03-30"
+version: 6
+last_updated: "2026-05-28"
 source: bundled-domain-baseline
 status: established
 ---
@@ -45,7 +45,7 @@ Classification axis: **structural component** — specifications classified by t
 ## Required Relationships
 
 - See §Golden Relationships for module-interface, test-code, and config-code coherence rules.
-- All external dependencies (libraries, APIs) must be abstracted via interfaces for replaceability
+- External dependencies must follow dependency_rules.md. Use owned interfaces, ports, adapters, or anti-corruption layers when replacement, testing, security, policy isolation, or model translation matters. Direct coupling to a stable or low-risk dependency may be accepted with an explicit tradeoff rationale
 - When structural verification (code) and execution procedures (protocol) are in separate documents, the linking reference must be back-referenced in the protocol document for enforcement to be complete
 
 ## Golden Relationships
@@ -60,7 +60,12 @@ Golden relationships are cross-component validation rules. Each rule connects tw
 
 ## Layer Structure Principles
 
-Layer dependency direction rules are defined in dependency_rules.md §Direction Rules. The key principle: upper layers depend on lower layers, never the reverse.
+Layer dependency direction rules are defined in dependency_rules.md §Direction Rules. There is no single global "upper -> lower" rule:
+
+- Conventional layered architecture may allow presentation/application layers to depend on lower service/data-access layers.
+- Clean and Hexagonal architectures constrain source-code dependencies to point inward or toward ports/abstractions.
+- Runtime call/data-flow direction is separate from source-code dependency direction.
+- Reviews must apply the direction rule for the declared architecture pattern and dependency kind.
 
 ## Authority and Layer Separation
 
@@ -137,8 +142,51 @@ These thresholds are structural health indicators derived from industry practice
 | Test coverage (line) | < 60% | Critical verification gap | Immediate action required |
 | API response time | P99 > 1s | Performance degradation | Performance review and optimization |
 | Class inheritance depth | > 5 levels | Inheritance hierarchy is too deep | Prefer composition over inheritance |
+| Agent tool count | > 20 tools per agent | Tool selection quality drops and routing becomes non-deterministic | Split tools, add routing, or narrow the agent role |
+| Prompt template length | > 25% of target context window | User input/retrieved evidence/output schema may be squeezed or truncated | Refactor prompt, move stable material to refs, or choose a larger context model |
 
 Cross-reference: logic_rules.md 'Testing Logic' (test boundary rules inform coverage measurement strategy).
+
+## LLM-Native System Structure
+
+This section applies when a software system, development workflow, or review workflow depends on LLMs, agents, prompt/context contracts, retrieval, model providers, or tool-call boundaries.
+
+### Required Components
+
+| Component | Structure | Failure if Missing |
+|---|---|---|
+| Model connection | Provider/client boundary with model id, auth mode, version, rate-limit handling | The system cannot reproduce or explain model behavior |
+| Prompt/context assembly | Prompt templates, instruction hierarchy, context sources, token budget, output schema | Model input becomes an unreviewable prompt blob |
+| Output validation and sink gates | Schema validation, semantic checks, sink-specific validation/encoding/authorization, trust boundary, failure artifact | Malformed or unsafe output becomes trusted behavior or unsafe downstream input |
+| Evaluation harness | Golden set, rubric, baseline, comparison method | Route success is mistaken for output quality |
+| Observability | Prompt/output/model/tool facts, correlation id, cost, latency, failure reason | Failures become expensive to diagnose |
+| Provenance record | Source refs, builder/agent, inputs, transformation path, verification state, model/provider facts | Generated or retrieved claims become unverifiable authority |
+| Ownership boundary map | LLM semantic delegation, runtime deterministic gates and authority seats, middleware transport/adaptation, trust status, diagnostics | LLM, runtime, or middleware can silently take over another layer's authority |
+
+### Optional Components Required When Applicable
+
+| Component | Required When | Structure |
+|---|---|---|
+| Retrieval/RAG pipeline | External knowledge is selected for model context | ingestion -> processing -> indexing -> retrieval -> reranking/context handoff, with provenance at each stage |
+| RAG permission layer | Retrieved material crosses users, tenants, projects, sensitivity classes, or authority levels | pre-context permission filtering, source validation, poison checks, retrieval audit, redaction/exclusion path |
+| Agent tool registry | An LLM can choose actions or call tools | tool name, purpose, parameter schema, result shape, failure semantics, permission boundary |
+| Agent state/progress | Work spans multiple steps, tools, or sessions | explicit state object or artifact with completed/current/remaining steps and accumulated refs |
+| Multi-agent profile | Multiple reasoning units collaborate | coordination pattern, isolated inputs/outputs, termination conditions, conflict-resolution authority |
+| Safety guardrails | User input, model output, or agent action can cause harm | input guardrail, output guardrail, action permission model, logging, false-positive review path |
+| AI governance record | AI behavior materially affects users, operators, release, security, privacy, or authority artifacts | risk owner, risk treatment, approval gate, human oversight, transparency/audit evidence |
+| Red-team/incident loop | AI behavior can fail semantically, disclose data, mislead users, or trigger unsafe action | test scenario, finding intake, incident disclosure path, remediation owner, updated prompt/policy/eval/release gate |
+| Human approval gate | Agent output or action is high-impact, irreversible, external, privileged, or user-affecting | approver role, approval input, audit record, denial path, idempotency or rollback expectation |
+
+### Golden Relationships
+
+- **Model capability -> prompt/tool requirement**: The chosen model must support the prompt's required capabilities: context length, structured output, tool use, modality, and reasoning level. If not, invocation must fail-loud before dispatch or record a degraded route explicitly
+- **Retrieved context -> evidence claim**: Any evidence-backed claim must trace to retrieved context provenance. Generated text without provenance may be a draft but not evidence
+- **Tool schema -> agent instruction**: Every tool named in agent instructions must exist with a valid schema, and every exposed tool must either be referenced by an agent role or justified as discoverable reserve capacity
+- **Evaluation baseline -> production drift**: Production quality drift detection must compare against an evaluation baseline. Monitoring without a baseline cannot classify quality movement
+- **External content -> model context**: Any external content entering model context must pass through context assembly that preserves instruction hierarchy and treats the content as data, not authority
+- **LLM semantic output -> runtime authority gate -> middleware adapter**: LLM output may provide semantic input, but runtime owns validation, authority-seat assembly, persistence, authorization, idempotency, and cost/security gates. Middleware may adapt envelopes, routes, and observability plumbing, but must not repair meaning, become hidden policy authority, or bypass runtime-owned gates
+- **Agent capability -> permission -> autonomy**: Capability, authorization, and approval are distinct structure seats. A design that exposes a tool without separately declaring permission and autonomy is structurally under-specified
+- **AI risk -> owner -> gate -> feedback loop**: Material AI risk must connect to an owner, approval or acceptance gate, incident/red-team intake, and update path for controls or evals
 
 ## Verification Structure
 
@@ -182,4 +230,5 @@ Cross-reference: logic_rules.md 'Testing Logic' (test boundary rules inform cove
 - concepts.md — term definitions for module, interface, layer, architecture patterns, etc.
 - dependency_rules.md — dependency direction and circular dependency rules, build/package dependency management
 - logic_rules.md — type system logic, constraint design, security logic, testing logic
+- prompt_interface.md — prompt, role, tool, response format, and context interface criteria
 - competency_qs.md — CQ-S-01~CQ-S-10 (Structural Understanding verification questions)

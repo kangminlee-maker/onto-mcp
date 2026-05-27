@@ -148,11 +148,27 @@ export function toRelativePath(targetPath: string, projectRoot: string): string 
   return normalized.split(path.sep).join(path.posix.sep);
 }
 
+const DOMAIN_ALIAS_TO_CANONICAL: Record<string, string> = {
+  "llm-native-development": "software-engineering",
+  "software-development": "software-engineering",
+};
+
+function stripDomainSigil(domainValue: string): string {
+  const trimmed = domainValue.trim();
+  return trimmed.startsWith("@") ? trimmed.slice(1) : trimmed;
+}
+
 export function normalizeDomainValue(domainValue: string): string {
-  if (["", "-", "@-", "none"].includes(domainValue)) {
+  const stripped = stripDomainSigil(domainValue);
+  if (["", "-", "none"].includes(stripped)) {
     return "none";
   }
-  return domainValue.startsWith("@") ? domainValue.slice(1) : domainValue;
+  return DOMAIN_ALIAS_TO_CANONICAL[stripped] ?? stripped;
+}
+
+export function isDeprecatedDomainAlias(domainValue: string): boolean {
+  const stripped = stripDomainSigil(domainValue);
+  return Object.prototype.hasOwnProperty.call(DOMAIN_ALIAS_TO_CANONICAL, stripped);
 }
 
 export function parseBooleanFlag(

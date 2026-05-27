@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Software Engineering Domain Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --ink: #17202a;
+      --muted: #5c6773;
+      --line: #d7dde5;
+      --panel: #ffffff;
+      --panel-2: #eef4ff;
+      --blue: #2563eb;
+      --green: #0f766e;
+      --red: #b42318;
+      --gold: #a16207;
+      --violet: #6d28d9;
+      --shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    .page {
+      width: min(1180px, calc(100vw - 40px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+
+    .page-header {
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(30px, 5vw, 56px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    a {
+      color: inherit;
+      text-decoration-color: rgba(37, 99, 235, 0.35);
+      text-underline-offset: 3px;
+    }
+
+    .lede {
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .section {
+      margin-top: 28px;
+    }
+
+    .map {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr) minmax(220px, 0.8fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .lane {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+    }
+
+    .node,
+    .core,
+    .summary-card,
+    .table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .node {
+      min-height: 104px;
+      padding: 16px;
+      border-radius: 8px;
+    }
+
+    .node strong,
+    .core strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .node small,
+    .core small {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .node ul,
+    .summary-card ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .core {
+      position: relative;
+      display: grid;
+      gap: 14px;
+      padding: 22px;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    }
+
+    .core-title {
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .core-title strong {
+      font-size: 26px;
+      line-height: 1.15;
+    }
+
+    .axis-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .axis {
+      padding: 12px;
+      border-radius: 8px;
+      background: #f8fafc;
+      border: 1px solid #e4e9f0;
+    }
+
+    .axis b {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .axis span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .blue { border-top: 4px solid var(--blue); }
+    .green { border-top: 4px solid var(--green); }
+    .red { border-top: 4px solid var(--red); }
+    .gold { border-top: 4px solid var(--gold); }
+    .violet { border-top: 4px solid var(--violet); }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .summary-card {
+      min-height: 210px;
+      padding: 18px;
+      border-radius: 8px;
+    }
+
+    .summary-card p {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      background: var(--panel);
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      background: #f1f5f9;
+      color: #26313d;
+      font-size: 13px;
+    }
+
+    td {
+      color: var(--muted);
+    }
+
+    td:first-child {
+      color: var(--ink);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    code {
+      padding: 1px 5px;
+      border-radius: 5px;
+      background: #edf2f7;
+      color: #1f2937;
+      font-size: 0.92em;
+    }
+
+    .footer-note {
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 920px) {
+      .page {
+        width: min(100vw - 28px, 760px);
+        padding-top: 28px;
+      }
+
+      .map,
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .axis-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="page-header">
+      <h1>Software Engineering Domain Map</h1>
+      <p class="lede">
+        이 도메인은 일반 소프트웨어 엔지니어링과 LLM-native/agentic 개발을 하나의 리뷰 프레임으로 다룹니다.
+        핵심은 구조, 계약, 상태, 검증, 운영, 그리고 AI 시대의 prompt/context/tool/model 경계와 LLM/runtime/middleware 소유권을 함께 보는 것입니다.
+      </p>
+      <div class="meta-row" aria-label="metadata">
+        <span class="pill">canonical domain: <code>software-engineering</code></span>
+        <span class="pill">retired alias: <code>llm-native-development</code></span>
+        <span class="pill">generated: 2026-05-27</span>
+      </div>
+    </div>
+
+    <div class="section" aria-labelledby="map-title">
+      <h2 id="map-title">개념도</h2>
+      <div class="map">
+        <div class="lane" aria-label="source documents">
+          <div class="node blue">
+            <strong><a href="../../.onto/domains/software-engineering/domain_scope.md">domain_scope.md</a></strong>
+            <small>무엇을 software-engineering concern으로 볼 것인가</small>
+            <ul>
+              <li>Data/State, Interface, Security</li>
+              <li>Verification, Architecture, Operations</li>
+              <li>LLM-Native &amp; Agentic Development</li>
+            </ul>
+          </div>
+          <div class="node green">
+            <strong><a href="../../.onto/domains/software-engineering/concepts.md">concepts.md</a></strong>
+            <small>용어와 해석 규칙의 source of truth</small>
+            <ul>
+              <li>architecture, state, type, quality</li>
+              <li>observability, DevOps</li>
+              <li>LLM-native engineering terms</li>
+            </ul>
+          </div>
+          <div class="node gold">
+            <strong><a href="../../.onto/domains/software-engineering/prompt_interface.md">prompt_interface.md</a></strong>
+            <small>prompt, role, tool, response, context interface 기준</small>
+            <ul>
+              <li>ownership boundary split</li>
+              <li>structured output validation</li>
+              <li>tool schema completeness</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="core" aria-label="domain core">
+          <div class="core-title">
+            <strong>Software Engineering Review Frame</strong>
+            <small>리뷰는 구현 코드만 보는 것이 아니라, contract와 runtime truth, LLM boundary, verification evidence를 함께 고정합니다.</small>
+          </div>
+          <div class="axis-grid">
+            <div class="axis">
+              <b>Scope Axis</b>
+              <span>어떤 concern이 빠졌는가</span>
+            </div>
+            <div class="axis">
+              <b>Concept Axis</b>
+              <span>같은 단어가 어떤 의미로 쓰였는가</span>
+            </div>
+            <div class="axis">
+              <b>Rule Axis</b>
+              <span>어떤 조건이 위반이면 결함인가</span>
+            </div>
+            <div class="axis">
+              <b>Verification Axis</b>
+              <span>무엇을 어떤 증거로 확인해야 하는가</span>
+            </div>
+            <div class="axis">
+              <b>Problem Framing Axis</b>
+              <span>이 이슈가 어디에서 어떤 결함으로 닫히는가</span>
+            </div>
+            <div class="axis">
+              <b>Evolution Axis</b>
+              <span>변경이 들어오면 어떤 경로로 깨지는가</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lane" aria-label="review lenses">
+          <div class="node red">
+            <strong><a href="../../.onto/domains/software-engineering/logic_rules.md">logic_rules.md</a></strong>
+            <small>type, state, constraint, security, error, LLM boundary 규칙</small>
+            <ul>
+              <li>fail-loud over silent degradation</li>
+              <li>prompt/context/tool validation</li>
+              <li>contract and state consistency</li>
+            </ul>
+          </div>
+          <div class="node violet">
+            <strong><a href="../../.onto/domains/software-engineering/structure_spec.md">structure_spec.md</a></strong>
+            <small>module, architecture, threshold, LLM system structure</small>
+            <ul>
+              <li>module-interface coherence</li>
+              <li>test-code coherence</li>
+              <li>model/prompt/eval/observability components</li>
+            </ul>
+          </div>
+          <div class="node blue">
+            <strong><a href="../../.onto/domains/software-engineering/competency_qs.md">competency_qs.md</a></strong>
+            <small>리뷰가 답해야 하는 질문 목록</small>
+            <ul>
+              <li>CQ-S, CQ-D, CQ-E, CQ-T, CQ-V</li>
+              <li>CQ-A: AI Agent and LLM-Native Collaboration</li>
+              <li>Security, Performance, Concurrency, Dependencies</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" aria-labelledby="core-concepts">
+      <h2 id="core-concepts">핵심 개념 정리</h2>
+      <div class="summary-grid">
+        <div class="summary-card blue">
+          <h3>1. Domain Scope</h3>
+          <p>리뷰에서 빠지면 안 되는 concern의 지도입니다. 기존 SE concern에 LLM-native &amp; agentic development가 통합되어, AI 관련 작업도 별도 리뷰가 아니라 같은 프레임 안에서 다룹니다.</p>
+          <ul>
+            <li>Data/State</li>
+            <li>Interface/Contract</li>
+            <li>Verification/Quality</li>
+            <li>LLM-Native/Agentic</li>
+          </ul>
+        </div>
+        <div class="summary-card green">
+          <h3>2. Source of Truth</h3>
+          <p>충돌이 생겼을 때 어떤 문서가 의미를 소유하는지 정합니다. 개념은 <code>concepts.md</code>, 범위는 <code>domain_scope.md</code>, operational rule은 <code>logic_rules.md</code>가 중심입니다.</p>
+          <ul>
+            <li>concept definition authority</li>
+            <li>artifact truth</li>
+            <li>domain rule ownership</li>
+          </ul>
+        </div>
+        <div class="summary-card red">
+          <h3>3. Fail-Loud</h3>
+          <p>LLM-native 개발에서는 조용한 fallback이 탐색 비용을 키웁니다. prompt, context, model, tool, schema, artifact 경계가 깨지면 원인과 위치를 드러내는 diagnostic artifact가 우선입니다.</p>
+          <ul>
+            <li>silent degradation is a defect</li>
+            <li>fail-close + fail-loud</li>
+            <li>visible degraded state</li>
+          </ul>
+        </div>
+        <div class="summary-card violet">
+          <h3>4. Structural Coherence</h3>
+          <p>좋은 구조는 모듈, public interface, tests, config, schema, docs가 서로 맞물리는 상태입니다. 구조 문서는 이 연결 관계를 golden relationship으로 검증합니다.</p>
+          <ul>
+            <li>module-interface coherence</li>
+            <li>test-code coherence</li>
+            <li>schema-code alignment</li>
+          </ul>
+        </div>
+        <div class="summary-card gold">
+          <h3>5. LLM Boundary</h3>
+          <p>LLM 호출은 단순 API call이 아니라 model/provider, prompt, context, tool, output validation과 LLM/runtime/middleware 소유권이 연결된 behavior boundary입니다.</p>
+          <ul>
+            <li>LLM: semantic judgment</li>
+            <li>Runtime: deterministic authority</li>
+            <li>Middleware: transport/adaptation only</li>
+          </ul>
+        </div>
+        <div class="summary-card green">
+          <h3>6. Problem Framing</h3>
+          <p>리뷰 finding을 실행 가능한 issue로 바꾸는 축입니다. 어디의 문제인지, 어떤 defect kind인지, 어떤 verification이 필요한지로 closure를 결정합니다.</p>
+          <ul>
+            <li>implementation_surface</li>
+            <li>defect_kind</li>
+            <li>verification_need</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" aria-labelledby="ownership-split">
+      <h2 id="ownership-split">LLM Boundary Ownership Split</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>영역</th>
+              <th>소유해야 하는 것</th>
+              <th>침범하면 안 되는 것</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LLM</td>
+              <td>의미 해석, 판단, 탐색 계획, source-layer reasoning, 초안 생성</td>
+              <td>persistence, deterministic binding, authorization, idempotency, 최종 authority artifact 조립</td>
+            </tr>
+            <tr>
+              <td>Runtime</td>
+              <td>binding, validation, state transition, persistence, audit, cost/security gate, artifact assembly</td>
+              <td>새 의미 생성, evidence sufficiency 임의 판단, semantic drift의 silent repair</td>
+            </tr>
+            <tr>
+              <td>Middleware</td>
+              <td>transport, envelope conversion, routing plumbing, auth/context propagation, retry envelope, observability plumbing</td>
+              <td>의미 재해석, hidden policy owner 역할, authority/source-of-truth 역할</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section" aria-labelledby="concept-table">
+      <h2 id="concept-table">리뷰 때 보는 주요 판단 축</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>축</th>
+              <th>핵심 질문</th>
+              <th>대표 실패 모드</th>
+              <th>주요 문서</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Scope Coverage</td>
+              <td>중요한 engineering concern이 빠졌는가?</td>
+              <td>보안, error path, LLM boundary, 운영 가시성 누락</td>
+              <td><code>domain_scope.md</code>, <code>competency_qs.md</code></td>
+            </tr>
+            <tr>
+              <td>Contract Integrity</td>
+              <td>타입, API, schema, tool contract가 런타임과 맞는가?</td>
+              <td>선언과 구현 불일치, output schema 미검증</td>
+              <td><code>logic_rules.md</code>, <code>structure_spec.md</code></td>
+            </tr>
+            <tr>
+              <td>Traceability</td>
+              <td>입력, 상태 변화, 근거, 결정을 따라갈 수 있는가?</td>
+              <td>source of truth 부재, provenance 누락, audit 불가</td>
+              <td><code>concepts.md</code>, <code>problem_framing_profile.md</code></td>
+            </tr>
+            <tr>
+              <td>Verification Evidence</td>
+              <td>주장한 품질을 어떤 테스트나 eval로 증명하는가?</td>
+              <td>route success를 semantic quality로 오인</td>
+              <td><code>competency_qs.md</code>, <code>structure_spec.md</code></td>
+            </tr>
+            <tr>
+              <td>Failure Diagnostics</td>
+              <td>실패 시 원인 경계가 바로 보이는가?</td>
+              <td>silent fallback, hidden repair, unmarked degradation</td>
+              <td><code>logic_rules.md</code>, <code>prompt_interface.md</code></td>
+            </tr>
+            <tr>
+              <td>Evolution Cost</td>
+              <td>새 기능, dependency, model/provider 변화에 안전한가?</td>
+              <td>영향 범위 불명확, migration/eval/retry 경로 부재</td>
+              <td><code>extension_cases.md</code>, <code>dependency_rules.md</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="footer-note">
+        이 HTML은 현재 <code>.onto/domains/software-engineering</code> 문서 세트를 요약한 시각 자료입니다.
+        canonical 문장은 원본 Markdown 문서가 소유하며, 이 파일은 탐색과 설명을 위한 보조 자료입니다.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

@@ -71,6 +71,22 @@ controlled deliberation은 관점 간 충돌을 제한 맥락에서 정리하며
 - 다른 lens 전체를 요약하지 않는다
 - `New Perspectives` canonical slot을 소유한다 (axiology-exclusive)
 
+`New Perspectives`는 현재 review에서 관찰된 목적상 미커버 관점을 보존하는 슬롯이다.
+이 슬롯은 현재 실행의 active lens set을 변경하지 않는다.
+domain 문서, domain concern tag, CQ, case evidence는 lens 추가를 요구하거나 결정하는
+authority가 아니다. domain은 concern을 lens-usable 원칙, 사례, CQ, 관련 문서 경로로
+표현할 수 있지만, lens 추가/삭제/분할/통합 판단은 review process 차원의 lens governance
+문제다.
+
+`New Perspectives` 제안이 나오면 가능한 처리 경로는 아래 중 하나다.
+
+1. 기존 lens/CQ/domain rule 경로로 흡수한다.
+2. domain 문서의 concern tag 또는 CQ를 보강한다.
+3. 별도 lens-governance follow-up으로 보존한다.
+
+3번은 후속 검토 입력일 뿐이며, 본 review 실행이나 특정 domain 문서가 새 active lens를
+추가했다는 뜻이 아니다.
+
 ### 4.2 `synthesize`
 
 - lens set 전체와 `deliberation.md`를 읽어 final review output을 만든다

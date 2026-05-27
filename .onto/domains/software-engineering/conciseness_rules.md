@@ -1,6 +1,6 @@
 ---
-version: 2
-last_updated: "2026-03-30"
+version: 5
+last_updated: "2026-05-28"
 source: bundled-domain-baseline
 status: established
 ---
@@ -49,6 +49,17 @@ Each rule is tagged with a strength level:
 
 - [MAY-ALLOW] Application-level and infrastructure-level metrics for the same quantity — application metrics (e.g., handler-measured latency, per-endpoint) and infrastructure metrics (e.g., load-balancer-measured latency, per-host) measure the same thing at different granularity and observation points. Retain when the difference matters for diagnosis; consolidate when identical and only one consumer uses them.
 
+### LLM-Native Runtime and Evaluation
+
+- [MUST-ALLOW] Safety policy in both prompt instructions and runtime guardrails — prompt instructions reduce unsafe generation; guardrails block unsafe output. This defense-in-depth duplication is justified when both copies point to the same authority.
+- [MAY-ALLOW] Evaluation criteria in both an eval rubric and a release gate — the rubric defines semantic quality; the gate enforces release policy. Retain only when the gate references the rubric instead of redefining criteria.
+
+### Review Concern Case Overlap
+
+- [MUST-ALLOW] The same case evidence may appear under multiple review concerns when each concern asks a different question. Example: prompt injection can support logic (instruction authority), structure (context assembly seat), dependency (retrieval/source boundary), security (exfiltration), pragmatics (answerable CQ), and axiology (user/operator harm). Domain concern labels are not lens-addition proposals.
+- [MUST-ALLOW] A principle may have separate CQ forms for deterministic correctness, semantic quality, dependency impact, and value tradeoff. Merge only when the questions have the same pass/fail evidence.
+- [MAY-ALLOW] Repeating a short inference path across CQ and case docs is acceptable when it lets a lens use the case without loading a long narrative. Prefer references over copied definitions.
+
 ### Cross-cutting Concerns
 
 - [MAY-ALLOW] Cross-cutting concerns (security, logging, authentication) appearing in multiple modules. Allowed under the separation of concerns (SoC) principle, but copy-paste of identical logic is a removal target.
@@ -85,6 +96,15 @@ Each rule is tagged with a strength level:
 
 - [SHOULD-REMOVE] Single-implementation interfaces — an interface with exactly one implementing class, created "for testability" or "future flexibility," that has remained single-implementation for an extended period. The interface adds indirection without providing polymorphism. Remove and depend on the concrete class; re-extract when a genuine second implementation arises (YAGNI principle).
 - [SHOULD-REMOVE] Redundant null checks after type-system verification — when the type system guarantees non-null (e.g., non-optional type in TypeScript strict mode, `@NonNull` in Java), a runtime null check duplicates the guarantee without adding safety. Exception: retain checks at system boundaries (external API responses, deserialized data) where the type system cannot verify the actual value.
+
+### LLM-Native Context Noise
+
+- [MUST-REMOVE] Historical migration notes, deprecated domain split rationale, or old LLM-native domain instructions from active execution context — they inflate model context with non-current behavior. Keep them in development-records or archive paths and link only when needed.
+- [MUST-REMOVE] Duplicate prompt templates in agent instructions and prompt-template files — the agent's behavior diverges when one copy changes. Keep one source of truth and reference it.
+- [MUST-REMOVE] Multiple tools with overlapping descriptions and identical practical capability — agents choose non-deterministically unless routing rules distinguish the tools.
+- [MUST-REMOVE] Hidden fallback descriptions that are not connected to diagnostic artifacts — they make failures look successful and increase investigation cost.
+- [MUST-REMOVE] Multiple active definitions of LLM/runtime/middleware ownership, output trust, RAG permission, agent autonomy, or provenance. Keep the definition in concepts.md and express operational consequences in rules/CQs.
+- [MUST-REMOVE] Case-study prose that does not yield a guideline, CQ seed, PASS, and FAIL criterion. Move historical narrative to archive/development records if it remains useful.
 
 ---
 

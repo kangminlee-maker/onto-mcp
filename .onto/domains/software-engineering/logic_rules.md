@@ -1,6 +1,6 @@
 ---
-version: 3
-last_updated: "2026-03-31"
+version: 7
+last_updated: "2026-05-28"
 source: bundled-domain-baseline
 status: established
 ---
@@ -125,6 +125,14 @@ See concepts.md §Type System Terms for definitions of structural and nominal ty
 - **Error middleware (Express, Koa, ASP.NET)**: Centralized error handling in request pipeline. Transforms internal errors into user-facing responses. Must not swallow errors silently
 - **Anti-pattern**: catch-and-ignore (`catch (e) {}`) creates silent failures. Every catch block must log, re-throw, or return an error value
 
+### LLM-Native Failure Posture
+
+- In LLM-native development, review, and authority-update paths, the default posture is **fail-loud**: a malformed model output, missing context source, invalid tool result, schema mismatch, provider preflight failure, unbudgeted truncation, or absent artifact ref must halt or surface a structured diagnostic naming the failing boundary
+- Silent fallback is a defect when it prevents a maintainer from identifying whether the failure originated in prompt design, context assembly, retrieval, model/provider behavior, tool schema, runtime validation, or artifact persistence
+- Graceful degradation is allowed only as explicit product behavior. It must declare trigger condition, degraded output semantics, lost capability, user/operator-visible marker, diagnostic artifact, and recovery/escalation path
+- Output repair must not erase evidence of the original failure. If runtime repairs malformed LLM output for a non-authority user flow, the repair must record the original validation failure and repaired fields. For review/authority paths, repaired output cannot become trusted output unless the contract explicitly permits that repair
+- Fail-loud and fail-close are complementary: fail-close blocks untrusted output from being accepted, while fail-loud preserves enough diagnostic context to fix the failing source quickly
+
 ### User-Facing Error Requirements
 
 - User-facing errors must include: (1) what went wrong (human-readable), (2) what the user can do (recommended action), (3) correlation ID (for support/debugging)
@@ -209,7 +217,7 @@ See concepts.md §Type System Terms for definitions of structural and nominal ty
 ### Load Testing Criteria
 
 - For quantitative load testing thresholds (P99 > 1s triggers review), see structure_spec.md §Quantitative Thresholds (SSOT for performance thresholds)
-- For SLI/SLO definitions, see domain_scope.md §Operations, Deployment & Maintenance (SSOT for service level targets)
+- For SLI/SLO definitions, see domain_scope.md §Major Sub-areas → Operations and maintenance
 - This section owns only the caching, query optimization, and indexing rules; structure_spec.md owns the thresholds and domain_scope.md owns the SLO framework
 
 ## Dependency Logic
@@ -231,10 +239,74 @@ See dependency_rules.md for all dependency-related rules.
 - In batch processing, placing transaction boundaries at the Phase level and performing consistency verification at each Phase completion is a practical pattern
 - For backward compatibility classification (breaking vs non-breaking changes), see dependency_rules.md §Breaking vs Non-breaking Changes Classification
 
+## LLM Boundary Logic
+
+### Ownership Split Rules
+
+- Use concepts.md §LLM-Native Engineering Terms for the domain projection of LLM Boundary, Runtime Boundary, Middleware Boundary, and Ownership Non-Interference. This section owns operational prohibitions and contradiction rules, not the base concept definitions
+- LLM semantic output can become evidence or a reasoning source only with declared provenance and trust status
+- Runtime must not produce new semantic meaning, infer evidence sufficiency, or silently repair semantic drift while presenting the result as original LLM judgment
+- Middleware must not reinterpret, upgrade, downgrade, or repair meaning, and must not become a hidden policy owner or second source of truth
+- The LLM must not own persistence, final authority-seat assembly, authorization, cost control, deterministic state transition, or idempotency unless the contract explicitly frames its output as non-authoritative semantic input to runtime-owned gates
+- Boundary crossing must be declared with owner, input/output shape, enforcement profile, artifact or trust status, and diagnostic behavior. Undeclared crossing is a design defect because it makes failures and authority conflicts hard to localize
+
+### Model and Provider Rules
+
+- Model provider, model id, model version, auth mode, and route realization are external dependency facts. Production and review records must preserve the values needed to reproduce or explain model behavior
+- Model version aliases are acceptable for exploration but not for reproducibility claims. When aliases are used, the run artifact must record that behavior may drift
+- Model routing must declare the routing condition, selected model capability requirement, fallback behavior, and diagnostic behavior when no route qualifies
+
+### Prompt and Context Rules
+
+- Prompt templates, tool schemas, agent instructions, retrieval policy, and context assembly rules are behavior-affecting artifacts. Changes to them require the same review discipline as code/config changes
+- Structured model output must be validated before consumption. A schema instruction in a prompt is not a validation guarantee
+- Token budget must be checked before model invocation when truncation would remove instructions, evidence, or output schema requirements. Silent truncation is a contract failure
+- Retrieved context used as evidence must carry source provenance. If provenance is missing, the output may still be useful as a draft but cannot be treated as evidence-backed
+
+### Output Zero-Trust Rules
+
+- LLM output is untrusted until runtime validates it for the downstream sink. Schema validity only proves shape; it does not prove shell safety, SQL safety, HTML safety, path safety, email safety, authorization, provenance, or semantic truth
+- A prompt instruction such as "return valid JSON" or "do not call unsafe tools" must not be treated as a security, authorization, or sink-validation guarantee
+- If LLM output can influence a command, database query, file path, rendered HTML, API request, email, authority artifact, or user-visible decision, the sink must have explicit validation/encoding/authorization before use
+- Runtime may classify trust status but must not silently upgrade untrusted output into trusted output. Trust upgrades require a declared gate, evidence, and artifact or audit record
+
+### External Content and Prompt Injection Rules
+
+- External content entering a prompt through user input, webpages, files, email, documents, tool output, or retrieval is data, not instruction authority
+- Instruction hierarchy must be enforced by runtime/context assembly. A system cannot rely on the model alone to ignore hostile or hidden instructions in external content
+- External content must not grant tool permission, override role instructions, change output authority, request secret disclosure, or authorize exfiltration sinks unless a runtime-owned policy explicitly allows it
+- If external content can influence tool calls or authority artifacts, the design must include a prompt-injection test or red-team scenario that proves the boundary is enforceable
+
+### Retrieval and Vector Rules
+
+- Retrieval relevance does not imply evidence authority. Retrieved material becomes evidence only when source identity, permission scope, retrieval path, and provenance are recorded
+- RAG must apply permission filtering before content enters model context. Filtering after generation is too late for tenant/user boundary protection
+- Ingestion must validate source trust, document lifecycle, metadata, and poisoning risk before indexing. A poisoned corpus is a behavior dependency, not merely bad data
+- Embedding model, chunking strategy, preprocessing, index version, and retrieval/reranking policy are coupled. Changing one requires compatibility analysis and an eval or migration path
+- Retrieved text containing instructions must remain quoted or otherwise bounded as source content. It must not become a higher-priority prompt instruction
+
+### Agent and Tool Rules
+
+- Agent tool schemas must be self-describing enough for an agent to determine applicability without hidden documentation
+- Agent loops must define termination conditions, timeout behavior, and progress persistence. A loop without a termination condition is an unbounded runtime risk
+- Tool call results must be validated before they influence further reasoning. Tool failure, partial output, or unavailable capability must be represented explicitly in agent state
+- Context-isolated reasoning units must receive contracted input and produce contracted output. They must not depend on hidden main-context state for correctness
+- Agent functionality, permission, and autonomy must be minimized separately. A tool being technically available does not mean the agent is authorized to use it, and authorization does not mean it may act without human approval
+- High-impact tool actions require a human approval gate or a documented risk acceptance. High-impact includes irreversible writes, external communication, payment, credential use, data deletion, deployment, security policy change, and user-affecting authority artifacts
+- Agent retries must be bounded by retry safety. Retrying a non-idempotent or high-impact action without idempotency or approval is a logic defect
+
+### AI Governance and Risk Rules
+
+- AI behavior that can materially affect users, operators, security, privacy, release decisions, or authority artifacts must have an AI risk owner or explicit non-applicability rationale
+- A release gate that claims AI quality must distinguish deterministic correctness, schema validity, semantic evaluation, safety/security testing, and production drift monitoring
+- Red-team findings, incidents, semantic eval failures, and drift signals must feed back into prompts, policies, tests, controls, or release gates. Treating them as disconnected observations breaks continuous improvement
+- AI incident disclosure must be defined when AI behavior can mislead users, expose data, trigger unsafe action, or break a trust claim. Hidden incident handling is not compatible with artifact truth
+
 ## Related Documents
 - concepts.md — term definitions for type system, constraint design, concurrency, security, and testing
 - dependency_rules.md — dependency direction rules, API dependency management, build/package dependency rules
 - structure_spec.md — module structure, layer structure principles, verification structure
+- prompt_interface.md — prompt, role, tool, response format, and context interface criteria
 - competency_qs.md — CQ-T-01~CQ-T-08 (Types and Constraints verification questions)
 - competency_qs.md — CQ-E-01~CQ-E-08 (Error Handling verification questions)
 - competency_qs.md — CQ-P-01~CQ-P-04 (Performance verification questions)

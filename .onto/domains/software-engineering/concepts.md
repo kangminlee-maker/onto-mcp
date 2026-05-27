@@ -1,6 +1,6 @@
 ---
-version: 3
-last_updated: "2026-03-31"
+version: 8
+last_updated: "2026-05-28"
 source: bundled-domain-baseline
 status: established
 ---
@@ -38,7 +38,7 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 - [L2] Saga = distributed transactions as a sequence of local transactions with compensating actions. Choreography-based (events) or orchestration-based (coordinator)
 - [L2] Hexagonal (Ports and Adapters) = application logic at center, surrounded by ports (interfaces) and adapters (implementations). Domain independent of infrastructure
 - [L2] Clean Architecture = concentric layers where dependencies point inward. The Dependency Rule: source code dependencies point toward higher-level policies
-- [L2] Layered Architecture = vertical separation (Presentation, Business, Data Access). Each layer depends only on the layer below
+- [L2] Layered Architecture = separation by technical layers such as Presentation, Business/Application, and Data Access. This is distinct from Vertical Slice Architecture, which organizes by feature. Layer direction rules depend on the declared architecture pattern and dependency kind
 - [L2] Microservices = independently deployable services communicating via network. Benefits: independent scaling/deployment. Costs: distributed system complexity
 - [L2] Monolith = single deployable unit. Not inherently bad — simpler deployment, no network latency, easier debugging
 - [L2] Modular Monolith = monolith with enforced module boundaries. Monolith simplicity with microservice-like modularity
@@ -104,6 +104,7 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 - [L2] Deprecation = maintaining while announcing future removal. Must specify: what, when removed, and replacement
 - [L2] Semantic Versioning (SemVer) = MAJOR.MINOR.PATCH. MAJOR: breaking. MINOR: backward-compatible features. PATCH: bug fixes. A communication contract — violating it erodes consumer trust
 - [L2] Feature Toggle = enable/disable features at runtime without deployment. Risk: toggle debt from unremoved toggles
+- [L2] Technical Debt = a deliberate shortcut with known future cost, owner, and remediation expectation. It differs from accidental complexity or a defect because the tradeoff is acknowledged and tracked
 - [L2] Trunk-based Development = all developers commit to main with short-lived branches. Requires strong CI and feature toggles
 - [L2] Branch-by-Abstraction = large changes without long-lived branches: introduce abstraction, implement new version behind it, switch, remove old
 
@@ -139,6 +140,10 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 - [L3] CSP (Content Security Policy) = HTTP header specifying allowed content sources. Primary defense against XSS
 - [L3] RBAC (Role-Based Access Control) = permissions assigned to roles, users assigned to roles. Simple but coarse-grained
 - [L3] ABAC (Attribute-Based Access Control) = access decisions based on user/resource/environment attributes. More flexible than RBAC, harder to audit
+- [L3] Data Classification = labeling data by sensitivity, regulatory exposure, tenant/user boundary, and handling obligations
+- [L3] Retention Policy = rule defining how long data or artifacts are kept, why they are kept, and when they must be deleted or archived
+- [L3] Deletion/Erasure Path = implemented path that removes or anonymizes data across primary stores, derived stores, indexes, caches, logs, backups, and downstream processors according to the retention/privacy obligation
+- [L3] Data Minimization = collecting, storing, and exposing only the data needed for the declared purpose
 
 ## Testing Terms
 
@@ -162,10 +167,58 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 ## DevOps Terms
 
 - [L3] CI/CD = CI: build and test on every commit. CD: automatically deploy verified builds. The pipeline is the automated sequence of these stages
-- [L3] Artifact = versioned, immutable build output (JAR, Docker image, npm package). Never modified — only replaced
+- [L3] Build Artifact = versioned, immutable build output (JAR, Docker image, npm package). Never modified — only replaced
+- [L3] SBOM = Software Bill of Materials. Machine-readable inventory of components and dependency versions included in a build or release
+- [L3] Artifact Attestation = signed or otherwise verifiable statement about how a build/release artifact was produced, by whom/what, from which inputs, and with which verification results
+- [L3] Release Artifact Traceability = ability to trace a deployed artifact back to source revision, build pipeline, dependency set, verification results, approval gate, and deployment environment
 - [L3] Blue-Green Deployment = two identical environments, switch traffic between them. Instant rollback. Cost: double infrastructure
 - [L3] Canary Deployment = route small traffic percentage to new version, increase gradually if healthy
 - [L3] Rolling Deployment = replace instances one at a time. Both versions coexist during rollout
+
+## LLM-Native Engineering Terms
+
+Domain-local definitions in this section own software-engineering usage. Onto/productization core concepts are marked as **domain projections**: the canonical seat remains in `.onto/authority/`, `.onto/principles/`, or `.onto/processes/`, while this file records how the software-engineering domain uses the concept during review.
+
+- [L3] LLM-Native Development = software development where LLMs, agents, prompt/context contracts, retrieval, model providers, semantic evaluation, or AI-assisted workflows materially affect product behavior or engineering workflow. It is now a sub-area of software engineering, not a separate review domain
+- [L3] Behavior-Affecting Artifact = any artifact whose change can alter software behavior, engineering workflow, review outcome, trust status, or release decision. Includes code, config, schemas, prompts, context assembly rules, tool schemas, retrieval policies, eval rubrics, model routes, and generated authority artifacts
+- [L3] Model Provider = an external or local system that serves model inference. Provider identity, API contract, auth mode, rate limits, pricing, and model version are runtime dependencies
+- [L3] Model Version = a specific model release used for inference. Version aliases such as `latest` reduce reproducibility; pinned versions make behavior changes diagnosable
+- [L3] Model Route = the runtime decision that selects a model/provider/profile for a task. A model route must expose the selected provider/model facts, capability requirements, fallback policy, and diagnostic behavior
+- [L3] Prompt Template = a versioned instruction artifact with placeholders filled at runtime. A prompt template change is a behavior change, comparable to code or configuration changes
+- [L3] Context Assembly = the runtime or agent process that selects and orders the information sent to the model. Context assembly owns token budget, provenance, relevance, and omission behavior
+- [L3] LLM Boundary (domain projection) = software-engineering use of the LLM/runtime interface principles in `.onto/principles/llm-runtime-interface-principles.md` and `.onto/principles/llm-native-development-guideline.md`. In this domain, reviews ask which semantic interpretation or judgment is delegated to the LLM and which runtime-owned gates must receive its output
+- [L3] Runtime Boundary (domain projection) = software-engineering use of runtime-owned deterministic authority: binding, validation, state transition, persistence, audit, cost/security gates, idempotency, and authority artifact assembly. The canonical boundary principles live in `.onto/principles/llm-runtime-interface-principles.md`
+- [L3] Middleware Boundary (domain projection) = software-engineering use of middleware-owned transport/adaptation responsibilities: envelope conversion, routing plumbing, auth/context propagation, retry envelopes, and observability plumbing. Middleware must remain a bounded adapter, not a second semantic or policy authority
+- [L3] Ownership Non-Interference (domain projection) = software-engineering review rule derived from the LLM/runtime interface principles: boundary crossings must declare owner, input/output, enforcement profile, artifact or trust status, and diagnostic behavior
+- [L3] Retrieved Context = external material selected for model input by search, RAG, graph traversal, or direct file selection. It must carry provenance when used as evidence
+- [L3] Prompt Injection Boundary = the boundary that treats external content, user text, retrieved text, tool output, and webpages as data rather than instruction authority. Prompt instructions are not a security boundary
+- [L3] RAG Permission Boundary = the requirement that retrieval preserve access control, tenancy, source validation, poisoning checks, provenance, and auditability before content influences model context
+- [L3] Embedding Index Compatibility = the rule that vectors produced by different embedding models, dimensions, preprocessing, or chunking policies are not interchangeable without a declared migration or dual-index strategy
+- [L3] Output Zero-Trust = the rule that LLM output is untrusted until runtime validates it for shape, policy, authorization, provenance, and the specific downstream sink
+- [L3] Sink Validation = validation/encoding/authorization performed for the concrete place where output will be used: shell, SQL, HTML, file path, email, API call, artifact write, or user-facing decision
+- [L3] LLM Agent = an LLM-powered system that observes state, chooses actions, invokes tools, and updates progress toward a goal. It differs from a simple prompt-response call by having an action loop
+- [L3] Agent Functionality = what an agent is technically able to do through tools and runtime capabilities
+- [L3] Agent Permission = what an agent is authorized to do for the current user, tenant, scope, and operation
+- [L3] Agent Autonomy = what an agent may do without human approval. Functionality, permission, and autonomy are separate axes
+- [L3] Tool Schema = the machine-readable contract that tells an agent how to call a tool. It must include name, description, parameter schema, required fields, and result semantics sufficient for agent selection
+- [L3] MCP Tool Boundary = the protocol boundary where an MCP server exposes tools/resources/prompts and a host or agent invokes them. The model requests a tool call; runtime code executes and validates it
+- [L3] Semantic Evaluation = evaluation of usefulness, faithfulness, specificity, actionability, calibration, or other qualities that cannot be proven by deterministic tests alone
+- [L3] Evaluation Baseline = a recorded set of expected examples, rubrics, scores, or comparative outputs used to detect semantic regression and production drift
+- [L3] Production Drift = behavior or quality movement after release caused by data changes, provider/model changes, prompt/context changes, corpus changes, traffic shifts, or external environment changes
+- [L3] Fail-Loud = a diagnostic posture where contract failures stop or surface with explicit failure location, cause, and artifact refs. In LLM-native development, fail-loud reduces exploration cost by making the failing prompt/context/model/tool/schema boundary visible
+- [L3] Fail-Close = a gate posture where contract-missing or unsafe output is blocked from becoming trusted output. Fail-close is a safety gate; fail-loud is the diagnostic visibility expected when the gate closes
+- [L3] Silent Degradation = a fallback, repair, default, or graceful-degradation path that hides the original failure or omits visible loss markers. Silent degradation is usually more costly in LLM-native development because it forces later investigators to rediscover the hidden failure
+- [L3] Graceful Degradation = an intentional product behavior that serves a reduced result when full behavior is unavailable. It is acceptable only when the loss is explicit, logged, and compatible with the user's task
+- [L3] Artifact Truth (domain projection) = software-engineering use of the productization principle that durable artifacts, not transient responses, own process truth. Canonical review artifact seats are defined by `.onto/principles/productization-charter.md` and `.onto/processes/review/record-contract.md`
+- [L3] Provenance = the recorded source, builder/agent, input set, transformation path, verification state, and time/version facts needed to explain why a software artifact, generated artifact, release artifact, or claim should be trusted
+- [L3] Generated Artifact = an artifact authored or transformed by an LLM, agent, generator, build step, or automation. It needs provenance when it affects authority, release, security, or user decisions
+- [L3] AI Supply Chain = the dependency chain for AI behavior: model/provider, dataset/corpus, embedding model/index, prompt framework, tool runtime, eval judge, safety layer, and generated artifacts
+- [L3] AI Governance = accountable management of AI behavior through owner assignment, risk treatment, approval gates, transparency, audit evidence, incident response, and continuous improvement
+- [L3] AI Risk Owner = the accountable role or team that accepts, mitigates, transfers, or rejects material risk introduced by AI behavior
+- [L3] Human Approval Gate = a runtime or process gate requiring human authorization before high-impact AI output, tool execution, release, or user-visible action becomes authoritative
+- [L3] Red-Team/Eval Loop = the feedback loop that turns adversarial findings, incidents, semantic eval results, and production drift into updated prompts, policies, tests, controls, and release gates
+- [L3] AI Incident Disclosure = the operator/user/internal communication path used when AI behavior materially fails, exposes data, misleads users, causes unsafe action, or breaks a trust claim
+- [L3] Context-Isolated Reasoning Unit (domain projection) = software-engineering use of the review/lens execution property defined in `.onto/processes/review/lens-prompt-contract.md`: the reasoning unit receives contracted input, does not share main-context state, and returns contracted output when independent judgment or disagreement preservation matters
 
 ## Document Design Terms
 
@@ -192,11 +245,20 @@ Layer 1 defines what the language/runtime provides. Layer 2 encodes design wisdo
 ## Homonyms Requiring Attention
 
 - "service": service class (business logic) != microservice (deployment unit) != domain service (DDD, stateless operation) != OS service (daemon)
+- "domain": review/domain-document namespace != business or problem domain != DDD bounded-context domain != Clean Architecture domain/entities layer != ontology property domain
+- "artifact": build artifact (deployable/package output) != authority artifact (truth-bearing record/contract) != generated artifact (authored/transformed by automation) != provenance record (trust evidence) != documentation artifact
 - "model": domain model (business object) != ML/LLM model != MVC model != data model (DB schema)
+- "model version": package/library version != LLM model version != database schema version
+- "agent": LLM agent != software agent (generic autonomous program) != user agent (browser HTTP header)
+- "tool": MCP tool (agent-invocable function) != development tool (IDE/linter) != CLI tool
+- "prompt": system prompt != user prompt != prompt template != MCP prompt primitive
+- "token": authentication token / API key != LLM token (subword unit)
 - "controller": MVC controller != hardware controller != Kubernetes controller (reconciliation loop)
 - "context": execution context (runtime) != Bounded Context (DDD) != React Context != context window (LLM)
+- "memory": process memory (RAM) != agent memory != persistence store != conversation history
+- "alignment": model behavior alignment != UI text alignment != ontology alignment
 - "migration": DB migration (schema change) != system migration (infrastructure move) != data migration (format transform)
-- "validation": input validation (user data) != design validation (architecture review) != schema validation (data vs schema)
+- "validation": input validation (user data) != schema validation (data vs schema) != sink validation (safe use at a downstream sink) != design validation (architecture review) != semantic evaluation (quality judgment)
 - "constraint": data constraint (DB) != design constraint (architecture) != business rule != type constraint (generic bounds)
 - "event": domain event (business) != browser event (click) != system event (OS signal) != CloudEvents (format)
 - "client": HTTP client != client application (frontend) != client (customer) != OAuth client (registered app)
