@@ -978,6 +978,7 @@ async function main(): Promise<void> {
           created_at: "2026-05-27T00:00:00.000Z",
           purpose: {
             claim_id: "purpose-1",
+            name: "Observed Spreadsheet Purpose",
             statement:
               "Use the observed spreadsheet material as reconstruct seed evidence.",
             evidence_refs: [evidenceRef],
