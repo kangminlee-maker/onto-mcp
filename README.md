@@ -39,7 +39,8 @@ cross-process goal contract lives at
 direct-call integral runner. The runner classifies target material, expands
 directory targets into per-member source observations, writes the initial source
 frontier, runs reconstruct lens judgments and exploration synthesis through a
-configured LLM provider, validates evidence refs, computes deterministic metrics, and writes
+configured LLM provider, validates evidence refs, computes deterministic
+metrics including Seed answerability bucket counts, and writes
 `final-output.md`, `reconstruct-run-manifest.yaml`, and the primary
 `reconstruct-record.yaml`. Code is the first fixture; the runner path is shared
 with spreadsheet/document/database material through source profiles and
@@ -249,8 +250,8 @@ Implemented direct-call, runtime-gated outputs:
 | `rounds/<round-id>/exploration-synthesis.yaml` | host LLM author | integrated gaps and next-source needs |
 | `rounds/<round-id>/source-frontier.yaml` | host LLM author | requested next source refs or no-next-frontier rationale |
 | `rounds/<round-id>/source-frontier-validation.yaml` | runtime | boundary, duplicate, and inventory validation for the frontier |
-| `seed-candidate.yaml` | host LLM author | evidence-backed Seed candidate with separate `claim_id` and user-facing `name` |
-| `seed-candidate-validation.yaml` | runtime | Seed claim name, shape, and evidence-ref validation |
+| `seed-candidate.yaml` | host LLM author | transitional concept-centered Seed candidate with legacy claim projections |
+| `seed-candidate-validation.yaml` | runtime | Seed claim, concept, relation, pressure, lifecycle, answerability, migration, and evidence-ref validation |
 | `claim-realization-map.yaml` | host LLM author | claim-level evidence stance |
 | `claim-realization-map-validation.yaml` | runtime | claim id, stance enum, and evidence linkage validation |
 | `seed-confirmation.yaml` | host/user mediated | accepted, rejected, partial, or deferred Seed confirmation |
@@ -263,9 +264,9 @@ Implemented direct-call, runtime-gated outputs:
 | `failure-classification-validation.yaml` | runtime | failure enum, linkage, and materiality validation |
 | `revision-proposal.yaml` | host LLM author | bounded revision/deferral proposals |
 | `revision-proposal-validation.yaml` | runtime | proposal id, target, action, and regression guard validation |
-| `reconstruct-metrics.yaml` | runtime | deterministic counts, unresolved/deferred counts, and pass rate |
+| `reconstruct-metrics.yaml` | runtime | deterministic counts, answerability bucket counts, unresolved/deferred counts, and pass rate |
 | `stop-decision.yaml` | host LLM author | stop, continue, or ask-user decision based on metrics |
-| `final-output.md` | host LLM author | user-facing result grounded in artifacts and provenance-checked by runtime |
+| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, with deterministic Seed Answerability and provenance sections enforced by runtime |
 | `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, and happy-path scope |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
 
@@ -281,7 +282,30 @@ UX expectations in `.onto/processes/reconstruct/reconstruct-execution-ux-contrac
 Seed discovery is further constrained by
 `.onto/processes/reconstruct/top-level-concept-discovery-contract.md`, which
 defines the Seed as a purpose-relative top-level concept discovery artifact
-rather than a full ontology or broad claim ledger.
+rather than a full ontology or broad claim ledger. The contract is the field-level
+authority for the concept-centered Seed surface: answerability, canonical
+relations, lower-level placement, frontier pressure, material coverage and
+source authority, convergence, lifecycle/provenance, migration compatibility, and
+deterministic validation boundaries.
+Direct-call and mock reconstruct authors now emit `seed_schema_version:
+transitional`; runtime validation fails loud on broken concept-centered authority
+refs such as stored relation-axis projections, ambiguous pressure event IDs, dangling
+relation endpoints, missing relation participation closure, invalid pressure
+statuses, incomplete or blank answerability inventory, dangling lifecycle and
+material-coverage refs, missing review profile refs for review-confirmed
+convergence, dangling lower-level detail source provenance, blank pressure
+successors, successor refs on non-superseded pressures, invalid ordered pressure
+event histories, material coverage events that overclaim unrelated material
+kinds, material coverage events that borrow checkpoint-wide material truth
+without event-local authority, exclusion events that use source refs instead of
+the intentional-exclusion checkpoint as material-kind authority, missing relation isolation reasons, source
+snapshot transition omissions, concept-centered fields without
+`seed_schema_version`, mixed `concept_centered` artifacts that retain legacy or
+retired projections without migration records, or migration records that do not
+match the runtime's exact source-field accepted-target mapping table. Pure
+`concept_centered` artifacts can omit legacy projection arrays. Deferred and
+unsupported answerability records remain boundary disclosures and are excluded
+from CQ eligibility even if a confirmation provider accepts them.
 
 ## Repository Map
 

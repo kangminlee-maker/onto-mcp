@@ -141,6 +141,14 @@ export interface ReconstructRunProgressProjection {
     unresolvedCount: number | null;
     passRate: number | null;
   };
+  answerabilitySummary: {
+    declaredQuestionCount: number;
+    supportedQuestionCount: number;
+    deferredQuestionCount: number;
+    unsupportedQuestionCount: number;
+    supportedActionCount: number;
+    unsupportedActionCount: number;
+  } | null;
   stages: ReconstructRunStageProjection[];
 }
 
@@ -342,6 +350,22 @@ function deriveReconstructProgress(args: {
         args.record.validation_summary.unresolved_count,
       passRate: args.metrics?.pass_rate ?? args.record.validation_summary.pass_rate,
     },
+    answerabilitySummary: args.metrics
+      ? {
+          declaredQuestionCount:
+            args.metrics.answerability_summary.declared_question_count,
+          supportedQuestionCount:
+            args.metrics.answerability_summary.supported_question_count,
+          deferredQuestionCount:
+            args.metrics.answerability_summary.deferred_question_count,
+          unsupportedQuestionCount:
+            args.metrics.answerability_summary.unsupported_question_count,
+          supportedActionCount:
+            args.metrics.answerability_summary.supported_action_count,
+          unsupportedActionCount:
+            args.metrics.answerability_summary.unsupported_action_count,
+        }
+      : null,
     stages,
   };
 }

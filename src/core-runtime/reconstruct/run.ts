@@ -1,6 +1,23 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
+import {
+  RECONSTRUCT_ANSWERABILITY_EVENT_TYPES as ANSWERABILITY_EVENT_TYPES,
+  RECONSTRUCT_CONCEPT_CONVERGENCE_STATES as CONVERGENCE_STATES,
+  RECONSTRUCT_CONCEPT_IDENTITY_EVENT_TYPES as CONCEPT_IDENTITY_EVENT_TYPES,
+  RECONSTRUCT_DETAIL_PLACEMENT_EVENT_TYPES as DETAIL_PLACEMENT_EVENT_TYPES,
+  RECONSTRUCT_FRONTIER_PRESSURE_ORIGINS as FRONTIER_PRESSURE_ORIGINS,
+  RECONSTRUCT_FRONTIER_PRESSURE_STATUSES as FRONTIER_PRESSURE_STATUSES,
+  RECONSTRUCT_FRONTIER_PRESSURE_TYPES as FRONTIER_PRESSURE_TYPES,
+  RECONSTRUCT_HANDOFF_QUESTION_SOURCES as HANDOFF_QUESTION_SOURCES,
+  RECONSTRUCT_LOWER_LEVEL_DETAIL_PLACEMENTS as LOWER_LEVEL_DETAIL_PLACEMENTS,
+  RECONSTRUCT_MATERIAL_COVERAGE_EVENT_TYPES as MATERIAL_COVERAGE_EVENT_TYPES,
+  RECONSTRUCT_PRESSURE_EVENT_TYPES as PRESSURE_EVENT_TYPES,
+  RECONSTRUCT_RELATION_IDENTITY_EVENT_TYPES as RELATION_IDENTITY_EVENT_TYPES,
+  RECONSTRUCT_SEED_MIGRATION_TARGETS as SEED_MIGRATION_TARGETS,
+  RECONSTRUCT_SEED_SCHEMA_VERSIONS as SEED_SCHEMA_VERSIONS,
+  RECONSTRUCT_TOP_LEVEL_RELATION_KINDS as TOP_LEVEL_RELATION_KINDS,
+} from "./artifact-types.js";
 import type {
   ReconstructClaimRealizationMapArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
@@ -42,9 +59,15 @@ import type {
   ReconstructStopDecisionArtifact,
   ReconstructStopDecision,
   ReconstructTargetMaterialProfileArtifact,
+  ReconstructTransitionalSeedCandidateArtifact,
 } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
+import {
+  TARGET_MATERIAL_KINDS,
+  isTargetMaterialKind,
+  type TargetMaterialKind,
+} from "../target-material-kind.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
 import {
@@ -58,6 +81,7 @@ import {
 } from "./post-seed-validation.js";
 import { assembleReconstructRecord } from "./record.js";
 import { writeSeedCandidateValidationArtifact } from "./seed-candidate-validation.js";
+import { seedClaimProjections } from "./seed-claim-projections.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
 
 export interface ReconstructDirectiveAuthor {
@@ -288,15 +312,7 @@ async function readYamlDocument<T>(filePath: string): Promise<T> {
 }
 
 function allClaims(seedCandidate: ReconstructSeedCandidateArtifact): ReconstructSeedClaim[] {
-  return [
-    seedCandidate.purpose,
-    ...seedCandidate.non_goals,
-    ...seedCandidate.entities,
-    ...seedCandidate.relations,
-    ...seedCandidate.actions,
-    ...seedCandidate.properties,
-    ...seedCandidate.rules,
-  ];
+  return seedClaimProjections(seedCandidate);
 }
 
 function compactStatement(statement: string): string {
@@ -306,6 +322,69 @@ function compactStatement(statement: string): string {
 
 function sourceBasename(sourceRef: string): string {
   return path.basename(sourceRef) || sourceRef;
+}
+
+function legacySeedClaims(
+  seedCandidate: ReconstructSeedCandidateArtifact,
+  fieldName: "non_goals" | "entities" | "relations" | "actions" | "properties" | "rules",
+): ReconstructSeedClaim[] {
+  if (!("non_goals" in seedCandidate)) return [];
+  return seedCandidate[fieldName];
+}
+
+function legacyOpenQuestions(seedCandidate: ReconstructSeedCandidateArtifact): string[] {
+  return "open_questions" in seedCandidate ? seedCandidate.open_questions : [];
+}
+
+function seedClaimKindById(seedCandidate: ReconstructSeedCandidateArtifact): Map<string, string> {
+  const claimKindById = new Map<string, string>();
+  const add = (claimId: string | undefined, claimKind: string) => {
+    if (claimId && !claimKindById.has(claimId)) claimKindById.set(claimId, claimKind);
+  };
+  add(seedCandidate.purpose.claim_id, "purpose");
+  const topLevelConcepts = "top_level_concepts" in seedCandidate
+    ? seedCandidate.top_level_concepts
+    : [];
+  const topLevelRelations = "top_level_relations" in seedCandidate
+    ? seedCandidate.top_level_relations
+    : [];
+  const answerability = "answerability_scope" in seedCandidate
+    ? seedCandidate.answerability_scope
+    : undefined;
+  for (const concept of topLevelConcepts) {
+    add(concept.concept_id, "top_level_concept");
+  }
+  for (const relation of topLevelRelations) {
+    add(relation.relation_id, "top_level_relation");
+  }
+  for (const question of answerability?.supported_questions ?? []) {
+    add(question.question_id, "supported_question");
+  }
+  for (const question of answerability?.deferred_questions ?? []) {
+    add(question.question_id, "deferred_question");
+  }
+  for (const question of answerability?.unsupported_questions ?? []) {
+    add(question.question_id, "unsupported_question");
+  }
+  for (const action of answerability?.supported_actions ?? []) {
+    add(action.action_id, "supported_action");
+  }
+  for (const action of answerability?.unsupported_actions ?? []) {
+    add(action.action_id, "unsupported_action");
+  }
+  for (const [fieldName, claimKind] of [
+    ["non_goals", "non_goal"],
+    ["entities", "entity"],
+    ["relations", "relation"],
+    ["actions", "action"],
+    ["properties", "property"],
+    ["rules", "rule"],
+  ] as const) {
+    for (const claim of legacySeedClaims(seedCandidate, fieldName)) {
+      add(claim.claim_id, claimKind);
+    }
+  }
+  return claimKindById;
 }
 
 function summarizeSeedClaimsForConfirmation(
@@ -318,29 +397,75 @@ function summarizeSeedClaimsForConfirmation(
   evidence_observation_ids: string[];
   evidence_source_basenames: string[];
 }> {
-  const groups: Array<[string, ReconstructSeedClaim[]]> = [
-    ["purpose", [seedCandidate.purpose]],
-    ["non_goal", seedCandidate.non_goals],
-    ["entity", seedCandidate.entities],
-    ["relation", seedCandidate.relations],
-    ["action", seedCandidate.actions],
-    ["property", seedCandidate.properties],
-    ["rule", seedCandidate.rules],
-  ];
-  return groups.flatMap(([claimKind, claims]) =>
-    claims.map((claim) => ({
-      claim_id: claim.claim_id,
-      claim_kind: claimKind,
-      name: claim.name,
-      statement: compactStatement(claim.statement),
-      evidence_observation_ids: [
-        ...new Set(claim.evidence_refs.map((ref) => ref.observation_id)),
-      ],
-      evidence_source_basenames: [
-        ...new Set(claim.evidence_refs.map((ref) => sourceBasename(ref.source_ref))),
-      ],
-    }))
+  const claimKindById = seedClaimKindById(seedCandidate);
+  return seedClaimProjections(seedCandidate).map((claim) => ({
+    claim_id: claim.claim_id,
+    claim_kind: claimKindById.get(claim.claim_id) ?? "semantic_claim",
+    name: claim.name,
+    statement: compactStatement(claim.statement),
+    evidence_observation_ids: [
+      ...new Set(claim.evidence_refs.map((ref) => ref.observation_id)),
+    ],
+    evidence_source_basenames: [
+      ...new Set(claim.evidence_refs.map((ref) => sourceBasename(ref.source_ref))),
+    ],
+  }));
+}
+
+function answerabilitySummary(
+  seedCandidate: ReconstructSeedCandidateArtifact,
+): ReconstructMetricsArtifact["answerability_summary"] {
+  const answerability = "answerability_scope" in seedCandidate
+    ? seedCandidate.answerability_scope
+    : undefined;
+  return {
+    declared_question_count: answerability?.declared_handoff_questions.length ?? 0,
+    supported_question_count: answerability?.supported_questions.length ?? 0,
+    deferred_question_count: answerability?.deferred_questions.length ?? 0,
+    unsupported_question_count: answerability?.unsupported_questions.length ?? 0,
+    supported_action_count: answerability?.supported_actions.length ?? 0,
+    unsupported_action_count: answerability?.unsupported_actions.length ?? 0,
+  };
+}
+
+function seedAnswerabilityLines(seedCandidate: ReconstructSeedCandidateArtifact): string[] {
+  const answerability = "answerability_scope" in seedCandidate
+    ? seedCandidate.answerability_scope
+    : undefined;
+  if (!answerability) return ["- No Seed answerability scope recorded."];
+  const questionTextById = new Map(
+    answerability.declared_handoff_questions.map((question) => [
+      question.question_id,
+      question.question,
+    ]),
   );
+  const lines: string[] = [
+    `- Declared handoff questions: ${answerability.declared_handoff_questions.length}`,
+    `- Supported questions: ${answerability.supported_questions.length}`,
+    `- Deferred questions: ${answerability.deferred_questions.length}`,
+    `- Unsupported questions: ${answerability.unsupported_questions.length}`,
+    `- Supported actions: ${answerability.supported_actions.length}`,
+    `- Unsupported actions: ${answerability.unsupported_actions.length}`,
+  ];
+  for (const question of answerability.supported_questions) {
+    lines.push(
+      `- supported question ${question.question_id}: ${questionTextById.get(question.question_id) ?? question.question_id}`,
+    );
+  }
+  for (const question of answerability.deferred_questions) {
+    lines.push(`- deferred question ${question.question_id}: ${question.reason_deferred}`);
+  }
+  for (const question of answerability.unsupported_questions) {
+    lines.push(`- unsupported question ${question.question_id}: ${question.reason_unsupported}`);
+  }
+  for (const action of answerability.supported_actions) {
+    lines.push(`- supported action ${action.action_id}: ${action.readiness_statement}`);
+  }
+  for (const action of answerability.unsupported_actions) {
+    lines.push(`- unsupported action ${action.action_id}: ${action.reason_unsupported}`);
+  }
+  lines.push(`- Handoff readiness: ${answerability.handoff_readiness_statement}`);
+  return lines;
 }
 
 function countBy<T extends string>(
@@ -419,6 +544,7 @@ function calculateMetrics(args: {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact;
+  seedCandidate: ReconstructSeedCandidateArtifact;
   seedCandidateValidation: ReconstructSeedCandidateValidationArtifact;
   claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
   seedConfirmation: ReconstructSeedConfirmationArtifact;
@@ -495,6 +621,7 @@ function calculateMetrics(args: {
     deferred_count: deferredClaimCount +
       answerStatusCounts.out_of_scope +
       args.failureClassificationValidation.failure_kind_counts.deferred_scope,
+    answerability_summary: answerabilitySummary(args.seedCandidate),
     claim_realization_stance_counts:
       args.claimRealizationMapValidation.stance_counts,
     confirmation_state_counts: {
@@ -928,6 +1055,54 @@ function stringArray(value: unknown, fieldName: string): string[] {
   return value.map((item, index) => stringValue(item, `${fieldName}[${index}]`));
 }
 
+function booleanValue(value: unknown, fieldName: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`${fieldName} must be a boolean.`);
+  }
+  return value;
+}
+
+function recordValue(value: unknown, fieldName: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${fieldName} must be an object.`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function nullableString(value: unknown, fieldName: string): string | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string") throw new Error(`${fieldName} must be a string or null.`);
+  return value.trim().length === 0 ? null : value.trim();
+}
+
+function enumString<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fieldName: string,
+): T {
+  const raw = stringValue(value, fieldName);
+  if (!allowed.includes(raw as T)) {
+    throw new Error(`${fieldName} must be one of: ${allowed.join(", ")}.`);
+  }
+  return raw as T;
+}
+
+function enumChoices(values: readonly string[]): string {
+  return values.join("|");
+}
+
+function seedMigrationMappingContract(): string {
+  return JSON.stringify(
+    SEED_MIGRATION_TARGETS.map((record) => ({
+      source_field: record.source_field,
+      default_target_authority_field: record.target_authority_field,
+      accepted_target_authority_fields: record.accepted_target_authority_fields,
+      compatibility_status: record.compatibility_status,
+      obligation_status: record.obligation_status,
+    })),
+  );
+}
+
 function evidenceRefByObservationId(
   sourceObservations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructEvidenceRef> {
@@ -956,6 +1131,29 @@ function evidenceRefsFromIds(args: {
     throw new Error(`${args.fieldName} must reference at least one observation id.`);
   }
   return refs;
+}
+
+function optionalEvidenceRefsFromIds(args: {
+  observationIds: string[];
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  fieldName: string;
+}): ReconstructEvidenceRef[] {
+  const byId = evidenceRefByObservationId(args.sourceObservations);
+  return args.observationIds.map((observationId) => {
+    const ref = byId.get(observationId);
+    if (!ref) {
+      throw new Error(`${args.fieldName} references unknown observation id: ${observationId}`);
+    }
+    return ref;
+  });
+}
+
+function targetMaterialKindValue(value: unknown, fieldName: string): TargetMaterialKind {
+  const raw = stringValue(value, fieldName);
+  if (!isTargetMaterialKind(raw)) {
+    throw new Error(`${fieldName} must be a known target_material_kind.`);
+  }
+  return raw;
 }
 
 function claimFromLlm(args: {
@@ -993,6 +1191,903 @@ function claimsFromLlm(args: {
       fieldName: `${args.prefix}[${index}]`,
     })
   );
+}
+
+function refsFromOptionalObservationIds(args: {
+  raw: Record<string, unknown>;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  fieldName: string;
+}): ReconstructEvidenceRef[] {
+  return optionalEvidenceRefsFromIds({
+    observationIds: stringArray(
+      args.raw.evidence_observation_ids,
+      `${args.fieldName}.evidence_observation_ids`,
+    ),
+    sourceObservations: args.sourceObservations,
+    fieldName: `${args.fieldName}.evidence_observation_ids`,
+  });
+}
+
+function rawRecordArray(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, unknown> =>
+    item !== null && typeof item === "object" && !Array.isArray(item)
+  );
+}
+
+function rawRetainedMigrationSourceFields(raw: Record<string, unknown>): Set<string> {
+  const retained = new Set<string>();
+  for (const migrationTarget of SEED_MIGRATION_TARGETS) {
+    if (migrationTarget.source_field in raw) {
+      retained.add(migrationTarget.source_field);
+    }
+  }
+  for (const sourceField of [
+    "included_lower_concepts",
+    "excluded_or_deferred_details",
+    "boundary_notes",
+    "core_relations",
+    "deferred_detail_candidates",
+    "frontier_refs",
+    "open_questions",
+  ]) {
+    if (
+      rawRecordArray(raw.top_level_concepts).some((concept) =>
+        sourceField in concept
+      )
+    ) {
+      retained.add(sourceField);
+    }
+  }
+  const convergence = raw.convergence;
+  if (
+    convergence !== null &&
+    typeof convergence === "object" &&
+    !Array.isArray(convergence) &&
+    "remaining_pressures" in convergence
+  ) {
+    retained.add("convergence.remaining_pressures");
+  }
+  return retained;
+}
+
+function assertRetainedMigrationDisclosure(raw: Record<string, unknown>): void {
+  const retained = rawRetainedMigrationSourceFields(raw);
+  if (retained.size === 0) return;
+  const migrated = new Set(
+    rawRecordArray(raw.migration_records)
+      .map((record) => record.source_field)
+      .filter((value): value is string => typeof value === "string" && value.trim().length > 0),
+  );
+  const missing = [...retained].filter((sourceField) => !migrated.has(sourceField));
+  if (missing.length > 0) {
+    throw new Error(
+      `SeedCandidate retained legacy or retired projection fields without migration_records: ${missing.join(", ")}`,
+    );
+  }
+}
+
+type ReconstructTransitionalSeedAuthorityFields = Pick<
+  ReconstructTransitionalSeedCandidateArtifact,
+  | "seed_schema_version"
+  | "answerability_scope"
+  | "top_level_concepts"
+  | "top_level_relations"
+  | "relation_participation_exceptions"
+  | "lower_level_detail_placements"
+  | "frontier_pressure_log"
+  | "material_coverage_checkpoint"
+  | "convergence"
+  | "lifecycle"
+  | "migration_records"
+>;
+
+function conceptCenteredFieldsFromLlm(args: {
+  raw: Record<string, unknown>;
+  sessionId: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): ReconstructTransitionalSeedAuthorityFields {
+  const seedSchemaVersion = enumString(
+    args.raw.seed_schema_version,
+    SEED_SCHEMA_VERSIONS,
+    "seed_schema_version",
+  );
+  if (seedSchemaVersion !== "transitional") {
+    throw new Error(
+      "SeedCandidate direct author must return seed_schema_version transitional while legacy compatibility fields are present.",
+    );
+  }
+  assertRetainedMigrationDisclosure(args.raw);
+
+  const topLevelConcepts = records(args.raw.top_level_concepts, "top_level_concepts")
+    .map((concept, index) => {
+      const boundary = recordValue(
+        concept.boundary,
+        `top_level_concepts[${index}].boundary`,
+      );
+      return {
+        concept_id: stringValue(concept.concept_id, `top_level_concepts[${index}].concept_id`),
+        name: stringValue(concept.name, `top_level_concepts[${index}].name`),
+        aliases: stringArray(concept.aliases, `top_level_concepts[${index}].aliases`),
+        definition: stringValue(concept.definition, `top_level_concepts[${index}].definition`),
+        why_top_level: stringValue(
+          concept.why_top_level,
+          `top_level_concepts[${index}].why_top_level`,
+        ),
+        evidence_refs: evidenceRefsFromIds({
+          observationIds: stringArray(
+            concept.evidence_observation_ids,
+            `top_level_concepts[${index}].evidence_observation_ids`,
+          ),
+          sourceObservations: args.sourceObservations,
+          fieldName: `top_level_concepts[${index}].evidence_observation_ids`,
+        }),
+        boundary: {
+          included_summary: stringValue(
+            boundary.included_summary,
+            `top_level_concepts[${index}].boundary.included_summary`,
+          ),
+          excluded_summary: stringValue(
+            boundary.excluded_summary,
+            `top_level_concepts[${index}].boundary.excluded_summary`,
+          ),
+          deferred_summary: stringValue(
+            boundary.deferred_summary,
+            `top_level_concepts[${index}].boundary.deferred_summary`,
+          ),
+        },
+        confidence: stringValue(concept.confidence, `top_level_concepts[${index}].confidence`),
+        provisional: booleanValue(
+          concept.provisional,
+          `top_level_concepts[${index}].provisional`,
+        ),
+      };
+    });
+
+  const topLevelRelations = records(args.raw.top_level_relations, "top_level_relations")
+    .map((relation, index) => {
+      if ("relation_axis" in relation) {
+        throw new Error("top_level_relations must not store relation_axis.");
+      }
+      return {
+        relation_id: stringValue(relation.relation_id, `top_level_relations[${index}].relation_id`),
+        source_concept_id: stringValue(
+          relation.source_concept_id,
+          `top_level_relations[${index}].source_concept_id`,
+        ),
+        target_concept_id: stringValue(
+          relation.target_concept_id,
+          `top_level_relations[${index}].target_concept_id`,
+        ),
+        relation_kind: enumString(
+          relation.relation_kind,
+          TOP_LEVEL_RELATION_KINDS,
+          `top_level_relations[${index}].relation_kind`,
+        ),
+        relation_label: stringValue(
+          relation.relation_label,
+          `top_level_relations[${index}].relation_label`,
+        ),
+        direction_statement: stringValue(
+          relation.direction_statement,
+          `top_level_relations[${index}].direction_statement`,
+        ),
+        statement: stringValue(relation.statement, `top_level_relations[${index}].statement`),
+        evidence_refs: evidenceRefsFromIds({
+          observationIds: stringArray(
+            relation.evidence_observation_ids,
+            `top_level_relations[${index}].evidence_observation_ids`,
+          ),
+          sourceObservations: args.sourceObservations,
+          fieldName: `top_level_relations[${index}].evidence_observation_ids`,
+        }),
+        confidence: stringValue(relation.confidence, `top_level_relations[${index}].confidence`),
+        provisional: booleanValue(
+          relation.provisional,
+          `top_level_relations[${index}].provisional`,
+        ),
+        registration_status: enumString(
+          relation.registration_status,
+          ["design_local"],
+          `top_level_relations[${index}].registration_status`,
+        ),
+      };
+    });
+
+  const relationParticipationExceptions = records(
+    args.raw.relation_participation_exceptions,
+    "relation_participation_exceptions",
+  ).map((exception, index) => ({
+    concept_id: stringValue(
+      exception.concept_id,
+      `relation_participation_exceptions[${index}].concept_id`,
+    ),
+    isolation_reason: stringValue(
+      exception.isolation_reason,
+      `relation_participation_exceptions[${index}].isolation_reason`,
+    ),
+    isolation_pressure_ids: stringArray(
+      exception.isolation_pressure_ids,
+      `relation_participation_exceptions[${index}].isolation_pressure_ids`,
+    ),
+  }));
+
+  const lowerLevelDetailPlacements = records(
+    args.raw.lower_level_detail_placements,
+    "lower_level_detail_placements",
+  ).map((detail, index) => ({
+    detail_id: stringValue(detail.detail_id, `lower_level_detail_placements[${index}].detail_id`),
+    name: stringValue(detail.name, `lower_level_detail_placements[${index}].name`),
+    material_kind: targetMaterialKindValue(
+      detail.material_kind,
+      `lower_level_detail_placements[${index}].material_kind`,
+    ),
+    source_ref: stringValue(
+      detail.source_ref,
+      `lower_level_detail_placements[${index}].source_ref`,
+    ),
+    placement: enumString(
+      detail.placement,
+      LOWER_LEVEL_DETAIL_PLACEMENTS,
+      `lower_level_detail_placements[${index}].placement`,
+    ),
+    owner_concept_id: stringValue(
+      detail.owner_concept_id,
+      `lower_level_detail_placements[${index}].owner_concept_id`,
+    ),
+    rationale: stringValue(
+      detail.rationale,
+      `lower_level_detail_placements[${index}].rationale`,
+    ),
+    evidence_refs: evidenceRefsFromIds({
+      observationIds: stringArray(
+        detail.evidence_observation_ids,
+        `lower_level_detail_placements[${index}].evidence_observation_ids`,
+      ),
+      sourceObservations: args.sourceObservations,
+      fieldName: `lower_level_detail_placements[${index}].evidence_observation_ids`,
+    }),
+    follow_up_question: nullableString(
+      detail.follow_up_question,
+      `lower_level_detail_placements[${index}].follow_up_question`,
+    ),
+  }));
+
+  const frontierPressureLog = records(args.raw.frontier_pressure_log, "frontier_pressure_log")
+    .map((pressure, index) => ({
+      pressure_id: stringValue(pressure.pressure_id, `frontier_pressure_log[${index}].pressure_id`),
+      origin: enumString(
+        pressure.origin,
+        FRONTIER_PRESSURE_ORIGINS,
+        `frontier_pressure_log[${index}].origin`,
+      ),
+      origin_ref: stringValue(pressure.origin_ref, `frontier_pressure_log[${index}].origin_ref`),
+      pressure_type: enumString(
+        pressure.pressure_type,
+        FRONTIER_PRESSURE_TYPES,
+        `frontier_pressure_log[${index}].pressure_type`,
+      ),
+      pressure_question: stringValue(
+        pressure.pressure_question,
+        `frontier_pressure_log[${index}].pressure_question`,
+      ),
+      target_concept_ids: stringArray(
+        pressure.target_concept_ids,
+        `frontier_pressure_log[${index}].target_concept_ids`,
+      ),
+      target_relation_ids: stringArray(
+        pressure.target_relation_ids,
+        `frontier_pressure_log[${index}].target_relation_ids`,
+      ),
+      material_kind: targetMaterialKindValue(
+        pressure.material_kind,
+        `frontier_pressure_log[${index}].material_kind`,
+      ),
+      source_ref: stringValue(pressure.source_ref, `frontier_pressure_log[${index}].source_ref`),
+      expected_decision_impact: stringValue(
+        pressure.expected_decision_impact,
+        `frontier_pressure_log[${index}].expected_decision_impact`,
+      ),
+      priority: enumString(
+        pressure.priority,
+        ["high", "medium", "low"],
+        `frontier_pressure_log[${index}].priority`,
+      ),
+      status: enumString(
+        pressure.status,
+        FRONTIER_PRESSURE_STATUSES,
+        `frontier_pressure_log[${index}].status`,
+      ),
+      status_reason: stringValue(
+        pressure.status_reason,
+        `frontier_pressure_log[${index}].status_reason`,
+      ),
+      superseded_by_pressure_id: nullableString(
+        pressure.superseded_by_pressure_id,
+        `frontier_pressure_log[${index}].superseded_by_pressure_id`,
+      ),
+      evidence_refs: refsFromOptionalObservationIds({
+        raw: pressure,
+        sourceObservations: args.sourceObservations,
+        fieldName: `frontier_pressure_log[${index}]`,
+      }),
+    }));
+
+  const answerabilityRaw = recordValue(args.raw.answerability_scope, "answerability_scope");
+  const materialCoverageRaw = recordValue(
+    args.raw.material_coverage_checkpoint,
+    "material_coverage_checkpoint",
+  );
+  const sourceAuthorityRaw = recordValue(
+    materialCoverageRaw.source_authority_scope,
+    "material_coverage_checkpoint.source_authority_scope",
+  );
+  const convergenceRaw = recordValue(args.raw.convergence, "convergence");
+  const lifecycleRaw = recordValue(args.raw.lifecycle, "lifecycle");
+  const sourceSnapshotTransitionRaw = recordValue(
+    lifecycleRaw.source_snapshot_transition,
+    "lifecycle.source_snapshot_transition",
+  );
+
+  return {
+    seed_schema_version: seedSchemaVersion,
+    answerability_scope: {
+      declared_handoff_questions: records(
+        answerabilityRaw.declared_handoff_questions,
+        "answerability_scope.declared_handoff_questions",
+      ).map((question, index) => ({
+        question_id: stringValue(
+          question.question_id,
+          `answerability_scope.declared_handoff_questions[${index}].question_id`,
+        ),
+        question: stringValue(
+          question.question,
+          `answerability_scope.declared_handoff_questions[${index}].question`,
+        ),
+        source: enumString(
+          question.source,
+          HANDOFF_QUESTION_SOURCES,
+          `answerability_scope.declared_handoff_questions[${index}].source`,
+        ),
+      })),
+      supported_questions: records(
+        answerabilityRaw.supported_questions,
+        "answerability_scope.supported_questions",
+      ).map((question, index) => {
+        const answeredBy = recordValue(
+          question.answered_by,
+          `answerability_scope.supported_questions[${index}].answered_by`,
+        );
+        return {
+          question_id: stringValue(
+            question.question_id,
+            `answerability_scope.supported_questions[${index}].question_id`,
+          ),
+          answered_by: {
+            concept_ids: stringArray(
+              answeredBy.concept_ids,
+              `answerability_scope.supported_questions[${index}].answered_by.concept_ids`,
+            ),
+            relation_ids: stringArray(
+              answeredBy.relation_ids,
+              `answerability_scope.supported_questions[${index}].answered_by.relation_ids`,
+            ),
+          },
+          confidence: stringValue(
+            question.confidence,
+            `answerability_scope.supported_questions[${index}].confidence`,
+          ),
+        };
+      }),
+      deferred_questions: records(
+        answerabilityRaw.deferred_questions,
+        "answerability_scope.deferred_questions",
+      ).map((question, index) => ({
+        question_id: stringValue(
+          question.question_id,
+          `answerability_scope.deferred_questions[${index}].question_id`,
+        ),
+        reason_deferred: stringValue(
+          question.reason_deferred,
+          `answerability_scope.deferred_questions[${index}].reason_deferred`,
+        ),
+        frontier_pressure_ids: stringArray(
+          question.frontier_pressure_ids,
+          `answerability_scope.deferred_questions[${index}].frontier_pressure_ids`,
+        ),
+      })),
+      unsupported_questions: records(
+        answerabilityRaw.unsupported_questions,
+        "answerability_scope.unsupported_questions",
+      ).map((question, index) => ({
+        question_id: stringValue(
+          question.question_id,
+          `answerability_scope.unsupported_questions[${index}].question_id`,
+        ),
+        reason_unsupported: stringValue(
+          question.reason_unsupported,
+          `answerability_scope.unsupported_questions[${index}].reason_unsupported`,
+        ),
+      })),
+      supported_actions: records(
+        answerabilityRaw.supported_actions,
+        "answerability_scope.supported_actions",
+      ).map((action, index) => ({
+        action_id: stringValue(
+          action.action_id,
+          `answerability_scope.supported_actions[${index}].action_id`,
+        ),
+        action: stringValue(action.action, `answerability_scope.supported_actions[${index}].action`),
+        supported_by_question_ids: stringArray(
+          action.supported_by_question_ids,
+          `answerability_scope.supported_actions[${index}].supported_by_question_ids`,
+        ),
+        readiness_statement: stringValue(
+          action.readiness_statement,
+          `answerability_scope.supported_actions[${index}].readiness_statement`,
+        ),
+      })),
+      unsupported_actions: records(
+        answerabilityRaw.unsupported_actions,
+        "answerability_scope.unsupported_actions",
+      ).map((action, index) => ({
+        action_id: stringValue(
+          action.action_id,
+          `answerability_scope.unsupported_actions[${index}].action_id`,
+        ),
+        action: stringValue(
+          action.action,
+          `answerability_scope.unsupported_actions[${index}].action`,
+        ),
+        reason_unsupported: stringValue(
+          action.reason_unsupported,
+          `answerability_scope.unsupported_actions[${index}].reason_unsupported`,
+        ),
+      })),
+      handoff_readiness_statement: stringValue(
+        answerabilityRaw.handoff_readiness_statement,
+        "answerability_scope.handoff_readiness_statement",
+      ),
+      handoff_readiness_question_ids: stringArray(
+        answerabilityRaw.handoff_readiness_question_ids,
+        "answerability_scope.handoff_readiness_question_ids",
+      ),
+    },
+    top_level_concepts: topLevelConcepts,
+    top_level_relations: topLevelRelations,
+    relation_participation_exceptions: relationParticipationExceptions,
+    lower_level_detail_placements: lowerLevelDetailPlacements,
+    frontier_pressure_log: frontierPressureLog,
+    material_coverage_checkpoint: {
+      observed_material_kinds: stringArray(
+        materialCoverageRaw.observed_material_kinds,
+        "material_coverage_checkpoint.observed_material_kinds",
+      ).map((kind, index) =>
+        targetMaterialKindValue(
+          kind,
+          `material_coverage_checkpoint.observed_material_kinds[${index}]`,
+        )
+      ),
+      observed_source_slices: stringArray(
+        materialCoverageRaw.observed_source_slices,
+        "material_coverage_checkpoint.observed_source_slices",
+      ),
+      source_authority_scope: {
+        permission_scope: enumString(
+          sourceAuthorityRaw.permission_scope,
+          ["within_declared_boundary", "restricted", "unknown"],
+          "material_coverage_checkpoint.source_authority_scope.permission_scope",
+        ),
+        permission_basis_refs: stringArray(
+          sourceAuthorityRaw.permission_basis_refs,
+          "material_coverage_checkpoint.source_authority_scope.permission_basis_refs",
+        ),
+        trust_status: enumString(
+          sourceAuthorityRaw.trust_status,
+          ["observed_evidence_only", "user_provided_authority", "external_untrusted", "mixed"],
+          "material_coverage_checkpoint.source_authority_scope.trust_status",
+        ),
+        instruction_authority_status: enumString(
+          sourceAuthorityRaw.instruction_authority_status,
+          ["none_data_only", "declared_process_authority", "mixed_requires_disclosure"],
+          "material_coverage_checkpoint.source_authority_scope.instruction_authority_status",
+        ),
+        external_content_handling: enumString(
+          sourceAuthorityRaw.external_content_handling,
+          ["not_applicable", "treated_as_untrusted_data", "sanitized_or_quoted", "excluded"],
+          "material_coverage_checkpoint.source_authority_scope.external_content_handling",
+        ),
+        restricted_source_refs: stringArray(
+          sourceAuthorityRaw.restricted_source_refs,
+          "material_coverage_checkpoint.source_authority_scope.restricted_source_refs",
+        ),
+        rationale: stringValue(
+          sourceAuthorityRaw.rationale,
+          "material_coverage_checkpoint.source_authority_scope.rationale",
+        ),
+      },
+      intentionally_excluded_material_kinds: stringArray(
+        materialCoverageRaw.intentionally_excluded_material_kinds,
+        "material_coverage_checkpoint.intentionally_excluded_material_kinds",
+      ).map((kind, index) =>
+        targetMaterialKindValue(
+          kind,
+          `material_coverage_checkpoint.intentionally_excluded_material_kinds[${index}]`,
+        )
+      ),
+      unexplored_source_categories: stringArray(
+        materialCoverageRaw.unexplored_source_categories,
+        "material_coverage_checkpoint.unexplored_source_categories",
+      ),
+      possible_missing_axis_pressure_ids: stringArray(
+        materialCoverageRaw.possible_missing_axis_pressure_ids,
+        "material_coverage_checkpoint.possible_missing_axis_pressure_ids",
+      ),
+      rationale_for_seed_level_sufficiency: stringValue(
+        materialCoverageRaw.rationale_for_seed_level_sufficiency,
+        "material_coverage_checkpoint.rationale_for_seed_level_sufficiency",
+      ),
+      partial_support_disclosures: stringArray(
+        materialCoverageRaw.partial_support_disclosures,
+        "material_coverage_checkpoint.partial_support_disclosures",
+      ),
+    },
+    convergence: {
+      state: enumString(convergenceRaw.state, CONVERGENCE_STATES, "convergence.state"),
+      source_convergence_rationale: stringValue(
+        convergenceRaw.source_convergence_rationale,
+        "convergence.source_convergence_rationale",
+      ),
+      review_confirmed: booleanValue(
+        convergenceRaw.review_confirmed,
+        "convergence.review_confirmed",
+      ),
+      review_profile_ref: nullableString(
+        convergenceRaw.review_profile_ref,
+        "convergence.review_profile_ref",
+      ),
+      remaining_pressure_ids: stringArray(
+        convergenceRaw.remaining_pressure_ids,
+        "convergence.remaining_pressure_ids",
+      ),
+    },
+    lifecycle: {
+      seed_id: stringValue(lifecycleRaw.seed_id, "lifecycle.seed_id"),
+      parent_seed_ref: nullableString(lifecycleRaw.parent_seed_ref, "lifecycle.parent_seed_ref"),
+      id_stability_scope: enumString(
+        lifecycleRaw.id_stability_scope,
+        ["session", "lineage"],
+        "lifecycle.id_stability_scope",
+      ),
+      session_id: stringValue(lifecycleRaw.session_id, "lifecycle.session_id"),
+      source_snapshot_refs: stringArray(
+        lifecycleRaw.source_snapshot_refs,
+        "lifecycle.source_snapshot_refs",
+      ),
+      source_snapshot_transition: {
+        prior_snapshot_refs: stringArray(
+          sourceSnapshotTransitionRaw.prior_snapshot_refs,
+          "lifecycle.source_snapshot_transition.prior_snapshot_refs",
+        ),
+        transition_reason: stringValue(
+          sourceSnapshotTransitionRaw.transition_reason,
+          "lifecycle.source_snapshot_transition.transition_reason",
+        ),
+      },
+      exploration_rounds: records(lifecycleRaw.exploration_rounds, "lifecycle.exploration_rounds")
+        .map((round, index) => ({
+          round_id: stringValue(round.round_id, `lifecycle.exploration_rounds[${index}].round_id`),
+          observed_source_refs: stringArray(
+            round.observed_source_refs,
+            `lifecycle.exploration_rounds[${index}].observed_source_refs`,
+          ),
+          authoring_pass_ref: nullableString(
+            round.authoring_pass_ref,
+            `lifecycle.exploration_rounds[${index}].authoring_pass_ref`,
+          ),
+          changed_concept_ids: stringArray(
+            round.changed_concept_ids,
+            `lifecycle.exploration_rounds[${index}].changed_concept_ids`,
+          ),
+          changed_relation_ids: stringArray(
+            round.changed_relation_ids,
+            `lifecycle.exploration_rounds[${index}].changed_relation_ids`,
+          ),
+          changed_frontier_pressure_ids: stringArray(
+            round.changed_frontier_pressure_ids,
+            `lifecycle.exploration_rounds[${index}].changed_frontier_pressure_ids`,
+          ),
+        })),
+      concept_identity_events: records(
+        lifecycleRaw.concept_identity_events,
+        "lifecycle.concept_identity_events",
+      ).map((event, index) => {
+        if ("concept_ids" in event) {
+          throw new Error("concept_identity_events must not carry generic concept_ids.");
+        }
+        return {
+          event_id: stringValue(
+            event.event_id,
+            `lifecycle.concept_identity_events[${index}].event_id`,
+          ),
+          event_type: enumString(
+            event.event_type,
+            CONCEPT_IDENTITY_EVENT_TYPES,
+            `lifecycle.concept_identity_events[${index}].event_type`,
+          ),
+          prior_concept_ids: stringArray(
+            event.prior_concept_ids,
+            `lifecycle.concept_identity_events[${index}].prior_concept_ids`,
+          ),
+          current_concept_ids: stringArray(
+            event.current_concept_ids,
+            `lifecycle.concept_identity_events[${index}].current_concept_ids`,
+          ),
+          target_detail_ids: stringArray(
+            event.target_detail_ids,
+            `lifecycle.concept_identity_events[${index}].target_detail_ids`,
+          ),
+          prior_names: stringArray(
+            event.prior_names,
+            `lifecycle.concept_identity_events[${index}].prior_names`,
+          ),
+          new_names: stringArray(
+            event.new_names,
+            `lifecycle.concept_identity_events[${index}].new_names`,
+          ),
+          prior_aliases: stringArray(
+            event.prior_aliases,
+            `lifecycle.concept_identity_events[${index}].prior_aliases`,
+          ),
+          current_aliases: stringArray(
+            event.current_aliases,
+            `lifecycle.concept_identity_events[${index}].current_aliases`,
+          ),
+          reason: stringValue(event.reason, `lifecycle.concept_identity_events[${index}].reason`),
+          evidence_refs: refsFromOptionalObservationIds({
+            raw: event,
+            sourceObservations: args.sourceObservations,
+            fieldName: `lifecycle.concept_identity_events[${index}]`,
+          }),
+          frontier_pressure_ids: stringArray(
+            event.frontier_pressure_ids,
+            `lifecycle.concept_identity_events[${index}].frontier_pressure_ids`,
+          ),
+        };
+      }),
+      relation_identity_events: records(
+        lifecycleRaw.relation_identity_events,
+        "lifecycle.relation_identity_events",
+      ).map((event, index) => {
+        if ("relation_ids" in event) {
+          throw new Error("relation_identity_events must not carry generic relation_ids.");
+        }
+        return {
+          event_id: stringValue(
+            event.event_id,
+            `lifecycle.relation_identity_events[${index}].event_id`,
+          ),
+          event_type: enumString(
+            event.event_type,
+            RELATION_IDENTITY_EVENT_TYPES,
+            `lifecycle.relation_identity_events[${index}].event_type`,
+          ),
+          prior_relation_ids: stringArray(
+            event.prior_relation_ids,
+            `lifecycle.relation_identity_events[${index}].prior_relation_ids`,
+          ),
+          current_relation_ids: stringArray(
+            event.current_relation_ids,
+            `lifecycle.relation_identity_events[${index}].current_relation_ids`,
+          ),
+          reason: stringValue(event.reason, `lifecycle.relation_identity_events[${index}].reason`),
+          evidence_refs: refsFromOptionalObservationIds({
+            raw: event,
+            sourceObservations: args.sourceObservations,
+            fieldName: `lifecycle.relation_identity_events[${index}]`,
+          }),
+          frontier_pressure_ids: stringArray(
+            event.frontier_pressure_ids,
+            `lifecycle.relation_identity_events[${index}].frontier_pressure_ids`,
+          ),
+        };
+      }),
+      pressure_events: records(lifecycleRaw.pressure_events, "lifecycle.pressure_events")
+        .map((event, index) => {
+          if ("pressure_ids" in event || "current_pressure_id" in event) {
+            throw new Error(
+              "pressure_events must carry one pressure_id and no pressure_ids/current_pressure_id.",
+            );
+          }
+          return {
+            event_id: stringValue(event.event_id, `lifecycle.pressure_events[${index}].event_id`),
+            event_type: enumString(
+              event.event_type,
+              PRESSURE_EVENT_TYPES,
+              `lifecycle.pressure_events[${index}].event_type`,
+            ),
+            pressure_id: stringValue(
+              event.pressure_id,
+              `lifecycle.pressure_events[${index}].pressure_id`,
+            ),
+            prior_status: event.prior_status === null || event.prior_status === undefined
+              ? null
+              : enumString(
+                  event.prior_status,
+                  FRONTIER_PRESSURE_STATUSES,
+                  `lifecycle.pressure_events[${index}].prior_status`,
+                ),
+            new_status: enumString(
+              event.new_status,
+              FRONTIER_PRESSURE_STATUSES,
+              `lifecycle.pressure_events[${index}].new_status`,
+            ),
+            superseded_by_pressure_id: nullableString(
+              event.superseded_by_pressure_id,
+              `lifecycle.pressure_events[${index}].superseded_by_pressure_id`,
+            ),
+            reason: stringValue(event.reason, `lifecycle.pressure_events[${index}].reason`),
+            evidence_refs: refsFromOptionalObservationIds({
+              raw: event,
+              sourceObservations: args.sourceObservations,
+              fieldName: `lifecycle.pressure_events[${index}]`,
+            }),
+          };
+        }),
+      detail_placement_events: records(
+        lifecycleRaw.detail_placement_events,
+        "lifecycle.detail_placement_events",
+      ).map((event, index) => ({
+        event_id: stringValue(
+          event.event_id,
+          `lifecycle.detail_placement_events[${index}].event_id`,
+        ),
+        event_type: enumString(
+          event.event_type,
+          DETAIL_PLACEMENT_EVENT_TYPES,
+          `lifecycle.detail_placement_events[${index}].event_type`,
+        ),
+        detail_ids: stringArray(
+          event.detail_ids,
+          `lifecycle.detail_placement_events[${index}].detail_ids`,
+        ),
+        reason: stringValue(event.reason, `lifecycle.detail_placement_events[${index}].reason`),
+        evidence_refs: refsFromOptionalObservationIds({
+          raw: event,
+          sourceObservations: args.sourceObservations,
+          fieldName: `lifecycle.detail_placement_events[${index}]`,
+        }),
+        frontier_pressure_ids: stringArray(
+          event.frontier_pressure_ids,
+          `lifecycle.detail_placement_events[${index}].frontier_pressure_ids`,
+        ),
+      })),
+      answerability_events: records(
+        lifecycleRaw.answerability_events,
+        "lifecycle.answerability_events",
+      ).map((event, index) => ({
+        event_id: stringValue(
+          event.event_id,
+          `lifecycle.answerability_events[${index}].event_id`,
+        ),
+        event_type: enumString(
+          event.event_type,
+          ANSWERABILITY_EVENT_TYPES,
+          `lifecycle.answerability_events[${index}].event_type`,
+        ),
+        question_ids: stringArray(
+          event.question_ids,
+          `lifecycle.answerability_events[${index}].question_ids`,
+        ),
+        action_ids: stringArray(
+          event.action_ids,
+          `lifecycle.answerability_events[${index}].action_ids`,
+        ),
+        frontier_pressure_ids: stringArray(
+          event.frontier_pressure_ids,
+          `lifecycle.answerability_events[${index}].frontier_pressure_ids`,
+        ),
+        reason: stringValue(event.reason, `lifecycle.answerability_events[${index}].reason`),
+      })),
+      material_coverage_events: records(
+        lifecycleRaw.material_coverage_events,
+        "lifecycle.material_coverage_events",
+      ).map((event, index) => ({
+        event_id: stringValue(
+          event.event_id,
+          `lifecycle.material_coverage_events[${index}].event_id`,
+        ),
+        event_type: enumString(
+          event.event_type,
+          MATERIAL_COVERAGE_EVENT_TYPES,
+          `lifecycle.material_coverage_events[${index}].event_type`,
+        ),
+        source_refs: stringArray(
+          event.source_refs,
+          `lifecycle.material_coverage_events[${index}].source_refs`,
+        ),
+        material_kinds: stringArray(
+          event.material_kinds,
+          `lifecycle.material_coverage_events[${index}].material_kinds`,
+        ).map((kind, kindIndex) =>
+          targetMaterialKindValue(
+            kind,
+            `lifecycle.material_coverage_events[${index}].material_kinds[${kindIndex}]`,
+          )
+        ),
+        changed_authority_fields: stringArray(
+          event.changed_authority_fields,
+          `lifecycle.material_coverage_events[${index}].changed_authority_fields`,
+        ),
+        prior_authority_state_ref: nullableString(
+          event.prior_authority_state_ref,
+          `lifecycle.material_coverage_events[${index}].prior_authority_state_ref`,
+        ),
+        current_authority_state_ref: nullableString(
+          event.current_authority_state_ref,
+          `lifecycle.material_coverage_events[${index}].current_authority_state_ref`,
+        ),
+        prior_authority_state: event.prior_authority_state === null ||
+          event.prior_authority_state === undefined
+          ? null
+          : recordValue(
+              event.prior_authority_state,
+              `lifecycle.material_coverage_events[${index}].prior_authority_state`,
+            ),
+        current_authority_state: event.current_authority_state === null ||
+          event.current_authority_state === undefined
+          ? null
+          : recordValue(
+              event.current_authority_state,
+              `lifecycle.material_coverage_events[${index}].current_authority_state`,
+            ),
+        frontier_pressure_ids: stringArray(
+          event.frontier_pressure_ids,
+          `lifecycle.material_coverage_events[${index}].frontier_pressure_ids`,
+        ),
+        reason: stringValue(event.reason, `lifecycle.material_coverage_events[${index}].reason`),
+      })),
+      convergence_events: records(
+        lifecycleRaw.convergence_events,
+        "lifecycle.convergence_events",
+      ).map((event, index) => ({
+        event_id: stringValue(
+          event.event_id,
+          `lifecycle.convergence_events[${index}].event_id`,
+        ),
+        prior_state: event.prior_state === null || event.prior_state === undefined
+          ? null
+          : enumString(
+              event.prior_state,
+              CONVERGENCE_STATES,
+              `lifecycle.convergence_events[${index}].prior_state`,
+            ),
+        new_state: enumString(
+          event.new_state,
+          CONVERGENCE_STATES,
+          `lifecycle.convergence_events[${index}].new_state`,
+        ),
+        frontier_pressure_ids: stringArray(
+          event.frontier_pressure_ids,
+          `lifecycle.convergence_events[${index}].frontier_pressure_ids`,
+        ),
+        reason: stringValue(event.reason, `lifecycle.convergence_events[${index}].reason`),
+      })),
+    },
+    migration_records: records(args.raw.migration_records, "migration_records")
+      .map((record, index) => ({
+        migration_id: stringValue(record.migration_id, `migration_records[${index}].migration_id`),
+        source_field: stringValue(record.source_field, `migration_records[${index}].source_field`),
+        target_authority_field: stringValue(
+          record.target_authority_field,
+          `migration_records[${index}].target_authority_field`,
+        ),
+        migration_artifact_ref: nullableString(
+          record.migration_artifact_ref,
+          `migration_records[${index}].migration_artifact_ref`,
+        ),
+      })),
+  };
 }
 
 function observationPromptPayload(
@@ -1343,13 +2438,39 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         llmCall,
         llmConfig,
         artifactName: "SeedCandidate",
-        maxTokens: 4200,
+        maxTokens: 7000,
         systemPrompt: [
           baseSystem,
-          "Author an ontology Seed candidate for the declared purpose. Claims must be evidence-backed by observation ids. Cover purpose, non-goals, entities, relations, actions, properties, rules, and open questions.",
-          "Each claim must include claim_id for artifact linkage and name for user-facing meaning. name must be a concise meaningful label such as RawIngestEvent, Usage Mart, or Dashboard Overview, not Entity 1 or a numbered placeholder.",
+          "Author a concept-centered ontology Seed candidate for the declared purpose. The Seed is a top-level concept discovery handoff artifact, not a full ontology graph.",
+          "Return seed_schema_version: transitional. The concept-centered fields are the semantic authority; legacy fields are compatibility projections only.",
+          "The concept-centered fields must include answerability_scope, top_level_concepts, top_level_relations, relation_participation_exceptions, lower_level_detail_placements, frontier_pressure_log, material_coverage_checkpoint, convergence, lifecycle, and migration_records.",
+          "Do not store relation_axis. relation axis is derived from relation_kind. Do not use pressure_ids or current_pressure_id in lifecycle.pressure_events; use one pressure_id.",
+          "Use only provided observation ids in evidence_observation_ids arrays. If evidence may change top-level concepts, boundaries, core relations, answerability, material coverage, or convergence confidence, record an open frontier pressure. Use deferred, superseded, or non_blocking pressure only with an explicit status_reason that explains why it does not block the declared Seed purpose.",
+          "Legacy claims must include claim_id for artifact linkage and name for user-facing meaning. name must be a concise meaningful label such as Usage Session, Usage Cost, or Dashboard Overview, not Entity 1 or a numbered placeholder.",
           "Each claim shape: {\"claim_id\":\"...\",\"name\":\"...\",\"statement\":\"...\",\"evidence_observation_ids\":[\"...\"]}",
-          "JSON shape: {\"purpose\":claim,\"non_goals\":[claim],\"entities\":[claim],\"relations\":[claim],\"actions\":[claim],\"properties\":[claim],\"rules\":[claim],\"open_questions\":[\"...\"]}",
+          "top_level_concepts item shape: {\"concept_id\":\"...\",\"name\":\"...\",\"aliases\":[\"...\"],\"definition\":\"...\",\"why_top_level\":\"...\",\"evidence_observation_ids\":[\"...\"],\"boundary\":{\"included_summary\":\"...\",\"excluded_summary\":\"...\",\"deferred_summary\":\"...\"},\"confidence\":\"...\",\"provisional\":false}",
+          `top_level_relations item shape: {"relation_id":"...","source_concept_id":"...","target_concept_id":"...","relation_kind":"${enumChoices(TOP_LEVEL_RELATION_KINDS)}","relation_label":"...","direction_statement":"...","statement":"...","evidence_observation_ids":["..."],"confidence":"...","provisional":false,"registration_status":"design_local"}`,
+          `answerability_scope shape: {"declared_handoff_questions":[{"question_id":"...","question":"...","source":"${enumChoices(HANDOFF_QUESTION_SOURCES)}"}],"supported_questions":[{"question_id":"...","answered_by":{"concept_ids":["..."],"relation_ids":["..."]},"confidence":"..."}],"deferred_questions":[{"question_id":"...","reason_deferred":"...","frontier_pressure_ids":["..."]}],"unsupported_questions":[{"question_id":"...","reason_unsupported":"..."}],"supported_actions":[{"action_id":"...","action":"...","supported_by_question_ids":["..."],"readiness_statement":"..."}],"unsupported_actions":[{"action_id":"...","action":"...","reason_unsupported":"..."}],"handoff_readiness_statement":"...","handoff_readiness_question_ids":["..."]}`,
+          "Partition every declared_handoff_questions item into exactly one of supported_questions, deferred_questions, or unsupported_questions. Partition every declared action into supported_actions or unsupported_actions.",
+          `lower_level_detail_placements item shape: {"detail_id":"...","name":"...","material_kind":"${enumChoices(TARGET_MATERIAL_KINDS)}","source_ref":"...","placement":"${enumChoices(LOWER_LEVEL_DETAIL_PLACEMENTS)}","owner_concept_id":"...","rationale":"...","evidence_observation_ids":["..."],"follow_up_question":null}`,
+          `frontier_pressure_log item shape: {"pressure_id":"...","origin":"${enumChoices(FRONTIER_PRESSURE_ORIGINS)}","origin_ref":"...","pressure_type":"${enumChoices(FRONTIER_PRESSURE_TYPES)}","pressure_question":"...","target_concept_ids":["..."],"target_relation_ids":["..."],"material_kind":"${enumChoices(TARGET_MATERIAL_KINDS)}","source_ref":"...","expected_decision_impact":"...","priority":"high|medium|low","status":"${enumChoices(FRONTIER_PRESSURE_STATUSES)}","status_reason":"...","superseded_by_pressure_id":null,"evidence_observation_ids":["..."]}`,
+          "material_coverage_checkpoint shape must include observed_material_kinds, observed_source_slices, source_authority_scope with permission/trust/instruction/external handling, intentionally_excluded_material_kinds, unexplored_source_categories, possible_missing_axis_pressure_ids, rationale_for_seed_level_sufficiency, and partial_support_disclosures.",
+          "convergence shape must include state, source_convergence_rationale, review_confirmed, review_profile_ref, and remaining_pressure_ids.",
+          `migration mapping authority: ${seedMigrationMappingContract()}`,
+          "migration_records item shape: {\"migration_id\":\"...\",\"source_field\":\"...\",\"target_authority_field\":\"one accepted target for that source_field\",\"migration_artifact_ref\":null}. The mapping rule, compatibility status, obligation status, and rationale are registry authority, not Seed record fields.",
+          "migration_records must use the exact accepted target_authority_field values from the migration mapping authority; do not map a source_field to a broad authority prefix or unrelated field.",
+          `lifecycle event_type enums: concept_identity_events=${enumChoices(CONCEPT_IDENTITY_EVENT_TYPES)}; relation_identity_events=${enumChoices(RELATION_IDENTITY_EVENT_TYPES)}; pressure_events=${enumChoices(PRESSURE_EVENT_TYPES)}; detail_placement_events=${enumChoices(DETAIL_PLACEMENT_EVENT_TYPES)}; answerability_events=${enumChoices(ANSWERABILITY_EVENT_TYPES)}; material_coverage_events=${enumChoices(MATERIAL_COVERAGE_EVENT_TYPES)}.`,
+          "lifecycle shape: {\"seed_id\":\"...\",\"parent_seed_ref\":null,\"id_stability_scope\":\"session|lineage\",\"session_id\":\"...\",\"source_snapshot_refs\":[\"...\"],\"source_snapshot_transition\":{\"prior_snapshot_refs\":[],\"transition_reason\":\"...\"},\"exploration_rounds\":[{\"round_id\":\"...\",\"observed_source_refs\":[\"...\"],\"authoring_pass_ref\":\"seed-candidate.yaml\",\"changed_concept_ids\":[\"...\"],\"changed_relation_ids\":[],\"changed_frontier_pressure_ids\":[\"...\"]}],\"concept_identity_events\":[object],\"relation_identity_events\":[object],\"pressure_events\":[object],\"detail_placement_events\":[object],\"answerability_events\":[object],\"material_coverage_events\":[object],\"convergence_events\":[object]}",
+          "concept_identity_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|renamed|alias_changed|split|merged|boundary_changed|demoted\",\"prior_concept_ids\":[],\"current_concept_ids\":[\"...\"],\"target_detail_ids\":[],\"prior_names\":[],\"new_names\":[\"...\"],\"prior_aliases\":[],\"current_aliases\":[],\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"],\"frontier_pressure_ids\":[\"...\"]}",
+          "relation_identity_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|changed_direction|changed_kind|split|merged|removed\",\"prior_relation_ids\":[],\"current_relation_ids\":[\"...\"],\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"],\"frontier_pressure_ids\":[\"...\"]}",
+          "pressure_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|resolved|deferred|reopened|superseded|non_blocking\",\"pressure_id\":\"...\",\"prior_status\":null,\"new_status\":\"open|resolved|deferred|superseded|non_blocking\",\"superseded_by_pressure_id\":null,\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"]}. Treat pressure_events as an ordered history per pressure: prior_status must match the previous event new_status when a previous event exists, and only the final event new_status must match frontier_pressure_log.status.",
+          `detail_placement_events item shape: {"event_id":"...","event_type":"${enumChoices(DETAIL_PLACEMENT_EVENT_TYPES)}","detail_ids":["..."],"reason":"...","evidence_observation_ids":["..."],"frontier_pressure_ids":["..."]}`,
+          `answerability_events item shape: {"event_id":"...","event_type":"${enumChoices(ANSWERABILITY_EVENT_TYPES)}","question_ids":["..."],"action_ids":["..."],"frontier_pressure_ids":["..."],"reason":"..."}`,
+          `material_coverage_events item shape: {"event_id":"...","event_type":"${enumChoices(MATERIAL_COVERAGE_EVENT_TYPES)}","source_refs":["..."],"material_kinds":["<target_material_kind from source_refs>"],"changed_authority_fields":["..."],"prior_authority_state_ref":null,"current_authority_state_ref":null,"prior_authority_state":null,"current_authority_state":{},"frontier_pressure_ids":["..."],"reason":"..."}`,
+          `material_coverage_events.material_kinds allowed values: ${enumChoices(TARGET_MATERIAL_KINDS)}. For source_slice_added and coverage_gap_resolved, use only material kinds proven by the event source_refs. For material_kind_excluded, use only material_coverage_checkpoint.intentionally_excluded_material_kinds. For coverage_gap_disclosed, disclose the gap kind without claiming source evidence. Do not copy the full enum list into one event.`,
+          `convergence_events item shape: {"event_id":"...","prior_state":null,"new_state":"${enumChoices(CONVERGENCE_STATES)}","frontier_pressure_ids":["..."],"reason":"..."}`,
+          "concept_identity_events demoted items must carry prior_concept_ids, empty current_concept_ids, and target_detail_ids pointing to lower_level_detail_placements.",
+          "JSON shape: {\"seed_schema_version\":\"transitional\",\"purpose\":claim,\"answerability_scope\":object,\"top_level_concepts\":[object],\"top_level_relations\":[object],\"relation_participation_exceptions\":[object],\"lower_level_detail_placements\":[object],\"frontier_pressure_log\":[object],\"material_coverage_checkpoint\":object,\"convergence\":object,\"lifecycle\":object,\"migration_records\":[object],\"non_goals\":[claim],\"entities\":[claim],\"relations\":[claim],\"actions\":[claim],\"properties\":[claim],\"rules\":[claim],\"open_questions\":[\"...\"]}",
         ].join("\n"),
         userPayload: {
           intent: input.intent,
@@ -1365,8 +2486,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ? raw.purpose as Record<string, unknown>
           : null;
       if (!purposeRaw) throw new Error("SeedCandidate.purpose must be an object.");
+      const conceptCenteredFields = conceptCenteredFieldsFromLlm({
+        raw,
+        sessionId: input.sessionId,
+        sourceObservations: input.sourceObservations,
+      });
       return {
         schema_version: "1",
+        ...conceptCenteredFields,
         session_id: input.sessionId,
         created_at: isoNow(),
         purpose: claimFromLlm({
@@ -1771,7 +2898,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "You are writing the final reconstruct result for the user.",
           "Write concise Markdown. Ground every important statement in artifact refs or ids.",
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
-          "Include execution profile, completion scope, skipped/deferred stages, confirmed Seed content, CQ assessment, material failures, revision proposals, and artifact truth.",
+          "Include execution profile, completion scope, skipped/deferred stages, confirmed Seed content, Seed answerability buckets, CQ assessment, material failures, revision proposals, and artifact truth.",
           "Do not claim full domain-context alignment when domain context selection was skipped.",
         ].join("\n"),
         JSON.stringify({
@@ -1800,6 +2927,263 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       );
       return result.text;
     },
+  };
+}
+
+function defaultSeedMigrationRecords():
+  ReconstructTransitionalSeedCandidateArtifact["migration_records"] {
+  return SEED_MIGRATION_TARGETS
+    .filter((record) => record.compatibility_status === "transitional_projection")
+    .map((record) => ({
+      migration_id: `migration-${record.source_field}`,
+      source_field: record.source_field,
+      target_authority_field: record.target_authority_field,
+      migration_artifact_ref: null,
+    }));
+}
+
+function mockConceptCenteredSeedFields(args: {
+  sessionId: string;
+  intent: string;
+  evidenceRefs: ReconstructEvidenceRef[];
+  materialKinds: Set<TargetMaterialKind>;
+  selectedSourceRefs: string[];
+}): ReconstructTransitionalSeedAuthorityFields {
+  const firstEvidence = args.evidenceRefs[0]!;
+  const materialKind = firstEvidence.target_material_kind;
+  const conceptId = "concept-declared-reconstruct-purpose";
+  const pressureId = "pressure-evidence-saturation-non-blocking";
+  const detailId = "detail-observed-source-unit";
+  const questionId = "question-declared-purpose";
+  const actionId = "action-explain-seed-purpose";
+  const sourceRefs = [...new Set(args.selectedSourceRefs)];
+  const materialKinds = [...args.materialKinds];
+  return {
+    seed_schema_version: "transitional",
+    answerability_scope: {
+      declared_handoff_questions: [
+        {
+          question_id: questionId,
+          question: "What top-level concept explains the declared reconstruct purpose?",
+          source: "declared_purpose",
+        },
+      ],
+      supported_questions: [
+        {
+          question_id: questionId,
+          answered_by: {
+            concept_ids: [conceptId],
+            relation_ids: [],
+          },
+          confidence: "bounded_fixture_confidence",
+        },
+      ],
+      deferred_questions: [],
+      unsupported_questions: [],
+      supported_actions: [
+        {
+          action_id: actionId,
+          action: "Explain the bounded Seed purpose and its supporting observed source evidence.",
+          supported_by_question_ids: [questionId],
+          readiness_statement:
+            "Supported for bounded reconstruct fixture output, not full ontology readiness.",
+        },
+      ],
+      unsupported_actions: [],
+      handoff_readiness_statement:
+        "The Seed is provisionally ready as a bounded top-level concept handoff with disclosed limits.",
+      handoff_readiness_question_ids: [questionId],
+    },
+    top_level_concepts: [
+      {
+        concept_id: conceptId,
+        name: "Declared Reconstruct Purpose",
+        aliases: [],
+        definition:
+          "The bounded purpose that selected observations support for reconstruct Seed authoring.",
+        why_top_level:
+          "It is the fixture's purpose-relative top-level concept; source observations are supporting evidence rather than the concept itself.",
+        evidence_refs: args.evidenceRefs,
+        boundary: {
+          included_summary: "The declared reconstruct purpose supported by selected source observations.",
+          excluded_summary: "Unobserved source slices and full ontology formalization.",
+          deferred_summary: "Richer domain concepts after additional semantic authoring.",
+        },
+        confidence: "medium",
+        provisional: true,
+      },
+    ],
+    top_level_relations: [],
+    relation_participation_exceptions: [
+      {
+        concept_id: conceptId,
+        isolation_reason:
+          "Single-concept bounded Seed fixture has no canonical relation endpoint pair yet.",
+        isolation_pressure_ids: [pressureId],
+      },
+    ],
+    lower_level_detail_placements: [
+      {
+        detail_id: detailId,
+        name: "Observed Source Unit",
+        material_kind: materialKind,
+        source_ref: firstEvidence.source_ref,
+        placement: "included_support",
+        owner_concept_id: conceptId,
+        rationale: "The source unit supports the declared reconstruct purpose concept.",
+        evidence_refs: [firstEvidence],
+        follow_up_question: null,
+      },
+    ],
+    frontier_pressure_log: [
+      {
+        pressure_id: pressureId,
+        origin: "source_observation",
+        origin_ref: firstEvidence.observation_id,
+        pressure_type: "evidence_saturation",
+        pressure_question:
+          "Would more source exploration change the selected top-level concept set?",
+        target_concept_ids: [conceptId],
+        target_relation_ids: [],
+        material_kind: materialKind,
+        source_ref: firstEvidence.source_ref,
+        expected_decision_impact:
+          "Additional source may refine evidence but does not block the bounded fixture Seed.",
+        priority: "low",
+        status: "non_blocking",
+        status_reason:
+          "The fixture intentionally limits source scope and discloses that limit.",
+        superseded_by_pressure_id: null,
+        evidence_refs: [firstEvidence],
+      },
+    ],
+    material_coverage_checkpoint: {
+      observed_material_kinds: materialKinds,
+      observed_source_slices: sourceRefs,
+      source_authority_scope: {
+        permission_scope: "within_declared_boundary",
+        permission_basis_refs: sourceRefs,
+        trust_status: "observed_evidence_only",
+        instruction_authority_status: "none_data_only",
+        external_content_handling: "not_applicable",
+        restricted_source_refs: [],
+        rationale:
+          "Source material is treated as evidence within the declared filesystem boundary.",
+      },
+      intentionally_excluded_material_kinds: [],
+      unexplored_source_categories: [],
+      possible_missing_axis_pressure_ids: [],
+      rationale_for_seed_level_sufficiency:
+        "The bounded fixture has enough evidence for a provisional Seed handoff.",
+      partial_support_disclosures: [
+        "Fixture output is not evidence of full ontology readiness.",
+      ],
+    },
+    convergence: {
+      state: "provisionally_converged",
+      source_convergence_rationale:
+        "No open frontier pressure remains for the bounded fixture handoff.",
+      review_confirmed: false,
+      review_profile_ref: null,
+      remaining_pressure_ids: [pressureId],
+    },
+    lifecycle: {
+      seed_id: `seed-${args.sessionId}`,
+      parent_seed_ref: null,
+      id_stability_scope: "session",
+      session_id: args.sessionId,
+      source_snapshot_refs: sourceRefs,
+      source_snapshot_transition: {
+        prior_snapshot_refs: [],
+        transition_reason: "Initial reconstruct Seed has no parent snapshot.",
+      },
+      exploration_rounds: [
+        {
+          round_id: "round-1",
+          observed_source_refs: sourceRefs,
+          authoring_pass_ref: "seed-candidate.yaml",
+          changed_concept_ids: [conceptId],
+          changed_relation_ids: [],
+          changed_frontier_pressure_ids: [pressureId],
+        },
+      ],
+      concept_identity_events: [
+        {
+          event_id: "concept-event-created-1",
+          event_type: "created",
+          prior_concept_ids: [],
+          current_concept_ids: [conceptId],
+          target_detail_ids: [],
+          prior_names: [],
+          new_names: ["Declared Reconstruct Purpose"],
+          prior_aliases: [],
+          current_aliases: [],
+          reason: "Initial concept-centered Seed authoring.",
+          evidence_refs: [firstEvidence],
+          frontier_pressure_ids: [pressureId],
+        },
+      ],
+      relation_identity_events: [],
+      pressure_events: [
+        {
+          event_id: "pressure-event-non-blocking-1",
+          event_type: "non_blocking",
+          pressure_id: pressureId,
+          prior_status: null,
+          new_status: "non_blocking",
+          superseded_by_pressure_id: null,
+          reason: "Bounded fixture pressure is disclosed as non-blocking.",
+          evidence_refs: [firstEvidence],
+        },
+      ],
+      detail_placement_events: [
+        {
+          event_id: "detail-event-placed-1",
+          event_type: "placed",
+          detail_ids: [detailId],
+          reason: "Observed source unit was placed as supporting detail.",
+          evidence_refs: [firstEvidence],
+          frontier_pressure_ids: [pressureId],
+        },
+      ],
+      answerability_events: [
+        {
+          event_id: "answerability-event-supported-1",
+          event_type: "question_supported",
+          question_ids: [questionId],
+          action_ids: [actionId],
+          frontier_pressure_ids: [],
+          reason: "Declared purpose question is supported by the Seed concept.",
+        },
+      ],
+      material_coverage_events: [
+        {
+          event_id: "material-coverage-event-source-slice-added-1",
+          event_type: "source_slice_added",
+          source_refs: sourceRefs,
+          material_kinds: materialKinds,
+          changed_authority_fields: ["observed_source_slices"],
+          prior_authority_state_ref: null,
+          current_authority_state_ref: null,
+          prior_authority_state: null,
+          current_authority_state: {
+            observed_source_slices: sourceRefs,
+          },
+          frontier_pressure_ids: [pressureId],
+          reason: "Initial material coverage checkpoint records observed source slices.",
+        },
+      ],
+      convergence_events: [
+        {
+          event_id: "convergence-event-provisional-1",
+          prior_state: null,
+          new_state: "provisionally_converged",
+          frontier_pressure_ids: [pressureId],
+          reason: "No open pressure remains for bounded fixture handoff.",
+        },
+      ],
+    },
+    migration_records: defaultSeedMigrationRecords(),
   };
 }
 
@@ -1913,8 +3297,16 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         selections.map((selection) => selection.target_material_kind),
       );
       const firstEvidence = evidenceRefs[0]!;
+      const conceptCenteredFields = mockConceptCenteredSeedFields({
+        sessionId: input.sessionId,
+        intent: input.intent,
+        evidenceRefs,
+        materialKinds,
+        selectedSourceRefs: selections.map((selection) => selection.source_ref),
+      });
       return {
         schema_version: "1",
+        ...conceptCenteredFields,
         session_id: input.sessionId,
         created_at: isoNow(),
         purpose: {
@@ -2039,7 +3431,7 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         seed_confirmation_ref: input.seedConfirmationRef,
         questions,
         open_questions: [
-          ...input.seedCandidate.open_questions,
+          ...legacyOpenQuestions(input.seedCandidate),
           ...input.seedConfirmation.notes,
         ],
         directive_author: {
@@ -2213,12 +3605,13 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
             `- ${proposal.proposal_id}: ${proposal.action} ${proposal.target_type} ${proposal.target_id} (revision-proposal.yaml)`
           );
       const unresolvedQuestions = [
-        ...input.seedCandidate.open_questions,
+        ...legacyOpenQuestions(input.seedCandidate),
         ...input.competencyQuestions.open_questions,
       ];
       const unresolvedLines = unresolvedQuestions.length === 0
         ? ["- None recorded."]
         : unresolvedQuestions.map((question) => `- ${question}`);
+      const answerabilityLines = seedAnswerabilityLines(input.seedCandidate);
       const skippedLines = input.sourceObservations.skipped_refs.length === 0
         ? ["- None recorded."]
         : input.sourceObservations.skipped_refs.map((skipped) =>
@@ -2249,6 +3642,10 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         `- Material failures: ${input.failureClassificationValidation.material_failure_count}`,
         `- Revision proposals: ${input.revisionProposalValidation.proposal_count}`,
         `- Pass rate: ${input.metrics.pass_rate}`,
+        "",
+        "## Seed Answerability",
+        "",
+        ...answerabilityLines,
         "",
         "## Claim Realization Summary",
         "",
@@ -2352,6 +3749,7 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           "Return only valid JSON. Do not wrap in Markdown.",
           "Classify every Seed claim summary into confirmed, rejected, partial, or deferred for the declared purpose.",
           "Use the claim id, claim kind, short statement, validation status, and evidence observation ids. Do not invent new claim ids.",
+          "Deferred or unsupported answerability summaries confirm boundary disclosure only; they do not make a claim eligible for competency-question testing.",
           "Do not re-author Seed content. This step only assigns confirmation state.",
           "JSON shape: {\"confirmation_status\":\"accepted|rejected|partial|deferred\",\"confirmed_claim_ids\":[\"...\"],\"rejected_claim_ids\":[\"...\"],\"partial_claim_ids\":[\"...\"],\"deferred_claim_ids\":[\"...\"],\"notes\":[\"...\"]}",
         ].join("\n"),
@@ -2491,6 +3889,21 @@ function appendFinalOutputProvenanceFooter(
     "## Runtime Artifact Truth Footer",
     "",
     ...missing.map((fragment) => `- ${fragment}`),
+    "",
+  ].join("\n");
+}
+
+function appendFinalOutputAnswerabilitySection(
+  finalOutputText: string,
+  seedCandidate: ReconstructSeedCandidateArtifact,
+): string {
+  if (finalOutputText.includes("## Seed Answerability")) return finalOutputText;
+  return [
+    finalOutputText.trimEnd(),
+    "",
+    "## Seed Answerability",
+    "",
+    ...seedAnswerabilityLines(seedCandidate),
     "",
   ].join("\n");
 }
@@ -2837,6 +4250,7 @@ export async function runReconstruct(
     sessionId,
     sourceObservations,
     sourceObservationDirectiveValidation,
+    seedCandidate,
     seedCandidateValidation,
     claimRealizationMapValidation,
     seedConfirmation,
@@ -2953,8 +4367,12 @@ export async function runReconstruct(
     ...failureClassification.failures.map((failure) => failure.failure_id),
     ...revisionProposal.proposals.map((proposal) => proposal.proposal_id),
   ];
-  const finalOutputText = appendFinalOutputProvenanceFooter(
+  const finalOutputWithAnswerability = appendFinalOutputAnswerabilitySection(
     authoredFinalOutputText,
+    seedCandidate,
+  );
+  const finalOutputText = appendFinalOutputProvenanceFooter(
+    finalOutputWithAnswerability,
     requiredFinalOutputFragments,
   );
   const finalOutputViolations = validateFinalOutputProvenance({

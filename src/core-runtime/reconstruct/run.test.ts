@@ -7,6 +7,10 @@ import type {
   ReconstructLensJudgmentArtifact,
   ReconstructRecordArtifact,
   ReconstructRunManifestArtifact,
+  ReconstructSeedCandidateArtifact,
+} from "./artifact-types.js";
+import {
+  RECONSTRUCT_SEED_MIGRATION_TARGETS,
 } from "./artifact-types.js";
 import {
   createAutoAcceptReconstructConfirmationProvider,
@@ -15,6 +19,7 @@ import {
   createMockReconstructDirectiveAuthor,
   runReconstruct,
 } from "./run.js";
+import { seedClaimProjections } from "./seed-claim-projections.js";
 import type { LlmCallResult } from "../llm/llm-caller.js";
 
 const tmpRoots: string[] = [];
@@ -167,11 +172,25 @@ describe("runReconstruct", () => {
 
   function fakeLiveLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
     const input = JSON.parse(userPrompt) as Record<string, any>;
-    const observations = (input.source_observations ?? []) as Array<{ observation_id: string }>;
+    const observations = (input.source_observations ?? []) as Array<{
+      observation_id: string;
+      target_material_kind?: string;
+      source_ref?: string;
+    }>;
     const firstObservationId =
       observations[0]?.observation_id ??
       input.seed_candidate?.purpose?.evidence_refs?.[0]?.observation_id ??
       "obs_code_fake";
+    const firstMaterialKind = observations[0]?.target_material_kind ?? "code";
+    const firstSourceRef = observations[0]?.source_ref ?? "src/feature.ts";
+    const migrationRecords = RECONSTRUCT_SEED_MIGRATION_TARGETS
+      .filter((record) => record.compatibility_status === "transitional_projection")
+      .map((record) => ({
+        migration_id: `migration-${record.source_field}`,
+        source_field: record.source_field,
+        target_authority_field: record.target_authority_field,
+        migration_artifact_ref: null,
+      }));
     let text: string;
     if (systemPrompt.includes("Select observations")) {
       text = JSON.stringify({
@@ -207,14 +226,226 @@ describe("runReconstruct", () => {
         frontier_refs: [],
         no_next_frontier_rationale: "No next frontier is required for this fixture.",
       });
-    } else if (systemPrompt.includes("Author an ontology Seed candidate")) {
+    } else if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
       text = JSON.stringify({
+        seed_schema_version: "transitional",
         purpose: {
           claim_id: "purpose-1",
           name: "Fixture Service Purpose",
           statement: "The fixture exposes a small feature service purpose.",
           evidence_observation_ids: [firstObservationId],
         },
+        answerability_scope: {
+          declared_handoff_questions: [
+            {
+              question_id: "question-1",
+              question: "What top-level concept explains the fixture service?",
+              source: "declared_purpose",
+            },
+          ],
+          supported_questions: [
+            {
+              question_id: "question-1",
+              answered_by: {
+                concept_ids: ["concept-fixture-service"],
+                relation_ids: [],
+              },
+              confidence: "medium",
+            },
+          ],
+          deferred_questions: [],
+          unsupported_questions: [],
+          supported_actions: [
+            {
+              action_id: "action-explain-fixture-service",
+              action: "Explain the bounded fixture service Seed.",
+              supported_by_question_ids: ["question-1"],
+              readiness_statement: "Ready for bounded fixture handoff.",
+            },
+          ],
+          unsupported_actions: [],
+          handoff_readiness_statement: "Ready for bounded fixture handoff.",
+          handoff_readiness_question_ids: ["question-1"],
+        },
+        top_level_concepts: [
+          {
+            concept_id: "concept-fixture-service",
+            name: "Fixture Service",
+            aliases: [],
+            definition: "A bounded service concept grounded in the observed fixture source.",
+            why_top_level: "It explains the fixture behavior for the declared purpose.",
+            evidence_observation_ids: [firstObservationId],
+            boundary: {
+              included_summary: "Observed feature source and its service behavior.",
+              excluded_summary: "Unobserved production concerns.",
+              deferred_summary: "Full ontology formalization.",
+            },
+            confidence: "medium",
+            provisional: false,
+          },
+        ],
+        top_level_relations: [],
+        relation_participation_exceptions: [
+          {
+            concept_id: "concept-fixture-service",
+            isolation_reason: "Single concept fixture has no canonical relation pair.",
+            isolation_pressure_ids: ["pressure-fixture-evidence"],
+          },
+        ],
+        lower_level_detail_placements: [
+          {
+            detail_id: "detail-feature-source",
+            name: "Feature Source",
+            material_kind: firstMaterialKind,
+            source_ref: firstSourceRef,
+            placement: "included_support",
+            owner_concept_id: "concept-fixture-service",
+            rationale: "The feature source supports the Fixture Service concept.",
+            evidence_observation_ids: [firstObservationId],
+            follow_up_question: null,
+          },
+        ],
+        frontier_pressure_log: [
+          {
+            pressure_id: "pressure-fixture-evidence",
+            origin: "source_observation",
+            origin_ref: firstObservationId,
+            pressure_type: "evidence_saturation",
+            pressure_question: "Would another fixture source change the top-level concept?",
+            target_concept_ids: ["concept-fixture-service"],
+            target_relation_ids: [],
+            material_kind: firstMaterialKind,
+            source_ref: firstSourceRef,
+            expected_decision_impact: "Additional evidence may refine but not block handoff.",
+            priority: "low",
+            status: "non_blocking",
+            status_reason: "The fixture intentionally has bounded source scope.",
+            superseded_by_pressure_id: null,
+            evidence_observation_ids: [firstObservationId],
+          },
+        ],
+        material_coverage_checkpoint: {
+          observed_material_kinds: [firstMaterialKind],
+          observed_source_slices: [firstSourceRef],
+          source_authority_scope: {
+            permission_scope: "within_declared_boundary",
+            permission_basis_refs: [firstSourceRef],
+            trust_status: "observed_evidence_only",
+            instruction_authority_status: "none_data_only",
+            external_content_handling: "not_applicable",
+            restricted_source_refs: [],
+            rationale: "Fixture source is treated as evidence only.",
+          },
+          intentionally_excluded_material_kinds: [],
+          unexplored_source_categories: [],
+          possible_missing_axis_pressure_ids: [],
+          rationale_for_seed_level_sufficiency: "Sufficient for bounded fixture handoff.",
+          partial_support_disclosures: [],
+        },
+        convergence: {
+          state: "provisionally_converged",
+          source_convergence_rationale: "No open pressure remains for fixture handoff.",
+          review_confirmed: false,
+          review_profile_ref: null,
+          remaining_pressure_ids: ["pressure-fixture-evidence"],
+        },
+        lifecycle: {
+          seed_id: "seed-fixture",
+          parent_seed_ref: null,
+          id_stability_scope: "session",
+          session_id: "direct-run",
+          source_snapshot_refs: [firstSourceRef],
+          source_snapshot_transition: {
+            prior_snapshot_refs: [],
+            transition_reason: "Initial fixture Seed.",
+          },
+          exploration_rounds: [
+            {
+              round_id: "round-1",
+              observed_source_refs: [firstSourceRef],
+              authoring_pass_ref: "seed-candidate.yaml",
+              changed_concept_ids: ["concept-fixture-service"],
+              changed_relation_ids: [],
+              changed_frontier_pressure_ids: ["pressure-fixture-evidence"],
+            },
+          ],
+          concept_identity_events: [
+            {
+              event_id: "concept-event-created-1",
+              event_type: "created",
+              prior_concept_ids: [],
+              current_concept_ids: ["concept-fixture-service"],
+              target_detail_ids: [],
+              prior_names: [],
+              new_names: ["Fixture Service"],
+              prior_aliases: [],
+              current_aliases: [],
+              reason: "Initial fixture concept.",
+              evidence_observation_ids: [firstObservationId],
+              frontier_pressure_ids: ["pressure-fixture-evidence"],
+            },
+          ],
+          relation_identity_events: [],
+          pressure_events: [
+            {
+              event_id: "pressure-event-non-blocking-1",
+              event_type: "non_blocking",
+              pressure_id: "pressure-fixture-evidence",
+              prior_status: null,
+              new_status: "non_blocking",
+              superseded_by_pressure_id: null,
+              reason: "Fixture pressure is non-blocking.",
+              evidence_observation_ids: [firstObservationId],
+            },
+          ],
+          detail_placement_events: [
+            {
+              event_id: "detail-event-placed-1",
+              event_type: "placed",
+              detail_ids: ["detail-feature-source"],
+              reason: "Feature source was placed under the service concept.",
+              evidence_observation_ids: [firstObservationId],
+              frontier_pressure_ids: ["pressure-fixture-evidence"],
+            },
+          ],
+          answerability_events: [
+            {
+              event_id: "answerability-event-supported-1",
+              event_type: "question_supported",
+              question_ids: ["question-1"],
+              action_ids: ["action-explain-fixture-service"],
+              frontier_pressure_ids: [],
+              reason: "Question is supported by the fixture concept.",
+            },
+          ],
+          material_coverage_events: [
+            {
+              event_id: "material-event-source-slice-added-1",
+              event_type: "source_slice_added",
+              source_refs: [firstSourceRef],
+              material_kinds: [firstMaterialKind],
+              changed_authority_fields: ["observed_source_slices"],
+              prior_authority_state_ref: null,
+              current_authority_state_ref: null,
+              prior_authority_state: null,
+              current_authority_state: {
+                observed_source_slices: [firstSourceRef],
+              },
+              frontier_pressure_ids: ["pressure-fixture-evidence"],
+              reason: "Observed fixture source slice recorded.",
+            },
+          ],
+          convergence_events: [
+            {
+              event_id: "convergence-event-provisional-1",
+              prior_state: null,
+              new_state: "provisionally_converged",
+              frontier_pressure_ids: ["pressure-fixture-evidence"],
+              reason: "No open pressure remains.",
+            },
+          ],
+        },
+        migration_records: migrationRecords,
         non_goals: [],
         entities: [
           {
@@ -250,11 +481,9 @@ describe("runReconstruct", () => {
         notes: ["Fixture host confirmation accepts all evidence-backed claims."],
       });
     } else if (systemPrompt.includes("Classify every Seed claim")) {
-      const claims = [
-        input.seed_candidate.purpose,
-        ...input.seed_candidate.entities,
-        ...input.seed_candidate.actions,
-      ];
+      const claims = seedClaimProjections(
+        input.seed_candidate as ReconstructSeedCandidateArtifact,
+      );
       text = JSON.stringify({
         claim_realizations: claims.map((claim: { claim_id: string }) => ({
           claim_id: claim.claim_id,
@@ -440,6 +669,22 @@ describe("runReconstruct", () => {
   it("runs the direct-call integral path without product mock authorship", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "direct-run");
+    const seedAuthorSystemPrompts: string[] = [];
+    const confirmationClaimSummaries: Array<
+      Array<{ claim_id: string; claim_kind: string }>
+    > = [];
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
+        seedAuthorSystemPrompts.push(systemPrompt);
+      }
+      if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
+        const input = JSON.parse(userPrompt) as {
+          claim_summaries?: Array<{ claim_id: string; claim_kind: string }>;
+        };
+        confirmationClaimSummaries.push(input.claim_summaries ?? []);
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
 
     const result = await runReconstruct({
       projectRoot,
@@ -451,10 +696,10 @@ describe("runReconstruct", () => {
       semanticAuthorRealization: "direct_call",
       confirmationProviderRealization: "direct_call",
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
-        llmCall: fakeLiveLlm,
+        llmCall,
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
-        llmCall: fakeLiveLlm,
+        llmCall,
       }),
     });
 
@@ -482,6 +727,97 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Runtime Artifact Truth Footer");
     expect(result.finalOutputText).toContain(result.reconstructRecordPath);
     expect(result.finalOutputText).not.toContain("mock");
+
+    const seedCandidate = await readYaml<ReconstructSeedCandidateArtifact>(
+      result.artifactRefs.seed_candidate!,
+    );
+    expect(seedCandidate.seed_schema_version).toBe("transitional");
+    expect(seedCandidate.top_level_concepts?.[0]?.concept_id)
+      .toBe("concept-fixture-service");
+    expect(seedCandidate.top_level_relations?.[0]).toBeUndefined();
+    expect(seedCandidate.frontier_pressure_log?.[0]).toMatchObject({
+      pressure_id: "pressure-fixture-evidence",
+      status: "non_blocking",
+    });
+    expect(seedCandidate.lifecycle?.pressure_events[0]).toMatchObject({
+      pressure_id: "pressure-fixture-evidence",
+      new_status: "non_blocking",
+    });
+    expect(confirmationClaimSummaries[0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          claim_id: "concept-fixture-service",
+          claim_kind: "top_level_concept",
+        }),
+        expect.objectContaining({
+          claim_id: "question-1",
+          claim_kind: "supported_question",
+        }),
+        expect.objectContaining({
+          claim_id: "action-explain-fixture-service",
+          claim_kind: "supported_action",
+        }),
+      ]),
+    );
+    expect(seedAuthorSystemPrompts[0]).toContain(
+      '"material_kinds":["<target_material_kind from source_refs>"]',
+    );
+    expect(seedAuthorSystemPrompts[0]).not.toContain(
+      '"material_kinds":["code"]',
+    );
+    expect(seedAuthorSystemPrompts[0]).toContain(
+      "material_coverage_events.material_kinds allowed values: code|spreadsheet|document|database|mixed|unknown",
+    );
+    expect(seedAuthorSystemPrompts[0]).not.toContain(
+      '"material_kinds":["code","spreadsheet","document","database","mixed","unknown"]',
+    );
+    expect(seedAuthorSystemPrompts[0]).not.toContain("code | spreadsheet");
+    expect(result.metrics.answerability_summary).toMatchObject({
+      supported_question_count: 1,
+      supported_action_count: 1,
+    });
+    expect(result.finalOutputText).toContain("Seed Answerability");
+    expect(result.finalOutputText).toContain("supported question question-1");
+  });
+
+  it("fails loud before normalization when direct-call Seed output hides retired projections", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "bad-retired-projection-run",
+    );
+    const llmCall = async (systemPrompt: string, userPrompt: string) => {
+      const result = await fakeLiveLlm(systemPrompt, userPrompt);
+      if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
+        const raw = JSON.parse(result.text) as any;
+        raw.top_level_concepts[0].core_relations = [];
+        delete raw.migration_records;
+        return {
+          ...result,
+          text: JSON.stringify(raw),
+        };
+      }
+      return result;
+    };
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a live reconstruct Seed from the code target.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    })).rejects.toThrow(/retained legacy or retired projection fields/);
   });
 
   it("keeps the same runner path usable for non-code material", async () => {

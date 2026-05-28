@@ -26,6 +26,7 @@ import type {
   ReconstructSourceObservationsArtifact,
 } from "./artifact-types.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
+import { seedClaimProjections } from "./seed-claim-projections.js";
 
 const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
@@ -89,15 +90,7 @@ function initCountMap<T extends string>(
 }
 
 function allClaims(seedCandidate: ReconstructSeedCandidateArtifact): ReconstructSeedClaim[] {
-  return [
-    seedCandidate.purpose,
-    ...seedCandidate.non_goals,
-    ...seedCandidate.entities,
-    ...seedCandidate.relations,
-    ...seedCandidate.actions,
-    ...seedCandidate.properties,
-    ...seedCandidate.rules,
-  ];
+  return seedClaimProjections(seedCandidate);
 }
 
 function validateEvidenceRef(args: {
@@ -154,6 +147,19 @@ function observationsById(
 
 function knownClaimIds(seedCandidate: ReconstructSeedCandidateArtifact): Set<string> {
   return new Set(allClaims(seedCandidate).map((claim) => claim.claim_id));
+}
+
+function cqExcludedAnswerabilityClaimIds(
+  seedCandidate: ReconstructSeedCandidateArtifact,
+): Set<string> {
+  const answerability = "answerability_scope" in seedCandidate
+    ? seedCandidate.answerability_scope
+    : undefined;
+  return new Set([
+    ...(answerability?.deferred_questions ?? []).map((question) => question.question_id),
+    ...(answerability?.unsupported_questions ?? []).map((question) => question.question_id),
+    ...(answerability?.unsupported_actions ?? []).map((action) => action.action_id),
+  ]);
 }
 
 export function validateClaimRealizationMap(args: {
@@ -325,7 +331,9 @@ export function validateSeedConfirmation(args: {
     rejected_claim_ids: [...rejected],
     partial_claim_ids: [...partial],
     deferred_claim_ids: [...deferred],
-    cq_eligible_claim_ids: [...accepted],
+    cq_eligible_claim_ids: accepted.filter((claimId) =>
+      !cqExcludedAnswerabilityClaimIds(args.seedCandidate).has(claimId)
+    ),
     validation_results: violations.length === 0
       ? ["seed_confirmation_valid"]
       : ["seed_confirmation_invalid"],
