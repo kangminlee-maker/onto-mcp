@@ -110,7 +110,7 @@ export interface ResolvedReviewInvokeInputs {
 }
 
 export interface ReviewInvokeRouteSummary {
-  combined_entrypoint: "review:invoke";
+  combined_entrypoint: "review_invocation";
   bounded_invoke_steps: string[];
   execution_realization: "worker" | "direct-call";
   host_runtime: "codex" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
@@ -2327,7 +2327,7 @@ async function resolveReviewInvokeInputs(
     (typeof requestedTarget !== "string" || requestedTarget.length === 0)
   ) {
     throw new Error(
-      "Missing review target. Use `npm run review:invoke -- <target> \"<intent>\"` or pass --requested-target.",
+      "Missing review target. Pass <target> \"<intent>\" or pass --requested-target.",
     );
   }
 
@@ -2338,7 +2338,7 @@ async function resolveReviewInvokeInputs(
     parsedPositionals.intentText;
   if (typeof requestText !== "string" || requestText.length === 0) {
     throw new Error(
-      "Missing review intent. Use `npm run review:invoke -- <target> \"<intent>\"` or pass --request-text.",
+      "Missing review intent. Pass <target> \"<intent>\" or pass --request-text.",
     );
   }
   if (requestText.length > MAX_REQUEST_TEXT_LENGTH) {
@@ -2767,7 +2767,7 @@ function rejectRemovedFlags(argv: string[]): void {
   if (hasOptionFlag(argv, "claude")) {
     throwRetiredInput(
       "--claude",
-      "--claude is not supported by review:invoke. Use the MCP review path or project settings.",
+      "--claude is not supported by the review runtime. Use the MCP review path or project settings.",
     );
   }
   for (const removed of ["host-runtime", "execution-realization", "execution-mode"]) {
@@ -2778,7 +2778,7 @@ function rejectRemovedFlags(argv: string[]): void {
     if (present) {
       throwRetiredInput(
         optionToken,
-        `--${removed} is not supported by review:invoke. Use .onto/settings.json for execution profile selection.`,
+        `--${removed} is not supported by the review runtime. Use .onto/settings.json for execution profile selection.`,
       );
     }
   }
@@ -3034,7 +3034,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       );
     } else {
       console.log(
-        `[review runner] live progress: open another terminal and run \`npm run review:watch -- "${sessionRoot}"\`` +
+        `[review runner] live progress: open another terminal and run \`bash scripts/onto-review-watch.sh "${sessionRoot}"\`` +
           (watcherResult.reason ? ` (${watcherResult.reason})` : ""),
       );
     }
@@ -3109,9 +3109,9 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   console.log("[review invoke] completed 3/3 record assembly");
   const reviewSummary = await readOptionalReviewSummary(sessionRoot);
   const boundedInvokeSteps = [
-    "review:start-session",
-    "review:run-prompt-execution",
-    "review:complete-session",
+    "start_review_session",
+    "run_review_prompt_execution",
+    "complete_review_session",
   ] as const;
   const finalRoute = buildReviewExecutionRoute(effectiveReviewExecutionProfile);
   const routeProfile: ResolvedExecutionProfile = {
@@ -3121,7 +3121,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     review_execution_profile: effectiveReviewExecutionProfile,
   };
   const routeSummary: ReviewInvokeRouteSummary = {
-    combined_entrypoint: "review:invoke",
+    combined_entrypoint: "review_invocation",
     bounded_invoke_steps: [...boundedInvokeSteps],
     execution_realization: routeProfile.execution_realization,
     host_runtime: routeProfile.host_runtime,

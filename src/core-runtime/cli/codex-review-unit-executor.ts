@@ -6,6 +6,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import {
+  appendRuntimeStreamChunkSync,
+  appendRuntimeStreamEventSync,
+} from "../observability/runtime-stream-observation.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -62,6 +66,8 @@ async function runCodexWorker(
   reasoningEffort: string | boolean | undefined,
   configOverrides: string[],
   unitId: string,
+  unitKind: string,
+  sessionRoot: string,
 ): Promise<void> {
   const codexArgs: string[] = [
     "exec",
@@ -92,6 +98,22 @@ async function runCodexWorker(
     cwd: projectRoot,
     stdio: ["pipe", "pipe", "pipe"],
   });
+  const runtimeSourceBase = {
+    kind: "process" as const,
+    label: `codex:${unitId}`,
+    unitId,
+    stageId: unitKind,
+  };
+  const runtimeSource = child.pid !== undefined
+    ? { ...runtimeSourceBase, processId: child.pid }
+    : runtimeSourceBase;
+  appendRuntimeStreamEventSync({
+    pipeline: "review",
+    sessionRoot,
+    source: runtimeSource,
+    stream: "status",
+    message: `codex worker started: ${unitKind} ${unitId}`,
+  });
 
   // Real-time tee to disk: each codex stdout/stderr chunk is appended to
   // the running log under the lens output directory so a watcher pane
@@ -120,10 +142,28 @@ async function runCodexWorker(
   child.stdout.on("data", (chunk: Buffer | string) => {
     stdout += String(chunk);
     if (runningLogStream) runningLogStream.write(chunk);
+    appendRuntimeStreamChunkSync(
+      {
+        pipeline: "review",
+        sessionRoot,
+        source: runtimeSource,
+        stream: "stdout",
+      },
+      chunk,
+    );
   });
   child.stderr.on("data", (chunk: Buffer | string) => {
     stderr += String(chunk);
     if (runningLogStream) runningLogStream.write(chunk);
+    appendRuntimeStreamChunkSync(
+      {
+        pipeline: "review",
+        sessionRoot,
+        source: runtimeSource,
+        stream: "stderr",
+      },
+      chunk,
+    );
   });
 
   child.stdin.write(boundedPrompt);
@@ -138,6 +178,13 @@ async function runCodexWorker(
       }
     });
     child.on("close", (code) => resolve(code ?? 1));
+  });
+  appendRuntimeStreamEventSync({
+    pipeline: "review",
+    sessionRoot,
+    source: runtimeSource,
+    stream: "status",
+    message: `codex worker exited: ${unitKind} ${unitId} code=${exitCode}`,
   });
 
   // Flush the stream before deciding cleanup so tail -f readers see final
@@ -224,6 +271,7 @@ export async function runCodexReviewUnitExecutorCli(
   );
   const unitId = requireString(values["unit-id"], "unit-id");
   const unitKind = requireString(values["unit-kind"], "unit-kind");
+  const sessionRoot = path.resolve(requireString(values["session-root"], "session-root"));
   const packetPath = path.resolve(requireString(values["packet-path"], "packet-path"));
   const outputPath = path.resolve(requireString(values["output-path"], "output-path"));
 
@@ -265,6 +313,8 @@ export async function runCodexReviewUnitExecutorCli(
     values["reasoning-effort"],
     values["config-override"],
     unitId,
+    unitKind,
+    sessionRoot,
   );
 
   const outputText = await fs.readFile(outputPath, "utf8");

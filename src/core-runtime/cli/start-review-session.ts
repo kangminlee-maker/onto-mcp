@@ -60,7 +60,7 @@ export async function startReviewSession(
   await runMaterializeReviewPromptPacketsCli(promptPacketsArgs);
 
   // Write `.latest-session` pointer so the watcher script and other tools can
-  // auto-discover the current session without parsing buffered npm stdout.
+  // auto-discover the current session without parsing buffered adapter stdout.
   // This is a deterministic side-effect: a single line containing the absolute
   // session-root path. Best-effort — failure here must not block session start.
   try {
@@ -78,8 +78,8 @@ export async function startReviewSession(
   return {
     session_root: sessionRoot,
     bounded_start_steps: [
-      "review:prepare-session",
-      "review:materialize-prompt-packets",
+      "prepare_review_session",
+      "materialize_review_prompt_packets",
     ],
   };
 }

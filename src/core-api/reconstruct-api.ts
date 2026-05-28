@@ -32,6 +32,9 @@ import {
   resolveSettingsChain,
 } from "../core-runtime/discovery/settings-chain.js";
 import {
+  resolveOntoHome,
+} from "../core-runtime/discovery/onto-home.js";
+import {
   resolveLlmProviderConfig,
 } from "../core-runtime/llm/llm-caller.js";
 import {
@@ -48,6 +51,13 @@ import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution
 import {
   buildReconstructPipelineExecutionLedger,
 } from "../core-runtime/reconstruct/pipeline-execution-ledger.js";
+import {
+  spawnRuntimeWatcherPane,
+} from "../core-runtime/cli/spawn-watcher.js";
+import {
+  appendRuntimeStatusEventSync,
+  runWithRuntimeObservationContext,
+} from "../core-runtime/observability/runtime-stream-observation.js";
 
 export interface PrepareReconstructRequest {
   projectRoot: string;
@@ -389,7 +399,7 @@ function recordArtifactRefsFromPreparation(
 export function createOntoReconstructCoreApi(
   options: OntoReconstructCoreApiOptions = {},
 ): OntoReconstructCoreApi {
-  const ontoHome = options.ontoHome ? path.resolve(options.ontoHome) : undefined;
+  const ontoHome = resolveOntoHome(options.ontoHome);
 
   return {
     async listSourceProfiles(projectRoot = process.cwd()): Promise<ReconstructSourceProfile[]> {
@@ -475,21 +485,71 @@ export function createOntoReconstructCoreApi(
         confirmationProviderRealization === "mock"
           ? createAutoAcceptReconstructConfirmationProvider()
           : createDirectCallReconstructConfirmationProvider({ llmConfig });
-      return runReconstruct({
-        projectRoot,
-        targetRefs,
-        intent: request.intent,
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
         sessionRoot,
-        profilesRoot,
-        semanticAuthorRealization,
-        confirmationProviderRealization,
-        directiveAuthor,
-        confirmationProvider,
-        llmConfig,
-        filesystemAllowedRoots:
-          request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
-          [projectRoot],
+        sourceLabel: "onto.reconstruct",
+        message: "reconstruct session starting",
+        stageId: "start",
       });
+      const watcherResult = spawnRuntimeWatcherPane(
+        projectRoot,
+        sessionRoot,
+        ontoHome,
+      );
+      appendRuntimeStatusEventSync({
+        pipeline: "reconstruct",
+        sessionRoot,
+        sourceLabel: "runtime-watcher",
+        message: watcherResult.spawned
+          ? `watcher ${watcherResult.dry_run ? "detected" : "attached"} via ${watcherResult.mechanism}`
+          : `watcher not attached: ${watcherResult.reason ?? "unknown reason"}`,
+        stageId: "start",
+      });
+      try {
+        const result = await runWithRuntimeObservationContext(
+          {
+            pipeline: "reconstruct",
+            sessionRoot,
+            source: {
+              kind: "llm",
+              label: "reconstruct",
+            },
+          },
+          () => runReconstruct({
+            projectRoot,
+            targetRefs,
+            intent: request.intent,
+            sessionRoot,
+            profilesRoot,
+            semanticAuthorRealization,
+            confirmationProviderRealization,
+            directiveAuthor,
+            confirmationProvider,
+            llmConfig,
+            filesystemAllowedRoots:
+              request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
+              [projectRoot],
+          }),
+        );
+        appendRuntimeStatusEventSync({
+          pipeline: "reconstruct",
+          sessionRoot,
+          sourceLabel: "onto.reconstruct",
+          message: "reconstruct session completed",
+          stageId: "complete",
+        });
+        return result;
+      } catch (error) {
+        appendRuntimeStatusEventSync({
+          pipeline: "reconstruct",
+          sessionRoot,
+          sourceLabel: "onto.reconstruct",
+          message: `reconstruct session failed: ${error instanceof Error ? error.message : String(error)}`,
+          stageId: "complete",
+        });
+        throw error;
+      }
     },
 
     async validateSourceObservationDirective(

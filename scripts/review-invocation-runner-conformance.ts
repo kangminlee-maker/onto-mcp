@@ -16,7 +16,12 @@ import {
 
 const execFileAsync = promisify(execFile);
 const PROJECT_ROOT = process.cwd();
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const TSX = path.join(
+  PROJECT_ROOT,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tsx.cmd" : "tsx",
+);
 const COMMAND_TIMEOUT_MS = Number.parseInt(
   process.env.ONTO_REVIEW_INVOCATION_CONFORMANCE_TIMEOUT_MS ?? "240000",
   10,
@@ -78,7 +83,7 @@ interface ArtifactProjection {
 }
 
 interface AdapterRun {
-  adapter: "cli" | "core-api" | "mcp";
+  adapter: "legacy-adapter" | "core-api" | "mcp";
   sessionRoot: string;
   responseProjection: unknown;
   artifactProjection: ArtifactProjection;
@@ -223,11 +228,19 @@ function parseLastJsonObject(stdout: string): LegacyReviewInvocationOutput {
       // Keep looking for the final pretty-printed JSON object.
     }
   }
-  throw new Error("CLI stdout did not include a legacy review invocation JSON result.");
+  throw new Error("Legacy adapter stdout did not include a review invocation JSON result.");
 }
 
-function npmRunArgs(script: string, scriptArgs: string[]): string[] {
-  return ["run", "--silent", script, "--", ...scriptArgs];
+function tsxArgs(entrypoint: string, scriptArgs: string[]): string[] {
+  return [entrypoint, ...scriptArgs];
+}
+
+function reviewInvokeArgs(scriptArgs: string[]): string[] {
+  return tsxArgs("src/core-runtime/cli/review-invoke.ts", scriptArgs);
+}
+
+function mcpServerArgs(): string[] {
+  return tsxArgs("src/mcp/server.ts", []);
 }
 
 function invocationArgs(projectRoot: string, fixture: FixtureCase): string[] {
@@ -353,10 +366,10 @@ function assertSameProjection(caseName: string, runs: AdapterRun[]): void {
   }
 }
 
-async function runCli(projectRoot: string, fixture: FixtureCase): Promise<AdapterRun> {
+async function runLegacyAdapter(projectRoot: string, fixture: FixtureCase): Promise<AdapterRun> {
   const result = await execFileAsync(
-    NPM,
-    npmRunArgs("review:invoke", invocationArgs(projectRoot, fixture)),
+    TSX,
+    reviewInvokeArgs(invocationArgs(projectRoot, fixture)),
     {
       cwd: PROJECT_ROOT,
       env: { ...process.env, ONTO_LLM_MOCK: "1" },
@@ -366,7 +379,7 @@ async function runCli(projectRoot: string, fixture: FixtureCase): Promise<Adapte
   );
   const output = parseLastJsonObject(result.stdout);
   return {
-    adapter: "cli",
+    adapter: "legacy-adapter",
     sessionRoot: output.review_result.session_root,
     responseProjection: projectReviewInvocationEquivalence(output),
     artifactProjection: await artifactProjection(output.review_result.session_root),
@@ -449,11 +462,11 @@ async function runMcp(
   };
 }
 
-async function expectCliFailure(projectRoot: string): Promise<void> {
+async function expectLegacyAdapterFailure(projectRoot: string): Promise<void> {
   try {
     await execFileAsync(
-      NPM,
-      npmRunArgs("review:invoke", [
+      TSX,
+      reviewInvokeArgs([
         "src/feature.ts",
         "conflicting domain failure",
         "--project-root",
@@ -479,11 +492,11 @@ async function expectCliFailure(projectRoot: string): Promise<void> {
     assert(
       `${stdout}\n${stderr}`.includes("no-domain") ||
         `${stdout}\n${stderr}`.includes("noDomain"),
-      "CLI conflict failure did not mention no-domain.",
+      "Legacy adapter conflict failure did not mention no-domain.",
     );
     return;
   }
-  throw new Error("CLI conflict request unexpectedly passed.");
+  throw new Error("Legacy adapter conflict request unexpectedly passed.");
 }
 
 async function expectCoreApiFailure(projectRoot: string): Promise<void> {
@@ -547,7 +560,7 @@ async function prepareFixtureProject(): Promise<string> {
 async function main(): Promise<void> {
   const projectRoot = await prepareFixtureProject();
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-invocation-home-"));
-  const child = spawn(NPM, ["run", "--silent", "mcp:server"], {
+  const child = spawn(TSX, mcpServerArgs(), {
     cwd: PROJECT_ROOT,
     env: { ...process.env, HOME: home, USERPROFILE: home, ONTO_LLM_MOCK: "1" },
     stdio: ["pipe", "pipe", "pipe"],
@@ -593,7 +606,7 @@ async function main(): Promise<void> {
 
     for (const fixture of fixtures) {
       const runs = [
-        await runCli(projectRoot, fixture),
+        await runLegacyAdapter(projectRoot, fixture),
         await runCoreApi(projectRoot, fixture),
         await runMcp(client, projectRoot, fixture),
       ];
@@ -610,13 +623,13 @@ async function main(): Promise<void> {
       });
     }
 
-    await expectCliFailure(projectRoot);
+    await expectLegacyAdapterFailure(projectRoot);
     await expectCoreApiFailure(projectRoot);
     await expectMcpFailure(client, projectRoot);
     checks.push({
       name: "domain-conflict-failure",
       status: "passed",
-      adapters: ["cli", "core-api", "mcp"],
+      adapters: ["legacy-adapter", "core-api", "mcp"],
     });
 
     console.log(JSON.stringify({

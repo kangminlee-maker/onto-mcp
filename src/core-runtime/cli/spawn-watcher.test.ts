@@ -90,11 +90,26 @@ function stubDarwin(): () => void {
 // ---------------------------------------------------------------------------
 
 const WATCHED_ENV_KEYS = [
+  "ONTO_RUNTIME_WATCHER_COMMAND",
   "ONTO_WATCHER_DRY_RUN",
   "TMUX",
   "TMUX_PANE",
   "TERM_PROGRAM",
   "ITERM_SESSION_ID",
+  "CODEX_SHELL",
+  "CODEX_THREAD_ID",
+  "CODEX_INTERNAL_ORIGINATOR_OVERRIDE",
+  "WARP_IS_LOCAL_SHELL_SESSION",
+  "WARP_BOOTSTRAPPED",
+  "CURSOR_TRACE_ID",
+  "CURSOR_AGENT",
+  "CURSOR_SESSION_ID",
+  "VSCODE_CWD",
+  "VSCODE_IPC_HOOK_CLI",
+  "VSCODE_GIT_ASKPASS_MAIN",
+  "HOME",
+  "XDG_DATA_HOME",
+  "APPDATA",
 ] as const;
 
 function saveEnv(): Record<string, string | undefined> {
@@ -155,7 +170,7 @@ describe("spawnWatcherPane — prereq failure", () => {
     process.env.ONTO_WATCHER_DRY_RUN = "1";
     const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
     expect(result.spawned).toBe(false);
-    expect(result.reason).toContain("no supported terminal multiplexer");
+    expect(result.reason).toContain("no supported terminal attach target");
   });
 });
 
@@ -260,6 +275,31 @@ describe("spawnWatcherPane — dry-run detection priority", () => {
     expect(result.dry_run).toBe(true);
   });
 
+  it("detects Codex Desktop when CODEX_SHELL is set", () => {
+    process.env.CODEX_SHELL = "1";
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(true);
+    expect(result.mechanism).toBe("codex_app");
+    expect(result.dry_run).toBe(true);
+  });
+
+  it("detects Warp when TERM_PROGRAM=WarpTerminal", () => {
+    process.env.TERM_PROGRAM = "WarpTerminal";
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(true);
+    expect(result.mechanism).toBe("warp");
+    expect(result.dry_run).toBe(true);
+  });
+
+  it("detects Cursor integrated terminal from vscode env plus Cursor signal", () => {
+    process.env.TERM_PROGRAM = "vscode";
+    process.env.VSCODE_CWD = "/Applications/Cursor.app/Contents/Resources/app";
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(true);
+    expect(result.mechanism).toBe("cursor");
+    expect(result.dry_run).toBe(true);
+  });
+
   it("prefers tmux over iTerm2 when both signals present (priority order)", () => {
     process.env.TMUX = "/tmp/tmux-1000/default,12345,0";
     process.env.TERM_PROGRAM = "iTerm.app";
@@ -276,7 +316,7 @@ describe("spawnWatcherPane — dry-run detection priority", () => {
     // ITERM_SESSION_ID intentionally unset.
     const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
     expect(result.spawned).toBe(false);
-    expect(result.reason).toContain("no supported terminal multiplexer");
+    expect(result.reason).toContain("no supported terminal attach target");
   });
 });
 
@@ -451,9 +491,97 @@ describe("spawnWatcherPane — real-attach (spawnSync mock)", () => {
 
     const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
     expect(result.spawned).toBe(false);
-    expect(result.reason).toContain("no supported terminal multiplexer");
+    expect(result.reason).toContain("no supported terminal attach target");
     // Refocus must NOT run when split itself failed.
     expect(mockedSpawnSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("Codex Desktop real-attach uses app keystrokes for the terminal panel", () => {
+    process.env.CODEX_SHELL = "1";
+    mockedSpawnSync.mockReturnValueOnce({
+      status: 0,
+      stdout: "matched",
+      stderr: "",
+      pid: 1,
+      output: [],
+      signal: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(true);
+    expect(result.mechanism).toBe("codex_app");
+
+    const [bin, args] = mockedSpawnSync.mock.calls[0]!;
+    expect(bin).toBe("osascript");
+    expect(args![0]).toBe("-e");
+    const script = String(args![1]);
+    expect(script).toContain('tell application "Codex"');
+    expect(script).toContain('keystroke "j" using {command down}');
+    expect(script).toContain("onto-review-watch.sh");
+  });
+
+  it("Warp real-attach writes a launch configuration and opens the launch URI", () => {
+    const homeRoot = fs.mkdtempSync(
+      path.join(os.tmpdir(), "onto-warp-home-"),
+    );
+    process.env.HOME = homeRoot;
+    process.env.TERM_PROGRAM = "WarpTerminal";
+    mockedSpawnSync.mockReturnValueOnce({
+      status: 0,
+      stdout: "",
+      stderr: "",
+      pid: 1,
+      output: [],
+      signal: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    try {
+      const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+      expect(result.spawned).toBe(true);
+      expect(result.mechanism).toBe("warp");
+
+      const configRoot = path.join(homeRoot, ".warp", "launch_configurations");
+      const files = fs.readdirSync(configRoot);
+      expect(files).toHaveLength(1);
+      const configText = fs.readFileSync(path.join(configRoot, files[0]!), "utf8");
+      expect(configText).toContain("commands:");
+      expect(configText).toContain("onto-review-watch.sh");
+      expect(configText).toContain(fixture.projectRoot);
+
+      const [bin, args] = mockedSpawnSync.mock.calls[0]!;
+      expect(bin).toBe("open");
+      expect(String(args![0])).toContain("warp://launch/onto-runtime-");
+    } finally {
+      fs.rmSync(homeRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("Cursor real-attach uses app keystrokes for a new integrated terminal", () => {
+    process.env.TERM_PROGRAM = "vscode";
+    process.env.VSCODE_CWD = "/Applications/Cursor.app/Contents/Resources/app";
+    mockedSpawnSync.mockReturnValueOnce({
+      status: 0,
+      stdout: "matched",
+      stderr: "",
+      pid: 1,
+      output: [],
+      signal: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(true);
+    expect(result.mechanism).toBe("cursor");
+
+    const [bin, args] = mockedSpawnSync.mock.calls[0]!;
+    expect(bin).toBe("osascript");
+    expect(args![0]).toBe("-e");
+    const script = String(args![1]);
+    expect(script).toContain('tell application "Cursor"');
+    expect(script).toContain("key code 50 using {control down, shift down}");
+    expect(script).toContain("onto-review-watch.sh");
   });
 
   it("iTerm2 real-attach passes osascript with embedded UUID + 'matched' sentinel grants success", () => {
@@ -506,7 +634,7 @@ describe("spawnWatcherPane — real-attach (spawnSync mock)", () => {
 
     const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
     expect(result.spawned).toBe(false);
-    expect(result.reason).toContain("no supported terminal multiplexer");
+    expect(result.reason).toContain("no supported terminal attach target");
   });
 
   it("Apple Terminal real-attach passes osascript with do-script", () => {

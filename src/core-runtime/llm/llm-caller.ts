@@ -25,6 +25,10 @@ import {
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
 } from "./model-switcher.js";
+import {
+  appendRuntimeModelCallLogFromCurrentContext,
+  appendRuntimeStreamChunkFromCurrentContextSync,
+} from "../observability/runtime-stream-observation.js";
 
 /**
  * Structural subset of ExecutionPlan that callLlm reads. Accepts either the
@@ -191,6 +195,7 @@ interface CodexAuthState {
  */
 function emitModelCallLog(line: string): void {
   process.stderr.write(`[model-call] ${line}\n`);
+  appendRuntimeModelCallLogFromCurrentContext(line);
 }
 
 function readCodexAuthState(): CodexAuthState {
@@ -496,6 +501,13 @@ async function callCodexCli(
   const child = spawn("codex", args, {
     stdio: ["pipe", "pipe", "pipe"],
   });
+  const codexStreamSourceBase = {
+    kind: "process" as const,
+    label: "codex-cli",
+  };
+  const codexStreamSource = child.pid !== undefined
+    ? { ...codexStreamSourceBase, processId: child.pid }
+    : codexStreamSourceBase;
 
   let stdout = "";
   let stderr = "";
@@ -503,9 +515,19 @@ async function callCodexCli(
 
   child.stdout.on("data", (chunk: Buffer | string) => {
     stdout += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stdout",
+      chunk,
+      codexStreamSource,
+    );
   });
   child.stderr.on("data", (chunk: Buffer | string) => {
     stderr += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stderr",
+      chunk,
+      codexStreamSource,
+    );
   });
 
   child.stdin.write(combinedPrompt);

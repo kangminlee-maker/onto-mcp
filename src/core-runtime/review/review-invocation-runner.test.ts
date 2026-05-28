@@ -168,9 +168,9 @@ describe("parseLegacyReviewInvocationOutput", () => {
           },
           result_overview: { outcome: { status: "completed" } },
           bounded_invoke_steps: [
-            "review:start-session",
-            "review:run-prompt-execution",
-            "review:complete-session",
+            "start_review_session",
+            "run_review_prompt_execution",
+            "complete_review_session",
           ],
         },
         null,
@@ -181,9 +181,9 @@ describe("parseLegacyReviewInvocationOutput", () => {
     expect(parsed.review_result.session_root).toBe("/tmp/session");
     expect(parsed.review_result.record_status).toBe("completed");
     expect(parsed.bounded_invoke_steps).toEqual([
-      "review:start-session",
-      "review:run-prompt-execution",
-      "review:complete-session",
+      "start_review_session",
+      "run_review_prompt_execution",
+      "complete_review_session",
     ]);
   });
 
@@ -223,9 +223,9 @@ describe("projectReviewInvocationEquivalence", () => {
         review_record: "/tmp/session-a/review-record.yaml",
       },
       bounded_invoke_steps: [
-        "review:start-session",
-        "review:run-prompt-execution",
-        "review:complete-session",
+        "start_review_session",
+        "run_review_prompt_execution",
+        "complete_review_session",
       ],
     };
     const sameFactsDifferentSession = {

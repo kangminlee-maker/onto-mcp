@@ -878,14 +878,14 @@ export interface ReviewRecord {
 export { REVIEW_TRANSITIONS as ALLOWED_TRANSITIONS } from "./review-state-machine.js";
 
 /**
- * Output of `review:invoke --prepare-only`.
+ * Output of the review invocation prepare-only path.
  *
  * Runs all pre-processing and session preparation, then returns without
  * executing lenses or completing the session.
  *
  * `request_text` is the **only** value not derivable from session artifacts
  * (not present in execution-plan.yaml). It must be preserved and passed to
- * `review:complete-session --request-text` later.
+ * the review completion runtime later.
  */
 export interface PrepareOnlyResult {
   prepare_only: true;

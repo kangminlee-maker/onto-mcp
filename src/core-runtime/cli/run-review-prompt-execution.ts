@@ -67,6 +67,10 @@ import {
 import {
   assertReviewExecutionPlanSessionBoundary,
 } from "../review/execution-plan-boundary.js";
+import {
+  appendRuntimeStreamChunkSync,
+  appendRuntimeStreamEventSync,
+} from "../observability/runtime-stream-observation.js";
 
 export interface ReviewUnitExecutorConfig {
   bin: string;
@@ -308,11 +312,9 @@ function requireString(
 function defaultStaggerDelayMsForExecutorConfig(
   executorConfig: ReviewUnitExecutorConfig,
 ): number {
-  if (executorConfig.bin === "npm" || executorConfig.bin.endsWith("npm.cmd")) {
-    if (executorConfig.args.includes("review:codex-unit-executor")) {
-      // codex executor spawns an external process → API request per lens
-      return 1500;
-    }
+  if (executorConfig.args.some((arg) => arg.includes("codex-review-unit-executor"))) {
+    // codex executor spawns an external process -> API request per lens
+    return 1500;
   }
   return 0;
 }
@@ -496,15 +498,49 @@ async function invokeExecutor(
       },
     },
   );
+  const runtimeSourceBase = {
+    kind: "process" as const,
+    label: `${dispatch.unit_kind}:${dispatch.unit_id}`,
+    unitId: dispatch.unit_id,
+    stageId: dispatch.unit_kind,
+  };
+  const runtimeSource = child.pid !== undefined
+    ? { ...runtimeSourceBase, processId: child.pid }
+    : runtimeSourceBase;
+  appendRuntimeStreamEventSync({
+    pipeline: "review",
+    sessionRoot,
+    source: runtimeSource,
+    stream: "status",
+    message: `executor started: ${dispatch.unit_kind} ${dispatch.unit_id}`,
+  });
 
   let stdout = "";
   let stderr = "";
 
   child.stdout.on("data", (chunk: Buffer | string) => {
     stdout += String(chunk);
+    appendRuntimeStreamChunkSync(
+      {
+        pipeline: "review",
+        sessionRoot,
+        source: runtimeSource,
+        stream: "stdout",
+      },
+      chunk,
+    );
   });
   child.stderr.on("data", (chunk: Buffer | string) => {
     stderr += String(chunk);
+    appendRuntimeStreamChunkSync(
+      {
+        pipeline: "review",
+        sessionRoot,
+        source: runtimeSource,
+        stream: "stderr",
+      },
+      chunk,
+    );
   });
 
   let timedOut = false;
@@ -538,6 +574,13 @@ async function invokeExecutor(
       if (forceKillTimer) clearTimeout(forceKillTimer);
       resolve(code ?? 1);
     });
+  });
+  appendRuntimeStreamEventSync({
+    pipeline: "review",
+    sessionRoot,
+    source: runtimeSource,
+    stream: "status",
+    message: `executor exited: ${dispatch.unit_kind} ${dispatch.unit_id} code=${exitCode}`,
   });
 
   if (timedOut) {

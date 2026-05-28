@@ -19,6 +19,8 @@
   "files": [
     "bin/",
     "dist/",
+    "scripts/onto-runtime-watch.sh",
+    "scripts/onto-review-watch.sh",
     ".onto/roles/",
     ".onto/domains/",
     ".onto/authority/",
@@ -36,21 +38,7 @@
     "test:mcp:review": "tsx scripts/mcp-review-conformance.ts",
     "test:review:hardening": "tsx scripts/review-runtime-hardening.ts",
     "test:e2e": "bash src/core-runtime/cli/e2e-review-invoke.test.sh",
-    "test:e2e:codex-multi-agent-fixes": "vitest run src/core-runtime/cli/e2e-codex-multi-agent-fixes.test.ts",
-    "review:prepare-session": "tsx src/core-runtime/cli/prepare-review-session.ts",
-    "review:materialize-prompt-packets": "tsx src/core-runtime/cli/materialize-review-prompt-packets.ts",
-    "review:start-session": "tsx src/core-runtime/cli/start-review-session.ts",
-    "review:run-prompt-execution": "tsx src/core-runtime/cli/run-review-prompt-execution.ts",
-    "review:mock-unit-executor": "tsx src/core-runtime/cli/mock-review-unit-executor.ts",
-    "review:codex-unit-executor": "tsx src/core-runtime/cli/codex-review-unit-executor.ts",
-    "review:inline-http-unit-executor": "tsx src/core-runtime/cli/inline-http-review-unit-executor.ts",
-    "review:invoke": "tsx src/core-runtime/cli/review-invoke.ts",
-    "review:watch": "bash scripts/onto-review-watch.sh",
-    "mcp:server": "tsx src/mcp/server.ts",
-    "review:render-final-output": "tsx src/core-runtime/cli/render-review-final-output.ts",
-    "review:finalize-session": "tsx src/core-runtime/cli/assemble-review-record.ts",
-    "review:complete-session": "tsx src/core-runtime/cli/complete-review-session.ts",
-    "review:assemble-record": "tsx src/core-runtime/cli/assemble-review-record.ts"
+    "test:e2e:codex-multi-agent-fixes": "vitest run src/core-runtime/cli/e2e-codex-multi-agent-fixes.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.99.0",

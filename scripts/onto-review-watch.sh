@@ -4,7 +4,7 @@
 #
 # Polls .onto/review/{session-id}/error-log.md and renders lens dispatch events.
 # Designed to be invoked automatically (via tmux split-window or iTerm2 osascript)
-# or manually (via `npm run review:watch`).
+# or manually (via this script).
 #
 # Usage:
 #   bash scripts/onto-review-watch.sh                    # auto-discover latest session
@@ -22,7 +22,7 @@ cd "$PROJECT_ROOT"
 #
 # The auto-spawn path in review-invoke.ts now always passes an explicit
 # session-root, so this zero-arg branch is only exercised by manual
-# `npm run review:watch` invocations. When multiple review sessions are
+# manual zero-arg invocations. When multiple review sessions are
 # active concurrently the `.latest-session` pointer and `ls -t` heuristic
 # both point to whichever session was most recently touched — which may
 # not be the one the user wanted to watch. To avoid rendering the wrong
@@ -53,14 +53,14 @@ else
     done
     echo "" >&2
     echo "${C_DIM:-}Pass an explicit session-root to avoid picking the wrong one:${C_RESET:-}" >&2
-    echo "  npm run review:watch -- \"<session-root>\"" >&2
+    echo "  bash scripts/onto-review-watch.sh \"<session-root>\"" >&2
     exit 2
   fi
 
   if [ "${#RECENT_CANDIDATES[@]}" -eq 1 ]; then
     SESSION_ROOT="${RECENT_CANDIDATES[0]}"
     echo "${C_DIM:-}Resolved to ${SESSION_ROOT} via error-log liveness lookup.${C_RESET:-}"
-    echo "${C_DIM:-}  For explicit targeting: npm run review:watch -- \"<session-root>\"${C_RESET:-}"
+    echo "${C_DIM:-}  For explicit targeting: bash scripts/onto-review-watch.sh \"<session-root>\"${C_RESET:-}"
   else
     # No live error-log marker yet; wait for .latest-session to appear, then
     # fall back to the newest session directory. This covers sessions that
@@ -83,7 +83,7 @@ else
 
     if [ -n "${SESSION_ROOT:-}" ] && [ -d "${SESSION_ROOT:-}" ]; then
       echo "${C_DIM:-}Resolved to ${SESSION_ROOT} via zero-arg lookup.${C_RESET:-}"
-      echo "${C_DIM:-}  For explicit targeting: npm run review:watch -- \"<session-root>\"${C_RESET:-}"
+      echo "${C_DIM:-}  For explicit targeting: bash scripts/onto-review-watch.sh \"<session-root>\"${C_RESET:-}"
     fi
   fi
 fi

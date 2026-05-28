@@ -2,23 +2,24 @@
 
 > Status: Design
 > Date: 2026-05-28
-> Purpose: make the review runtime independent of the CLI-shaped
-> `review:invoke` path while preserving current artifact truth and MCP behavior.
+> Purpose: keep the review runtime independent of legacy CLI adapter shape while
+> preserving current artifact truth and MCP behavior.
 
 ---
 
 ## 1. Goal
 
-Create one typed review invocation runner that both public adapters can call:
+Create one typed review invocation runner that the MCP product surface and
+internal compatibility adapter can call:
 
 ```text
-CLI review:invoke        MCP onto.review
-      |                       |
-      v                       v
-  parse argv              parse tool args
-      \                     /
-       \                   /
-        v                 v
+legacy argv adapter      MCP onto.review
+        |                     |
+        v                     v
+    parse argv            parse tool args
+        \                   /
+         \                 /
+          v               v
         ReviewInvocationRequest
                  |
                  v
@@ -27,18 +28,18 @@ CLI review:invoke        MCP onto.review
                  v
         ReviewInvocationResult
           /                 \
-   CLI render/json      MCP structuredContent
+ legacy render/json    MCP structuredContent
 ```
 
-The runner owns product runtime orchestration. CLI and MCP own only their
-transport surfaces.
+The runner owns product runtime orchestration. MCP owns the public transport
+surface; the legacy argv adapter is an internal compatibility and test harness.
 
 ---
 
 ## 2. Current Shape
 
-Current MCP review execution is not shelling out to `npm run review:invoke`, but
-it still calls the CLI-shaped runtime function in process:
+Current MCP review execution is not shelling out to a CLI command, but it still
+calls a legacy adapter-shaped runtime function in process:
 
 ```text
 src/mcp/server.ts
@@ -58,7 +59,7 @@ This works, but it gives `review-invoke.ts` two responsibilities:
 2. runtime responsibility: target binding, domain selection, route selection,
    session preparation, execution, completion, result projection
 
-That makes MCP correctness depend on CLI text/argv conventions and console
+That makes MCP correctness depend on legacy text/argv conventions and console
 capture.
 
 ---
@@ -490,7 +491,7 @@ documents and target/domain metadata.
 
 ## 10. Adapter Behavior
 
-### 10.1 CLI Adapter
+### 10.1 Legacy Argv Adapter
 
 `src/core-runtime/cli/review-invoke.ts` should become:
 
@@ -501,7 +502,7 @@ documents and target/domain metadata.
 
 Compatibility rules:
 
-- keep existing CLI flags unless explicitly retired
+- keep existing internal flags only while they are still needed by tests
 - keep current final JSON shape during migration
 - keep `npm run test:e2e` as the compatibility gate
 
@@ -519,7 +520,7 @@ It must not:
 
 - build argv for review execution
 - capture console output
-- parse CLI stdout JSON
+- parse legacy adapter stdout JSON
 - independently derive artifact-to-result projection
 
 MCP progress should be emitted from typed progress events, not parsed console
@@ -531,7 +532,7 @@ lines.
 
 Compatibility is field-level, not whole-object textual equality.
 
-| Field group | CLI expectation | MCP/Core API expectation | Equivalence rule |
+| Field group | Legacy adapter expectation | MCP/Core API expectation | Equivalence rule |
 |---|---|---|---|
 | session identity | visible in JSON and logs | visible in structured result | compare shape only; session ids are volatile |
 | artifact refs | JSON-compatible paths | structured refs | strict after path normalization |
@@ -541,7 +542,7 @@ Compatibility is field-level, not whole-object textual equality.
 | timestamps/durations | may differ | may differ | ignored or normalized |
 | diagnostics | visible in JSON/text | structured failure/diagnostic refs | strict for failure kind and diagnostic refs |
 
-Migration cannot be considered safe until both CLI and MCP/Core API execute
+Migration cannot be considered safe until both legacy adapter and MCP/Core API execute
 through the shared runner and pass this equivalence oracle.
 
 ---
@@ -561,8 +562,8 @@ Move implementation out of `review-invoke.ts` without changing behavior:
 Done when:
 
 - helpers live under `src/core-runtime/review/`
-- existing CLI tests still pass
-- no public shape changes
+- existing legacy adapter tests still pass
+- no MCP public shape changes
 
 ### Phase 2 - Add Typed Runner
 
@@ -572,12 +573,12 @@ execution, completion functions directly.
 Done when:
 
 - `runReviewInvocation(request)` can run the full mock review path
-- result projection matches current CLI JSON result facts
+- result projection matches current legacy JSON result facts
 - artifact refs are still derived from session files
 - prepare-only returns a `PreparedReviewInvocation` that can be inspected from
   session artifacts
 
-### Phase 3 - Switch Core API And CLI To Runner Authority
+### Phase 3 - Switch Core API And Legacy Adapter To Runner Authority
 
 Replace:
 
@@ -595,17 +596,17 @@ Done when:
 - `src/core-runtime/cli/review-invoke.ts` calls the same runner for execution
 - MCP `onto.review` behavior is unchanged
 - native MCP progress does not depend on console parsing
-- CLI/MCP equivalence fixtures pass
+- legacy adapter/MCP equivalence fixtures pass
 
-### Phase 4 - Thin CLI
+### Phase 4 - Thin Legacy Adapter
 
 Reduce `review-invoke.ts` to adapter code.
 
 Done when:
 
 - product logic is owned by `src/core-runtime/review/`
-- CLI remains a dev harness and compatibility surface
-- `review:invoke` is no longer a conceptual runtime authority
+- legacy argv handling remains only as an internal harness when still needed
+- no CLI-shaped review command is treated as conceptual runtime authority
 
 ---
 
@@ -647,7 +648,7 @@ Focused fixtures required before implementation proceeds:
 - artifact-derived `ReviewInvocationResult` projection.
 - progress event ordering, degraded events, failure events, and unknown event
   projection behavior.
-- CLI/MCP equivalence fixtures using strict, normalized, and ignored field
+- legacy adapter/MCP equivalence fixtures using strict, normalized, and ignored field
   groups.
 - provider/realization fixture proving extension without adapter churn.
 
@@ -657,7 +658,7 @@ Focused fixtures required before implementation proceeds:
 
 | Risk | Control |
 |---|---|
-| CLI and MCP diverge during migration | both adapters call the same runner before deleting old path |
+| Legacy adapter and MCP diverge during migration | both adapters call the same runner before deleting old path |
 | accidental new artifact authority | runner result must derive from existing artifacts |
 | progress regressions | introduce typed progress observer before removing console parsing |
 | route visibility drift | keep `buildReviewExecutionRoute` as the single projection helper |
@@ -685,10 +686,10 @@ The refactor is complete when:
 
 1. `src/core-api/review-api.ts` does not call `runReviewInvokeCli`.
 2. `src/core-api/review-api.ts` does not construct review execution argv.
-3. `src/core-api/review-api.ts` does not parse CLI stdout JSON.
+3. `src/core-api/review-api.ts` does not parse legacy adapter stdout JSON.
 4. `src/core-runtime/cli/review-invoke.ts` is an adapter over
    `runReviewInvocation`.
-5. CLI and MCP produce equivalent review artifacts for the same typed request.
+5. Legacy adapter and MCP produce equivalent review artifacts for the same typed request.
 6. boundary, progress, failure, prepare-only, projection, and equivalence
    contracts have focused tests.
 7. static, API, E2E, hardening, and MCP conformance tests pass.
