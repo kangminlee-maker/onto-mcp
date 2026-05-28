@@ -185,6 +185,46 @@ If a user later chooses `accept_risk`, that accepted disposition belongs in a
 separate decision/closure record or future workflow surface. Review presentation
 may show the candidate; it must not present the candidate as already accepted.
 
+### 5.1 Patch-Loop Eligibility Judgement
+
+When a material issue appears and the host is considering patch-and-rerun, the
+host LLM should make a short patch-loop eligibility judgement before continuing.
+
+This is an operational judgement, not a runtime artifact, schema field, enum, or
+deterministic gate. Runtime remains responsible for preserving snapshot and
+artifact truth; the LLM explains whether repeating the review is still a
+bounded closure loop.
+
+The judgement should answer four questions:
+
+1. Is the principal target artifact or design surface materially the same?
+2. Is the review intent still the same closure problem?
+3. Is the evidence boundary unchanged?
+4. Is there patch lineage from the prior issue to the current change?
+
+For the first review in a possible loop, the LLM can only classify an
+`initial_loop_candidate`. Trend judgement requires at least a second review in
+the same series.
+
+From the second review onward, compare the current issue artifacts with the
+prior review result:
+
+| Pattern | Meaning | Loop disposition |
+|---|---|---|
+| `closed` | Prior root issue disappeared. | Continue only if new local residue remains. |
+| `narrowed` | Same root issue remains with smaller scope or weaker severity. | Continue if patch scope stays local. |
+| `new-local` | New issue is a local consequence of the closure patch. | Continue if severity and scope are bounded. |
+| `new-structural` | Issue requires a new authority seat, concept, lifecycle, or ownership split. | Stop and ask. |
+| `boundary-expanding` | Review must expand to runtime, schema, tests, docs, or another material kind. | Stop and treat as a new review. |
+| `reopened` | A supposedly closed root issue reappears. | Stop unless the user explicitly chooses another loop. |
+| `plateau` | Material issue count, severity, or root risk does not decrease across repeated runs. | Stop and ask. |
+
+Automatic patch looping is appropriate only for `closed`, `narrowed`, or
+bounded `new-local` patterns, and only when the user has authorized that
+operating mode. `new-structural`, `boundary-expanding`, `reopened`, and
+`plateau` patterns must not be hidden behind `continue_review`; they require a
+user-facing decision or a new review boundary.
+
 ---
 
 ## 6. Start And Progress Output
