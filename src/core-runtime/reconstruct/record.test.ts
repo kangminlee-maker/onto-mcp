@@ -5,6 +5,7 @@ import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
   ReconstructRecordArtifact,
+  ReconstructInitialSourceFrontierArtifact,
   ReconstructSeedCandidateValidationArtifact,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
@@ -91,6 +92,26 @@ function sourceInventory(sessionId: string): ReconstructSourceInventoryArtifact 
   };
 }
 
+function initialSourceFrontier(sessionId: string): ReconstructInitialSourceFrontierArtifact {
+  return {
+    schema_version: "1",
+    session_id: sessionId,
+    created_at: "2026-05-27T00:00:00.000Z",
+    frontier_id: "initial",
+    source_refs: [
+      {
+        frontier_ref_id: "frontier_initial_abc",
+        source_ref: "/tmp/schedule.csv",
+        target_material_kind: "spreadsheet",
+        inventory_unit: "workbook_sheet_or_table_unit",
+        profile_ref: "/tmp/spreadsheet.md",
+        rationale: "Initial source frontier from inventory.",
+      },
+    ],
+    skipped_refs: [],
+  };
+}
+
 function sourceObservations(sessionId: string): ReconstructSourceObservationsArtifact {
   return {
     schema_version: "1",
@@ -161,6 +182,10 @@ describe("assembleReconstructRecord", () => {
       path.join(sessionRoot, "source-inventory.yaml"),
       sourceInventory(sessionId),
     );
+    const initialSourceFrontierPath = await writeYaml(
+      path.join(sessionRoot, "initial-source-frontier.yaml"),
+      initialSourceFrontier(sessionId),
+    );
     const sourceObservationsPath = await writeYaml(
       path.join(sessionRoot, "source-observations.yaml"),
       sourceObservations(sessionId),
@@ -179,6 +204,7 @@ describe("assembleReconstructRecord", () => {
       artifactRefs: {
         target_material_profile: targetMaterialProfilePath,
         source_inventory: sourceInventoryPath,
+        initial_source_frontier: initialSourceFrontierPath,
         source_observations: sourceObservationsPath,
         source_observation_directive_validation: sourceObservationValidationPath,
         seed_candidate_validation: seedCandidateValidationPath,
@@ -219,6 +245,7 @@ describe("assembleReconstructRecord", () => {
     expect(record.missing_artifacts).toEqual([
       "target_material_profile",
       "source_inventory",
+      "initial_source_frontier",
       "source_observations",
     ]);
     expect(record.warnings[0]).toContain("missing artifact refs");

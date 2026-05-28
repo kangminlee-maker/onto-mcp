@@ -22,12 +22,18 @@ import {
 } from "../core-runtime/reconstruct/record.js";
 import {
   createAutoAcceptReconstructConfirmationProvider,
+  createDirectCallReconstructConfirmationProvider,
+  createDirectCallReconstructDirectiveAuthor,
   createMockReconstructDirectiveAuthor,
   runReconstruct,
-  type ReconstructConfirmationProviderRealization,
   type ReconstructRunResult,
-  type ReconstructSemanticAuthorRealization,
 } from "../core-runtime/reconstruct/run.js";
+import {
+  resolveSettingsChain,
+} from "../core-runtime/discovery/settings-chain.js";
+import {
+  resolveLlmProviderConfig,
+} from "../core-runtime/llm/llm-caller.js";
 import {
   writeSeedCandidateValidationArtifact,
 } from "../core-runtime/reconstruct/seed-candidate-validation.js";
@@ -53,8 +59,8 @@ export interface PrepareReconstructRequest {
 
 export interface RunReconstructRequest extends PrepareReconstructRequest {
   intent: string;
-  semanticAuthorRealization: ReconstructSemanticAuthorRealization;
-  confirmationProviderRealization: ReconstructConfirmationProviderRealization;
+  semanticAuthorRealization?: "mock" | "direct_call";
+  confirmationProviderRealization?: "mock" | "direct_call";
 }
 
 export interface PreparedReconstruct {
@@ -109,9 +115,12 @@ export interface ReconstructRunStageProjection {
   state: "pending" | "completed" | "skipped" | "halted";
   owner: "runtime" | "host_llm" | "host_or_user" | null;
   artifactRefs: string[];
+  reason: string | null;
+  authorityImpact: string | null;
 }
 
 export interface ReconstructRunProgressProjection {
+  executionProfile: ReconstructRunManifestArtifact["execution_profile"] | null;
   currentStageId: ReconstructStageId;
   stageCount: number;
   liveness: {
@@ -285,6 +294,8 @@ function deriveReconstructProgress(args: {
             : "pending" as const,
       owner: step?.owner ?? null,
       artifactRefs: step?.artifact_refs ?? [],
+      reason: step?.reason ?? null,
+      authorityImpact: step?.authority_impact ?? null,
     };
   });
   const lastReachedStage =
@@ -292,6 +303,7 @@ function deriveReconstructProgress(args: {
     stages[0]!;
 
   return {
+    executionProfile: args.runManifest?.execution_profile ?? null,
     currentStageId: lastReachedStage.stageId,
     stageCount: RECONSTRUCT_STAGE_IDS.length,
     liveness: {
@@ -338,12 +350,14 @@ function recordArtifactRefsFromPreparation(
   refs: {
     target_material_profile: string;
     source_inventory: string;
+    initial_source_frontier: string;
     source_observations: string;
   },
 ): Partial<ReconstructRecordArtifactRefs> {
   return {
     target_material_profile: refs.target_material_profile,
     source_inventory: refs.source_inventory,
+    initial_source_frontier: refs.initial_source_frontier,
     source_observations: refs.source_observations,
   };
 }
@@ -424,16 +438,30 @@ export function createOntoReconstructCoreApi(
       const targetRefs = request.targetRefs.map((targetRef) =>
         resolveFromBase(projectRoot, targetRef)
       );
+      const settings = await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot);
+      const llmConfig = resolveLlmProviderConfig({ config: settings });
+      const semanticAuthorRealization = request.semanticAuthorRealization ?? "direct_call";
+      const confirmationProviderRealization =
+        request.confirmationProviderRealization ?? "direct_call";
+      const directiveAuthor =
+        semanticAuthorRealization === "mock"
+          ? createMockReconstructDirectiveAuthor()
+          : createDirectCallReconstructDirectiveAuthor({ llmConfig });
+      const confirmationProvider =
+        confirmationProviderRealization === "mock"
+          ? createAutoAcceptReconstructConfirmationProvider()
+          : createDirectCallReconstructConfirmationProvider({ llmConfig });
       return runReconstruct({
         projectRoot,
         targetRefs,
         intent: request.intent,
         sessionRoot,
         profilesRoot,
-        semanticAuthorRealization: request.semanticAuthorRealization,
-        confirmationProviderRealization: request.confirmationProviderRealization,
-        directiveAuthor: createMockReconstructDirectiveAuthor(),
-        confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+        semanticAuthorRealization,
+        confirmationProviderRealization,
+        directiveAuthor,
+        confirmationProvider,
+        llmConfig,
         filesystemAllowedRoots:
           request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
           [projectRoot],

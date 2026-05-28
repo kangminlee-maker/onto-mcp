@@ -51,11 +51,18 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["target_material_profile"],
   },
   {
+    unitId: "initial_source_frontier",
+    unitKind: "source_frontier_initial",
+    owner: "runtime",
+    artifactKey: "initial_source_frontier",
+    upstreamUnitIds: ["source_inventory"],
+  },
+  {
     unitId: "source_observation",
     unitKind: "source_observation",
     owner: "runtime",
     artifactKey: "source_observations",
-    upstreamUnitIds: ["source_inventory"],
+    upstreamUnitIds: ["initial_source_frontier"],
   },
   {
     unitId: "observation_directive",
@@ -86,11 +93,39 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["domain_context_selection"],
   },
   {
+    unitId: "lens_judgment",
+    unitKind: "semantic_lens_judgment",
+    owner: "host_llm",
+    artifactKey: "lens_judgment_index",
+    upstreamUnitIds: ["observation_directive_validation"],
+  },
+  {
+    unitId: "exploration_synthesis",
+    unitKind: "semantic_exploration_synthesis",
+    owner: "host_llm",
+    artifactKey: "exploration_synthesis",
+    upstreamUnitIds: ["lens_judgment"],
+  },
+  {
+    unitId: "source_frontier",
+    unitKind: "semantic_source_frontier",
+    owner: "host_llm",
+    artifactKey: "source_frontier",
+    upstreamUnitIds: ["exploration_synthesis"],
+  },
+  {
+    unitId: "source_frontier_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "source_frontier_validation",
+    upstreamUnitIds: ["source_frontier"],
+  },
+  {
     unitId: "seed_candidate",
     unitKind: "semantic_seed",
     owner: "host_llm",
     artifactKey: "seed_candidate",
-    upstreamUnitIds: ["observation_directive_validation"],
+    upstreamUnitIds: ["source_frontier_validation"],
   },
   {
     unitId: "seed_candidate_validation",
@@ -215,6 +250,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
 
 const VALIDATION_GATE_BY_AUTHORED_UNIT = new Map<ReconstructStageId, ReconstructStageId>([
   ["observation_directive", "observation_directive_validation"],
+  ["source_frontier", "source_frontier_validation"],
   ["seed_candidate", "seed_candidate_validation"],
   ["claim_realization", "claim_realization_validation"],
   ["seed_confirmation", "seed_confirmation_validation"],

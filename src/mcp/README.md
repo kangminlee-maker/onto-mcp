@@ -63,12 +63,12 @@ material-specific validation remains partial.
 
 The reconstruct tools are bounded projections over `src/core-api/reconstruct-api.ts`:
 source profile listing, material-aware source observation, LLM-authored
-directive validation, post-Seed run orchestration, status, and result reads.
+directive validation, integral reconstruct run orchestration, status, and result reads.
 They return artifact refs, validation status, stage progress, count summaries,
 records, manifests, and final output text; they do not author ontology Seeds,
 claim realization, failure classifications, revision proposals, or design
 decisions.
-`onto.reconstruct` currently requires explicit
-`semanticAuthorRealization="mock"` and `confirmationProviderRealization="mock"`
-arguments. Host/direct-call semantic authoring and user-mediated confirmation
-are intentionally not implied by a completed mock run.
+`onto.reconstruct` defaults to direct-call semantic authoring and direct-call
+host-mediated confirmation through the configured `llm` provider. Missing
+provider/model/credentials and invalid LLM-authored artifact shapes fail loud;
+test-only mock helpers are not exposed as product completion evidence.

@@ -1108,6 +1108,7 @@ terms:
       - "Orthogonal to medium: medium is a cross-product reference and learning frame such as excel or cli; target_material_kind is a per-run target classification."
       - "Orthogonal to target_input_kind: target_input_kind says how the target entered the runtime, such as single_file or git_diff; target_material_kind says what kind of material is being handled."
       - "Do not use review context `source_kind` for this axis. In review artifacts, source_kind identifies context-source artifacts such as materialized_input or review_target_profile."
+      - "`mixed` is a classification value for bundles with multiple member material kinds, not a generic adapter target. A process exposing `mixed` must define supported_composite, partial_composite, unsupported, or reserved_future behavior in its process contract before dispatch."
   - term_id: "pipeline_execution_ledger"
     canonical_label: "PipelineExecutionLedger"
     korean_label: "파이프라인 실행 단위 원장"

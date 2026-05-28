@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import {
-  detectTargetMaterialKind,
+  aggregateTargetMaterialDetections,
+  detectTargetMaterialRefs,
   type TargetMaterialKind,
   type TargetMaterialRefDetection,
 } from "../target-material-kind.js";
@@ -17,6 +18,7 @@ import {
 } from "./source-profiles.js";
 import type {
   ReconstructPreparationArtifactRefs,
+  ReconstructInitialSourceFrontierArtifact,
   ReconstructSelectedSourceProfileRef,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceInventoryUnit,
@@ -81,9 +83,9 @@ function supportForMaterial(args: {
   }
   if (args.targetMaterialKind === "mixed") {
     return {
-      support_status: "partial",
+      support_status: "partial_composite",
       unsupported_reason:
-        "mixed target material kind requires per-ref observation; unsupported members are skipped",
+        "mixed target material kind is observed through per-ref source profiles; unsupported members are skipped with authority impact",
     };
   }
   if (args.selectedProfiles.length === 0) {
@@ -146,17 +148,24 @@ function selectedProfileRefs(
 async function textStats(ref: string): Promise<{
   line_count: number | null;
   char_count: number | null;
+  content_excerpt: string | null;
+  excerpt_truncated: boolean;
 }> {
   try {
     const text = await fs.readFile(ref, "utf8");
+    const excerptLimit = 6000;
     return {
       line_count: text.length === 0 ? 0 : text.split(/\r?\n/).length,
       char_count: text.length,
+      content_excerpt: text.slice(0, excerptLimit),
+      excerpt_truncated: text.length > excerptLimit,
     };
   } catch {
     return {
       line_count: null,
       char_count: null,
+      content_excerpt: null,
+      excerpt_truncated: false,
     };
   }
 }
@@ -173,6 +182,8 @@ async function buildObservation(
   const stats = stat.isFile() ? await textStats(detection.ref) : {
     line_count: null,
     char_count: null,
+    content_excerpt: null,
+    excerpt_truncated: false,
   };
   const observation: ReconstructSourceObservation = {
     observation_id: stableObservationId({
@@ -192,6 +203,8 @@ async function buildObservation(
       size_bytes: stat.isFile() ? stat.size : null,
       line_count: stats.line_count,
       char_count: stats.char_count,
+      content_excerpt: stats.content_excerpt,
+      excerpt_truncated: stats.excerpt_truncated,
     },
   };
 
@@ -202,6 +215,47 @@ async function buildObservation(
     );
   }
   return observation;
+}
+
+function stableFrontierRefId(unit: ReconstructSourceInventoryUnit): string {
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${unit.target_material_kind}\n${path.resolve(unit.ref)}\n${unit.inventory_unit}`)
+    .digest("hex")
+    .slice(0, 16);
+  return `frontier_initial_${digest}`;
+}
+
+function buildInitialSourceFrontier(args: {
+  sessionId: string;
+  inventory: ReconstructSourceInventoryArtifact;
+}): ReconstructInitialSourceFrontierArtifact {
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    frontier_id: "initial",
+    source_refs: args.inventory.inventory_units
+      .filter((unit) => unit.scan_status === "planned")
+      .map((unit) => ({
+        frontier_ref_id: stableFrontierRefId(unit),
+        source_ref: unit.ref,
+        target_material_kind: unit.target_material_kind,
+        inventory_unit: unit.inventory_unit,
+        profile_ref: unit.profile_ref,
+        rationale:
+          "Initial source frontier derived from runtime material inventory and selected source profile.",
+      })),
+    skipped_refs: args.inventory.inventory_units
+      .filter((unit) => unit.scan_status === "skipped")
+      .map((unit) => ({
+        source_ref: unit.ref,
+        target_material_kind: unit.target_material_kind,
+        reason: unit.skip_reason ?? "skipped",
+        authority_impact:
+          "Semantic artifacts cannot use this ref as trusted evidence until a supported material profile and observation exist.",
+      })),
+  };
 }
 
 function buildInventoryUnits(args: {
@@ -240,7 +294,8 @@ export async function materializeReconstructPreparationArtifacts(
   const sessionId = path.basename(sessionRoot);
   const targetRefs = params.targetRefs.map((ref) => path.resolve(ref));
   const profiles = await loadReconstructSourceProfiles(params.profilesRoot);
-  const detection = await detectTargetMaterialKind(targetRefs);
+  const perRefDetections = await detectTargetMaterialRefs(targetRefs);
+  const detection = aggregateTargetMaterialDetections(perRefDetections);
   const selectedProfiles = selectedProfileRefs(
     profiles,
     detection.target_material_kind === "mixed"
@@ -284,6 +339,10 @@ export async function materializeReconstructPreparationArtifacts(
       source: "binding",
     },
   };
+  const initialSourceFrontier = buildInitialSourceFrontier({
+    sessionId,
+    inventory,
+  });
 
   const observations: ReconstructSourceObservation[] = [];
   const skippedRefs: ReconstructSourceObservationsArtifact["skipped_refs"] = [];
@@ -318,12 +377,14 @@ export async function materializeReconstructPreparationArtifacts(
   const refs: ReconstructPreparationArtifactRefs = {
     target_material_profile: path.join(sessionRoot, "target-material-profile.yaml"),
     source_inventory: path.join(sessionRoot, "source-inventory.yaml"),
+    initial_source_frontier: path.join(sessionRoot, "initial-source-frontier.yaml"),
     source_observations: path.join(sessionRoot, "source-observations.yaml"),
   };
 
   await Promise.all([
     writeYamlDocument(refs.target_material_profile, targetMaterialProfile),
     writeYamlDocument(refs.source_inventory, inventory),
+    writeYamlDocument(refs.initial_source_frontier, initialSourceFrontier),
     writeYamlDocument(refs.source_observations, sourceObservations),
   ]);
 

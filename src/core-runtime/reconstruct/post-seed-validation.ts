@@ -343,6 +343,7 @@ export function validateCompetencyQuestions(args: {
 }): ReconstructCompetencyQuestionsValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
   const eligibleClaims = new Set(args.seedConfirmationValidation.cq_eligible_claim_ids);
+  const coveredEligibleClaims = new Set<string>();
   const seen = new Set<string>();
   const observations = observationsById(args.sourceObservations);
   for (const question of args.competencyQuestions.questions) {
@@ -368,6 +369,8 @@ export function validateCompetencyQuestions(args: {
           message: `competency question links to a non-eligible claim: ${claimId}`,
           subjectId: question.question_id,
         }));
+      } else {
+        coveredEligibleClaims.add(claimId);
       }
     }
     for (const evidenceRef of question.evidence_refs) {
@@ -378,6 +381,15 @@ export function validateCompetencyQuestions(args: {
           subjectId: question.question_id,
         }),
       );
+    }
+  }
+  for (const claimId of eligibleClaims) {
+    if (!coveredEligibleClaims.has(claimId)) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message: `eligible claim has no competency question coverage: ${claimId}`,
+        subjectId: claimId,
+      }));
     }
   }
 

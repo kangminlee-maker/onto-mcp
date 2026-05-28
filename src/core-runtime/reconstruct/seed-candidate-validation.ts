@@ -139,6 +139,17 @@ function readEvidenceRef(
   };
 }
 
+function isGenericClaimName(name: string, groupName: string): boolean {
+  const normalized = name.trim().toLowerCase().replace(/[_\s-]+/g, "_");
+  const singularGroup = groupName.endsWith("ies")
+    ? groupName.slice(0, -3) + "y"
+    : groupName.endsWith("s")
+      ? groupName.slice(0, -1)
+      : groupName;
+  const normalizedGroup = singularGroup.toLowerCase().replace(/[_\s-]+/g, "_");
+  return new RegExp(`^${normalizedGroup}_?\\d+$`).test(normalized);
+}
+
 function readClaim(
   value: unknown,
   groupName: string,
@@ -166,6 +177,24 @@ function readClaim(
     }));
   }
 
+  const rawName = value.name;
+  const name = typeof rawName === "string" && rawName.trim().length > 0
+    ? rawName.trim()
+    : null;
+  if (!name) {
+    violations.push(violation({
+      code: "claim_name_missing",
+      message: `${groupName} name is required`,
+      claimId,
+    }));
+  } else if (isGenericClaimName(name, groupName)) {
+    violations.push(violation({
+      code: "claim_name_generic",
+      message: `${groupName} name must be a meaningful user-facing label, not a numbered placeholder`,
+      claimId,
+    }));
+  }
+
   const rawStatement = value.statement;
   const statement = typeof rawStatement === "string" ? rawStatement : "";
   const rawEvidenceRefs = value.evidence_refs;
@@ -183,6 +212,7 @@ function readClaim(
   return {
     claim: {
       claim_id: claimId ?? `${groupName}:missing-claim-id`,
+      name: name ?? "",
       statement,
       evidence_refs: evidenceRefs,
     },

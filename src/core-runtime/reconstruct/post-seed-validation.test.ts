@@ -53,12 +53,14 @@ function seedCandidate(): ReconstructSeedCandidateArtifact {
     created_at: "2026-05-27T00:00:00.000Z",
     purpose: {
       claim_id: "claim-1",
+      name: "Claim One",
       statement: "Claim one.",
       evidence_refs: [evidenceRef],
     },
     non_goals: [
       {
         claim_id: "claim-2",
+        name: "Claim Two",
         statement: "Claim two.",
         evidence_refs: [evidenceRef],
       },
@@ -227,6 +229,45 @@ describe("post-seed reconstruct validation", () => {
     expect(questionsValidation.validation_status).toBe("valid");
     expect(assessmentValidation.validation_status).toBe("valid");
     expect(assessmentValidation.answer_status_counts.partially_answered).toBe(1);
+  });
+
+  it("rejects competency questions that omit eligible confirmed claims", () => {
+    const confirmationValidation = seedConfirmationValidation();
+    confirmationValidation.accepted_claim_ids = ["claim-1", "claim-2"];
+    confirmationValidation.cq_eligible_claim_ids = ["claim-1", "claim-2"];
+    const questions: ReconstructCompetencyQuestionsArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-05-27T00:00:00.000Z",
+      seed_confirmation_ref: "seed-confirmation.yaml",
+      questions: [
+        {
+          question_id: "cq-1",
+          question: "Can claim-1 be answered?",
+          linked_claim_ids: ["claim-1"],
+          evidence_refs: [evidenceRef],
+        },
+      ],
+      open_questions: [],
+      directive_author: {
+        owner: "mock",
+        author_id: "mock",
+      },
+    };
+
+    const validation = validateCompetencyQuestions({
+      competencyQuestions: questions,
+      seedConfirmationValidation: confirmationValidation,
+      sourceObservations: sourceObservations(),
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations).toContainEqual(
+      expect.objectContaining({
+        code: "missing_required_coverage",
+        subject_id: "claim-2",
+      }),
+    );
   });
 
   it("validates failure and revision linkage", () => {

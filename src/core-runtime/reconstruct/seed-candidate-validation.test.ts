@@ -117,6 +117,7 @@ function validSeedCandidate(): ReconstructSeedCandidateArtifact {
     created_at: "2026-05-27T00:00:00.000Z",
     purpose: {
       claim_id: "purpose-1",
+      name: "Spreadsheet Purpose",
       statement: "Explain the declared spreadsheet purpose.",
       evidence_refs: [evidenceRef()],
     },
@@ -124,6 +125,7 @@ function validSeedCandidate(): ReconstructSeedCandidateArtifact {
     entities: [
       {
         claim_id: "entity-1",
+        name: "Schedule Row",
         statement: "Schedule row is a candidate entity.",
         evidence_refs: [evidenceRef()],
       },
@@ -134,6 +136,7 @@ function validSeedCandidate(): ReconstructSeedCandidateArtifact {
     rules: [
       {
         claim_id: "rule-1",
+        name: "Formula-Like Cell Rule",
         statement: "Formula-like cells are candidate rules.",
         evidence_refs: [evidenceRef()],
       },
@@ -163,11 +166,13 @@ describe("validateSeedCandidate", () => {
     seedCandidate.entities = [
       {
         claim_id: "duplicate-id",
+        name: "Entity 1",
         statement: "",
         evidence_refs: [],
       },
       {
         claim_id: "duplicate-id",
+        name: "Unknown Evidence Entity",
         statement: "Unknown evidence is rejected.",
         evidence_refs: [{
           ...evidenceRef(),
@@ -178,6 +183,7 @@ describe("validateSeedCandidate", () => {
     seedCandidate.relations = [
       {
         claim_id: "relation-1",
+        name: "Unselected Evidence Relation",
         statement: "Unselected evidence is rejected.",
         evidence_refs: [evidenceRef("obs_document_def")],
       },
@@ -185,6 +191,7 @@ describe("validateSeedCandidate", () => {
     seedCandidate.properties = [
       {
         claim_id: "property-1",
+        name: "Mismatched Material Property",
         statement: "Mismatched material is rejected.",
         evidence_refs: [{
           ...evidenceRef(),
@@ -195,6 +202,7 @@ describe("validateSeedCandidate", () => {
     seedCandidate.rules = [
       {
         claim_id: "rule-1",
+        name: "Mismatched Location Rule",
         statement: "Mismatched source and location are rejected.",
         evidence_refs: [{
           ...evidenceRef(),
@@ -215,6 +223,7 @@ describe("validateSeedCandidate", () => {
     expect(validation.violations.map((entry) => entry.code)).toEqual(expect.arrayContaining([
       "prior_observation_directive_invalid",
       "duplicate_claim_id",
+      "claim_name_generic",
       "claim_statement_missing",
       "claim_evidence_missing",
       "unknown_observation_ref",
@@ -256,6 +265,7 @@ describe("validateSeedCandidate", () => {
     expect(validation.violations.map((entry) => entry.code)).toEqual(expect.arrayContaining([
       "schema_shape_invalid",
       "claim_id_missing",
+      "claim_name_missing",
       "claim_statement_missing",
       "claim_evidence_missing",
       "evidence_ref_shape_invalid",

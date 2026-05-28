@@ -30,9 +30,14 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
   return {
     target_material_profile: null,
     source_inventory: null,
+    initial_source_frontier: null,
     source_observations: null,
     source_observation_directive: null,
     source_observation_directive_validation: null,
+    lens_judgment_index: null,
+    exploration_synthesis: null,
+    source_frontier: null,
+    source_frontier_validation: null,
     domain_context_selection: null,
     domain_context_selection_validation: null,
     seed_candidate: null,
@@ -118,6 +123,9 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceInventory = await writeArtifact(
       path.join(root, "source-inventory.yaml"),
     );
+    const initialSourceFrontier = await writeArtifact(
+      path.join(root, "initial-source-frontier.yaml"),
+    );
     const sourceObservations = await writeArtifact(
       path.join(root, "source-observations.yaml"),
     );
@@ -127,6 +135,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       reconstructRecord: record(root, {
         target_material_profile: targetMaterialProfile,
         source_inventory: sourceInventory,
+        initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
       }),
       reconstructRecordRef: path.join(root, "reconstruct-record.yaml"),
@@ -150,6 +159,9 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceInventory = await writeArtifact(
       path.join(root, "source-inventory.yaml"),
     );
+    const initialSourceFrontier = await writeArtifact(
+      path.join(root, "initial-source-frontier.yaml"),
+    );
     const sourceObservations = await writeArtifact(
       path.join(root, "source-observations.yaml"),
     );
@@ -162,6 +174,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       reconstructRecord: record(root, {
         target_material_profile: targetMaterialProfile,
         source_inventory: sourceInventory,
+        initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
         source_observation_directive: sourceObservationDirective,
       }),
@@ -180,6 +193,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       reconstructRecord: record(root, {
         target_material_profile: targetMaterialProfile,
         source_inventory: sourceInventory,
+        initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
         source_observation_directive: sourceObservationDirective,
         source_observation_directive_validation:

@@ -91,12 +91,14 @@ proceed, while unknown tokens return a `ReviewDomainResolutionError` with either
 
 `reconstruct-api.ts` is the bounded facade for the reconstruct MCP surface. It
 lists source profiles, materializes preparation artifacts, validates
-LLM-authored directive files, runs the material-aware post-Seed artifact loop,
+LLM-authored directive files, runs the material-aware integral reconstruct path,
 assembles `reconstruct-record.yaml`, and reads status/result artifacts back.
 It does not author Seed content, claim realization, competency questions,
 assessments, failure classifications, revisions, or design decisions; those come
 from a pluggable directive author or confirmation provider. Runtime validates
 ids, refs, enums, coverage, metrics, stage state, and final-output provenance.
-The current public run path requires explicit `semanticAuthorRealization="mock"`
-and `confirmationProviderRealization="mock"` so mock-authored output is not
-confused with a live host/user-mediated reconstruct run.
+The public run path defaults to `semanticAuthorRealization="direct_call"` and
+`confirmationProviderRealization="direct_call"`, using the configured `llm`
+provider and failing loud when provider, model, credentials, or returned
+artifact shape are invalid. Test-only mock helpers remain internal fixtures and
+must not be treated as product completion evidence.

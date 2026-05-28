@@ -92,8 +92,8 @@ export const OntoObserveSourceToolInputSchema = z.object({
 
 export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.extend({
   intent: z.string().min(1),
-  semanticAuthorRealization: z.literal("mock"),
-  confirmationProviderRealization: z.literal("mock"),
+  semanticAuthorRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
+  confirmationProviderRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
 }).strict();
 
 export const OntoReconstructSessionInputSchema = z.object({

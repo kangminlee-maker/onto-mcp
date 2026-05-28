@@ -350,8 +350,6 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
   required: [
     "targetRefs",
     "intent",
-    "semanticAuthorRealization",
-    "confirmationProviderRealization",
   ],
   properties: {
     targetRefs: {
@@ -388,15 +386,15 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
     },
     semanticAuthorRealization: {
       type: "string",
-      enum: ["mock"],
+      enum: ["mock", "direct_call"],
       description:
-        "Explicit semantic author realization. Only mock is currently wired; host/direct-call authoring is not yet exposed.",
+        "Explicit semantic author realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
     },
     confirmationProviderRealization: {
       type: "string",
-      enum: ["mock"],
+      enum: ["mock", "direct_call"],
       description:
-        "Explicit confirmation provider realization. Only mock is currently wired; user-mediated confirmation is not yet exposed.",
+        "Explicit confirmation provider realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
     },
   },
 };
@@ -532,7 +530,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto.reconstruct",
     description:
-      "Run the material-aware reconstruct post-Seed artifact loop with explicit mock semantic author and confirmation provider realization, returning final-output.md and reconstruct-record.yaml refs.",
+      "Run the material-aware reconstruct path with live semantic authoring, runtime validation gates, final-output.md, and reconstruct-record.yaml refs.",
     inputSchema: RECONSTRUCT_INPUT_SCHEMA,
   },
   {

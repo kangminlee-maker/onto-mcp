@@ -25,8 +25,11 @@ export function isTargetMaterialKind(value: string): value is TargetMaterialKind
 export type TargetMaterialSupportStatus =
   | "supported"
   | "partial"
+  | "supported_composite"
+  | "partial_composite"
   | "unsupported"
-  | "unknown";
+  | "unknown"
+  | "reserved_future";
 
 export interface TargetMaterialRefDetection {
   ref: string;
@@ -198,7 +201,7 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
         maxEntries: 200,
         maxDepth: 3,
       });
-      const aggregated = aggregateDetections(childDetections);
+      const aggregated = aggregateTargetMaterialDetections(childDetections);
       return {
         ref: resolved,
         exists: true,
@@ -230,7 +233,7 @@ async function classifyRef(ref: string): Promise<TargetMaterialRefDetection> {
   }
 }
 
-function aggregateDetections(
+export function aggregateTargetMaterialDetections(
   detections: TargetMaterialRefDetection[],
 ): TargetMaterialKindDetection {
   if (detections.length === 0) {
@@ -297,7 +300,41 @@ export async function detectTargetMaterialKind(
   refs: string[],
 ): Promise<TargetMaterialKindDetection> {
   const detections = await Promise.all(refs.map(classifyRef));
-  return aggregateDetections(detections);
+  return aggregateTargetMaterialDetections(detections);
+}
+
+export async function detectTargetMaterialRefs(
+  refs: string[],
+): Promise<TargetMaterialRefDetection[]> {
+  const detections: TargetMaterialRefDetection[] = [];
+  for (const ref of refs) {
+    const resolved = path.resolve(ref);
+    try {
+      const stat = await fs.stat(resolved);
+      if (stat.isDirectory()) {
+        const childDetections = await collectDirectoryMaterialDetections({
+          root: resolved,
+          maxEntries: 200,
+          maxDepth: 3,
+        });
+        detections.push(...childDetections);
+        if (childDetections.length === 0) {
+          detections.push({
+            ref: resolved,
+            exists: true,
+            kind: "unknown",
+            confidence: 0.1,
+            confidence_basis: "empty or unreadable directory inventory",
+          });
+        }
+        continue;
+      }
+    } catch {
+      // classifyRef preserves fail-loud existence metadata for missing refs.
+    }
+    detections.push(await classifyRef(resolved));
+  }
+  return detections;
 }
 
 export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
@@ -318,9 +355,9 @@ export function reviewMaterialSupportStatus(kind: TargetMaterialKind): {
   }
   if (kind === "mixed") {
     return {
-      status: "partial",
+      status: "partial_composite",
       reason:
-        "review records mixed material kind, but per-member material-specific validation is not implemented yet",
+        "review records per-member material kinds for a mixed target, but cross-material validation remains partial",
     };
   }
   return {

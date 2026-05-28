@@ -61,8 +61,9 @@ target material 관련 작업 시 추가로 읽을 문서:
 
 1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
 2. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
-3. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
-4. selected source profile under `.onto/processes/reconstruct/source-profiles/`
+3. [top-level-concept-discovery-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/top-level-concept-discovery-contract.md)
+4. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
+5. selected source profile under `.onto/processes/reconstruct/source-profiles/`
 
 ---
 

@@ -36,17 +36,17 @@ cross-process goal contract lives at
 
 `reconstruct` now has a current design contract under
 `.onto/processes/reconstruct/`, material-aware runtime helpers, and a bounded
-happy-path runner. The runner classifies target material, writes source
-observations, accepts pluggable LLM-owned directive authors and confirmation
-providers, validates evidence refs, computes deterministic metrics, and writes
+direct-call integral runner. The runner classifies target material, expands
+directory targets into per-member source observations, writes the initial source
+frontier, runs reconstruct lens judgments and exploration synthesis through a
+configured LLM provider, validates evidence refs, computes deterministic metrics, and writes
 `final-output.md`, `reconstruct-run-manifest.yaml`, and the primary
 `reconstruct-record.yaml`. Code is the first fixture; the runner path is shared
 with spreadsheet/document/database material through source profiles and
-material-specific observers. The current public run path is an explicit mock
-semantic/confirmation post-Seed artifact loop. It implements claim realization,
-confirmation validation, competency-question assessment, failure classification,
-revision proposal, metrics/status projection, and artifact-tethered final
-output; domain context selection remains deferred.
+material-specific observers. The current public run path defaults to
+`direct_call` semantic authoring and host-mediated confirmation. It fails loud
+when provider/model/credentials, LLM-authored artifact shape, or runtime gates
+are invalid; domain context selection remains deferred.
 `evolve` has a future material-kind adapter contract at
 `.onto/processes/evolve/material-kind-adapter-contract.md`, but no active
 runtime or MCP tool. `learn` and `govern` remain separate design slices.
@@ -87,7 +87,7 @@ Available MCP tools:
 | `onto.list_source_profiles` | List reconstruct source profiles |
 | `onto.observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
 | `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files |
-| `onto.reconstruct` | Run the material-aware reconstruct post-Seed loop with explicit mock semantic/confirmation realization |
+| `onto.reconstruct` | Run the material-aware direct-call reconstruct path with runtime validation gates |
 | `onto.reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
 | `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
 
@@ -104,18 +104,15 @@ Minimal reconstruct MCP call shape:
     "projectRoot": "/path/to/project",
     "targetRefs": ["src/example.ts"],
     "intent": "Create a bounded reconstruct Seed from this target.",
-    "sessionRoot": ".onto/reconstruct/example-run",
-    "semanticAuthorRealization": "mock",
-    "confirmationProviderRealization": "mock"
+    "sessionRoot": ".onto/reconstruct/example-run"
   }
 }
 ```
 
-`semanticAuthorRealization` and `confirmationProviderRealization` are required
-so completed reconstruct runs are explicit about their current mock semantics.
-Today this proves the material-aware post-Seed artifact loop, runtime gates, and
-MCP surface. It does not claim live host-LLM semantic authorship or live
-user-mediated confirmation.
+`semanticAuthorRealization` and `confirmationProviderRealization` default to
+`direct_call`. Configure `.onto/settings.json` or user `~/.onto/settings.json`
+with an `llm` provider/model before running. Test-only mock helpers are not
+product completion evidence.
 
 Repository-local development harness:
 
@@ -238,44 +235,53 @@ Primary outputs:
 
 A reconstruct session writes artifacts under `.onto/reconstruct/<session-id>/`.
 
-Implemented mock-authored, runtime-gated outputs:
+Implemented direct-call, runtime-gated outputs:
 
 | Artifact | Owner | Purpose |
 |---|---|---|
 | `target-material-profile.yaml` | runtime | detected `target_material_kind`, support status, and selected source profiles |
 | `source-inventory.yaml` | runtime | material-specific inventory units and scan boundary |
+| `initial-source-frontier.yaml` | runtime | first observation frontier derived from inventory |
 | `source-observations.yaml` | runtime | structural observations with stable evidence ids |
-| `source-observation-directive.yaml` | mock/host author | selected observations for evidence use |
+| `source-observation-directive.yaml` | host LLM author | selected observations for evidence use |
 | `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
-| `seed-candidate.yaml` | mock/host author | evidence-backed Seed candidate |
-| `seed-candidate-validation.yaml` | runtime | Seed claim and evidence-ref validation |
-| `claim-realization-map.yaml` | mock/host author | claim-level evidence stance |
+| `rounds/<round-id>/lens-judgments/*.yaml` | host LLM author | reconstruct lens judgments over trusted observations |
+| `rounds/<round-id>/exploration-synthesis.yaml` | host LLM author | integrated gaps and next-source needs |
+| `rounds/<round-id>/source-frontier.yaml` | host LLM author | requested next source refs or no-next-frontier rationale |
+| `rounds/<round-id>/source-frontier-validation.yaml` | runtime | boundary, duplicate, and inventory validation for the frontier |
+| `seed-candidate.yaml` | host LLM author | evidence-backed Seed candidate with separate `claim_id` and user-facing `name` |
+| `seed-candidate-validation.yaml` | runtime | Seed claim name, shape, and evidence-ref validation |
+| `claim-realization-map.yaml` | host LLM author | claim-level evidence stance |
 | `claim-realization-map-validation.yaml` | runtime | claim id, stance enum, and evidence linkage validation |
-| `seed-confirmation.yaml` | mock/host/user mediated | accepted, rejected, partial, or deferred Seed confirmation |
+| `seed-confirmation.yaml` | host/user mediated | accepted, rejected, partial, or deferred Seed confirmation |
 | `seed-confirmation-validation.yaml` | runtime | confirmation transition validation and derived claim sets |
-| `competency-questions.yaml` | mock/host author | questions linked to confirmed claims |
-| `competency-questions-validation.yaml` | runtime | CQ id, claim-link, and evidence validation |
-| `competency-question-assessment.yaml` | mock/host author | answer status for every authoritative CQ |
+| `competency-questions.yaml` | host LLM author | questions linked to confirmed claims |
+| `competency-questions-validation.yaml` | runtime | CQ id, eligible-claim coverage, claim-link, and evidence validation |
+| `competency-question-assessment.yaml` | host LLM author | answer status for every authoritative CQ |
 | `competency-question-assessment-validation.yaml` | runtime | exactly-once CQ assessment validation |
-| `failure-classification.yaml` | mock/host author | material failure and gap classification |
+| `failure-classification.yaml` | host LLM author | material failure and gap classification |
 | `failure-classification-validation.yaml` | runtime | failure enum, linkage, and materiality validation |
-| `revision-proposal.yaml` | mock/host author | bounded revision/deferral proposals |
+| `revision-proposal.yaml` | host LLM author | bounded revision/deferral proposals |
 | `revision-proposal-validation.yaml` | runtime | proposal id, target, action, and regression guard validation |
 | `reconstruct-metrics.yaml` | runtime | deterministic counts, unresolved/deferred counts, and pass rate |
-| `stop-decision.yaml` | mock/host author | stop, continue, or ask-user decision based on metrics |
-| `final-output.md` | mock/host author | user-facing result grounded in artifacts and provenance-checked by runtime |
+| `stop-decision.yaml` | host LLM author | stop, continue, or ask-user decision based on metrics |
+| `final-output.md` | host LLM author | user-facing result grounded in artifacts and provenance-checked by runtime |
 | `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, and happy-path scope |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
 
 Current deferred reconstruct artifacts are recorded in
 `reconstruct-run-manifest.yaml` under `happy_path_scope.deferred_artifacts`:
 `domain_context_selection` and `domain_context_selection_validation`. Those
-require additional domain selection semantics and are outside the current mock
-path.
+require additional domain selection semantics and are outside the current
+direct-call path.
 
-The post-Seed design contract also defines validation artifacts for those
+The reconstruct design contract also defines validation artifacts for those
 stages, stable reconstruct stage ids, cross-artifact id authority, and progress
 UX expectations in `.onto/processes/reconstruct/reconstruct-execution-ux-contract.md`.
+Seed discovery is further constrained by
+`.onto/processes/reconstruct/top-level-concept-discovery-contract.md`, which
+defines the Seed as a purpose-relative top-level concept discovery artifact
+rather than a full ontology or broad claim ledger.
 
 ## Repository Map
 

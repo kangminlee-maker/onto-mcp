@@ -85,6 +85,6 @@ describe("review target profile material kind", () => {
       "code",
       "document",
     ]);
-    expect(profile.material_profile.support_status).toBe("partial");
+    expect(profile.material_profile.support_status).toBe("partial_composite");
   });
 });

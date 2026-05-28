@@ -56,7 +56,7 @@ Allowed values:
 | `spreadsheet` | Workbook, sheet, CSV, accounting schedule, formula model, report, or tabular calculation artifact. |
 | `document` | Prose, requirements, policy, guide, report, contract, PDF, DOCX, Markdown, or similar textual artifact. |
 | `database` | Database connection, schema, migration, SQL file, warehouse model, table, view, or query artifact. |
-| `mixed` | Bundle containing more than one material kind. Each member needs its own material classification. |
+| `mixed` | Bundle containing more than one material kind. Each member needs its own material classification; `mixed` itself is not an adapter target. |
 | `unknown` | Runtime cannot classify the material safely. Adapter execution must halt or ask for clarification. |
 
 The axis is separate from:
@@ -76,6 +76,21 @@ The axis is separate from:
 | `review` | `review-target-profile.yaml` records `target_material_kind`; review must not claim material-aware validation before per-material validators exist. |
 | `reconstruct` | Source profiles, source adapters, source observations, and directive validation must be keyed by `target_material_kind`. |
 | `evolve` | Future adapters must not assume code-product inputs; adapter selection should start from `target_material_kind` as defined in `.onto/processes/evolve/material-kind-adapter-contract.md`. |
+
+### 4.1 Mixed Support Semantics
+
+Because `mixed` is an allowed public value, every process that exposes it must
+also expose one of these support states:
+
+| Support state | Runtime behavior |
+|---|---|
+| `supported_composite` | Classify every member, dispatch only member-specific supported adapters, and preserve cross-material refs as structural refs. |
+| `partial_composite` | Classify every member, observe supported members, record unsupported members and downstream authority impact. |
+| `unsupported` | Halt or ask for clarification before adapter dispatch with a stable unsupported reason. |
+| `reserved_future` | Treat `mixed` as non-executable vocabulary and do not expose it as a runnable path. |
+
+No process may dispatch a single generic `mixed` adapter. Semantic
+cross-material interpretation belongs to the LLM after runtime observation.
 
 ## 5. Artifact Contract Additions
 
@@ -120,7 +135,8 @@ Runtime must validate:
 
 - `target_material_kind` is one of the allowed values
 - `unknown` does not dispatch a material adapter
-- `mixed` records per-member material kinds
+- `mixed` records per-member material kinds and one of the support states in
+  section 4.1 before adapter dispatch
 - unsupported formats halt or degrade explicitly
 - source observations do not claim ontology facts such as entity, relation,
   business rule, aggregate root, or policy meaning

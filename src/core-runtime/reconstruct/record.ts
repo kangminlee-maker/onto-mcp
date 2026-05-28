@@ -32,9 +32,14 @@ export interface AssembleReconstructRecordParams {
 const RECORD_ARTIFACT_KEYS = [
   "target_material_profile",
   "source_inventory",
+  "initial_source_frontier",
   "source_observations",
   "source_observation_directive",
   "source_observation_directive_validation",
+  "lens_judgment_index",
+  "exploration_synthesis",
+  "source_frontier",
+  "source_frontier_validation",
   "domain_context_selection",
   "domain_context_selection_validation",
   "seed_candidate",
@@ -60,6 +65,7 @@ const RECORD_ARTIFACT_KEYS = [
 const PREPARATION_REQUIRED_KEYS = [
   "target_material_profile",
   "source_inventory",
+  "initial_source_frontier",
   "source_observations",
 ] as const satisfies readonly (keyof ReconstructRecordArtifactRefs)[];
 
@@ -407,7 +413,9 @@ export async function assembleReconstructRecord(
       runtime_owned_gates: [
         "target_material_profiling",
         "source_inventory",
+        "initial_source_frontier",
         "source_observation",
+        "source_frontier_validation",
         "source_observation_directive_validation",
         "seed_candidate_validation",
         "claim_realization_validation",
@@ -426,6 +434,9 @@ export async function assembleReconstructRecord(
       ],
       llm_owned_directives: [
         "source_observation_directive",
+        "lens_judgment",
+        "exploration_synthesis",
+        "source_frontier",
         "domain_context_selection",
         "seed_candidate",
         "claim_realization_map",

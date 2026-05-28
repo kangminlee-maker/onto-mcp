@@ -51,6 +51,29 @@ export interface ReconstructSourceInventoryArtifact {
   };
 }
 
+export interface ReconstructInitialSourceFrontierRef {
+  frontier_ref_id: string;
+  source_ref: string;
+  target_material_kind: TargetMaterialKind;
+  inventory_unit: string;
+  profile_ref: string | null;
+  rationale: string;
+}
+
+export interface ReconstructInitialSourceFrontierArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  frontier_id: "initial";
+  source_refs: ReconstructInitialSourceFrontierRef[];
+  skipped_refs: Array<{
+    source_ref: string;
+    target_material_kind: TargetMaterialKind;
+    reason: string;
+    authority_impact: string;
+  }>;
+}
+
 export interface ReconstructSourceObservationsArtifact {
   schema_version: "1";
   session_id: string;
@@ -115,6 +138,7 @@ export interface ReconstructEvidenceRef {
 
 export interface ReconstructSeedClaim {
   claim_id: string;
+  name: string;
   statement: string;
   evidence_refs: ReconstructEvidenceRef[];
 }
@@ -139,6 +163,8 @@ export interface ReconstructSeedCandidateValidationViolation {
     | "session_id_mismatch"
     | "prior_observation_directive_invalid"
     | "claim_id_missing"
+    | "claim_name_missing"
+    | "claim_name_generic"
     | "duplicate_claim_id"
     | "claim_statement_missing"
     | "claim_evidence_missing"
@@ -168,13 +194,118 @@ export interface ReconstructSeedCandidateValidationArtifact {
   violations: ReconstructSeedCandidateValidationViolation[];
 }
 
+export interface ReconstructLensJudgmentArtifact {
+  schema_version: "1";
+  session_id: string;
+  round_id: string;
+  lens_id: string;
+  created_at: string;
+  source_observation_directive_ref: string | null;
+  candidate_labels: Array<{
+    label_id: string;
+    label: string;
+    evidence_refs: ReconstructEvidenceRef[];
+    rationale: string;
+  }>;
+  semantic_gaps: Array<{
+    gap_id: string;
+    description: string;
+    evidence_refs: ReconstructEvidenceRef[];
+    requested_source_refs: string[];
+    materiality_rationale: string;
+  }>;
+  no_next_frontier_rationale: string | null;
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructLensJudgmentIndexArtifact {
+  schema_version: "1";
+  session_id: string;
+  round_id: string;
+  created_at: string;
+  lens_judgment_refs: Array<{
+    lens_id: string;
+    artifact_ref: string;
+  }>;
+}
+
+export interface ReconstructExplorationSynthesisArtifact {
+  schema_version: "1";
+  session_id: string;
+  round_id: string;
+  created_at: string;
+  lens_judgment_index_ref: string | null;
+  accepted_gaps: Array<{
+    gap_id: string;
+    lens_id: string;
+    description: string;
+    evidence_refs: ReconstructEvidenceRef[];
+  }>;
+  requested_source_refs: Array<{
+    source_ref: string;
+    rationale: string;
+    priority: "high" | "medium" | "low";
+  }>;
+  no_next_frontier_rationale: string | null;
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructSourceFrontierArtifact {
+  schema_version: "1";
+  session_id: string;
+  round_id: string;
+  created_at: string;
+  exploration_synthesis_ref: string | null;
+  frontier_refs: Array<{
+    frontier_ref_id: string;
+    source_ref: string;
+    rationale: string;
+    priority: "high" | "medium" | "low";
+  }>;
+  no_next_frontier_rationale: string | null;
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructSourceFrontierValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  round_id: string;
+  created_at: string;
+  source_frontier_ref: string | null;
+  source_inventory_ref: string | null;
+  source_observations_ref: string | null;
+  validation_status: "valid" | "invalid";
+  accepted_frontier_ref_ids: string[];
+  rejected_frontier_refs: Array<{
+    frontier_ref_id: string | null;
+    source_ref: string | null;
+    reason: string;
+  }>;
+  no_next_frontier_accepted: boolean;
+  validation_results: string[];
+}
+
 export const RECONSTRUCT_STAGE_IDS = [
   "invocation_binding",
   "target_material_profile",
   "source_inventory",
+  "initial_source_frontier",
   "source_observation",
   "observation_directive",
   "observation_directive_validation",
+  "lens_judgment",
+  "exploration_synthesis",
+  "source_frontier",
+  "source_frontier_validation",
   "domain_context_selection",
   "domain_context_selection_validation",
   "seed_candidate",
@@ -534,11 +665,13 @@ export interface ReconstructRunManifestStep {
   owner: "runtime" | "host_llm" | "host_or_user";
   performed_by: {
     authority: "runtime" | "host_llm" | "host_or_user";
-    realization: "runtime" | "mock";
+    realization: "runtime" | "mock" | "direct_call";
     actor_id: string;
   };
   status: "completed" | "skipped" | "failed";
   artifact_refs: string[];
+  reason?: string;
+  authority_impact?: string;
 }
 
 export interface ReconstructRunManifestArtifact {
@@ -550,11 +683,13 @@ export interface ReconstructRunManifestArtifact {
   target_refs: string[];
   intent: string;
   execution_profile: {
-    runner: "material-aware-happy-path";
-    semantic_author_realization: "mock";
-    confirmation_provider_realization: "mock";
+    profile_kind: "observer_gate_slice" | "mock_semantic_slice" | "full_integral_exploration";
+    runner: "material-aware-happy-path" | "integral-exploration-direct-call";
+    semantic_author_realization: "mock" | "direct_call";
+    confirmation_provider_realization: "mock" | "direct_call";
     directive_author_id: string;
     confirmation_provider_id: string;
+    allowed_completion_claim: string;
   };
   artifact_refs: ReconstructRecordArtifactRefs & {
     reconstruct_record: string | null;
@@ -596,9 +731,14 @@ export type ReconstructRecordValidationStatusProjection =
 export interface ReconstructRecordArtifactRefs {
   target_material_profile: string | null;
   source_inventory: string | null;
+  initial_source_frontier: string | null;
   source_observations: string | null;
   source_observation_directive: string | null;
   source_observation_directive_validation: string | null;
+  lens_judgment_index: string | null;
+  exploration_synthesis: string | null;
+  source_frontier: string | null;
+  source_frontier_validation: string | null;
   domain_context_selection: string | null;
   domain_context_selection_validation: string | null;
   seed_candidate: string | null;
@@ -663,5 +803,6 @@ export interface ReconstructRecordArtifact {
 export interface ReconstructPreparationArtifactRefs {
   target_material_profile: string;
   source_inventory: string;
+  initial_source_frontier: string;
   source_observations: string;
 }

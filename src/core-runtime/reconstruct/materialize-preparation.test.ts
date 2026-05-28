@@ -7,6 +7,7 @@ import type {
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationsArtifact,
   ReconstructTargetMaterialProfileArtifact,
+  ReconstructInitialSourceFrontierArtifact,
 } from "./artifact-types.js";
 import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
 
@@ -53,6 +54,10 @@ describe("materializeReconstructPreparationArtifacts", () => {
       await readYaml<ReconstructSourceObservationsArtifact>(
         refs.source_observations,
       );
+    const initialFrontier =
+      await readYaml<ReconstructInitialSourceFrontierArtifact>(
+        refs.initial_source_frontier,
+      );
 
     expect(materialProfile.target_material_kind).toBe("spreadsheet");
     expect(materialProfile.selected_source_profiles).toHaveLength(1);
@@ -77,6 +82,12 @@ describe("materializeReconstructPreparationArtifacts", () => {
     expect(observations.validation_results).toContain(
       "source_observation_boundary_valid",
     );
+    expect(initialFrontier.source_refs).toEqual([
+      expect.objectContaining({
+        source_ref: target,
+        target_material_kind: "spreadsheet",
+      }),
+    ]);
   });
 
   it("keeps unknown targets skipped instead of guessing an adapter", async () => {
@@ -110,5 +121,47 @@ describe("materializeReconstructPreparationArtifacts", () => {
         target_material_kind: "unknown",
       }),
     ]);
+  });
+
+  it("expands directory targets into per-member material observations", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-c");
+    const code = path.join(root, "src", "feature.ts");
+    const sheet = path.join(root, "data", "schedule.csv");
+    await fs.mkdir(path.dirname(code), { recursive: true });
+    await fs.mkdir(path.dirname(sheet), { recursive: true });
+    await fs.writeFile(code, "export const feature = true;\n", "utf8");
+    await fs.writeFile(sheet, "month,revenue\n2026-01,100\n", "utf8");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [root],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialProfile =
+      await readYaml<ReconstructTargetMaterialProfileArtifact>(
+        refs.target_material_profile,
+      );
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(
+        refs.source_observations,
+      );
+    const initialFrontier =
+      await readYaml<ReconstructInitialSourceFrontierArtifact>(
+        refs.initial_source_frontier,
+      );
+
+    expect(materialProfile.target_material_kind).toBe("mixed");
+    expect(materialProfile.support_status).toBe("partial_composite");
+    expect(materialProfile.target_material_kind_candidates.sort()).toEqual([
+      "code",
+      "spreadsheet",
+    ]);
+    expect(observations.observations.map((observation) =>
+      observation.target_material_kind
+    ).sort()).toEqual(["code", "spreadsheet"]);
+    expect(initialFrontier.source_refs).toHaveLength(2);
   });
 });
