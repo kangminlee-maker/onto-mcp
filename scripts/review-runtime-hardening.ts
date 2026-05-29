@@ -8,7 +8,12 @@ import YAML from "yaml";
 const execFileAsync = promisify(execFile);
 
 const PROJECT_ROOT = process.cwd();
-const NPM = process.platform === "win32" ? "npm.cmd" : "npm";
+const TSX = path.join(
+  PROJECT_ROOT,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tsx.cmd" : "tsx",
+);
 const COMMAND_TIMEOUT_MS = Number.parseInt(
   process.env.ONTO_REVIEW_HARDENING_TIMEOUT_MS ?? "240000",
   10,
@@ -109,13 +114,21 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
-function npmRunArgs(script: string, scriptArgs: string[]): string[] {
-  return ["run", "--silent", script, "--", ...scriptArgs];
+function tsxArgs(entrypoint: string, scriptArgs: string[]): string[] {
+  return [entrypoint, ...scriptArgs];
+}
+
+function reviewInvokeArgs(scriptArgs: string[]): string[] {
+  return tsxArgs("src/core-runtime/cli/review-invoke.ts", scriptArgs);
+}
+
+function inlineHttpUnitExecutorArgs(scriptArgs: string[]): string[] {
+  return tsxArgs("src/core-runtime/cli/inline-http-review-unit-executor.ts", scriptArgs);
 }
 
 async function runCommand(args: string[], env: NodeJS.ProcessEnv): Promise<RunResult> {
   const started = Date.now();
-  const result = await execFileAsync(NPM, args, {
+  const result = await execFileAsync(TSX, args, {
     cwd: PROJECT_ROOT,
     env,
     maxBuffer: 50 * 1024 * 1024,
@@ -136,7 +149,7 @@ async function runCommandExpectFailure(
 ): Promise<RunResult> {
   const started = Date.now();
   try {
-    await execFileAsync(NPM, args, {
+    await execFileAsync(TSX, args, {
       cwd: PROJECT_ROOT,
       env,
       maxBuffer: 50 * 1024 * 1024,
@@ -157,7 +170,7 @@ async function runCommandExpectFailure(
       durationMs: Date.now() - started,
     };
   }
-  throw new Error(`Expected command failure: ${NPM} ${args.join(" ")}`);
+  throw new Error(`Expected command failure: ${TSX} ${args.join(" ")}`);
 }
 
 async function readYaml<T>(filePath: string): Promise<T> {
@@ -248,7 +261,7 @@ async function runMockReview(args: {
   extraArgs?: string[];
 }): Promise<{ sessionRoot: string; durationMs: number }> {
   const result = await runCommand(
-    npmRunArgs("review:invoke", [
+    reviewInvokeArgs([
       args.target,
       args.intent,
       "--project-root",
@@ -564,7 +577,7 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
   await fs.writeFile(packetPath, TOOLS_REQUIRED_PACKET, "utf8");
 
   const baseArgs = (outputPath: string): string[] =>
-    npmRunArgs("review:inline-http-unit-executor", [
+    inlineHttpUnitExecutorArgs([
       "--project-root",
       projectRoot,
       "--session-root",
@@ -714,7 +727,7 @@ async function runProviderPreflightCheck(): Promise<CheckResult> {
     const env = isolatedEnv(home);
     delete env[item.apiKeyEnv];
     const run = await runCommandExpectFailure(
-      npmRunArgs("review:invoke", [
+      reviewInvokeArgs([
         "target.txt",
         `${item.provider} provider preflight must stop before dispatch`,
         "--project-root",
@@ -759,7 +772,7 @@ async function runProviderPreflightCheck(): Promise<CheckResult> {
     }),
   );
   const localRun = await runCommandExpectFailure(
-    npmRunArgs("review:invoke", [
+    reviewInvokeArgs([
       "target.txt",
       "lmstudio local preflight must stop before dispatch",
       "--project-root",

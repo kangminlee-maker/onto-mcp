@@ -66,6 +66,12 @@ import {
   type ReviewPromptExecutionResult,
 } from "../core-runtime/cli/run-review-prompt-execution.js";
 import {
+  spawnRuntimeWatcherPane,
+} from "../core-runtime/cli/spawn-watcher.js";
+import {
+  appendRuntimeStatusEventSync,
+} from "../core-runtime/observability/runtime-stream-observation.js";
+import {
   buildReviewPipelineExecutionLedger,
   type ReviewRunManifestForLedger,
 } from "../core-runtime/review/pipeline-execution-ledger.js";
@@ -2790,6 +2796,7 @@ export function createOntoReviewCoreApi(
 
     async runReview(request: RunReviewRequest): Promise<ReviewRunResult> {
       await validateRequestedDomainForDispatch(request, ontoHome);
+      const projectRoot = path.resolve(request.projectRoot);
       const requestHash = requestHashForReviewInput(request);
       const invocationId = `initial-${continuationAttemptId()}`;
       let progressSequence = 0;
@@ -2827,6 +2834,27 @@ export function createOntoReviewCoreApi(
         if (sessionRootResolved) return;
         sessionRootResolved = true;
         resolveSessionRoot(resolved);
+        appendRuntimeStatusEventSync({
+          pipeline: "review",
+          sessionRoot: resolved,
+          sourceLabel: "onto.review",
+          message: "review session observed",
+          stageId: "start",
+        });
+        const watcherResult = spawnRuntimeWatcherPane(
+          projectRoot,
+          resolved,
+          ontoHome,
+        );
+        appendRuntimeStatusEventSync({
+          pipeline: "review",
+          sessionRoot: resolved,
+          sourceLabel: "runtime-watcher",
+          message: watcherResult.spawned
+            ? `watcher ${watcherResult.dry_run ? "detected" : "attached"} via ${watcherResult.mechanism}`
+            : `watcher not attached: ${watcherResult.reason ?? "unknown reason"}`,
+          stageId: "start",
+        });
         activeAttemptWrite = (async () => {
           const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
             path.join(resolved, "execution-plan.yaml"),
@@ -2846,6 +2874,16 @@ export function createOntoReviewCoreApi(
       };
       const runnerProgressObserver = (event: ReviewInvocationProgressEvent): void => {
         if (event.sessionRoot) noteSessionRoot(event.sessionRoot);
+        const runtimeSessionRoot = event.sessionRoot ?? observedSessionRoot;
+        if (runtimeSessionRoot) {
+          appendRuntimeStatusEventSync({
+            pipeline: "review",
+            sessionRoot: runtimeSessionRoot,
+            sourceLabel: "onto.review",
+            message: `${event.status}: ${event.message}`,
+            stageId: event.phase,
+          });
+        }
         const stage: ReviewNativeProgressStage =
           event.phase === "prepare"
             ? "session_planned"
@@ -3076,6 +3114,27 @@ export function createOntoReviewCoreApi(
         label: "ReviewSessionMetadata.project_root",
         expected: projectRoot,
         actual: sessionMetadata.project_root,
+      });
+      appendRuntimeStatusEventSync({
+        pipeline: "review",
+        sessionRoot: resolvedSessionRoot,
+        sourceLabel: "onto.review_continue",
+        message: "review continuation starting",
+        stageId: "continue",
+      });
+      const continuationWatcherResult = spawnRuntimeWatcherPane(
+        projectRoot,
+        resolvedSessionRoot,
+        ontoHome,
+      );
+      appendRuntimeStatusEventSync({
+        pipeline: "review",
+        sessionRoot: resolvedSessionRoot,
+        sourceLabel: "runtime-watcher",
+        message: continuationWatcherResult.spawned
+          ? `watcher ${continuationWatcherResult.dry_run ? "detected" : "attached"} via ${continuationWatcherResult.mechanism}`
+          : `watcher not attached: ${continuationWatcherResult.reason ?? "unknown reason"}`,
+        stageId: "continue",
       });
       const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
       const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(

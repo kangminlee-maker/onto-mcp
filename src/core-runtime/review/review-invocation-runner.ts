@@ -675,9 +675,9 @@ async function projectLegacyReviewInvocationOutput(args: {
 }): Promise<LegacyReviewInvocationOutput> {
   const reviewSummary = await readOptionalReviewSummary(args.sessionRoot);
   const boundedInvokeSteps = [
-    "review:start-session",
-    "review:run-prompt-execution",
-    "review:complete-session",
+    "start_review_session",
+    "run_review_prompt_execution",
+    "complete_review_session",
   ] as const;
   const effectiveReviewExecutionProfile =
     args.setup.executionProfile.review_execution_profile;
@@ -689,7 +689,7 @@ async function projectLegacyReviewInvocationOutput(args: {
     review_execution_profile: effectiveReviewExecutionProfile,
   };
   const routeSummary: ReviewInvokeRouteSummary = {
-    combined_entrypoint: "review:invoke",
+    combined_entrypoint: "review_invocation",
     bounded_invoke_steps: [...boundedInvokeSteps],
     execution_realization: routeProfile.execution_realization,
     host_runtime: routeProfile.host_runtime,

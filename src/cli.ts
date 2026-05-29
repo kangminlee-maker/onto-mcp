@@ -9,8 +9,7 @@ import { readOntoVersion } from "./core-runtime/release-channel/release-channel.
  * Public binary surface for the MCP-native product.
  *
  * Product tools are exposed through MCP (`onto mcp`). Review and other
- * runtime flows are no longer public `onto <activity>` CLI commands. The
- * `npm run review:*` scripts remain internal development harnesses.
+ * runtime flows are no longer public `onto <activity>` CLI commands.
  */
 
 function loadOntoEnvFile(filePath: string): void {
@@ -54,9 +53,6 @@ function printHelp(): void {
       "  onto.reconstruct_status",
       "  onto.reconstruct_result",
       "",
-      "Development harness:",
-      "  npm run review:invoke -- <target> \"<intent>\"",
-      "",
       "Options:",
       "  --version, -v  Show version",
       "  --help, -h     Show this help",
@@ -68,7 +64,6 @@ function unsupportedCommandMessage(subcommand: string): string {
   return [
     `[onto] Unsupported public CLI subcommand: ${subcommand}`,
     "Active public command: onto mcp",
-    "Development harness: npm run review:invoke -- <target> \"<intent>\"",
   ].join("\n");
 }
 

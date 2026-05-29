@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# E2E Test Suite for review:invoke
+# E2E Test Suite for the internal review invocation adapter
 # Run from project root: bash src/core-runtime/cli/e2e-review-invoke.test.sh
 #
 # Exit codes:
@@ -12,6 +12,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$PROJECT_ROOT"
 export PATH="$PROJECT_ROOT/bin:$PATH"
+TSX_BIN="$PROJECT_ROOT/node_modules/.bin/tsx"
+if [ ! -x "$TSX_BIN" ]; then
+  TSX_BIN="tsx"
+fi
+REVIEW_INVOKE=("$TSX_BIN" "src/core-runtime/cli/review-invoke.ts")
+REVIEW_COMPLETE_SESSION=("$TSX_BIN" "src/core-runtime/cli/complete-review-session.ts")
+REVIEW_RUN_PROMPT_EXECUTION=("$TSX_BIN" "src/core-runtime/cli/run-review-prompt-execution.ts")
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -25,7 +32,7 @@ run_expect_pass() {
   local tname="$1"
   shift
   local tout
-  tout=$(npm run review:invoke -- "$@" 2>&1)
+  tout=$("${REVIEW_INVOKE[@]}" "$@" 2>&1)
   local texit=$?
   local tstatus
   tstatus=$(echo "$tout" | grep '"record_status"' | head -1 | sed 's/.*: "//;s/".*//')
@@ -43,7 +50,7 @@ run_expect_fail() {
   local tname="$1"
   shift
   local tout
-  tout=$(npm run review:invoke -- "$@" 2>&1)
+  tout=$("${REVIEW_INVOKE[@]}" "$@" 2>&1)
   local texit=$?
 
   if [ $texit -ne 0 ]; then
@@ -60,7 +67,7 @@ run_expect_status() {
   local expected_status="$2"
   shift 2
   local tout
-  tout=$(npm run review:invoke -- "$@" 2>&1)
+  tout=$("${REVIEW_INVOKE[@]}" "$@" 2>&1)
   local texit=$?
   local tstatus
   tstatus=$(echo "$tout" | grep '"record_status"' | head -1 | sed 's/.*: "//;s/".*//')
@@ -134,7 +141,7 @@ cleanup_fixtures() {
 trap cleanup_fixtures EXIT
 setup_fixtures
 
-echo "review:invoke E2E Test Suite"
+echo "Review invocation adapter E2E Test Suite"
 echo "================================="
 echo "project root: $PROJECT_ROOT"
 echo "fixtures: $FIXTURE_DIR"
@@ -172,7 +179,7 @@ run_expect_pass "T6: custom-lenses" \
   --executor-realization mock \
   --lens-id logic --lens-id pragmatics
 
-T6B_OUT=$(npm run review:invoke -- \
+T6B_OUT=$("${REVIEW_INVOKE[@]}" \
   src/core-runtime/cli/review-invoke.ts "single lens" \
   --executor-realization mock \
   --lens-id logic 2>&1)
@@ -234,10 +241,10 @@ run_expect_fail "E1: diff-range-injection" \
   --executor-realization mock
 
 echo "=== E2: session-id-collision ==="
-FIRST_OUT=$(npm run review:invoke -- src/core-runtime/cli/review-invoke.ts "first" \
+FIRST_OUT=$("${REVIEW_INVOKE[@]}" src/core-runtime/cli/review-invoke.ts "first" \
   --executor-realization mock --session-id e2e-collision-test --review-mode core-axis 2>&1)
 FIRST_EXIT=$?
-SECOND_OUT=$(npm run review:invoke -- src/core-runtime/cli/review-invoke.ts "second" \
+SECOND_OUT=$("${REVIEW_INVOKE[@]}" src/core-runtime/cli/review-invoke.ts "second" \
   --executor-realization mock --session-id e2e-collision-test --review-mode core-axis 2>&1)
 SECOND_EXIT=$?
 if [ $FIRST_EXIT -eq 0 ] && [ $SECOND_EXIT -ne 0 ]; then
@@ -262,7 +269,7 @@ echo "── Input Validation ──"
 
 echo "=== E4: request-text-truncation ==="
 LONG_TEXT=$(python3 -c "print('x' * 3000)")
-E4_OUT=$(npm run review:invoke -- src/core-runtime/cli/review-invoke.ts "$LONG_TEXT" \
+E4_OUT=$("${REVIEW_INVOKE[@]}" src/core-runtime/cli/review-invoke.ts "$LONG_TEXT" \
   --executor-realization mock --review-mode core-axis 2>&1)
 E4_EXIT=$?
 if [ $E4_EXIT -eq 0 ]; then
@@ -373,7 +380,7 @@ run_expect_fail "E23: unknown-executor-rejected" \
   --executor-realization banana --review-mode core-axis
 
 echo "=== E23a: value-alignment-confirmation-gate ==="
-E23A_OUT=$(npm run review:invoke -- src/core-runtime/cli/review-invoke.ts "ambiguous value gate" \
+E23A_OUT=$("${REVIEW_INVOKE[@]}" src/core-runtime/cli/review-invoke.ts "ambiguous value gate" \
   --executor-realization mock --review-mode core-axis \
   --ambiguity-note "principal intent requires confirmation" 2>&1)
 E23A_EXIT=$?
@@ -386,7 +393,7 @@ else
 fi
 
 echo "=== E23b: value-alignment-confirmed-allow-path ==="
-E23B_OUT=$(npm run review:invoke -- \
+E23B_OUT=$("${REVIEW_INVOKE[@]}" \
   src/core-runtime/cli/review-invoke.ts "ambiguous but confirmed value gate" \
   --executor-realization mock --review-mode core-axis \
   --ambiguity-note "principal intent was confirmed out of band" \
@@ -419,7 +426,7 @@ cat > "$E23C_ROOT/.onto/settings.json" <<'JSON'
   }
 }
 JSON
-E23C_OUT=$(env -u ONTO_E2E_MISSING_OPENAI_API_KEY npm run review:invoke -- \
+E23C_OUT=$(env -u ONTO_E2E_MISSING_OPENAI_API_KEY "${REVIEW_INVOKE[@]}" \
   target.txt "provider route must fail before dispatch" \
   --project-root "$E23C_ROOT" --onto-home "$PROJECT_ROOT" \
   --no-domain --review-mode core-axis --no-watch \
@@ -463,7 +470,7 @@ cat > "$E23D_ROOT/.onto/settings.json" <<'JSON'
   }
 }
 JSON
-E23D_OUT=$(PATH="$E23D_ROOT/bin:$PATH" npm run review:invoke -- \
+E23D_OUT=$(PATH="$E23D_ROOT/bin:$PATH" "${REVIEW_INVOKE[@]}" \
   target.txt "codex actor route mismatch must fail before dispatch" \
   --project-root "$E23D_ROOT" --onto-home "$PROJECT_ROOT" \
   --no-domain --review-mode core-axis --no-watch \
@@ -532,7 +539,7 @@ if [ -d "$EXISTING_SESSION" ]; then
   for f in logic.md structure.md axiology.md; do
     cp "$EXISTING_SESSION/round1/$f" "$PARTIAL/round1/" 2>/dev/null
   done
-  E14_OUT=$(npm run review:complete-session -- \
+  E14_OUT=$("${REVIEW_COMPLETE_SESSION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$PARTIAL" \
     --request-text "partial test" 2>&1)
@@ -550,7 +557,7 @@ else
 fi
 
 echo "=== E27: complete-nonexistent ==="
-E27_OUT=$(npm run review:complete-session -- \
+E27_OUT=$("${REVIEW_COMPLETE_SESSION[@]}" \
   --project-root "$PROJECT_ROOT" \
   --session-root "$PROJECT_ROOT/.onto/review/nonexistent" \
   --request-text "ghost" 2>&1)
@@ -572,10 +579,10 @@ echo ""
 echo "── Concurrency ──"
 
 echo "=== E29: parallel-reviews ==="
-npm run review:invoke -- src/ "parallel-A" \
+"${REVIEW_INVOKE[@]}" src/ "parallel-A" \
   --executor-realization mock --review-mode core-axis > /tmp/onto-e2e-a.out 2>&1 &
 PID_A=$!
-npm run review:invoke -- src/ "parallel-B" \
+"${REVIEW_INVOKE[@]}" src/ "parallel-B" \
   --executor-realization mock --review-mode core-axis > /tmp/onto-e2e-b.out 2>&1 &
 PID_B=$!
 wait $PID_A; EXIT_A=$?
@@ -598,7 +605,7 @@ echo ""
 echo "── Prepare-Only ──"
 
 echo "=== E38: prepare-only ==="
-E38_OUT=$(npm run review:invoke -- \
+E38_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "prepare only test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38_EXIT=$?
@@ -638,7 +645,7 @@ fi
 echo "=== E38b: packet-hash-mismatch-fails-before-dispatch ==="
 if [ -n "${E38_SESSION_ROOT:-}" ] && [ -d "$E38_SESSION_ROOT" ]; then
   printf '\nmanual packet mutation\n' >> "$E38_SESSION_ROOT/prompt-packets/logic.prompt.md"
-  E38B_OUT=$(npm run review:run-prompt-execution -- \
+  E38B_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -656,7 +663,7 @@ else
 fi
 
 echo "=== E38c: manifest-schema-version-fails-before-dispatch ==="
-E38C_OUT=$(npm run review:invoke -- \
+E38C_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "manifest schema guard test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38C_EXIT=$?
@@ -670,7 +677,7 @@ const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
 doc.schema_version = "999";
 fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
 NODE
-  E38C_RUN_OUT=$(npm run review:run-prompt-execution -- \
+  E38C_RUN_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38C_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -689,7 +696,7 @@ else
 fi
 
 echo "=== E38d: manifest-derived-matrix-mismatch-fails-before-dispatch ==="
-E38D_OUT=$(npm run review:invoke -- \
+E38D_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "manifest matrix guard test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38D_EXIT=$?
@@ -703,7 +710,7 @@ const doc = YAML.parse(fs.readFileSync(filePath, "utf8"));
 doc.derived_context_access_matrix["lens:logic"] = ["materialized-input"];
 fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
 NODE
-  E38D_RUN_OUT=$(npm run review:run-prompt-execution -- \
+  E38D_RUN_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38D_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -722,7 +729,7 @@ else
 fi
 
 echo "=== E38e: packet-forbidden-context-ref-fails-before-dispatch ==="
-E38E_OUT=$(npm run review:invoke -- \
+E38E_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "packet context guard test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38E_EXIT=$?
@@ -738,7 +745,7 @@ if (!packet) throw new Error("synthesize packet ref missing");
 packet.consumed_context_refs = [...packet.consumed_context_refs, "domain:logic_rules"];
 fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
 NODE
-  E38E_RUN_OUT=$(npm run review:run-prompt-execution -- \
+  E38E_RUN_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38E_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -757,7 +764,7 @@ else
 fi
 
 echo "=== E38f: packet-unknown-consumer-fails-before-dispatch ==="
-E38F_OUT=$(npm run review:invoke -- \
+E38F_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "packet unknown consumer guard test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38F_EXIT=$?
@@ -776,7 +783,7 @@ doc.packet_refs.push({
 });
 fs.writeFileSync(filePath, YAML.stringify(doc), "utf8");
 NODE
-  E38F_RUN_OUT=$(npm run review:run-prompt-execution -- \
+  E38F_RUN_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38F_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -797,14 +804,14 @@ else
 fi
 
 echo "=== E38g: artifact-write-failure-is-structured ==="
-E38G_OUT=$(npm run review:invoke -- \
+E38G_OUT=$("${REVIEW_INVOKE[@]}" \
   src/ "artifact write guard test" \
   --executor-realization mock --review-mode core-axis --prepare-only 2>&1)
 E38G_EXIT=$?
 E38G_SESSION_ROOT=$(echo "$E38G_OUT" | grep '"session_root"' | head -1 | sed 's/.*: "//;s/".*//')
 if [ $E38G_EXIT -eq 0 ] && [ -n "$E38G_SESSION_ROOT" ] && [ -d "$E38G_SESSION_ROOT" ]; then
   mkdir "$E38G_SESSION_ROOT/review-run-manifest.yaml"
-  E38G_RUN_OUT=$(npm run review:run-prompt-execution -- \
+  E38G_RUN_OUT=$("${REVIEW_RUN_PROMPT_EXECUTION[@]}" \
     --project-root "$PROJECT_ROOT" \
     --session-root "$E38G_SESSION_ROOT" \
     --executor-bin "$PROJECT_ROOT/node_modules/.bin/tsx" \
@@ -889,7 +896,7 @@ echo "=== E43: external-project-missing-onto-home ==="
 E43_TMPDIR=$(mktemp -d)
 mkdir -p "$E43_TMPDIR/.git"  # make it look like a project
 echo "test content" > "$E43_TMPDIR/test.txt"
-E43_OUT=$(npm run review:invoke -- "$E43_TMPDIR/test.txt" "trust test" \
+E43_OUT=$("${REVIEW_INVOKE[@]}" "$E43_TMPDIR/test.txt" "trust test" \
   --executor-realization mock --review-mode core-axis \
   --project-root "$E43_TMPDIR" 2>&1)
 E43_EXIT=$?
@@ -908,7 +915,7 @@ echo "=== E44: external-project-with-onto-home ==="
 E44_TMPDIR=$(mktemp -d)
 mkdir -p "$E44_TMPDIR/.git"
 echo "test content" > "$E44_TMPDIR/test.txt"
-E44_OUT=$(npm run review:invoke -- "$E44_TMPDIR/test.txt" "trust allow test" \
+E44_OUT=$("${REVIEW_INVOKE[@]}" "$E44_TMPDIR/test.txt" "trust allow test" \
   --executor-realization mock --review-mode core-axis \
   --project-root "$E44_TMPDIR" --onto-home "$PROJECT_ROOT" --allow-onto-init 2>&1)
 E44_EXIT=$?

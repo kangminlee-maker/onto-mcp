@@ -82,7 +82,7 @@ deliberation_status: performed
 - Replace the mock executor with a real ContextIsolatedReasoningUnit realization.
 
 ### Recommendations
-- Keep MCP review connected to \`review:start-session -> review:run-prompt-execution -> review:complete-session\`.
+- Keep MCP review connected to the start-session -> prompt-execution -> completion runtime.
 
 ### Unique Finding Tagging
 - mock-runner-generated

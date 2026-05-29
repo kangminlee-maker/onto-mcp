@@ -5,6 +5,15 @@ import path from "node:path";
 import YAML from "yaml";
 import { parseMarkdownFrontmatter } from "../src/core-runtime/review/review-artifact-utils.js";
 
+const PROJECT_ROOT = process.cwd();
+const TSX = path.join(
+  PROJECT_ROOT,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "tsx.cmd" : "tsx",
+);
+const MCP_SERVER_ARGS = ["src/mcp/server.ts"] as const;
+
 interface JsonRpcResponse {
   jsonrpc: "2.0";
   id: number;
@@ -770,9 +779,9 @@ function resolveNonEmptyGitDiffRange(projectRoot: string): string | null {
 }
 
 async function main(): Promise<void> {
-  const projectRoot = process.cwd();
+  const projectRoot = PROJECT_ROOT;
   const testHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-mcp-conformance-home-"));
-  const child = spawn("npm", ["run", "--silent", "mcp:server"], {
+  const child = spawn(TSX, [...MCP_SERVER_ARGS], {
     cwd: projectRoot,
     env: {
       ...process.env,
@@ -969,6 +978,7 @@ async function main(): Promise<void> {
           created_at: "2026-05-27T00:00:00.000Z",
           purpose: {
             claim_id: "purpose-1",
+            name: "Observed Spreadsheet Purpose",
             statement:
               "Use the observed spreadsheet material as reconstruct seed evidence.",
             evidence_refs: [evidenceRef],
@@ -2180,7 +2190,7 @@ async function main(): Promise<void> {
     const delayedHome = await fs.mkdtemp(
       path.join(os.tmpdir(), "onto-mcp-delayed-home-"),
     );
-    const delayedChild = spawn("npm", ["run", "--silent", "mcp:server"], {
+    const delayedChild = spawn(TSX, [...MCP_SERVER_ARGS], {
       cwd: projectRoot,
       env: {
         ...process.env,
@@ -2331,7 +2341,7 @@ async function main(): Promise<void> {
     const malformedHome = await fs.mkdtemp(
       path.join(os.tmpdir(), "onto-mcp-malformed-home-"),
     );
-    const malformedChild = spawn("npm", ["run", "--silent", "mcp:server"], {
+    const malformedChild = spawn(TSX, [...MCP_SERVER_ARGS], {
       cwd: projectRoot,
       env: {
         ...process.env,

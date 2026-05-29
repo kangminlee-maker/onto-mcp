@@ -59,6 +59,9 @@ import {
   DEFAULT_GROK_BASE_URL,
   DEFAULT_LMSTUDIO_BASE_URL,
 } from "./model-switcher.js";
+import {
+  appendRuntimeModelCallLogFromCurrentContext,
+} from "../observability/runtime-stream-observation.js";
 
 const MAX_ITERATIONS = 12;
 const MAX_TOKENS_PER_TURN = 4096;
@@ -72,6 +75,7 @@ const MAX_TOKENS_PER_TURN = 4096;
  */
 function emitModelCallLog(line: string): void {
   process.stderr.write(`[model-call] ${line}\n`);
+  appendRuntimeModelCallLogFromCurrentContext(line);
 }
 
 export type ToolLoopProvider = "anthropic" | "openai" | "grok" | "lmstudio";

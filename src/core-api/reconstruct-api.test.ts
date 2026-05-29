@@ -78,6 +78,24 @@ describe("createOntoReconstructCoreApi", () => {
     );
   });
 
+  it("uses the installed source profiles when the target project has none", async () => {
+    const projectRoot = await tempProjectRoot();
+    const api = createOntoReconstructCoreApi();
+
+    const prepared = await api.prepareReconstruct({
+      projectRoot,
+      targetRefs: ["schedule.csv"],
+      sessionRoot: ".onto/reconstruct/install-profile-session",
+    });
+
+    expect(prepared.profilesRoot).toContain(
+      path.join(".onto", "processes", "reconstruct", "source-profiles"),
+    );
+    expect(path.resolve(prepared.profilesRoot).startsWith(path.resolve(projectRoot)))
+      .toBe(false);
+    expect(prepared.reconstructRecord.target_material_kind).toBe("spreadsheet");
+  });
+
   it("validates LLM-owned directives and reassembles the reconstruct record", async () => {
     const projectRoot = await tempProjectRoot();
     const api = createOntoReconstructCoreApi({

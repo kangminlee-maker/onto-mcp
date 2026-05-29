@@ -1,8 +1,8 @@
 # Onto MCP
 
 `onto-mcp` is the TypeScript product core for ontology-as-code review. The
-public interface is MCP-native; repository-local npm scripts remain development
-harnesses for verification and debugging.
+public interface is MCP-native; repository-local verification harnesses are
+internal and are not product entrypoints.
 
 ```text
 .onto contracts and domain documents
@@ -96,6 +96,20 @@ MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
 final result to the user without inventing settings or findings.
 
+When `onto.review`, `onto.review_continue`, or `onto.reconstruct` starts, the
+runtime writes a session-local `runtime-events.ndjson` stream and tries to open
+`scripts/onto-runtime-watch.sh` in a supported terminal split/tab. Current
+automatic attach targets are `tmux`, Codex Desktop with a configured launcher
+path, Warp, Cursor, iTerm2, and Apple Terminal. Codex Desktop attach never uses
+UI keystroke automation by default; set
+`ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER=/absolute/path/to/launcher.sh` to
+enable it. The launcher receives `watcherScript`, `sessionRoot`, `projectRoot`,
+and `watcherCommand` as positional arguments. Unsupported hosts can set
+`ONTO_RUNTIME_WATCHER_COMMAND` with a launcher template containing
+`{watcherCommand}`. Each stream line is source-tagged by pipeline,
+unit/stage/process, and stdout/stderr/status. Set `ONTO_RUNTIME_WATCHER=0` to
+disable the automatic terminal attach.
+
 Minimal reconstruct MCP call shape:
 
 ```json
@@ -115,36 +129,9 @@ Minimal reconstruct MCP call shape:
 with an `llm` provider/model before running. Test-only mock helpers are not
 product completion evidence.
 
-Repository-local development harness:
-
-```bash
-npm run review:invoke -- <target> "<intent>"
-```
-
-`review:invoke` prints a structured start preview before execution begins:
-
-- review target and filesystem boundary
-- request intent
-- selected domain and selection mode
-- review mode and lens ids
-- execution mode, seats, deliberation mode, concurrency
-- model auth/provider/model/effort/service tier
-- settings locations and MCP/dev-harness override points
-
-During execution, the runner prints numbered progress markers for the bounded
-review stages. At completion, it prints a structured result overview:
-
-- outcome status and deliberation status
-- target/domain/review mode
-- planned, participating, and degraded lens counts
-- comprehensive `Final Review Result` explanation from synthesize
-- issue count plus severity/timing/closure classification
-- top problem definitions from `problem-framing.yaml`
-- primary artifact paths
-
 For MCP clients, prefer the `llmPresentation.openingBrief` and
-`llmPresentation.finalResult` prompt/input pairs over CLI stdout when presenting
-start and finish explanations.
+`llmPresentation.finalResult` prompt/input pairs when presenting start and
+finish explanations.
 
 Runtime hardening is available as a development verification harness:
 
@@ -276,6 +263,24 @@ Current deferred reconstruct artifacts are recorded in
 require additional domain selection semantics and are outside the current
 direct-call path.
 
+The runtime keeps full source evidence in `source-observations.yaml`. LLM
+authoring calls may receive compact prompt projections, such as selected
+observations with shortened text excerpts, while validation still checks all
+generated evidence refs against the full artifact truth.
+
+When a reconstruct run is retried with the same session root, completed
+LLM-authored artifacts are read back from disk and the runner resumes at the
+first missing authored artifact. Runtime validation gates still re-run against
+the current artifact truth, so a retry avoids repeating expensive prompt calls
+without treating stale or malformed YAML as successful output.
+
+Source-ref fields in direct-call Seed outputs are canonicalized narrowly:
+runtime accepts source ref strings, `{ source_ref }` objects, or evidence objects
+with known `observation_id`, and writes the canonical observed `source_ref`
+string before validation. Descriptive `source_authority_scope` output is folded
+into the bounded enum fields plus a retained rationale when it already states an
+observed-source authority boundary.
+
 The reconstruct design contract also defines validation artifacts for those
 stages, stable reconstruct stage ids, cross-artifact id authority, and progress
 UX expectations in `.onto/processes/reconstruct/reconstruct-execution-ux-contract.md`.
@@ -329,6 +334,5 @@ npm run check:ts-core
 npm run build:ts-core
 npm run test:mcp:review
 npm run test:review:hardening
-npm run test:e2e
 git diff --check
 ```

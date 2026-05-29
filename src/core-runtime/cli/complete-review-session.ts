@@ -64,8 +64,8 @@ export async function completeReviewSession(
   return {
     session_root: sessionRoot,
     bounded_complete_steps: [
-      "review:render-final-output",
-      "review:finalize-session",
+      "render_review_final_output",
+      "assemble_review_record",
     ],
   };
 }
