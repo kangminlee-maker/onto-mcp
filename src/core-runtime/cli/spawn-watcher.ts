@@ -40,8 +40,21 @@ export interface SpawnWatcherResult {
   dry_run?: boolean;
 }
 
+const CODEX_APP_LAUNCHER_ENV = "ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER";
+
 function escapeAppleScriptString(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function expandHomePath(value: string): string {
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function resolveConfiguredPath(value: string): string {
+  const expanded = expandHomePath(value.trim());
+  return path.isAbsolute(expanded) ? expanded : path.resolve(expanded);
 }
 
 function yamlDoubleQuote(value: string): string {
@@ -167,6 +180,21 @@ function spawnViaMacAppKeystrokes(args: {
   return result.status === 0 && result.stdout.trim() === "matched";
 }
 
+function spawnViaConfiguredLauncher(args: {
+  launcherPath: string;
+  watcherScript: string;
+  sessionRoot: string;
+  projectRoot: string;
+  watcherArgs: string;
+}): boolean {
+  const result = spawnSync(
+    args.launcherPath,
+    [args.watcherScript, args.sessionRoot, args.projectRoot, args.watcherArgs],
+    { stdio: "ignore" },
+  );
+  return result.status === 0;
+}
+
 function spawnWatcherPaneForScript(
   projectRoot: string,
   sessionRoot: string,
@@ -196,6 +224,7 @@ function spawnWatcherPaneForScript(
   // without producing a visible side pane or extra terminal tab on every
   // run. Enabled via `ONTO_WATCHER_DRY_RUN=1`.
   const dryRun = process.env.ONTO_WATCHER_DRY_RUN === "1";
+  const skippedAttachReasons: string[] = [];
 
   const customCommand = process.env.ONTO_RUNTIME_WATCHER_COMMAND;
   if (typeof customCommand === "string" && customCommand.trim().length > 0) {
@@ -246,19 +275,31 @@ function spawnWatcherPaneForScript(
   }
 
   if (isCodexDesktopShell()) {
-    if (dryRun) {
-      return { spawned: true, mechanism: "codex_app", dry_run: true };
-    }
-    try {
-      if (spawnViaMacAppKeystrokes({
-        appName: "Codex",
-        watcherArgs,
-        focusTerminalScript: `  keystroke "j" using {command down}\n`,
-      })) {
-        return { spawned: true, mechanism: "codex_app" };
+    const configuredLauncher = process.env[CODEX_APP_LAUNCHER_ENV];
+    if (configuredLauncher?.trim()) {
+      const launcherPath = resolveConfiguredPath(configuredLauncher);
+      if (!fs.existsSync(launcherPath)) {
+        skippedAttachReasons.push(`${CODEX_APP_LAUNCHER_ENV} not found`);
+      } else if (dryRun) {
+        return { spawned: true, mechanism: "codex_app", dry_run: true };
+      } else {
+        try {
+          if (spawnViaConfiguredLauncher({
+            launcherPath,
+            watcherScript,
+            sessionRoot,
+            projectRoot,
+            watcherArgs,
+          })) {
+            return { spawned: true, mechanism: "codex_app" };
+          }
+          skippedAttachReasons.push(`${CODEX_APP_LAUNCHER_ENV} failed`);
+        } catch {
+          skippedAttachReasons.push(`${CODEX_APP_LAUNCHER_ENV} failed`);
+        }
       }
-    } catch {
-      // fall through
+    } else {
+      skippedAttachReasons.push(`${CODEX_APP_LAUNCHER_ENV} not set`);
     }
   }
 
@@ -385,8 +426,10 @@ function spawnWatcherPaneForScript(
 
   return {
     spawned: false,
-    reason:
-      "no supported terminal attach target detected (tmux, Codex app, Warp, Cursor, iTerm2, Apple Terminal)",
+    reason: [
+      ...skippedAttachReasons,
+      "no supported terminal attach target detected (tmux, configured Codex app launcher, Warp, Cursor, iTerm2, Apple Terminal)",
+    ].join("; "),
   };
 }
 
@@ -395,10 +438,17 @@ function spawnWatcherPaneForScript(
  * using the most appropriate terminal multiplexer detected from the environment.
  *
  * Detection priority (most universal first):
- *   1. tmux (any OS, via $TMUX env var) — splits the pane identified by
+ *   1. ONTO_RUNTIME_WATCHER_COMMAND — host-provided launcher template.
+ *   2. tmux (any OS, via $TMUX env var) — splits the pane identified by
  *      `$TMUX_PANE` so the watcher stays beside the invoking pane even if
  *      the user has switched panes during startReviewSession.
- *   2. iTerm2 on macOS (via $TERM_PROGRAM === 'iTerm.app') — targets the
+ *   3. Codex Desktop — only via ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER;
+ *      default UI keystroke automation is intentionally not used because
+ *      the app chat composer and terminal panel are not distinguishable by
+ *      a stable runtime-owned handle.
+ *   4. Warp — writes a launch configuration and opens the Warp launch URI.
+ *   5. Cursor — best-effort integrated-terminal UI automation.
+ *   6. iTerm2 on macOS (via $TERM_PROGRAM === 'iTerm.app') — targets the
  *      session identified by `$ITERM_SESSION_ID`, which is inherited from
  *      the invoking session at process start, so splits land beside the
  *      pane that actually launched onto:review. If the env var is missing
@@ -407,7 +457,7 @@ function spawnWatcherPaneForScript(
  *      tab — a default target would land the watcher on whichever tab happens to
  *      be frontmost at spawn time, which is the bug this path exists to
  *      avoid.
- *   3. Apple Terminal on macOS (via $TERM_PROGRAM === 'Apple_Terminal')
+ *   7. Apple Terminal on macOS (via $TERM_PROGRAM === 'Apple_Terminal')
  *      — best effort; Terminal.app lacks a stable session identifier, so
  *      the spawn opens a new tab rather than a tab-targeted split.
  *

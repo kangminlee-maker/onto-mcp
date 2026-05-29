@@ -99,11 +99,16 @@ final result to the user without inventing settings or findings.
 When `onto.review`, `onto.review_continue`, or `onto.reconstruct` starts, the
 runtime writes a session-local `runtime-events.ndjson` stream and tries to open
 `scripts/onto-runtime-watch.sh` in a supported terminal split/tab. Current
-automatic attach targets are `tmux`, Codex Desktop, Warp, Cursor, iTerm2, and
-Apple Terminal; unsupported hosts can set `ONTO_RUNTIME_WATCHER_COMMAND` with a
-launcher template containing `{watcherCommand}`. Each stream line is
-source-tagged by pipeline, unit/stage/process, and stdout/stderr/status. Set
-`ONTO_RUNTIME_WATCHER=0` to disable the automatic terminal attach.
+automatic attach targets are `tmux`, Codex Desktop with a configured launcher
+path, Warp, Cursor, iTerm2, and Apple Terminal. Codex Desktop attach never uses
+UI keystroke automation by default; set
+`ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER=/absolute/path/to/launcher.sh` to
+enable it. The launcher receives `watcherScript`, `sessionRoot`, `projectRoot`,
+and `watcherCommand` as positional arguments. Unsupported hosts can set
+`ONTO_RUNTIME_WATCHER_COMMAND` with a launcher template containing
+`{watcherCommand}`. Each stream line is source-tagged by pipeline,
+unit/stage/process, and stdout/stderr/status. Set `ONTO_RUNTIME_WATCHER=0` to
+disable the automatic terminal attach.
 
 Minimal reconstruct MCP call shape:
 

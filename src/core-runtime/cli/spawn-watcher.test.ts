@@ -66,6 +66,16 @@ function mkProjectRoot(withWatcherScript: boolean): Fixture {
   };
 }
 
+function writeLauncherFixture(fixture: Fixture): string {
+  const launcherPath = path.join(fixture.projectRoot, "codex-launcher.sh");
+  fs.writeFileSync(
+    launcherPath,
+    "#!/usr/bin/env bash\n# test fixture — no-op\n",
+    { mode: 0o755 },
+  );
+  return launcherPath;
+}
+
 // ---------------------------------------------------------------------------
 // Platform stubbing — iTerm2 / Apple Terminal branches gate on
 // `process.platform === "darwin"`. Tests must match so they exercise
@@ -91,6 +101,7 @@ function stubDarwin(): () => void {
 
 const WATCHED_ENV_KEYS = [
   "ONTO_RUNTIME_WATCHER_COMMAND",
+  "ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER",
   "ONTO_WATCHER_DRY_RUN",
   "TMUX",
   "TMUX_PANE",
@@ -275,8 +286,19 @@ describe("spawnWatcherPane — dry-run detection priority", () => {
     expect(result.dry_run).toBe(true);
   });
 
-  it("detects Codex Desktop when CODEX_SHELL is set", () => {
+  it("does not detect Codex Desktop without a configured launcher", () => {
     process.env.CODEX_SHELL = "1";
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+    expect(result.spawned).toBe(false);
+    expect(result.reason).toContain(
+      "ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER not set",
+    );
+  });
+
+  it("detects Codex Desktop when a launcher path is configured", () => {
+    process.env.CODEX_SHELL = "1";
+    process.env.ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER =
+      writeLauncherFixture(fixture);
     const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
     expect(result.spawned).toBe(true);
     expect(result.mechanism).toBe("codex_app");
@@ -496,11 +518,24 @@ describe("spawnWatcherPane — real-attach (spawnSync mock)", () => {
     expect(mockedSpawnSync).toHaveBeenCalledTimes(1);
   });
 
-  it("Codex Desktop real-attach uses app keystrokes for the terminal panel", () => {
+  it("Codex Desktop real-attach refuses UI keystrokes without a launcher", () => {
     process.env.CODEX_SHELL = "1";
+    const result = spawnWatcherPane(fixture.projectRoot, fixture.sessionRoot);
+
+    expect(result.spawned).toBe(false);
+    expect(result.reason).toContain(
+      "ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER not set",
+    );
+    expect(mockedSpawnSync).not.toHaveBeenCalled();
+  });
+
+  it("Codex Desktop real-attach invokes the configured launcher path", () => {
+    process.env.CODEX_SHELL = "1";
+    const launcherPath = writeLauncherFixture(fixture);
+    process.env.ONTO_RUNTIME_WATCHER_CODEX_APP_LAUNCHER = launcherPath;
     mockedSpawnSync.mockReturnValueOnce({
       status: 0,
-      stdout: "matched",
+      stdout: "",
       stderr: "",
       pid: 1,
       output: [],
@@ -513,12 +548,13 @@ describe("spawnWatcherPane — real-attach (spawnSync mock)", () => {
     expect(result.mechanism).toBe("codex_app");
 
     const [bin, args] = mockedSpawnSync.mock.calls[0]!;
-    expect(bin).toBe("osascript");
-    expect(args![0]).toBe("-e");
-    const script = String(args![1]);
-    expect(script).toContain('tell application "Codex"');
-    expect(script).toContain('keystroke "j" using {command down}');
-    expect(script).toContain("onto-review-watch.sh");
+    expect(bin).toBe(launcherPath);
+    expect(args).toEqual([
+      expect.stringContaining("onto-review-watch.sh"),
+      fixture.sessionRoot,
+      fixture.projectRoot,
+      expect.stringContaining("onto-review-watch.sh"),
+    ]);
   });
 
   it("Warp real-attach writes a launch configuration and opens the launch URI", () => {
