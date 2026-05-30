@@ -639,6 +639,9 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
 }
 
 function formatToolResult(data: unknown): JsonValue {
+  // Per MCP, `structuredContent` must be a JSON object. Callers that produce a
+  // top-level array (e.g. a list of domains/profiles) must wrap it in an object
+  // before calling this, or strict MCP clients reject the result.
   const text = JSON.stringify(data, null, 2);
   return {
     content: [{ type: "text", text }],
@@ -1196,13 +1199,17 @@ async function callTool(
         return formatToolResult(await reviewApi.listLenses());
       case "onto.list_domains": {
         const parsed = OntoListDomainsToolInputSchema.parse(args ?? {});
-        return formatToolResult(await reviewApi.listDomains(parsed.projectRoot));
+        const domains = await reviewApi.listDomains(parsed.projectRoot);
+        // Wrap the array so structuredContent is a JSON object (MCP requirement).
+        return formatToolResult({ domains });
       }
       case "onto.list_source_profiles": {
         const parsed = OntoListSourceProfilesToolInputSchema.parse(args ?? {});
-        return formatToolResult(
-          await reconstructApi.listSourceProfiles(parsed.projectRoot),
+        const sourceProfiles = await reconstructApi.listSourceProfiles(
+          parsed.projectRoot,
         );
+        // Wrap the array so structuredContent is a JSON object (MCP requirement).
+        return formatToolResult({ sourceProfiles });
       }
       case "onto.observe_source": {
         const parsed = OntoObserveSourceToolInputSchema.parse(args);
