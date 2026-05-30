@@ -6,13 +6,22 @@ import {
   cursorConfigPath,
 } from "./json-config-host.js";
 
+export interface DefaultHostTargetOptions {
+  /** Target a specific Claude Code profile by config dir (CLAUDE_CONFIG_DIR). */
+  claudeConfigDir?: string;
+}
+
 /**
  * The four supported hosts in display order. CLI-backed hosts (Claude Code,
  * Codex) come first; JSON-config hosts (Claude Desktop, Cursor) follow.
  */
-export function getDefaultHostTargets(): HostTarget[] {
+export function getDefaultHostTargets(
+  options: DefaultHostTargetOptions = {},
+): HostTarget[] {
   return [
-    createClaudeCodeHost(),
+    createClaudeCodeHost(
+      options.claudeConfigDir ? { configDir: options.claudeConfigDir } : {},
+    ),
     createCodexHost(),
     createJsonConfigHost({
       id: "claude-desktop",
