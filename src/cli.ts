@@ -34,10 +34,11 @@ function loadOntoEnvFile(filePath: string): void {
 function printHelp(): void {
   console.log(
     [
-      "Usage: onto mcp",
+      "Usage: onto <command>",
       "",
       "Active interface:",
       "  mcp            Start the MCP stdio tool server",
+      "  register       Register the onto MCP server into supported hosts",
       "",
       "Available MCP tools:",
       "  onto.review",
@@ -63,7 +64,7 @@ function printHelp(): void {
 function unsupportedCommandMessage(subcommand: string): string {
   return [
     `[onto] Unsupported public CLI subcommand: ${subcommand}`,
-    "Active public command: onto mcp",
+    "Active public commands: onto mcp, onto register",
   ].join("\n");
 }
 
@@ -78,6 +79,11 @@ async function main(): Promise<number> {
     case "mcp": {
       const { startMcpServer } = await import("./mcp/server.js");
       return startMcpServer();
+    }
+
+    case "register": {
+      const { runRegister } = await import("./core-runtime/onboard/register.js");
+      return runRegister(argv.slice(1));
     }
 
     case "--version":

@@ -76,6 +76,36 @@ Start the MCP server:
 onto mcp
 ```
 
+### Register with hosts
+
+`npm install` only puts the `onto` binary on PATH — each MCP host (Claude Code,
+Codex, Claude Desktop, Cursor) must additionally be told to launch it. `onto
+register` does that in one step. The same global binary is shared by every host.
+
+```bash
+onto register                  # interactive: pick detected hosts (terminal only)
+onto register --all --yes      # non-interactive: every detected host
+onto register --hosts cursor,codex --yes
+onto register --list           # show detection status, write nothing
+onto register --hosts cursor --dry-run   # preview the change, write nothing
+```
+
+Mechanism per host:
+
+| Host | How it is registered |
+|---|---|
+| Claude Code | `claude mcp add onto -s user -- onto mcp` (user scope = all projects) |
+| Codex CLI | `codex mcp add onto -- onto mcp` |
+| Claude Desktop | edits `mcpServers.onto` in `claude_desktop_config.json` |
+| Cursor | edits `mcpServers.onto` in `~/.cursor/mcp.json` |
+
+For the CLI-backed hosts, `onto register` prefers the official CLI and falls back
+to printing manual instructions when it is not on PATH. JSON edits preserve any
+servers already present and are idempotent (re-running reports `skipped`).
+Registration writes only host-owned config; it never writes onto runtime data.
+Restart the host app after registering to pick up the new server. Override the
+launched command or server name with `--command <cmd>` / `--name <id>`.
+
 For project-local installs, add `onto-mcp` to the project and run the local
 binary:
 
