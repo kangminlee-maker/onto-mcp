@@ -890,15 +890,40 @@ async function main(): Promise<void> {
           projectRoot: reconstructProjectRoot,
         },
       }), "tools/call onto.list_source_profiles"));
+      // structuredContent must be a JSON object (MCP requirement); the profile
+      // list lives under `sourceProfiles`.
+      const profilesStructured = profilesResult.structuredContent;
       assert(
-        Array.isArray(profilesResult.structuredContent) &&
-          profilesResult.structuredContent.some((profile) =>
+        profilesStructured !== null &&
+          typeof profilesStructured === "object" &&
+          !Array.isArray(profilesStructured),
+        "onto.list_source_profiles structuredContent must be a JSON object.",
+      );
+      const sourceProfiles = (profilesStructured as { sourceProfiles?: unknown }).sourceProfiles;
+      assert(
+        Array.isArray(sourceProfiles) &&
+          sourceProfiles.some((profile) =>
             profile !== null &&
               typeof profile === "object" &&
               (profile as { target_material_kind?: unknown }).target_material_kind ===
                 "spreadsheet"
           ),
-        "onto.list_source_profiles must include spreadsheet profile.",
+        "onto.list_source_profiles.sourceProfiles must include spreadsheet profile.",
+      );
+
+      const domainsResult = requireToolResult(requireResult(await client.request("tools/call", {
+        name: "onto.list_domains",
+        arguments: {
+          projectRoot: reconstructProjectRoot,
+        },
+      }), "tools/call onto.list_domains"));
+      const domainsStructured = domainsResult.structuredContent;
+      assert(
+        domainsStructured !== null &&
+          typeof domainsStructured === "object" &&
+          !Array.isArray(domainsStructured) &&
+          Array.isArray((domainsStructured as { domains?: unknown }).domains),
+        "onto.list_domains structuredContent must be a JSON object with a domains array.",
       );
 
       const observeResult = requireToolResult(requireResult(await client.request("tools/call", {
