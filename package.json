@@ -21,6 +21,7 @@
     "dist/",
     "scripts/onto-runtime-watch.sh",
     "scripts/onto-review-watch.sh",
+    "scripts/postinstall-hint.js",
     ".onto/roles/",
     ".onto/domains/",
     ".onto/authority/",
@@ -32,6 +33,7 @@
   ],
   "scripts": {
     "prepare": "npm run build:ts-core",
+    "postinstall": "node scripts/postinstall-hint.js",
     "clean:ts-core": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
