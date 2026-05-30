@@ -1,24 +1,13 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
-import {
-  RECONSTRUCT_ANSWERABILITY_EVENT_TYPES as ANSWERABILITY_EVENT_TYPES,
-  RECONSTRUCT_CONCEPT_CONVERGENCE_STATES as CONVERGENCE_STATES,
-  RECONSTRUCT_CONCEPT_IDENTITY_EVENT_TYPES as CONCEPT_IDENTITY_EVENT_TYPES,
-  RECONSTRUCT_DETAIL_PLACEMENT_EVENT_TYPES as DETAIL_PLACEMENT_EVENT_TYPES,
-  RECONSTRUCT_FRONTIER_PRESSURE_ORIGINS as FRONTIER_PRESSURE_ORIGINS,
-  RECONSTRUCT_FRONTIER_PRESSURE_STATUSES as FRONTIER_PRESSURE_STATUSES,
-  RECONSTRUCT_FRONTIER_PRESSURE_TYPES as FRONTIER_PRESSURE_TYPES,
-  RECONSTRUCT_HANDOFF_QUESTION_SOURCES as HANDOFF_QUESTION_SOURCES,
-  RECONSTRUCT_LOWER_LEVEL_DETAIL_PLACEMENTS as LOWER_LEVEL_DETAIL_PLACEMENTS,
-  RECONSTRUCT_MATERIAL_COVERAGE_EVENT_TYPES as MATERIAL_COVERAGE_EVENT_TYPES,
-  RECONSTRUCT_PRESSURE_EVENT_TYPES as PRESSURE_EVENT_TYPES,
-  RECONSTRUCT_RELATION_IDENTITY_EVENT_TYPES as RELATION_IDENTITY_EVENT_TYPES,
-  RECONSTRUCT_SEED_MIGRATION_TARGETS as SEED_MIGRATION_TARGETS,
-  RECONSTRUCT_SEED_SCHEMA_VERSIONS as SEED_SCHEMA_VERSIONS,
-  RECONSTRUCT_TOP_LEVEL_RELATION_KINDS as TOP_LEVEL_RELATION_KINDS,
-} from "./artifact-types.js";
 import type {
+  ReconstructActionableOntologySeedArtifact,
+  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructCandidateDispositionArtifact,
+  ReconstructCandidateDispositionValidationArtifact,
+  ReconstructCandidateInventoryArtifact,
   ReconstructClaimRealizationMapArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructClaimRealizationStance,
@@ -32,9 +21,11 @@ import type {
   ReconstructFailureClassificationArtifact,
   ReconstructFailureClassificationValidationArtifact,
   ReconstructFailureRecommendedAction,
+  ReconstructFinalOutputProvenanceValidationArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructLensJudgmentIndexArtifact,
   ReconstructFailureKind,
+  ReconstructHandoffDecisionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
@@ -42,9 +33,9 @@ import type {
   ReconstructRevisionProposalArtifact,
   ReconstructRevisionProposalValidationArtifact,
   ReconstructRunManifestArtifact,
+  ReconstructRunGoverningSnapshot,
+  ReconstructRunManifestValidationArtifact,
   ReconstructRunManifestStep,
-  ReconstructSeedCandidateArtifact,
-  ReconstructSeedCandidateValidationArtifact,
   ReconstructSeedClaim,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationStatus,
@@ -59,29 +50,47 @@ import type {
   ReconstructStopDecisionArtifact,
   ReconstructStopDecision,
   ReconstructTargetMaterialProfileArtifact,
-  ReconstructTransitionalSeedCandidateArtifact,
+  ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
 import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-caller.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   TARGET_MATERIAL_KINDS,
-  isTargetMaterialKind,
   type TargetMaterialKind,
 } from "../target-material-kind.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
 import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
+import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
+  ANSWER_STATUSES,
   validateFinalOutputProvenance,
-  writeClaimRealizationMapValidationArtifact,
+  type ReconstructFinalOutputProvenanceSectionBindingInput,
+  writeClaimRealizationMapValidationForOntologySeedArtifact,
   writeCompetencyQuestionAssessmentValidationArtifact,
-  writeCompetencyQuestionsValidationArtifact,
+  writeCompetencyQuestionsValidationForOntologySeedArtifact,
   writeFailureClassificationValidationArtifact,
   writeRevisionProposalValidationArtifact,
-  writeSeedConfirmationValidationArtifact,
+  writeSeedConfirmationValidationForOntologySeedArtifact,
 } from "./post-seed-validation.js";
 import { assembleReconstructRecord } from "./record.js";
-import { writeSeedCandidateValidationArtifact } from "./seed-candidate-validation.js";
-import { seedClaimProjections } from "./seed-claim-projections.js";
+import {
+  writeActionableOntologySeedValidationArtifact,
+  writeCandidateDispositionValidationArtifact,
+} from "./actionable-seed-validation.js";
+import {
+  loadReconstructContractRegistry,
+  type ReconstructContractRegistry,
+} from "./contract-registry.js";
+import { buildReconstructRunGoverningSnapshot } from "./governing-snapshot.js";
+import {
+  writeHandoffDecisionValidationArtifact,
+  writeReconstructRunManifestValidationArtifact,
+} from "./terminal-validation.js";
+import {
+  ontologySeedAnswerabilitySummary,
+  ontologySeedClaimProjections,
+  ontologySeedExcludedClaimIds,
+} from "./seed-claim-projections.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
 
 export interface ReconstructDirectiveAuthor {
@@ -99,9 +108,15 @@ export interface ReconstructDirectiveAuthor {
   writeSourceFrontier(
     input: ReconstructSourceFrontierAuthorInput,
   ): Promise<ReconstructSourceFrontierArtifact>;
-  writeSeedCandidate(
-    input: ReconstructSeedCandidateAuthorInput,
-  ): Promise<ReconstructSeedCandidateArtifact>;
+  writeCandidateInventory(
+    input: ReconstructCandidateInventoryAuthorInput,
+  ): Promise<ReconstructCandidateInventoryArtifact>;
+  writeCandidateDisposition(
+    input: ReconstructCandidateDispositionAuthorInput,
+  ): Promise<ReconstructCandidateDispositionArtifact>;
+  writeOntologySeed(
+    input: ReconstructOntologySeedAuthorInput,
+  ): Promise<ReconstructActionableOntologySeedArtifact>;
   writeClaimRealizationMap(
     input: ReconstructClaimRealizationAuthorInput,
   ): Promise<ReconstructClaimRealizationMapArtifact>;
@@ -129,7 +144,7 @@ export type ReconstructConfirmationProviderRealization = "mock" | "direct_call";
 export interface ReconstructConfirmationProvider {
   readonly providerId: string;
   readonly owner: "host_or_user" | "mock";
-  confirmSeedCandidate(
+  confirmOntologySeed(
     input: ReconstructSeedConfirmationInput,
   ): Promise<ReconstructSeedConfirmationArtifact>;
 }
@@ -139,18 +154,6 @@ export interface ReconstructSourceObservationDirectiveAuthorInput {
   intent: string;
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
-}
-
-export interface ReconstructSeedCandidateAuthorInput {
-  sessionId: string;
-  intent: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
-  sourceObservationDirectiveValidation:
-    ReconstructSourceObservationDirectiveValidationArtifact;
-  lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact | null;
-  explorationSynthesis: ReconstructExplorationSynthesisArtifact | null;
-  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null;
 }
 
 export interface ReconstructLensJudgmentAuthorInput {
@@ -170,6 +173,8 @@ export interface ReconstructExplorationSynthesisAuthorInput {
   roundId: string;
   lensJudgments: ReconstructLensJudgmentArtifact[];
   lensJudgmentIndexRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
 }
 
 export interface ReconstructSourceFrontierAuthorInput {
@@ -178,31 +183,72 @@ export interface ReconstructSourceFrontierAuthorInput {
   roundId: string;
   explorationSynthesis: ReconstructExplorationSynthesisArtifact;
   explorationSynthesisRef: string;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
+export interface ReconstructCandidateInventoryAuthorInput {
+  sessionId: string;
+  intent: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
+  lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact;
+  explorationSynthesis: ReconstructExplorationSynthesisArtifact;
+  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
+  contractRegistry: ReconstructContractRegistry;
+}
+
+export interface ReconstructCandidateDispositionAuthorInput {
+  sessionId: string;
+  intent: string;
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  candidateInventoryRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  contractRegistry: ReconstructContractRegistry;
+}
+
+export interface ReconstructOntologySeedAuthorInput {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  candidateInventoryRef: string;
+  candidateDisposition: ReconstructCandidateDispositionArtifact;
+  candidateDispositionRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  contractRegistry: ReconstructContractRegistry;
 }
 
 export interface ReconstructSeedConfirmationInput {
   sessionId: string;
-  seedCandidate: ReconstructSeedCandidateArtifact;
-  seedCandidateRef: string;
-  seedCandidateValidation: ReconstructSeedCandidateValidationArtifact;
-  seedCandidateValidationRef: string;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedRef: string;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeedValidationRef: string;
 }
 
 export interface ReconstructClaimRealizationAuthorInput {
   sessionId: string;
-  seedCandidate: ReconstructSeedCandidateArtifact;
-  seedCandidateRef: string;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedRef: string;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
 export interface ReconstructCompetencyQuestionAuthorInput {
   sessionId: string;
-  seedCandidate: ReconstructSeedCandidateArtifact;
-  seedConfirmation: ReconstructSeedConfirmationArtifact;
-  seedConfirmationRef: string;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedRef: string;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
   seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
   seedConfirmationValidationRef: string;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  contractRegistry: ReconstructContractRegistry;
+  governingSnapshot: ReconstructRunGoverningSnapshot;
 }
 
 export interface ReconstructCompetencyQuestionAssessmentAuthorInput {
@@ -243,7 +289,11 @@ export interface ReconstructFinalOutputAuthorInput {
   sessionId: string;
   intent: string;
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  seedCandidate: ReconstructSeedCandidateArtifact;
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  candidateDisposition: ReconstructCandidateDispositionArtifact;
+  candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
   claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
   seedConfirmation: ReconstructSeedConfirmationArtifact;
@@ -259,6 +309,8 @@ export interface ReconstructFinalOutputAuthorInput {
   revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
   metrics: ReconstructMetricsArtifact;
   stopDecision: ReconstructStopDecisionArtifact;
+  preHandoffRunManifestValidation: ReconstructRunManifestValidationArtifact;
+  handoffDecisionValidation: ReconstructHandoffDecisionValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   artifactRefs: ReconstructRecordArtifactRefs;
   reconstructRecordPath: string;
@@ -273,12 +325,39 @@ export interface RunReconstructParams {
   intent: string;
   sessionRoot: string;
   profilesRoot: string;
+  domain?: string;
+  resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
   filesystemAllowedRoots?: string[];
   semanticAuthorRealization: ReconstructSemanticAuthorRealization;
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
   llmConfig?: Partial<LlmCallConfig>;
+}
+
+interface AuthoredArtifactCompatibility {
+  session_id: string;
+  intent_sha256: string;
+  target_refs_sha256: string;
+  target_material_profile_sha256: string;
+  source_inventory_sha256: string;
+  source_observations_sha256: string;
+  governing_snapshot_sha256: string;
+  requested_domain_ids: string[];
+  semantic_author_realization: ReconstructSemanticAuthorRealization;
+  confirmation_provider_realization: ReconstructConfirmationProviderRealization;
+  directive_author_id: string;
+  confirmation_provider_id: string;
+}
+
+interface AuthoredArtifactReuseProvenance {
+  schema_version: "1";
+  artifact_name: string;
+  artifact_ref: string;
+  artifact_sha256: string;
+  created_at: string;
+  compatibility_hash: string;
+  compatibility: AuthoredArtifactCompatibility;
 }
 
 export interface ReconstructRunResult {
@@ -302,17 +381,281 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${stableJson(value[key])}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sha256Text(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
+}
+
 async function writeYamlDocument(filePath: string, value: unknown): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, stringifyYaml(value), "utf8");
+}
+
+function validationViolationSummary(violations: unknown): string {
+  if (!Array.isArray(violations) || violations.length === 0) {
+    return "no violation details recorded";
+  }
+  return violations.slice(0, 8).map((violation, index) => {
+    if (violation === null || typeof violation !== "object" || Array.isArray(violation)) {
+      return `${index + 1}. ${String(violation)}`;
+    }
+    const record = violation as Record<string, unknown>;
+    const code = typeof record.code === "string" ? record.code : "unknown";
+    const message = typeof record.message === "string" ? record.message : JSON.stringify(record);
+    const subject =
+      typeof record.subject_id === "string"
+        ? record.subject_id
+        : typeof record.claim_id === "string"
+          ? record.claim_id
+          : typeof record.candidate_id === "string"
+            ? record.candidate_id
+            : null;
+    return `${index + 1}. ${code}${subject ? ` (${subject})` : ""}: ${message}`;
+  }).join("; ");
+}
+
+function validationDetailSummary(validation: Record<string, unknown>): string {
+  if (Array.isArray(validation.violations) && validation.violations.length > 0) {
+    return validationViolationSummary(validation.violations);
+  }
+  if (
+    Array.isArray(validation.rejected_frontier_refs) &&
+    validation.rejected_frontier_refs.length > 0
+  ) {
+    return validation.rejected_frontier_refs.slice(0, 8).map((item, index) => {
+      if (item === null || typeof item !== "object" || Array.isArray(item)) {
+        return `${index + 1}. ${String(item)}`;
+      }
+      const record = item as Record<string, unknown>;
+      return `${index + 1}. ${String(record.reason ?? "rejected_frontier_ref")}: ${
+        String(record.source_ref ?? record.frontier_ref_id ?? "unknown")
+      }`;
+    }).join("; ");
+  }
+  return "no validation details recorded";
+}
+
+function assertRuntimeValidationValid(args: {
+  artifactName: string;
+  artifactRef: string;
+  validation: {
+    validation_status: "valid" | "invalid";
+    violations?: unknown;
+  };
+}): void {
+  if (args.validation.validation_status === "valid") return;
+  throw new Error(
+    `${args.artifactName} validation failed at ${args.artifactRef}: ${
+      validationDetailSummary(args.validation as unknown as Record<string, unknown>)
+    }`,
+  );
 }
 
 async function readYamlDocument<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
 }
 
-function allClaims(seedCandidate: ReconstructSeedCandidateArtifact): ReconstructSeedClaim[] {
-  return seedClaimProjections(seedCandidate);
+function isMissingFile(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
+async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null> {
+  try {
+    return await readYamlDocument<T>(filePath);
+  } catch (error) {
+    if (isMissingFile(error)) return null;
+    throw error;
+  }
+}
+
+async function readTextIfPresent(filePath: string): Promise<string | null> {
+  try {
+    return await fs.readFile(filePath, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return null;
+    throw error;
+  }
+}
+
+async function exists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if (isMissingFile(error)) return false;
+    throw error;
+  }
+}
+
+function authoredArtifactProvenancePath(filePath: string): string {
+  return `${filePath}.reuse-provenance.yaml`;
+}
+
+function compatibilityHash(compatibility: AuthoredArtifactCompatibility): string {
+  return sha256Text(stableJson(compatibility));
+}
+
+function authoredArtifactCompatibility(args: {
+  sessionId: string;
+  intent: string;
+  targetRefs: string[];
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  governingSnapshot: ReconstructRunGoverningSnapshot;
+  semanticAuthorRealization: ReconstructSemanticAuthorRealization;
+  confirmationProviderRealization: ReconstructConfirmationProviderRealization;
+  directiveAuthor: ReconstructDirectiveAuthor;
+  confirmationProvider: ReconstructConfirmationProvider;
+}): AuthoredArtifactCompatibility {
+  return {
+    session_id: args.sessionId,
+    intent_sha256: sha256Text(args.intent),
+    target_refs_sha256: sha256Text(stableJson(args.targetRefs.map((ref) => path.resolve(ref)).sort())),
+    target_material_profile_sha256: sha256Text(stableJson({
+      target_refs: args.targetMaterialProfile.target_refs.map((ref) => path.resolve(ref)).sort(),
+      target_material_kind: args.targetMaterialProfile.target_material_kind,
+      target_material_kind_candidates:
+        args.targetMaterialProfile.target_material_kind_candidates,
+      support_status: args.targetMaterialProfile.support_status,
+      selected_source_profiles: args.targetMaterialProfile.selected_source_profiles,
+      detection: args.targetMaterialProfile.detection.per_ref.map((item) => ({
+        ref: path.resolve(item.ref),
+        exists: item.exists,
+        kind: item.kind,
+        confidence: item.confidence,
+      })),
+    })),
+    source_inventory_sha256: sha256Text(stableJson(
+      args.sourceInventory.inventory_units.map((unit) => ({
+        ref: path.resolve(unit.ref),
+        exists: unit.exists,
+        target_material_kind: unit.target_material_kind,
+        inventory_unit: unit.inventory_unit,
+        profile_ref: unit.profile_ref ? path.resolve(unit.profile_ref) : null,
+        scan_status: unit.scan_status,
+        skip_reason: unit.skip_reason,
+      })),
+    )),
+    source_observations_sha256: sha256Text(stableJson({
+      observations: args.sourceObservations.observations.map((observation) => ({
+        observation_id: observation.observation_id,
+        target_material_kind: observation.target_material_kind,
+        adapter_id: observation.adapter_id,
+        source_ref: path.resolve(observation.source_ref),
+        location: path.resolve(observation.location),
+        structural_data: {
+          path_kind: observation.structural_data.path_kind ?? null,
+          size_bytes: observation.structural_data.size_bytes ?? null,
+          line_count: observation.structural_data.line_count ?? null,
+          char_count: observation.structural_data.char_count ?? null,
+          content_sha256: observation.structural_data.content_sha256 ?? null,
+          excerpt_truncated: observation.structural_data.excerpt_truncated ?? null,
+        },
+      })),
+      skipped_refs: args.sourceObservations.skipped_refs.map((skipped) => ({
+        ref: path.resolve(skipped.ref),
+        target_material_kind: skipped.target_material_kind,
+        reason: skipped.reason,
+      })),
+    })),
+    governing_snapshot_sha256: sha256Text(stableJson(args.governingSnapshot)),
+    requested_domain_ids: args.governingSnapshot.requested_domain_ids,
+    semantic_author_realization: args.semanticAuthorRealization,
+    confirmation_provider_realization: args.confirmationProviderRealization,
+    directive_author_id: args.directiveAuthor.authorId,
+    confirmation_provider_id: args.confirmationProvider.providerId,
+  };
+}
+
+async function writeFreshAuthoredYamlDocument<T>(
+  filePath: string,
+  artifactName: string,
+  create: () => Promise<T>,
+  options: {
+    reuseExisting?: boolean;
+    compatibility?: AuthoredArtifactCompatibility;
+  } = {},
+): Promise<T> {
+  const currentCompatibilityHash = options.compatibility
+    ? compatibilityHash(options.compatibility)
+    : null;
+  if (await exists(filePath)) {
+    if (options.reuseExisting) {
+      const provenancePath = authoredArtifactProvenancePath(filePath);
+      const provenance =
+        await readYamlDocumentIfPresent<AuthoredArtifactReuseProvenance>(
+          provenancePath,
+        );
+      if (!provenance) {
+        throw new Error(
+          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove authored artifact compatibility.`,
+        );
+      }
+      if (
+        currentCompatibilityHash &&
+        provenance.compatibility_hash !== currentCompatibilityHash
+      ) {
+        throw new Error(
+          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for compatibility_hash=${provenance.compatibility_hash}, current compatibility_hash=${currentCompatibilityHash}.`,
+        );
+      }
+      const currentArtifactSha256 = await sha256File(filePath);
+      if (provenance.artifact_sha256 !== currentArtifactSha256) {
+        throw new Error(
+          `${artifactName} artifact hash mismatch at ${filePath}; expected ${provenance.artifact_sha256}, got ${currentArtifactSha256}.`,
+        );
+      }
+      return readYamlDocument<T>(filePath);
+    }
+    throw new Error(
+      `${artifactName} already exists at ${filePath}; explicit resume or supersession is required before rewriting authored semantic artifacts.`,
+    );
+  }
+  const created = await create();
+  await writeYamlDocument(filePath, created);
+  if (options.compatibility && currentCompatibilityHash) {
+    await writeYamlDocument(authoredArtifactProvenancePath(filePath), {
+      schema_version: "1",
+      artifact_name: artifactName,
+      artifact_ref: filePath,
+      artifact_sha256: await sha256File(filePath),
+      created_at: isoNow(),
+      compatibility_hash: currentCompatibilityHash,
+      compatibility: options.compatibility,
+    } satisfies AuthoredArtifactReuseProvenance);
+  }
+  return created;
+}
+
+function ontologyClaims(
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
+): ReconstructSeedClaim[] {
+  return ontologySeedClaimProjections(ontologySeed);
 }
 
 function compactStatement(statement: string): string {
@@ -324,83 +667,17 @@ function sourceBasename(sourceRef: string): string {
   return path.basename(sourceRef) || sourceRef;
 }
 
-function legacySeedClaims(
-  seedCandidate: ReconstructSeedCandidateArtifact,
-  fieldName: "non_goals" | "entities" | "relations" | "actions" | "properties" | "rules",
-): ReconstructSeedClaim[] {
-  if (!("non_goals" in seedCandidate)) return [];
-  return seedCandidate[fieldName];
-}
-
-function legacyOpenQuestions(seedCandidate: ReconstructSeedCandidateArtifact): string[] {
-  return "open_questions" in seedCandidate ? seedCandidate.open_questions : [];
-}
-
-function seedClaimKindById(seedCandidate: ReconstructSeedCandidateArtifact): Map<string, string> {
-  const claimKindById = new Map<string, string>();
-  const add = (claimId: string | undefined, claimKind: string) => {
-    if (claimId && !claimKindById.has(claimId)) claimKindById.set(claimId, claimKind);
-  };
-  add(seedCandidate.purpose.claim_id, "purpose");
-  const topLevelConcepts = "top_level_concepts" in seedCandidate
-    ? seedCandidate.top_level_concepts
-    : [];
-  const topLevelRelations = "top_level_relations" in seedCandidate
-    ? seedCandidate.top_level_relations
-    : [];
-  const answerability = "answerability_scope" in seedCandidate
-    ? seedCandidate.answerability_scope
-    : undefined;
-  for (const concept of topLevelConcepts) {
-    add(concept.concept_id, "top_level_concept");
-  }
-  for (const relation of topLevelRelations) {
-    add(relation.relation_id, "top_level_relation");
-  }
-  for (const question of answerability?.supported_questions ?? []) {
-    add(question.question_id, "supported_question");
-  }
-  for (const question of answerability?.deferred_questions ?? []) {
-    add(question.question_id, "deferred_question");
-  }
-  for (const question of answerability?.unsupported_questions ?? []) {
-    add(question.question_id, "unsupported_question");
-  }
-  for (const action of answerability?.supported_actions ?? []) {
-    add(action.action_id, "supported_action");
-  }
-  for (const action of answerability?.unsupported_actions ?? []) {
-    add(action.action_id, "unsupported_action");
-  }
-  for (const [fieldName, claimKind] of [
-    ["non_goals", "non_goal"],
-    ["entities", "entity"],
-    ["relations", "relation"],
-    ["actions", "action"],
-    ["properties", "property"],
-    ["rules", "rule"],
-  ] as const) {
-    for (const claim of legacySeedClaims(seedCandidate, fieldName)) {
-      add(claim.claim_id, claimKind);
-    }
-  }
-  return claimKindById;
-}
-
-function summarizeSeedClaimsForConfirmation(
-  seedCandidate: ReconstructSeedCandidateArtifact,
+function claimRealizationTargets(
+  claims: ReconstructSeedClaim[],
 ): Array<{
   claim_id: string;
-  claim_kind: string;
   name: string;
   statement: string;
   evidence_observation_ids: string[];
   evidence_source_basenames: string[];
 }> {
-  const claimKindById = seedClaimKindById(seedCandidate);
-  return seedClaimProjections(seedCandidate).map((claim) => ({
+  return claims.map((claim) => ({
     claim_id: claim.claim_id,
-    claim_kind: claimKindById.get(claim.claim_id) ?? "semantic_claim",
     name: claim.name,
     statement: compactStatement(claim.statement),
     evidence_observation_ids: [
@@ -413,59 +690,22 @@ function summarizeSeedClaimsForConfirmation(
 }
 
 function answerabilitySummary(
-  seedCandidate: ReconstructSeedCandidateArtifact,
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
 ): ReconstructMetricsArtifact["answerability_summary"] {
-  const answerability = "answerability_scope" in seedCandidate
-    ? seedCandidate.answerability_scope
-    : undefined;
-  return {
-    declared_question_count: answerability?.declared_handoff_questions.length ?? 0,
-    supported_question_count: answerability?.supported_questions.length ?? 0,
-    deferred_question_count: answerability?.deferred_questions.length ?? 0,
-    unsupported_question_count: answerability?.unsupported_questions.length ?? 0,
-    supported_action_count: answerability?.supported_actions.length ?? 0,
-    unsupported_action_count: answerability?.unsupported_actions.length ?? 0,
-  };
+  return ontologySeedAnswerabilitySummary(ontologySeed);
 }
 
-function seedAnswerabilityLines(seedCandidate: ReconstructSeedCandidateArtifact): string[] {
-  const answerability = "answerability_scope" in seedCandidate
-    ? seedCandidate.answerability_scope
-    : undefined;
-  if (!answerability) return ["- No Seed answerability scope recorded."];
-  const questionTextById = new Map(
-    answerability.declared_handoff_questions.map((question) => [
-      question.question_id,
-      question.question,
-    ]),
-  );
-  const lines: string[] = [
-    `- Declared handoff questions: ${answerability.declared_handoff_questions.length}`,
-    `- Supported questions: ${answerability.supported_questions.length}`,
-    `- Deferred questions: ${answerability.deferred_questions.length}`,
-    `- Unsupported questions: ${answerability.unsupported_questions.length}`,
-    `- Supported actions: ${answerability.supported_actions.length}`,
-    `- Unsupported actions: ${answerability.unsupported_actions.length}`,
+function ontologySeedSummaryLines(
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
+): string[] {
+  const claims = ontologyClaims(ontologySeed);
+  const summary = ontologySeedAnswerabilitySummary(ontologySeed);
+  return [
+    `- Ontology seed projected claims: ${claims.length}`,
+    `- Coverage axes: ${summary.declared_question_count}`,
+    `- Action types: ${summary.supported_action_count + summary.unsupported_action_count}`,
+    `- Limited action types: ${summary.unsupported_action_count}`,
   ];
-  for (const question of answerability.supported_questions) {
-    lines.push(
-      `- supported question ${question.question_id}: ${questionTextById.get(question.question_id) ?? question.question_id}`,
-    );
-  }
-  for (const question of answerability.deferred_questions) {
-    lines.push(`- deferred question ${question.question_id}: ${question.reason_deferred}`);
-  }
-  for (const question of answerability.unsupported_questions) {
-    lines.push(`- unsupported question ${question.question_id}: ${question.reason_unsupported}`);
-  }
-  for (const action of answerability.supported_actions) {
-    lines.push(`- supported action ${action.action_id}: ${action.readiness_statement}`);
-  }
-  for (const action of answerability.unsupported_actions) {
-    lines.push(`- unsupported action ${action.action_id}: ${action.reason_unsupported}`);
-  }
-  lines.push(`- Handoff readiness: ${answerability.handoff_readiness_statement}`);
-  return lines;
 }
 
 function countBy<T extends string>(
@@ -481,6 +721,22 @@ function countBy<T extends string>(
   return counts;
 }
 
+function stopDecisionAllowedDecisions(input: {
+  metrics: ReconstructMetricsArtifact;
+  failureClassification: ReconstructFailureClassificationArtifact;
+}): ReconstructStopDecision[] {
+  const materialFailureCount = input.failureClassification.failures.filter((failure) =>
+    failure.materiality === "material"
+  ).length;
+  const hasUnresolvedWork =
+    input.metrics.unresolved_question_count > 0 ||
+    materialFailureCount > 0 ||
+    input.metrics.confirmation_state_counts.rejected > 0 ||
+    input.metrics.confirmation_state_counts.partial > 0 ||
+    input.metrics.confirmation_state_counts.deferred > 0;
+  return hasUnresolvedWork ? ["continue", "ask_user"] : ["stop", "continue", "ask_user"];
+}
+
 const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
   "declared_design_intent",
@@ -489,14 +745,6 @@ const CLAIM_REALIZATION_STANCES = [
   "deferred_or_non_goal",
   "unknown",
 ] as const satisfies readonly ReconstructClaimRealizationStance[];
-
-const ANSWER_STATUSES = [
-  "answered",
-  "partially_answered",
-  "not_answered",
-  "needs_evidence",
-  "out_of_scope",
-] as const satisfies readonly ReconstructCompetencyQuestionAnswerStatus[];
 
 const FAILURE_KINDS = [
   "unsupported_claim",
@@ -539,13 +787,38 @@ function requireFirstObservation(
   return observation;
 }
 
+function assertSemanticAuthoringHasObservedEvidence(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): void {
+  if (args.sourceObservations.observations.length > 0) return;
+  const skipped = args.sourceInventory.inventory_units
+    .filter((unit) => unit.scan_status === "skipped")
+    .map((unit) =>
+      `${path.basename(unit.ref)}:${unit.target_material_kind}:${unit.skip_reason ?? "skipped"}`
+    );
+  throw new Error(
+    [
+      "reconstruct semantic authoring requires at least one runtime source observation",
+      `target_material_kind=${args.targetMaterialProfile.target_material_kind}`,
+      `support_status=${args.targetMaterialProfile.support_status}`,
+      `unsupported_reason=${args.targetMaterialProfile.unsupported_reason ?? "none"}`,
+      `skipped_refs=${skipped.join(", ") || "none"}`,
+    ].join("; "),
+  );
+}
+
 function calculateMetrics(args: {
   sessionId: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
+  targetMaterialProfileValidation:
+    ReconstructTargetMaterialProfileValidationArtifact;
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact;
-  seedCandidate: ReconstructSeedCandidateArtifact;
-  seedCandidateValidation: ReconstructSeedCandidateValidationArtifact;
+  candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
   claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
   seedConfirmation: ReconstructSeedConfirmationArtifact;
   seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
@@ -557,9 +830,13 @@ function calculateMetrics(args: {
   revisionProposalValidation: ReconstructRevisionProposalValidationArtifact;
 }): ReconstructMetricsArtifact {
   const validationStatus = {
+    target_material_profile:
+      args.targetMaterialProfileValidation.validation_status,
     source_observation_directive:
       args.sourceObservationDirectiveValidation.validation_status,
-    seed_candidate: args.seedCandidateValidation.validation_status,
+    candidate_disposition:
+      args.candidateDispositionValidation.validation_status,
+    ontology_seed: args.ontologySeedValidation.validation_status,
     seed_confirmation: args.seedConfirmation.confirmation_status,
     claim_realization: args.claimRealizationMapValidation.validation_status,
     seed_confirmation_validation:
@@ -578,7 +855,9 @@ function calculateMetrics(args: {
     args.seedConfirmationValidation.deferred_claim_ids.length;
   const invalidGateCount = [
     validationStatus.source_observation_directive,
-    validationStatus.seed_candidate,
+    validationStatus.target_material_profile,
+    validationStatus.candidate_disposition,
+    validationStatus.ontology_seed,
     validationStatus.claim_realization,
     validationStatus.seed_confirmation_validation,
     validationStatus.competency_questions,
@@ -589,6 +868,7 @@ function calculateMetrics(args: {
   const unresolvedQuestionCount =
     rejectedClaimCount +
     partialClaimCount +
+    args.sourceObservations.skipped_refs.length +
     args.failureClassificationValidation.material_failure_count +
     args.competencyQuestions.open_questions.length +
     invalidGateCount;
@@ -599,6 +879,7 @@ function calculateMetrics(args: {
   );
   const answerStatusCounts =
     args.competencyQuestionAssessmentValidation.answer_status_counts;
+  const projectedOntologyClaims = ontologyClaims(args.ontologySeed);
 
   return {
     schema_version: "1",
@@ -607,8 +888,8 @@ function calculateMetrics(args: {
     source_observation_count: args.sourceObservations.observations.length,
     selected_observation_count:
       args.sourceObservationDirectiveValidation.selected_observation_count,
-    semantic_claim_count: args.seedCandidateValidation.semantic_claim_count,
-    evidence_ref_count: args.seedCandidateValidation.evidence_ref_count,
+    semantic_claim_count: projectedOntologyClaims.length,
+    evidence_ref_count: args.ontologySeedValidation.evidence_ref_count,
     confirmed_claim_count:
       args.seedConfirmationValidation.accepted_claim_ids.length,
     rejected_claim_count: rejectedClaimCount,
@@ -619,9 +900,9 @@ function calculateMetrics(args: {
       args.competencyQuestionAssessmentValidation.assessment_count,
     unresolved_question_count: unresolvedQuestionCount,
     deferred_count: deferredClaimCount +
-      answerStatusCounts.out_of_scope +
+      answerStatusCounts.deferred +
       args.failureClassificationValidation.failure_kind_counts.deferred_scope,
-    answerability_summary: answerabilitySummary(args.seedCandidate),
+    answerability_summary: answerabilitySummary(args.ontologySeed),
     claim_realization_stance_counts:
       args.claimRealizationMapValidation.stance_counts,
     confirmation_state_counts: {
@@ -647,6 +928,8 @@ function artifactRefsWithDefaults(args: {
 }): ReconstructRecordArtifactRefs {
   return {
     target_material_profile: args.refs.target_material_profile ?? null,
+    target_material_profile_validation:
+      args.refs.target_material_profile_validation ?? null,
     source_inventory: args.refs.source_inventory ?? null,
     initial_source_frontier: args.refs.initial_source_frontier ?? null,
     source_observations: args.refs.source_observations ?? null,
@@ -658,11 +941,12 @@ function artifactRefsWithDefaults(args: {
     exploration_synthesis: args.refs.exploration_synthesis ?? null,
     source_frontier: args.refs.source_frontier ?? null,
     source_frontier_validation: args.refs.source_frontier_validation ?? null,
-    domain_context_selection: args.refs.domain_context_selection ?? null,
-    domain_context_selection_validation:
-      args.refs.domain_context_selection_validation ?? null,
-    seed_candidate: args.refs.seed_candidate ?? null,
-    seed_candidate_validation: args.refs.seed_candidate_validation ?? null,
+    candidate_inventory: args.refs.candidate_inventory ?? null,
+    candidate_disposition: args.refs.candidate_disposition ?? null,
+    candidate_disposition_validation:
+      args.refs.candidate_disposition_validation ?? null,
+    ontology_seed: args.refs.ontology_seed ?? null,
+    ontology_seed_validation: args.refs.ontology_seed_validation ?? null,
     claim_realization_map: args.refs.claim_realization_map ?? null,
     claim_realization_map_validation:
       args.refs.claim_realization_map_validation ?? null,
@@ -684,7 +968,15 @@ function artifactRefsWithDefaults(args: {
       args.refs.revision_proposal_validation ?? null,
     reconstruct_metrics: args.refs.reconstruct_metrics ?? null,
     stop_decision: args.refs.stop_decision ?? null,
+    pre_handoff_run_manifest_validation:
+      args.refs.pre_handoff_run_manifest_validation ?? null,
+    post_publication_run_manifest_validation:
+      args.refs.post_publication_run_manifest_validation ?? null,
+    handoff_decision_validation:
+      args.refs.handoff_decision_validation ?? null,
     final_output: args.refs.final_output ?? null,
+    final_output_provenance_validation:
+      args.refs.final_output_provenance_validation ?? null,
     reconstruct_run_manifest: args.refs.reconstruct_run_manifest ?? null,
   };
 }
@@ -760,7 +1052,16 @@ function createRunManifest(args: {
   confirmationProvider: ReconstructConfirmationProvider;
   artifactRefs: ReconstructRecordArtifactRefs;
   reconstructRecordPath: string;
+  governingSnapshot: ReconstructRunGoverningSnapshot;
+  terminalArtifactsCompleted: boolean;
 }): ReconstructRunManifestArtifact {
+  const artifactRefs = args.terminalArtifactsCompleted
+    ? args.artifactRefs
+    : {
+      ...args.artifactRefs,
+      handoff_decision_validation: null,
+      final_output: null,
+    };
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -788,12 +1089,16 @@ function createRunManifest(args: {
           : "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
     },
     artifact_refs: {
-      ...args.artifactRefs,
-      reconstruct_record: args.reconstructRecordPath,
+      ...artifactRefs,
+      reconstruct_record: args.terminalArtifactsCompleted
+        ? args.reconstructRecordPath
+        : null,
     },
+    governing_snapshot: args.governingSnapshot,
     happy_path_scope: {
       implemented_artifacts: [
         "target_material_profile",
+        "target_material_profile_validation",
         "source_inventory",
         "initial_source_frontier",
         "source_observations",
@@ -803,8 +1108,11 @@ function createRunManifest(args: {
         "exploration_synthesis",
         "source_frontier",
         "source_frontier_validation",
-        "seed_candidate",
-        "seed_candidate_validation",
+        "candidate_inventory",
+        "candidate_disposition",
+        "candidate_disposition_validation",
+        "ontology_seed",
+        "ontology_seed_validation",
         "claim_realization_map",
         "claim_realization_map_validation",
         "seed_confirmation",
@@ -819,21 +1127,30 @@ function createRunManifest(args: {
         "revision_proposal_validation",
         "reconstruct_metrics",
         "stop_decision",
-        "final_output",
+        "pre_handoff_run_manifest_validation",
+        "handoff_decision_validation",
         "reconstruct_run_manifest",
-        "reconstruct_record",
+        ...(args.terminalArtifactsCompleted
+          ? [
+            "final_output",
+            "final_output_provenance_validation",
+            "post_publication_run_manifest_validation",
+            "reconstruct_record",
+          ]
+          : []),
       ],
-      deferred_artifacts: [
-        "domain_context_selection",
-        "domain_context_selection_validation",
-      ],
-      deferred_reason:
-        "The current runner does not yet select domain context; downstream authority is narrowed to source-grounded reconstruction without selected domain-document alignment.",
+      deferred_artifacts: [],
+      deferred_reason: args.governingSnapshot.requested_domain_ids.length > 0
+        ? "Domain competency admission is recorded in governing_snapshot; no separate domain competency selection artifact is active."
+        : "No reconstruct artifacts are deferred by the active runtime contract.",
     },
     steps: [
       completedStep("invocation_binding", "runtime", runtimePerformer(), []),
       completedStep("target_material_profile", "runtime", runtimePerformer(), [
         args.artifactRefs.target_material_profile,
+      ].filter((ref): ref is string => ref !== null)),
+      completedStep("target_material_profile_validation", "runtime", runtimePerformer(), [
+        args.artifactRefs.target_material_profile_validation,
       ].filter((ref): ref is string => ref !== null)),
       completedStep("source_inventory", "runtime", runtimePerformer(), [
         args.artifactRefs.source_inventory,
@@ -878,29 +1195,32 @@ function createRunManifest(args: {
       completedStep("source_frontier_validation", "runtime", runtimePerformer(), [
         args.artifactRefs.source_frontier_validation,
       ].filter((ref): ref is string => ref !== null)),
-      skippedStep(
-        "domain_context_selection",
-        "host_llm",
-        directiveAuthorPerformer(args.directiveAuthor),
-        "domain context selection is not implemented in this direct-call runner.",
-        "Final output cannot claim selected domain-document alignment.",
-      ),
-      skippedStep(
-        "domain_context_selection_validation",
-        "runtime",
-        runtimePerformer(),
-        "domain context selection was skipped.",
-        "Runtime cannot validate domain snapshot identity for this run.",
-      ),
       completedStep(
-        "seed_candidate",
+        "candidate_inventory",
         "host_llm",
         directiveAuthorPerformer(args.directiveAuthor),
-        [args.artifactRefs.seed_candidate]
+        [args.artifactRefs.candidate_inventory]
           .filter((ref): ref is string => ref !== null),
       ),
-      completedStep("seed_candidate_validation", "runtime", runtimePerformer(), [
-        args.artifactRefs.seed_candidate_validation,
+      completedStep(
+        "candidate_disposition",
+        "host_llm",
+        directiveAuthorPerformer(args.directiveAuthor),
+        [args.artifactRefs.candidate_disposition]
+          .filter((ref): ref is string => ref !== null),
+      ),
+      completedStep("candidate_disposition_validation", "runtime", runtimePerformer(), [
+        args.artifactRefs.candidate_disposition_validation,
+      ].filter((ref): ref is string => ref !== null)),
+      completedStep(
+        "ontology_seed",
+        "host_llm",
+        directiveAuthorPerformer(args.directiveAuthor),
+        [args.artifactRefs.ontology_seed]
+          .filter((ref): ref is string => ref !== null),
+      ),
+      completedStep("ontology_seed_validation", "runtime", runtimePerformer(), [
+        args.artifactRefs.ontology_seed_validation,
       ].filter((ref): ref is string => ref !== null)),
       completedStep(
         "claim_realization",
@@ -972,16 +1292,79 @@ function createRunManifest(args: {
         [args.artifactRefs.stop_decision]
           .filter((ref): ref is string => ref !== null),
       ),
-      completedStep(
-        "final_output",
-        "host_llm",
-        directiveAuthorPerformer(args.directiveAuthor),
-        [args.artifactRefs.final_output]
-          .filter((ref): ref is string => ref !== null),
-      ),
-      completedStep("record_assembly", "runtime", runtimePerformer(), [
-        args.reconstructRecordPath,
-      ]),
+      completedStep("pre_handoff_run_manifest_validation", "runtime", runtimePerformer(), [
+        args.artifactRefs.pre_handoff_run_manifest_validation,
+      ].filter((ref): ref is string => ref !== null)),
+      args.terminalArtifactsCompleted
+        ? completedStep("handoff_decision_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.handoff_decision_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "handoff_decision_validation",
+          "runtime",
+          runtimePerformer(),
+          "handoff-decision-validation.yaml is emitted after pre-handoff manifest validation.",
+          "Pre-handoff manifest validation must not certify future handoff validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "final_output",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.final_output]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "final_output",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "final-output.md is emitted after handoff validation.",
+          "Pre-handoff manifest validation must not certify future final output.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "final_output_provenance_validation",
+          "runtime",
+          runtimePerformer(),
+          [args.artifactRefs.final_output_provenance_validation]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "final_output_provenance_validation",
+          "runtime",
+          runtimePerformer(),
+          "final-output-provenance-validation.yaml is emitted after final output.",
+          "Pre-handoff manifest validation must not certify future final-output provenance.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "record_assembly",
+          "runtime",
+          runtimePerformer(),
+          [args.reconstructRecordPath],
+        )
+        : skippedStep(
+          "record_assembly",
+          "runtime",
+          runtimePerformer(),
+          "reconstruct-record.yaml is assembled after final output provenance validation.",
+          "Pre-handoff manifest validation must not certify future record assembly.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "post_publication_run_manifest_validation",
+          "runtime",
+          runtimePerformer(),
+          [args.artifactRefs.post_publication_run_manifest_validation]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "post_publication_run_manifest_validation",
+          "runtime",
+          runtimePerformer(),
+          "post-publication run-manifest validation is emitted after final output and record refs exist.",
+          "Pre-handoff manifest validation must not certify future post-publication audit.",
+        ),
     ],
     runtime_boundary: {
       semantic_generation: "not_performed",
@@ -1055,11 +1438,22 @@ function stringArray(value: unknown, fieldName: string): string[] {
   return value.map((item, index) => stringValue(item, `${fieldName}[${index}]`));
 }
 
-function booleanValue(value: unknown, fieldName: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`${fieldName} must be a boolean.`);
+function downstreamEffectForAnswerStatus(
+  answerStatus: ReconstructCompetencyQuestionAnswerStatus,
+): ReconstructCompetencyQuestionAssessmentArtifact["assessments"][number]["downstream_effect"] {
+  switch (answerStatus) {
+    case "answerable":
+      return "ready";
+    case "partially_answerable":
+      return "limited";
+    case "deferred":
+      return "blocked_by_missing_source_or_confirmation";
+    case "not_applicable":
+      return "not_applicable";
+    case "unsupported":
+    case "contradicted":
+      return "blocks_handoff";
   }
-  return value;
 }
 
 function recordValue(value: unknown, fieldName: string): Record<string, unknown> {
@@ -1067,12 +1461,6 @@ function recordValue(value: unknown, fieldName: string): Record<string, unknown>
     throw new Error(`${fieldName} must be an object.`);
   }
   return value as Record<string, unknown>;
-}
-
-function nullableString(value: unknown, fieldName: string): string | null {
-  if (value === null || value === undefined || value === "") return null;
-  if (typeof value !== "string") throw new Error(`${fieldName} must be a string or null.`);
-  return value.trim().length === 0 ? null : value.trim();
 }
 
 function enumString<T extends string>(
@@ -1091,17 +1479,28 @@ function enumChoices(values: readonly string[]): string {
   return values.join("|");
 }
 
-function seedMigrationMappingContract(): string {
-  return JSON.stringify(
-    SEED_MIGRATION_TARGETS.map((record) => ({
-      source_field: record.source_field,
-      default_target_authority_field: record.target_authority_field,
-      accepted_target_authority_fields: record.accepted_target_authority_fields,
-      compatibility_status: record.compatibility_status,
-      obligation_status: record.obligation_status,
-    })),
-  );
-}
+const ACTIONABLE_ONTOLOGY_SEED_JSON_SHAPE = [
+  "Return exactly one JSON object with these root fields:",
+  "seed_identity={schema_version,seed_id,title,target_refs,generated_at,authoring_profile}",
+  "purpose={declared_purpose,intended_decisions,intended_actions,non_goals,evidence_refs}",
+  "decision_context={principal_user,downstream_use,decision_boundary,risk_notes}",
+  "conceptual_frame={concepts:[{concept_id,name,definition,purpose_role,evidence_refs,confidence}],associations:[{association_id,source_concept_id,target_concept_id,association_kind,statement,evidence_refs}]}",
+  "semantic_layer={object_types:[{object_type_id,name,object_kind,description,primary_key:{property_id,name,value_type,evidence_refs},properties:[{property_id,name,value_type,nullable,description,constraints,evidence_refs}],backing_source_refs,evidence_refs,status}],link_types:[{link_type_id,source_object_type_id,target_object_type_id,cardinality,business_meaning,evidence_refs}],value_types:[{value_type_id,name,representation,constraints,evidence_refs}],constraints:[{constraint_id,target_ref,constraint_kind,statement,evidence_refs}]}",
+  "kinetic_layer={action_types:[{action_type_id,name,description,actor_type_ids,target_object_type_ids,affected_object_type_ids,parameters:[{parameter_id,name,value_source,value_type,required}],preconditions:[{precondition_id,statement,evidence_refs}],postconditions:[{postcondition_id,statement,evidence_refs}],side_effects:[{side_effect_id,statement,failure_behavior,evidence_refs}],writeback_behavior:{writes,writeback_source_refs,rationale},evidence_refs,status}],functions:[{function_id,name,input_type_refs,return_type_ref,purity,evidence_refs}],workflows:[{workflow_id,name,ordered_action_type_ids,trigger,terminal_state,evidence_refs}]}",
+  "dynamic_layer={actor_types:[{actor_type_id,name,actor_kind,role_refs,description,evidence_refs}],actor_roles:[{role_id,name,holder_actor_type_ids,authority_scope_refs,evidence_refs}],permission_policies:[{policy_id,actor_type_id,action_type_id,object_type_id,permission_kind,condition,evidence_refs}],state_models:[{state_model_id,object_type_id,states,transitions:[{transition_id,from_state,to_state,action_type_id,evidence_refs}]}],lifecycle_rules:[{rule_id,target_ref,statement,evidence_refs}]}",
+  "data_binding_layer={source_bindings:[{binding_id,seed_ref,source_ref,binding_kind,statement,evidence_refs}],read_models:[{read_model_id,name,object_type_ids,source_refs,transformation_summary,evidence_refs}],writebacks:[{writeback_id,action_type_id,target_source_refs,write_mode,evidence_refs}],provenance_bindings:[{provenance_id,seed_ref,source_ref,author_or_system,timestamp_ref,evidence_refs}]}",
+  "validation_layer={question_authority_ref:{authority_scope,projection_policy},coverage_axes,unsupported_question_candidates:[{candidate_id,question,unsupported_reason,needed_source_or_confirmation}],runtime_validation_refs:[{authority_scope,projection_policy}]}",
+  "candidate_disposition_authority_ref={authority_scope,projection_policy}",
+  "ontology_handoff={readiness_claim,classification_mapping,entity_identity_mapping,instance_assertion_mapping,terminology_mapping,relation_type_mapping,constraint_mapping,modularity_boundary,reasoning_or_formalism_profile,application_context_mapping,metadata_mapping,provenance_mapping,change_tracking_mapping,competency_scope_mapping,alignment_mapping,modeling_concern_applicability,reference_standard_mapping,pattern_catalog_mapping,query_access_contract,visualization_contract,graph_exploration_contract,graph_connectivity,limitation_refs}",
+  "source_authority={evidence_scope,permission_scope,trust_boundary,instruction_authority,external_content_handling,included_source_refs,excluded_source_refs,restricted_source_refs,source_gaps,rationale}",
+  "handoff_limitations=[{limitation_id,limitation_kind,description,affected_refs,missing_source_refs,mitigation_or_next_action,evidence_refs}]",
+          "Every evidence_refs item must be an object copied from an observed source with observation_id,target_material_kind,source_ref,location. Do not use a bare observation id string in evidence_refs.",
+          "Use the exact *_id key names above. Do not use id, claim_id, or candidate_id as a substitute for concept_id, object_type_id, actor_type_id, action_type_id, workflow_id, limitation_id, etc.",
+          "data_binding_layer.source_bindings.source_ref, read_models.source_refs, writebacks.target_source_refs, provenance_bindings.source_ref, source_authority.included_source_refs, and source_authority.excluded_source_refs must use only observed_source_refs.",
+          "Do not put runtime artifact refs such as source-observations.yaml, candidate-disposition.yaml, validation files, or final-output.md into source_ref fields. Runtime artifacts may be named in timestamp_ref, authority_ref, rationale, or mapping text only.",
+          "Skipped or unsupported material refs must not appear in included_source_refs or excluded_source_refs; record them in source_authority.source_gaps or handoff_limitations.missing_source_refs instead.",
+          "Every semantic_layer.object_types[].object_type_id must be covered by at least one of source_bindings.seed_ref, read_models.object_type_ids, provenance_bindings.seed_ref, or handoff_limitations.affected_refs.",
+].join("\n");
 
 function evidenceRefByObservationId(
   sourceObservations: ReconstructSourceObservationsArtifact,
@@ -1133,974 +1532,616 @@ function evidenceRefsFromIds(args: {
   return refs;
 }
 
-function optionalEvidenceRefsFromIds(args: {
-  observationIds: string[];
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  fieldName: string;
-}): ReconstructEvidenceRef[] {
-  const byId = evidenceRefByObservationId(args.sourceObservations);
-  return args.observationIds.map((observationId) => {
-    const ref = byId.get(observationId);
-    if (!ref) {
-      throw new Error(`${args.fieldName} references unknown observation id: ${observationId}`);
-    }
-    return ref;
-  });
+function candidateKindIds(registry: ReconstructContractRegistry): string[] {
+  return registry.candidate_kind_registry.map((record) => record.candidate_kind_id);
 }
 
-function targetMaterialKindValue(value: unknown, fieldName: string): TargetMaterialKind {
-  const raw = stringValue(value, fieldName);
-  if (!isTargetMaterialKind(raw)) {
-    throw new Error(`${fieldName} must be a known target_material_kind.`);
-  }
-  return raw;
+function candidateDispositionIds(registry: ReconstructContractRegistry): string[] {
+  return registry.candidate_disposition_registry.map((record) => record.disposition_id);
 }
 
-function claimFromLlm(args: {
+function coverageAxisIds(registry: ReconstructContractRegistry): string[] {
+  return registry.coverage_axis_registry.map((record) => record.axis_id);
+}
+
+function facetIds(records: Array<{ facet_id: string }>): string[] {
+  return records.map((record) => record.facet_id);
+}
+
+function modelingConcernIds(registry: ReconstructContractRegistry): string[] {
+  return registry.modeling_concern_applicability_registry.map((record) =>
+    record.concern_id
+  );
+}
+
+function proofContractIds(records: Array<{ contract_ref_id: string }>): string[] {
+  return records.map((record) => record.contract_ref_id);
+}
+
+function candidateInventoryItemFromLlm(args: {
   raw: Record<string, unknown>;
-  fallbackId: string;
+  index: number;
   sourceObservations: ReconstructSourceObservationsArtifact;
-  fieldName: string;
-}): ReconstructSeedClaim {
-  const claimId = optionalString(args.raw.claim_id) ?? args.fallbackId;
+}): ReconstructCandidateInventoryArtifact["candidates"][number] {
+  const fieldName = `candidates[${args.index}]`;
+  const candidateId = stringValue(args.raw.candidate_id, `${fieldName}.candidate_id`);
   return {
-    claim_id: claimId,
-    name: stringValue(args.raw.name, `${args.fieldName}.name`),
-    statement: stringValue(args.raw.statement, `${args.fieldName}.statement`),
+    candidate_id: candidateId,
+    candidate_kind: stringValue(args.raw.candidate_kind, `${fieldName}.candidate_kind`),
+    name: stringValue(args.raw.name, `${fieldName}.name`),
+    description: stringValue(args.raw.description, `${fieldName}.description`),
+    salience: enumString(args.raw.salience, ["high", "medium", "low"], `${fieldName}.salience`),
     evidence_refs: evidenceRefsFromIds({
       observationIds: stringArray(
         args.raw.evidence_observation_ids,
-        `${args.fieldName}.evidence_observation_ids`,
+        `${fieldName}.evidence_observation_ids`,
       ),
       sourceObservations: args.sourceObservations,
-      fieldName: `${args.fieldName}.evidence_observation_ids`,
+      fieldName: `${fieldName}.evidence_observation_ids`,
     }),
   };
 }
 
-function claimsFromLlm(args: {
-  value: unknown;
-  prefix: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}): ReconstructSeedClaim[] {
-  return records(args.value ?? [], args.prefix).map((raw, index) =>
-    claimFromLlm({
-      raw,
-      fallbackId: `${args.prefix}-${index + 1}`,
-      sourceObservations: args.sourceObservations,
-      fieldName: `${args.prefix}[${index}]`,
-    })
-  );
-}
-
-function refsFromOptionalObservationIds(args: {
+function candidateDispositionItemFromLlm(args: {
   raw: Record<string, unknown>;
+  index: number;
   sourceObservations: ReconstructSourceObservationsArtifact;
-  fieldName: string;
-}): ReconstructEvidenceRef[] {
-  return optionalEvidenceRefsFromIds({
-    observationIds: stringArray(
-      args.raw.evidence_observation_ids,
-      `${args.fieldName}.evidence_observation_ids`,
-    ),
-    sourceObservations: args.sourceObservations,
-    fieldName: `${args.fieldName}.evidence_observation_ids`,
-  });
-}
-
-function rawRecordArray(value: unknown): Record<string, unknown>[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((item): item is Record<string, unknown> =>
-    item !== null && typeof item === "object" && !Array.isArray(item)
-  );
-}
-
-function rawRetainedMigrationSourceFields(raw: Record<string, unknown>): Set<string> {
-  const retained = new Set<string>();
-  for (const migrationTarget of SEED_MIGRATION_TARGETS) {
-    if (migrationTarget.source_field in raw) {
-      retained.add(migrationTarget.source_field);
-    }
-  }
-  for (const sourceField of [
-    "included_lower_concepts",
-    "excluded_or_deferred_details",
-    "boundary_notes",
-    "core_relations",
-    "deferred_detail_candidates",
-    "frontier_refs",
-    "open_questions",
-  ]) {
-    if (
-      rawRecordArray(raw.top_level_concepts).some((concept) =>
-        sourceField in concept
-      )
-    ) {
-      retained.add(sourceField);
-    }
-  }
-  const convergence = raw.convergence;
-  if (
-    convergence !== null &&
-    typeof convergence === "object" &&
-    !Array.isArray(convergence) &&
-    "remaining_pressures" in convergence
-  ) {
-    retained.add("convergence.remaining_pressures");
-  }
-  return retained;
-}
-
-function assertRetainedMigrationDisclosure(raw: Record<string, unknown>): void {
-  const retained = rawRetainedMigrationSourceFields(raw);
-  if (retained.size === 0) return;
-  const migrated = new Set(
-    rawRecordArray(raw.migration_records)
-      .map((record) => record.source_field)
-      .filter((value): value is string => typeof value === "string" && value.trim().length > 0),
-  );
-  const missing = [...retained].filter((sourceField) => !migrated.has(sourceField));
-  if (missing.length > 0) {
-    throw new Error(
-      `SeedCandidate retained legacy or retired projection fields without migration_records: ${missing.join(", ")}`,
-    );
-  }
-}
-
-type ReconstructTransitionalSeedAuthorityFields = Pick<
-  ReconstructTransitionalSeedCandidateArtifact,
-  | "seed_schema_version"
-  | "answerability_scope"
-  | "top_level_concepts"
-  | "top_level_relations"
-  | "relation_participation_exceptions"
-  | "lower_level_detail_placements"
-  | "frontier_pressure_log"
-  | "material_coverage_checkpoint"
-  | "convergence"
-  | "lifecycle"
-  | "migration_records"
->;
-
-function conceptCenteredFieldsFromLlm(args: {
-  raw: Record<string, unknown>;
-  sessionId: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-}): ReconstructTransitionalSeedAuthorityFields {
-  const seedSchemaVersion = enumString(
-    args.raw.seed_schema_version,
-    SEED_SCHEMA_VERSIONS,
-    "seed_schema_version",
-  );
-  if (seedSchemaVersion !== "transitional") {
-    throw new Error(
-      "SeedCandidate direct author must return seed_schema_version transitional while legacy compatibility fields are present.",
-    );
-  }
-  assertRetainedMigrationDisclosure(args.raw);
-
-  const topLevelConcepts = records(args.raw.top_level_concepts, "top_level_concepts")
-    .map((concept, index) => {
-      const boundary = recordValue(
-        concept.boundary,
-        `top_level_concepts[${index}].boundary`,
-      );
-      return {
-        concept_id: stringValue(concept.concept_id, `top_level_concepts[${index}].concept_id`),
-        name: stringValue(concept.name, `top_level_concepts[${index}].name`),
-        aliases: stringArray(concept.aliases, `top_level_concepts[${index}].aliases`),
-        definition: stringValue(concept.definition, `top_level_concepts[${index}].definition`),
-        why_top_level: stringValue(
-          concept.why_top_level,
-          `top_level_concepts[${index}].why_top_level`,
-        ),
-        evidence_refs: evidenceRefsFromIds({
-          observationIds: stringArray(
-            concept.evidence_observation_ids,
-            `top_level_concepts[${index}].evidence_observation_ids`,
-          ),
-          sourceObservations: args.sourceObservations,
-          fieldName: `top_level_concepts[${index}].evidence_observation_ids`,
-        }),
-        boundary: {
-          included_summary: stringValue(
-            boundary.included_summary,
-            `top_level_concepts[${index}].boundary.included_summary`,
-          ),
-          excluded_summary: stringValue(
-            boundary.excluded_summary,
-            `top_level_concepts[${index}].boundary.excluded_summary`,
-          ),
-          deferred_summary: stringValue(
-            boundary.deferred_summary,
-            `top_level_concepts[${index}].boundary.deferred_summary`,
-          ),
-        },
-        confidence: stringValue(concept.confidence, `top_level_concepts[${index}].confidence`),
-        provisional: booleanValue(
-          concept.provisional,
-          `top_level_concepts[${index}].provisional`,
-        ),
-      };
-    });
-
-  const topLevelRelations = records(args.raw.top_level_relations, "top_level_relations")
-    .map((relation, index) => {
-      if ("relation_axis" in relation) {
-        throw new Error("top_level_relations must not store relation_axis.");
-      }
-      return {
-        relation_id: stringValue(relation.relation_id, `top_level_relations[${index}].relation_id`),
-        source_concept_id: stringValue(
-          relation.source_concept_id,
-          `top_level_relations[${index}].source_concept_id`,
-        ),
-        target_concept_id: stringValue(
-          relation.target_concept_id,
-          `top_level_relations[${index}].target_concept_id`,
-        ),
-        relation_kind: enumString(
-          relation.relation_kind,
-          TOP_LEVEL_RELATION_KINDS,
-          `top_level_relations[${index}].relation_kind`,
-        ),
-        relation_label: stringValue(
-          relation.relation_label,
-          `top_level_relations[${index}].relation_label`,
-        ),
-        direction_statement: stringValue(
-          relation.direction_statement,
-          `top_level_relations[${index}].direction_statement`,
-        ),
-        statement: stringValue(relation.statement, `top_level_relations[${index}].statement`),
-        evidence_refs: evidenceRefsFromIds({
-          observationIds: stringArray(
-            relation.evidence_observation_ids,
-            `top_level_relations[${index}].evidence_observation_ids`,
-          ),
-          sourceObservations: args.sourceObservations,
-          fieldName: `top_level_relations[${index}].evidence_observation_ids`,
-        }),
-        confidence: stringValue(relation.confidence, `top_level_relations[${index}].confidence`),
-        provisional: booleanValue(
-          relation.provisional,
-          `top_level_relations[${index}].provisional`,
-        ),
-        registration_status: enumString(
-          relation.registration_status,
-          ["design_local"],
-          `top_level_relations[${index}].registration_status`,
-        ),
-      };
-    });
-
-  const relationParticipationExceptions = records(
-    args.raw.relation_participation_exceptions,
-    "relation_participation_exceptions",
-  ).map((exception, index) => ({
-    concept_id: stringValue(
-      exception.concept_id,
-      `relation_participation_exceptions[${index}].concept_id`,
-    ),
-    isolation_reason: stringValue(
-      exception.isolation_reason,
-      `relation_participation_exceptions[${index}].isolation_reason`,
-    ),
-    isolation_pressure_ids: stringArray(
-      exception.isolation_pressure_ids,
-      `relation_participation_exceptions[${index}].isolation_pressure_ids`,
-    ),
-  }));
-
-  const lowerLevelDetailPlacements = records(
-    args.raw.lower_level_detail_placements,
-    "lower_level_detail_placements",
-  ).map((detail, index) => ({
-    detail_id: stringValue(detail.detail_id, `lower_level_detail_placements[${index}].detail_id`),
-    name: stringValue(detail.name, `lower_level_detail_placements[${index}].name`),
-    material_kind: targetMaterialKindValue(
-      detail.material_kind,
-      `lower_level_detail_placements[${index}].material_kind`,
-    ),
-    source_ref: stringValue(
-      detail.source_ref,
-      `lower_level_detail_placements[${index}].source_ref`,
-    ),
-    placement: enumString(
-      detail.placement,
-      LOWER_LEVEL_DETAIL_PLACEMENTS,
-      `lower_level_detail_placements[${index}].placement`,
-    ),
-    owner_concept_id: stringValue(
-      detail.owner_concept_id,
-      `lower_level_detail_placements[${index}].owner_concept_id`,
-    ),
-    rationale: stringValue(
-      detail.rationale,
-      `lower_level_detail_placements[${index}].rationale`,
-    ),
+}): ReconstructCandidateDispositionArtifact["dispositions"][number] {
+  const fieldName = `dispositions[${args.index}]`;
+  return {
+    candidate_id: stringValue(args.raw.candidate_id, `${fieldName}.candidate_id`),
+    disposition_id: stringValue(args.raw.disposition_id, `${fieldName}.disposition_id`),
+    target_seed_refs: stringArray(args.raw.target_seed_refs, `${fieldName}.target_seed_refs`),
+    rationale: stringValue(args.raw.rationale, `${fieldName}.rationale`),
     evidence_refs: evidenceRefsFromIds({
       observationIds: stringArray(
-        detail.evidence_observation_ids,
-        `lower_level_detail_placements[${index}].evidence_observation_ids`,
+        args.raw.evidence_observation_ids,
+        `${fieldName}.evidence_observation_ids`,
       ),
       sourceObservations: args.sourceObservations,
-      fieldName: `lower_level_detail_placements[${index}].evidence_observation_ids`,
+      fieldName: `${fieldName}.evidence_observation_ids`,
     }),
-    follow_up_question: nullableString(
-      detail.follow_up_question,
-      `lower_level_detail_placements[${index}].follow_up_question`,
-    ),
-  }));
-
-  const frontierPressureLog = records(args.raw.frontier_pressure_log, "frontier_pressure_log")
-    .map((pressure, index) => ({
-      pressure_id: stringValue(pressure.pressure_id, `frontier_pressure_log[${index}].pressure_id`),
-      origin: enumString(
-        pressure.origin,
-        FRONTIER_PRESSURE_ORIGINS,
-        `frontier_pressure_log[${index}].origin`,
-      ),
-      origin_ref: stringValue(pressure.origin_ref, `frontier_pressure_log[${index}].origin_ref`),
-      pressure_type: enumString(
-        pressure.pressure_type,
-        FRONTIER_PRESSURE_TYPES,
-        `frontier_pressure_log[${index}].pressure_type`,
-      ),
-      pressure_question: stringValue(
-        pressure.pressure_question,
-        `frontier_pressure_log[${index}].pressure_question`,
-      ),
-      target_concept_ids: stringArray(
-        pressure.target_concept_ids,
-        `frontier_pressure_log[${index}].target_concept_ids`,
-      ),
-      target_relation_ids: stringArray(
-        pressure.target_relation_ids,
-        `frontier_pressure_log[${index}].target_relation_ids`,
-      ),
-      material_kind: targetMaterialKindValue(
-        pressure.material_kind,
-        `frontier_pressure_log[${index}].material_kind`,
-      ),
-      source_ref: stringValue(pressure.source_ref, `frontier_pressure_log[${index}].source_ref`),
-      expected_decision_impact: stringValue(
-        pressure.expected_decision_impact,
-        `frontier_pressure_log[${index}].expected_decision_impact`,
-      ),
-      priority: enumString(
-        pressure.priority,
-        ["high", "medium", "low"],
-        `frontier_pressure_log[${index}].priority`,
-      ),
-      status: enumString(
-        pressure.status,
-        FRONTIER_PRESSURE_STATUSES,
-        `frontier_pressure_log[${index}].status`,
-      ),
-      status_reason: stringValue(
-        pressure.status_reason,
-        `frontier_pressure_log[${index}].status_reason`,
-      ),
-      superseded_by_pressure_id: nullableString(
-        pressure.superseded_by_pressure_id,
-        `frontier_pressure_log[${index}].superseded_by_pressure_id`,
-      ),
-      evidence_refs: refsFromOptionalObservationIds({
-        raw: pressure,
-        sourceObservations: args.sourceObservations,
-        fieldName: `frontier_pressure_log[${index}]`,
-      }),
-    }));
-
-  const answerabilityRaw = recordValue(args.raw.answerability_scope, "answerability_scope");
-  const materialCoverageRaw = recordValue(
-    args.raw.material_coverage_checkpoint,
-    "material_coverage_checkpoint",
-  );
-  const sourceAuthorityRaw = recordValue(
-    materialCoverageRaw.source_authority_scope,
-    "material_coverage_checkpoint.source_authority_scope",
-  );
-  const convergenceRaw = recordValue(args.raw.convergence, "convergence");
-  const lifecycleRaw = recordValue(args.raw.lifecycle, "lifecycle");
-  const sourceSnapshotTransitionRaw = recordValue(
-    lifecycleRaw.source_snapshot_transition,
-    "lifecycle.source_snapshot_transition",
-  );
-
-  return {
-    seed_schema_version: seedSchemaVersion,
-    answerability_scope: {
-      declared_handoff_questions: records(
-        answerabilityRaw.declared_handoff_questions,
-        "answerability_scope.declared_handoff_questions",
-      ).map((question, index) => ({
-        question_id: stringValue(
-          question.question_id,
-          `answerability_scope.declared_handoff_questions[${index}].question_id`,
-        ),
-        question: stringValue(
-          question.question,
-          `answerability_scope.declared_handoff_questions[${index}].question`,
-        ),
-        source: enumString(
-          question.source,
-          HANDOFF_QUESTION_SOURCES,
-          `answerability_scope.declared_handoff_questions[${index}].source`,
-        ),
-      })),
-      supported_questions: records(
-        answerabilityRaw.supported_questions,
-        "answerability_scope.supported_questions",
-      ).map((question, index) => {
-        const answeredBy = recordValue(
-          question.answered_by,
-          `answerability_scope.supported_questions[${index}].answered_by`,
-        );
-        return {
-          question_id: stringValue(
-            question.question_id,
-            `answerability_scope.supported_questions[${index}].question_id`,
-          ),
-          answered_by: {
-            concept_ids: stringArray(
-              answeredBy.concept_ids,
-              `answerability_scope.supported_questions[${index}].answered_by.concept_ids`,
-            ),
-            relation_ids: stringArray(
-              answeredBy.relation_ids,
-              `answerability_scope.supported_questions[${index}].answered_by.relation_ids`,
-            ),
-          },
-          confidence: stringValue(
-            question.confidence,
-            `answerability_scope.supported_questions[${index}].confidence`,
-          ),
-        };
-      }),
-      deferred_questions: records(
-        answerabilityRaw.deferred_questions,
-        "answerability_scope.deferred_questions",
-      ).map((question, index) => ({
-        question_id: stringValue(
-          question.question_id,
-          `answerability_scope.deferred_questions[${index}].question_id`,
-        ),
-        reason_deferred: stringValue(
-          question.reason_deferred,
-          `answerability_scope.deferred_questions[${index}].reason_deferred`,
-        ),
-        frontier_pressure_ids: stringArray(
-          question.frontier_pressure_ids,
-          `answerability_scope.deferred_questions[${index}].frontier_pressure_ids`,
-        ),
-      })),
-      unsupported_questions: records(
-        answerabilityRaw.unsupported_questions,
-        "answerability_scope.unsupported_questions",
-      ).map((question, index) => ({
-        question_id: stringValue(
-          question.question_id,
-          `answerability_scope.unsupported_questions[${index}].question_id`,
-        ),
-        reason_unsupported: stringValue(
-          question.reason_unsupported,
-          `answerability_scope.unsupported_questions[${index}].reason_unsupported`,
-        ),
-      })),
-      supported_actions: records(
-        answerabilityRaw.supported_actions,
-        "answerability_scope.supported_actions",
-      ).map((action, index) => ({
-        action_id: stringValue(
-          action.action_id,
-          `answerability_scope.supported_actions[${index}].action_id`,
-        ),
-        action: stringValue(action.action, `answerability_scope.supported_actions[${index}].action`),
-        supported_by_question_ids: stringArray(
-          action.supported_by_question_ids,
-          `answerability_scope.supported_actions[${index}].supported_by_question_ids`,
-        ),
-        readiness_statement: stringValue(
-          action.readiness_statement,
-          `answerability_scope.supported_actions[${index}].readiness_statement`,
-        ),
-      })),
-      unsupported_actions: records(
-        answerabilityRaw.unsupported_actions,
-        "answerability_scope.unsupported_actions",
-      ).map((action, index) => ({
-        action_id: stringValue(
-          action.action_id,
-          `answerability_scope.unsupported_actions[${index}].action_id`,
-        ),
-        action: stringValue(
-          action.action,
-          `answerability_scope.unsupported_actions[${index}].action`,
-        ),
-        reason_unsupported: stringValue(
-          action.reason_unsupported,
-          `answerability_scope.unsupported_actions[${index}].reason_unsupported`,
-        ),
-      })),
-      handoff_readiness_statement: stringValue(
-        answerabilityRaw.handoff_readiness_statement,
-        "answerability_scope.handoff_readiness_statement",
-      ),
-      handoff_readiness_question_ids: stringArray(
-        answerabilityRaw.handoff_readiness_question_ids,
-        "answerability_scope.handoff_readiness_question_ids",
-      ),
-    },
-    top_level_concepts: topLevelConcepts,
-    top_level_relations: topLevelRelations,
-    relation_participation_exceptions: relationParticipationExceptions,
-    lower_level_detail_placements: lowerLevelDetailPlacements,
-    frontier_pressure_log: frontierPressureLog,
-    material_coverage_checkpoint: {
-      observed_material_kinds: stringArray(
-        materialCoverageRaw.observed_material_kinds,
-        "material_coverage_checkpoint.observed_material_kinds",
-      ).map((kind, index) =>
-        targetMaterialKindValue(
-          kind,
-          `material_coverage_checkpoint.observed_material_kinds[${index}]`,
-        )
-      ),
-      observed_source_slices: stringArray(
-        materialCoverageRaw.observed_source_slices,
-        "material_coverage_checkpoint.observed_source_slices",
-      ),
-      source_authority_scope: {
-        permission_scope: enumString(
-          sourceAuthorityRaw.permission_scope,
-          ["within_declared_boundary", "restricted", "unknown"],
-          "material_coverage_checkpoint.source_authority_scope.permission_scope",
-        ),
-        permission_basis_refs: stringArray(
-          sourceAuthorityRaw.permission_basis_refs,
-          "material_coverage_checkpoint.source_authority_scope.permission_basis_refs",
-        ),
-        trust_status: enumString(
-          sourceAuthorityRaw.trust_status,
-          ["observed_evidence_only", "user_provided_authority", "external_untrusted", "mixed"],
-          "material_coverage_checkpoint.source_authority_scope.trust_status",
-        ),
-        instruction_authority_status: enumString(
-          sourceAuthorityRaw.instruction_authority_status,
-          ["none_data_only", "declared_process_authority", "mixed_requires_disclosure"],
-          "material_coverage_checkpoint.source_authority_scope.instruction_authority_status",
-        ),
-        external_content_handling: enumString(
-          sourceAuthorityRaw.external_content_handling,
-          ["not_applicable", "treated_as_untrusted_data", "sanitized_or_quoted", "excluded"],
-          "material_coverage_checkpoint.source_authority_scope.external_content_handling",
-        ),
-        restricted_source_refs: stringArray(
-          sourceAuthorityRaw.restricted_source_refs,
-          "material_coverage_checkpoint.source_authority_scope.restricted_source_refs",
-        ),
-        rationale: stringValue(
-          sourceAuthorityRaw.rationale,
-          "material_coverage_checkpoint.source_authority_scope.rationale",
-        ),
-      },
-      intentionally_excluded_material_kinds: stringArray(
-        materialCoverageRaw.intentionally_excluded_material_kinds,
-        "material_coverage_checkpoint.intentionally_excluded_material_kinds",
-      ).map((kind, index) =>
-        targetMaterialKindValue(
-          kind,
-          `material_coverage_checkpoint.intentionally_excluded_material_kinds[${index}]`,
-        )
-      ),
-      unexplored_source_categories: stringArray(
-        materialCoverageRaw.unexplored_source_categories,
-        "material_coverage_checkpoint.unexplored_source_categories",
-      ),
-      possible_missing_axis_pressure_ids: stringArray(
-        materialCoverageRaw.possible_missing_axis_pressure_ids,
-        "material_coverage_checkpoint.possible_missing_axis_pressure_ids",
-      ),
-      rationale_for_seed_level_sufficiency: stringValue(
-        materialCoverageRaw.rationale_for_seed_level_sufficiency,
-        "material_coverage_checkpoint.rationale_for_seed_level_sufficiency",
-      ),
-      partial_support_disclosures: stringArray(
-        materialCoverageRaw.partial_support_disclosures,
-        "material_coverage_checkpoint.partial_support_disclosures",
-      ),
-    },
-    convergence: {
-      state: enumString(convergenceRaw.state, CONVERGENCE_STATES, "convergence.state"),
-      source_convergence_rationale: stringValue(
-        convergenceRaw.source_convergence_rationale,
-        "convergence.source_convergence_rationale",
-      ),
-      review_confirmed: booleanValue(
-        convergenceRaw.review_confirmed,
-        "convergence.review_confirmed",
-      ),
-      review_profile_ref: nullableString(
-        convergenceRaw.review_profile_ref,
-        "convergence.review_profile_ref",
-      ),
-      remaining_pressure_ids: stringArray(
-        convergenceRaw.remaining_pressure_ids,
-        "convergence.remaining_pressure_ids",
-      ),
-    },
-    lifecycle: {
-      seed_id: stringValue(lifecycleRaw.seed_id, "lifecycle.seed_id"),
-      parent_seed_ref: nullableString(lifecycleRaw.parent_seed_ref, "lifecycle.parent_seed_ref"),
-      id_stability_scope: enumString(
-        lifecycleRaw.id_stability_scope,
-        ["session", "lineage"],
-        "lifecycle.id_stability_scope",
-      ),
-      session_id: stringValue(lifecycleRaw.session_id, "lifecycle.session_id"),
-      source_snapshot_refs: stringArray(
-        lifecycleRaw.source_snapshot_refs,
-        "lifecycle.source_snapshot_refs",
-      ),
-      source_snapshot_transition: {
-        prior_snapshot_refs: stringArray(
-          sourceSnapshotTransitionRaw.prior_snapshot_refs,
-          "lifecycle.source_snapshot_transition.prior_snapshot_refs",
-        ),
-        transition_reason: stringValue(
-          sourceSnapshotTransitionRaw.transition_reason,
-          "lifecycle.source_snapshot_transition.transition_reason",
-        ),
-      },
-      exploration_rounds: records(lifecycleRaw.exploration_rounds, "lifecycle.exploration_rounds")
-        .map((round, index) => ({
-          round_id: stringValue(round.round_id, `lifecycle.exploration_rounds[${index}].round_id`),
-          observed_source_refs: stringArray(
-            round.observed_source_refs,
-            `lifecycle.exploration_rounds[${index}].observed_source_refs`,
-          ),
-          authoring_pass_ref: nullableString(
-            round.authoring_pass_ref,
-            `lifecycle.exploration_rounds[${index}].authoring_pass_ref`,
-          ),
-          changed_concept_ids: stringArray(
-            round.changed_concept_ids,
-            `lifecycle.exploration_rounds[${index}].changed_concept_ids`,
-          ),
-          changed_relation_ids: stringArray(
-            round.changed_relation_ids,
-            `lifecycle.exploration_rounds[${index}].changed_relation_ids`,
-          ),
-          changed_frontier_pressure_ids: stringArray(
-            round.changed_frontier_pressure_ids,
-            `lifecycle.exploration_rounds[${index}].changed_frontier_pressure_ids`,
-          ),
-        })),
-      concept_identity_events: records(
-        lifecycleRaw.concept_identity_events,
-        "lifecycle.concept_identity_events",
-      ).map((event, index) => {
-        if ("concept_ids" in event) {
-          throw new Error("concept_identity_events must not carry generic concept_ids.");
-        }
-        return {
-          event_id: stringValue(
-            event.event_id,
-            `lifecycle.concept_identity_events[${index}].event_id`,
-          ),
-          event_type: enumString(
-            event.event_type,
-            CONCEPT_IDENTITY_EVENT_TYPES,
-            `lifecycle.concept_identity_events[${index}].event_type`,
-          ),
-          prior_concept_ids: stringArray(
-            event.prior_concept_ids,
-            `lifecycle.concept_identity_events[${index}].prior_concept_ids`,
-          ),
-          current_concept_ids: stringArray(
-            event.current_concept_ids,
-            `lifecycle.concept_identity_events[${index}].current_concept_ids`,
-          ),
-          target_detail_ids: stringArray(
-            event.target_detail_ids,
-            `lifecycle.concept_identity_events[${index}].target_detail_ids`,
-          ),
-          prior_names: stringArray(
-            event.prior_names,
-            `lifecycle.concept_identity_events[${index}].prior_names`,
-          ),
-          new_names: stringArray(
-            event.new_names,
-            `lifecycle.concept_identity_events[${index}].new_names`,
-          ),
-          prior_aliases: stringArray(
-            event.prior_aliases,
-            `lifecycle.concept_identity_events[${index}].prior_aliases`,
-          ),
-          current_aliases: stringArray(
-            event.current_aliases,
-            `lifecycle.concept_identity_events[${index}].current_aliases`,
-          ),
-          reason: stringValue(event.reason, `lifecycle.concept_identity_events[${index}].reason`),
-          evidence_refs: refsFromOptionalObservationIds({
-            raw: event,
-            sourceObservations: args.sourceObservations,
-            fieldName: `lifecycle.concept_identity_events[${index}]`,
-          }),
-          frontier_pressure_ids: stringArray(
-            event.frontier_pressure_ids,
-            `lifecycle.concept_identity_events[${index}].frontier_pressure_ids`,
-          ),
-        };
-      }),
-      relation_identity_events: records(
-        lifecycleRaw.relation_identity_events,
-        "lifecycle.relation_identity_events",
-      ).map((event, index) => {
-        if ("relation_ids" in event) {
-          throw new Error("relation_identity_events must not carry generic relation_ids.");
-        }
-        return {
-          event_id: stringValue(
-            event.event_id,
-            `lifecycle.relation_identity_events[${index}].event_id`,
-          ),
-          event_type: enumString(
-            event.event_type,
-            RELATION_IDENTITY_EVENT_TYPES,
-            `lifecycle.relation_identity_events[${index}].event_type`,
-          ),
-          prior_relation_ids: stringArray(
-            event.prior_relation_ids,
-            `lifecycle.relation_identity_events[${index}].prior_relation_ids`,
-          ),
-          current_relation_ids: stringArray(
-            event.current_relation_ids,
-            `lifecycle.relation_identity_events[${index}].current_relation_ids`,
-          ),
-          reason: stringValue(event.reason, `lifecycle.relation_identity_events[${index}].reason`),
-          evidence_refs: refsFromOptionalObservationIds({
-            raw: event,
-            sourceObservations: args.sourceObservations,
-            fieldName: `lifecycle.relation_identity_events[${index}]`,
-          }),
-          frontier_pressure_ids: stringArray(
-            event.frontier_pressure_ids,
-            `lifecycle.relation_identity_events[${index}].frontier_pressure_ids`,
-          ),
-        };
-      }),
-      pressure_events: records(lifecycleRaw.pressure_events, "lifecycle.pressure_events")
-        .map((event, index) => {
-          if ("pressure_ids" in event || "current_pressure_id" in event) {
-            throw new Error(
-              "pressure_events must carry one pressure_id and no pressure_ids/current_pressure_id.",
-            );
-          }
-          return {
-            event_id: stringValue(event.event_id, `lifecycle.pressure_events[${index}].event_id`),
-            event_type: enumString(
-              event.event_type,
-              PRESSURE_EVENT_TYPES,
-              `lifecycle.pressure_events[${index}].event_type`,
-            ),
-            pressure_id: stringValue(
-              event.pressure_id,
-              `lifecycle.pressure_events[${index}].pressure_id`,
-            ),
-            prior_status: event.prior_status === null || event.prior_status === undefined
-              ? null
-              : enumString(
-                  event.prior_status,
-                  FRONTIER_PRESSURE_STATUSES,
-                  `lifecycle.pressure_events[${index}].prior_status`,
-                ),
-            new_status: enumString(
-              event.new_status,
-              FRONTIER_PRESSURE_STATUSES,
-              `lifecycle.pressure_events[${index}].new_status`,
-            ),
-            superseded_by_pressure_id: nullableString(
-              event.superseded_by_pressure_id,
-              `lifecycle.pressure_events[${index}].superseded_by_pressure_id`,
-            ),
-            reason: stringValue(event.reason, `lifecycle.pressure_events[${index}].reason`),
-            evidence_refs: refsFromOptionalObservationIds({
-              raw: event,
-              sourceObservations: args.sourceObservations,
-              fieldName: `lifecycle.pressure_events[${index}]`,
-            }),
-          };
-        }),
-      detail_placement_events: records(
-        lifecycleRaw.detail_placement_events,
-        "lifecycle.detail_placement_events",
-      ).map((event, index) => ({
-        event_id: stringValue(
-          event.event_id,
-          `lifecycle.detail_placement_events[${index}].event_id`,
-        ),
-        event_type: enumString(
-          event.event_type,
-          DETAIL_PLACEMENT_EVENT_TYPES,
-          `lifecycle.detail_placement_events[${index}].event_type`,
-        ),
-        detail_ids: stringArray(
-          event.detail_ids,
-          `lifecycle.detail_placement_events[${index}].detail_ids`,
-        ),
-        reason: stringValue(event.reason, `lifecycle.detail_placement_events[${index}].reason`),
-        evidence_refs: refsFromOptionalObservationIds({
-          raw: event,
-          sourceObservations: args.sourceObservations,
-          fieldName: `lifecycle.detail_placement_events[${index}]`,
-        }),
-        frontier_pressure_ids: stringArray(
-          event.frontier_pressure_ids,
-          `lifecycle.detail_placement_events[${index}].frontier_pressure_ids`,
-        ),
-      })),
-      answerability_events: records(
-        lifecycleRaw.answerability_events,
-        "lifecycle.answerability_events",
-      ).map((event, index) => ({
-        event_id: stringValue(
-          event.event_id,
-          `lifecycle.answerability_events[${index}].event_id`,
-        ),
-        event_type: enumString(
-          event.event_type,
-          ANSWERABILITY_EVENT_TYPES,
-          `lifecycle.answerability_events[${index}].event_type`,
-        ),
-        question_ids: stringArray(
-          event.question_ids,
-          `lifecycle.answerability_events[${index}].question_ids`,
-        ),
-        action_ids: stringArray(
-          event.action_ids,
-          `lifecycle.answerability_events[${index}].action_ids`,
-        ),
-        frontier_pressure_ids: stringArray(
-          event.frontier_pressure_ids,
-          `lifecycle.answerability_events[${index}].frontier_pressure_ids`,
-        ),
-        reason: stringValue(event.reason, `lifecycle.answerability_events[${index}].reason`),
-      })),
-      material_coverage_events: records(
-        lifecycleRaw.material_coverage_events,
-        "lifecycle.material_coverage_events",
-      ).map((event, index) => ({
-        event_id: stringValue(
-          event.event_id,
-          `lifecycle.material_coverage_events[${index}].event_id`,
-        ),
-        event_type: enumString(
-          event.event_type,
-          MATERIAL_COVERAGE_EVENT_TYPES,
-          `lifecycle.material_coverage_events[${index}].event_type`,
-        ),
-        source_refs: stringArray(
-          event.source_refs,
-          `lifecycle.material_coverage_events[${index}].source_refs`,
-        ),
-        material_kinds: stringArray(
-          event.material_kinds,
-          `lifecycle.material_coverage_events[${index}].material_kinds`,
-        ).map((kind, kindIndex) =>
-          targetMaterialKindValue(
-            kind,
-            `lifecycle.material_coverage_events[${index}].material_kinds[${kindIndex}]`,
-          )
-        ),
-        changed_authority_fields: stringArray(
-          event.changed_authority_fields,
-          `lifecycle.material_coverage_events[${index}].changed_authority_fields`,
-        ),
-        prior_authority_state_ref: nullableString(
-          event.prior_authority_state_ref,
-          `lifecycle.material_coverage_events[${index}].prior_authority_state_ref`,
-        ),
-        current_authority_state_ref: nullableString(
-          event.current_authority_state_ref,
-          `lifecycle.material_coverage_events[${index}].current_authority_state_ref`,
-        ),
-        prior_authority_state: event.prior_authority_state === null ||
-          event.prior_authority_state === undefined
-          ? null
-          : recordValue(
-              event.prior_authority_state,
-              `lifecycle.material_coverage_events[${index}].prior_authority_state`,
-            ),
-        current_authority_state: event.current_authority_state === null ||
-          event.current_authority_state === undefined
-          ? null
-          : recordValue(
-              event.current_authority_state,
-              `lifecycle.material_coverage_events[${index}].current_authority_state`,
-            ),
-        frontier_pressure_ids: stringArray(
-          event.frontier_pressure_ids,
-          `lifecycle.material_coverage_events[${index}].frontier_pressure_ids`,
-        ),
-        reason: stringValue(event.reason, `lifecycle.material_coverage_events[${index}].reason`),
-      })),
-      convergence_events: records(
-        lifecycleRaw.convergence_events,
-        "lifecycle.convergence_events",
-      ).map((event, index) => ({
-        event_id: stringValue(
-          event.event_id,
-          `lifecycle.convergence_events[${index}].event_id`,
-        ),
-        prior_state: event.prior_state === null || event.prior_state === undefined
-          ? null
-          : enumString(
-              event.prior_state,
-              CONVERGENCE_STATES,
-              `lifecycle.convergence_events[${index}].prior_state`,
-            ),
-        new_state: enumString(
-          event.new_state,
-          CONVERGENCE_STATES,
-          `lifecycle.convergence_events[${index}].new_state`,
-        ),
-        frontier_pressure_ids: stringArray(
-          event.frontier_pressure_ids,
-          `lifecycle.convergence_events[${index}].frontier_pressure_ids`,
-        ),
-        reason: stringValue(event.reason, `lifecycle.convergence_events[${index}].reason`),
-      })),
-    },
-    migration_records: records(args.raw.migration_records, "migration_records")
-      .map((record, index) => ({
-        migration_id: stringValue(record.migration_id, `migration_records[${index}].migration_id`),
-        source_field: stringValue(record.source_field, `migration_records[${index}].source_field`),
-        target_authority_field: stringValue(
-          record.target_authority_field,
-          `migration_records[${index}].target_authority_field`,
-        ),
-        migration_artifact_ref: nullableString(
-          record.migration_artifact_ref,
-          `migration_records[${index}].migration_artifact_ref`,
-        ),
-      })),
   };
+}
+
+function firstEvidenceRef(sourceObservations: ReconstructSourceObservationsArtifact): ReconstructEvidenceRef {
+  return evidenceRefFromObservation(requireFirstObservation(sourceObservations));
+}
+
+function mockCandidateInventory(args: {
+  sessionId: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  authorId: string;
+}): ReconstructCandidateInventoryArtifact {
+  const evidence = firstEvidenceRef(args.sourceObservations);
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    source_observations_ref: "source-observations.yaml",
+    candidates: [
+      {
+        candidate_id: "candidate-observed-material",
+        candidate_kind: "object",
+        name: "Observed Material",
+        description: "The observed source material represented as a seed object.",
+        salience: "high",
+        evidence_refs: [evidence],
+      },
+      {
+        candidate_id: "candidate-reconstruct-user",
+        candidate_kind: "actor",
+        name: "Reconstruct User",
+        description: "The user who will consume the reconstructed seed.",
+        salience: "high",
+        evidence_refs: [evidence],
+      },
+      {
+        candidate_id: "candidate-explain-seed",
+        candidate_kind: "action",
+        name: "Explain Seed",
+        description: "The action of explaining the observed material through the seed.",
+        salience: "high",
+        evidence_refs: [evidence],
+      },
+      {
+        candidate_id: "candidate-observed-source",
+        candidate_kind: "data_source",
+        name: "Observed Source",
+        description: "The runtime-observed source ref used as evidence.",
+        salience: "high",
+        evidence_refs: [evidence],
+      },
+    ],
+    directive_author: {
+      owner: "mock",
+      author_id: args.authorId,
+    },
+  };
+}
+
+function mockCandidateDisposition(args: {
+  sessionId: string;
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  authorId: string;
+}): ReconstructCandidateDispositionArtifact {
+  const targetByCandidateId = new Map<string, string>([
+    ["candidate-observed-material", "object-observed-material"],
+    ["candidate-reconstruct-user", "actor-reconstruct-user"],
+    ["candidate-explain-seed", "action-explain-seed"],
+    ["candidate-observed-source", "binding-observed-source"],
+  ]);
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    candidate_inventory_ref: "candidate-inventory.yaml",
+    dispositions: args.candidateInventory.candidates.map((candidate) => ({
+      candidate_id: candidate.candidate_id,
+      disposition_id: "promoted_to_seed_layer",
+      target_seed_refs: [
+        targetByCandidateId.get(candidate.candidate_id) ?? `seed-ref-${candidate.candidate_id}`,
+      ],
+      rationale: `${candidate.name} is promoted into the mock actionable seed surface.`,
+      evidence_refs: candidate.evidence_refs,
+    })),
+    directive_author: {
+      owner: "mock",
+      author_id: args.authorId,
+    },
+  };
+}
+
+function mockOntologyHandoff(): Record<string, unknown> {
+  return {
+    readiness_claim: "ready",
+    classification_mapping: {
+      ontology_scope_kind: "application_ontology_seed",
+      classification_axis_policy: "object, actor, action, and data-binding layers",
+      classification_level_axis_refs: [
+        "object-observed-material",
+        "actor-reconstruct-user",
+        "action-explain-seed",
+      ],
+      inheritance_model: "flat_seed_layer",
+      mece_status: "not_asserted",
+      seed_refs: [
+        "object-observed-material",
+        "actor-reconstruct-user",
+        "action-explain-seed",
+      ],
+      limitation_refs: [],
+    },
+    entity_identity_mapping: {
+      entity_id_policy: "stable seed ids",
+      uri_or_iri_policy: "not_assigned",
+      canonical_identifier_refs: [
+        "object-observed-material",
+        "actor-reconstruct-user",
+        "action-explain-seed",
+      ],
+      alias_identifier_refs: [],
+      primitive_vs_defined_status: "defined_by_seed_record",
+      definition_criteria_refs: ["object-observed-material"],
+      limitation_refs: [],
+    },
+    instance_assertion_mapping: {
+      instance_availability_status: "present",
+      instance_refs: ["object-observed-material"],
+      example_assertion_refs: ["action-explain-seed"],
+      abox_assertion_refs: [],
+      limitation_refs: [],
+    },
+    terminology_mapping: {
+      canonical_label_policy: "seed names are canonical labels",
+      alias_policy: "aliases are not asserted",
+      hidden_label_policy: "hidden labels are not asserted",
+      homonym_policy: "not assessed in mock path",
+      multilingual_label_policy: "single-language mock labels",
+      language_tag_policy: "und",
+      limitation_refs: [],
+    },
+    relation_type_mapping: {
+      relation_type_refs: [],
+      formal_relation_semantics:
+        "No link types are asserted; action bindings express operational relations.",
+      domain_range_declaration_refs: ["action-explain-seed"],
+      relation_property_constraint_refs: [],
+      unsupported_relation_candidates: [],
+      limitation_refs: [],
+    },
+    constraint_mapping: {
+      constraint_refs: [],
+      tbox_constraint_refs: [],
+      abox_assertion_constraint_refs: [],
+      shape_or_validation_constraint_refs: ["runtime_seed_validator"],
+      policy_constraint_refs: ["policy-explain-seed"],
+      unsupported_constraint_candidates: [],
+      limitation_refs: [],
+    },
+    modularity_boundary: {
+      module_candidates: ["observed_material_seed_module"],
+      import_or_reuse_refs: [],
+      limitation_refs: [],
+    },
+    reasoning_or_formalism_profile: {
+      representation_formalism: "informal_actionable_graph",
+      vocabulary_systems: ["custom_controlled_vocabulary"],
+      validation_formalisms: ["custom_runtime_validator"],
+      ontology_type: "application_ontology",
+      owl_profile: "not_applicable",
+      alignment_posture: "custom_alignment",
+      reasoning_expectations: ["runtime validation gates preserve seed truth"],
+      validation_expectations: ["seed validator and handoff validator must pass"],
+      limitation_refs: [],
+    },
+    application_context_mapping: {
+      application_context_refs: ["object-observed-material"],
+      actor_or_surface_refs: ["actor-reconstruct-user", "object-observed-material"],
+      limitation_refs: [],
+    },
+    metadata_mapping: {
+      descriptive_metadata_refs: ["seed_identity"],
+      bibliographic_metadata_refs: [],
+      resource_metadata_refs: ["source-observations.yaml"],
+      limitation_refs: [],
+    },
+    provenance_mapping: {
+      provenance_binding_refs: ["provenance-observed-source"],
+      evidence_scope_refs: ["source-observations.yaml"],
+      limitation_refs: [],
+    },
+    change_tracking_mapping: {
+      state_model_refs: [],
+      lifecycle_rule_refs: [],
+      migration_or_versioning_refs: ["seed_identity.generated_at"],
+      limitation_refs: [],
+    },
+    competency_scope_mapping: {
+      expected_coverage_axes: [
+        "purpose",
+        "semantic_layer",
+        "kinetic_layer",
+        "dynamic_layer",
+        "data_binding_layer",
+        "ontology_handoff",
+      ],
+      required_handoff_axes: ["classification", "entity_identity", "provenance"],
+      unsupported_axes: [],
+      limitation_refs: [],
+    },
+    alignment_mapping: {
+      external_vocab_or_domain_refs: [],
+      mapped_seed_refs: [
+        "object-observed-material",
+        "actor-reconstruct-user",
+        "action-explain-seed",
+      ],
+      limitation_refs: [],
+    },
+    modeling_concern_applicability: {
+      rows: [
+        {
+          concern_id: "instance_assertion_coverage",
+          applies: false,
+          applicability_predicate_ref: "mock path has no separate instance catalog",
+          trace_refs: ["object-observed-material"],
+          limitation_refs: [],
+        },
+      ],
+    },
+    reference_standard_mapping: {
+      standard_refs: ["foundry_style_seed_contract"],
+      mapped_concern_refs: ["classification", "entity_identity"],
+      limitation_refs: [],
+    },
+    pattern_catalog_mapping: {
+      pattern_catalog_refs: ["actionable_seed_pattern"],
+      mapped_concern_refs: ["purpose", "ontology_handoff"],
+      limitation_refs: [],
+    },
+    query_access_contract: { applies: "not_applicable", limitation_refs: [] },
+    visualization_contract: { applies: "not_applicable", limitation_refs: [] },
+    graph_exploration_contract: { applies: "not_applicable", limitation_refs: [] },
+    graph_connectivity: {
+      connected_seed_refs: [
+        "object-observed-material",
+        "actor-reconstruct-user",
+        "action-explain-seed",
+      ],
+      isolated_seed_refs: [],
+      isolation_rationale_refs: [],
+    },
+    limitation_refs: [],
+  };
+}
+
+function mockActionableOntologySeed(args: {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  authorId: string;
+}): ReconstructActionableOntologySeedArtifact {
+  const evidence = firstEvidenceRef(args.sourceObservations);
+  const sourceRef = evidence.source_ref;
+  return {
+    seed_identity: {
+      schema_version: "1",
+      seed_id: `seed-${args.sessionId}`,
+      title: "Mock Actionable Ontology Seed",
+      target_refs: args.targetMaterialProfile.target_refs,
+      generated_at: isoNow(),
+      authoring_profile: args.authorId,
+    },
+    purpose: {
+      declared_purpose: args.intent,
+      intended_decisions: ["Decide whether the observed material can be handed off as a bounded seed."],
+      intended_actions: ["Explain the observed material from validated evidence."],
+      non_goals: ["Full formal ontology generation is outside this mock path."],
+      evidence_refs: [evidence],
+    },
+    decision_context: {
+      principal_user: "Reconstruct user",
+      downstream_use: "bounded_seed_handoff",
+      decision_boundary: "Observed runtime evidence only.",
+      risk_notes: [],
+    },
+    conceptual_frame: {
+      concepts: [
+        {
+          concept_id: "concept-observed-material",
+          name: "Observed Material",
+          definition: "The source material observed by reconstruct runtime.",
+          purpose_role: "orients the seed around the declared purpose",
+          evidence_refs: [evidence],
+          confidence: "confirmed",
+        },
+      ],
+      associations: [],
+    },
+    semantic_layer: {
+      object_types: [
+        {
+          object_type_id: "object-observed-material",
+          name: "Observed Material",
+          object_kind: "document",
+          description: "A bounded object representing the observed source material.",
+          primary_key: {
+            property_id: "property-observed-material-ref",
+            name: "source ref",
+            value_type: "string",
+            evidence_refs: [evidence],
+          },
+          properties: [],
+          backing_source_refs: [sourceRef],
+          evidence_refs: [evidence],
+          status: "confirmed",
+        },
+      ],
+      link_types: [],
+      value_types: [],
+      constraints: [],
+    },
+    kinetic_layer: {
+      action_types: [
+        {
+          action_type_id: "action-explain-seed",
+          name: "Explain Seed",
+          description: "Explain the observed material as a bounded seed.",
+          actor_type_ids: ["actor-reconstruct-user"],
+          target_object_type_ids: ["object-observed-material"],
+          affected_object_type_ids: [],
+          parameters: [],
+          preconditions: [],
+          postconditions: [],
+          side_effects: [],
+          writeback_behavior: {
+            writes: false,
+            writeback_source_refs: [],
+            rationale: "The action is explanatory and does not write source material.",
+          },
+          evidence_refs: [evidence],
+          status: "confirmed",
+        },
+      ],
+      functions: [],
+      workflows: [
+        {
+          workflow_id: "workflow-explain-seed",
+          name: "Explain Seed Workflow",
+          ordered_action_type_ids: ["action-explain-seed"],
+          trigger: "User requests reconstruct output.",
+          terminal_state: "Bounded seed explanation is available.",
+          evidence_refs: [evidence],
+        },
+      ],
+    },
+    dynamic_layer: {
+      actor_types: [
+        {
+          actor_type_id: "actor-reconstruct-user",
+          name: "Reconstruct User",
+          actor_kind: "human_user",
+          role_refs: ["role-seed-reader"],
+          description: "Human user consuming the reconstructed seed.",
+          evidence_refs: [evidence],
+        },
+      ],
+      actor_roles: [
+        {
+          role_id: "role-seed-reader",
+          name: "Seed Reader",
+          holder_actor_type_ids: ["actor-reconstruct-user"],
+          authority_scope_refs: [],
+          evidence_refs: [evidence],
+        },
+      ],
+      permission_policies: [
+        {
+          policy_id: "policy-explain-seed",
+          actor_type_id: "actor-reconstruct-user",
+          action_type_id: "action-explain-seed",
+          object_type_id: "object-observed-material",
+          permission_kind: "allowed",
+          condition: "Within the reconstruct session boundary.",
+          evidence_refs: [evidence],
+        },
+      ],
+      state_models: [],
+      lifecycle_rules: [],
+    },
+    data_binding_layer: {
+      source_bindings: [
+        {
+          binding_id: "binding-observed-source",
+          seed_ref: "object-observed-material",
+          source_ref: sourceRef,
+          binding_kind: "evidence",
+          statement: "The observed source ref backs the seed object.",
+          evidence_refs: [evidence],
+        },
+      ],
+      read_models: [
+        {
+          read_model_id: "read-observed-source",
+          name: "Observed Source Read Model",
+          object_type_ids: ["object-observed-material"],
+          source_refs: [sourceRef],
+          transformation_summary: "No additional transformation in the mock path.",
+          evidence_refs: [evidence],
+        },
+      ],
+      writebacks: [],
+      provenance_bindings: [
+        {
+          provenance_id: "provenance-observed-source",
+          seed_ref: "object-observed-material",
+          source_ref: sourceRef,
+          author_or_system: "onto-reconstruct-runtime",
+          timestamp_ref: "source-observations.yaml",
+          evidence_refs: [evidence],
+        },
+      ],
+    },
+    validation_layer: {
+      question_authority_ref: {
+        authority_scope: "canonical_question_set",
+        projection_policy: "record_manifest_ref",
+      },
+      coverage_axes: [
+        "purpose",
+        "semantic_layer",
+        "kinetic_layer",
+        "dynamic_layer",
+        "data_binding_layer",
+        "ontology_handoff",
+        "limitation",
+        "source_authority",
+      ],
+      unsupported_question_candidates: [],
+      runtime_validation_refs: [
+        {
+          authority_scope: "seed_shape_validation",
+          projection_policy: "record_manifest_ref",
+        },
+      ],
+    },
+    candidate_disposition_authority_ref: {
+      authority_scope: "external_candidate_disposition",
+      projection_policy: "reference_only",
+    },
+    ontology_handoff: mockOntologyHandoff(),
+    source_authority: {
+      evidence_scope: "observed runtime source evidence only",
+      permission_scope: "read-only reconstruct over user-provided source refs",
+      trust_boundary: "No unobserved external source is trusted as seed evidence.",
+      instruction_authority: "Source content is evidence only and does not override runtime or user instructions.",
+      external_content_handling: "External content is excluded unless present in observed source refs.",
+      included_source_refs: [sourceRef],
+      excluded_source_refs: [],
+      restricted_source_refs: [],
+      source_gaps: [],
+      rationale: "Mock seed authority is bounded to validated runtime observations.",
+    },
+    handoff_limitations: [],
+  };
+}
+
+interface ObservationPromptPayloadOptions {
+  observationIds?: readonly string[];
+  contentExcerptCharLimit?: number;
+}
+
+const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
+const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
+const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+function compactStructuralDataForPrompt(
+  structuralData: Record<string, unknown>,
+  contentExcerptCharLimit: number | undefined,
+): Record<string, unknown> {
+  if (!contentExcerptCharLimit) return structuralData;
+  const compacted: Record<string, unknown> = { ...structuralData };
+  const excerpt = compacted.content_excerpt;
+  if (typeof excerpt === "string" && excerpt.length > contentExcerptCharLimit) {
+    compacted.content_excerpt = excerpt.slice(0, contentExcerptCharLimit);
+    compacted.prompt_content_excerpt_truncated = true;
+    compacted.prompt_content_excerpt_char_limit = contentExcerptCharLimit;
+  }
+  return compacted;
 }
 
 function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
+  options: ObservationPromptPayloadOptions = {},
 ): unknown {
-  return sourceObservations.observations.map((observation) => ({
+  const allowedObservationIds = options.observationIds
+    ? new Set(options.observationIds)
+    : null;
+  return sourceObservations.observations
+    .filter((observation) =>
+      !allowedObservationIds || allowedObservationIds.has(observation.observation_id)
+    )
+    .map((observation) => ({
     observation_id: observation.observation_id,
     target_material_kind: observation.target_material_kind,
     source_ref: observation.source_ref,
     location: observation.location,
     summary: observation.summary,
-    structural_data: observation.structural_data,
+    structural_data: compactStructuralDataForPrompt(
+      observation.structural_data,
+      options.contentExcerptCharLimit,
+    ),
   }));
+}
+
+function selectedObservationIds(
+  directive: ReconstructSourceObservationDirectiveArtifact,
+): string[] {
+  return [
+    ...new Set(
+      directive.selected_observations.map((observation) =>
+        observation.observation_id
+      ),
+    ),
+  ];
+}
+
+function claimEvidenceObservationIds(claims: ReconstructSeedClaim[]): string[] {
+  return [
+    ...new Set(
+      claims.flatMap((claim) => claim.evidence_refs.map((ref) => ref.observation_id)),
+    ),
+  ];
 }
 
 function lensJudgmentPromptPayload(
@@ -2161,6 +2202,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
 
     async writeSourceObservationDirective(input) {
       requireFirstObservation(input.sourceObservations);
+      const availableObservationIds = input.sourceObservations.observations.map(
+        (observation) => observation.observation_id,
+      );
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -2169,11 +2213,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           "Select observations that should become evidence candidates for the declared reconstruct purpose.",
+          "selected_observations is a set keyed by observation_id. Include each observation_id at most once; if one observation supports multiple rationales, combine them in one selection_rationale.",
+          "Copy observation_id verbatim from available_observation_ids. Do not invent, rename, or duplicate observation ids.",
           "JSON shape: {\"selected_observations\":[{\"observation_id\":\"...\",\"selection_rationale\":\"...\"}],\"open_questions\":[\"...\"]}",
         ].join("\n"),
         userPayload: {
           intent: input.intent,
           target_material_profile: input.targetMaterialProfile,
+          available_observation_ids: availableObservationIds,
           source_observations: observationPromptPayload(input.sourceObservations),
         },
       });
@@ -2183,6 +2230,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           observation,
         ]),
       );
+      const selectedIds = new Set<string>();
       const selected = records(
         raw.selected_observations,
         "selected_observations",
@@ -2191,6 +2239,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           selection.observation_id,
           `selected_observations[${index}].observation_id`,
         );
+        if (selectedIds.has(observationId)) {
+          throw new Error(
+            `SourceObservationDirective repeats observation id: ${observationId}`,
+          );
+        }
+        selectedIds.add(observationId);
         const observation = byId.get(observationId);
         if (!observation) {
           throw new Error(
@@ -2222,7 +2276,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         maxTokens: 3200,
         systemPrompt: [
           baseSystem,
-          `You are the ${input.lensId} reconstruct lens. Apply this perspective:`,
+          `You are the ${input.lensId} reconstruct lens. Apply this lens contract:`,
           input.lensPrompt,
           "JSON shape: {\"candidate_labels\":[{\"label_id\":\"...\",\"label\":\"...\",\"evidence_observation_ids\":[\"...\"],\"rationale\":\"...\"}],\"semantic_gaps\":[{\"gap_id\":\"...\",\"description\":\"...\",\"evidence_observation_ids\":[\"...\"],\"requested_source_refs\":[\"...\"],\"materiality_rationale\":\"...\"}],\"no_next_frontier_rationale\":\"... or null\"}",
         ].join("\n"),
@@ -2231,7 +2285,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           round_id: input.roundId,
           source_observation_directive_ref: input.sourceObservationDirectiveRef,
           selected_observations: input.sourceObservationDirective.selected_observations,
-          source_observations: observationPromptPayload(input.sourceObservations),
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            observationIds: selectedObservationIds(input.sourceObservationDirective),
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
         },
       });
       return {
@@ -2305,31 +2362,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           intent: input.intent,
           round_id: input.roundId,
           lens_judgment_index_ref: input.lensJudgmentIndexRef,
+          source_observations_ref: input.sourceObservationsRef,
           lens_judgments: lensJudgmentPromptPayload(input.lensJudgments),
         },
       });
-      const sourceObservations: ReconstructSourceObservationsArtifact = {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        observations: input.lensJudgments.flatMap((judgment) =>
-          [
-            ...judgment.candidate_labels.flatMap((label) => label.evidence_refs),
-            ...judgment.semantic_gaps.flatMap((gap) => gap.evidence_refs),
-          ].map((ref) => ({
-              observation_id: ref.observation_id,
-              target_material_kind:
-                ref.target_material_kind as ReconstructSourceObservation["target_material_kind"],
-              adapter_id: "evidence-ref-projection",
-              source_ref: ref.source_ref,
-              location: ref.location,
-              summary: "Projected from lens judgment evidence refs.",
-              structural_data: {},
-            }))
-        ),
-        skipped_refs: [],
-        validation_results: [],
-      };
       return {
         schema_version: "1",
         session_id: input.sessionId,
@@ -2349,7 +2385,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 gap.evidence_observation_ids,
                 `accepted_gaps[${index}].evidence_observation_ids`,
               ),
-              sourceObservations,
+              sourceObservations: input.sourceObservations,
               fieldName: `accepted_gaps[${index}].evidence_observation_ids`,
             }),
           })),
@@ -2394,6 +2430,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           "Convert exploration synthesis into a concrete source frontier. If no new source should be read, return an empty frontier_refs array and a no_next_frontier_rationale.",
+          "Frontier refs are only for not-yet-observed refs that are already present in inventory_source_refs. Do not request refs listed in observed_source_refs. Do not invent relative paths outside inventory_source_refs.",
+          "If every useful next source is already observed, return frontier_refs: [] and explain the remaining source-depth limitation in no_next_frontier_rationale.",
           "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
         ].join("\n"),
         userPayload: {
@@ -2401,6 +2439,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           round_id: input.roundId,
           exploration_synthesis_ref: input.explorationSynthesisRef,
           exploration_synthesis: input.explorationSynthesis,
+          inventory_source_refs: input.sourceInventory.inventory_units
+            .map((unit) => unit.ref),
+          observed_source_refs: input.sourceObservations.observations
+            .map((observation) => observation.source_ref),
         },
       });
       const frontierRefs = records(raw.frontier_refs ?? [], "frontier_refs")
@@ -2433,130 +2475,183 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
     },
 
-    async writeSeedCandidate(input) {
+    async writeCandidateInventory(input) {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
-        artifactName: "SeedCandidate",
-        maxTokens: 7000,
+        artifactName: "CandidateInventory",
+        maxTokens: 4000,
         systemPrompt: [
           baseSystem,
-          "Author a concept-centered ontology Seed candidate for the declared purpose. The Seed is a top-level concept discovery handoff artifact, not a full ontology graph.",
-          "Return seed_schema_version: transitional. The concept-centered fields are the semantic authority; legacy fields are compatibility projections only.",
-          "The concept-centered fields must include answerability_scope, top_level_concepts, top_level_relations, relation_participation_exceptions, lower_level_detail_placements, frontier_pressure_log, material_coverage_checkpoint, convergence, lifecycle, and migration_records.",
-          "Do not store relation_axis. relation axis is derived from relation_kind. Do not use pressure_ids or current_pressure_id in lifecycle.pressure_events; use one pressure_id.",
-          "Use only provided observation ids in evidence_observation_ids arrays. If evidence may change top-level concepts, boundaries, core relations, answerability, material coverage, or convergence confidence, record an open frontier pressure. Use deferred, superseded, or non_blocking pressure only with an explicit status_reason that explains why it does not block the declared Seed purpose.",
-          "Legacy claims must include claim_id for artifact linkage and name for user-facing meaning. name must be a concise meaningful label such as Usage Session, Usage Cost, or Dashboard Overview, not Entity 1 or a numbered placeholder.",
-          "Each claim shape: {\"claim_id\":\"...\",\"name\":\"...\",\"statement\":\"...\",\"evidence_observation_ids\":[\"...\"]}",
-          "top_level_concepts item shape: {\"concept_id\":\"...\",\"name\":\"...\",\"aliases\":[\"...\"],\"definition\":\"...\",\"why_top_level\":\"...\",\"evidence_observation_ids\":[\"...\"],\"boundary\":{\"included_summary\":\"...\",\"excluded_summary\":\"...\",\"deferred_summary\":\"...\"},\"confidence\":\"...\",\"provisional\":false}",
-          `top_level_relations item shape: {"relation_id":"...","source_concept_id":"...","target_concept_id":"...","relation_kind":"${enumChoices(TOP_LEVEL_RELATION_KINDS)}","relation_label":"...","direction_statement":"...","statement":"...","evidence_observation_ids":["..."],"confidence":"...","provisional":false,"registration_status":"design_local"}`,
-          `answerability_scope shape: {"declared_handoff_questions":[{"question_id":"...","question":"...","source":"${enumChoices(HANDOFF_QUESTION_SOURCES)}"}],"supported_questions":[{"question_id":"...","answered_by":{"concept_ids":["..."],"relation_ids":["..."]},"confidence":"..."}],"deferred_questions":[{"question_id":"...","reason_deferred":"...","frontier_pressure_ids":["..."]}],"unsupported_questions":[{"question_id":"...","reason_unsupported":"..."}],"supported_actions":[{"action_id":"...","action":"...","supported_by_question_ids":["..."],"readiness_statement":"..."}],"unsupported_actions":[{"action_id":"...","action":"...","reason_unsupported":"..."}],"handoff_readiness_statement":"...","handoff_readiness_question_ids":["..."]}`,
-          "Partition every declared_handoff_questions item into exactly one of supported_questions, deferred_questions, or unsupported_questions. Partition every declared action into supported_actions or unsupported_actions.",
-          `lower_level_detail_placements item shape: {"detail_id":"...","name":"...","material_kind":"${enumChoices(TARGET_MATERIAL_KINDS)}","source_ref":"...","placement":"${enumChoices(LOWER_LEVEL_DETAIL_PLACEMENTS)}","owner_concept_id":"...","rationale":"...","evidence_observation_ids":["..."],"follow_up_question":null}`,
-          `frontier_pressure_log item shape: {"pressure_id":"...","origin":"${enumChoices(FRONTIER_PRESSURE_ORIGINS)}","origin_ref":"...","pressure_type":"${enumChoices(FRONTIER_PRESSURE_TYPES)}","pressure_question":"...","target_concept_ids":["..."],"target_relation_ids":["..."],"material_kind":"${enumChoices(TARGET_MATERIAL_KINDS)}","source_ref":"...","expected_decision_impact":"...","priority":"high|medium|low","status":"${enumChoices(FRONTIER_PRESSURE_STATUSES)}","status_reason":"...","superseded_by_pressure_id":null,"evidence_observation_ids":["..."]}`,
-          "material_coverage_checkpoint shape must include observed_material_kinds, observed_source_slices, source_authority_scope with permission/trust/instruction/external handling, intentionally_excluded_material_kinds, unexplored_source_categories, possible_missing_axis_pressure_ids, rationale_for_seed_level_sufficiency, and partial_support_disclosures.",
-          "convergence shape must include state, source_convergence_rationale, review_confirmed, review_profile_ref, and remaining_pressure_ids.",
-          `migration mapping authority: ${seedMigrationMappingContract()}`,
-          "migration_records item shape: {\"migration_id\":\"...\",\"source_field\":\"...\",\"target_authority_field\":\"one accepted target for that source_field\",\"migration_artifact_ref\":null}. The mapping rule, compatibility status, obligation status, and rationale are registry authority, not Seed record fields.",
-          "migration_records must use the exact accepted target_authority_field values from the migration mapping authority; do not map a source_field to a broad authority prefix or unrelated field.",
-          `lifecycle event_type enums: concept_identity_events=${enumChoices(CONCEPT_IDENTITY_EVENT_TYPES)}; relation_identity_events=${enumChoices(RELATION_IDENTITY_EVENT_TYPES)}; pressure_events=${enumChoices(PRESSURE_EVENT_TYPES)}; detail_placement_events=${enumChoices(DETAIL_PLACEMENT_EVENT_TYPES)}; answerability_events=${enumChoices(ANSWERABILITY_EVENT_TYPES)}; material_coverage_events=${enumChoices(MATERIAL_COVERAGE_EVENT_TYPES)}.`,
-          "lifecycle shape: {\"seed_id\":\"...\",\"parent_seed_ref\":null,\"id_stability_scope\":\"session|lineage\",\"session_id\":\"...\",\"source_snapshot_refs\":[\"...\"],\"source_snapshot_transition\":{\"prior_snapshot_refs\":[],\"transition_reason\":\"...\"},\"exploration_rounds\":[{\"round_id\":\"...\",\"observed_source_refs\":[\"...\"],\"authoring_pass_ref\":\"seed-candidate.yaml\",\"changed_concept_ids\":[\"...\"],\"changed_relation_ids\":[],\"changed_frontier_pressure_ids\":[\"...\"]}],\"concept_identity_events\":[object],\"relation_identity_events\":[object],\"pressure_events\":[object],\"detail_placement_events\":[object],\"answerability_events\":[object],\"material_coverage_events\":[object],\"convergence_events\":[object]}",
-          "concept_identity_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|renamed|alias_changed|split|merged|boundary_changed|demoted\",\"prior_concept_ids\":[],\"current_concept_ids\":[\"...\"],\"target_detail_ids\":[],\"prior_names\":[],\"new_names\":[\"...\"],\"prior_aliases\":[],\"current_aliases\":[],\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"],\"frontier_pressure_ids\":[\"...\"]}",
-          "relation_identity_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|changed_direction|changed_kind|split|merged|removed\",\"prior_relation_ids\":[],\"current_relation_ids\":[\"...\"],\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"],\"frontier_pressure_ids\":[\"...\"]}",
-          "pressure_events item shape: {\"event_id\":\"...\",\"event_type\":\"created|resolved|deferred|reopened|superseded|non_blocking\",\"pressure_id\":\"...\",\"prior_status\":null,\"new_status\":\"open|resolved|deferred|superseded|non_blocking\",\"superseded_by_pressure_id\":null,\"reason\":\"...\",\"evidence_observation_ids\":[\"...\"]}. Treat pressure_events as an ordered history per pressure: prior_status must match the previous event new_status when a previous event exists, and only the final event new_status must match frontier_pressure_log.status.",
-          `detail_placement_events item shape: {"event_id":"...","event_type":"${enumChoices(DETAIL_PLACEMENT_EVENT_TYPES)}","detail_ids":["..."],"reason":"...","evidence_observation_ids":["..."],"frontier_pressure_ids":["..."]}`,
-          `answerability_events item shape: {"event_id":"...","event_type":"${enumChoices(ANSWERABILITY_EVENT_TYPES)}","question_ids":["..."],"action_ids":["..."],"frontier_pressure_ids":["..."],"reason":"..."}`,
-          `material_coverage_events item shape: {"event_id":"...","event_type":"${enumChoices(MATERIAL_COVERAGE_EVENT_TYPES)}","source_refs":["..."],"material_kinds":["<target_material_kind from source_refs>"],"changed_authority_fields":["..."],"prior_authority_state_ref":null,"current_authority_state_ref":null,"prior_authority_state":null,"current_authority_state":{},"frontier_pressure_ids":["..."],"reason":"..."}`,
-          `material_coverage_events.material_kinds allowed values: ${enumChoices(TARGET_MATERIAL_KINDS)}. For source_slice_added and coverage_gap_resolved, use only material kinds proven by the event source_refs. For material_kind_excluded, use only material_coverage_checkpoint.intentionally_excluded_material_kinds. For coverage_gap_disclosed, disclose the gap kind without claiming source evidence. Do not copy the full enum list into one event.`,
-          `convergence_events item shape: {"event_id":"...","prior_state":null,"new_state":"${enumChoices(CONVERGENCE_STATES)}","frontier_pressure_ids":["..."],"reason":"..."}`,
-          "concept_identity_events demoted items must carry prior_concept_ids, empty current_concept_ids, and target_detail_ids pointing to lower_level_detail_placements.",
-          "JSON shape: {\"seed_schema_version\":\"transitional\",\"purpose\":claim,\"answerability_scope\":object,\"top_level_concepts\":[object],\"top_level_relations\":[object],\"relation_participation_exceptions\":[object],\"lower_level_detail_placements\":[object],\"frontier_pressure_log\":[object],\"material_coverage_checkpoint\":object,\"convergence\":object,\"lifecycle\":object,\"migration_records\":[object],\"non_goals\":[claim],\"entities\":[claim],\"relations\":[claim],\"actions\":[claim],\"properties\":[claim],\"rules\":[claim],\"open_questions\":[\"...\"]}",
+          "Author candidate-inventory.yaml. Inventory every high-salience object, actor, action, workflow, permission, data source, constraint, and concept candidate that the observed evidence may support.",
+          "Every provided source observation must appear in at least one candidate evidence_observation_ids array. If an observation only shows absence, boundary, or limitation evidence, create a low-salience validation or limitation candidate for that observation.",
+          `Allowed candidate_kind values: ${candidateKindIds(input.contractRegistry).join(", ")}.`,
+          "Do not decide placement here. This artifact only records candidates that must not vanish before disposition.",
+          "Each candidate shape: {\"candidate_id\":\"candidate-...\",\"candidate_kind\":\"...\",\"name\":\"...\",\"description\":\"...\",\"salience\":\"high|medium|low\",\"evidence_observation_ids\":[\"...\"]}.",
+          "JSON shape: {\"candidates\":[candidate]}",
         ].join("\n"),
         userPayload: {
+          session_id: input.sessionId,
           intent: input.intent,
           selected_observations: input.sourceObservationDirective.selected_observations,
-          source_observations: observationPromptPayload(input.sourceObservations),
+          source_observations_ref: input.sourceObservationsRef,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
           lens_judgment_index: input.lensJudgmentIndex,
           exploration_synthesis: input.explorationSynthesis,
           source_frontier_validation: input.sourceFrontierValidation,
         },
       });
-      const purposeRaw =
-        raw.purpose && typeof raw.purpose === "object" && !Array.isArray(raw.purpose)
-          ? raw.purpose as Record<string, unknown>
-          : null;
-      if (!purposeRaw) throw new Error("SeedCandidate.purpose must be an object.");
-      const conceptCenteredFields = conceptCenteredFieldsFromLlm({
-        raw,
-        sessionId: input.sessionId,
-        sourceObservations: input.sourceObservations,
-      });
       return {
         schema_version: "1",
-        ...conceptCenteredFields,
         session_id: input.sessionId,
         created_at: isoNow(),
-        purpose: claimFromLlm({
-          raw: purposeRaw,
-          fallbackId: "purpose-1",
-          sourceObservations: input.sourceObservations,
-          fieldName: "purpose",
-        }),
-        non_goals: claimsFromLlm({
-          value: raw.non_goals,
-          prefix: "non-goal",
-          sourceObservations: input.sourceObservations,
-        }),
-        entities: claimsFromLlm({
-          value: raw.entities,
-          prefix: "entity",
-          sourceObservations: input.sourceObservations,
-        }),
-        relations: claimsFromLlm({
-          value: raw.relations,
-          prefix: "relation",
-          sourceObservations: input.sourceObservations,
-        }),
-        actions: claimsFromLlm({
-          value: raw.actions,
-          prefix: "action",
-          sourceObservations: input.sourceObservations,
-        }),
-        properties: claimsFromLlm({
-          value: raw.properties,
-          prefix: "property",
-          sourceObservations: input.sourceObservations,
-        }),
-        rules: claimsFromLlm({
-          value: raw.rules,
-          prefix: "rule",
-          sourceObservations: input.sourceObservations,
-        }),
-        open_questions: stringArray(raw.open_questions, "open_questions"),
+        source_observations_ref: input.sourceObservationsRef,
+        candidates: records(raw.candidates, "candidates").map((candidate, index) =>
+          candidateInventoryItemFromLlm({
+            raw: candidate,
+            index,
+            sourceObservations: input.sourceObservations,
+          })
+        ),
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
       };
     },
 
+    async writeCandidateDisposition(input) {
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "CandidateDisposition",
+        maxTokens: 4000,
+        systemPrompt: [
+          baseSystem,
+          "Author candidate-disposition.yaml. Every candidate from candidate-inventory.yaml must receive exactly one disposition.",
+          `Allowed disposition_id values: ${candidateDispositionIds(input.contractRegistry).join(", ")}.`,
+          "Use promoted_to_seed_layer only when target_seed_refs names planned canonical seed refs that ontology-seed.yaml must later realize. Use non-promoted dispositions when the candidate is represented, deferred, rejected, or only validation-facing.",
+          "Each disposition shape: {\"candidate_id\":\"...\",\"disposition_id\":\"...\",\"target_seed_refs\":[\"...\"],\"rationale\":\"...\",\"evidence_observation_ids\":[\"...\"]}.",
+          "JSON shape: {\"dispositions\":[disposition]}",
+        ].join("\n"),
+        userPayload: {
+          intent: input.intent,
+          candidate_inventory_ref: input.candidateInventoryRef,
+          candidate_inventory: input.candidateInventory,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
+        },
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        candidate_inventory_ref: input.candidateInventoryRef,
+        dispositions: records(raw.dispositions, "dispositions").map((disposition, index) =>
+          candidateDispositionItemFromLlm({
+            raw: disposition,
+            index,
+            sourceObservations: input.sourceObservations,
+          })
+        ),
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
+      };
+    },
+
+    async writeOntologySeed(input) {
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "ActionableOntologySeed",
+        maxTokens: 9000,
+        systemPrompt: [
+          baseSystem,
+          "Author ontology-seed.yaml as an ActionableOntologySeed. This is not a concept map only; it must include operational objects, actors, actions, permissions, data bindings, validation requirements, ontology handoff mapping, source authority, and limitations.",
+          "Use candidate-disposition.yaml as the disposition authority. Do not duplicate the full disposition ledger in ontology-seed.yaml.",
+          `validation_layer.coverage_axes allowed values: ${coverageAxisIds(input.contractRegistry).join(", ")}.`,
+          ACTIONABLE_ONTOLOGY_SEED_JSON_SHAPE,
+          "candidate_disposition_authority_ref must be {\"authority_scope\":\"external_candidate_disposition\",\"projection_policy\":\"reference_only\"}; concrete candidate artifact refs are owned by reconstruct-record.yaml and reconstruct-run-manifest.yaml.",
+          "validation_layer.question_authority_ref must declare {\"authority_scope\":\"canonical_question_set\",\"projection_policy\":\"record_manifest_ref\"}; validation_layer.runtime_validation_refs may name authority scopes, but must not contain concrete runtime artifact filenames.",
+          "ontology_handoff.readiness_claim must be one of ready, limited, not_ready, blocked. Use limited or not_ready when source evidence leaves explicit handoff limitations.",
+          "When ontology_handoff.readiness_claim is ready, every ontology_handoff mapping object must include concrete mapping content or limitation_refs. Empty shells such as {\"limitation_refs\":[]} are invalid.",
+          "Object types need object_type_id and properties arrays. Actor types belong in dynamic_layer.actor_types with actor_type_id, not semantic_layer.actor_types. Actions belong in kinetic_layer.action_types with action_type_id.",
+          "Every concept_id/object_type_id/actor_type_id/action_type_id/limitation_id must be stable and meaningful, for example object_user or action_review_session; do not use generic ids like ontology_seed.",
+          "Every *_id value must be globally unique across the seed, except semantic_layer.object_types[].primary_key.property_id may reference a property_id from that same object's properties array.",
+          "Use only observed_source_refs for every source_ref field. Use skipped_source_refs only in source_authority.source_gaps or handoff_limitations.missing_source_refs.",
+          "Do not use reconstruct runtime artifact names as source_ref values; they are artifact truth refs, not source evidence refs.",
+          "Before returning, check every object_type_id has data binding coverage or appears in a handoff limitation affected_refs array.",
+          "Every action must have actor_type_ids and object refs, or a handoff limitation. Every action must have permission policy coverage or a limitation. Every object must have source/read/provenance data binding coverage or a limitation.",
+          "Any field named evidence_refs is reserved for evidence arrays only. Never put prose, policy text, artifact names, or source_ref strings in evidence_refs; use statement, rationale, policy, authority_scope, timestamp_ref, or *_mapping text fields instead.",
+          "Use evidence_refs arrays with full evidence ref objects from the provided source_observations. Return the complete ontology seed as one JSON object with no wrapper.",
+        ].join("\n"),
+        userPayload: {
+          intent: input.intent,
+          target_material_profile: input.targetMaterialProfile,
+          candidate_inventory_ref: input.candidateInventoryRef,
+          candidate_inventory: input.candidateInventory,
+          candidate_disposition_ref: input.candidateDispositionRef,
+          candidate_disposition: input.candidateDisposition,
+          source_observations_ref: input.sourceObservationsRef,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
+          observed_source_refs: input.sourceObservations.observations
+            .map((observation) => observation.source_ref),
+          skipped_source_refs: input.targetMaterialProfile.detection.per_ref
+            .filter((ref) =>
+              !input.sourceObservations.observations.some((observation) =>
+                path.resolve(observation.source_ref) === path.resolve(ref.ref)
+              )
+            )
+            .map((ref) => ({
+              source_ref: ref.ref,
+              target_material_kind: ref.kind,
+              confidence_basis: ref.confidence_basis,
+            })),
+        },
+      });
+      return raw;
+    },
+
     async writeClaimRealizationMap(input) {
+      const claims = ontologyClaims(input.ontologySeed);
+      const allowedClaims = claimRealizationTargets(claims);
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
         artifactName: "ClaimRealizationMap",
-        maxTokens: 3000,
+        maxTokens: 8000,
         systemPrompt: [
           baseSystem,
           `Classify every Seed claim with one stance from: ${CLAIM_REALIZATION_STANCES.join(", ")}.`,
+          "For this artifact, Seed claim means exactly one item in userPayload.allowed_claims.",
+          "Return exactly one claim_realizations item for every allowed_claims item.",
+          "Copy claim_id verbatim from allowed_claims[].claim_id. Do not invent, rename, normalize, shorten, or derive claim_id values from limitations, unsupported question candidates, source refs, or runtime artifact names.",
+          "Do not include any claim_id outside allowed_claims. If a claim is limited or not realized, keep the allowed claim_id and use deferred_or_non_goal or unknown with rationale.",
           "JSON shape: {\"claim_realizations\":[{\"claim_id\":\"...\",\"stance\":\"...\",\"rationale\":\"...\"}]}",
         ].join("\n"),
         userPayload: {
-          seed_candidate_ref: input.seedCandidateRef,
-          seed_candidate: input.seedCandidate,
-          source_observations: observationPromptPayload(input.sourceObservations),
+          ontology_seed_ref: input.ontologySeedRef,
+          allowed_claims: allowedClaims,
+          ontology_seed: input.ontologySeed,
+          ontology_seed_validation: input.ontologySeedValidation,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            observationIds: claimEvidenceObservationIds(claims),
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
         },
       });
-      const claimById = new Map(allClaims(input.seedCandidate).map((claim) => [
+      const claimById = new Map(claims.map((claim) => [
         claim.claim_id,
         claim,
       ]));
+      const seenClaimIds = new Set<string>();
       const realizations = records(
         raw.claim_realizations,
         "claim_realizations",
@@ -2567,6 +2662,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         );
         const claim = claimById.get(claimId);
         if (!claim) throw new Error(`ClaimRealizationMap references unknown claim id: ${claimId}`);
+        if (seenClaimIds.has(claimId)) {
+          throw new Error(`ClaimRealizationMap repeats claim id: ${claimId}`);
+        }
+        seenClaimIds.add(claimId);
         const stance = stringValue(
           realization.stance,
           `claim_realizations[${index}].stance`,
@@ -2584,11 +2683,21 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ),
         };
       });
+      const missingClaimIds = claims
+        .map((claim) => claim.claim_id)
+        .filter((claimId) => !seenClaimIds.has(claimId));
+      if (missingClaimIds.length > 0) {
+        throw new Error(
+          `ClaimRealizationMap is missing allowed claim ids: ${missingClaimIds.slice(0, 12).join(", ")}${
+            missingClaimIds.length > 12 ? ", ..." : ""
+          }`,
+        );
+      }
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_candidate_ref: input.seedCandidateRef,
+        ontology_seed_ref: input.ontologySeedRef,
         claim_realizations: realizations,
         directive_author: {
           owner: "host_llm",
@@ -2598,30 +2707,197 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeCompetencyQuestions(input) {
-      const raw = await callJsonAuthor({
-        llmCall,
-        llmConfig,
-        artifactName: "CompetencyQuestions",
-        maxTokens: 3200,
-        systemPrompt: [
-          baseSystem,
-          "Write competency questions that test accepted or CQ-eligible Seed claims for the declared purpose.",
-          "Every cq_eligible_claim_id must appear in at least one linked_claim_ids array. Group related claims when useful, but do not leave an eligible claim untested.",
-          "JSON shape: {\"questions\":[{\"question_id\":\"...\",\"question\":\"...\",\"linked_claim_ids\":[\"...\"],\"evidence_observation_ids\":[\"...\"]}],\"open_questions\":[\"...\"]}",
-        ].join("\n"),
-        userPayload: {
-          seed_candidate: input.seedCandidate,
-          seed_confirmation: input.seedConfirmation,
-          seed_confirmation_validation: input.seedConfirmationValidation,
-          claim_realization_map: input.claimRealizationMap,
-        },
-      });
-      const eligibleClaimIds = new Set(input.seedConfirmationValidation.cq_eligible_claim_ids);
+      const eligibleClaimIds = new Set(
+        input.seedConfirmationValidation.cq_eligible_claim_ids,
+      );
+      const eligibleClaims = ontologyClaims(input.ontologySeed)
+        .filter((claim) => eligibleClaimIds.has(claim.claim_id));
+      const requiredDomainCompetencyIds = new Set(
+        input.governingSnapshot.required_admitted_competency_ids,
+      );
+      const domainCompetencyRows =
+        input.governingSnapshot.admitted_domain_competency_snapshots.flatMap(
+          (snapshot) => snapshot.admitted_competencies,
+        ).filter((competency) =>
+          requiredDomainCompetencyIds.has(competency.qualified_competency_id)
+        );
+      const domainCompetencyPromptRows = domainCompetencyRows.map((competency) => ({
+        competency_id: competency.qualified_competency_id,
+        priority: competency.priority,
+        question: competency.question,
+        section_heading: competency.section_heading,
+        inference_path: competency.inference_path,
+        verification_criteria: competency.verification_criteria,
+        source_anchor: competency.source_anchor,
+      }));
+      const allowedPayload = {
+        allowed_coverage_axis_ids: input.contractRegistry.coverage_axis_registry.map(
+          (record) => record.axis_id,
+        ),
+        allowed_ontology_handoff_axis_ids:
+          input.contractRegistry.ontology_handoff_axis_registry.map((record) =>
+            record.axis_id
+          ),
+        allowed_reference_standard_ids:
+          input.contractRegistry.reference_standard_registry.map((record) =>
+            record.standard_ref_id
+          ),
+        allowed_pattern_catalog_ref_ids:
+          input.contractRegistry.reference_pattern_catalog_registry.map((record) =>
+            record.pattern_catalog_ref_id
+          ),
+        allowed_reasoning_or_formalism_facet_ids: facetIds(
+          input.contractRegistry.reasoning_or_formalism_facet_registry,
+        ),
+        allowed_entity_identity_facet_ids: facetIds(
+          input.contractRegistry.entity_identity_facet_registry,
+        ),
+        allowed_instance_assertion_facet_ids: facetIds(
+          input.contractRegistry.instance_assertion_facet_registry,
+        ),
+        allowed_terminology_facet_ids: facetIds(
+          input.contractRegistry.terminology_facet_registry,
+        ),
+        allowed_relation_type_facet_ids: facetIds(
+          input.contractRegistry.relation_type_facet_registry,
+        ),
+        allowed_classification_facet_ids: facetIds(
+          input.contractRegistry.classification_facet_registry,
+        ),
+        allowed_constraint_facet_ids: facetIds(
+          input.contractRegistry.constraint_facet_registry,
+        ),
+        allowed_modeling_concern_ids: modelingConcernIds(input.contractRegistry),
+        allowed_query_access_contract_ref_ids: proofContractIds(
+          input.contractRegistry.query_access_contract_registry,
+        ),
+        allowed_visualization_contract_ref_ids: proofContractIds(
+          input.contractRegistry.visualization_contract_registry,
+        ),
+        allowed_graph_exploration_contract_ref_ids: proofContractIds(
+          input.contractRegistry.graph_exploration_contract_registry,
+        ),
+      };
+      const rawQuestionRows: Record<string, unknown>[] = [];
+      const openQuestions: string[] = [];
+      const callCompetencyQuestionBatch = async (args: {
+        eligibleClaimRows: typeof eligibleClaims;
+        domainRows: typeof domainCompetencyPromptRows;
+        observationIds: string[];
+        questionIdPrefix: string;
+      }): Promise<void> => {
+        const batchSeedConfirmationValidation = {
+          ...input.seedConfirmationValidation,
+          cq_eligible_claim_ids: args.eligibleClaimRows.map((claim) => claim.claim_id),
+        };
+        const domainBatchOnly =
+          args.domainRows.length > 0 && args.eligibleClaimRows.length === 0;
+        const rawBatch = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "CompetencyQuestions",
+          maxTokens: domainBatchOnly
+            ? DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS
+            : 3200,
+          systemPrompt: [
+            baseSystem,
+            "Write competency questions that test accepted or CQ-eligible Seed claims for the declared purpose.",
+            domainBatchOnly
+              ? "This is a required domain competency batch. Do not attempt broad claim coverage in this call; emit exactly one question for each required_domain_competency_question_rows item."
+              : "Every cq_eligible_claim_id in the payload must appear in at least one linked_claim_ids array. Group related claims when useful, but do not leave an eligible claim untested.",
+            "Each question must also declare coverage axis refs, ontology handoff refs, facet refs, modeling concern refs, proof contract refs, domain trace refs, disposition, answer kind, handoff relevance, lifecycle status, rationale, seed refs, limitation refs, reference standard refs, and pattern catalog refs. Use [] only when a category is intentionally not applicable. Runtime derives required_evidence_scope from these refs.",
+            "domain_competency_trace_refs may only use required_admitted_competency_ids from the payload. Domain admission refs and source document refs are not valid trace refs.",
+            "If required_domain_competency_question_rows is non-empty, emit exactly one question for each row. That question must include domain_competency_trace_refs with that row's competency_id exactly once across the whole batch.",
+            "For each domain competency trace, include one domain_competency_semantic_assessments row. The row is LLM-authored semantic judgment; runtime validates refs, source_anchor, enum values, rationale, and evidence, but does not perform string-similarity semantic judging.",
+            "coverage_disposition must be one of covered, limited, unsupported, deferred, not_applicable. Non-covered questions must cite limitation_refs.",
+            domainBatchOnly
+              ? "Use the allowed axis and facet refs that apply to this domain competency row; do not invent refs outside the allowed lists."
+              : "Across the question set, cover every allowed coverage axis and every allowed ontology handoff axis at least once; use limitation_refs for limited axes.",
+            "JSON shape: {\"questions\":[{\"question_id\":\"...\",\"question\":\"...\",\"linked_claim_ids\":[\"...\"],\"coverage_axis_refs\":[\"...\"],\"ontology_handoff_axis_refs\":[\"...\"],\"seed_ref_refs\":[\"...\"],\"limitation_refs\":[\"...\"],\"reasoning_or_formalism_facets\":[\"...\"],\"entity_identity_facets\":[\"...\"],\"instance_assertion_facets\":[\"...\"],\"terminology_facets\":[\"...\"],\"relation_type_facets\":[\"...\"],\"classification_facets\":[\"...\"],\"constraint_facets\":[\"...\"],\"modeling_concern_facets\":[\"...\"],\"domain_competency_trace_refs\":[\"...\"],\"domain_competency_semantic_assessments\":[{\"competency_id\":\"...\",\"source_anchor\":\"...\",\"applicability_verdict\":\"applicable|not_applicable|deferred\",\"semantic_alignment\":\"preserved|limited|not_assessed\",\"rationale\":\"...\",\"evidence_observation_ids\":[\"...\"]}],\"reference_standard_refs\":[\"...\"],\"pattern_catalog_refs\":[\"...\"],\"query_access_contract_refs\":[\"...\"],\"visualization_contract_refs\":[\"...\"],\"graph_exploration_contract_refs\":[\"...\"],\"coverage_disposition\":\"covered|limited|unsupported|deferred|not_applicable\",\"expected_answer_kind\":\"yes_no|explanation|list|mapping|gap_statement\",\"handoff_relevance\":\"required|supporting|diagnostic\",\"lifecycle_status\":\"active|deferred|unsupported_candidate\",\"rationale\":\"...\",\"evidence_observation_ids\":[\"...\"]}],\"open_questions\":[\"...\"]}",
+          ].join("\n"),
+          userPayload: {
+            ontology_seed_ref: input.ontologySeedRef,
+            ontology_seed: input.ontologySeed,
+            ontology_seed_validation: input.ontologySeedValidation,
+            source_observations_ref: input.sourceObservationsRef,
+            source_observations: observationPromptPayload(input.sourceObservations, {
+              observationIds: args.observationIds,
+              contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            }),
+            seed_confirmation_validation_ref: input.seedConfirmationValidationRef,
+            seed_confirmation_validation: batchSeedConfirmationValidation,
+            admitted_domain_competency_refs:
+              input.governingSnapshot.admitted_domain_competency_refs,
+            admitted_domain_competency_source_refs:
+              input.governingSnapshot.admitted_domain_competency_source_refs,
+            required_admitted_competency_ids:
+              input.governingSnapshot.required_admitted_competency_ids,
+            admitted_competency_priorities:
+              input.governingSnapshot.admitted_competency_priorities,
+            required_domain_competency_question_rows: args.domainRows,
+            ...allowedPayload,
+            eligible_claims: args.eligibleClaimRows.map((claim) => ({
+              claim_id: claim.claim_id,
+              name: claim.name,
+              statement: compactStatement(claim.statement),
+              evidence_observation_ids: [
+                ...new Set(claim.evidence_refs.map((ref) => ref.observation_id)),
+              ],
+            })),
+            claim_realization_map: input.claimRealizationMap,
+          },
+        });
+        rawQuestionRows.push(
+          ...records(rawBatch.questions, "questions").map((question, index) => ({
+            ...question,
+            question_id: `${args.questionIdPrefix}-${index + 1}`,
+          })),
+        );
+        openQuestions.push(...stringArray(rawBatch.open_questions, "open_questions"));
+      };
+      if (domainCompetencyPromptRows.length > DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE) {
+        await callCompetencyQuestionBatch({
+          eligibleClaimRows: eligibleClaims,
+          domainRows: [],
+          observationIds: claimEvidenceObservationIds(eligibleClaims),
+          questionIdPrefix: "cq-claim",
+        });
+        const domainObservationIds = input.sourceObservations.observations.map((observation) =>
+          observation.observation_id
+        );
+        for (const [batchIndex, domainRows] of chunkArray(
+          domainCompetencyPromptRows,
+          DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE,
+        ).entries()) {
+          await callCompetencyQuestionBatch({
+            eligibleClaimRows: [],
+            domainRows,
+            observationIds: domainObservationIds,
+            questionIdPrefix: `cq-domain-${batchIndex + 1}`,
+          });
+        }
+      } else {
+        await callCompetencyQuestionBatch({
+          eligibleClaimRows: eligibleClaims,
+          domainRows: domainCompetencyPromptRows,
+          observationIds: domainCompetencyRows.length > 0
+            ? input.sourceObservations.observations.map((observation) =>
+              observation.observation_id
+            )
+            : claimEvidenceObservationIds(eligibleClaims),
+          questionIdPrefix: "cq",
+        });
+      }
+      const raw = {
+        questions: rawQuestionRows,
+        open_questions: openQuestions,
+      };
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_confirmation_ref: input.seedConfirmationRef,
+        seed_confirmation_ref: null,
+        ontology_seed_ref: input.ontologySeedRef,
         questions: records(raw.questions, "questions").map((question, index) => {
           const linkedClaimIds = stringArray(
             question.linked_claim_ids,
@@ -2632,34 +2908,159 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               throw new Error(`CompetencyQuestions linked non-eligible claim id: ${claimId}`);
             }
           }
+          const coverageAxisRefs = stringArray(
+            question.coverage_axis_refs,
+            `questions[${index}].coverage_axis_refs`,
+          );
+          const ontologyHandoffAxisRefs = stringArray(
+            question.ontology_handoff_axis_refs,
+            `questions[${index}].ontology_handoff_axis_refs`,
+          );
+          const seedRefRefs = stringArray(
+            question.seed_ref_refs,
+            `questions[${index}].seed_ref_refs`,
+          );
+          const limitationRefs = stringArray(
+            question.limitation_refs,
+            `questions[${index}].limitation_refs`,
+          );
+          const reasoningOrFormalismFacets = stringArray(
+            question.reasoning_or_formalism_facets,
+            `questions[${index}].reasoning_or_formalism_facets`,
+          );
+          const entityIdentityFacets = stringArray(
+            question.entity_identity_facets,
+            `questions[${index}].entity_identity_facets`,
+          );
+          const instanceAssertionFacets = stringArray(
+            question.instance_assertion_facets,
+            `questions[${index}].instance_assertion_facets`,
+          );
+          const terminologyFacets = stringArray(
+            question.terminology_facets,
+            `questions[${index}].terminology_facets`,
+          );
+          const relationTypeFacets = stringArray(
+            question.relation_type_facets,
+            `questions[${index}].relation_type_facets`,
+          );
+          const classificationFacets = stringArray(
+            question.classification_facets,
+            `questions[${index}].classification_facets`,
+          );
+          const constraintFacets = stringArray(
+            question.constraint_facets,
+            `questions[${index}].constraint_facets`,
+          );
+          const modelingConcernFacets = stringArray(
+            question.modeling_concern_facets,
+            `questions[${index}].modeling_concern_facets`,
+          );
+          const domainCompetencyTraceRefs = stringArray(
+            question.domain_competency_trace_refs,
+            `questions[${index}].domain_competency_trace_refs`,
+          );
+          const domainCompetencySemanticAssessments = records(
+            question.domain_competency_semantic_assessments ?? [],
+            `questions[${index}].domain_competency_semantic_assessments`,
+          ).map((assessment, assessmentIndex) => ({
+            competency_id: stringValue(
+              assessment.competency_id,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].competency_id`,
+            ),
+            source_anchor: stringValue(
+              assessment.source_anchor,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].source_anchor`,
+            ),
+            applicability_verdict: stringValue(
+              assessment.applicability_verdict,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].applicability_verdict`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["applicability_verdict"],
+            semantic_alignment: stringValue(
+              assessment.semantic_alignment,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].semantic_alignment`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["semantic_alignment"],
+            rationale: stringValue(
+              assessment.rationale,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].rationale`,
+            ),
+            evidence_refs: evidenceRefsFromIds({
+              observationIds: stringArray(
+                assessment.evidence_observation_ids,
+                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
+              ),
+              sourceObservations: input.sourceObservations,
+              fieldName:
+                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
+            }),
+          }));
+          const referenceStandardRefs = stringArray(
+            question.reference_standard_refs,
+            `questions[${index}].reference_standard_refs`,
+          );
+          const patternCatalogRefs = stringArray(
+            question.pattern_catalog_refs,
+            `questions[${index}].pattern_catalog_refs`,
+          );
+          const queryAccessContractRefs = stringArray(
+            question.query_access_contract_refs,
+            `questions[${index}].query_access_contract_refs`,
+          );
+          const visualizationContractRefs = stringArray(
+            question.visualization_contract_refs,
+            `questions[${index}].visualization_contract_refs`,
+          );
+          const graphExplorationContractRefs = stringArray(
+            question.graph_exploration_contract_refs,
+            `questions[${index}].graph_exploration_contract_refs`,
+          );
           return {
             question_id: optionalString(question.question_id) ?? `cq-${index + 1}`,
             question: stringValue(question.question, `questions[${index}].question`),
             linked_claim_ids: linkedClaimIds,
+            coverage_axis_refs: coverageAxisRefs,
+            ontology_handoff_axis_refs: ontologyHandoffAxisRefs,
+            seed_ref_refs: seedRefRefs,
+            limitation_refs: limitationRefs,
+            reasoning_or_formalism_facets: reasoningOrFormalismFacets,
+            entity_identity_facets: entityIdentityFacets,
+            instance_assertion_facets: instanceAssertionFacets,
+            terminology_facets: terminologyFacets,
+            relation_type_facets: relationTypeFacets,
+            classification_facets: classificationFacets,
+            constraint_facets: constraintFacets,
+            modeling_concern_facets: modelingConcernFacets,
+            domain_competency_trace_refs: domainCompetencyTraceRefs,
+            domain_competency_semantic_assessments:
+              domainCompetencySemanticAssessments,
+            reference_standard_refs: referenceStandardRefs,
+            pattern_catalog_refs: patternCatalogRefs,
+            query_access_contract_refs: queryAccessContractRefs,
+            visualization_contract_refs: visualizationContractRefs,
+            graph_exploration_contract_refs: graphExplorationContractRefs,
+            coverage_disposition: stringValue(
+              question.coverage_disposition,
+              `questions[${index}].coverage_disposition`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["coverage_disposition"],
+            expected_answer_kind: stringValue(
+              question.expected_answer_kind,
+              `questions[${index}].expected_answer_kind`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["expected_answer_kind"],
+            handoff_relevance: stringValue(
+              question.handoff_relevance,
+              `questions[${index}].handoff_relevance`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["handoff_relevance"],
+            lifecycle_status: stringValue(
+              question.lifecycle_status,
+              `questions[${index}].lifecycle_status`,
+            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["lifecycle_status"],
+            rationale: stringValue(question.rationale, `questions[${index}].rationale`),
             evidence_refs: evidenceRefsFromIds({
               observationIds: stringArray(
                 question.evidence_observation_ids,
                 `questions[${index}].evidence_observation_ids`,
               ),
-              sourceObservations: {
-                schema_version: "1",
-                session_id: input.sessionId,
-                created_at: isoNow(),
-                observations: allClaims(input.seedCandidate).flatMap((claim) =>
-                  claim.evidence_refs.map((ref) => ({
-                    observation_id: ref.observation_id,
-                    target_material_kind:
-                      ref.target_material_kind as ReconstructSourceObservation["target_material_kind"],
-                    adapter_id: "seed-evidence-ref-projection",
-                    source_ref: ref.source_ref,
-                    location: ref.location,
-                    summary: "Projected from Seed evidence refs.",
-                    structural_data: {},
-                  }))
-                ),
-                skipped_refs: [],
-                validation_results: [],
-              },
+              sourceObservations: input.sourceObservations,
               fieldName: `questions[${index}].evidence_observation_ids`,
             }),
           };
@@ -2681,7 +3082,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
-          "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"rationale\":\"...\"}]}",
+          "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
+          "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
         ].join("\n"),
         userPayload: {
           competency_questions_ref: input.competencyQuestionsRef,
@@ -2719,8 +3121,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           return {
             question_id: questionId,
             answer_status: answerStatus,
+            answer_summary: optionalString(assessment.answer_summary) ??
+              stringValue(assessment.rationale, `assessments[${index}].rationale`),
+            required_seed_refs: question.seed_ref_refs,
             linked_claim_ids: question.linked_claim_ids,
             evidence_refs: question.evidence_refs,
+            missing_source_or_confirmation:
+              optionalString(assessment.missing_source_or_confirmation),
+            ambiguity_notes: stringArray(
+              assessment.ambiguity_notes,
+              `assessments[${index}].ambiguity_notes`,
+            ),
+            downstream_effect: downstreamEffectForAnswerStatus(answerStatus),
             rationale: stringValue(
               assessment.rationale,
               `assessments[${index}].rationale`,
@@ -2855,6 +3267,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeStopDecision(input) {
+      const allowedDecisions = stopDecisionAllowedDecisions(input);
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -2863,11 +3276,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           "Decide whether the current reconstructed result is decision-ready for the declared purpose. This is a presentation decision, not user control.",
+          "Use ActionableOntologySeed and downstream runtime validations as the primary authority.",
+          `Allowed decision values for this run: ${allowedDecisions.join(", ")}.`,
+          "Return decision must be copied from the allowed decision values. If material failures, partial/deferred/rejected claims, or unresolved questions remain, do not return stop.",
           "JSON shape: {\"decision\":\"stop|continue|ask_user\",\"rationale\":\"...\",\"next_actions\":[\"...\"]}",
         ].join("\n"),
         userPayload: {
           intent: input.intent,
           metrics: input.metrics,
+          allowed_decisions: allowedDecisions,
+          primary_authority: {
+            seed_artifact: "ontology-seed.yaml",
+          },
           failure_classification: input.failureClassification,
           revision_proposal: input.revisionProposal,
         },
@@ -2875,6 +3295,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const decision = stringValue(raw.decision, "decision") as ReconstructStopDecision;
       if (decision !== "stop" && decision !== "continue" && decision !== "ask_user") {
         throw new Error(`StopDecision decision is invalid: ${decision}`);
+      }
+      if (!allowedDecisions.includes(decision)) {
+        throw new Error(
+          `StopDecision decision ${decision} is not allowed for current readiness; allowed: ${
+            allowedDecisions.join(", ")
+          }`,
+        );
       }
       return {
         schema_version: "1",
@@ -2898,14 +3325,19 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "You are writing the final reconstruct result for the user.",
           "Write concise Markdown. Ground every important statement in artifact refs or ids.",
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
+          "ActionableOntologySeed is the primary and only active seed authority.",
           "Include execution profile, completion scope, skipped/deferred stages, confirmed Seed content, Seed answerability buckets, CQ assessment, material failures, revision proposals, and artifact truth.",
-          "Do not claim full domain-context alignment when domain context selection was skipped.",
+          "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
         ].join("\n"),
         JSON.stringify({
           session_id: input.sessionId,
           intent: input.intent,
           target_material_profile: input.targetMaterialProfile,
-          seed_candidate: input.seedCandidate,
+          candidate_inventory: input.candidateInventory,
+          candidate_disposition: input.candidateDisposition,
+          candidate_disposition_validation: input.candidateDispositionValidation,
+          ontology_seed: input.ontologySeed,
+          ontology_seed_validation: input.ontologySeedValidation,
           claim_realization_map: input.claimRealizationMap,
           seed_confirmation: input.seedConfirmation,
           seed_confirmation_validation: input.seedConfirmationValidation,
@@ -2915,6 +3347,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           revision_proposal: input.revisionProposal,
           metrics: input.metrics,
           stop_decision: input.stopDecision,
+          pre_handoff_run_manifest_validation:
+            input.preHandoffRunManifestValidation,
+          handoff_decision_validation: input.handoffDecisionValidation,
           artifact_refs: input.artifactRefs,
           reconstruct_record_path: input.reconstructRecordPath,
           reconstruct_run_manifest_path: input.reconstructRunManifestPath,
@@ -2927,263 +3362,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       );
       return result.text;
     },
-  };
-}
-
-function defaultSeedMigrationRecords():
-  ReconstructTransitionalSeedCandidateArtifact["migration_records"] {
-  return SEED_MIGRATION_TARGETS
-    .filter((record) => record.compatibility_status === "transitional_projection")
-    .map((record) => ({
-      migration_id: `migration-${record.source_field}`,
-      source_field: record.source_field,
-      target_authority_field: record.target_authority_field,
-      migration_artifact_ref: null,
-    }));
-}
-
-function mockConceptCenteredSeedFields(args: {
-  sessionId: string;
-  intent: string;
-  evidenceRefs: ReconstructEvidenceRef[];
-  materialKinds: Set<TargetMaterialKind>;
-  selectedSourceRefs: string[];
-}): ReconstructTransitionalSeedAuthorityFields {
-  const firstEvidence = args.evidenceRefs[0]!;
-  const materialKind = firstEvidence.target_material_kind;
-  const conceptId = "concept-declared-reconstruct-purpose";
-  const pressureId = "pressure-evidence-saturation-non-blocking";
-  const detailId = "detail-observed-source-unit";
-  const questionId = "question-declared-purpose";
-  const actionId = "action-explain-seed-purpose";
-  const sourceRefs = [...new Set(args.selectedSourceRefs)];
-  const materialKinds = [...args.materialKinds];
-  return {
-    seed_schema_version: "transitional",
-    answerability_scope: {
-      declared_handoff_questions: [
-        {
-          question_id: questionId,
-          question: "What top-level concept explains the declared reconstruct purpose?",
-          source: "declared_purpose",
-        },
-      ],
-      supported_questions: [
-        {
-          question_id: questionId,
-          answered_by: {
-            concept_ids: [conceptId],
-            relation_ids: [],
-          },
-          confidence: "bounded_fixture_confidence",
-        },
-      ],
-      deferred_questions: [],
-      unsupported_questions: [],
-      supported_actions: [
-        {
-          action_id: actionId,
-          action: "Explain the bounded Seed purpose and its supporting observed source evidence.",
-          supported_by_question_ids: [questionId],
-          readiness_statement:
-            "Supported for bounded reconstruct fixture output, not full ontology readiness.",
-        },
-      ],
-      unsupported_actions: [],
-      handoff_readiness_statement:
-        "The Seed is provisionally ready as a bounded top-level concept handoff with disclosed limits.",
-      handoff_readiness_question_ids: [questionId],
-    },
-    top_level_concepts: [
-      {
-        concept_id: conceptId,
-        name: "Declared Reconstruct Purpose",
-        aliases: [],
-        definition:
-          "The bounded purpose that selected observations support for reconstruct Seed authoring.",
-        why_top_level:
-          "It is the fixture's purpose-relative top-level concept; source observations are supporting evidence rather than the concept itself.",
-        evidence_refs: args.evidenceRefs,
-        boundary: {
-          included_summary: "The declared reconstruct purpose supported by selected source observations.",
-          excluded_summary: "Unobserved source slices and full ontology formalization.",
-          deferred_summary: "Richer domain concepts after additional semantic authoring.",
-        },
-        confidence: "medium",
-        provisional: true,
-      },
-    ],
-    top_level_relations: [],
-    relation_participation_exceptions: [
-      {
-        concept_id: conceptId,
-        isolation_reason:
-          "Single-concept bounded Seed fixture has no canonical relation endpoint pair yet.",
-        isolation_pressure_ids: [pressureId],
-      },
-    ],
-    lower_level_detail_placements: [
-      {
-        detail_id: detailId,
-        name: "Observed Source Unit",
-        material_kind: materialKind,
-        source_ref: firstEvidence.source_ref,
-        placement: "included_support",
-        owner_concept_id: conceptId,
-        rationale: "The source unit supports the declared reconstruct purpose concept.",
-        evidence_refs: [firstEvidence],
-        follow_up_question: null,
-      },
-    ],
-    frontier_pressure_log: [
-      {
-        pressure_id: pressureId,
-        origin: "source_observation",
-        origin_ref: firstEvidence.observation_id,
-        pressure_type: "evidence_saturation",
-        pressure_question:
-          "Would more source exploration change the selected top-level concept set?",
-        target_concept_ids: [conceptId],
-        target_relation_ids: [],
-        material_kind: materialKind,
-        source_ref: firstEvidence.source_ref,
-        expected_decision_impact:
-          "Additional source may refine evidence but does not block the bounded fixture Seed.",
-        priority: "low",
-        status: "non_blocking",
-        status_reason:
-          "The fixture intentionally limits source scope and discloses that limit.",
-        superseded_by_pressure_id: null,
-        evidence_refs: [firstEvidence],
-      },
-    ],
-    material_coverage_checkpoint: {
-      observed_material_kinds: materialKinds,
-      observed_source_slices: sourceRefs,
-      source_authority_scope: {
-        permission_scope: "within_declared_boundary",
-        permission_basis_refs: sourceRefs,
-        trust_status: "observed_evidence_only",
-        instruction_authority_status: "none_data_only",
-        external_content_handling: "not_applicable",
-        restricted_source_refs: [],
-        rationale:
-          "Source material is treated as evidence within the declared filesystem boundary.",
-      },
-      intentionally_excluded_material_kinds: [],
-      unexplored_source_categories: [],
-      possible_missing_axis_pressure_ids: [],
-      rationale_for_seed_level_sufficiency:
-        "The bounded fixture has enough evidence for a provisional Seed handoff.",
-      partial_support_disclosures: [
-        "Fixture output is not evidence of full ontology readiness.",
-      ],
-    },
-    convergence: {
-      state: "provisionally_converged",
-      source_convergence_rationale:
-        "No open frontier pressure remains for the bounded fixture handoff.",
-      review_confirmed: false,
-      review_profile_ref: null,
-      remaining_pressure_ids: [pressureId],
-    },
-    lifecycle: {
-      seed_id: `seed-${args.sessionId}`,
-      parent_seed_ref: null,
-      id_stability_scope: "session",
-      session_id: args.sessionId,
-      source_snapshot_refs: sourceRefs,
-      source_snapshot_transition: {
-        prior_snapshot_refs: [],
-        transition_reason: "Initial reconstruct Seed has no parent snapshot.",
-      },
-      exploration_rounds: [
-        {
-          round_id: "round-1",
-          observed_source_refs: sourceRefs,
-          authoring_pass_ref: "seed-candidate.yaml",
-          changed_concept_ids: [conceptId],
-          changed_relation_ids: [],
-          changed_frontier_pressure_ids: [pressureId],
-        },
-      ],
-      concept_identity_events: [
-        {
-          event_id: "concept-event-created-1",
-          event_type: "created",
-          prior_concept_ids: [],
-          current_concept_ids: [conceptId],
-          target_detail_ids: [],
-          prior_names: [],
-          new_names: ["Declared Reconstruct Purpose"],
-          prior_aliases: [],
-          current_aliases: [],
-          reason: "Initial concept-centered Seed authoring.",
-          evidence_refs: [firstEvidence],
-          frontier_pressure_ids: [pressureId],
-        },
-      ],
-      relation_identity_events: [],
-      pressure_events: [
-        {
-          event_id: "pressure-event-non-blocking-1",
-          event_type: "non_blocking",
-          pressure_id: pressureId,
-          prior_status: null,
-          new_status: "non_blocking",
-          superseded_by_pressure_id: null,
-          reason: "Bounded fixture pressure is disclosed as non-blocking.",
-          evidence_refs: [firstEvidence],
-        },
-      ],
-      detail_placement_events: [
-        {
-          event_id: "detail-event-placed-1",
-          event_type: "placed",
-          detail_ids: [detailId],
-          reason: "Observed source unit was placed as supporting detail.",
-          evidence_refs: [firstEvidence],
-          frontier_pressure_ids: [pressureId],
-        },
-      ],
-      answerability_events: [
-        {
-          event_id: "answerability-event-supported-1",
-          event_type: "question_supported",
-          question_ids: [questionId],
-          action_ids: [actionId],
-          frontier_pressure_ids: [],
-          reason: "Declared purpose question is supported by the Seed concept.",
-        },
-      ],
-      material_coverage_events: [
-        {
-          event_id: "material-coverage-event-source-slice-added-1",
-          event_type: "source_slice_added",
-          source_refs: sourceRefs,
-          material_kinds: materialKinds,
-          changed_authority_fields: ["observed_source_slices"],
-          prior_authority_state_ref: null,
-          current_authority_state_ref: null,
-          prior_authority_state: null,
-          current_authority_state: {
-            observed_source_slices: sourceRefs,
-          },
-          frontier_pressure_ids: [pressureId],
-          reason: "Initial material coverage checkpoint records observed source slices.",
-        },
-      ],
-      convergence_events: [
-        {
-          event_id: "convergence-event-provisional-1",
-          prior_state: null,
-          new_state: "provisionally_converged",
-          frontier_pressure_ids: [pressureId],
-          reason: "No open pressure remains for bounded fixture handoff.",
-        },
-      ],
-    },
-    migration_records: defaultSeedMigrationRecords(),
   };
 }
 
@@ -3282,128 +3460,49 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
       };
     },
 
-    async writeSeedCandidate(input) {
-      const selections = input.sourceObservationDirective.selected_observations;
-      if (selections.length === 0) {
-        throw new Error("SeedCandidate author requires a selected source observation.");
-      }
-      const evidenceRefs: ReconstructEvidenceRef[] = selections.map((selection) => ({
-        observation_id: selection.observation_id,
-        target_material_kind: selection.target_material_kind,
-        source_ref: selection.source_ref,
-        location: selection.location,
-      }));
-      const materialKinds = new Set(
-        selections.map((selection) => selection.target_material_kind),
-      );
-      const firstEvidence = evidenceRefs[0]!;
-      const conceptCenteredFields = mockConceptCenteredSeedFields({
+    async writeCandidateInventory(input) {
+      return mockCandidateInventory({
+        sessionId: input.sessionId,
+        sourceObservations: input.sourceObservations,
+        authorId,
+      });
+    },
+
+    async writeCandidateDisposition(input) {
+      return mockCandidateDisposition({
+        sessionId: input.sessionId,
+        candidateInventory: input.candidateInventory,
+        authorId,
+      });
+    },
+
+    async writeOntologySeed(input) {
+      return mockActionableOntologySeed({
         sessionId: input.sessionId,
         intent: input.intent,
-        evidenceRefs,
-        materialKinds,
-        selectedSourceRefs: selections.map((selection) => selection.source_ref),
+        targetMaterialProfile: input.targetMaterialProfile,
+        sourceObservations: input.sourceObservations,
+        authorId,
       });
-      return {
-        schema_version: "1",
-        ...conceptCenteredFields,
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        purpose: {
-          claim_id: "purpose-1",
-          name: "Bounded Ontology Seed Purpose",
-          statement:
-            `Reconstruct a bounded ontology Seed for the declared purpose: ${input.intent}`,
-          evidence_refs: evidenceRefs,
-        },
-        non_goals: [
-          {
-            claim_id: "non-goal-1",
-            name: "Runtime Authorship Boundary",
-            statement:
-              "The runtime does not author ontology meaning; semantic expansion remains host-owned.",
-            evidence_refs: [firstEvidence],
-          },
-        ],
-        entities: [
-          {
-            claim_id: "entity-1",
-            name: "Observed Source Evidence Set",
-            statement:
-              `The target material exposes ${selections.length} observed source unit(s) as ontology Seed evidence.`,
-            evidence_refs: evidenceRefs,
-          },
-        ],
-        relations: [
-          {
-            claim_id: "relation-1",
-            name: "Observation Evidence Boundary",
-            statement:
-              "Selected source observations provide the evidence boundary for every Seed claim.",
-            evidence_refs: evidenceRefs,
-          },
-        ],
-        actions: [
-          {
-            claim_id: "action-1",
-            name: "Competency Question Assessment",
-            statement:
-              "The reconstruct process can ask competency questions against confirmed Seed claims.",
-            evidence_refs: [firstEvidence],
-          },
-        ],
-        properties: [
-          {
-            claim_id: "property-1",
-            name: "Target Material Kind",
-            statement:
-              `The target material kind is ${selections[0]?.target_material_kind ?? "unknown"} for at least one selected evidence unit.`,
-            evidence_refs: [firstEvidence],
-          },
-        ],
-        rules: [
-          {
-            claim_id: "rule-1",
-            name: "Artifact Truth Rule",
-            statement:
-              "Any final output must cite artifact truth rather than becoming a second ontology authority.",
-            evidence_refs: [firstEvidence],
-          },
-        ],
-        open_questions: [
-          ...(input.sourceObservationDirectiveValidation.validation_status === "valid"
-            ? []
-            : ["Source observation directive needs revision before Seed use."]),
-          ...(materialKinds.size > 1
-            ? [
-                "Mixed target material requires a host-authored mapping from each selected observation to ontology terms before expanding beyond the bounded Seed purpose.",
-              ]
-            : []),
-        ],
-      };
     },
 
     async writeClaimRealizationMap(input) {
-      const claims = allClaims(input.seedCandidate);
+      const claims = ontologyClaims(input.ontologySeed);
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_candidate_ref: input.seedCandidateRef,
-        claim_realizations: claims.map((claim, index) => {
-          const stance = CLAIM_REALIZATION_STANCES[
-            index % CLAIM_REALIZATION_STANCES.length
-          ] ?? "unknown";
-          return {
-            claim_id: claim.claim_id,
-            stance,
-            evidence_refs: claim.evidence_refs,
-            rationale:
-              stance === "observed_runtime_behavior"
-                ? "Mock author treats this claim as directly supported by runtime observations."
-                : `Mock author records ${stance} so downstream gates exercise non-happy-path evidence states.`,
-          };
-        }),
+        ontology_seed_ref: input.ontologySeedRef,
+	        claim_realizations: claims.map((claim) => {
+	          const stance = "observed_runtime_behavior" as const;
+	          return {
+	            claim_id: claim.claim_id,
+	            stance,
+	            evidence_refs: claim.evidence_refs,
+	            rationale:
+	              "Mock author treats this claim as directly supported by runtime observations.",
+	          };
+	        }),
         directive_author: {
           owner: "mock",
           author_id: authorId,
@@ -3412,28 +3511,128 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
     },
 
     async writeCompetencyQuestions(input) {
-      const confirmedClaims = new Set(
+      const eligibleClaims = new Set(
         input.seedConfirmationValidation.cq_eligible_claim_ids,
       );
-      const questions = allClaims(input.seedCandidate)
-        .filter((claim) => confirmedClaims.has(claim.claim_id))
-        .map((claim, index) => ({
-          question_id: `cq-${index + 1}`,
-          question:
-            `Can the reconstructed Seed explain claim ${claim.claim_id} for its declared purpose?`,
-          linked_claim_ids: [claim.claim_id],
-          evidence_refs: claim.evidence_refs,
-        }));
+      const claimQuestions = ontologyClaims(input.ontologySeed)
+        .filter((claim) => eligibleClaims.has(claim.claim_id))
+        .map((claim, index) => {
+          const question = {
+            question_id: `cq-${index + 1}`,
+            question:
+              `Can the reconstructed Seed explain claim ${claim.claim_id} for its declared purpose?`,
+            linked_claim_ids: [claim.claim_id],
+            coverage_axis_refs: input.contractRegistry.coverage_axis_registry.map((record) =>
+              record.axis_id
+            ),
+            ontology_handoff_axis_refs:
+              input.contractRegistry.ontology_handoff_axis_registry.map((record) =>
+                record.axis_id
+              ),
+            seed_ref_refs: [claim.claim_id],
+            limitation_refs: [],
+            reasoning_or_formalism_facets: facetIds(
+              input.contractRegistry.reasoning_or_formalism_facet_registry,
+            ),
+            entity_identity_facets: facetIds(
+              input.contractRegistry.entity_identity_facet_registry,
+            ),
+            instance_assertion_facets: facetIds(
+              input.contractRegistry.instance_assertion_facet_registry,
+            ),
+            terminology_facets: facetIds(input.contractRegistry.terminology_facet_registry),
+            relation_type_facets: facetIds(
+              input.contractRegistry.relation_type_facet_registry,
+            ),
+            classification_facets: facetIds(
+              input.contractRegistry.classification_facet_registry,
+            ),
+            constraint_facets: facetIds(input.contractRegistry.constraint_facet_registry),
+            modeling_concern_facets: modelingConcernIds(input.contractRegistry),
+            domain_competency_trace_refs: [],
+            domain_competency_semantic_assessments: [],
+            reference_standard_refs: [],
+            pattern_catalog_refs: [],
+            query_access_contract_refs: [],
+            visualization_contract_refs: [],
+            graph_exploration_contract_refs: [],
+            coverage_disposition: "covered" as const,
+            expected_answer_kind: "yes_no" as const,
+            handoff_relevance: "required" as const,
+            lifecycle_status: "active" as const,
+            rationale:
+              `Mock competency question covers claim ${claim.claim_id} and all registry-required happy-path axes.`,
+            evidence_refs: claim.evidence_refs,
+          };
+          return question;
+        });
+      const requiredDomainCompetencyIds = new Set(
+        input.governingSnapshot.required_admitted_competency_ids,
+      );
+      const admittedDomainCompetencies =
+        input.governingSnapshot.admitted_domain_competency_snapshots.flatMap(
+          (snapshot) => snapshot.admitted_competencies,
+        ).filter((competency) =>
+          requiredDomainCompetencyIds.has(competency.qualified_competency_id)
+        );
+      const domainEvidenceRef = input.sourceObservations.observations[0]
+        ? evidenceRefFromObservation(input.sourceObservations.observations[0])
+        : null;
+      const domainCompetencyQuestions =
+        admittedDomainCompetencies.map((competency, index) => {
+          const question = {
+            question_id: `domain-cq-${index + 1}`,
+            question:
+              `Can the reconstructed Seed answer ${competency.qualified_competency_id}: ${competency.question}`,
+            linked_claim_ids: [],
+            coverage_axis_refs: [],
+            ontology_handoff_axis_refs: [],
+            seed_ref_refs: [],
+            limitation_refs: [],
+            reasoning_or_formalism_facets: [],
+            entity_identity_facets: [],
+            instance_assertion_facets: [],
+            terminology_facets: [],
+            relation_type_facets: [],
+            classification_facets: [],
+            constraint_facets: [],
+            modeling_concern_facets: [],
+            domain_competency_trace_refs: [competency.qualified_competency_id],
+            domain_competency_semantic_assessments: [
+              {
+                competency_id: competency.qualified_competency_id,
+                source_anchor: competency.source_anchor,
+                applicability_verdict: "applicable" as const,
+                semantic_alignment: "preserved" as const,
+                rationale:
+                  `Mock semantic assessment preserves admitted domain competency ${competency.qualified_competency_id}.`,
+                evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
+              },
+            ],
+            reference_standard_refs: [],
+            pattern_catalog_refs: [],
+            query_access_contract_refs: [],
+            visualization_contract_refs: [],
+            graph_exploration_contract_refs: [],
+            coverage_disposition: "covered" as const,
+            expected_answer_kind: "gap_statement" as const,
+            handoff_relevance: "diagnostic" as const,
+            lifecycle_status: "active" as const,
+            rationale:
+              `Mock domain competency disposition row for ${competency.qualified_competency_id}. Verification criteria: ${competency.verification_criteria}`,
+            evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
+          };
+          return question;
+        });
+      const questions = [...claimQuestions, ...domainCompetencyQuestions];
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_confirmation_ref: input.seedConfirmationRef,
+        seed_confirmation_ref: null,
+        ontology_seed_ref: input.ontologySeedRef,
         questions,
-        open_questions: [
-          ...legacyOpenQuestions(input.seedCandidate),
-          ...input.seedConfirmation.notes,
-        ],
+        open_questions: [],
         directive_author: {
           owner: "mock",
           author_id: authorId,
@@ -3458,21 +3657,30 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
           const firstClaimId = question.linked_claim_ids[0] ?? null;
           const stance = firstClaimId
             ? realizationByClaim.get(firstClaimId)?.stance ?? "unknown"
-            : "unknown";
+            : question.domain_competency_trace_refs.length > 0
+              ? "schema_or_contract_presence"
+              : "unknown";
           const answerStatus: ReconstructCompetencyQuestionAnswerStatus =
             stance === "observed_runtime_behavior" ||
             stance === "schema_or_contract_presence"
-              ? "answered"
+              ? "answerable"
               : stance === "declared_design_intent"
-                ? "partially_answered"
+                ? "partially_answerable"
                 : stance === "deferred_or_non_goal"
-                  ? "out_of_scope"
-                  : "needs_evidence";
+                  ? "deferred"
+                  : "unsupported";
           return {
             question_id: question.question_id,
             answer_status: answerStatus,
+            answer_summary:
+              `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
+            required_seed_refs: question.seed_ref_refs,
             linked_claim_ids: question.linked_claim_ids,
             evidence_refs: question.evidence_refs,
+            missing_source_or_confirmation:
+              answerStatus === "answerable" ? null : `Mock unresolved stance: ${stance}`,
+            ambiguity_notes: [],
+            downstream_effect: downstreamEffectForAnswerStatus(answerStatus),
             rationale:
               `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
           };
@@ -3486,14 +3694,17 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
 
     async writeFailureClassification(input) {
       const failures = input.competencyQuestionAssessment.assessments
-        .filter((assessment) => assessment.answer_status !== "answered")
+        .filter((assessment) => assessment.answer_status !== "answerable")
+        .filter((assessment) => assessment.answer_status !== "not_applicable")
         .map((assessment, index) => {
           const failureKind: ReconstructFailureKind =
-            assessment.answer_status === "out_of_scope"
+            assessment.answer_status === "deferred"
               ? "deferred_scope"
-              : assessment.answer_status === "partially_answered"
+              : assessment.answer_status === "partially_answerable"
                 ? "insufficient_evidence"
-                : "unanswered_question";
+                : assessment.answer_status === "contradicted"
+                  ? "contradicted_evidence"
+                  : "unsupported_claim";
           return {
             failure_id: `failure-${index + 1}`,
             failure_kind: failureKind,
@@ -3550,9 +3761,12 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
     },
 
     async writeStopDecision(input) {
+      const allowedDecisions = stopDecisionAllowedDecisions(input);
       const shouldStop =
+        allowedDecisions.includes("stop") &&
         input.metrics.validation_status.source_observation_directive === "valid" &&
-        input.metrics.validation_status.seed_candidate === "valid" &&
+        input.metrics.validation_status.candidate_disposition === "valid" &&
+        input.metrics.validation_status.ontology_seed === "valid" &&
         input.metrics.validation_status.seed_confirmation_validation === "valid" &&
         input.metrics.unresolved_question_count === 0;
       return {
@@ -3563,7 +3777,7 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         declared_purpose: input.intent,
         metrics_ref: input.metricsRef,
         rationale: shouldStop
-          ? "All happy-path runtime gates passed and the Seed candidate was accepted."
+          ? "All happy-path runtime gates passed and the primary ontology seed was accepted."
           : "One or more reconstruct gates remains unresolved.",
         next_actions: shouldStop
           ? []
@@ -3576,13 +3790,13 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
     },
 
     async writeFinalOutput(input) {
-      const confirmedClaims = allClaims(input.seedCandidate).filter((claim) =>
+      const confirmedClaims = ontologyClaims(input.ontologySeed).filter((claim) =>
         input.seedConfirmationValidation.accepted_claim_ids.includes(claim.claim_id)
       );
       const claimLines = confirmedClaims.length === 0
         ? ["- No Seed claims were confirmed."]
         : confirmedClaims.map((claim) =>
-            `- ${claim.name} (${claim.claim_id}): ${claim.statement} (seed-candidate.yaml, seed-confirmation-validation.yaml)`
+            `- ${claim.name} (${claim.claim_id}): ${claim.statement} (ontology-seed.yaml, seed-confirmation-validation.yaml)`
           );
       const realizationLines = input.claimRealizationMap.claim_realizations.map(
         (realization) =>
@@ -3605,13 +3819,12 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
             `- ${proposal.proposal_id}: ${proposal.action} ${proposal.target_type} ${proposal.target_id} (revision-proposal.yaml)`
           );
       const unresolvedQuestions = [
-        ...legacyOpenQuestions(input.seedCandidate),
         ...input.competencyQuestions.open_questions,
       ];
       const unresolvedLines = unresolvedQuestions.length === 0
         ? ["- None recorded."]
         : unresolvedQuestions.map((question) => `- ${question}`);
-      const answerabilityLines = seedAnswerabilityLines(input.seedCandidate);
+      const answerabilityLines = ontologySeedSummaryLines(input.ontologySeed);
       const skippedLines = input.sourceObservations.skipped_refs.length === 0
         ? ["- None recorded."]
         : input.sourceObservations.skipped_refs.map((skipped) =>
@@ -3642,6 +3855,8 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         `- Material failures: ${input.failureClassificationValidation.material_failure_count}`,
         `- Revision proposals: ${input.revisionProposalValidation.proposal_count}`,
         `- Pass rate: ${input.metrics.pass_rate}`,
+        `- Handoff readiness: ${input.handoffDecisionValidation.readiness_projection}`,
+        `- Handoff decision validation: ${input.handoffDecisionValidation.validation_status}`,
         "",
         "## Seed Answerability",
         "",
@@ -3677,12 +3892,15 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         "",
         "## Artifact Truth",
         "",
-        `- Seed candidate: ${input.artifactRefs.seed_candidate}`,
+        `- Ontology seed: ${input.artifactRefs.ontology_seed}`,
+        `- Ontology seed validation: ${input.artifactRefs.ontology_seed_validation}`,
         `- Claim realization map: ${input.artifactRefs.claim_realization_map}`,
         `- Seed confirmation validation: ${input.artifactRefs.seed_confirmation_validation}`,
         `- Competency question assessment: ${input.artifactRefs.competency_question_assessment}`,
         `- Failure classification: ${input.artifactRefs.failure_classification}`,
         `- Revision proposal: ${input.artifactRefs.revision_proposal}`,
+        `- Pre-handoff run manifest validation: ${input.artifactRefs.pre_handoff_run_manifest_validation}`,
+        `- Handoff decision validation: ${input.artifactRefs.handoff_decision_validation}`,
         `- Reconstruct record: ${input.reconstructRecordPath}`,
         `- Reconstruct run manifest: ${input.reconstructRunManifestPath}`,
         `- Record stage at final output authoring: ${input.record.record_stage}`,
@@ -3699,29 +3917,46 @@ export function createAutoAcceptReconstructConfirmationProvider():
   return {
     providerId,
     owner: "mock",
-    async confirmSeedCandidate(input) {
-      const claims = allClaims(input.seedCandidate);
-      const canAccept = input.seedCandidateValidation.validation_status === "valid";
-      const acceptedClaims = canAccept ? claims.slice(0, 3) : [];
-      const partialClaims = canAccept ? claims.slice(3, 4) : [];
-      const deferredClaims = canAccept ? claims.slice(4, 5) : [];
-      const rejectedClaims = canAccept ? claims.slice(5) : claims;
+    async confirmOntologySeed(input) {
+      const claims = ontologyClaims(input.ontologySeed);
+      const canAccept = input.ontologySeedValidation.validation_status === "valid";
+      const excludedClaimIds = ontologySeedExcludedClaimIds(input.ontologySeed);
+      const acceptedClaims = canAccept
+        ? claims.filter((claim) => !excludedClaimIds.has(claim.claim_id))
+        : [];
+      const partialClaims: typeof claims = [];
+      const deferredClaims = canAccept
+        ? claims.filter((claim) => excludedClaimIds.has(claim.claim_id))
+        : [];
+      const classifiedClaimIds = new Set([
+        ...acceptedClaims.map((claim) => claim.claim_id),
+        ...partialClaims.map((claim) => claim.claim_id),
+        ...deferredClaims.map((claim) => claim.claim_id),
+      ]);
+      const rejectedClaims = canAccept
+        ? claims.filter((claim) => !classifiedClaimIds.has(claim.claim_id))
+        : claims;
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_candidate_ref: input.seedCandidateRef,
-        seed_candidate_validation_ref: input.seedCandidateValidationRef,
-        confirmation_status: canAccept ? "partial" : "rejected",
+        ontology_seed_ref: input.ontologySeedRef,
+        ontology_seed_validation_ref: input.ontologySeedValidationRef,
+        confirmation_status:
+          rejectedClaims.length === 0 && partialClaims.length === 0 && deferredClaims.length === 0
+            ? "accepted"
+            : canAccept
+              ? "partial"
+              : "rejected",
         confirmed_claim_ids: acceptedClaims.map((claim) => claim.claim_id),
         rejected_claim_ids: rejectedClaims.map((claim) => claim.claim_id),
         partial_claim_ids: partialClaims.map((claim) => claim.claim_id),
         deferred_claim_ids: deferredClaims.map((claim) => claim.claim_id),
         notes: canAccept
           ? [
-              "Mock confirmation intentionally emits mixed claim states to exercise downstream reconstruct gates.",
+              "Mock confirmation accepts ontology seed claims before competency-question authoring.",
             ]
-          : ["Seed candidate validation failed; confirmation rejected by provider."],
+          : ["Ontology seed validation failed; confirmation rejected by provider."],
         confirmation_provider: {
           owner: "mock",
           provider_id: providerId,
@@ -3741,8 +3976,19 @@ export function createDirectCallReconstructConfirmationProvider(args: {
   return {
     providerId,
     owner: "host_or_user",
-    async confirmSeedCandidate(input) {
-      const claimSummaries = summarizeSeedClaimsForConfirmation(input.seedCandidate);
+    async confirmOntologySeed(input) {
+      const claimSummaries = ontologyClaims(input.ontologySeed).map((claim) => ({
+        claim_id: claim.claim_id,
+        claim_kind: "ontology_seed_claim",
+        name: claim.name,
+        statement: compactStatement(claim.statement),
+        evidence_observation_ids: [
+          ...new Set(claim.evidence_refs.map((ref) => ref.observation_id)),
+        ],
+        evidence_source_basenames: [
+          ...new Set(claim.evidence_refs.map((ref) => sourceBasename(ref.source_ref))),
+        ],
+      }));
       const result = await llmCall(
         [
           "You are mediating reconstruct Seed confirmation for a non-interactive host.",
@@ -3750,14 +3996,14 @@ export function createDirectCallReconstructConfirmationProvider(args: {
           "Classify every Seed claim summary into confirmed, rejected, partial, or deferred for the declared purpose.",
           "Use the claim id, claim kind, short statement, validation status, and evidence observation ids. Do not invent new claim ids.",
           "Deferred or unsupported answerability summaries confirm boundary disclosure only; they do not make a claim eligible for competency-question testing.",
-          "Do not re-author Seed content. This step only assigns confirmation state.",
+          "Do not re-author Seed content or assess competency-question answerability. This step only assigns seed-claim confirmation state before competency questions are authored.",
           "JSON shape: {\"confirmation_status\":\"accepted|rejected|partial|deferred\",\"confirmed_claim_ids\":[\"...\"],\"rejected_claim_ids\":[\"...\"],\"partial_claim_ids\":[\"...\"],\"deferred_claim_ids\":[\"...\"],\"notes\":[\"...\"]}",
         ].join("\n"),
         JSON.stringify({
-          seed_candidate_ref: input.seedCandidateRef,
-          seed_candidate_validation_status: input.seedCandidateValidation.validation_status,
-          seed_candidate_validation_results: input.seedCandidateValidation.validation_results,
-          seed_candidate_validation_violation_count: input.seedCandidateValidation.violations.length,
+          ontology_seed_ref: input.ontologySeedRef,
+          ontology_seed_validation_status: input.ontologySeedValidation.validation_status,
+          ontology_seed_validation_results: input.ontologySeedValidation.validation_results,
+          ontology_seed_validation_violation_count: input.ontologySeedValidation.violations.length,
           claim_summaries: claimSummaries,
         }, null, 2),
         { ...llmConfig, max_tokens: 2400 },
@@ -3774,8 +4020,8 @@ export function createDirectCallReconstructConfirmationProvider(args: {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
-        seed_candidate_ref: input.seedCandidateRef,
-        seed_candidate_validation_ref: input.seedCandidateValidationRef,
+        ontology_seed_ref: input.ontologySeedRef,
+        ontology_seed_validation_ref: input.ontologySeedValidationRef,
         confirmation_status: confirmationStatus,
         confirmed_claim_ids: stringArray(raw.confirmed_claim_ids, "confirmed_claim_ids"),
         rejected_claim_ids: stringArray(raw.rejected_claim_ids, "rejected_claim_ids"),
@@ -3799,6 +4045,13 @@ async function readLensPrompt(args: {
   return fs.readFile(path.join(ontoRoot, "roles", `${args.lensId}.md`), "utf8");
 }
 
+function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): string {
+  return path.join(
+    path.dirname(path.resolve(profilesRoot)),
+    "reconstruct-contract-registry.yaml",
+  );
+}
+
 function validateSourceFrontier(args: {
   sessionId: string;
   roundId: string;
@@ -3808,6 +4061,8 @@ function validateSourceFrontier(args: {
   sourceInventoryRef: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
+  targetMaterialProfileValidation: ReconstructTargetMaterialProfileValidationArtifact;
+  targetMaterialProfileValidationRef: string;
 }): ReconstructSourceFrontierValidationArtifact {
   const inventoryRefs = new Set(
     args.sourceInventory.inventory_units.map((unit) => path.resolve(unit.ref)),
@@ -3853,7 +4108,17 @@ function validateSourceFrontier(args: {
     args.sourceFrontier.frontier_refs.length === 0 &&
     typeof args.sourceFrontier.no_next_frontier_rationale === "string" &&
     args.sourceFrontier.no_next_frontier_rationale.length > 0;
+  const upstreamValid =
+    args.targetMaterialProfileValidation.validation_status === "valid";
+  if (!upstreamValid) {
+    rejected.push({
+      frontier_ref_id: null,
+      source_ref: null,
+      reason: "target_material_profile_validation_invalid",
+    });
+  }
   const valid =
+    upstreamValid &&
     rejected.length === 0 &&
     (accepted.length > 0 || noNextFrontierAccepted);
   return {
@@ -3864,12 +4129,19 @@ function validateSourceFrontier(args: {
     source_frontier_ref: args.sourceFrontierRef,
     source_inventory_ref: args.sourceInventoryRef,
     source_observations_ref: args.sourceObservationsRef,
+    target_material_profile_validation_ref:
+      args.targetMaterialProfileValidationRef,
+    upstream_validation_statuses: {
+      target_material_profile:
+        args.targetMaterialProfileValidation.validation_status,
+    },
     validation_status: valid ? "valid" : "invalid",
     accepted_frontier_ref_ids: accepted,
     rejected_frontier_refs: rejected,
     no_next_frontier_accepted: noNextFrontierAccepted,
     validation_results: [
       ...(valid ? ["source_frontier_boundary_valid"] : []),
+      ...(upstreamValid ? ["target_material_profile_validation_valid"] : []),
       ...(noNextFrontierAccepted ? ["no_next_frontier_rationale_present"] : []),
     ],
   };
@@ -3879,23 +4151,79 @@ function appendFinalOutputProvenanceFooter(
   finalOutputText: string,
   requiredFragments: string[],
 ): string {
-  const missing = requiredFragments.filter((fragment) =>
-    !finalOutputText.includes(fragment)
-  );
-  if (missing.length === 0) return finalOutputText;
+  const heading = "## Runtime Artifact Truth Footer";
+  const footer = [
+    heading,
+    "",
+    ...requiredFragments.map((fragment) => `- ${fragment}`),
+    "",
+  ].join("\n");
+  if (finalOutputText.includes(heading)) {
+    const lines = finalOutputText.split(/\r?\n/);
+    const start = lines.findIndex((line) => line.trim() === heading);
+    let end = lines.length;
+    for (let index = start + 1; index < lines.length; index += 1) {
+      if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
+        end = index;
+        break;
+      }
+    }
+    return [
+      ...lines.slice(0, start),
+      footer.trimEnd(),
+      ...lines.slice(end),
+    ].join("\n");
+  }
   return [
     finalOutputText.trimEnd(),
     "",
-    "## Runtime Artifact Truth Footer",
+    footer,
+  ].join("\n");
+}
+
+function appendFinalOutputProvenanceBindingsSection(
+  finalOutputText: string,
+  sectionBindings: ReconstructFinalOutputProvenanceSectionBindingInput[],
+): string {
+  const heading = "## Runtime Provenance Bindings";
+  const content = [
+    heading,
     "",
-    ...missing.map((fragment) => `- ${fragment}`),
+    ...sectionBindings.flatMap((binding) => [
+      `- ${binding.section_id}: ${binding.claim_summary}`,
+      `  - section: ${binding.heading}`,
+      `  - authority_refs: ${binding.authority_refs.join(", ")}`,
+      `  - validation_refs: ${binding.validation_refs.join(", ")}`,
+    ]),
     "",
+  ].join("\n");
+  if (!finalOutputText.includes(heading)) {
+    return [
+      finalOutputText.trimEnd(),
+      "",
+      content,
+    ].join("\n");
+  }
+  const lines = finalOutputText.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) return finalOutputText;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
+      end = index;
+      break;
+    }
+  }
+  return [
+    ...lines.slice(0, start),
+    content.trimEnd(),
+    ...lines.slice(end),
   ].join("\n");
 }
 
 function appendFinalOutputAnswerabilitySection(
   finalOutputText: string,
-  seedCandidate: ReconstructSeedCandidateArtifact,
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
 ): string {
   if (finalOutputText.includes("## Seed Answerability")) return finalOutputText;
   return [
@@ -3903,9 +4231,204 @@ function appendFinalOutputAnswerabilitySection(
     "",
     "## Seed Answerability",
     "",
-    ...seedAnswerabilityLines(seedCandidate),
+    ...ontologySeedSummaryLines(ontologySeed),
     "",
   ].join("\n");
+}
+
+function appendFinalOutputArtifactTruthSection(
+  finalOutputText: string,
+  args: {
+    ontologySeedPath: string;
+    ontologySeedValidationPath: string;
+    claimRealizationMapPath: string;
+    seedConfirmationValidationPath: string;
+    competencyQuestionAssessmentPath: string;
+    failureClassificationPath: string;
+    revisionProposalPath: string;
+    preHandoffManifestPath: string;
+    preHandoffRunManifestValidationPath: string;
+    handoffDecisionValidationPath: string;
+    recordPath: string;
+    manifestPath: string;
+  },
+): string {
+  const heading = "## Artifact Truth";
+  const content = [
+    heading,
+    "",
+    `- Ontology seed: ${args.ontologySeedPath}`,
+    `- Ontology seed validation: ${args.ontologySeedValidationPath}`,
+    `- Claim realization map: ${args.claimRealizationMapPath}`,
+    `- Seed confirmation validation: ${args.seedConfirmationValidationPath}`,
+    `- Competency question assessment: ${args.competencyQuestionAssessmentPath}`,
+    `- Failure classification: ${args.failureClassificationPath}`,
+    `- Revision proposal: ${args.revisionProposalPath}`,
+    `- Pre-handoff run manifest: ${args.preHandoffManifestPath}`,
+    `- Pre-handoff run manifest validation: ${args.preHandoffRunManifestValidationPath}`,
+    `- Handoff decision validation: ${args.handoffDecisionValidationPath}`,
+    `- Reconstruct record: ${args.recordPath}`,
+    `- Reconstruct run manifest: ${args.manifestPath}`,
+    "",
+  ].join("\n");
+  if (!finalOutputText.includes(heading)) {
+    return [
+      finalOutputText.trimEnd(),
+      "",
+      content,
+    ].join("\n");
+  }
+  const lines = finalOutputText.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) return finalOutputText;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
+      end = index;
+      break;
+    }
+  }
+  return [
+    ...lines.slice(0, start),
+    content.trimEnd(),
+    ...lines.slice(end),
+  ].join("\n");
+}
+
+async function writeFinalOutputProvenanceValidationArtifact(args: {
+  sessionId: string;
+  finalOutputPath: string;
+  sectionBindings: ReconstructFinalOutputProvenanceSectionBindingInput[];
+  outputPath: string;
+}): Promise<ReconstructFinalOutputProvenanceValidationArtifact> {
+  const finalOutputText = await fs.readFile(args.finalOutputPath, "utf8");
+  const requiredFragments = [
+    ...new Set(args.sectionBindings.flatMap((binding) => binding.required_fragments)),
+  ];
+  const violations = validateFinalOutputProvenance({
+    finalOutputText,
+    sectionBindings: args.sectionBindings,
+  });
+  const violationSubjects = new Set(
+    violations.map((item) => item.subject_id).filter((item): item is string => item !== null),
+  );
+  const artifact = {
+    schema_version: "1" as const,
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    final_output_ref: args.finalOutputPath,
+    validation_status: violations.length === 0 ? "valid" as const : "invalid" as const,
+    required_fragments: requiredFragments,
+    section_bindings: args.sectionBindings.map((binding) => {
+      const missing = binding.required_fragments.some((fragment) =>
+        violationSubjects.has(`${binding.section_id}:${fragment}`)
+      ) || violationSubjects.has(binding.section_id);
+      return {
+        section_id: binding.section_id,
+        heading: binding.heading,
+        claim_summary: binding.claim_summary,
+        authority_refs: binding.authority_refs,
+        validation_refs: binding.validation_refs,
+        required_fragments: binding.required_fragments,
+        binding_status: missing
+          ? "missing" as const
+          : "present" as const,
+        trust_status: missing
+          ? "unbound" as const
+          : "grounded" as const,
+      };
+    }),
+    validation_results: violations.length === 0
+      ? ["final_output_provenance_valid"]
+      : ["final_output_provenance_invalid"],
+    violations,
+  };
+  await writeYamlDocument(args.outputPath, artifact);
+  return artifact;
+}
+
+function finalOutputProvenanceSectionBindings(args: {
+  ontologySeedPath: string;
+  ontologySeedValidationPath: string;
+  claimRealizationMapPath: string;
+  claimRealizationMapValidationPath: string;
+  seedConfirmationValidationPath: string;
+  competencyQuestionsPath: string;
+  competencyQuestionsValidationPath: string;
+  competencyQuestionAssessmentPath: string;
+  competencyQuestionAssessmentValidationPath: string;
+  failureClassificationPath: string;
+  failureClassificationValidationPath: string;
+  revisionProposalPath: string;
+  revisionProposalValidationPath: string;
+  metricsPath: string;
+  stopDecisionPath: string;
+  preHandoffManifestPath: string;
+  preHandoffRunManifestValidationPath: string;
+  handoffDecisionValidationPath: string;
+  recordPath: string;
+  manifestPath: string;
+  finalOutputProvenanceValidationPath: string;
+  finalFragments: string[];
+}): ReconstructFinalOutputProvenanceSectionBindingInput[] {
+  return [
+    {
+      section_id: "seed-answerability",
+      heading: "Seed Answerability",
+      claim_summary: "Seed answerability is grounded in the seed and competency-question artifacts.",
+      authority_refs: [args.ontologySeedPath, args.competencyQuestionsPath],
+      validation_refs: [
+        args.ontologySeedValidationPath,
+        args.competencyQuestionsValidationPath,
+      ],
+      required_fragments: ["Ontology seed projected claims", "Coverage axes"],
+    },
+    {
+      section_id: "artifact-truth",
+      heading: "Artifact Truth",
+      claim_summary: "Terminal artifact truth is grounded in the pre-handoff manifest validation, handoff readiness validation, final output provenance, and planned terminal record paths.",
+      authority_refs: [args.recordPath, args.manifestPath, args.preHandoffManifestPath],
+      validation_refs: [
+        args.preHandoffRunManifestValidationPath,
+        args.handoffDecisionValidationPath,
+        args.finalOutputProvenanceValidationPath,
+      ],
+      required_fragments: [
+        args.ontologySeedPath,
+        args.ontologySeedValidationPath,
+        args.claimRealizationMapPath,
+        args.seedConfirmationValidationPath,
+        args.competencyQuestionAssessmentPath,
+        args.failureClassificationPath,
+        args.revisionProposalPath,
+        args.preHandoffManifestPath,
+        args.preHandoffRunManifestValidationPath,
+        args.handoffDecisionValidationPath,
+        args.recordPath,
+        args.manifestPath,
+      ],
+    },
+    {
+      section_id: "runtime-artifact-truth-footer",
+      heading: "Runtime Artifact Truth Footer",
+      claim_summary: "The runtime footer enumerates all required provenance fragments for audit.",
+      authority_refs: [args.manifestPath, args.recordPath],
+      validation_refs: [args.finalOutputProvenanceValidationPath],
+      required_fragments: args.finalFragments,
+    },
+    {
+      section_id: "runtime-provenance-bindings",
+      heading: "Runtime Provenance Bindings",
+      claim_summary: "The runtime-emitted provenance binding section lists section-to-authority bindings.",
+      authority_refs: [args.finalOutputProvenanceValidationPath],
+      validation_refs: [args.finalOutputProvenanceValidationPath],
+      required_fragments: [
+        "seed-answerability",
+        "artifact-truth",
+        "runtime-artifact-truth-footer",
+      ],
+    },
+  ];
 }
 
 export async function runReconstruct(
@@ -3916,6 +4439,20 @@ export async function runReconstruct(
   const sessionId = path.basename(sessionRoot);
   const targetRefs = params.targetRefs.map((targetRef) => path.resolve(targetRef));
   const { directiveAuthor, confirmationProvider } = params;
+  const reuseExistingAuthoredArtifacts =
+    params.resumeMode === "reuse_existing_authored_artifacts";
+  let currentAuthoredArtifactCompatibility: AuthoredArtifactCompatibility | null = null;
+  const writeAuthoredYamlDocument = <T>(
+    filePath: string,
+    artifactName: string,
+    create: () => Promise<T>,
+  ): Promise<T> =>
+    writeFreshAuthoredYamlDocument(filePath, artifactName, create, {
+      reuseExisting: reuseExistingAuthoredArtifacts,
+      ...(currentAuthoredArtifactCompatibility
+        ? { compatibility: currentAuthoredArtifactCompatibility }
+        : {}),
+    });
   if (
     params.semanticAuthorRealization !== "mock" &&
     params.semanticAuthorRealization !== "direct_call"
@@ -3965,19 +4502,69 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructSourceInventoryArtifact>(
       preparationRefs.source_inventory,
     );
-
+  const contractRegistryPath =
+    reconstructContractRegistryPathFromProfilesRoot(params.profilesRoot);
+  const contractRegistry = await loadReconstructContractRegistry({
+    registryPath: contractRegistryPath,
+  });
+  const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
+  const targetMaterialProfileValidationPath = path.join(
+    sessionRoot,
+    "target-material-profile-validation.yaml",
+  );
+  const targetMaterialProfileValidation =
+    await writeTargetMaterialProfileValidationArtifact({
+      targetMaterialProfilePath: preparationRefs.target_material_profile,
+      registryPath: contractRegistryPath,
+      outputPath: targetMaterialProfileValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "target-material-profile",
+    artifactRef: targetMaterialProfileValidationPath,
+    validation: targetMaterialProfileValidation,
+  });
+  assertSemanticAuthoringHasObservedEvidence({
+    targetMaterialProfile,
+    sourceInventory,
+    sourceObservations,
+  });
+  const lensIds = loadCoreLensRegistry().full_review_lens_ids;
+  const governingSnapshot = await buildReconstructRunGoverningSnapshot({
+    projectRoot,
+    registryPath: contractRegistryPath,
+    contractRegistry,
+    selectedSourceProfiles: targetMaterialProfile.selected_source_profiles,
+    lensIds,
+    admittedDomainIds: params.domain ? [params.domain] : [],
+  });
+  currentAuthoredArtifactCompatibility = authoredArtifactCompatibility({
+    sessionId,
+    intent: params.intent,
+    targetRefs,
+    targetMaterialProfile,
+    sourceInventory,
+    sourceObservations,
+    governingSnapshot,
+    semanticAuthorRealization: params.semanticAuthorRealization,
+    confirmationProviderRealization: params.confirmationProviderRealization,
+    directiveAuthor,
+    confirmationProvider,
+  });
   const sourceObservationDirectivePath = path.join(
     sessionRoot,
     "source-observation-directive.yaml",
   );
   const sourceObservationDirective =
-    await directiveAuthor.writeSourceObservationDirective({
-      sessionId,
-      intent: params.intent,
-      targetMaterialProfile,
-      sourceObservations,
-    });
-  await writeYamlDocument(sourceObservationDirectivePath, sourceObservationDirective);
+    await writeAuthoredYamlDocument(
+      sourceObservationDirectivePath,
+      "source-observation-directive.yaml",
+      () => directiveAuthor.writeSourceObservationDirective({
+        sessionId,
+        intent: params.intent,
+        targetMaterialProfile,
+        sourceObservations,
+      }),
+    );
   const sourceObservationDirectiveValidationPath = path.join(
     sessionRoot,
     "source-observation-directive-validation.yaml",
@@ -3988,7 +4575,11 @@ export async function runReconstruct(
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: sourceObservationDirectiveValidationPath,
     });
-
+  assertRuntimeValidationValid({
+    artifactName: "source-observation-directive",
+    artifactRef: sourceObservationDirectiveValidationPath,
+    validation: sourceObservationDirectiveValidation,
+  });
   const roundId = "round-1";
   const roundRoot = path.join(sessionRoot, "rounds", roundId);
   const roundObservationDirectivePath = path.join(
@@ -4006,7 +4597,6 @@ export async function runReconstruct(
   );
 
   const lensJudgmentRoot = path.join(roundRoot, "lens-judgments");
-  const lensIds = loadCoreLensRegistry().full_review_lens_ids;
   const lensJudgments: ReconstructLensJudgmentArtifact[] = [];
   const lensJudgmentRefs: Array<{ lens_id: string; artifact_ref: string }> = [];
   for (const lensId of lensIds) {
@@ -4014,18 +4604,21 @@ export async function runReconstruct(
       profilesRoot: path.resolve(params.profilesRoot),
       lensId,
     });
-    const lensJudgment = await directiveAuthor.writeLensJudgment({
-      sessionId,
-      intent: params.intent,
-      roundId,
-      lensId,
-      lensPrompt,
-      sourceObservations,
-      sourceObservationDirective,
-      sourceObservationDirectiveRef: roundObservationDirectivePath,
-    });
     const lensJudgmentPath = path.join(lensJudgmentRoot, `${lensId}.yaml`);
-    await writeYamlDocument(lensJudgmentPath, lensJudgment);
+    const lensJudgment = await writeAuthoredYamlDocument(
+      lensJudgmentPath,
+      `lens judgment ${lensId}`,
+      () => directiveAuthor.writeLensJudgment({
+        sessionId,
+        intent: params.intent,
+        roundId,
+        lensId,
+        lensPrompt,
+        sourceObservations,
+        sourceObservationDirective,
+        sourceObservationDirectiveRef: roundObservationDirectivePath,
+      }),
+    );
     lensJudgments.push(lensJudgment);
     lensJudgmentRefs.push({
       lens_id: lensId,
@@ -4046,24 +4639,34 @@ export async function runReconstruct(
     roundRoot,
     "exploration-synthesis.yaml",
   );
-  const explorationSynthesis = await directiveAuthor.writeExplorationSynthesis({
-    sessionId,
-    intent: params.intent,
-    roundId,
-    lensJudgments,
-    lensJudgmentIndexRef: lensJudgmentIndexPath,
-  });
-  await writeYamlDocument(explorationSynthesisPath, explorationSynthesis);
+  const explorationSynthesis = await writeAuthoredYamlDocument(
+    explorationSynthesisPath,
+    "exploration-synthesis.yaml",
+    () => directiveAuthor.writeExplorationSynthesis({
+      sessionId,
+      intent: params.intent,
+      roundId,
+      lensJudgments,
+      lensJudgmentIndexRef: lensJudgmentIndexPath,
+      sourceObservations,
+      sourceObservationsRef: preparationRefs.source_observations,
+    }),
+  );
 
   const sourceFrontierPath = path.join(roundRoot, "source-frontier.yaml");
-  const sourceFrontier = await directiveAuthor.writeSourceFrontier({
-    sessionId,
-    intent: params.intent,
-    roundId,
-    explorationSynthesis,
-    explorationSynthesisRef: explorationSynthesisPath,
-  });
-  await writeYamlDocument(sourceFrontierPath, sourceFrontier);
+  const sourceFrontier = await writeAuthoredYamlDocument(
+    sourceFrontierPath,
+    "source-frontier.yaml",
+    () => directiveAuthor.writeSourceFrontier({
+      sessionId,
+      intent: params.intent,
+      roundId,
+      explorationSynthesis,
+      explorationSynthesisRef: explorationSynthesisPath,
+      sourceInventory,
+      sourceObservations,
+    }),
+  );
   const sourceFrontierValidationPath = path.join(
     roundRoot,
     "source-frontier-validation.yaml",
@@ -4077,120 +4680,232 @@ export async function runReconstruct(
     sourceInventoryRef: preparationRefs.source_inventory,
     sourceObservations,
     sourceObservationsRef: preparationRefs.source_observations,
+    targetMaterialProfileValidation,
+    targetMaterialProfileValidationRef: targetMaterialProfileValidationPath,
   });
   await writeYamlDocument(sourceFrontierValidationPath, sourceFrontierValidation);
-
-  const seedCandidatePath = path.join(sessionRoot, "seed-candidate.yaml");
-  const seedCandidate = await directiveAuthor.writeSeedCandidate({
-    sessionId,
-    intent: params.intent,
-    sourceObservations,
-    sourceObservationDirective,
-    sourceObservationDirectiveValidation,
-    lensJudgmentIndex,
-    explorationSynthesis,
-    sourceFrontierValidation,
+  assertRuntimeValidationValid({
+    artifactName: "source-frontier",
+    artifactRef: sourceFrontierValidationPath,
+    validation: sourceFrontierValidation,
   });
-  await writeYamlDocument(seedCandidatePath, seedCandidate);
-  const seedCandidateValidationPath = path.join(
-    sessionRoot,
-    "seed-candidate-validation.yaml",
+  if (sourceFrontierValidation.accepted_frontier_ref_ids.length > 0) {
+    throw new Error(
+      [
+        "source-frontier accepted new source refs, but this runner has no multi-round observation loop yet.",
+        "Use no_next_frontier_rationale for terminal frontier or implement observation of accepted refs before semantic authoring.",
+        `accepted_frontier_ref_ids=${sourceFrontierValidation.accepted_frontier_ref_ids.join(",")}`,
+      ].join(" "),
+    );
+  }
+
+  const candidateInventoryPath = path.join(sessionRoot, "candidate-inventory.yaml");
+  const candidateInventory = await writeAuthoredYamlDocument(
+    candidateInventoryPath,
+    "candidate-inventory.yaml",
+    () => directiveAuthor.writeCandidateInventory({
+      sessionId,
+      intent: params.intent,
+      sourceObservations,
+      sourceObservationsRef: preparationRefs.source_observations,
+      sourceObservationDirective,
+      lensJudgmentIndex,
+      explorationSynthesis,
+      sourceFrontierValidation,
+      contractRegistry,
+    }),
   );
-  const seedCandidateValidation = await writeSeedCandidateValidationArtifact({
-    seedCandidatePath,
-    sourceObservationsPath: preparationRefs.source_observations,
-    outputPath: seedCandidateValidationPath,
-    sourceObservationDirectivePath,
-    sourceObservationDirectiveValidationPath,
+
+  const candidateDispositionPath = path.join(
+    sessionRoot,
+    "candidate-disposition.yaml",
+  );
+  const candidateDisposition = await writeAuthoredYamlDocument(
+    candidateDispositionPath,
+    "candidate-disposition.yaml",
+    () => directiveAuthor.writeCandidateDisposition({
+      sessionId,
+      intent: params.intent,
+      candidateInventory,
+      candidateInventoryRef: candidateInventoryPath,
+      sourceObservations,
+      contractRegistry,
+    }),
+  );
+  const candidateDispositionValidationPath = path.join(
+    sessionRoot,
+    "candidate-disposition-validation.yaml",
+  );
+  const candidateDispositionValidation =
+    await writeCandidateDispositionValidationArtifact({
+      candidateInventoryPath,
+      candidateDispositionPath,
+      sourceObservationsPath: preparationRefs.source_observations,
+      registryPath: contractRegistryPath,
+      outputPath: candidateDispositionValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "candidate-disposition",
+    artifactRef: candidateDispositionValidationPath,
+    validation: candidateDispositionValidation,
+  });
+
+  const ontologySeedPath = path.join(sessionRoot, "ontology-seed.yaml");
+  const ontologySeed = await writeAuthoredYamlDocument(
+    ontologySeedPath,
+    "ontology-seed.yaml",
+    () => directiveAuthor.writeOntologySeed({
+      sessionId,
+      intent: params.intent,
+      targetMaterialProfile,
+      candidateInventory,
+      candidateInventoryRef: candidateInventoryPath,
+      candidateDisposition,
+      candidateDispositionRef: candidateDispositionPath,
+      sourceObservations,
+      sourceObservationsRef: preparationRefs.source_observations,
+      contractRegistry,
+    }),
+  );
+  const ontologySeedValidationPath = path.join(
+    sessionRoot,
+    "ontology-seed-validation.yaml",
+  );
+  const ontologySeedValidation =
+    await writeActionableOntologySeedValidationArtifact({
+      ontologySeedPath,
+      candidateDispositionPath,
+      sourceObservationsPath: preparationRefs.source_observations,
+      registryPath: contractRegistryPath,
+      outputPath: ontologySeedValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "ontology-seed",
+    artifactRef: ontologySeedValidationPath,
+    validation: ontologySeedValidation,
   });
 
   const claimRealizationMapPath = path.join(
     sessionRoot,
     "claim-realization-map.yaml",
   );
-  const claimRealizationMap = await directiveAuthor.writeClaimRealizationMap({
-    sessionId,
-    seedCandidate,
-    seedCandidateRef: seedCandidatePath,
-    sourceObservations,
-  });
-  await writeYamlDocument(claimRealizationMapPath, claimRealizationMap);
+  const claimRealizationMap = await writeAuthoredYamlDocument(
+    claimRealizationMapPath,
+    "claim-realization-map.yaml",
+    () => directiveAuthor.writeClaimRealizationMap({
+      sessionId,
+      ontologySeed,
+      ontologySeedRef: ontologySeedPath,
+      ontologySeedValidation,
+      sourceObservations,
+    }),
+  );
   const claimRealizationMapValidationPath = path.join(
     sessionRoot,
     "claim-realization-map-validation.yaml",
   );
   const claimRealizationMapValidation =
-    await writeClaimRealizationMapValidationArtifact({
+    await writeClaimRealizationMapValidationForOntologySeedArtifact({
       claimRealizationMapPath,
-      seedCandidatePath,
+      ontologySeedPath,
       sourceObservationsPath: preparationRefs.source_observations,
       outputPath: claimRealizationMapValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "claim-realization-map",
+    artifactRef: claimRealizationMapValidationPath,
+    validation: claimRealizationMapValidation,
+  });
 
   const seedConfirmationPath = path.join(sessionRoot, "seed-confirmation.yaml");
-  const seedConfirmation = await confirmationProvider.confirmSeedCandidate({
-    sessionId,
-    seedCandidate,
-    seedCandidateRef: seedCandidatePath,
-    seedCandidateValidation,
-    seedCandidateValidationRef: seedCandidateValidationPath,
-  });
-  await writeYamlDocument(seedConfirmationPath, seedConfirmation);
+  const seedConfirmation = await writeAuthoredYamlDocument(
+    seedConfirmationPath,
+    "seed-confirmation.yaml",
+    () => confirmationProvider.confirmOntologySeed({
+      sessionId,
+      ontologySeed,
+      ontologySeedRef: ontologySeedPath,
+      ontologySeedValidation,
+      ontologySeedValidationRef: ontologySeedValidationPath,
+    }),
+  );
   const seedConfirmationValidationPath = path.join(
     sessionRoot,
     "seed-confirmation-validation.yaml",
   );
   const seedConfirmationValidation =
-    await writeSeedConfirmationValidationArtifact({
+    await writeSeedConfirmationValidationForOntologySeedArtifact({
       seedConfirmationPath,
-      seedCandidatePath,
-      seedCandidateValidationPath,
+      ontologySeedPath,
+      ontologySeedValidationPath,
       outputPath: seedConfirmationValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "seed-confirmation",
+    artifactRef: seedConfirmationValidationPath,
+    validation: seedConfirmationValidation,
+  });
 
   const competencyQuestionsPath = path.join(
     sessionRoot,
     "competency-questions.yaml",
   );
-  const competencyQuestions = await directiveAuthor.writeCompetencyQuestions({
-    sessionId,
-    seedCandidate,
-    seedConfirmation,
-    seedConfirmationRef: seedConfirmationPath,
-    seedConfirmationValidation,
-    seedConfirmationValidationRef: seedConfirmationValidationPath,
-    claimRealizationMap,
-  });
-  await writeYamlDocument(competencyQuestionsPath, competencyQuestions);
+  const competencyQuestions = await writeAuthoredYamlDocument(
+    competencyQuestionsPath,
+    "competency-questions.yaml",
+    () => directiveAuthor.writeCompetencyQuestions({
+      sessionId,
+      ontologySeed,
+      ontologySeedRef: ontologySeedPath,
+      ontologySeedValidation,
+      seedConfirmationValidation,
+      seedConfirmationValidationRef: seedConfirmationValidationPath,
+      claimRealizationMap,
+      sourceObservations,
+      sourceObservationsRef: preparationRefs.source_observations,
+      contractRegistry,
+      governingSnapshot,
+    }),
+  );
   const competencyQuestionsValidationPath = path.join(
     sessionRoot,
     "competency-questions-validation.yaml",
   );
   const competencyQuestionsValidation =
-    await writeCompetencyQuestionsValidationArtifact({
+    await writeCompetencyQuestionsValidationForOntologySeedArtifact({
       competencyQuestionsPath,
+      ontologySeedPath,
+      ontologySeedValidationPath,
       seedConfirmationValidationPath,
       sourceObservationsPath: preparationRefs.source_observations,
+      registryPath: contractRegistryPath,
+      reconstructRunManifestPath: manifestPath,
+      governingSnapshot,
       outputPath: competencyQuestionsValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "competency-questions",
+    artifactRef: competencyQuestionsValidationPath,
+    validation: competencyQuestionsValidation,
+  });
 
   const competencyQuestionAssessmentPath = path.join(
     sessionRoot,
     "competency-question-assessment.yaml",
   );
   const competencyQuestionAssessment =
-    await directiveAuthor.writeCompetencyQuestionAssessment({
-      sessionId,
-      competencyQuestions,
-      competencyQuestionsRef: competencyQuestionsPath,
-      competencyQuestionsValidation,
-      competencyQuestionsValidationRef: competencyQuestionsValidationPath,
-      claimRealizationMap,
-    });
-  await writeYamlDocument(
-    competencyQuestionAssessmentPath,
-    competencyQuestionAssessment,
-  );
+    await writeAuthoredYamlDocument(
+      competencyQuestionAssessmentPath,
+      "competency-question-assessment.yaml",
+      () => directiveAuthor.writeCompetencyQuestionAssessment({
+        sessionId,
+        competencyQuestions,
+        competencyQuestionsRef: competencyQuestionsPath,
+        competencyQuestionsValidation,
+        competencyQuestionsValidationRef: competencyQuestionsValidationPath,
+        claimRealizationMap,
+      }),
+    );
   const competencyQuestionAssessmentValidationPath = path.join(
     sessionRoot,
     "competency-question-assessment-validation.yaml",
@@ -4201,19 +4916,27 @@ export async function runReconstruct(
       competencyQuestionsPath,
       outputPath: competencyQuestionAssessmentValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "competency-question-assessment",
+    artifactRef: competencyQuestionAssessmentValidationPath,
+    validation: competencyQuestionAssessmentValidation,
+  });
 
   const failureClassificationPath = path.join(
     sessionRoot,
     "failure-classification.yaml",
   );
-  const failureClassification = await directiveAuthor.writeFailureClassification({
-    sessionId,
-    competencyQuestionAssessment,
-    competencyQuestionAssessmentRef: competencyQuestionAssessmentPath,
-    competencyQuestionAssessmentValidation,
-    seedConfirmationValidation,
-  });
-  await writeYamlDocument(failureClassificationPath, failureClassification);
+  const failureClassification = await writeAuthoredYamlDocument(
+    failureClassificationPath,
+    "failure-classification.yaml",
+    () => directiveAuthor.writeFailureClassification({
+      sessionId,
+      competencyQuestionAssessment,
+      competencyQuestionAssessmentRef: competencyQuestionAssessmentPath,
+      competencyQuestionAssessmentValidation,
+      seedConfirmationValidation,
+    }),
+  );
   const failureClassificationValidationPath = path.join(
     sessionRoot,
     "failure-classification-validation.yaml",
@@ -4225,15 +4948,23 @@ export async function runReconstruct(
       seedConfirmationValidationPath,
       outputPath: failureClassificationValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "failure-classification",
+    artifactRef: failureClassificationValidationPath,
+    validation: failureClassificationValidation,
+  });
 
   const revisionProposalPath = path.join(sessionRoot, "revision-proposal.yaml");
-  const revisionProposal = await directiveAuthor.writeRevisionProposal({
-    sessionId,
-    failureClassification,
-    failureClassificationRef: failureClassificationPath,
-    failureClassificationValidation,
-  });
-  await writeYamlDocument(revisionProposalPath, revisionProposal);
+  const revisionProposal = await writeAuthoredYamlDocument(
+    revisionProposalPath,
+    "revision-proposal.yaml",
+    () => directiveAuthor.writeRevisionProposal({
+      sessionId,
+      failureClassification,
+      failureClassificationRef: failureClassificationPath,
+      failureClassificationValidation,
+    }),
+  );
   const revisionProposalValidationPath = path.join(
     sessionRoot,
     "revision-proposal-validation.yaml",
@@ -4244,14 +4975,21 @@ export async function runReconstruct(
       failureClassificationPath,
       outputPath: revisionProposalValidationPath,
     });
+  assertRuntimeValidationValid({
+    artifactName: "revision-proposal",
+    artifactRef: revisionProposalValidationPath,
+    validation: revisionProposalValidation,
+  });
 
   const metricsPath = path.join(sessionRoot, "reconstruct-metrics.yaml");
   const metrics = calculateMetrics({
     sessionId,
     sourceObservations,
+    targetMaterialProfileValidation,
     sourceObservationDirectiveValidation,
-    seedCandidate,
-    seedCandidateValidation,
+    candidateDispositionValidation,
+    ontologySeed,
+    ontologySeedValidation,
     claimRealizationMapValidation,
     seedConfirmation,
     seedConfirmationValidation,
@@ -4264,22 +5002,49 @@ export async function runReconstruct(
   await writeYamlDocument(metricsPath, metrics);
 
   const stopDecisionPath = path.join(sessionRoot, "stop-decision.yaml");
-  const stopDecision = await directiveAuthor.writeStopDecision({
-    sessionId,
-    intent: params.intent,
-    metrics,
-    metricsRef: metricsPath,
-    failureClassification,
-    revisionProposal,
-  });
-  await writeYamlDocument(stopDecisionPath, stopDecision);
+  const stopDecision = await writeAuthoredYamlDocument(
+    stopDecisionPath,
+    "stop-decision.yaml",
+    () => directiveAuthor.writeStopDecision({
+      sessionId,
+      intent: params.intent,
+      metrics,
+      metricsRef: metricsPath,
+      failureClassification,
+      revisionProposal,
+    }),
+  );
 
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
-  const manifestPath = path.join(sessionRoot, "reconstruct-run-manifest.yaml");
+  const finalOutputProvenanceValidationPath = path.join(
+    sessionRoot,
+    "final-output-provenance-validation.yaml",
+  );
+  const preHandoffManifestPath = path.join(
+    sessionRoot,
+    "reconstruct-run-manifest.pre-handoff.yaml",
+  );
+  const preHandoffRunManifestValidationPath = path.join(
+    sessionRoot,
+    "reconstruct-run-manifest.pre-handoff-validation.yaml",
+  );
+  const postPublicationRunManifestValidationPath = path.join(
+    sessionRoot,
+    "reconstruct-run-manifest.post-publication-validation.yaml",
+  );
+  const handoffDecisionValidationPath = path.join(
+    sessionRoot,
+    "handoff-decision-validation.yaml",
+  );
   const recordPath = path.join(sessionRoot, "reconstruct-record.yaml");
+  const prePublicationRecordPath = path.join(
+    sessionRoot,
+    "reconstruct-record.pre-publication.yaml",
+  );
   const artifactRefs = artifactRefsWithDefaults({
     refs: {
       target_material_profile: preparationRefs.target_material_profile,
+      target_material_profile_validation: targetMaterialProfileValidationPath,
       source_inventory: preparationRefs.source_inventory,
       initial_source_frontier: preparationRefs.initial_source_frontier,
       source_observations: preparationRefs.source_observations,
@@ -4290,8 +5055,11 @@ export async function runReconstruct(
       exploration_synthesis: explorationSynthesisPath,
       source_frontier: sourceFrontierPath,
       source_frontier_validation: sourceFrontierValidationPath,
-      seed_candidate: seedCandidatePath,
-      seed_candidate_validation: seedCandidateValidationPath,
+      candidate_inventory: candidateInventoryPath,
+      candidate_disposition: candidateDispositionPath,
+      candidate_disposition_validation: candidateDispositionValidationPath,
+      ontology_seed: ontologySeedPath,
+      ontology_seed_validation: ontologySeedValidationPath,
       claim_realization_map: claimRealizationMapPath,
       claim_realization_map_validation: claimRealizationMapValidationPath,
       seed_confirmation: seedConfirmationPath,
@@ -4307,9 +5075,221 @@ export async function runReconstruct(
       revision_proposal_validation: revisionProposalValidationPath,
       reconstruct_metrics: metricsPath,
       stop_decision: stopDecisionPath,
+      pre_handoff_run_manifest_validation: preHandoffRunManifestValidationPath,
+      post_publication_run_manifest_validation:
+        postPublicationRunManifestValidationPath,
+      handoff_decision_validation: handoffDecisionValidationPath,
       final_output: finalOutputPath,
+      final_output_provenance_validation: finalOutputProvenanceValidationPath,
       reconstruct_run_manifest: manifestPath,
     },
+  });
+  const preHandoffArtifactRefs = artifactRefsWithDefaults({
+    refs: {
+      ...artifactRefs,
+      pre_handoff_run_manifest_validation: preHandoffRunManifestValidationPath,
+      post_publication_run_manifest_validation: null,
+      handoff_decision_validation: null,
+      final_output: null,
+      final_output_provenance_validation: null,
+      reconstruct_run_manifest: preHandoffManifestPath,
+    },
+  });
+  const preHandoffRunManifest = createRunManifest({
+    sessionId,
+    targetRefs,
+    intent: params.intent,
+    semanticAuthorRealization: params.semanticAuthorRealization,
+    confirmationProviderRealization: params.confirmationProviderRealization,
+    directiveAuthor,
+    confirmationProvider,
+    artifactRefs: preHandoffArtifactRefs,
+    reconstructRecordPath: recordPath,
+    governingSnapshot,
+    terminalArtifactsCompleted: false,
+  });
+  await writeYamlDocument(preHandoffManifestPath, preHandoffRunManifest);
+  const preHandoffRunManifestValidation =
+    await writeReconstructRunManifestValidationArtifact({
+      manifestPath: preHandoffManifestPath,
+      projectRoot,
+      registryPath: contractRegistryPath,
+      targetMaterialProfilePath: preparationRefs.target_material_profile,
+      lensIds,
+      admittedDomainIds: params.domain ? [params.domain] : [],
+      outputPath: preHandoffRunManifestValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "reconstruct-run-manifest",
+    artifactRef: preHandoffRunManifestValidationPath,
+    validation: preHandoffRunManifestValidation,
+  });
+  const handoffDecisionValidation = await writeHandoffDecisionValidationArtifact({
+    stopDecisionPath,
+    manifestValidationPath: preHandoffRunManifestValidationPath,
+    metricsPath,
+    targetMaterialProfileValidationPath,
+    sourceObservationDirectiveValidationPath,
+    sourceFrontierValidationPath,
+    candidateDispositionValidationPath,
+    ontologySeedValidationPath,
+    claimRealizationMapValidationPath,
+    competencyQuestionsValidationPath,
+    competencyQuestionAssessmentValidationPath,
+    seedConfirmationValidationPath,
+    failureClassificationValidationPath,
+    revisionProposalValidationPath,
+    registryPath: contractRegistryPath,
+    outputPath: handoffDecisionValidationPath,
+  });
+  assertRuntimeValidationValid({
+    artifactName: "handoff-decision",
+    artifactRef: handoffDecisionValidationPath,
+    validation: handoffDecisionValidation,
+  });
+  const interimRecord = await assembleReconstructRecord({
+    sessionRoot,
+    artifactRefs,
+    outputPath: prePublicationRecordPath,
+  });
+  const authoredFinalOutputText =
+    await directiveAuthor.writeFinalOutput({
+      sessionId,
+      intent: params.intent,
+      targetMaterialProfile,
+      candidateInventory,
+      candidateDisposition,
+      candidateDispositionValidation,
+      ontologySeed,
+      ontologySeedValidation,
+      claimRealizationMap,
+      claimRealizationMapValidation,
+      seedConfirmation,
+      seedConfirmationValidation,
+      competencyQuestions,
+      competencyQuestionsValidation,
+      competencyQuestionAssessment,
+      competencyQuestionAssessmentValidation,
+      failureClassification,
+      failureClassificationValidation,
+      revisionProposal,
+      revisionProposalValidation,
+      metrics,
+      stopDecision,
+      preHandoffRunManifestValidation,
+      handoffDecisionValidation,
+      sourceObservations,
+      artifactRefs,
+      reconstructRecordPath: recordPath,
+      reconstructRunManifestPath: preHandoffManifestPath,
+      reconstructRunManifest: preHandoffRunManifest,
+      record: interimRecord,
+    });
+  const requiredFinalOutputFragments = [
+    recordPath,
+    manifestPath,
+    candidateInventoryPath,
+    candidateDispositionPath,
+    candidateDispositionValidationPath,
+    ontologySeedPath,
+    ontologySeedValidationPath,
+    claimRealizationMapPath,
+    seedConfirmationValidationPath,
+    competencyQuestionAssessmentPath,
+    failureClassificationPath,
+    revisionProposalPath,
+    preHandoffManifestPath,
+    preHandoffRunManifestValidationPath,
+    handoffDecisionValidationPath,
+    finalOutputProvenanceValidationPath,
+    preHandoffRunManifestValidation.validation_status,
+    handoffDecisionValidation.readiness_projection,
+    handoffDecisionValidation.validation_status,
+    ...seedConfirmationValidation.accepted_claim_ids,
+    ...candidateDispositionValidation.violations.map((violation) => violation.code),
+    ...ontologySeedValidation.violations.map((violation) => violation.code),
+    ...failureClassification.failures.map((failure) => failure.failure_id),
+    ...revisionProposal.proposals.map((proposal) => proposal.proposal_id),
+  ];
+  const requiredFinalOutputSectionBindings = finalOutputProvenanceSectionBindings({
+    ontologySeedPath,
+    ontologySeedValidationPath,
+    claimRealizationMapPath,
+    claimRealizationMapValidationPath,
+    seedConfirmationValidationPath,
+    competencyQuestionsPath,
+    competencyQuestionsValidationPath,
+    competencyQuestionAssessmentPath,
+    competencyQuestionAssessmentValidationPath,
+    failureClassificationPath,
+    failureClassificationValidationPath,
+    revisionProposalPath,
+    revisionProposalValidationPath,
+    metricsPath,
+    stopDecisionPath,
+    preHandoffManifestPath,
+    preHandoffRunManifestValidationPath,
+    handoffDecisionValidationPath,
+    recordPath,
+    manifestPath,
+    finalOutputProvenanceValidationPath,
+    finalFragments: requiredFinalOutputFragments,
+  });
+  const finalOutputWithAnswerability = appendFinalOutputAnswerabilitySection(
+    authoredFinalOutputText,
+    ontologySeed,
+  );
+  const finalOutputWithArtifactTruth = appendFinalOutputArtifactTruthSection(
+    finalOutputWithAnswerability,
+    {
+      ontologySeedPath,
+      ontologySeedValidationPath,
+      claimRealizationMapPath,
+      seedConfirmationValidationPath,
+      competencyQuestionAssessmentPath,
+      failureClassificationPath,
+      revisionProposalPath,
+      preHandoffManifestPath,
+      preHandoffRunManifestValidationPath,
+      handoffDecisionValidationPath,
+      recordPath,
+      manifestPath,
+    },
+  );
+  let finalOutputText = appendFinalOutputProvenanceFooter(
+    finalOutputWithArtifactTruth,
+    requiredFinalOutputFragments,
+  );
+  finalOutputText = appendFinalOutputProvenanceBindingsSection(
+    finalOutputText,
+    requiredFinalOutputSectionBindings,
+  );
+  const finalOutputViolations = validateFinalOutputProvenance({
+    finalOutputText,
+    sectionBindings: requiredFinalOutputSectionBindings,
+  });
+  if (finalOutputViolations.length > 0) {
+    throw new Error(
+      `final-output.md failed provenance validation: ${finalOutputViolations.map((item) => item.message).join("; ")}`,
+    );
+  }
+  await fs.writeFile(finalOutputPath, finalOutputText, "utf8");
+  const finalOutputProvenanceValidation =
+    await writeFinalOutputProvenanceValidationArtifact({
+      sessionId,
+      finalOutputPath,
+      sectionBindings: requiredFinalOutputSectionBindings,
+      outputPath: finalOutputProvenanceValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "final-output-provenance",
+    artifactRef: finalOutputProvenanceValidationPath,
+    validation: finalOutputProvenanceValidation,
+  });
+  await assembleReconstructRecord({
+    sessionRoot,
+    artifactRefs,
+    outputPath: recordPath,
   });
   const reconstructRunManifest = createRunManifest({
     sessionId,
@@ -4321,70 +5301,25 @@ export async function runReconstruct(
     confirmationProvider,
     artifactRefs,
     reconstructRecordPath: recordPath,
+    governingSnapshot,
+    terminalArtifactsCompleted: true,
   });
   await writeYamlDocument(manifestPath, reconstructRunManifest);
-  const interimRecord = await assembleReconstructRecord({
-    sessionRoot,
-    artifactRefs,
-    outputPath: recordPath,
+  const postPublicationRunManifestValidation =
+    await writeReconstructRunManifestValidationArtifact({
+      manifestPath,
+      projectRoot,
+      registryPath: contractRegistryPath,
+      targetMaterialProfilePath: preparationRefs.target_material_profile,
+      lensIds,
+      admittedDomainIds: params.domain ? [params.domain] : [],
+      outputPath: postPublicationRunManifestValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "reconstruct-run-manifest",
+    artifactRef: postPublicationRunManifestValidationPath,
+    validation: postPublicationRunManifestValidation,
   });
-  const authoredFinalOutputText = await directiveAuthor.writeFinalOutput({
-    sessionId,
-    intent: params.intent,
-    targetMaterialProfile,
-    seedCandidate,
-    claimRealizationMap,
-    claimRealizationMapValidation,
-    seedConfirmation,
-    seedConfirmationValidation,
-    competencyQuestions,
-    competencyQuestionsValidation,
-    competencyQuestionAssessment,
-    competencyQuestionAssessmentValidation,
-    failureClassification,
-    failureClassificationValidation,
-    revisionProposal,
-    revisionProposalValidation,
-    metrics,
-    stopDecision,
-    sourceObservations,
-    artifactRefs,
-    reconstructRecordPath: recordPath,
-    reconstructRunManifestPath: manifestPath,
-    reconstructRunManifest,
-    record: interimRecord,
-  });
-  const requiredFinalOutputFragments = [
-    recordPath,
-    manifestPath,
-    seedCandidatePath,
-    claimRealizationMapPath,
-    seedConfirmationValidationPath,
-    competencyQuestionAssessmentPath,
-    failureClassificationPath,
-    revisionProposalPath,
-    ...seedConfirmationValidation.accepted_claim_ids,
-    ...failureClassification.failures.map((failure) => failure.failure_id),
-    ...revisionProposal.proposals.map((proposal) => proposal.proposal_id),
-  ];
-  const finalOutputWithAnswerability = appendFinalOutputAnswerabilitySection(
-    authoredFinalOutputText,
-    seedCandidate,
-  );
-  const finalOutputText = appendFinalOutputProvenanceFooter(
-    finalOutputWithAnswerability,
-    requiredFinalOutputFragments,
-  );
-  const finalOutputViolations = validateFinalOutputProvenance({
-    finalOutputText,
-    requiredFragments: requiredFinalOutputFragments,
-  });
-  if (finalOutputViolations.length > 0) {
-    throw new Error(
-      `final-output.md failed provenance validation: ${finalOutputViolations.map((item) => item.message).join("; ")}`,
-    );
-  }
-  await fs.writeFile(finalOutputPath, finalOutputText, "utf8");
   const finalRecord = await assembleReconstructRecord({
     sessionRoot,
     artifactRefs,

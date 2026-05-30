@@ -1,0 +1,19 @@
+schema_version: 1
+session_id: "20260528-e6edefdf"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#c1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "lifecycle.prior_concept_mappings[] and lifecycle.concept_identity_events[] both encode prior/current concept transitions; lifecycle.prior_relation_mappings[] and relation_identity_events[] repeat the same pattern"
+    claim: "Lifecycle mapping authority is duplicated between mapping arrays and identity event arrays, leaving two practical paths for the same concept/relation transition relationships."
+    proposed_action: "Make prior_concept_mappings[] and prior_relation_mappings[] the sole canonical transition mapping authority; keep identity events as provenance only by removing prior/current mapping arrays from identity events or declaring them non-authoritative generated echoes. For demotion, use one canonical bridge such as prior_concept_mappings[].current_detail_ids[] and make concept_identity_events[].target_detail_ids[] derived or remove it."
+    affected_purpose: "Maintain a concise, auditably canonical reconstruct Seed design contract with one authority path for lifecycle identity transitions, split/merge continuity, demotion bridges, and relation identity mapping."
+    failure_condition: "When maintainers, validators, or future reconstruct runtimes need to determine the authoritative prior-to-current concept or relation transition from lifecycle data, they can read the relationship from both mapping arrays and identity event arrays."
+    impact: "The happy path remains possible, but trust, auditability, maintainability, and future validator implementation quality are meaningfully weakened because duplicated relationship paths can drift or be interpreted as competing authorities."
+    evidence_refs:
+      - "round1/conciseness.md#c1"
+    severity: "medium"
+    domain_threshold_used: ".onto/domains/software-engineering/conciseness_rules.md#2-removal-target-patterns-relationship-redundancy"
+validation:
+  unaddressable_findings: []

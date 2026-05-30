@@ -1,6 +1,7 @@
 # Reconstruct Source Profile Contract
 
-> Status: design contract, partially wired runtime.
+> Contract status: active.
+> Runtime support status authority: `reconstruct-contract-registry.yaml#source_profile_records`.
 > Purpose: define target-material observation contracts for `reconstruct`.
 
 ## 1. Canonical Seat
@@ -11,14 +12,14 @@ Source profiles live under:
 .onto/processes/reconstruct/source-profiles/
 ```
 
-The historical `explorers/` folder is archived and must not be revived as an
-active runtime path. `SourceProfile` is the current name because the file guides
-runtime observation. It is not an autonomous semantic explorer.
+`SourceProfileDefinition` is the contract-owned source profile file. A
+`SelectedSourceProfile` is the runtime-owned selection recorded after material
+classification. Neither concept owns semantic interpretation.
 
-In the integral exploration design, source profiles still belong to the runtime
-observation side. Reconstruct lenses may ask for additional source refs through
-a validated source frontier, but the profile itself does not decide which source
-is semantically important.
+In the integral exploration design, source profiles belong to the runtime
+observation side. Reconstruct lens judgments may ask for additional
+source refs through a validated source frontier, but the profile itself does not
+decide which source is semantically important.
 
 Source profiles are keyed by `target_material_kind`, the shared runtime axis
 defined in `.onto/authority/core-lexicon.yaml`. They must not use `source_kind`
@@ -29,16 +30,25 @@ to mean code, spreadsheet, document, or database because review already uses
 The cross-process goal and validation rules for this axis are defined in
 `.onto/processes/shared/target-material-kind-contract.md`.
 
-Current source profiles:
+The current profile record set is owned by
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml#source_profile_records`.
+That registry is the executable authority for profile ids, definition refs,
+definition hashes, contract status, runtime implementation status, schema
+version, profile version, and migration status. This source-profile contract
+defines what a profile means; it does not independently publish current support
+status.
 
-| Target material kind | Profile |
-|---|---|
-| `code` | `.onto/processes/reconstruct/source-profiles/code.md` |
-| `spreadsheet` | `.onto/processes/reconstruct/source-profiles/spreadsheet.md` |
-| `database` | `.onto/processes/reconstruct/source-profiles/database.md` |
-| `document` | `.onto/processes/reconstruct/source-profiles/document.md` |
-| `mixed` | no standalone parser profile; requires per-member profiles or explicit unsupported/halt behavior |
-| `unknown` | no profile; runtime must halt or ask for clarification |
+Profile migration continuity is also registry-owned. `source_profile_records`
+must record `supersedes`, `replaced_by`, `split_from`, `split_into`,
+`merged_from`, and `merged_into` so old profile snapshots can be replayed,
+compared, or migrated without guessing how a previous profile id maps to the
+current registry.
+
+`contract_status` means whether a profile definition or public material-kind
+contract is authoritative. `runtime_implementation_status` means whether the
+current runtime can execute that profile. A profile can be contract-active while
+its runtime adapter is still planned or unsupported, but that status must be read
+from `source_profile_records`.
 
 ## 2. Profile Responsibility
 
@@ -52,11 +62,15 @@ A source profile may define:
 - scan targets
 - safe frontier-ref shapes for this material kind
 - correct and incorrect observation examples
-- current support status and explicit unsupported cases
+- profile-specific unsupported cases that do not claim current runtime status
+- profile-specific `candidate_subkind` and `disposition_detail` qualifiers
 
 A source profile must not define rules that convert source structure into
 ontology concepts or rules that choose the next source based on ontology
-meaning.
+meaning. A source profile must not define or override `contract_status`,
+`runtime_implementation_status`, `schema_version`, `profile_version`, or
+`migration_status`; those values and source-profile migration mapping fields
+belong to `source_profile_records`.
 
 Examples:
 
@@ -75,7 +89,7 @@ profile may guide observation scope, but the adapter schema is the runtime
 contract that fixes returned fields and observation ids.
 
 When a source adapter is invoked after the first round, it consumes only
-runtime-validated source frontier refs. It must not accept lens prose or
+runtime-validated source frontier refs. It must not accept lens-judgment prose or
 semantic labels as source locations.
 
 The future adapter contract must fail explicitly when:
@@ -117,12 +131,24 @@ validates it before any additional observation occurs.
 Adding a new target material kind requires:
 
 1. A new source profile under `.onto/processes/reconstruct/source-profiles/`.
-2. Runtime adapter support or an explicit unsupported status.
+2. A `source_profile_records` entry that declares profile id, definition ref or
+   explicit null-ref behavior, definition hash, contract status, runtime
+   implementation status, schema version, profile version, migration status,
+   and source-profile migration mapping fields.
 3. Tests for target material detection, observation shape, source frontier
    validation, unsupported inputs, and directive evidence-ref validation.
-4. MCP schema updates only after the runtime contract is implemented.
+4. `reconstruct-contract-registry.yaml` updates when artifact authority,
+   validation gates, root candidate kinds, root dispositions, material kinds,
+   source profile records, source profile definition refs, runtime
+   implementation status values, or support-status migration behavior change.
+5. MCP schema updates only after the runtime contract is implemented.
 
 The source profile alone does not make a target material kind supported.
+
+Profile-specific refinements must use qualifiers. A source profile may introduce
+`candidate_subkind` or `disposition_detail` values for its material kind. It may
+not introduce a new root candidate kind, root disposition, or material kind
+without a contract and registry change.
 
 ## 6. Mixed Material Rule
 

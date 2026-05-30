@@ -1,0 +1,57 @@
+schema_version: 1
+session_id: "20260528-03960a26"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#C1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/review/20260528-03960a26/execution-preparation/materialized-input.md lines 300-319 and 373-383"
+    claim: "Identity event schemas still define duplicate affected-ID paths because concept identity events include concept_ids alongside prior_concept_ids/current_concept_ids/target_detail_ids, and relation identity events include relation_ids alongside prior_relation_ids/current_relation_ids."
+    proposed_action: "Remove concept_identity_events[].concept_ids and relation_identity_events[].relation_ids, and encode affected identity only through prior/current arrays plus target_detail_ids where demotion applies."
+    affected_purpose: "Maintain the concept_identity_events and relation_identity_events arrays as the sole lifecycle transition authority for the reconstruct Seed contract."
+    failure_condition: "When future authors or validators update lifecycle transition data, the generic concept_ids or relation_ids fields can duplicate or partially summarize the authoritative prior/current arrays."
+    impact: "This weakens trust in the contract's single-authority lifecycle design by preserving a second update path for the same affected identity information."
+    evidence_refs: ["round1/conciseness.md#C1"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#C2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/review/20260528-03960a26/execution-preparation/materialized-input.md lines 306, 328-334, and 1084"
+    claim: "detail_placement_events[].prior_concept_ids risks becoming an alternate demotion bridge because it can express prior-concept-to-detail lineage alongside concept_identity_events[].target_detail_ids."
+    proposed_action: "Remove detail_placement_events[].prior_concept_ids, or explicitly narrow it so it cannot be used for demotion lineage; keep demotion lineage solely in concept_identity_events and let detail placement events reference detail_ids, reason, evidence, and pressure refs."
+    affected_purpose: "Preserve concept_identity_events[].target_detail_ids as the sole demotion bridge from prior concept IDs to lower_level_detail_placements[].detail_id."
+    failure_condition: "When demotion lineage is represented through both detail_placement_events[].prior_concept_ids plus detail_ids and concept_identity_events[].target_detail_ids, consumers have multiple paths for the same demotion relationship."
+    impact: "This meaningfully weakens auditability and reproducibility because the contract can no longer guarantee one canonical path for demotion continuity."
+    evidence_refs: ["round1/conciseness.md#C2"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-003"
+    lens_id: "semantics"
+    source_ref: "round1/semantics.md#non-blocking-note"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md line 127; resolved by lines 371-386"
+    claim: "The phrase prior/current ID mappings could be read as a mapping concept, but later context clarifies that the actual authority is prior/current ID arrays inside concept_identity_events and relation_identity_events."
+    proposed_action: "Optionally tighten the phrase to prior/current ID arrays in concept_identity_events and relation_identity_events to remove wording-level ambiguity."
+    affected_purpose: "Keep lifecycle transition terminology aligned with the canonical identity-event authority."
+    failure_condition: "If a future implementer quotes only the consumer paragraph and ignores the later canonical lifecycle section, they may infer a mapping-shaped authority that the contract otherwise rejects."
+    impact: "This is a wording-level ambiguity that does not currently make the reviewed result unsafe, but it could increase future interpretation friction."
+    evidence_refs: ["round1/semantics.md#non-blocking-note"]
+    severity: "low"
+    domain_threshold_used: null
+  - finding_id: "finding-004"
+    lens_id: "evolution"
+    source_ref: "round1/evolution.md#minor-wording-risk"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "round1/evolution.md#evolution-assessment"
+    claim: "The consumer description phrase prior/current ID mappings remains a minor wording risk even though the lifecycle section resolves authority through prior/current ID arrays in concept_identity_events and relation_identity_events."
+    proposed_action: "Ensure future implementers preserve the later canonical array rule if they quote or revise the consumer paragraph."
+    affected_purpose: "Maintain change-tolerant lifecycle authority without reintroducing mapping-style compatibility concepts."
+    failure_condition: "Future documentation or implementation work may over-weight the informal consumer phrase and reintroduce mapping terminology."
+    impact: "This does not materially weaken the current design, but it is relevant to future evolution hygiene and should be preserved as a low-severity caution."
+    evidence_refs: ["round1/evolution.md#minor-wording-risk"]
+    severity: "low"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

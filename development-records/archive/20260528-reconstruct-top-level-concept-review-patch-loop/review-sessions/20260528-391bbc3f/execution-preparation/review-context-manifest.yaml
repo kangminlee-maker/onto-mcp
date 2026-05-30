@@ -1,0 +1,638 @@
+schema_version: "1"
+producer: onto-review-runtime
+producer_version: review-runtime-settings-domain-axiology-plan-20260523
+settings_schema_version: settings.json/v1
+domain_registry_version: domain-docs/v1
+alignment_contract_version: review-value-alignment-criteria/v1
+lifecycle_state: dispatched
+session_id: 20260528-391bbc3f
+target_refs:
+  - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/diff-target.patch
+domain_binding_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/domain-binding.yaml
+review_value_alignment_criteria_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/review-value-alignment-criteria.yaml
+actor_consumer_bindings_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/actor-consumer-bindings.yaml
+context_sources:
+  - context_source_id: materialized-input
+    source_kind: materialized_input
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/materialized-input.md
+    source_sha256: 8e4985e9e17613732fbfb3ce6f6cbcd97ec277f6b766f358b709b224e7789fae
+    required: true
+    sensitivity: internal
+    allowed_consumers: &a1
+      - teamlead
+      - lens:logic
+      - lens:structure
+      - lens:dependency
+      - lens:semantics
+      - lens:pragmatics
+      - lens:evolution
+      - lens:coverage
+      - lens:conciseness
+      - lens:axiology
+      - deliberation:logic
+      - deliberation:structure
+      - deliberation:dependency
+      - deliberation:semantics
+      - deliberation:pragmatics
+      - deliberation:evolution
+      - deliberation:coverage
+      - deliberation:conciseness
+      - deliberation:axiology
+      - issue-artifact:finding-ledger
+      - issue-artifact:finding-relation-graph
+      - issue-artifact:issue-ledger
+      - issue-artifact:issue-stance-matrix
+      - issue-artifact:deliberation-plan
+      - issue-artifact:problem-framing
+      - controlled-deliberation
+      - synthesize
+      - final-output
+      - review-record
+  - context_source_id: target-snapshot
+    source_kind: target_snapshot
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/target-snapshot.md
+    source_sha256: c5e354cc53b1262d4125a922753eb362ad6deabc076f75df6b51c2a014425ffe
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: context-candidate-assembly
+    source_kind: context_candidate_assembly
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/context-candidate-assembly.yaml
+    source_sha256: a5ad0f44478ce11a572944ed1aa296ade088e0d2383ddc6f344b7a36312c374f
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-target-profile
+    source_kind: review_target_profile
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/review-target-profile.yaml
+    source_sha256: c3216fa66415d2d452de321a95b947e519c873b59a2245ee0f57f50c953ed8a6
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: review-value-alignment-criteria
+    source_kind: review_value_alignment_criteria
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/execution-preparation/review-value-alignment-criteria.yaml
+    source_sha256: cc1413b7d61a19f5393f4eecb21433a8b4f9ab229ef11946927ecdbbc8453da2
+    required: true
+    sensitivity: internal
+    allowed_consumers: *a1
+  - context_source_id: domain:competency_qs
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/competency_qs.md
+    source_sha256: ad69bd914792e361584d5c39a3bf179567ec63ce6519da77da025f4584194565
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:pragmatics
+      - deliberation:pragmatics
+      - review-record
+  - context_source_id: domain:concepts
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/concepts.md
+    source_sha256: 9879135c1a5adf1045c7b8dd61738cd12caa3e8fa0305f1b4095e99649f9dc9c
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:semantics
+      - deliberation:semantics
+      - review-record
+  - context_source_id: domain:conciseness_rules
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/conciseness_rules.md
+    source_sha256: a33057efbdd985231ca6cab690b5ae0b47ccca0f539e56df6e380159bc80c3e8
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:conciseness
+      - deliberation:conciseness
+      - review-record
+  - context_source_id: domain:dependency_rules
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/dependency_rules.md
+    source_sha256: 0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:dependency
+      - deliberation:dependency
+      - review-record
+  - context_source_id: domain:domain_scope
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/domain_scope.md
+    source_sha256: 6a3ce92472c053d815df3b0f2dfcad2fb01948d98dae4f2f3b316d03cf5467b6
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:coverage
+      - deliberation:coverage
+      - review-record
+  - context_source_id: domain:extension_cases
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/extension_cases.md
+    source_sha256: 2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:evolution
+      - deliberation:evolution
+      - review-record
+  - context_source_id: domain:logic_rules
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/logic_rules.md
+    source_sha256: 0b59734c92583c00a2c9bfd8a80f647b92e25472d09238046c365148cab25886
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:logic
+      - deliberation:logic
+      - review-record
+  - context_source_id: domain:structure_spec
+    source_kind: domain_required_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/structure_spec.md
+    source_sha256: defce85754cf60b644ab765ef6d11d231fad2544e5ce3e7a946bcaf53d5a427f
+    required: true
+    sensitivity: internal
+    allowed_consumers:
+      - lens:structure
+      - deliberation:structure
+      - review-record
+  - context_source_id: domain:problem_framing_profile
+    source_kind: domain_problem_framing_profile
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/problem_framing_profile.md
+    source_sha256: 8f343e1061239ea7e47f83b2867064181081a9e7abf172b47895d3f9ece83ef0
+    required: false
+    sensitivity: internal
+    allowed_consumers:
+      - issue-artifact:problem-framing
+      - review-record
+  - context_source_id: domain:prompt_interface
+    source_kind: domain_optional_doc
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/prompt_interface.md
+    source_sha256: 8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+    required: false
+    sensitivity: internal
+    allowed_consumers:
+      - lens:logic
+      - lens:structure
+      - lens:dependency
+      - lens:semantics
+      - lens:pragmatics
+      - lens:evolution
+      - lens:coverage
+      - lens:conciseness
+      - lens:axiology
+      - deliberation:logic
+      - deliberation:structure
+      - deliberation:dependency
+      - deliberation:semantics
+      - deliberation:pragmatics
+      - deliberation:evolution
+      - deliberation:coverage
+      - deliberation:conciseness
+      - deliberation:axiology
+      - review-record
+derived_context_access_matrix:
+  teamlead:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:logic: &a2
+    - context-candidate-assembly
+    - domain:logic_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:structure: &a3
+    - context-candidate-assembly
+    - domain:prompt_interface
+    - domain:structure_spec
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:dependency: &a4
+    - context-candidate-assembly
+    - domain:dependency_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:semantics: &a5
+    - context-candidate-assembly
+    - domain:concepts
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:pragmatics: &a6
+    - context-candidate-assembly
+    - domain:competency_qs
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:evolution: &a7
+    - context-candidate-assembly
+    - domain:extension_cases
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:coverage: &a8
+    - context-candidate-assembly
+    - domain:domain_scope
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:conciseness: &a9
+    - context-candidate-assembly
+    - domain:conciseness_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  lens:axiology: &a10
+    - context-candidate-assembly
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:logic:
+    - context-candidate-assembly
+    - domain:logic_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:structure:
+    - context-candidate-assembly
+    - domain:prompt_interface
+    - domain:structure_spec
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:dependency:
+    - context-candidate-assembly
+    - domain:dependency_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:semantics:
+    - context-candidate-assembly
+    - domain:concepts
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:pragmatics:
+    - context-candidate-assembly
+    - domain:competency_qs
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:evolution:
+    - context-candidate-assembly
+    - domain:extension_cases
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:coverage:
+    - context-candidate-assembly
+    - domain:domain_scope
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:conciseness:
+    - context-candidate-assembly
+    - domain:conciseness_rules
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  deliberation:axiology:
+    - context-candidate-assembly
+    - domain:prompt_interface
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:finding-relation-graph:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-ledger:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:issue-stance-matrix:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:deliberation-plan:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  issue-artifact:problem-framing:
+    - context-candidate-assembly
+    - domain:problem_framing_profile
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  controlled-deliberation:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  synthesize: &a11
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  final-output:
+    - context-candidate-assembly
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+  review-record:
+    - context-candidate-assembly
+    - domain:competency_qs
+    - domain:concepts
+    - domain:conciseness_rules
+    - domain:dependency_rules
+    - domain:domain_scope
+    - domain:extension_cases
+    - domain:logic_rules
+    - domain:problem_framing_profile
+    - domain:prompt_interface
+    - domain:structure_spec
+    - materialized-input
+    - review-target-profile
+    - review-value-alignment-criteria
+    - target-snapshot
+packet_refs:
+  - consumer_id: lens:logic
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/logic.prompt.md
+    packet_sha256: 9048fa7749b13f09602b1a9db249e1295c03719f528f4d3619fb0a4e23b9c826
+    consumed_context_refs: *a2
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:structure
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/structure.prompt.md
+    packet_sha256: 02eff822b95ef8bccb18663b60ade1e2aad9f19f263b0a058493b232faf90c67
+    consumed_context_refs: *a3
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:problem_framing_profile
+  - consumer_id: lens:dependency
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/dependency.prompt.md
+    packet_sha256: e5ba4397eab75ec718b943f6ddb37fca337a7f0ddd473a96fa1a3fe348599cae
+    consumed_context_refs: *a4
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:semantics
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/semantics.prompt.md
+    packet_sha256: 8f739fa3cf1d1a118cf9f5cf8e94efa34cb9454e805719efb692a99d00be8c4d
+    consumed_context_refs: *a5
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:pragmatics
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/pragmatics.prompt.md
+    packet_sha256: bbaa16464d7387b68e431538e577bc431075f0185ae295da2d9acc887bc728d7
+    consumed_context_refs: *a6
+    forbidden_context_refs:
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:evolution
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/evolution.prompt.md
+    packet_sha256: 3017623b0d3c15ae37759cc905150fb3254ee356bdc07e9847b64e3687aa213b
+    consumed_context_refs: *a7
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:coverage
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/coverage.prompt.md
+    packet_sha256: 17eaf8e1ac0f4249c62aaa51c322e46c7e5fea0addcaaa22836512955dfa8df9
+    consumed_context_refs: *a8
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:conciseness
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/conciseness.prompt.md
+    packet_sha256: 44b72a3ab82e1115261aaac9373991eb702117deb68aa5c89a787b62ef97ecd2
+    consumed_context_refs: *a9
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: lens:axiology
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/axiology.prompt.md
+    packet_sha256: 7e67fe4af26cefc7e074e97b0c17eced38dee168272ea17f13591029a4178c09
+    consumed_context_refs: *a10
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+  - consumer_id: synthesize
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/synthesize.prompt.md
+    packet_sha256: 0ce281cb2d12e7a74b0191c6de379b6a42985a0526ff72dadbc34d9845951c9a
+    consumed_context_refs: *a11
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+      - domain:prompt_interface
+  - consumer_id: issue-artifact:finding-ledger
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/finding-ledger.prompt.md
+    packet_sha256: d331a9a69ee5542565f30e27981b22c29a5891962b0f1960733a7f2f10edc5c2
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+      - domain:prompt_interface
+  - consumer_id: issue-artifact:finding-relation-graph
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/finding-relation-graph.prompt.md
+    packet_sha256: fb29e840d79af9dcc37fe1cda5b963c07b70438540bf53ca1fecd3a416e103ce
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+      - domain:prompt_interface
+  - consumer_id: issue-artifact:issue-ledger
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/issue-ledger.prompt.md
+    packet_sha256: aa18c259f877ceee5cfce0e47ff28e456795978ceba0009604b3981b6878129e
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+      - domain:prompt_interface
+  - consumer_id: issue-artifact:issue-stance-matrix
+    packet_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-391bbc3f/prompt-packets/issue-stance-matrix.prompt.md
+    packet_sha256: 0c991e21ca00b299526ddbfdd4e32c21749d3ed861a59c78bdcd66f45db3955f
+    consumed_context_refs:
+      - context-candidate-assembly
+      - materialized-input
+      - review-target-profile
+      - review-value-alignment-criteria
+      - target-snapshot
+    forbidden_context_refs:
+      - domain:competency_qs
+      - domain:concepts
+      - domain:conciseness_rules
+      - domain:dependency_rules
+      - domain:domain_scope
+      - domain:extension_cases
+      - domain:logic_rules
+      - domain:structure_spec
+      - domain:problem_framing_profile
+      - domain:prompt_interface
+validation_results:
+  - domain_binding_valid
+  - review_value_alignment_dispatch_allowed
+  - review_target_profile_admitted
+  - context_access_matrix_valid
+  - packet_refs_materialized
+  - generated_packet_ref_registered:issue-artifact:finding-ledger
+  - generated_packet_ref_registered:issue-artifact:finding-relation-graph
+  - generated_packet_ref_registered:issue-artifact:issue-ledger
+  - generated_packet_ref_registered:issue-artifact:issue-stance-matrix
+failure_record_refs: []

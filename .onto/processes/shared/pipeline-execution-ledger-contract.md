@@ -130,16 +130,32 @@ ledger.
 
 ### Reconstruct
 
-`reconstruct` units follow stable `ReconstructStageId` values:
+`reconstruct` units are runtime projections of the active reconstruct registry
+and the TypeScript stage contract. The registry owns artifact, gate, predicate,
+readiness, and validator authority; the TypeScript stage id list and ledger
+specs are implementation projections that must stay aligned with those registry
+authorities and must not introduce independent semantic authority. The current
+unit families are:
 
-- material profiling;
-- source inventory;
-- source observation;
-- LLM-authored directive production;
-- runtime directive validation;
-- Seed candidate, confirmation, competency-question, assessment,
-  failure-classification, revision, metrics, stop-decision, final-output, and
-  record assembly stages as the contract enables them.
+- material profile and material-profile validation;
+- source inventory, source observation, source-observation directive, and
+  directive validation;
+- per-round source frontier, frontier validation, observation delta, delta
+  validation, perspective judgments, exploration synthesis, and observation
+  re-entry validation;
+- candidate inventory, candidate disposition, and candidate-disposition
+  validation;
+- `ontology-seed.yaml` and `ontology-seed-validation.yaml`;
+- competency questions, competency-question validation, assessment, and
+  assessment validation;
+- seed confirmation and seed-confirmation validation;
+- query proofs, visualization proofs, graph-exploration proofs, and their
+  runtime validations when the corresponding downstream capability is claimed;
+- failure classification, revision proposal, reconstruct metrics, and their
+  validations where applicable;
+- reconstruct run manifest and run-manifest validation;
+- handoff decision and handoff-decision validation before final output and
+  reconstruct-record projection.
 
 Runtime validation units are the trust gates for LLM-authored artifacts. A
 semantic artifact can exist but remain untrusted until its validation unit

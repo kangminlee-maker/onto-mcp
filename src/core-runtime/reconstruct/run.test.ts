@@ -4,13 +4,18 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
+  ReconstructActionableOntologySeedArtifact,
+  ReconstructCandidateDispositionValidationArtifact,
+  ReconstructCompetencyQuestionsArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructRecordArtifact,
+  ReconstructCompetencyQuestionsValidationArtifact,
+  ReconstructHandoffDecisionValidationArtifact,
+  ReconstructMetricsArtifact,
   ReconstructRunManifestArtifact,
-  ReconstructSeedCandidateArtifact,
-} from "./artifact-types.js";
-import {
-  RECONSTRUCT_SEED_MIGRATION_TARGETS,
+  ReconstructRunManifestValidationArtifact,
+  ReconstructSourceObservationsArtifact,
+  ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
   createAutoAcceptReconstructConfirmationProvider,
@@ -19,7 +24,10 @@ import {
   createMockReconstructDirectiveAuthor,
   runReconstruct,
 } from "./run.js";
-import { seedClaimProjections } from "./seed-claim-projections.js";
+import type { ReconstructConfirmationProvider } from "./run.js";
+import {
+  ontologySeedClaimProjections,
+} from "./seed-claim-projections.js";
 import type { LlmCallResult } from "../llm/llm-caller.js";
 
 const tmpRoots: string[] = [];
@@ -51,6 +59,160 @@ afterEach(async () => {
 
 async function readYaml<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
+}
+
+function ontologyHandoffFixture(args: {
+  objectTypeId: string;
+  actorTypeId: string;
+  actionTypeId: string;
+  policyId: string;
+  provenanceId: string;
+}): Record<string, unknown> {
+  return {
+    readiness_claim: "ready",
+    classification_mapping: {
+      ontology_scope_kind: "application_ontology_seed",
+      classification_axis_policy: "object, actor, action, and data-binding layers",
+      classification_level_axis_refs: [
+        args.objectTypeId,
+        args.actorTypeId,
+        args.actionTypeId,
+      ],
+      inheritance_model: "flat_seed_layer",
+      mece_status: "not_asserted",
+      seed_refs: [args.objectTypeId, args.actorTypeId, args.actionTypeId],
+      limitation_refs: [],
+    },
+    entity_identity_mapping: {
+      entity_id_policy: "stable seed ids",
+      uri_or_iri_policy: "not_assigned",
+      canonical_identifier_refs: [args.objectTypeId, args.actorTypeId, args.actionTypeId],
+      alias_identifier_refs: [],
+      primitive_vs_defined_status: "defined_by_seed_record",
+      definition_criteria_refs: [args.objectTypeId],
+      limitation_refs: [],
+    },
+    instance_assertion_mapping: {
+      instance_availability_status: "present",
+      instance_refs: [args.objectTypeId],
+      example_assertion_refs: [args.actionTypeId],
+      abox_assertion_refs: [],
+      limitation_refs: [],
+    },
+    terminology_mapping: {
+      canonical_label_policy: "seed names are canonical labels",
+      alias_policy: "aliases are not asserted",
+      hidden_label_policy: "hidden labels are not asserted",
+      homonym_policy: "not assessed in fixture",
+      multilingual_label_policy: "single-language fixture labels",
+      language_tag_policy: "und",
+      limitation_refs: [],
+    },
+    relation_type_mapping: {
+      relation_type_refs: [],
+      formal_relation_semantics:
+        "No link types are asserted; action bindings express operational relations.",
+      domain_range_declaration_refs: [args.actionTypeId],
+      relation_property_constraint_refs: [],
+      unsupported_relation_candidates: [],
+      limitation_refs: [],
+    },
+    constraint_mapping: {
+      constraint_refs: [],
+      tbox_constraint_refs: [],
+      abox_assertion_constraint_refs: [],
+      shape_or_validation_constraint_refs: ["runtime_seed_validator"],
+      policy_constraint_refs: [args.policyId],
+      unsupported_constraint_candidates: [],
+      limitation_refs: [],
+    },
+    modularity_boundary: {
+      module_candidates: ["fixture_seed_module"],
+      import_or_reuse_refs: [],
+      limitation_refs: [],
+    },
+    reasoning_or_formalism_profile: {
+      representation_formalism: "informal_actionable_graph",
+      vocabulary_systems: ["custom_controlled_vocabulary"],
+      validation_formalisms: ["custom_runtime_validator"],
+      ontology_type: "application_ontology",
+      owl_profile: "not_applicable",
+      alignment_posture: "custom_alignment",
+      reasoning_expectations: ["runtime validation gates preserve seed truth"],
+      validation_expectations: ["seed validator and handoff validator must pass"],
+      limitation_refs: [],
+    },
+    application_context_mapping: {
+      application_context_refs: [args.objectTypeId],
+      actor_or_surface_refs: [args.actorTypeId, args.objectTypeId],
+      limitation_refs: [],
+    },
+    metadata_mapping: {
+      descriptive_metadata_refs: ["seed_identity"],
+      bibliographic_metadata_refs: [],
+      resource_metadata_refs: ["source-observations.yaml"],
+      limitation_refs: [],
+    },
+    provenance_mapping: {
+      provenance_binding_refs: [args.provenanceId],
+      evidence_scope_refs: ["source-observations.yaml"],
+      limitation_refs: [],
+    },
+    change_tracking_mapping: {
+      state_model_refs: [],
+      lifecycle_rule_refs: [],
+      migration_or_versioning_refs: ["seed_identity.generated_at"],
+      limitation_refs: [],
+    },
+    competency_scope_mapping: {
+      expected_coverage_axes: [
+        "purpose",
+        "semantic_layer",
+        "kinetic_layer",
+        "dynamic_layer",
+        "data_binding_layer",
+        "ontology_handoff",
+      ],
+      required_handoff_axes: ["classification", "entity_identity", "provenance"],
+      unsupported_axes: [],
+      limitation_refs: [],
+    },
+    alignment_mapping: {
+      external_vocab_or_domain_refs: [],
+      mapped_seed_refs: [args.objectTypeId, args.actorTypeId, args.actionTypeId],
+      limitation_refs: [],
+    },
+    modeling_concern_applicability: {
+      rows: [
+        {
+          concern_id: "instance_assertion_coverage",
+          applies: false,
+          applicability_predicate_ref: "fixture has no separate instance catalog",
+          trace_refs: [args.objectTypeId],
+          limitation_refs: [],
+        },
+      ],
+    },
+    reference_standard_mapping: {
+      standard_refs: ["foundry_style_seed_contract"],
+      mapped_concern_refs: ["classification", "entity_identity"],
+      limitation_refs: [],
+    },
+    pattern_catalog_mapping: {
+      pattern_catalog_refs: ["actionable_seed_pattern"],
+      mapped_concern_refs: ["purpose", "ontology_handoff"],
+      limitation_refs: [],
+    },
+    query_access_contract: { applies: "not_applicable", limitation_refs: [] },
+    visualization_contract: { applies: "not_applicable", limitation_refs: [] },
+    graph_exploration_contract: { applies: "not_applicable", limitation_refs: [] },
+    graph_connectivity: {
+      connected_seed_refs: [args.objectTypeId, args.actorTypeId, args.actionTypeId],
+      isolated_seed_refs: [],
+      isolation_rationale_refs: [],
+    },
+    limitation_refs: [],
+  };
 }
 
 describe("runReconstruct", () => {
@@ -134,6 +296,25 @@ describe("runReconstruct", () => {
       roundId: "round-1",
       lensJudgmentIndexRef: "lens-judgment-index.yaml",
       lensJudgments,
+      sourceObservations: {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: "2026-05-28T00:00:00.000Z",
+        observations: [
+          {
+            observation_id: "obs-1",
+            target_material_kind: "code",
+            adapter_id: "fixture-observer",
+            source_ref: "src/app/page.tsx",
+            location: "file",
+            summary: "Dashboard page fixture.",
+            structural_data: {},
+          },
+        ],
+        skipped_refs: [],
+        validation_results: [],
+      },
+      sourceObservationsRef: "source-observations.yaml",
     });
 
     expect(capturedPayload?.lens_judgments).toEqual([
@@ -179,18 +360,13 @@ describe("runReconstruct", () => {
     }>;
     const firstObservationId =
       observations[0]?.observation_id ??
-      input.seed_candidate?.purpose?.evidence_refs?.[0]?.observation_id ??
+      input.eligible_claims?.[0]?.evidence_observation_ids?.[0] ??
       "obs_code_fake";
+    const evidenceObservationIds = observations.length > 0
+      ? observations.map((observation) => observation.observation_id)
+      : [firstObservationId];
     const firstMaterialKind = observations[0]?.target_material_kind ?? "code";
     const firstSourceRef = observations[0]?.source_ref ?? "src/feature.ts";
-    const migrationRecords = RECONSTRUCT_SEED_MIGRATION_TARGETS
-      .filter((record) => record.compatibility_status === "transitional_projection")
-      .map((record) => ({
-        migration_id: `migration-${record.source_field}`,
-        source_field: record.source_field,
-        target_authority_field: record.target_authority_field,
-        migration_artifact_ref: null,
-      }));
     let text: string;
     if (systemPrompt.includes("Select observations")) {
       text = JSON.stringify({
@@ -226,247 +402,289 @@ describe("runReconstruct", () => {
         frontier_refs: [],
         no_next_frontier_rationale: "No next frontier is required for this fixture.",
       });
-    } else if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
+    } else if (systemPrompt.includes("Author candidate-inventory.yaml")) {
       text = JSON.stringify({
-        seed_schema_version: "transitional",
-        purpose: {
-          claim_id: "purpose-1",
-          name: "Fixture Service Purpose",
-          statement: "The fixture exposes a small feature service purpose.",
-          evidence_observation_ids: [firstObservationId],
-        },
-        answerability_scope: {
-          declared_handoff_questions: [
-            {
-              question_id: "question-1",
-              question: "What top-level concept explains the fixture service?",
-              source: "declared_purpose",
-            },
-          ],
-          supported_questions: [
-            {
-              question_id: "question-1",
-              answered_by: {
-                concept_ids: ["concept-fixture-service"],
-                relation_ids: [],
-              },
-              confidence: "medium",
-            },
-          ],
-          deferred_questions: [],
-          unsupported_questions: [],
-          supported_actions: [
-            {
-              action_id: "action-explain-fixture-service",
-              action: "Explain the bounded fixture service Seed.",
-              supported_by_question_ids: ["question-1"],
-              readiness_statement: "Ready for bounded fixture handoff.",
-            },
-          ],
-          unsupported_actions: [],
-          handoff_readiness_statement: "Ready for bounded fixture handoff.",
-          handoff_readiness_question_ids: ["question-1"],
-        },
-        top_level_concepts: [
+        candidates: [
           {
-            concept_id: "concept-fixture-service",
+            candidate_id: "candidate-fixture-service",
+            candidate_kind: "object",
             name: "Fixture Service",
-            aliases: [],
-            definition: "A bounded service concept grounded in the observed fixture source.",
-            why_top_level: "It explains the fixture behavior for the declared purpose.",
-            evidence_observation_ids: [firstObservationId],
-            boundary: {
-              included_summary: "Observed feature source and its service behavior.",
-              excluded_summary: "Unobserved production concerns.",
-              deferred_summary: "Full ontology formalization.",
-            },
-            confidence: "medium",
-            provisional: false,
+            description: "A bounded service object grounded in fixture source.",
+            salience: "high",
+            evidence_observation_ids: evidenceObservationIds,
           },
-        ],
-        top_level_relations: [],
-        relation_participation_exceptions: [
           {
-            concept_id: "concept-fixture-service",
-            isolation_reason: "Single concept fixture has no canonical relation pair.",
-            isolation_pressure_ids: ["pressure-fixture-evidence"],
+            candidate_id: "candidate-fixture-user",
+            candidate_kind: "actor",
+            name: "Fixture User",
+            description: "The user who consumes the fixture service explanation.",
+            salience: "high",
+            evidence_observation_ids: evidenceObservationIds,
           },
-        ],
-        lower_level_detail_placements: [
           {
-            detail_id: "detail-feature-source",
-            name: "Feature Source",
-            material_kind: firstMaterialKind,
-            source_ref: firstSourceRef,
-            placement: "included_support",
-            owner_concept_id: "concept-fixture-service",
-            rationale: "The feature source supports the Fixture Service concept.",
-            evidence_observation_ids: [firstObservationId],
-            follow_up_question: null,
+            candidate_id: "candidate-explain-fixture",
+            candidate_kind: "action",
+            name: "Explain Fixture",
+            description: "The action of explaining the fixture service.",
+            salience: "high",
+            evidence_observation_ids: evidenceObservationIds,
           },
-        ],
-        frontier_pressure_log: [
           {
-            pressure_id: "pressure-fixture-evidence",
-            origin: "source_observation",
-            origin_ref: firstObservationId,
-            pressure_type: "evidence_saturation",
-            pressure_question: "Would another fixture source change the top-level concept?",
-            target_concept_ids: ["concept-fixture-service"],
-            target_relation_ids: [],
-            material_kind: firstMaterialKind,
-            source_ref: firstSourceRef,
-            expected_decision_impact: "Additional evidence may refine but not block handoff.",
-            priority: "low",
-            status: "non_blocking",
-            status_reason: "The fixture intentionally has bounded source scope.",
-            superseded_by_pressure_id: null,
-            evidence_observation_ids: [firstObservationId],
+            candidate_id: "candidate-fixture-source",
+            candidate_kind: "data_source",
+            name: "Fixture Source",
+            description: "The observed source file backing the fixture seed.",
+            salience: "high",
+            evidence_observation_ids: evidenceObservationIds,
           },
         ],
-        material_coverage_checkpoint: {
-          observed_material_kinds: [firstMaterialKind],
-          observed_source_slices: [firstSourceRef],
-          source_authority_scope: {
-            permission_scope: "within_declared_boundary",
-            permission_basis_refs: [firstSourceRef],
-            trust_status: "observed_evidence_only",
-            instruction_authority_status: "none_data_only",
-            external_content_handling: "not_applicable",
-            restricted_source_refs: [],
-            rationale: "Fixture source is treated as evidence only.",
+      });
+    } else if (systemPrompt.includes("Author candidate-disposition.yaml")) {
+      text = JSON.stringify({
+        dispositions: [
+          {
+            candidate_id: "candidate-fixture-service",
+            disposition_id: "promoted_to_seed_layer",
+            target_seed_refs: ["object-fixture-service"],
+            rationale: "The fixture service is the main seed object.",
+            evidence_observation_ids: evidenceObservationIds,
           },
-          intentionally_excluded_material_kinds: [],
-          unexplored_source_categories: [],
-          possible_missing_axis_pressure_ids: [],
-          rationale_for_seed_level_sufficiency: "Sufficient for bounded fixture handoff.",
-          partial_support_disclosures: [],
+          {
+            candidate_id: "candidate-fixture-user",
+            disposition_id: "promoted_to_seed_layer",
+            target_seed_refs: ["actor-fixture-user"],
+            rationale: "The user is required for action binding.",
+            evidence_observation_ids: evidenceObservationIds,
+          },
+          {
+            candidate_id: "candidate-explain-fixture",
+            disposition_id: "promoted_to_seed_layer",
+            target_seed_refs: ["action-explain-fixture"],
+            rationale: "The explanation action connects actor and object.",
+            evidence_observation_ids: evidenceObservationIds,
+          },
+          {
+            candidate_id: "candidate-fixture-source",
+            disposition_id: "promoted_to_seed_layer",
+            target_seed_refs: ["binding-fixture-source"],
+            rationale: "The source is represented through data binding.",
+            evidence_observation_ids: evidenceObservationIds,
+          },
+        ],
+      });
+    } else if (systemPrompt.includes("Author ontology-seed.yaml")) {
+      const evidence = {
+        observation_id: firstObservationId,
+        target_material_kind: firstMaterialKind,
+        source_ref: firstSourceRef,
+        location: firstSourceRef,
+      };
+      text = JSON.stringify({
+        seed_identity: {
+          schema_version: "1",
+          seed_id: "seed-fixture-service",
+          title: "Fixture Service Actionable Seed",
+          target_refs: [firstSourceRef],
+          generated_at: "2026-05-29T00:00:00.000Z",
+          authoring_profile: "fixture-live-author",
         },
-        convergence: {
-          state: "provisionally_converged",
-          source_convergence_rationale: "No open pressure remains for fixture handoff.",
-          review_confirmed: false,
-          review_profile_ref: null,
-          remaining_pressure_ids: ["pressure-fixture-evidence"],
+        purpose: {
+          declared_purpose: "Explain fixture service structure for bounded handoff.",
+          intended_decisions: ["Decide whether the fixture service can be explained."],
+          intended_actions: ["Explain fixture service structure."],
+          non_goals: [],
+          evidence_refs: [evidence],
         },
-        lifecycle: {
-          seed_id: "seed-fixture",
-          parent_seed_ref: null,
-          id_stability_scope: "session",
-          session_id: "direct-run",
-          source_snapshot_refs: [firstSourceRef],
-          source_snapshot_transition: {
-            prior_snapshot_refs: [],
-            transition_reason: "Initial fixture Seed.",
-          },
-          exploration_rounds: [
+        decision_context: {
+          principal_user: "Fixture reviewer",
+          downstream_use: "bounded_seed_handoff",
+          decision_boundary: "Observed fixture source only.",
+          risk_notes: [],
+        },
+        conceptual_frame: {
+          concepts: [
             {
-              round_id: "round-1",
-              observed_source_refs: [firstSourceRef],
-              authoring_pass_ref: "seed-candidate.yaml",
-              changed_concept_ids: ["concept-fixture-service"],
-              changed_relation_ids: [],
-              changed_frontier_pressure_ids: ["pressure-fixture-evidence"],
+              concept_id: "concept-fixture-service",
+              name: "Fixture Service",
+              definition: "A bounded fixture service concept.",
+              purpose_role: "orients the fixture service seed",
+              evidence_refs: [evidence],
+              confidence: "confirmed",
             },
           ],
-          concept_identity_events: [
+          associations: [],
+        },
+        semantic_layer: {
+          object_types: [
             {
-              event_id: "concept-event-created-1",
-              event_type: "created",
-              prior_concept_ids: [],
-              current_concept_ids: ["concept-fixture-service"],
-              target_detail_ids: [],
-              prior_names: [],
-              new_names: ["Fixture Service"],
-              prior_aliases: [],
-              current_aliases: [],
-              reason: "Initial fixture concept.",
-              evidence_observation_ids: [firstObservationId],
-              frontier_pressure_ids: ["pressure-fixture-evidence"],
-            },
-          ],
-          relation_identity_events: [],
-          pressure_events: [
-            {
-              event_id: "pressure-event-non-blocking-1",
-              event_type: "non_blocking",
-              pressure_id: "pressure-fixture-evidence",
-              prior_status: null,
-              new_status: "non_blocking",
-              superseded_by_pressure_id: null,
-              reason: "Fixture pressure is non-blocking.",
-              evidence_observation_ids: [firstObservationId],
-            },
-          ],
-          detail_placement_events: [
-            {
-              event_id: "detail-event-placed-1",
-              event_type: "placed",
-              detail_ids: ["detail-feature-source"],
-              reason: "Feature source was placed under the service concept.",
-              evidence_observation_ids: [firstObservationId],
-              frontier_pressure_ids: ["pressure-fixture-evidence"],
-            },
-          ],
-          answerability_events: [
-            {
-              event_id: "answerability-event-supported-1",
-              event_type: "question_supported",
-              question_ids: ["question-1"],
-              action_ids: ["action-explain-fixture-service"],
-              frontier_pressure_ids: [],
-              reason: "Question is supported by the fixture concept.",
-            },
-          ],
-          material_coverage_events: [
-            {
-              event_id: "material-event-source-slice-added-1",
-              event_type: "source_slice_added",
-              source_refs: [firstSourceRef],
-              material_kinds: [firstMaterialKind],
-              changed_authority_fields: ["observed_source_slices"],
-              prior_authority_state_ref: null,
-              current_authority_state_ref: null,
-              prior_authority_state: null,
-              current_authority_state: {
-                observed_source_slices: [firstSourceRef],
+              object_type_id: "object-fixture-service",
+              name: "Fixture Service",
+              object_kind: "service",
+              description: "Service object represented by observed fixture source.",
+              primary_key: {
+                property_id: "property-fixture-service-id",
+                name: "fixture service id",
+                value_type: "string",
+                evidence_refs: [evidence],
               },
-              frontier_pressure_ids: ["pressure-fixture-evidence"],
-              reason: "Observed fixture source slice recorded.",
+              properties: [],
+              backing_source_refs: [firstSourceRef],
+              evidence_refs: [evidence],
+              status: "confirmed",
             },
           ],
-          convergence_events: [
+          link_types: [],
+          value_types: [],
+          constraints: [],
+        },
+        kinetic_layer: {
+          action_types: [
             {
-              event_id: "convergence-event-provisional-1",
-              prior_state: null,
-              new_state: "provisionally_converged",
-              frontier_pressure_ids: ["pressure-fixture-evidence"],
-              reason: "No open pressure remains.",
+              action_type_id: "action-explain-fixture",
+              name: "Explain Fixture",
+              description: "Explain the fixture service.",
+              actor_type_ids: ["actor-fixture-user"],
+              target_object_type_ids: ["object-fixture-service"],
+              affected_object_type_ids: [],
+              parameters: [],
+              preconditions: [],
+              postconditions: [],
+              side_effects: [],
+              writeback_behavior: {
+                writes: false,
+                writeback_source_refs: [],
+                rationale: "Explanation is read-only.",
+              },
+              evidence_refs: [evidence],
+              status: "confirmed",
+            },
+          ],
+          functions: [],
+          workflows: [
+            {
+              workflow_id: "workflow-explain-fixture",
+              name: "Explain Fixture Workflow",
+              ordered_action_type_ids: ["action-explain-fixture"],
+              trigger: "Fixture reviewer requests explanation.",
+              terminal_state: "Fixture explanation is available.",
+              evidence_refs: [evidence],
             },
           ],
         },
-        migration_records: migrationRecords,
-        non_goals: [],
-        entities: [
-          {
-            claim_id: "entity-1",
-            name: "Observed Feature Source",
-            statement: "The fixture contains one observed feature source unit.",
-            evidence_observation_ids: [firstObservationId],
+        dynamic_layer: {
+          actor_types: [
+            {
+              actor_type_id: "actor-fixture-user",
+              name: "Fixture User",
+              actor_kind: "human_user",
+              role_refs: ["role-fixture-reader"],
+              description: "User consuming fixture service explanation.",
+              evidence_refs: [evidence],
+            },
+          ],
+          actor_roles: [
+            {
+              role_id: "role-fixture-reader",
+              name: "Fixture Reader",
+              holder_actor_type_ids: ["actor-fixture-user"],
+              authority_scope_refs: [],
+              evidence_refs: [evidence],
+            },
+          ],
+          permission_policies: [
+            {
+              policy_id: "policy-explain-fixture",
+              actor_type_id: "actor-fixture-user",
+              action_type_id: "action-explain-fixture",
+              object_type_id: "object-fixture-service",
+              permission_kind: "allowed",
+              condition: "Within fixture test boundary.",
+              evidence_refs: [evidence],
+            },
+          ],
+          state_models: [],
+          lifecycle_rules: [],
+        },
+        data_binding_layer: {
+          source_bindings: [
+            {
+              binding_id: "binding-fixture-source",
+              seed_ref: "object-fixture-service",
+              source_ref: firstSourceRef,
+              binding_kind: "evidence",
+              statement: "Observed fixture source backs the service object.",
+              evidence_refs: [evidence],
+            },
+          ],
+          read_models: [
+            {
+              read_model_id: "read-fixture-source",
+              name: "Fixture Source Read Model",
+              object_type_ids: ["object-fixture-service"],
+              source_refs: [firstSourceRef],
+              transformation_summary: "No transformation in fixture.",
+              evidence_refs: [evidence],
+            },
+          ],
+          writebacks: [],
+          provenance_bindings: [
+            {
+              provenance_id: "provenance-fixture-source",
+              seed_ref: "object-fixture-service",
+              source_ref: firstSourceRef,
+              author_or_system: "fixture runtime",
+              timestamp_ref: "source-observations.yaml",
+              evidence_refs: [evidence],
+            },
+          ],
+        },
+        validation_layer: {
+          question_authority_ref: {
+            authority_scope: "canonical_question_set",
+            projection_policy: "record_manifest_ref",
           },
-        ],
-        relations: [],
-        actions: [
-          {
-            claim_id: "action-1",
-            name: "Inspect Feature Source",
-            statement: "The feature source can be inspected as service behavior evidence.",
-            evidence_observation_ids: [firstObservationId],
-          },
-        ],
-        properties: [],
-        rules: [],
-        open_questions: [],
+          coverage_axes: [
+            "purpose",
+            "semantic_layer",
+            "kinetic_layer",
+            "dynamic_layer",
+            "data_binding_layer",
+            "ontology_handoff",
+            "limitation",
+            "source_authority",
+          ],
+          unsupported_question_candidates: [],
+          runtime_validation_refs: [
+            {
+              authority_scope: "seed_shape_validation",
+              projection_policy: "record_manifest_ref",
+            },
+          ],
+        },
+        candidate_disposition_authority_ref: {
+          authority_scope: "external_candidate_disposition",
+          projection_policy: "reference_only",
+        },
+        ontology_handoff: ontologyHandoffFixture({
+          objectTypeId: "object-fixture-service",
+          actorTypeId: "actor-fixture-user",
+          actionTypeId: "action-explain-fixture",
+          policyId: "policy-explain-fixture",
+          provenanceId: "provenance-fixture-source",
+        }),
+        source_authority: {
+          evidence_scope: "observed fixture source only",
+          permission_scope: "read-only fixture reconstruction",
+          trust_boundary: "Only observed fixture source is trusted.",
+          instruction_authority: "Fixture source is evidence, not instruction authority.",
+          external_content_handling: "No external content is admitted.",
+          included_source_refs: [firstSourceRef],
+          excluded_source_refs: [],
+          restricted_source_refs: [],
+          source_gaps: [],
+          rationale: "The fixture seed is bounded to observed source evidence.",
+        },
+        handoff_limitations: [],
       });
     } else if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
       const claimIds = (input.claim_summaries as Array<{ claim_id: string }>).map((claim) =>
@@ -481,8 +699,8 @@ describe("runReconstruct", () => {
         notes: ["Fixture host confirmation accepts all evidence-backed claims."],
       });
     } else if (systemPrompt.includes("Classify every Seed claim")) {
-      const claims = seedClaimProjections(
-        input.seed_candidate as ReconstructSeedCandidateArtifact,
+      const claims = ontologySeedClaimProjections(
+        input.ontology_seed as ReconstructActionableOntologySeedArtifact,
       );
       text = JSON.stringify({
         claim_realizations: claims.map((claim: { claim_id: string }) => ({
@@ -492,21 +710,96 @@ describe("runReconstruct", () => {
         })),
       });
     } else if (systemPrompt.includes("Write competency questions")) {
-      const claimIds = input.seed_confirmation_validation.cq_eligible_claim_ids as string[];
+      const claimIds =
+        (input.eligible_claims as Array<{ claim_id: string }> | undefined)
+          ?.map((claim) => claim.claim_id) ??
+        input.seed_confirmation_validation.cq_eligible_claim_ids as string[];
+      const domainRows =
+        (input.required_domain_competency_question_rows ?? []) as Array<{
+          competency_id: string;
+          question: string;
+          source_anchor: string;
+        }>;
+      const claimQuestions = claimIds.map((claimId, index) => ({
+        question_id: `cq-claim-${index + 1}`,
+        question: `Can the Seed explain ${claimId}?`,
+        linked_claim_ids: [claimId],
+        coverage_axis_refs: input.allowed_coverage_axis_ids,
+        ontology_handoff_axis_refs: input.allowed_ontology_handoff_axis_ids,
+        seed_ref_refs: [claimId],
+        limitation_refs: [],
+        reasoning_or_formalism_facets:
+          input.allowed_reasoning_or_formalism_facet_ids,
+        entity_identity_facets: input.allowed_entity_identity_facet_ids,
+        instance_assertion_facets: input.allowed_instance_assertion_facet_ids,
+        terminology_facets: input.allowed_terminology_facet_ids,
+        relation_type_facets: input.allowed_relation_type_facet_ids,
+        classification_facets: input.allowed_classification_facet_ids,
+        constraint_facets: input.allowed_constraint_facet_ids,
+        modeling_concern_facets: input.allowed_modeling_concern_ids,
+        domain_competency_trace_refs: [],
+        domain_competency_semantic_assessments: [],
+        reference_standard_refs: [],
+        pattern_catalog_refs: [],
+        query_access_contract_refs: [],
+        visualization_contract_refs: [],
+        graph_exploration_contract_refs: [],
+        coverage_disposition: "covered",
+        expected_answer_kind: "yes_no",
+        handoff_relevance: "required",
+        lifecycle_status: "active",
+        rationale: "The fixture question covers the claim and registry facets.",
+        evidence_observation_ids: [firstObservationId],
+      }));
+      const domainQuestions = domainRows.map((row, index) => ({
+        question_id: `cq-domain-${index + 1}`,
+        question: row.question,
+        linked_claim_ids: [],
+        coverage_axis_refs: input.allowed_coverage_axis_ids,
+        ontology_handoff_axis_refs: input.allowed_ontology_handoff_axis_ids,
+        seed_ref_refs: [],
+        limitation_refs: [],
+        reasoning_or_formalism_facets:
+          input.allowed_reasoning_or_formalism_facet_ids,
+        entity_identity_facets: input.allowed_entity_identity_facet_ids,
+        instance_assertion_facets: input.allowed_instance_assertion_facet_ids,
+        terminology_facets: input.allowed_terminology_facet_ids,
+        relation_type_facets: input.allowed_relation_type_facet_ids,
+        classification_facets: input.allowed_classification_facet_ids,
+        constraint_facets: input.allowed_constraint_facet_ids,
+        modeling_concern_facets: input.allowed_modeling_concern_ids,
+        domain_competency_trace_refs: [row.competency_id],
+        domain_competency_semantic_assessments: [
+          {
+            competency_id: row.competency_id,
+            source_anchor: row.source_anchor,
+            applicability_verdict: "applicable",
+            semantic_alignment: "preserved",
+            rationale: "The fixture source preserves this admitted domain competency.",
+            evidence_observation_ids: [firstObservationId],
+          },
+        ],
+        reference_standard_refs: [],
+        pattern_catalog_refs: [],
+        query_access_contract_refs: [],
+        visualization_contract_refs: [],
+        graph_exploration_contract_refs: [],
+        coverage_disposition: "covered",
+        expected_answer_kind: "yes_no",
+        handoff_relevance: "required",
+        lifecycle_status: "active",
+        rationale: "The fixture question covers an admitted domain competency.",
+        evidence_observation_ids: [firstObservationId],
+      }));
       text = JSON.stringify({
-        questions: claimIds.map((claimId, index) => ({
-          question_id: `cq-${index + 1}`,
-          question: `Can the Seed explain ${claimId}?`,
-          linked_claim_ids: [claimId],
-          evidence_observation_ids: [firstObservationId],
-        })),
+        questions: [...claimQuestions, ...domainQuestions],
         open_questions: [],
       });
     } else if (systemPrompt.includes("Assess every competency question")) {
       text = JSON.stringify({
         assessments: (input.competency_questions.questions as Array<{ question_id: string }>).map((question) => ({
           question_id: question.question_id,
-          answer_status: "answered",
+          answer_status: "answerable",
           rationale: "The fixture evidence answers this question.",
         })),
       });
@@ -565,18 +858,16 @@ describe("runReconstruct", () => {
       .not.toContain("seed_confirmation");
     expect(result.reconstructRecord.runtime_boundary.host_user_mediated_artifacts)
       .toContain("seed_confirmation");
-    expect(result.metrics.pass_rate).toBeLessThan(1);
+    expect(result.metrics.pass_rate).toBe(1);
     expect(result.metrics.confirmed_claim_count).toBeGreaterThan(0);
-    expect(result.metrics.partial_claim_count).toBeGreaterThan(0);
-    expect(result.metrics.deferred_claim_count).toBeGreaterThan(0);
-    expect(result.metrics.rejected_claim_count).toBeGreaterThan(0);
+    expect(result.metrics.partial_claim_count).toBe(0);
+    expect(result.metrics.deferred_claim_count).toBe(0);
+    expect(result.metrics.rejected_claim_count).toBe(0);
     expect(result.metrics.competency_question_assessment_count)
       .toBe(result.metrics.competency_question_count);
-    expect(result.metrics.failure_kind_counts.insufficient_evidence)
-      .toBeGreaterThan(0);
-    expect(result.metrics.revision_proposal_action_counts.extend)
-      .toBeGreaterThan(0);
-    expect(result.stopDecision.decision).toBe("ask_user");
+    expect(result.metrics.failure_kind_counts.insufficient_evidence).toBe(0);
+    expect(result.metrics.revision_proposal_action_counts.extend).toBe(0);
+    expect(result.stopDecision.decision).toBe("stop");
     expect(result.finalOutputText).toContain("Confirmed Seed Content");
     expect(result.finalOutputText).toContain("Claim Realization Summary");
     expect(result.finalOutputText).toContain("Competency Question Assessment");
@@ -589,17 +880,88 @@ describe("runReconstruct", () => {
     const manifest = await readYaml<ReconstructRunManifestArtifact>(
       result.reconstructRunManifestPath,
     );
+    const runManifestValidation =
+      await readYaml<ReconstructRunManifestValidationArtifact>(
+        record.artifact_refs.post_publication_run_manifest_validation!,
+      );
+    const handoffDecisionValidation =
+      await readYaml<ReconstructHandoffDecisionValidationArtifact>(
+        record.artifact_refs.handoff_decision_validation!,
+      );
+    const preHandoffManifest = await readYaml<ReconstructRunManifestArtifact>(
+      path.join(sessionRoot, "reconstruct-run-manifest.pre-handoff.yaml"),
+    );
+    const preHandoffRunManifestValidation =
+      await readYaml<ReconstructRunManifestValidationArtifact>(
+        path.join(sessionRoot, "reconstruct-run-manifest.pre-handoff-validation.yaml"),
+      );
+    const candidateDispositionValidation =
+      await readYaml<ReconstructCandidateDispositionValidationArtifact>(
+        record.artifact_refs.candidate_disposition_validation!,
+      );
 
     expect(record.artifact_refs.final_output).toBe(result.finalOutputPath);
     expect(record.artifact_refs.reconstruct_run_manifest)
       .toBe(result.reconstructRunManifestPath);
+    expect(record.artifact_refs.pre_handoff_run_manifest_validation)
+      .toContain("reconstruct-run-manifest.pre-handoff-validation.yaml");
+    expect(record.artifact_refs.post_publication_run_manifest_validation)
+      .toContain("reconstruct-run-manifest.post-publication-validation.yaml");
+    expect(record.artifact_refs.handoff_decision_validation)
+      .toContain("handoff-decision-validation.yaml");
+    expect(record.artifact_refs.final_output_provenance_validation)
+      .toContain("final-output-provenance-validation.yaml");
     expect(record.validation_summary).toMatchObject({
+      target_material_profile_status: "valid",
       source_observation_directive_status: "valid",
-      seed_candidate_status: "valid",
-      seed_confirmation_status: "partial",
+      candidate_disposition_status: "valid",
+      ontology_seed_status: "valid",
+      claim_realization_status: "valid",
+      seed_confirmation_status: "accepted",
+      pre_handoff_run_manifest_status: "valid",
+      post_publication_run_manifest_status: "valid",
+      handoff_decision_status: "valid",
     });
-    expect(record.validation_summary.failure_count).toBeGreaterThan(0);
-    expect(record.validation_summary.revision_proposal_count).toBeGreaterThan(0);
+    expect(runManifestValidation.validation_status).toBe("valid");
+    expect(runManifestValidation.reconstruct_run_manifest_ref)
+      .toBe(result.reconstructRunManifestPath);
+    expect(preHandoffRunManifestValidation.reconstruct_run_manifest_ref)
+      .toContain("reconstruct-run-manifest.pre-handoff.yaml");
+    expect(handoffDecisionValidation.validation_status).toBe("valid");
+    expect(handoffDecisionValidation.stop_decision_ref)
+      .toContain("stop-decision.yaml");
+    expect(handoffDecisionValidation.readiness_projection_source)
+      .toBe("runtime_gate_projection");
+    expect(handoffDecisionValidation.pre_handoff_run_manifest_validation_ref)
+      .toContain("reconstruct-run-manifest.pre-handoff-validation.yaml");
+    expect(handoffDecisionValidation.readiness_projection).toBe("ready");
+    expect(handoffDecisionValidation.gate_projection.some((gate) =>
+      gate.validation_artifact_ref === "final-output-provenance-validation.yaml"
+    )).toBe(false);
+    expect(handoffDecisionValidation.gate_projection.some((gate) =>
+      gate.validation_artifact_ref === "reconstruct-run-manifest.pre-handoff-validation.yaml"
+    )).toBe(true);
+    expect(handoffDecisionValidation.gate_projection.some((gate) =>
+      gate.validation_artifact_ref === "reconstruct-run-manifest.post-publication-validation.yaml"
+    )).toBe(false);
+    expect(result.finalOutputText).toContain("Handoff readiness: ready");
+    await expect(
+      fs.stat(path.join(sessionRoot, "reconstruct-record.pre-publication.yaml")),
+    ).resolves.toBeTruthy();
+    expect(record.artifact_refs.candidate_inventory)
+      .toContain("candidate-inventory.yaml");
+    expect(record.artifact_refs.target_material_profile_validation)
+      .toContain("target-material-profile-validation.yaml");
+    expect(record.artifact_refs.candidate_disposition_validation)
+      .toContain("candidate-disposition-validation.yaml");
+    expect(candidateDispositionValidation.source_observations_ref)
+      .toBe(path.resolve(sessionRoot, "source-observations.yaml"));
+    expect(record.artifact_refs.ontology_seed)
+      .toContain("ontology-seed.yaml");
+    expect(record.artifact_refs.ontology_seed_validation)
+      .toContain("ontology-seed-validation.yaml");
+    expect(record.validation_summary.failure_count).toBe(0);
+    expect(record.validation_summary.revision_proposal_count).toBe(0);
     expect(manifest.runtime_boundary).toMatchObject({
       semantic_generation: "not_performed",
       semantic_authority: "host_llm_or_mock_author",
@@ -609,19 +971,9 @@ describe("runReconstruct", () => {
       semantic_author_realization: "mock",
       confirmation_provider_realization: "mock",
     });
-    expect(manifest.happy_path_scope.deferred_artifacts).toEqual([
-      "domain_context_selection",
-      "domain_context_selection_validation",
-    ]);
+    expect(manifest.happy_path_scope.deferred_artifacts).toEqual([]);
     expect(manifest.steps.find((step) => step.step_id === "seed_candidate"))
-      .toMatchObject({
-        owner: "host_llm",
-        performed_by: {
-          authority: "host_llm",
-          realization: "mock",
-          actor_id: "mock-reconstruct-directive-author",
-        },
-      });
+      .toBeUndefined();
     expect(manifest.steps.find((step) => step.step_id === "seed_confirmation"))
       .toMatchObject({
         owner: "host_or_user",
@@ -631,9 +983,24 @@ describe("runReconstruct", () => {
           actor_id: "mock-mixed-confirmation-provider",
         },
       });
+    expect(manifest.steps.find((step) => step.step_id === "final_output"))
+      .toMatchObject({ status: "completed" });
+    expect(manifest.steps.find((step) =>
+      step.step_id === "final_output_provenance_validation"
+    )).toMatchObject({ status: "completed" });
+    expect(manifest.steps.find((step) => step.step_id === "record_assembly"))
+      .toMatchObject({ status: "completed" });
+    expect(preHandoffManifest.steps.find((step) => step.step_id === "final_output"))
+      .toMatchObject({ status: "skipped" });
+    expect(preHandoffManifest.steps.find((step) =>
+      step.step_id === "final_output_provenance_validation"
+    )).toMatchObject({ status: "skipped" });
+    expect(preHandoffManifest.steps.find((step) => step.step_id === "record_assembly"))
+      .toMatchObject({ status: "skipped" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
       "target_material_profile",
+      "target_material_profile_validation",
       "source_inventory",
       "initial_source_frontier",
       "source_observation",
@@ -643,10 +1010,11 @@ describe("runReconstruct", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
-      "domain_context_selection",
-      "domain_context_selection_validation",
-      "seed_candidate",
-      "seed_candidate_validation",
+      "candidate_inventory",
+      "candidate_disposition",
+      "candidate_disposition_validation",
+      "ontology_seed",
+      "ontology_seed_validation",
       "claim_realization",
       "claim_realization_validation",
       "seed_confirmation",
@@ -661,21 +1029,205 @@ describe("runReconstruct", () => {
       "revision_proposal_validation",
       "metrics",
       "stop_decision",
+      "pre_handoff_run_manifest_validation",
+      "handoff_decision_validation",
       "final_output",
+      "final_output_provenance_validation",
       "record_assembly",
+      "post_publication_run_manifest_validation",
     ]);
+  });
+
+  it("authors confirmation before competency questions and uses only CQ-eligible claims", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "eligibility-run");
+    const baseConfirmationProvider = createAutoAcceptReconstructConfirmationProvider();
+    const confirmationProvider: ReconstructConfirmationProvider = {
+      providerId: "fixture-reject-first-claim-provider",
+      owner: "mock" as const,
+      async confirmOntologySeed(input) {
+        const artifact = await baseConfirmationProvider.confirmOntologySeed(input);
+        const [rejectedClaimId, ...acceptedClaimIds] = artifact.confirmed_claim_ids;
+        if (!rejectedClaimId) return artifact;
+        return {
+          ...artifact,
+          confirmation_status: "partial" as const,
+          confirmed_claim_ids: acceptedClaimIds,
+          rejected_claim_ids: [
+            ...artifact.rejected_claim_ids,
+            rejectedClaimId,
+          ],
+          notes: [
+            ...artifact.notes,
+            "Fixture rejects one claim before competency-question authoring.",
+          ],
+          confirmation_provider: {
+            owner: "mock" as const,
+            provider_id: "fixture-reject-first-claim-provider",
+          },
+        };
+      },
+    };
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a bounded reconstruct Seed from the code fixture.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "mock",
+      confirmationProviderRealization: "mock",
+      directiveAuthor: createMockReconstructDirectiveAuthor(),
+      confirmationProvider,
+    })).rejects.toThrow("handoff-decision validation failed");
+
+    const seedConfirmationValidation = await readYaml<{
+      cq_eligible_claim_ids: string[];
+      rejected_claim_ids: string[];
+    }>(path.join(sessionRoot, "seed-confirmation-validation.yaml"));
+    const competencyQuestions = await readYaml<{
+      questions: Array<{ linked_claim_ids: string[] }>;
+    }>(path.join(sessionRoot, "competency-questions.yaml"));
+
+    const competencyQuestionsValidation =
+      await readYaml<ReconstructCompetencyQuestionsValidationArtifact>(
+        path.join(sessionRoot, "competency-questions-validation.yaml"),
+      );
+
+    const rejectedClaimId = seedConfirmationValidation.rejected_claim_ids[0];
+    expect(seedConfirmationValidation.cq_eligible_claim_ids)
+      .not.toContain(rejectedClaimId);
+    expect(competencyQuestions.questions.flatMap((question) => question.linked_claim_ids))
+      .not.toContain(rejectedClaimId);
+    expect(competencyQuestionsValidation.validation_status).toBe("valid");
+    expect(competencyQuestionsValidation.seed_confirmation_validation_ref)
+      .toContain("seed-confirmation-validation.yaml");
+    expect(competencyQuestionsValidation.violations.some((violation) =>
+      violation.message.includes("non-eligible claim")
+    )).toBe(false);
+    await expect(fs.access(path.join(sessionRoot, "failure-classification.yaml")))
+      .resolves.toBeUndefined();
+    await expect(fs.access(path.join(sessionRoot, "handoff-decision-validation.yaml")))
+      .resolves.toBeUndefined();
+  });
+
+  it("threads required domain competencies through governing snapshot, questions, and handoff validation", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "domain-run");
+    const domainRoot = path.join(projectRoot, ".onto", "domains", "fixture");
+    await fs.mkdir(domainRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(domainRoot, "competency_qs.md"),
+      [
+        "# Fixture Domain Competency Questions",
+        "",
+        "## 1. Core Fixture Checks",
+        "",
+        "- **CQ-F-01** [P1] Can the fixture service purpose be enumerated?",
+        "  - Inference path: fixture profile -> purpose is required",
+        "  - Verification criteria: PASS if purpose can be listed.",
+        "",
+        "- **CQ-F-02** [P2] Can the fixture service optional extension be evaluated?",
+        "  - Inference path: fixture profile -> production extension is optional",
+        "  - Verification criteria: PASS if optional extension evidence exists.",
+        "",
+        "- **CQ-F-03** [P3] Can mature fixture visualizations be generated?",
+        "  - Inference path: fixture profile -> visualization is diagnostic",
+        "  - Verification criteria: PASS if visualization evidence exists.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a bounded reconstruct Seed from the code target for fixture domain.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      domain: "fixture",
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "mock",
+      confirmationProviderRealization: "mock",
+      directiveAuthor: createMockReconstructDirectiveAuthor(),
+      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+    });
+
+    const competencyQuestions =
+      await readYaml<ReconstructCompetencyQuestionsArtifact>(
+        path.join(sessionRoot, "competency-questions.yaml"),
+      );
+    const competencyQuestionsValidation =
+      await readYaml<ReconstructCompetencyQuestionsValidationArtifact>(
+        path.join(sessionRoot, "competency-questions-validation.yaml"),
+      );
+    const handoffDecisionValidation =
+      await readYaml<ReconstructHandoffDecisionValidationArtifact>(
+        path.join(sessionRoot, "handoff-decision-validation.yaml"),
+      );
+    const snapshot = result.reconstructRunManifest.governing_snapshot;
+    const domainQuestion = competencyQuestions.questions.find((question) =>
+      question.domain_competency_trace_refs.includes("domain:fixture#CQ-F-01")
+    );
+
+    expect(result.status).toBe("completed");
+    expect(snapshot.requested_domain_ids).toEqual(["fixture"]);
+    expect(snapshot.required_admitted_competency_ids).toEqual(["domain:fixture#CQ-F-01"]);
+    expect(snapshot.admitted_competency_priorities).toMatchObject({
+      "domain:fixture#CQ-F-01": "P1",
+      "domain:fixture#CQ-F-02": "P2",
+      "domain:fixture#CQ-F-03": "P3",
+    });
+    expect(competencyQuestions.questions.some((question) =>
+      question.domain_competency_trace_refs.includes("domain:fixture#CQ-F-02") ||
+      question.domain_competency_trace_refs.includes("domain:fixture#CQ-F-03")
+    )).toBe(false);
+    expect(domainQuestion).toBeDefined();
+    expect(domainQuestion?.domain_competency_semantic_assessments).toEqual([
+      expect.objectContaining({
+        competency_id: "domain:fixture#CQ-F-01",
+        source_anchor: "1. Core Fixture Checks#CQ-F-01",
+        applicability_verdict: "applicable",
+        semantic_alignment: "preserved",
+      }),
+    ]);
+    expect(competencyQuestionsValidation.validation_status).toBe("valid");
+    expect(competencyQuestionsValidation.required_admitted_competency_ids)
+      .toEqual(["domain:fixture#CQ-F-01"]);
+    expect(result.reconstructRunManifest.happy_path_scope.deferred_artifacts)
+      .toEqual([]);
+    expect(result.reconstructRunManifest.happy_path_scope.deferred_reason)
+      .toContain("governing_snapshot");
+    expect(handoffDecisionValidation.validation_status).toBe("valid");
   });
 
   it("runs the direct-call integral path without product mock authorship", async () => {
     const projectRoot = await tempProjectRoot();
+    const longSourcePath = path.join(projectRoot, "src", "long-feature.ts");
+    await fs.writeFile(
+      longSourcePath,
+      `export const longFeature = ${JSON.stringify("x".repeat(5000))};\n`,
+      "utf8",
+    );
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "direct-run");
-    const seedAuthorSystemPrompts: string[] = [];
+    const ontologySeedSystemPrompts: string[] = [];
+    const ontologySeedPayloads: Array<{
+      source_observations?: Array<{
+        observation_id: string;
+        structural_data?: {
+          content_excerpt?: string;
+          prompt_content_excerpt_truncated?: boolean;
+        };
+      }>;
+    }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
     > = [];
     const llmCall = (systemPrompt: string, userPrompt: string) => {
-      if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
-        seedAuthorSystemPrompts.push(systemPrompt);
+      if (systemPrompt.includes("Author ontology-seed.yaml")) {
+        ontologySeedSystemPrompts.push(systemPrompt);
+        ontologySeedPayloads.push(JSON.parse(userPrompt));
       }
       if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
         const input = JSON.parse(userPrompt) as {
@@ -688,7 +1240,7 @@ describe("runReconstruct", () => {
 
     const result = await runReconstruct({
       projectRoot,
-      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      targetRefs: [longSourcePath, path.join(projectRoot, "src", "feature.ts")],
       intent: "Create a live reconstruct Seed from the code target.",
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
@@ -723,86 +1275,319 @@ describe("runReconstruct", () => {
       .toContain("initial-source-frontier.yaml");
     expect(result.reconstructRunManifest.artifact_refs.source_frontier_validation)
       .toContain("source-frontier-validation.yaml");
+    expect(result.reconstructRunManifest.artifact_refs.candidate_inventory)
+      .toContain("candidate-inventory.yaml");
+    expect(result.reconstructRunManifest.artifact_refs.ontology_seed)
+      .toContain("ontology-seed.yaml");
+    expect(result.reconstructRecord.validation_summary).toMatchObject({
+      target_material_profile_status: "valid",
+      candidate_disposition_status: "valid",
+      ontology_seed_status: "valid",
+    });
     expect(result.finalOutputText).toContain("full_integral_exploration");
     expect(result.finalOutputText).toContain("Runtime Artifact Truth Footer");
     expect(result.finalOutputText).toContain(result.reconstructRecordPath);
     expect(result.finalOutputText).not.toContain("mock");
 
-    const seedCandidate = await readYaml<ReconstructSeedCandidateArtifact>(
-      result.artifactRefs.seed_candidate!,
-    );
-    expect(seedCandidate.seed_schema_version).toBe("transitional");
-    expect(seedCandidate.top_level_concepts?.[0]?.concept_id)
-      .toBe("concept-fixture-service");
-    expect(seedCandidate.top_level_relations?.[0]).toBeUndefined();
-    expect(seedCandidate.frontier_pressure_log?.[0]).toMatchObject({
-      pressure_id: "pressure-fixture-evidence",
-      status: "non_blocking",
-    });
-    expect(seedCandidate.lifecycle?.pressure_events[0]).toMatchObject({
-      pressure_id: "pressure-fixture-evidence",
-      new_status: "non_blocking",
-    });
+    await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
+      .rejects.toMatchObject({ code: "ENOENT" });
     expect(confirmationClaimSummaries[0]).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           claim_id: "concept-fixture-service",
-          claim_kind: "top_level_concept",
+          claim_kind: "ontology_seed_claim",
         }),
         expect.objectContaining({
-          claim_id: "question-1",
-          claim_kind: "supported_question",
+          claim_id: "object-fixture-service",
+          claim_kind: "ontology_seed_claim",
         }),
         expect.objectContaining({
-          claim_id: "action-explain-fixture-service",
-          claim_kind: "supported_action",
+          claim_id: "action-explain-fixture",
+          claim_kind: "ontology_seed_claim",
         }),
       ]),
     );
-    expect(seedAuthorSystemPrompts[0]).toContain(
-      '"material_kinds":["<target_material_kind from source_refs>"]',
-    );
-    expect(seedAuthorSystemPrompts[0]).not.toContain(
-      '"material_kinds":["code"]',
-    );
-    expect(seedAuthorSystemPrompts[0]).toContain(
-      "material_coverage_events.material_kinds allowed values: code|spreadsheet|document|database|mixed|unknown",
-    );
-    expect(seedAuthorSystemPrompts[0]).not.toContain(
-      '"material_kinds":["code","spreadsheet","document","database","mixed","unknown"]',
-    );
-    expect(seedAuthorSystemPrompts[0]).not.toContain("code | spreadsheet");
+    expect(ontologySeedSystemPrompts[0]).toContain("ActionableOntologySeed");
+    expect(ontologySeedPayloads[0]?.source_observations).toHaveLength(2);
+    const longObservation = ontologySeedPayloads[0]?.source_observations
+      ?.find((observation) => observation.structural_data?.prompt_content_excerpt_truncated);
+    expect(
+      longObservation?.structural_data?.content_excerpt?.length,
+    ).toBeLessThanOrEqual(1200);
+    expect(
+      longObservation?.structural_data?.prompt_content_excerpt_truncated,
+    ).toBe(true);
+    expect(ontologySeedSystemPrompts[0]).not.toContain("top_level_concepts");
     expect(result.metrics.answerability_summary).toMatchObject({
-      supported_question_count: 1,
+      supported_question_count: 8,
       supported_action_count: 1,
     });
     expect(result.finalOutputText).toContain("Seed Answerability");
-    expect(result.finalOutputText).toContain("supported question question-1");
+    expect(result.finalOutputText).toContain("Ontology seed projected claims");
   });
 
-  it("fails loud before normalization when direct-call Seed output hides retired projections", async () => {
+  it("batches direct-call required domain competency dispositions", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "large-domain-run");
+    const domainRoot = path.join(projectRoot, ".onto", "domains", "fixture-large");
+    await fs.mkdir(domainRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(domainRoot, "competency_qs.md"),
+      [
+        "# Fixture Large Domain Competency Questions",
+        "",
+        "## 1. Required Checks",
+        "",
+        ...Array.from({ length: 17 }, (_, index) => {
+          const id = `CQ-L-${String(index + 1).padStart(2, "0")}`;
+          return [
+            `- **${id}** [P1] Can fixture requirement ${index + 1} be answered?`,
+            `  - Inference path: fixture large profile -> requirement ${index + 1}`,
+            `  - Verification criteria: PASS if requirement ${index + 1} is dispositioned.`,
+            "",
+          ].join("\n");
+        }),
+      ].join("\n"),
+      "utf8",
+    );
+    const competencyQuestionPayloads: Array<{
+      eligible_claims?: Array<{ claim_id: string }>;
+      required_domain_competency_question_rows?: Array<{
+        competency_id: string;
+      }>;
+    }> = [];
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Write competency questions")) {
+        competencyQuestionPayloads.push(JSON.parse(userPrompt));
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a live reconstruct Seed from the code target with large domain coverage.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      domain: "fixture-large",
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+    const competencyQuestions =
+      await readYaml<ReconstructCompetencyQuestionsArtifact>(
+        path.join(sessionRoot, "competency-questions.yaml"),
+      );
+    const competencyQuestionsValidation =
+      await readYaml<ReconstructCompetencyQuestionsValidationArtifact>(
+        path.join(sessionRoot, "competency-questions-validation.yaml"),
+      );
+    const domainBatches = competencyQuestionPayloads.filter((payload) =>
+      (payload.required_domain_competency_question_rows ?? []).length > 0
+    );
+
+    expect(result.status).toBe("completed");
+    expect(competencyQuestionPayloads[0]?.required_domain_competency_question_rows)
+      .toEqual([]);
+    expect(competencyQuestionPayloads[0]?.eligible_claims?.length).toBeGreaterThan(0);
+    expect(domainBatches.map((payload) =>
+      payload.required_domain_competency_question_rows?.length
+    )).toEqual([8, 8, 1]);
+    expect(competencyQuestionsValidation.validation_status).toBe("valid");
+    expect(competencyQuestionsValidation.required_admitted_competency_ids)
+      .toHaveLength(17);
+    expect(competencyQuestions.questions.flatMap((question) =>
+      question.domain_competency_trace_refs
+    ).sort()).toEqual(
+      Array.from({ length: 17 }, (_, index) =>
+        `domain:fixture-large#CQ-L-${String(index + 1).padStart(2, "0")}`
+      ),
+    );
+  });
+
+  it("fails loud instead of overwriting authored semantic artifacts in an existing session root", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
       projectRoot,
       ".onto",
       "reconstruct",
-      "bad-retired-projection-run",
+      "retry-run",
     );
-    const llmCall = async (systemPrompt: string, userPrompt: string) => {
-      const result = await fakeLiveLlm(systemPrompt, userPrompt);
-      if (systemPrompt.includes("Author a concept-centered ontology Seed candidate")) {
-        const raw = JSON.parse(result.text) as any;
-        raw.top_level_concepts[0].core_relations = [];
-        delete raw.migration_records;
-        return {
-          ...result,
-          text: JSON.stringify(raw),
-        };
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptPrompts: string[] = [];
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      firstAttemptPrompts.push(systemPrompt);
+      if (systemPrompt.includes("Author ontology-seed.yaml")) {
+        throw new Error("ontology seed author timed out");
       }
-      return result;
+      return fakeLiveLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with retry.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/ontology seed author timed out/);
+
+    expect(firstAttemptPrompts.some((prompt) =>
+      prompt.includes("Convert exploration synthesis into a concrete source frontier")
+    )).toBe(true);
+    await fs.access(path.join(
+      sessionRoot,
+      "rounds",
+      "round-1",
+      "source-frontier.yaml",
+    ));
+    await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
+      .rejects.toMatchObject({ code: "ENOENT" });
+
+    const retryPrompts: string[] = [];
+    const retryLlmCall = (systemPrompt: string, userPrompt: string) => {
+      retryPrompts.push(systemPrompt);
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with retry.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: retryLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: retryLlmCall,
+      }),
+    })).rejects.toThrow(/already exists.*explicit resume or supersession/);
+
+    expect(retryPrompts).toHaveLength(0);
+
+    const resumeResult = await runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with retry.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: retryLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: retryLlmCall,
+      }),
+    });
+    expect(resumeResult.status).toBe("completed");
+    expect(retryPrompts.some((prompt) =>
+      prompt.includes("Convert exploration synthesis into a concrete source frontier")
+    )).toBe(false);
+    expect(retryPrompts.some((prompt) =>
+      prompt.includes("Author ontology-seed.yaml")
+    )).toBe(true);
+  });
+
+  it("rejects explicit resume when the current source snapshot changed", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "stale-resume-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author ontology-seed.yaml")) {
+        throw new Error("ontology seed author timed out");
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with stale resume protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/ontology seed author timed out/);
+
+    await fs.writeFile(
+      targetRef,
+      "export function featureName(): string {\n  return 'changed-source';\n}\n",
+      "utf8",
+    );
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with stale resume protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return fakeLiveLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return fakeLiveLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
+  it("uses ontology-seed.yaml as the only active direct-call seed artifact", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "ontology-seed-only-run",
+    );
+    const prompts: string[] = [];
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      prompts.push(systemPrompt);
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
       projectRoot,
       targetRefs: [path.join(projectRoot, "src", "feature.ts")],
       intent: "Create a live reconstruct Seed from the code target.",
@@ -817,10 +1602,23 @@ describe("runReconstruct", () => {
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall,
       }),
-    })).rejects.toThrow(/retained legacy or retired projection fields/);
+    });
+
+    const ontologySeed = await readYaml<ReconstructActionableOntologySeedArtifact>(
+      result.artifactRefs.ontology_seed!,
+    );
+    expect(result.artifactRefs).not.toHaveProperty("seed_candidate");
+    await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
+      .rejects.toMatchObject({ code: "ENOENT" });
+    expect(prompts.some((prompt) =>
+      prompt.includes("Author a concept-centered ontology Seed candidate")
+    )).toBe(false);
+    expect(
+      (ontologySeed.data_binding_layer as any).source_bindings[0].source_ref,
+    ).toBe(path.join(projectRoot, "src", "feature.ts"));
   });
 
-  it("keeps the same runner path usable for non-code material", async () => {
+  it("fails loud for non-code material whose source profile adapter is only planned", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
       projectRoot,
@@ -829,7 +1627,7 @@ describe("runReconstruct", () => {
       "spreadsheet-run",
     );
 
-    const result = await runReconstruct({
+    await expect(runReconstruct({
       projectRoot,
       targetRefs: [path.join(projectRoot, "schedule.csv")],
       intent: "Create a bounded reconstruct Seed from the schedule target.",
@@ -840,13 +1638,7 @@ describe("runReconstruct", () => {
       confirmationProviderRealization: "mock",
       directiveAuthor: createMockReconstructDirectiveAuthor(),
       confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
-    });
-
-    expect(result.reconstructRecord.record_stage).toBe("completed");
-    expect(result.reconstructRecord.target_material_kind).toBe("spreadsheet");
-    expect(result.reconstructRecord.validation_summary.seed_candidate_status)
-      .toBe("valid");
-    expect(result.finalOutputText).toContain("Target material kind: spreadsheet");
+    })).rejects.toThrow(/runtime_implementation_status=planned/);
   });
 
   it("selects every observation and leaves mixed material expansion explicit", async () => {
@@ -858,7 +1650,7 @@ describe("runReconstruct", () => {
       "mixed-run",
     );
 
-    const result = await runReconstruct({
+    await expect(runReconstruct({
       projectRoot,
       targetRefs: [
         path.join(projectRoot, "src", "feature.ts"),
@@ -872,32 +1664,49 @@ describe("runReconstruct", () => {
       confirmationProviderRealization: "mock",
       directiveAuthor: createMockReconstructDirectiveAuthor(),
       confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
-    });
+    })).rejects.toThrow("handoff-decision validation failed");
 
-    expect(result.reconstructRecord.target_material_kind).toBe("mixed");
-    expect(result.metrics.source_observation_count).toBe(2);
-    expect(result.metrics.selected_observation_count).toBe(2);
-    expect(result.metrics.semantic_claim_count).toBeGreaterThanOrEqual(5);
-    expect(result.metrics.confirmed_claim_count).toBeGreaterThan(0);
-    expect(
-      result.metrics.partial_claim_count +
-      result.metrics.deferred_claim_count +
-      result.metrics.rejected_claim_count,
-    ).toBeGreaterThan(0);
-    expect(result.metrics.competency_question_assessment_count)
-      .toBe(result.metrics.competency_question_count);
-    expect(result.metrics.failure_kind_counts.insufficient_evidence)
-      .toBeGreaterThan(0);
-    expect(result.metrics.revision_proposal_action_counts.extend)
-      .toBeGreaterThan(0);
-    expect(result.metrics.evidence_ref_count).toBeGreaterThanOrEqual(2);
-    expect(result.metrics.unresolved_question_count).toBeGreaterThan(0);
-    expect(result.stopDecision.decision).toBe("ask_user");
-    expect(result.finalOutputText).toContain("Mixed target material requires");
-    expect(result.finalOutputText).toContain("failure-1");
-    expect(result.finalOutputText).toContain("proposal-1");
-    expect(result.finalOutputText).toContain(result.artifactRefs.seed_candidate!);
-    expect(result.finalOutputText)
-      .toContain(result.artifactRefs.revision_proposal!);
+    const metrics = await readYaml<ReconstructMetricsArtifact>(
+      path.join(sessionRoot, "reconstruct-metrics.yaml"),
+    );
+    const stopDecision = await readYaml<ReconstructStopDecisionArtifact>(
+      path.join(sessionRoot, "stop-decision.yaml"),
+    );
+    const sourceObservations = await readYaml<ReconstructSourceObservationsArtifact>(
+      path.join(sessionRoot, "source-observations.yaml"),
+    );
+    const preHandoffManifestValidation =
+      await readYaml<ReconstructRunManifestValidationArtifact>(
+        path.join(sessionRoot, "reconstruct-run-manifest.pre-handoff-validation.yaml"),
+      );
+    const handoffDecisionValidation =
+      await readYaml<ReconstructHandoffDecisionValidationArtifact>(
+        path.join(sessionRoot, "handoff-decision-validation.yaml"),
+      );
+
+    expect(metrics.source_observation_count).toBe(1);
+    expect(metrics.selected_observation_count).toBe(1);
+    expect(metrics.unresolved_question_count).toBeGreaterThan(0);
+    expect(stopDecision.decision).toBe("ask_user");
+    expect(preHandoffManifestValidation.validation_status).toBe("valid");
+    expect(handoffDecisionValidation.validation_status).toBe("invalid");
+    expect(handoffDecisionValidation.readiness_projection).toBe("not_ready");
+    expect(handoffDecisionValidation.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "handoff_decision_inconsistent",
+          subject_id: "ask_user",
+        }),
+      ]),
+    );
+    expect(sourceObservations.observations).toHaveLength(1);
+    expect(sourceObservations.skipped_refs).toEqual([
+      expect.objectContaining({
+        target_material_kind: "spreadsheet",
+        reason: expect.stringContaining("runtime_implementation_status=planned"),
+      }),
+    ]);
+    await expect(fs.access(path.join(sessionRoot, "final-output.md")))
+      .rejects.toMatchObject({ code: "ENOENT" });
   });
 });

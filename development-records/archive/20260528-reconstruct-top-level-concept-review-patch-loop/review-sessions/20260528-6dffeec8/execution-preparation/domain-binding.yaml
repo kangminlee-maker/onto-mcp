@@ -1,0 +1,117 @@
+schema_version: "1"
+session_id: 20260528-6dffeec8
+created_at: 2026-05-28T14:45:26+09:00
+selected_domain: software-engineering
+selection_mode: explicit_token
+domain_sentinel: false
+domain_directory: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering
+attempted_directories:
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering
+validation_status: valid
+required_docs:
+  - doc_id: competency_qs
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/competency_qs.md
+    required: true
+    status: present
+    sha256: ad69bd914792e361584d5c39a3bf179567ec63ce6519da77da025f4584194565
+    allowed_consumers:
+      - lens:pragmatics
+      - deliberation:pragmatics
+      - review-record
+  - doc_id: concepts
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/concepts.md
+    required: true
+    status: present
+    sha256: 9879135c1a5adf1045c7b8dd61738cd12caa3e8fa0305f1b4095e99649f9dc9c
+    allowed_consumers:
+      - lens:semantics
+      - deliberation:semantics
+      - review-record
+  - doc_id: conciseness_rules
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/conciseness_rules.md
+    required: true
+    status: present
+    sha256: a33057efbdd985231ca6cab690b5ae0b47ccca0f539e56df6e380159bc80c3e8
+    allowed_consumers:
+      - lens:conciseness
+      - deliberation:conciseness
+      - review-record
+  - doc_id: dependency_rules
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/dependency_rules.md
+    required: true
+    status: present
+    sha256: 0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+    allowed_consumers:
+      - lens:dependency
+      - deliberation:dependency
+      - review-record
+  - doc_id: domain_scope
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/domain_scope.md
+    required: true
+    status: present
+    sha256: 6a3ce92472c053d815df3b0f2dfcad2fb01948d98dae4f2f3b316d03cf5467b6
+    allowed_consumers:
+      - lens:coverage
+      - deliberation:coverage
+      - review-record
+  - doc_id: extension_cases
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/extension_cases.md
+    required: true
+    status: present
+    sha256: 2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+    allowed_consumers:
+      - lens:evolution
+      - deliberation:evolution
+      - review-record
+  - doc_id: logic_rules
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/logic_rules.md
+    required: true
+    status: present
+    sha256: 0b59734c92583c00a2c9bfd8a80f647b92e25472d09238046c365148cab25886
+    allowed_consumers:
+      - lens:logic
+      - deliberation:logic
+      - review-record
+  - doc_id: structure_spec
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/structure_spec.md
+    required: true
+    status: present
+    sha256: defce85754cf60b644ab765ef6d11d231fad2544e5ce3e7a946bcaf53d5a427f
+    allowed_consumers:
+      - lens:structure
+      - deliberation:structure
+      - review-record
+optional_docs:
+  - doc_id: problem_framing_profile
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/problem_framing_profile.md
+    required: false
+    status: present
+    sha256: 8f343e1061239ea7e47f83b2867064181081a9e7abf172b47895d3f9ece83ef0
+    allowed_consumers:
+      - issue-artifact:problem-framing
+      - review-record
+  - doc_id: prompt_interface
+    path: /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/prompt_interface.md
+    required: false
+    status: present
+    sha256: 8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+    allowed_consumers:
+      - lens:logic
+      - lens:structure
+      - lens:dependency
+      - lens:semantics
+      - lens:pragmatics
+      - lens:evolution
+      - lens:coverage
+      - lens:conciseness
+      - lens:axiology
+      - deliberation:logic
+      - deliberation:structure
+      - deliberation:dependency
+      - deliberation:semantics
+      - deliberation:pragmatics
+      - deliberation:evolution
+      - deliberation:coverage
+      - deliberation:conciseness
+      - deliberation:axiology
+      - review-record

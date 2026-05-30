@@ -1,0 +1,222 @@
+schema_version: "1"
+session_id: 20260528-4080a34b
+created_at: 2026-05-28T15:05:11+09:00
+warnings:
+  - warningId: environment-warning-35d9f6371998
+    source: review_runner_warning
+    message: "semantics: [plan:executor] kind=codex unit_id=semantics model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-025218f114dc
+    source: review_runner_warning
+    message: "coverage: [plan:executor] kind=codex unit_id=coverage model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-1f8b9a060a2f
+    source: review_runner_warning
+    message: "dependency: [plan:executor] kind=codex unit_id=dependency
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-5d3f3f3ef05b
+    source: review_runner_warning
+    message: "logic: [plan:executor] kind=codex unit_id=logic model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-897cc2b11f3e
+    source: review_runner_warning
+    message: "structure: [plan:executor] kind=codex unit_id=structure model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-6700f152c68a
+    source: review_runner_warning
+    message: "evolution: [plan:executor] kind=codex unit_id=evolution model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-93867646f5fe
+    source: review_runner_warning
+    message: "conciseness: [plan:executor] kind=codex unit_id=conciseness
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-872219ef8116
+    source: review_runner_warning
+    message: "axiology: [plan:executor] kind=codex unit_id=axiology model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-34c740cd69fe
+    source: review_runner_warning
+    message: "pragmatics: [plan:executor] kind=codex unit_id=pragmatics
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-e3f50e7c0af1
+    source: review_runner_warning
+    message: "finding-ledger: [plan:executor] kind=codex unit_id=finding-ledger
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-cc14c6a3cfa6
+    source: review_runner_warning
+    message: "finding-relation-graph: [plan:executor] kind=codex
+      unit_id=finding-relation-graph model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-5d8bea944f87
+    source: review_runner_warning
+    message: "issue-ledger: [plan:executor] kind=codex unit_id=issue-ledger
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-ae629a241fc9
+    source: review_runner_warning
+    message: "issue-stance-matrix: [plan:executor] kind=codex
+      unit_id=issue-stance-matrix model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-7cadacf3f146
+    source: review_runner_warning
+    message: "deliberation-plan: [plan:executor] kind=codex
+      unit_id=deliberation-plan model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-31af3ce84a5b
+    source: review_runner_warning
+    message: "deliberation-axiology: [plan:executor] kind=codex
+      unit_id=deliberation-axiology model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-ce3a2cefa6ed
+    source: review_runner_warning
+    message: "deliberation-conciseness: [plan:executor] kind=codex
+      unit_id=deliberation-conciseness model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-6fa047de1339
+    source: review_runner_warning
+    message: "deliberation-evolution: [plan:executor] kind=codex
+      unit_id=deliberation-evolution model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-beabb64dbf8c
+    source: review_runner_warning
+    message: "deliberation-coverage: [plan:executor] kind=codex
+      unit_id=deliberation-coverage model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-3acce860f5e1
+    source: review_runner_warning
+    message: "deliberation-dependency: [plan:executor] kind=codex
+      unit_id=deliberation-dependency model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-cca57e8a9d0c
+    source: review_runner_warning
+    message: "deliberation-semantics: [plan:executor] kind=codex
+      unit_id=deliberation-semantics model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-8dc03ea725d2
+    source: review_runner_warning
+    message: "deliberation-pragmatics: [plan:executor] kind=codex
+      unit_id=deliberation-pragmatics model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-5272c32f134b
+    source: review_runner_warning
+    message: "deliberation-structure: [plan:executor] kind=codex
+      unit_id=deliberation-structure model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-18d2c1cc1b99
+    source: review_runner_warning
+    message: "deliberation-logic: [plan:executor] kind=codex
+      unit_id=deliberation-logic model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-78fdc821f224
+    source: review_runner_warning
+    message: "controlled-deliberation: [plan:executor] kind=codex
+      unit_id=controlled-deliberation model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-094b49e2ff06
+    source: review_runner_warning
+    message: "problem-framing: [plan:executor] kind=codex unit_id=problem-framing
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00
+  - warningId: environment-warning-7206ad7dfa4b
+    source: review_runner_warning
+    message: "synthesize: [plan:executor] kind=codex unit_id=synthesize
+      model=gpt-5.5 sandbox=read-only effort=xhigh"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T15:05:11+09:00

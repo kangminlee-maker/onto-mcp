@@ -1,0 +1,70 @@
+schema_version: 1
+session_id: "20260528-3d59d774"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:306,324,345,377,507"
+    claim: "Demoted concept lifecycle is structurally disconnected from the lower-level detail authority because demotion mappings and events do not deterministically link the prior concept ID to the resulting detail_id."
+    proposed_action: "Add an explicit demotion bridge such as current_detail_ids or target_detail_ids on demoted mappings/events, or prior_concept_ids on detail_placement_events, and validate that demoted lifecycle refs point to known lower_level_detail_placements detail IDs."
+    affected_purpose: "Fresh verification of whether material documentation/design-contract issues remain in the reconstruct top-level concept discovery design patch, especially lifecycle continuity, retired-seat mappings, and artifact truth."
+    failure_condition: "When a concept is demoted, runtime validation can verify that some concept was demoted and some detail was placed, but cannot verify that both records represent the same lifecycle transition."
+    impact: "Auditability and reproducibility are meaningfully weakened because the current representation of a demoted concept can become orphaned from the canonical lower-level detail placement authority."
+    evidence_refs: ["round1/structure.md#finding-1"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#finding-2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:894,957"
+    claim: "External migration artifact refs are allowed by the contract text but are not structurally seated in the shown migration_records shape."
+    proposed_action: "Add a nullable field such as migration_artifact_ref or external_record_ref to migration_records and validate that it is present when compatibility is claimed from an external migration artifact."
+    affected_purpose: "Documentation/design-contract verification for retired-seat legacy migration mappings and artifact truth."
+    failure_condition: "When a migration record is too large for the Seed and must point to an external migration artifact, the Seed-level schema projection does not show where the ref is carried."
+    impact: "This is a drift and maintainability risk, but the reviewed result is not unsafe for the declared purpose because the issue is a missing relationship seat for an allowed external artifact path rather than a core happy-path break."
+    evidence_refs: ["round1/structure.md#finding-2"]
+    severity: "low"
+    domain_threshold_used: null
+  - finding_id: "finding-003"
+    lens_id: "pragmatics"
+    source_ref: "round1/pragmatics.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/review/20260528-3d59d774/execution-preparation/materialized-input.md answerability_scope and convergence language"
+    claim: "Answerability scope can be present and structurally valid while still failing to prove that all intended Seed-stage handoff questions were considered."
+    proposed_action: "Define answerability_scope as the complete considered question/action inventory for the declared Seed handoff purpose, define the source of required handoff questions, validate that every declared handoff question appears exactly once across supported, deferred, or unsupported lists, and require handoff_readiness_statement to cite relevant question IDs."
+    affected_purpose: "Practical trust in Seed handoff readiness and final review decision quality for the reconstruct top-level concept discovery design patch."
+    failure_condition: "A Seed lists valid supported, deferred, and unsupported questions but omits an important principal-facing handoff question because the contract does not define the complete required question inventory."
+    impact: "Completeness and decision quality are meaningfully weakened because users can see listed question statuses but cannot know whether all required Seed-stage questions were considered."
+    evidence_refs: ["round1/pragmatics.md#finding-1"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-004"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#finding-c-1"
+    target: "README.md and IMPLEMENTATION_MAP.html"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:78; README.md:284-292; IMPLEMENTATION_MAP.html:670"
+    claim: "Active summary docs duplicate the contract's detailed reconstruct Seed authority catalog."
+    proposed_action: "Keep README.md and IMPLEMENTATION_MAP.html at outcome and authority-reference level, summarize only the concept-centered Seed authority surface, answerability, lifecycle/provenance, migration compatibility, and deterministic validation boundaries, and point readers to the contract for the field-level catalog."
+    affected_purpose: "Maintainability, scope control, precedence, and artifact truth for active documentation aligned with the reconstruct contract."
+    failure_condition: "When the contract authority surface changes, README.md and IMPLEMENTATION_MAP.html contain near-definitions of the same detailed field catalog and can drift from the canonical contract."
+    impact: "Trust and maintainability are meaningfully weakened because multiple active documentation surfaces appear to define the same authority catalog without adding a distinct concept."
+    evidence_refs: ["round1/conciseness.md#finding-c-1"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-005"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#finding-c-2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:427-452"
+    claim: "relation_participation.status: connected duplicates endpoint membership authority from top_level_relations."
+    proposed_action: "Make relation participation an exception or projection seat rather than a required status for every concept, derive connected participation from endpoint membership, or mark connected explicitly as a derived_summary and not Seed-authored authority."
+    affected_purpose: "Concept economy, relation authority precedence, and maintainability of the concept-centered Seed design contract."
+    failure_condition: "For connected concepts, the Seed repeats a status that is fully derivable from canonical top_level_relations endpoint membership while also declaring that top_level_relations is the relation graph authority."
+    impact: "Trust and maintainability are meaningfully weakened because the design introduces a subordinate redeclaration of canonical relation authority, increasing drift and validation complexity."
+    evidence_refs: ["round1/conciseness.md#finding-c-2"]
+    severity: "medium"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

@@ -49,7 +49,9 @@ describe("createOntoReconstructCoreApi", () => {
       "code",
       "database",
       "document",
+      "mixed",
       "spreadsheet",
+      "unknown",
     ]);
   });
 
@@ -72,6 +74,9 @@ describe("createOntoReconstructCoreApi", () => {
       .toBe("not_performed");
     expect(prepared.artifactRefs.target_material_profile).toContain(
       "target-material-profile.yaml",
+    );
+    expect(prepared.artifactRefs.target_material_profile_validation).toContain(
+      "target-material-profile-validation.yaml",
     );
     expect(prepared.artifactRefs.reconstruct_record).toContain(
       "reconstruct-record.yaml",
@@ -103,7 +108,7 @@ describe("createOntoReconstructCoreApi", () => {
     });
     const prepared = await api.prepareReconstruct({
       projectRoot,
-      targetRefs: ["schedule.csv"],
+      targetRefs: ["src/feature.ts"],
       sessionRoot: ".onto/reconstruct/test-session",
     });
     const sourceObservations =
@@ -121,7 +126,6 @@ describe("createOntoReconstructCoreApi", () => {
       prepared.sessionRoot,
       "source-observation-directive.yaml",
     );
-    const seedCandidatePath = path.join(prepared.sessionRoot, "seed-candidate.yaml");
     await fs.writeFile(
       directivePath,
       stringifyYaml({
@@ -139,25 +143,30 @@ describe("createOntoReconstructCoreApi", () => {
       }),
       "utf8",
     );
+    const ontologySeedValidationPath = path.join(
+      prepared.sessionRoot,
+      "ontology-seed-validation.yaml",
+    );
     await fs.writeFile(
-      seedCandidatePath,
+      ontologySeedValidationPath,
       stringifyYaml({
         schema_version: "1",
         session_id: prepared.sessionId,
         created_at: "2026-05-27T00:00:00.000Z",
-        purpose: {
-          claim_id: "purpose-1",
-          name: "Spreadsheet Seed Purpose",
-          statement: "Use the observed spreadsheet material as seed evidence.",
-          evidence_refs: [evidenceRef],
-        },
-        non_goals: [],
-        entities: [],
-        relations: [],
-        actions: [],
-        properties: [],
-        rules: [],
-        open_questions: [],
+        ontology_seed_ref: path.join(prepared.sessionRoot, "ontology-seed.yaml"),
+        candidate_disposition_ref:
+          path.join(prepared.sessionRoot, "candidate-disposition.yaml"),
+        source_observations_ref: prepared.artifactRefs.source_observations!,
+        registry_ref: path.join(
+          prepared.sessionRoot,
+          "reconstruct-contract-registry.yaml",
+        ),
+        validation_status: "valid",
+        seed_ref_count: 1,
+        evidence_ref_count: 1,
+        limitation_count: 0,
+        validation_results: ["ontology_seed_valid"],
+        violations: [],
       }),
       "utf8",
     );
@@ -166,35 +175,28 @@ describe("createOntoReconstructCoreApi", () => {
       directivePath,
       sourceObservationsPath: prepared.artifactRefs.source_observations!,
     });
-    const seedValidation = await api.validateSeedCandidate({
-      seedCandidatePath,
-      sourceObservationsPath: prepared.artifactRefs.source_observations!,
-      sourceObservationDirectivePath: directivePath,
-      sourceObservationDirectiveValidationPath:
-        path.join(prepared.sessionRoot, "source-observation-directive-validation.yaml"),
-    });
     const record = await api.assembleRecord({
       sessionRoot: prepared.sessionRoot,
       artifactRefs: {
         target_material_profile: prepared.artifactRefs.target_material_profile,
+        target_material_profile_validation:
+          prepared.artifactRefs.target_material_profile_validation,
         source_inventory: prepared.artifactRefs.source_inventory,
         initial_source_frontier: prepared.artifactRefs.initial_source_frontier,
         source_observations: prepared.artifactRefs.source_observations,
         source_observation_directive: directivePath,
         source_observation_directive_validation:
           path.join(prepared.sessionRoot, "source-observation-directive-validation.yaml"),
-        seed_candidate: seedCandidatePath,
-        seed_candidate_validation:
-          path.join(prepared.sessionRoot, "seed-candidate-validation.yaml"),
+        ontology_seed_validation: ontologySeedValidationPath,
       },
     });
     const readBack = await api.getRecord(prepared.sessionRoot);
 
     expect(directiveValidation.validation_status).toBe("valid");
-    expect(seedValidation.validation_status).toBe("valid");
-    expect(record.record_stage).toBe("seed_candidate_validated");
-    expect(readBack.validation_summary.seed_candidate_status).toBe("valid");
+    expect(record.record_stage).toBe("ontology_seed_validated");
+    expect(readBack.validation_summary.ontology_seed_status).toBe("valid");
     expect(readBack.validation_summary.semantic_claim_count).toBe(1);
+    expect(readBack.validation_summary.evidence_ref_count).toBe(1);
   });
 
 });

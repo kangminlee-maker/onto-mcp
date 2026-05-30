@@ -1,0 +1,7 @@
+schema_version: "1"
+session_id: 20260528-3d59d774
+requested_at: 2026-05-28T14:27:10+09:00
+requested_by: mcp
+reason: Valid medium design-contract issues identified in issue-ledger; cancel
+  before patching current working tree to avoid stale downstream review
+  artifacts.

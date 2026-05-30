@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  RECONSTRUCT_DOMAIN_ID_GRAMMAR_DESCRIPTION,
+  RECONSTRUCT_DOMAIN_ID_PATTERN,
+} from "../core-runtime/reconstruct/domain-id.js";
 
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
 const ReviewTargetScopeKindSchema = z.enum(["file", "directory", "bundle"]);
@@ -7,6 +11,10 @@ const ReviewResultProjectionLevelSchema = z.enum(["compact", "standard", "full"]
 const DeliberationModeSchema = z.enum([
   "controlled_lens_deliberation",
 ]);
+const ReconstructDomainIdSchema = z.string().regex(
+  RECONSTRUCT_DOMAIN_ID_PATTERN,
+  `domain must use ${RECONSTRUCT_DOMAIN_ID_GRAMMAR_DESCRIPTION}`,
+);
 
 const OntoReviewToolInputBaseSchema = z.object({
   target: z.string().min(1),
@@ -92,6 +100,8 @@ export const OntoObserveSourceToolInputSchema = z.object({
 
 export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.extend({
   intent: z.string().min(1),
+  domain: ReconstructDomainIdSchema.optional(),
+  resumeMode: z.enum(["fresh", "reuse_existing_authored_artifacts"]).optional(),
   semanticAuthorRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
   confirmationProviderRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
 }).strict();
@@ -109,12 +119,22 @@ const OntoValidateSourceObservationDirectiveToolInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 }).strict();
 
-const OntoValidateSeedCandidateToolInputSchema = z.object({
-  directiveKind: z.literal("seed_candidate"),
-  seedCandidatePath: z.string().min(1),
+const OntoValidateCandidateDispositionToolInputSchema = z.object({
+  directiveKind: z.literal("candidate_disposition"),
+  candidateInventoryPath: z.string().min(1),
+  candidateDispositionPath: z.string().min(1),
   sourceObservationsPath: z.string().min(1),
-  sourceObservationDirectivePath: z.string().min(1).optional(),
-  sourceObservationDirectiveValidationPath: z.string().min(1).optional(),
+  registryPath: z.string().min(1).optional(),
+  outputPath: z.string().min(1).optional(),
+  projectRoot: z.string().min(1).optional(),
+}).strict();
+
+const OntoValidateOntologySeedToolInputSchema = z.object({
+  directiveKind: z.literal("ontology_seed"),
+  ontologySeedPath: z.string().min(1),
+  candidateDispositionPath: z.string().min(1),
+  sourceObservationsPath: z.string().min(1),
+  registryPath: z.string().min(1).optional(),
   outputPath: z.string().min(1).optional(),
   projectRoot: z.string().min(1).optional(),
 }).strict();
@@ -123,7 +143,8 @@ export const OntoValidateReconstructDirectiveToolInputSchema = z.discriminatedUn
   "directiveKind",
   [
     OntoValidateSourceObservationDirectiveToolInputSchema,
-    OntoValidateSeedCandidateToolInputSchema,
+    OntoValidateCandidateDispositionToolInputSchema,
+    OntoValidateOntologySeedToolInputSchema,
   ],
 );
 

@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
+  ReconstructActionableOntologySeedArtifact,
+  ReconstructActionableOntologySeedValidationArtifact,
   ReconstructClaimRealizationMapArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructClaimRealizationStance,
@@ -18,15 +20,23 @@ import type {
   ReconstructRevisionProposalAction,
   ReconstructRevisionProposalArtifact,
   ReconstructRevisionProposalValidationArtifact,
-  ReconstructSeedCandidateArtifact,
-  ReconstructSeedCandidateValidationArtifact,
+  ReconstructRunGoverningSnapshot,
+  ReconstructRunManifestArtifact,
   ReconstructSeedClaim,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructSourceObservationsArtifact,
 } from "./artifact-types.js";
 import type { ReconstructSourceObservation } from "./source-observations.js";
-import { seedClaimProjections } from "./seed-claim-projections.js";
+import {
+  ontologySeedClaimProjections,
+  ontologySeedExcludedClaimIds,
+} from "./seed-claim-projections.js";
+import { collectActionableOntologySeedRefs } from "./actionable-seed-validation.js";
+import {
+  loadReconstructContractRegistry,
+  type ReconstructContractRegistry,
+} from "./contract-registry.js";
 
 const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
@@ -37,13 +47,62 @@ const CLAIM_REALIZATION_STANCES = [
   "unknown",
 ] as const satisfies readonly ReconstructClaimRealizationStance[];
 
-const ANSWER_STATUSES = [
-  "answered",
-  "partially_answered",
-  "not_answered",
-  "needs_evidence",
-  "out_of_scope",
+export const ANSWER_STATUSES = [
+  "answerable",
+  "partially_answerable",
+  "unsupported",
+  "deferred",
+  "contradicted",
+  "not_applicable",
 ] as const satisfies readonly ReconstructCompetencyQuestionAnswerStatus[];
+
+const DOWNSTREAM_EFFECTS = [
+  "ready",
+  "limited",
+  "blocks_handoff",
+  "blocked_by_missing_source_or_confirmation",
+  "not_applicable",
+] as const;
+
+const DOMAIN_COMPETENCY_APPLICABILITY_VERDICTS = [
+  "applicable",
+  "not_applicable",
+  "deferred",
+] as const;
+
+const DOMAIN_COMPETENCY_SEMANTIC_ALIGNMENTS = [
+  "preserved",
+  "limited",
+  "not_assessed",
+] as const;
+
+export const COVERAGE_DISPOSITIONS = [
+  "covered",
+  "limited",
+  "unsupported",
+  "deferred",
+  "not_applicable",
+] as const;
+
+export const EXPECTED_ANSWER_KINDS = [
+  "yes_no",
+  "explanation",
+  "list",
+  "mapping",
+  "gap_statement",
+] as const;
+
+export const HANDOFF_RELEVANCE_VALUES = [
+  "required",
+  "supporting",
+  "diagnostic",
+] as const;
+
+export const COMPETENCY_QUESTION_STATUSES = [
+  "active",
+  "deferred",
+  "unsupported_candidate",
+] as const;
 
 const FAILURE_KINDS = [
   "unsupported_claim",
@@ -89,10 +148,6 @@ function initCountMap<T extends string>(
   return Object.fromEntries(values.map((value) => [value, 0])) as Record<T, number>;
 }
 
-function allClaims(seedCandidate: ReconstructSeedCandidateArtifact): ReconstructSeedClaim[] {
-  return seedClaimProjections(seedCandidate);
-}
-
 function validateEvidenceRef(args: {
   evidenceRef: ReconstructEvidenceRef;
   observation: ReconstructSourceObservation | undefined;
@@ -134,6 +189,15 @@ function validateEvidenceRef(args: {
   return violations;
 }
 
+function evidenceRefKey(ref: ReconstructEvidenceRef): string {
+  return [
+    ref.observation_id,
+    ref.target_material_kind,
+    normalizeRef(ref.source_ref),
+    ref.location,
+  ].join("\u0000");
+}
+
 function observationsById(
   sourceObservations: ReconstructSourceObservationsArtifact,
 ): Map<string, ReconstructSourceObservation> {
@@ -145,40 +209,556 @@ function observationsById(
   );
 }
 
-function knownClaimIds(seedCandidate: ReconstructSeedCandidateArtifact): Set<string> {
-  return new Set(allClaims(seedCandidate).map((claim) => claim.claim_id));
+function knownClaimIdsFromClaims(claims: ReconstructSeedClaim[]): Set<string> {
+  return new Set(claims.map((claim) => claim.claim_id));
 }
 
-function cqExcludedAnswerabilityClaimIds(
-  seedCandidate: ReconstructSeedCandidateArtifact,
+function recordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is Record<string, unknown> =>
+      typeof item === "object" && item !== null && !Array.isArray(item)
+    )
+    : [];
+}
+
+function seedRecordArray(
+  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  key: string,
+): Record<string, unknown>[] {
+  return recordArray(seed?.[key]);
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function seedLimitationIds(
+  seed: ReconstructActionableOntologySeedArtifact | undefined,
 ): Set<string> {
-  const answerability = "answerability_scope" in seedCandidate
-    ? seedCandidate.answerability_scope
-    : undefined;
-  return new Set([
-    ...(answerability?.deferred_questions ?? []).map((question) => question.question_id),
-    ...(answerability?.unsupported_questions ?? []).map((question) => question.question_id),
-    ...(answerability?.unsupported_actions ?? []).map((action) => action.action_id),
+  return new Set(
+    seedRecordArray(seed, "handoff_limitations")
+      .map((record) => stringField(record, "limitation_id"))
+      .filter((id): id is string => id !== null),
+  );
+}
+
+function knownSeedRefs(
+  seed: ReconstructActionableOntologySeedArtifact | undefined,
+): Set<string> {
+  if (!seed) return new Set();
+  const refs = collectActionableOntologySeedRefs(seed);
+  for (const claim of ontologySeedClaimProjections(seed)) {
+    refs.add(claim.claim_id);
+  }
+  return refs;
+}
+
+function uniqueSorted(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))].sort();
+}
+
+type RequiredEvidenceScopeInput = Pick<
+  ReconstructCompetencyQuestionsArtifact["questions"][number],
+  | "linked_claim_ids"
+  | "coverage_axis_refs"
+  | "ontology_handoff_axis_refs"
+  | "seed_ref_refs"
+  | "limitation_refs"
+  | "reasoning_or_formalism_facets"
+  | "entity_identity_facets"
+  | "instance_assertion_facets"
+  | "terminology_facets"
+  | "relation_type_facets"
+  | "classification_facets"
+  | "constraint_facets"
+  | "modeling_concern_facets"
+  | "domain_competency_trace_refs"
+  | "reference_standard_refs"
+  | "pattern_catalog_refs"
+  | "query_access_contract_refs"
+  | "visualization_contract_refs"
+  | "graph_exploration_contract_refs"
+>;
+
+const COMPETENCY_QUESTION_STRING_ARRAY_FIELDS = [
+  "linked_claim_ids",
+  "coverage_axis_refs",
+  "ontology_handoff_axis_refs",
+  "seed_ref_refs",
+  "limitation_refs",
+  "reasoning_or_formalism_facets",
+  "entity_identity_facets",
+  "instance_assertion_facets",
+  "terminology_facets",
+  "relation_type_facets",
+  "classification_facets",
+  "constraint_facets",
+  "modeling_concern_facets",
+  "domain_competency_trace_refs",
+  "reference_standard_refs",
+  "pattern_catalog_refs",
+  "query_access_contract_refs",
+  "visualization_contract_refs",
+  "graph_exploration_contract_refs",
+] as const satisfies readonly (keyof RequiredEvidenceScopeInput)[];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function boundarySubjectId(
+  record: Record<string, unknown>,
+  index: number,
+): string {
+  return typeof record.question_id === "string" && record.question_id.trim().length > 0
+    ? record.question_id
+    : `questions[${index}]`;
+}
+
+function boundaryString(args: {
+  record: Record<string, unknown>;
+  fieldName: string;
+  subjectId: string;
+  violations: ReconstructPostSeedValidationViolation[];
+}): string {
+  const value = args.record[args.fieldName];
+  if (typeof value === "string") return value;
+  args.violations.push(violation({
+    code: "schema_shape_invalid",
+    message: `competency question ${args.fieldName} must be a string`,
+    subjectId: args.subjectId,
+  }));
+  return "";
+}
+
+function boundaryStringArray(args: {
+  record: Record<string, unknown>;
+  fieldName: string;
+  subjectId: string;
+  violations: ReconstructPostSeedValidationViolation[];
+}): string[] {
+  const value = args.record[args.fieldName];
+  if (!Array.isArray(value)) {
+    args.violations.push(violation({
+      code: "schema_shape_invalid",
+      message: `competency question ${args.fieldName} must be an array of strings`,
+      subjectId: args.subjectId,
+    }));
+    return [];
+  }
+  const strings = value.filter((item): item is string => typeof item === "string");
+  if (strings.length !== value.length) {
+    args.violations.push(violation({
+      code: "schema_shape_invalid",
+      message: `competency question ${args.fieldName} contains non-string values`,
+      subjectId: args.subjectId,
+    }));
+  }
+  return strings;
+}
+
+function boundaryEvidenceRefs(args: {
+  record: Record<string, unknown>;
+  fieldName: string;
+  subjectId: string;
+  violations: ReconstructPostSeedValidationViolation[];
+}): ReconstructEvidenceRef[] {
+  const value = args.record[args.fieldName];
+  if (!Array.isArray(value)) {
+    args.violations.push(violation({
+      code: "schema_shape_invalid",
+      message: `competency question ${args.fieldName} must be an array of evidence refs`,
+      subjectId: args.subjectId,
+    }));
+    return [];
+  }
+  const refs: ReconstructEvidenceRef[] = [];
+  for (const [index, item] of value.entries()) {
+    if (
+      isRecord(item) &&
+      typeof item.observation_id === "string" &&
+      typeof item.target_material_kind === "string" &&
+      typeof item.source_ref === "string" &&
+      typeof item.location === "string"
+    ) {
+      refs.push({
+        observation_id: item.observation_id,
+        target_material_kind:
+          item.target_material_kind as ReconstructEvidenceRef["target_material_kind"],
+        source_ref: item.source_ref,
+        location: item.location,
+      });
+      continue;
+    }
+    args.violations.push(violation({
+      code: "schema_shape_invalid",
+      message:
+        `competency question ${args.fieldName}[${index}] must contain observation_id, target_material_kind, source_ref, and location strings`,
+      subjectId: args.subjectId,
+    }));
+  }
+  return refs;
+}
+
+function normalizeDomainCompetencySemanticAssessments(args: {
+  value: unknown;
+  subjectId: string;
+  violations: ReconstructPostSeedValidationViolation[];
+}): ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"] {
+  if (!Array.isArray(args.value)) {
+    args.violations.push(violation({
+      code: "schema_shape_invalid",
+      message:
+        "competency question domain_competency_semantic_assessments must be an array",
+      subjectId: args.subjectId,
+    }));
+    return [];
+  }
+  return args.value
+    .map((item, index) => {
+      if (!isRecord(item)) {
+        args.violations.push(violation({
+          code: "schema_shape_invalid",
+          message:
+            `competency question domain_competency_semantic_assessments[${index}] must be an object`,
+          subjectId: args.subjectId,
+        }));
+        return null;
+      }
+      const assessmentSubjectId = `${args.subjectId}.domain_competency_semantic_assessments[${index}]`;
+      return {
+        competency_id: boundaryString({
+          record: item,
+          fieldName: "competency_id",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }),
+        source_anchor: boundaryString({
+          record: item,
+          fieldName: "source_anchor",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }),
+        applicability_verdict: boundaryString({
+          record: item,
+          fieldName: "applicability_verdict",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["applicability_verdict"],
+        semantic_alignment: boundaryString({
+          record: item,
+          fieldName: "semantic_alignment",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["semantic_alignment"],
+        rationale: boundaryString({
+          record: item,
+          fieldName: "rationale",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }),
+        evidence_refs: boundaryEvidenceRefs({
+          record: item,
+          fieldName: "evidence_refs",
+          subjectId: assessmentSubjectId,
+          violations: args.violations,
+        }),
+      };
+    })
+    .filter((item): item is ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number] =>
+      item !== null
+    );
+}
+
+function normalizeCompetencyQuestionsAtBoundary(
+  competencyQuestions: ReconstructCompetencyQuestionsArtifact,
+): {
+  questions: ReconstructCompetencyQuestionsArtifact["questions"];
+  violations: ReconstructPostSeedValidationViolation[];
+} {
+  const violations: ReconstructPostSeedValidationViolation[] = [];
+  const rawQuestions = (competencyQuestions as unknown as Record<string, unknown>).questions;
+  if (!Array.isArray(rawQuestions)) {
+    violations.push(violation({
+      code: "schema_shape_invalid",
+      message: "competency-questions.yaml questions must be an array",
+      subjectId: "questions",
+    }));
+    return { questions: [], violations };
+  }
+
+  const questions = rawQuestions
+    .map((item, index) => {
+      if (!isRecord(item)) {
+        violations.push(violation({
+          code: "schema_shape_invalid",
+          message: `competency question row ${index} must be an object`,
+          subjectId: `questions[${index}]`,
+        }));
+        return null;
+      }
+      const subjectId = boundarySubjectId(item, index);
+      const normalizedArrays = Object.fromEntries(
+        COMPETENCY_QUESTION_STRING_ARRAY_FIELDS.map((fieldName) => [
+          fieldName,
+          boundaryStringArray({
+            record: item,
+            fieldName,
+            subjectId,
+            violations,
+          }),
+        ]),
+      ) as Pick<
+        ReconstructCompetencyQuestionsArtifact["questions"][number],
+        typeof COMPETENCY_QUESTION_STRING_ARRAY_FIELDS[number]
+      >;
+      return {
+        question_id: boundaryString({
+          record: item,
+          fieldName: "question_id",
+          subjectId,
+          violations,
+        }),
+        question: boundaryString({
+          record: item,
+          fieldName: "question",
+          subjectId,
+          violations,
+        }),
+        ...normalizedArrays,
+        domain_competency_semantic_assessments:
+          normalizeDomainCompetencySemanticAssessments({
+            value: item.domain_competency_semantic_assessments,
+            subjectId,
+            violations,
+          }),
+        coverage_disposition: boundaryString({
+          record: item,
+          fieldName: "coverage_disposition",
+          subjectId,
+          violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["coverage_disposition"],
+        expected_answer_kind: boundaryString({
+          record: item,
+          fieldName: "expected_answer_kind",
+          subjectId,
+          violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["expected_answer_kind"],
+        handoff_relevance: boundaryString({
+          record: item,
+          fieldName: "handoff_relevance",
+          subjectId,
+          violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["handoff_relevance"],
+        lifecycle_status: boundaryString({
+          record: item,
+          fieldName: "lifecycle_status",
+          subjectId,
+          violations,
+        }) as ReconstructCompetencyQuestionsArtifact["questions"][number]["lifecycle_status"],
+        rationale: boundaryString({
+          record: item,
+          fieldName: "rationale",
+          subjectId,
+          violations,
+        }),
+        evidence_refs: boundaryEvidenceRefs({
+          record: item,
+          fieldName: "evidence_refs",
+          subjectId,
+          violations,
+        }),
+      };
+    })
+    .filter((item): item is ReconstructCompetencyQuestionsArtifact["questions"][number] =>
+      item !== null
+    );
+  return { questions, violations };
+}
+
+export function derivedRequiredEvidenceScope(
+  question: RequiredEvidenceScopeInput,
+): string[] {
+  return uniqueSorted([
+    ...question.linked_claim_ids,
+    ...question.coverage_axis_refs,
+    ...question.ontology_handoff_axis_refs,
+    ...question.seed_ref_refs,
+    ...question.limitation_refs,
+    ...question.reasoning_or_formalism_facets,
+    ...question.entity_identity_facets,
+    ...question.instance_assertion_facets,
+    ...question.terminology_facets,
+    ...question.relation_type_facets,
+    ...question.classification_facets,
+    ...question.constraint_facets,
+    ...question.modeling_concern_facets,
+    ...question.domain_competency_trace_refs,
+    ...question.reference_standard_refs,
+    ...question.pattern_catalog_refs,
+    ...question.query_access_contract_refs,
+    ...question.visualization_contract_refs,
+    ...question.graph_exploration_contract_refs,
   ]);
 }
 
-export function validateClaimRealizationMap(args: {
+function expectedDownstreamEffect(
+  answerStatus: ReconstructCompetencyQuestionAnswerStatus,
+): (typeof DOWNSTREAM_EFFECTS)[number] {
+  switch (answerStatus) {
+    case "answerable":
+      return "ready";
+    case "partially_answerable":
+      return "limited";
+    case "deferred":
+      return "blocked_by_missing_source_or_confirmation";
+    case "not_applicable":
+      return "not_applicable";
+    case "unsupported":
+    case "contradicted":
+      return "blocks_handoff";
+  }
+}
+
+function hasSeedSection(
+  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  section: string,
+): boolean {
+  const value = seed?.[section];
+  if (Array.isArray(value)) return value.length > 0;
+  return typeof value === "object" && value !== null &&
+    Object.values(value as Record<string, unknown>).some((item) =>
+      Array.isArray(item) ? item.length > 0 : item !== null && item !== undefined
+    );
+}
+
+function requiredCoverageAxisIds(args: {
+  registry?: ReconstructContractRegistry | undefined;
+  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+}): Set<string> {
+  const registered = new Set(
+    args.registry?.coverage_axis_registry.map((record) => record.axis_id) ?? [],
+  );
+  const required = new Set<string>();
+  for (const axisId of ["purpose", "source_authority"]) {
+    if (registered.has(axisId)) required.add(axisId);
+  }
+  for (const [axisId, section] of [
+    ["semantic_layer", "semantic_layer"],
+    ["kinetic_layer", "kinetic_layer"],
+    ["dynamic_layer", "dynamic_layer"],
+    ["data_binding_layer", "data_binding_layer"],
+    ["ontology_handoff", "ontology_handoff"],
+  ] as const) {
+    if (registered.has(axisId) && hasSeedSection(args.seed, section)) {
+      required.add(axisId);
+    }
+  }
+  if (
+    registered.has("limitation") &&
+    seedLimitationIds(args.seed).size > 0
+  ) {
+    required.add("limitation");
+  }
+  return required;
+}
+
+function requiredOntologyHandoffAxisIds(args: {
+  registry?: ReconstructContractRegistry | undefined;
+  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+}): Set<string> {
+  const registered = new Set(
+    args.registry?.ontology_handoff_axis_registry.map((record) => record.axis_id) ??
+      [],
+  );
+  const handoff = args.seed?.ontology_handoff;
+  if (typeof handoff !== "object" || handoff === null || Array.isArray(handoff)) {
+    return new Set();
+  }
+  const fieldByAxis: Record<string, string> = {
+    classification: "classification_mapping",
+    entity_identity: "entity_identity_mapping",
+    instance_assertion_coverage: "instance_assertion_mapping",
+    terminology: "terminology_mapping",
+    relation_typing: "relation_type_mapping",
+    constraints: "constraint_mapping",
+    modularity: "modularity_boundary",
+    reasoning_or_formalism_profile: "reasoning_or_formalism_profile",
+    application_context: "application_context_mapping",
+    provenance: "provenance_mapping",
+    change_tracking: "change_tracking_mapping",
+    competency_scope: "competency_scope_mapping",
+    alignment: "alignment_mapping",
+    graph_connectivity: "graph_connectivity",
+    limitations: "limitation_refs",
+  };
+  const required = new Set<string>();
+  for (const [axisId, field] of Object.entries(fieldByAxis)) {
+    if (!registered.has(axisId)) continue;
+    const value = (handoff as Record<string, unknown>)[field];
+    if (Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null) {
+      required.add(axisId);
+    }
+  }
+  return required;
+}
+
+function validateRefArray(args: {
+  refs: string[];
+  allowed: Set<string>;
+  subjectId: string;
+  unknownMessage: (ref: string) => string;
+}): ReconstructPostSeedValidationViolation[] {
+  return args.refs
+    .filter((ref) => !args.allowed.has(ref))
+    .map((ref) =>
+      violation({
+        code: "unknown_id",
+        message: args.unknownMessage(ref),
+        subjectId: args.subjectId,
+      })
+    );
+}
+
+function meaningfulTokens(text: string): Set<string> {
+  return new Set(
+    text.toLowerCase()
+      .split(/[^a-z0-9_]+/)
+      .filter((token) => token.length >= 5),
+  );
+}
+
+function hasMeaningfulTokenOverlap(candidate: string, authority: string): boolean {
+  const candidateTokens = meaningfulTokens(candidate);
+  const authorityTokens = meaningfulTokens(authority);
+  if (authorityTokens.size === 0) return true;
+  let overlap = 0;
+  for (const token of authorityTokens) {
+    if (candidateTokens.has(token)) overlap += 1;
+    if (overlap >= 3) return true;
+  }
+  return overlap >= Math.min(2, authorityTokens.size);
+}
+
+function validateClaimRealizationMapAgainstClaims(args: {
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
-  seedCandidate: ReconstructSeedCandidateArtifact;
+  seedSessionId: string;
+  seedClaims: ReconstructSeedClaim[];
   sourceObservations: ReconstructSourceObservationsArtifact;
   claimRealizationMapRef?: string | null;
-  seedCandidateRef?: string | null;
+  ontologySeedRef?: string | null;
   sourceObservationsRef?: string | null;
 }): ReconstructClaimRealizationMapValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
-  if (args.claimRealizationMap.session_id !== args.seedCandidate.session_id) {
+  if (args.claimRealizationMap.session_id !== args.seedSessionId) {
     violations.push(violation({
       code: "session_id_mismatch",
-      message: "claim realization session_id does not match seed candidate",
+      message: "claim realization session_id does not match seed authority",
     }));
   }
 
-  const claimIds = knownClaimIds(args.seedCandidate);
+  const claimIds = knownClaimIdsFromClaims(args.seedClaims);
   const seen = new Set<string>();
   const stanceCounts = initCountMap(CLAIM_REALIZATION_STANCES);
   const observations = observationsById(args.sourceObservations);
@@ -232,9 +812,10 @@ export function validateClaimRealizationMap(args: {
           evidenceRef,
           observation: observations.get(evidenceRef.observation_id),
           subjectId,
-        }),
-      );
-    }
+      }),
+    );
+}
+
   }
 
   for (const claimId of claimIds) {
@@ -252,7 +833,7 @@ export function validateClaimRealizationMap(args: {
     session_id: args.claimRealizationMap.session_id,
     created_at: isoNow(),
     claim_realization_map_ref: args.claimRealizationMapRef ?? null,
-    seed_candidate_ref: args.seedCandidateRef ?? null,
+    ontology_seed_ref: args.ontologySeedRef ?? null,
     source_observations_ref: args.sourceObservationsRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
     realized_claim_count: args.claimRealizationMap.claim_realizations.length,
@@ -264,22 +845,202 @@ export function validateClaimRealizationMap(args: {
   };
 }
 
-export function validateSeedConfirmation(args: {
+function validateValue<T extends string>(args: {
+  value: string;
+  allowed: readonly T[];
+  fieldName: string;
+  subjectId: string;
+}): ReconstructPostSeedValidationViolation[] {
+  return args.allowed.includes(args.value as T)
+    ? []
+    : [
+      violation({
+        code: "invalid_enum",
+        message: `${args.fieldName} has invalid value: ${args.value}`,
+        subjectId: args.subjectId,
+      }),
+    ];
+}
+
+function idSet<T, K extends keyof T>(
+  records: T[],
+  key: K,
+): Set<string> {
+  return new Set(
+    records
+      .map((record) => record[key] as unknown)
+      .filter((value): value is string => typeof value === "string"),
+  );
+}
+
+function seedArrayField(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): unknown[] {
+  const value = record?.[key];
+  return Array.isArray(value) ? value : [];
+}
+
+function hasMeaningfulValue(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some((item) => hasMeaningfulValue(item));
+  }
+  if (typeof value === "string") {
+    return value.trim().length > 0 &&
+      !["none", "unknown", "not_applicable"].includes(value);
+  }
+  if (typeof value === "boolean") return value;
+  return value !== null && value !== undefined;
+}
+
+function contractApplies(
+  handoff: Record<string, unknown> | undefined,
+  key: string,
+): boolean {
+  const value = handoff?.[key];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return (value as Record<string, unknown>).applies === true;
+}
+
+function requiredModelingConcernIds(args: {
+  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+  registry?: ReconstructContractRegistry | undefined;
+}): Set<string> {
+  const registered = new Set(
+    args.registry?.modeling_concern_applicability_registry.map((record) =>
+      record.concern_id
+    ) ?? [],
+  );
+  const required = new Set<string>();
+  const handoff = typeof args.seed?.ontology_handoff === "object" &&
+      args.seed.ontology_handoff !== null && !Array.isArray(args.seed.ontology_handoff)
+    ? args.seed.ontology_handoff as Record<string, unknown>
+    : undefined;
+  const rows = seedArrayField(
+    handoff?.modeling_concern_applicability as Record<string, unknown> | undefined,
+    "rows",
+  );
+  for (const row of rows) {
+    if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
+    const rowRecord = row as Record<string, unknown>;
+    const concernId = stringField(rowRecord, "concern_id");
+    if (concernId && registered.has(concernId) && rowRecord.applies === true) {
+      required.add(concernId);
+    }
+  }
+  if (!handoff) return required;
+  const reasoning = handoff.reasoning_or_formalism_profile;
+  if (typeof reasoning === "object" && reasoning !== null && !Array.isArray(reasoning)) {
+    const record = reasoning as Record<string, unknown>;
+    if (
+      registered.has("ontology_representation_formalism") &&
+      hasMeaningfulValue(record.representation_formalism)
+    ) {
+      required.add("ontology_representation_formalism");
+    }
+    if (
+      registered.has("controlled_vocabulary_modeling") &&
+      hasMeaningfulValue(record.vocabulary_systems)
+    ) {
+      required.add("controlled_vocabulary_modeling");
+    }
+    if (
+      registered.has("shape_or_validation_modeling") &&
+      hasMeaningfulValue(record.validation_formalisms)
+    ) {
+      required.add("shape_or_validation_modeling");
+    }
+  }
+  if (registered.has("query_interface") && contractApplies(handoff, "query_access_contract")) {
+    required.add("query_interface");
+  }
+  if (
+    registered.has("visualization_interface") &&
+    contractApplies(handoff, "visualization_contract")
+  ) {
+    required.add("visualization_interface");
+  }
+  if (
+    registered.has("graph_exploration_interface") &&
+    contractApplies(handoff, "graph_exploration_contract")
+  ) {
+    required.add("graph_exploration_interface");
+  }
+  return required;
+}
+
+export function validateClaimRealizationMapForOntologySeed(args: {
+  claimRealizationMap: ReconstructClaimRealizationMapArtifact;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  claimRealizationMapRef?: string | null;
+  ontologySeedRef?: string | null;
+  sourceObservationsRef?: string | null;
+}): ReconstructClaimRealizationMapValidationArtifact {
+  const ontologySeedRecord = args.ontologySeed as Record<string, unknown>;
+  const seedIdentity = typeof ontologySeedRecord.seed_identity === "object" &&
+    ontologySeedRecord.seed_identity !== null &&
+    !Array.isArray(ontologySeedRecord.seed_identity)
+    ? ontologySeedRecord.seed_identity as Record<string, unknown>
+    : {};
+  return validateClaimRealizationMapAgainstClaims({
+    claimRealizationMap: args.claimRealizationMap,
+    seedSessionId:
+      typeof ontologySeedRecord.session_id === "string"
+        ? ontologySeedRecord.session_id
+        : args.sourceObservations.session_id,
+    seedClaims: ontologySeedClaimProjections(args.ontologySeed),
+    sourceObservations: args.sourceObservations,
+    claimRealizationMapRef: args.claimRealizationMapRef ?? null,
+    ontologySeedRef:
+      args.ontologySeedRef ??
+      (typeof seedIdentity.seed_id === "string" ? seedIdentity.seed_id : null),
+    sourceObservationsRef: args.sourceObservationsRef ?? null,
+  });
+}
+
+export function validateSeedConfirmationForOntologySeed(args: {
   seedConfirmation: ReconstructSeedConfirmationArtifact;
-  seedCandidate: ReconstructSeedCandidateArtifact;
-  seedCandidateValidation: ReconstructSeedCandidateValidationArtifact;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
   seedConfirmationRef?: string | null;
-  seedCandidateRef?: string | null;
-  seedCandidateValidationRef?: string | null;
+  ontologySeedRef?: string | null;
+  ontologySeedValidationRef?: string | null;
+}): ReconstructSeedConfirmationValidationArtifact {
+  const priorValidationValid = args.ontologySeedValidation.validation_status === "valid";
+  return validateSeedConfirmationAgainstClaims({
+    seedConfirmation: args.seedConfirmation,
+    priorValidationStatus: priorValidationValid ? "valid" : "invalid",
+    priorValidationInvalidMessage:
+      "ontology seed validation must be valid before confirmation validation",
+    seedClaims: ontologySeedClaimProjections(args.ontologySeed),
+    cqExcludedClaimIds: ontologySeedExcludedClaimIds(args.ontologySeed),
+    seedConfirmationRef: args.seedConfirmationRef ?? null,
+    ontologySeedRef: args.ontologySeedRef ?? null,
+    ontologySeedValidationRef: args.ontologySeedValidationRef ?? null,
+  });
+}
+
+function validateSeedConfirmationAgainstClaims(args: {
+  seedConfirmation: ReconstructSeedConfirmationArtifact;
+  priorValidationStatus: "valid" | "invalid";
+  priorValidationInvalidMessage: string;
+  seedClaims: ReconstructSeedClaim[];
+  cqExcludedClaimIds: Set<string>;
+  seedConfirmationRef?: string | null;
+  ontologySeedRef?: string | null;
+  ontologySeedValidationRef?: string | null;
 }): ReconstructSeedConfirmationValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
-  if (args.seedCandidateValidation.validation_status !== "valid") {
+  if (args.priorValidationStatus !== "valid") {
     violations.push(violation({
       code: "prior_validation_invalid",
-      message: "seed candidate validation must be valid before confirmation validation",
+      message: args.priorValidationInvalidMessage,
     }));
   }
-  const claimIds = knownClaimIds(args.seedCandidate);
+  const claimIds = knownClaimIdsFromClaims(args.seedClaims);
   const accepted = args.seedConfirmation.confirmed_claim_ids;
   const rejected = args.seedConfirmation.rejected_claim_ids;
   const partial = args.seedConfirmation.partial_claim_ids ?? [];
@@ -324,16 +1085,14 @@ export function validateSeedConfirmation(args: {
     session_id: args.seedConfirmation.session_id,
     created_at: isoNow(),
     seed_confirmation_ref: args.seedConfirmationRef ?? null,
-    seed_candidate_ref: args.seedCandidateRef ?? null,
-    seed_candidate_validation_ref: args.seedCandidateValidationRef ?? null,
+    ontology_seed_ref: args.ontologySeedRef ?? null,
+    ontology_seed_validation_ref: args.ontologySeedValidationRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
     accepted_claim_ids: [...accepted],
     rejected_claim_ids: [...rejected],
     partial_claim_ids: [...partial],
     deferred_claim_ids: [...deferred],
-    cq_eligible_claim_ids: accepted.filter((claimId) =>
-      !cqExcludedAnswerabilityClaimIds(args.seedCandidate).has(claimId)
-    ),
+    cq_eligible_claim_ids: accepted.filter((claimId) => !args.cqExcludedClaimIds.has(claimId)),
     validation_results: violations.length === 0
       ? ["seed_confirmation_valid"]
       : ["seed_confirmation_invalid"],
@@ -349,12 +1108,203 @@ export function validateCompetencyQuestions(args: {
   seedConfirmationValidationRef?: string | null;
   sourceObservationsRef?: string | null;
 }): ReconstructCompetencyQuestionsValidationArtifact {
+  return validateCompetencyQuestionsAgainstEligibleClaims({
+    competencyQuestions: args.competencyQuestions,
+    eligibleClaimIds: args.seedConfirmationValidation.cq_eligible_claim_ids,
+    sourceObservations: args.sourceObservations,
+    competencyQuestionsRef: args.competencyQuestionsRef ?? null,
+    seedConfirmationValidationRef: args.seedConfirmationValidationRef ?? null,
+    sourceObservationsRef: args.sourceObservationsRef ?? null,
+  });
+}
+
+export function validateCompetencyQuestionsForOntologySeed(args: {
+  competencyQuestions: ReconstructCompetencyQuestionsArtifact;
+  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  seedConfirmationValidation?: ReconstructSeedConfirmationValidationArtifact | null;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  contractRegistry: ReconstructContractRegistry;
+  governingSnapshot?: ReconstructRunGoverningSnapshot | null;
+  competencyQuestionsRef?: string | null;
+  reconstructRunManifestRef?: string | null;
+  seedConfirmationValidationRef?: string | null;
+  ontologySeedRef?: string | null;
+  ontologySeedValidationRef?: string | null;
+  sourceObservationsRef?: string | null;
+}): ReconstructCompetencyQuestionsValidationArtifact {
+  const eligibleClaimIds = args.seedConfirmationValidation
+    ? args.seedConfirmationValidation.cq_eligible_claim_ids
+    : [];
+  const validation = validateCompetencyQuestionsAgainstEligibleClaims({
+    competencyQuestions: args.competencyQuestions,
+    eligibleClaimIds,
+    sourceObservations: args.sourceObservations,
+    ontologySeed: args.ontologySeed,
+    contractRegistry: args.contractRegistry,
+    governingSnapshot: args.governingSnapshot ?? null,
+    competencyQuestionsRef: args.competencyQuestionsRef ?? null,
+    reconstructRunManifestRef: args.reconstructRunManifestRef ?? null,
+    seedConfirmationValidationRef: args.seedConfirmationValidationRef ?? null,
+    ontologySeedRef: args.ontologySeedRef ?? null,
+    ontologySeedValidationRef: args.ontologySeedValidationRef ?? null,
+    sourceObservationsRef: args.sourceObservationsRef ?? null,
+  });
+  const lifecycleViolations: ReconstructPostSeedValidationViolation[] = [];
+  if (!args.seedConfirmationValidation) {
+    lifecycleViolations.push(violation({
+      code: "prior_validation_invalid",
+      message:
+        "seed confirmation validation is required before competency question validation",
+      subjectId: args.competencyQuestionsRef ?? null,
+    }));
+  } else if (args.seedConfirmationValidation.validation_status !== "valid") {
+    lifecycleViolations.push(violation({
+      code: "prior_validation_invalid",
+      message:
+        "seed confirmation validation must be valid before competency question validation",
+      subjectId: args.seedConfirmationValidationRef ?? null,
+    }));
+  }
+  if (args.ontologySeedValidation.validation_status === "valid" && lifecycleViolations.length === 0) {
+    return validation;
+  }
+  return {
+    ...validation,
+    validation_status: "invalid",
+    validation_results: ["competency_questions_invalid"],
+    violations: [
+      ...validation.violations,
+      ...lifecycleViolations,
+      ...(args.ontologySeedValidation.validation_status === "valid"
+        ? []
+        : [
+          violation({
+            code: "prior_validation_invalid",
+            message:
+              "ontology seed validation must be valid before competency question validation",
+          }),
+        ]),
+    ],
+  };
+}
+
+function validateCompetencyQuestionsAgainstEligibleClaims(args: {
+  competencyQuestions: ReconstructCompetencyQuestionsArtifact;
+  eligibleClaimIds: string[];
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  ontologySeed?: ReconstructActionableOntologySeedArtifact;
+  contractRegistry?: ReconstructContractRegistry;
+  governingSnapshot?: ReconstructRunGoverningSnapshot | null;
+  competencyQuestionsRef?: string | null;
+  reconstructRunManifestRef?: string | null;
+  seedConfirmationValidationRef?: string | null;
+  ontologySeedRef?: string | null;
+  ontologySeedValidationRef?: string | null;
+  sourceObservationsRef?: string | null;
+}): ReconstructCompetencyQuestionsValidationArtifact {
   const violations: ReconstructPostSeedValidationViolation[] = [];
-  const eligibleClaims = new Set(args.seedConfirmationValidation.cq_eligible_claim_ids);
+  const normalizedCompetencyQuestions = normalizeCompetencyQuestionsAtBoundary(
+    args.competencyQuestions,
+  );
+  violations.push(...normalizedCompetencyQuestions.violations);
+  const eligibleClaims = new Set(args.eligibleClaimIds);
   const coveredEligibleClaims = new Set<string>();
   const seen = new Set<string>();
   const observations = observationsById(args.sourceObservations);
-  for (const question of args.competencyQuestions.questions) {
+  const coverageAxisIds = new Set(
+    args.contractRegistry?.coverage_axis_registry.map((record) => record.axis_id) ?? [],
+  );
+  const ontologyHandoffAxisIds = new Set(
+    args.contractRegistry?.ontology_handoff_axis_registry.map((record) =>
+      record.axis_id
+    ) ?? [],
+  );
+  const referenceStandardIds = new Set(
+    args.contractRegistry?.reference_standard_registry.map((record) =>
+      record.standard_ref_id
+    ) ?? [],
+  );
+  const patternCatalogIds = new Set(
+    args.contractRegistry?.reference_pattern_catalog_registry.map((record) =>
+      record.pattern_catalog_ref_id
+    ) ?? [],
+  );
+  const reasoningOrFormalismFacetIds = idSet(
+    args.contractRegistry?.reasoning_or_formalism_facet_registry ?? [],
+    "facet_id",
+  );
+  const entityIdentityFacetIds = idSet(
+    args.contractRegistry?.entity_identity_facet_registry ?? [],
+    "facet_id",
+  );
+  const instanceAssertionFacetIds = idSet(
+    args.contractRegistry?.instance_assertion_facet_registry ?? [],
+    "facet_id",
+  );
+  const terminologyFacetIds = idSet(
+    args.contractRegistry?.terminology_facet_registry ?? [],
+    "facet_id",
+  );
+  const relationTypeFacetIds = idSet(
+    args.contractRegistry?.relation_type_facet_registry ?? [],
+    "facet_id",
+  );
+  const classificationFacetIds = idSet(
+    args.contractRegistry?.classification_facet_registry ?? [],
+    "facet_id",
+  );
+  const constraintFacetIds = idSet(
+    args.contractRegistry?.constraint_facet_registry ?? [],
+    "facet_id",
+  );
+  const modelingConcernIds = idSet(
+    args.contractRegistry?.modeling_concern_applicability_registry ?? [],
+    "concern_id",
+  );
+  const queryAccessContractIds = idSet(
+    args.contractRegistry?.query_access_contract_registry ?? [],
+    "contract_ref_id",
+  );
+  const visualizationContractIds = idSet(
+    args.contractRegistry?.visualization_contract_registry ?? [],
+    "contract_ref_id",
+  );
+  const graphExplorationContractIds = idSet(
+    args.contractRegistry?.graph_exploration_contract_registry ?? [],
+    "contract_ref_id",
+  );
+  const limitationIds = seedLimitationIds(args.ontologySeed);
+  const seedRefs = knownSeedRefs(args.ontologySeed);
+  const admittedDomainCompetencyIds = new Set(
+    args.governingSnapshot?.required_admitted_competency_ids ?? [],
+  );
+  const admittedDomainCompetencyRows = new Map(
+    (args.governingSnapshot?.admitted_domain_competency_snapshots ?? [])
+      .flatMap((snapshot) => snapshot.admitted_competencies)
+      .map((competency) => [competency.qualified_competency_id, competency]),
+  );
+  const requiredCoverageAxes = requiredCoverageAxisIds({
+    registry: args.contractRegistry,
+    seed: args.ontologySeed,
+  });
+  const requiredOntologyHandoffAxes = requiredOntologyHandoffAxisIds({
+    registry: args.contractRegistry,
+    seed: args.ontologySeed,
+  });
+  const requiredModelingConcerns = requiredModelingConcernIds({
+    registry: args.contractRegistry,
+    seed: args.ontologySeed,
+  });
+  const coveredCoverageAxes = new Set<string>();
+  const coveredOntologyHandoffAxes = new Set<string>();
+  const coveredModelingConcerns = new Set<string>();
+  const requiredEvidenceScopeProjection:
+    ReconstructCompetencyQuestionsValidationArtifact["required_evidence_scope_projection"] = [];
+  const domainCompetencyTraceCounts = new Map(
+    [...admittedDomainCompetencyIds].map((competencyId) => [competencyId, 0]),
+  );
+  for (const question of normalizedCompetencyQuestions.questions) {
     if (seen.has(question.question_id)) {
       violations.push(violation({
         code: "duplicate_id",
@@ -370,6 +1320,60 @@ export function validateCompetencyQuestions(args: {
         subjectId: question.question_id,
       }));
     }
+    if (question.rationale.trim().length === 0) {
+      violations.push(violation({
+        code: "rationale_missing",
+        message: "competency question rationale is required",
+        subjectId: question.question_id,
+      }));
+    }
+    violations.push(...validateValue({
+      value: question.coverage_disposition,
+      allowed: COVERAGE_DISPOSITIONS,
+      fieldName: "coverage_disposition",
+      subjectId: question.question_id,
+    }));
+    violations.push(...validateValue({
+      value: question.expected_answer_kind,
+      allowed: EXPECTED_ANSWER_KINDS,
+      fieldName: "expected_answer_kind",
+      subjectId: question.question_id,
+    }));
+    violations.push(...validateValue({
+      value: question.handoff_relevance,
+      allowed: HANDOFF_RELEVANCE_VALUES,
+      fieldName: "handoff_relevance",
+      subjectId: question.question_id,
+    }));
+    violations.push(...validateValue({
+      value: question.lifecycle_status,
+      allowed: COMPETENCY_QUESTION_STATUSES,
+      fieldName: "lifecycle_status",
+      subjectId: question.question_id,
+    }));
+    if (
+      question.coverage_disposition !== "covered" &&
+      question.limitation_refs.length === 0
+    ) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message:
+          "non-covered competency questions must cite limitation_refs",
+        subjectId: question.question_id,
+      }));
+    }
+    if (
+      question.coverage_disposition === "covered" &&
+      question.lifecycle_status === "active" &&
+      question.evidence_refs.length === 0
+    ) {
+      violations.push(violation({
+        code: "evidence_ref_missing",
+        message:
+          "covered active competency questions must cite source evidence refs",
+        subjectId: question.question_id,
+      }));
+    }
     for (const claimId of question.linked_claim_ids) {
       if (!eligibleClaims.has(claimId)) {
         violations.push(violation({
@@ -379,6 +1383,203 @@ export function validateCompetencyQuestions(args: {
         }));
       } else {
         coveredEligibleClaims.add(claimId);
+      }
+    }
+    for (const axisId of question.coverage_axis_refs) {
+      coveredCoverageAxes.add(axisId);
+    }
+    violations.push(...validateRefArray({
+      refs: question.coverage_axis_refs,
+      allowed: coverageAxisIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `coverage_axis_refs references unknown coverage axis: ${ref}`,
+    }));
+    for (const axisId of question.ontology_handoff_axis_refs) {
+      coveredOntologyHandoffAxes.add(axisId);
+    }
+    violations.push(...validateRefArray({
+      refs: question.ontology_handoff_axis_refs,
+      allowed: ontologyHandoffAxisIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `ontology_handoff_axis_refs references unknown ontology handoff axis: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.seed_ref_refs,
+      allowed: seedRefs,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `seed_ref_refs references unknown seed ref: ${ref}`,
+    }));
+    requiredEvidenceScopeProjection.push({
+      question_id: question.question_id,
+      required_evidence_scope: derivedRequiredEvidenceScope(question),
+    });
+    violations.push(...validateRefArray({
+      refs: question.reasoning_or_formalism_facets,
+      allowed: reasoningOrFormalismFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `reasoning_or_formalism_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.entity_identity_facets,
+      allowed: entityIdentityFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `entity_identity_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.instance_assertion_facets,
+      allowed: instanceAssertionFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `instance_assertion_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.terminology_facets,
+      allowed: terminologyFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `terminology_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.relation_type_facets,
+      allowed: relationTypeFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `relation_type_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.classification_facets,
+      allowed: classificationFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `classification_facets references unknown facet: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.constraint_facets,
+      allowed: constraintFacetIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `constraint_facets references unknown facet: ${ref}`,
+    }));
+    for (const concernId of question.modeling_concern_facets) {
+      coveredModelingConcerns.add(concernId);
+    }
+    violations.push(...validateRefArray({
+      refs: question.modeling_concern_facets,
+      allowed: modelingConcernIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `modeling_concern_facets references unknown modeling concern: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.limitation_refs,
+      allowed: limitationIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) => `limitation_refs references unknown limitation: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.reference_standard_refs,
+      allowed: referenceStandardIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `reference_standard_refs references unknown reference standard: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.pattern_catalog_refs,
+      allowed: patternCatalogIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `pattern_catalog_refs references unknown pattern catalog: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.query_access_contract_refs,
+      allowed: queryAccessContractIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `query_access_contract_refs references unknown query access contract: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.visualization_contract_refs,
+      allowed: visualizationContractIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `visualization_contract_refs references unknown visualization contract: ${ref}`,
+    }));
+    violations.push(...validateRefArray({
+      refs: question.graph_exploration_contract_refs,
+      allowed: graphExplorationContractIds,
+      subjectId: question.question_id,
+      unknownMessage: (ref) =>
+        `graph_exploration_contract_refs references unknown graph exploration contract: ${ref}`,
+    }));
+    for (const ref of question.domain_competency_trace_refs) {
+      if (!admittedDomainCompetencyIds.has(ref)) {
+        violations.push(violation({
+          code: "unknown_id",
+          message:
+            `domain_competency_trace_refs references an unadmitted required domain competency id: ${ref}`,
+          subjectId: question.question_id,
+        }));
+      }
+      if (admittedDomainCompetencyIds.has(ref)) {
+        domainCompetencyTraceCounts.set(
+          ref,
+          (domainCompetencyTraceCounts.get(ref) ?? 0) + 1,
+        );
+        const competency = admittedDomainCompetencyRows.get(ref);
+        const semanticRows = (question.domain_competency_semantic_assessments ?? [])
+          .filter((assessment) => assessment.competency_id === ref);
+        if (semanticRows.length !== 1) {
+          violations.push(violation({
+            code: semanticRows.length === 0 ? "missing_required_coverage" : "duplicate_id",
+            message:
+              `domain competency trace ${ref} must have exactly one semantic assessment row`,
+            subjectId: question.question_id,
+          }));
+        }
+        for (const semanticRow of semanticRows) {
+          if (competency && semanticRow.source_anchor !== competency.source_anchor) {
+            violations.push(violation({
+              code: "unknown_id",
+              message:
+                `domain competency semantic assessment source_anchor must match admitted source anchor for ${ref}`,
+              subjectId: question.question_id,
+            }));
+          }
+          violations.push(...validateValue({
+            value: semanticRow.applicability_verdict,
+            allowed: DOMAIN_COMPETENCY_APPLICABILITY_VERDICTS,
+            fieldName: "applicability_verdict",
+            subjectId: question.question_id,
+          }));
+          violations.push(...validateValue({
+            value: semanticRow.semantic_alignment,
+            allowed: DOMAIN_COMPETENCY_SEMANTIC_ALIGNMENTS,
+            fieldName: "semantic_alignment",
+            subjectId: question.question_id,
+          }));
+          if (semanticRow.rationale.trim().length === 0) {
+            violations.push(violation({
+              code: "rationale_missing",
+              message: `domain competency semantic assessment ${ref} requires rationale`,
+              subjectId: question.question_id,
+            }));
+          }
+          if (semanticRow.evidence_refs.length === 0) {
+            violations.push(violation({
+              code: "evidence_ref_missing",
+              message:
+                `domain competency semantic assessment ${ref} must cite evidence_refs`,
+              subjectId: question.question_id,
+            }));
+          }
+          for (const evidenceRef of semanticRow.evidence_refs) {
+            violations.push(
+              ...validateEvidenceRef({
+                evidenceRef,
+                observation: observations.get(evidenceRef.observation_id),
+                subjectId: question.question_id,
+              }),
+            );
+          }
+        }
       }
     }
     for (const evidenceRef of question.evidence_refs) {
@@ -400,16 +1601,73 @@ export function validateCompetencyQuestions(args: {
       }));
     }
   }
+  for (const axisId of requiredCoverageAxes) {
+    if (!coveredCoverageAxes.has(axisId)) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message: `coverage axis has no competency question coverage: ${axisId}`,
+        subjectId: axisId,
+      }));
+    }
+  }
+  for (const axisId of requiredOntologyHandoffAxes) {
+    if (!coveredOntologyHandoffAxes.has(axisId)) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message: `ontology handoff axis has no competency question coverage: ${axisId}`,
+        subjectId: axisId,
+      }));
+    }
+  }
+  for (const concernId of requiredModelingConcerns) {
+    if (!coveredModelingConcerns.has(concernId)) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message: `modeling concern has no competency question coverage: ${concernId}`,
+        subjectId: concernId,
+      }));
+    }
+  }
+  for (const [competencyId, traceCount] of domainCompetencyTraceCounts.entries()) {
+    if (traceCount === 0) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message:
+          `admitted domain competency id has no competency question disposition row: ${competencyId}`,
+        subjectId: competencyId,
+      }));
+    } else if (traceCount > 1) {
+      violations.push(violation({
+        code: "duplicate_id",
+        message:
+          `admitted domain competency id must appear in exactly one competency question disposition row: ${competencyId}`,
+        subjectId: competencyId,
+      }));
+    }
+  }
 
   return {
     schema_version: "1",
     session_id: args.competencyQuestions.session_id,
     created_at: isoNow(),
     competency_questions_ref: args.competencyQuestionsRef ?? null,
+    reconstruct_run_manifest_ref: args.reconstructRunManifestRef ?? null,
     seed_confirmation_validation_ref: args.seedConfirmationValidationRef ?? null,
+    ontology_seed_ref: args.ontologySeedRef ?? null,
+    ontology_seed_validation_ref: args.ontologySeedValidationRef ?? null,
     source_observations_ref: args.sourceObservationsRef ?? null,
+    admitted_domain_competency_refs: [
+      ...(args.governingSnapshot?.admitted_domain_competency_refs ?? []),
+    ],
+    admitted_domain_competency_source_refs: [
+      ...(args.governingSnapshot?.admitted_domain_competency_source_refs ?? []),
+    ],
+    required_admitted_competency_ids: [
+      ...(args.governingSnapshot?.required_admitted_competency_ids ?? []),
+    ],
     validation_status: violations.length === 0 ? "valid" : "invalid",
-    competency_question_count: args.competencyQuestions.questions.length,
+    competency_question_count: normalizedCompetencyQuestions.questions.length,
+    required_evidence_scope_projection: requiredEvidenceScopeProjection,
     validation_results: violations.length === 0
       ? ["competency_questions_valid"]
       : ["competency_questions_invalid"],
@@ -427,9 +1685,28 @@ export function validateCompetencyQuestionAssessment(args: {
   const questionIds = new Set(
     args.competencyQuestions.questions.map((question) => question.question_id),
   );
+  const questionById = new Map(
+    args.competencyQuestions.questions.map((question) => [
+      question.question_id,
+      question,
+    ]),
+  );
   const seen = new Set<string>();
   const answerStatusCounts = initCountMap(ANSWER_STATUSES);
   for (const assessment of args.competencyQuestionAssessment.assessments) {
+    const question = questionById.get(assessment.question_id);
+    const requiredSeedRefs = Array.isArray(assessment.required_seed_refs)
+      ? assessment.required_seed_refs.filter((ref): ref is string =>
+        typeof ref === "string" && ref.trim().length > 0
+      )
+      : [];
+    if (!Array.isArray(assessment.required_seed_refs)) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message: "assessment required_seed_refs must be an array",
+        subjectId: assessment.question_id,
+      }));
+    }
     if (seen.has(assessment.question_id)) {
       violations.push(violation({
         code: "duplicate_id",
@@ -445,6 +1722,60 @@ export function validateCompetencyQuestionAssessment(args: {
         subjectId: assessment.question_id,
       }));
     }
+    if (question) {
+      const questionClaimIds = new Set(question.linked_claim_ids);
+      const assessmentClaimIds = new Set(assessment.linked_claim_ids);
+      for (const claimId of assessment.linked_claim_ids) {
+        if (!questionClaimIds.has(claimId)) {
+          violations.push(violation({
+            code: "unknown_id",
+            message: `assessment linked_claim_ids references a claim outside its question: ${claimId}`,
+            subjectId: assessment.question_id,
+          }));
+        }
+      }
+      for (const claimId of question.linked_claim_ids) {
+        if (!assessmentClaimIds.has(claimId)) {
+          violations.push(violation({
+            code: "missing_required_coverage",
+            message: `assessment is missing question linked claim: ${claimId}`,
+            subjectId: assessment.question_id,
+          }));
+        }
+      }
+      const questionEvidenceRefs = new Set(question.evidence_refs.map(evidenceRefKey));
+      for (const evidenceRef of assessment.evidence_refs) {
+        if (!questionEvidenceRefs.has(evidenceRefKey(evidenceRef))) {
+          violations.push(violation({
+            code: "unknown_observation_ref",
+            message:
+              `assessment evidence_refs includes evidence outside its competency question: ${evidenceRef.observation_id}`,
+            subjectId: assessment.question_id,
+          }));
+        }
+      }
+      const questionSeedRefs = new Set(question.seed_ref_refs);
+      const assessmentSeedRefs = new Set(requiredSeedRefs);
+      for (const seedRef of requiredSeedRefs) {
+        if (!questionSeedRefs.has(seedRef)) {
+          violations.push(violation({
+            code: "unknown_id",
+            message:
+              `assessment required_seed_refs references a seed ref outside its question: ${seedRef}`,
+            subjectId: assessment.question_id,
+          }));
+        }
+      }
+      for (const seedRef of question.seed_ref_refs) {
+        if (!assessmentSeedRefs.has(seedRef)) {
+          violations.push(violation({
+            code: "missing_required_coverage",
+            message: `assessment is missing question seed ref: ${seedRef}`,
+            subjectId: assessment.question_id,
+          }));
+        }
+      }
+    }
     if (!ANSWER_STATUSES.includes(assessment.answer_status)) {
       violations.push(violation({
         code: "invalid_enum",
@@ -454,12 +1785,69 @@ export function validateCompetencyQuestionAssessment(args: {
     } else {
       answerStatusCounts[assessment.answer_status] += 1;
     }
-    if (assessment.rationale.trim().length === 0) {
+    if (typeof assessment.rationale !== "string" || assessment.rationale.trim().length === 0) {
       violations.push(violation({
         code: "rationale_missing",
         message: "assessment rationale is required",
         subjectId: assessment.question_id,
       }));
+    }
+    if (
+      typeof assessment.answer_summary !== "string" ||
+      assessment.answer_summary.trim().length === 0
+    ) {
+      violations.push(violation({
+        code: "rationale_missing",
+        message: "assessment answer_summary is required",
+        subjectId: assessment.question_id,
+      }));
+    }
+    violations.push(...validateValue({
+      value: assessment.downstream_effect,
+      allowed: DOWNSTREAM_EFFECTS,
+      fieldName: "downstream_effect",
+      subjectId: assessment.question_id,
+    }));
+    if (ANSWER_STATUSES.includes(assessment.answer_status)) {
+      const expectedEffect = expectedDownstreamEffect(assessment.answer_status);
+      if (assessment.downstream_effect !== expectedEffect) {
+        violations.push(violation({
+          code: "invalid_enum",
+          message:
+            `assessment downstream_effect must be ${expectedEffect} for answer_status ${assessment.answer_status}`,
+          subjectId: assessment.question_id,
+        }));
+      }
+    }
+    if (
+      (assessment.answer_status === "unsupported" ||
+        assessment.answer_status === "deferred") &&
+      !assessment.missing_source_or_confirmation
+    ) {
+      violations.push(violation({
+        code: "missing_required_coverage",
+        message:
+          "unsupported or deferred assessments must name missing_source_or_confirmation",
+        subjectId: assessment.question_id,
+      }));
+    }
+    if (assessment.answer_status === "answerable") {
+      if (assessment.evidence_refs.length === 0) {
+        violations.push(violation({
+          code: "evidence_ref_missing",
+          message:
+            "answerable competency assessments must cite evidence_refs from the question",
+          subjectId: assessment.question_id,
+        }));
+      }
+      if (question && question.seed_ref_refs.length > 0 && requiredSeedRefs.length === 0) {
+        violations.push(violation({
+          code: "missing_required_coverage",
+          message:
+            "answerable competency assessments must carry required_seed_refs when the question declares seed refs",
+          subjectId: assessment.question_id,
+        }));
+      }
     }
   }
   for (const questionId of questionIds) {
@@ -639,18 +2027,64 @@ export function validateRevisionProposal(args: {
   };
 }
 
+export interface ReconstructFinalOutputProvenanceSectionBindingInput {
+  section_id: string;
+  heading: string;
+  claim_summary: string;
+  authority_refs: string[];
+  validation_refs: string[];
+  required_fragments: string[];
+}
+
+function markdownSectionText(markdown: string, heading: string): string | null {
+  const headingLine = `## ${heading}`;
+  const lines = markdown.split(/\r?\n/);
+  const startIndex = lines.findIndex((line) => line.trim() === headingLine);
+  if (startIndex < 0) return null;
+  let endIndex = lines.length;
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
+      endIndex = index;
+      break;
+    }
+  }
+  return lines.slice(startIndex, endIndex).join("\n");
+}
+
 export function validateFinalOutputProvenance(args: {
   finalOutputText: string;
-  requiredFragments: string[];
+  requiredFragments?: string[];
+  sectionBindings?: ReconstructFinalOutputProvenanceSectionBindingInput[];
 }): ReconstructPostSeedValidationViolation[] {
   const violations: ReconstructPostSeedValidationViolation[] = [];
-  for (const fragment of args.requiredFragments) {
+  for (const fragment of args.requiredFragments ?? []) {
     if (!args.finalOutputText.includes(fragment)) {
       violations.push(violation({
         code: "final_output_provenance_missing",
         message: `final output does not cite required artifact or id: ${fragment}`,
         subjectId: fragment,
       }));
+    }
+  }
+  for (const binding of args.sectionBindings ?? []) {
+    const sectionText = markdownSectionText(args.finalOutputText, binding.heading);
+    if (!sectionText) {
+      violations.push(violation({
+        code: "final_output_provenance_missing",
+        message: `final output is missing provenance-bound section: ${binding.heading}`,
+        subjectId: binding.section_id,
+      }));
+      continue;
+    }
+    for (const fragment of binding.required_fragments) {
+      if (!sectionText.includes(fragment)) {
+        violations.push(violation({
+          code: "final_output_provenance_missing",
+          message:
+            `final output section ${binding.heading} does not cite required artifact or id: ${fragment}`,
+          subjectId: `${binding.section_id}:${fragment}`,
+        }));
+      }
     }
   }
   return violations;
@@ -665,57 +2099,65 @@ async function readYamlDocument<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
 }
 
-export async function writeClaimRealizationMapValidationArtifact(args: {
+export async function writeClaimRealizationMapValidationForOntologySeedArtifact(args: {
   claimRealizationMapPath: string;
-  seedCandidatePath: string;
+  ontologySeedPath: string;
   sourceObservationsPath: string;
   outputPath: string;
 }): Promise<ReconstructClaimRealizationMapValidationArtifact> {
-  const [claimRealizationMap, seedCandidate, sourceObservations] =
+  const [claimRealizationMap, ontologySeed, sourceObservations] =
     await Promise.all([
       readYamlDocument<ReconstructClaimRealizationMapArtifact>(
         args.claimRealizationMapPath,
       ),
-      readYamlDocument<ReconstructSeedCandidateArtifact>(args.seedCandidatePath),
+      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+        args.ontologySeedPath,
+      ),
       readYamlDocument<ReconstructSourceObservationsArtifact>(
         args.sourceObservationsPath,
       ),
     ]);
-  const validation = validateClaimRealizationMap({
+  const validation = validateClaimRealizationMapForOntologySeed({
     claimRealizationMap,
-    seedCandidate,
+    ontologySeed,
     sourceObservations,
     claimRealizationMapRef: path.resolve(args.claimRealizationMapPath),
-    seedCandidateRef: path.resolve(args.seedCandidatePath),
+    ontologySeedRef: path.resolve(args.ontologySeedPath),
     sourceObservationsRef: path.resolve(args.sourceObservationsPath),
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
 }
 
-export async function writeSeedConfirmationValidationArtifact(args: {
+export async function writeSeedConfirmationValidationForOntologySeedArtifact(args: {
   seedConfirmationPath: string;
-  seedCandidatePath: string;
-  seedCandidateValidationPath: string;
+  ontologySeedPath: string;
+  ontologySeedValidationPath: string;
   outputPath: string;
 }): Promise<ReconstructSeedConfirmationValidationArtifact> {
-  const [seedConfirmation, seedCandidate, seedCandidateValidation] =
+  const [
+    seedConfirmation,
+    ontologySeed,
+    ontologySeedValidation,
+  ] =
     await Promise.all([
       readYamlDocument<ReconstructSeedConfirmationArtifact>(
         args.seedConfirmationPath,
       ),
-      readYamlDocument<ReconstructSeedCandidateArtifact>(args.seedCandidatePath),
-      readYamlDocument<ReconstructSeedCandidateValidationArtifact>(
-        args.seedCandidateValidationPath,
+      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+        args.ontologySeedPath,
+      ),
+      readYamlDocument<ReconstructActionableOntologySeedValidationArtifact>(
+        args.ontologySeedValidationPath,
       ),
     ]);
-  const validation = validateSeedConfirmation({
+  const validation = validateSeedConfirmationForOntologySeed({
     seedConfirmation,
-    seedCandidate,
-    seedCandidateValidation,
+    ontologySeed,
+    ontologySeedValidation,
     seedConfirmationRef: path.resolve(args.seedConfirmationPath),
-    seedCandidateRef: path.resolve(args.seedCandidatePath),
-    seedCandidateValidationRef: path.resolve(args.seedCandidateValidationPath),
+    ontologySeedRef: path.resolve(args.ontologySeedPath),
+    ontologySeedValidationRef: path.resolve(args.ontologySeedValidationPath),
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
@@ -746,6 +2188,73 @@ export async function writeCompetencyQuestionsValidationArtifact(args: {
     competencyQuestionsRef: path.resolve(args.competencyQuestionsPath),
     seedConfirmationValidationRef:
       path.resolve(args.seedConfirmationValidationPath),
+    sourceObservationsRef: path.resolve(args.sourceObservationsPath),
+  });
+  await writeYamlDocument(args.outputPath, validation);
+  return validation;
+}
+
+export async function writeCompetencyQuestionsValidationForOntologySeedArtifact(args: {
+  competencyQuestionsPath: string;
+  ontologySeedPath: string;
+  ontologySeedValidationPath: string;
+  seedConfirmationValidationPath?: string | null;
+  sourceObservationsPath: string;
+  registryPath: string;
+  reconstructRunManifestPath?: string | null;
+  governingSnapshot?: ReconstructRunGoverningSnapshot | null;
+  outputPath: string;
+}): Promise<ReconstructCompetencyQuestionsValidationArtifact> {
+  const [
+    competencyQuestions,
+    ontologySeed,
+    ontologySeedValidation,
+    sourceObservations,
+    contractRegistry,
+  ] =
+    await Promise.all([
+      readYamlDocument<ReconstructCompetencyQuestionsArtifact>(
+        args.competencyQuestionsPath,
+      ),
+      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+        args.ontologySeedPath,
+      ),
+      readYamlDocument<ReconstructActionableOntologySeedValidationArtifact>(
+        args.ontologySeedValidationPath,
+      ),
+      readYamlDocument<ReconstructSourceObservationsArtifact>(
+        args.sourceObservationsPath,
+      ),
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+    ]);
+  const manifest = args.governingSnapshot || !args.reconstructRunManifestPath
+    ? null
+    : await readYamlDocument<ReconstructRunManifestArtifact>(
+      args.reconstructRunManifestPath,
+    );
+  const seedConfirmationValidation = args.seedConfirmationValidationPath
+    ? await readYamlDocument<ReconstructSeedConfirmationValidationArtifact>(
+      args.seedConfirmationValidationPath,
+    )
+    : null;
+  const governingSnapshot = args.governingSnapshot ?? manifest?.governing_snapshot ?? null;
+  const validation = validateCompetencyQuestionsForOntologySeed({
+    competencyQuestions,
+    ontologySeed,
+    ontologySeedValidation,
+    seedConfirmationValidation,
+    sourceObservations,
+    contractRegistry,
+    governingSnapshot,
+    competencyQuestionsRef: path.resolve(args.competencyQuestionsPath),
+    reconstructRunManifestRef: args.reconstructRunManifestPath
+      ? path.resolve(args.reconstructRunManifestPath)
+      : null,
+    seedConfirmationValidationRef: args.seedConfirmationValidationPath
+      ? path.resolve(args.seedConfirmationValidationPath)
+      : null,
+    ontologySeedRef: path.resolve(args.ontologySeedPath),
+    ontologySeedValidationRef: path.resolve(args.ontologySeedValidationPath),
     sourceObservationsRef: path.resolve(args.sourceObservationsPath),
   });
   await writeYamlDocument(args.outputPath, validation);

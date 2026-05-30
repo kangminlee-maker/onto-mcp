@@ -164,11 +164,11 @@ bounded mock-author post-Seed loop, not proof that runtime authored ontology
 meaning or that live host confirmation occurred.
 
 The run manifest records `happy_path_scope.implemented_artifacts` and
-`happy_path_scope.deferred_artifacts`. Deferred artifacts currently include
-domain context selection and its validation only; claim realization,
-confirmation validation, competency-question assessment, failure classification,
-revision proposal, metrics, stop decision, and final output provenance are
-implemented in the mock-authored runtime-gated path.
+`happy_path_scope.deferred_artifacts`. Domain competency admission is active
+governing-snapshot truth rather than a separate domain competency selection artifact.
+Claim realization, confirmation validation, competency-question assessment,
+failure classification, revision proposal, metrics, stop decision, and final
+output provenance are implemented in the runtime-gated path.
 
 The post-Seed design is captured in
 `.onto/processes/reconstruct/reconstruct-boundary-contract.md` and
@@ -206,9 +206,11 @@ host LLM and user-mediated flow.
   malformed output and artifact write failures continue to use structured
   failure records. Review continuation is a bounded artifact-backed continuation
   surface, not a generic retry policy or subagent lifecycle API.
-- MCP reconstruct tools must not become an ontology generator. The host LLM owns
-  Seed candidates, competency questions, failure classifications, revision
-  proposals, and stop decisions.
+- MCP reconstruct tools expose the LLM-authored semantic artifact workflow. The
+  host LLM owns ontology seeds, competency questions, failure classifications,
+  revision proposals, and stop decisions; runtime owns structural observation,
+  artifact persistence, deterministic validation gates, and bounded status
+  projection.
 
 ## Provider And Route Selection
 

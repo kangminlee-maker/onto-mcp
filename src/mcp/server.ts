@@ -12,6 +12,10 @@ import {
   createOntoReconstructCoreApi,
 } from "../core-api/reconstruct-api.js";
 import {
+  RECONSTRUCT_DOMAIN_ID_GRAMMAR_DESCRIPTION,
+  RECONSTRUCT_DOMAIN_ID_PATTERN,
+} from "../core-runtime/reconstruct/domain-id.js";
+import {
   OntoSettingsValidationError,
   UnsupportedOntoConfigFilesError,
 } from "../core-runtime/discovery/settings-chain.js";
@@ -384,6 +388,18 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       description:
         "Declared reconstruction purpose. The runner passes this to the directive author and does not infer ontology meaning itself.",
     },
+    domain: {
+      type: "string",
+      pattern: RECONSTRUCT_DOMAIN_ID_PATTERN.source,
+      description:
+        `Optional domain id whose competency_qs.md is admitted into the reconstruct run governing snapshot. Must use ${RECONSTRUCT_DOMAIN_ID_GRAMMAR_DESCRIPTION}.`,
+    },
+    resumeMode: {
+      type: "string",
+      enum: ["fresh", "reuse_existing_authored_artifacts"],
+      description:
+        "Optional explicit same-session resume mode. fresh fails before rewriting authored semantic artifacts; reuse_existing_authored_artifacts reuses existing authored YAML artifacts and reruns downstream runtime validation gates.",
+    },
     semanticAuthorRealization: {
       type: "string",
       enum: ["mock", "direct_call"],
@@ -420,12 +436,43 @@ const VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
   required: ["directiveKind", "sourceObservationsPath"],
+  allOf: [
+    {
+      if: {
+        properties: { directiveKind: { const: "source_observation" } },
+        required: ["directiveKind"],
+      },
+      then: { required: ["directivePath"] },
+    },
+    {
+      if: {
+        properties: { directiveKind: { const: "candidate_disposition" } },
+        required: ["directiveKind"],
+      },
+      then: {
+        required: ["candidateInventoryPath", "candidateDispositionPath"],
+      },
+    },
+    {
+      if: {
+        properties: { directiveKind: { const: "ontology_seed" } },
+        required: ["directiveKind"],
+      },
+      then: {
+        required: ["ontologySeedPath", "candidateDispositionPath"],
+      },
+    },
+  ],
   properties: {
     directiveKind: {
       type: "string",
-      enum: ["source_observation", "seed_candidate"],
+      enum: [
+        "source_observation",
+        "candidate_disposition",
+        "ontology_seed",
+      ],
       description:
-        "Which LLM-authored reconstruct directive shape to validate.",
+        "Which LLM-authored reconstruct artifact shape to validate.",
     },
     projectRoot: {
       type: "string",
@@ -436,24 +483,29 @@ const VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA: JsonValue = {
       description:
         "Path to source-observation-directive.yaml when directiveKind=source_observation.",
     },
-    seedCandidatePath: {
+    candidateInventoryPath: {
       type: "string",
       description:
-        "Path to seed-candidate.yaml when directiveKind=seed_candidate.",
+        "Path to candidate-inventory.yaml when directiveKind=candidate_disposition.",
+    },
+    candidateDispositionPath: {
+      type: "string",
+      description:
+        "Path to candidate-disposition.yaml when directiveKind=candidate_disposition or ontology_seed.",
+    },
+    ontologySeedPath: {
+      type: "string",
+      description:
+        "Path to ontology-seed.yaml when directiveKind=ontology_seed.",
     },
     sourceObservationsPath: {
       type: "string",
       description: "Path to source-observations.yaml.",
     },
-    sourceObservationDirectivePath: {
+    registryPath: {
       type: "string",
       description:
-        "Optional path to source-observation-directive.yaml for Seed validation.",
-    },
-    sourceObservationDirectiveValidationPath: {
-      type: "string",
-      description:
-        "Optional path to source-observation-directive-validation.yaml for Seed validation.",
+        "Optional path to reconstruct-contract-registry.yaml for registry-backed validators.",
     },
     outputPath: {
       type: "string",
@@ -524,7 +576,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto.validate_reconstruct_directive",
     description:
-      "Validate LLM-authored reconstruct directive files against runtime observations and evidence refs without repairing or rewriting them.",
+      "Validate LLM-authored reconstruct artifacts against runtime observations, registry enums, and evidence refs without repairing or rewriting them.",
     inputSchema: VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA,
   },
   {
@@ -1218,35 +1270,61 @@ async function callTool(
             }),
           );
         }
-        return formatToolResult(
-          await reconstructApi.validateSeedCandidate({
-            seedCandidatePath: resolveInsideProject({
-              projectRoot,
-              ref: parsed.seedCandidatePath,
-              label: "seedCandidatePath",
+        if (parsed.directiveKind === "candidate_disposition") {
+          return formatToolResult(
+            await reconstructApi.validateCandidateDisposition({
+              candidateInventoryPath: resolveInsideProject({
+                projectRoot,
+                ref: parsed.candidateInventoryPath,
+                label: "candidateInventoryPath",
+              }),
+              candidateDispositionPath: resolveInsideProject({
+                projectRoot,
+                ref: parsed.candidateDispositionPath,
+                label: "candidateDispositionPath",
+              }),
+              sourceObservationsPath,
+              ...(parsed.registryPath
+                ? {
+                    registryPath: resolveInsideProject({
+                      projectRoot,
+                      ref: parsed.registryPath,
+                      label: "registryPath",
+                    }),
+                  }
+                : {}),
+              ...(outputPath ? { outputPath } : {}),
             }),
-            sourceObservationsPath,
-            ...(parsed.sourceObservationDirectivePath
-              ? {
-                  sourceObservationDirectivePath: resolveInsideProject({
-                    projectRoot,
-                    ref: parsed.sourceObservationDirectivePath,
-                    label: "sourceObservationDirectivePath",
-                  }),
-                }
-              : {}),
-            ...(parsed.sourceObservationDirectiveValidationPath
-              ? {
-                  sourceObservationDirectiveValidationPath: resolveInsideProject({
-                    projectRoot,
-                    ref: parsed.sourceObservationDirectiveValidationPath,
-                    label: "sourceObservationDirectiveValidationPath",
-                  }),
-                }
-              : {}),
-            ...(outputPath ? { outputPath } : {}),
-          }),
-        );
+          );
+        }
+        if (parsed.directiveKind === "ontology_seed") {
+          return formatToolResult(
+            await reconstructApi.validateActionableOntologySeed({
+              ontologySeedPath: resolveInsideProject({
+                projectRoot,
+                ref: parsed.ontologySeedPath,
+                label: "ontologySeedPath",
+              }),
+              candidateDispositionPath: resolveInsideProject({
+                projectRoot,
+                ref: parsed.candidateDispositionPath,
+                label: "candidateDispositionPath",
+              }),
+              sourceObservationsPath,
+              ...(parsed.registryPath
+                ? {
+                    registryPath: resolveInsideProject({
+                      projectRoot,
+                      ref: parsed.registryPath,
+                      label: "registryPath",
+                    }),
+                  }
+                : {}),
+              ...(outputPath ? { outputPath } : {}),
+            }),
+          );
+        }
+        throw new Error("Unsupported reconstruct directive kind.");
       }
       case "onto.reconstruct": {
         const parsed = OntoReconstructToolInputSchema.parse(args);
@@ -1281,6 +1359,8 @@ async function callTool(
             projectRoot,
             targetRefs,
             intent: parsed.intent,
+            ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
+            ...(parsed.resumeMode !== undefined ? { resumeMode: parsed.resumeMode } : {}),
             semanticAuthorRealization: parsed.semanticAuthorRealization,
             confirmationProviderRealization:
               parsed.confirmationProviderRealization,

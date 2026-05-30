@@ -1,0 +1,83 @@
+schema_version: 1
+session_id: "20260528-6dffeec8"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#STRUCTURE-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:344, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013"
+    claim: "Validation references `current_detail_ids`, but the lifecycle schema does not define that edge; the declared demotion bridge field is `concept_identity_events[].target_detail_ids`."
+    proposed_action: "Replace `current_detail_ids or target_detail_ids` with only `target_detail_ids`, unless `current_detail_ids` is intentionally added as a declared lifecycle field."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially confirming that demotion bridges from prior concept IDs to lower-level detail IDs are closed through a canonical lifecycle authority."
+    failure_condition: "A contract implementer or runtime validator follows the validation expectation and looks for or accepts `current_detail_ids`, which is not declared in the lifecycle schema."
+    impact: "The orphan validation edge weakens the intended single demotion bridge and can introduce a parallel lifecycle transition authority, reducing structural trust in the design contract."
+    evidence_refs: ["round1/structure.md#STRUCTURE-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:344", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013"]
+    severity: medium
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "dependency"
+    source_ref: "round1/dependency.md#DEP-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"
+    claim: "Demotion bridge validation names `current_detail_ids` as an alternate dependency edge even though the lifecycle schema and output shape define `target_detail_ids` as the bridge."
+    proposed_action: "Make the demotion bridge single-shaped by requiring `concept_identity_events[].target_detail_ids[]` to reference known `lower_level_detail_placements[].detail_id` values."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially confirming lifecycle transition authority and demotion bridge dependency direction."
+    failure_condition: "A validator accepts a demotion bridge through `current_detail_ids`, leaving downstream consumers unable to reliably find the demotion linkage in the declared artifact shape."
+    impact: "The implicit dependency path is not anchored to a declared artifact seat, weakening reproducibility and downstream dependency reliability for lifecycle transition replay."
+    evidence_refs: ["round1/dependency.md#DEP-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"]
+    severity: medium
+    domain_threshold_used: null
+  - finding_id: "finding-003"
+    lens_id: "semantics"
+    source_ref: "round1/semantics.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "`concept_identity_events[].target_detail_ids` is defined as the demotion bridge, while validation later permits `current_detail_ids` or `target_detail_ids`."
+    claim: "`current_detail_ids` reads like a synonym or alternate lifecycle authority for the same demotion bridge, but it is not introduced as a field, alias, compatibility projection, or retired-seat mapping."
+    proposed_action: "Change the validation expectation to reference only `target_detail_ids`, or explicitly add `current_detail_ids` with a clear semantic distinction; the smaller fix is to remove `current_detail_ids`."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially preserving a single stable semantic shape for lifecycle transition authority."
+    failure_condition: "Readers or implementers interpret `current_detail_ids` as an allowed public schema field even though the documented Seed shape does not define it."
+    impact: "The undefined alternate name weakens semantic clarity and can create a second name for the same demotion relation, reducing trust in the canonical field vocabulary."
+    evidence_refs: ["round1/semantics.md#finding-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"]
+    severity: medium
+    domain_threshold_used: null
+  - finding_id: "finding-004"
+    lens_id: "pragmatics"
+    source_ref: "round1/pragmatics.md#P2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:342, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:344, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1015"
+    claim: "The runtime question path for which lower-level detail currently represents a demoted prior concept becomes ambiguous because validation permits undeclared `current_detail_ids` beside declared `target_detail_ids`."
+    proposed_action: "Use a single declared bridge: `concept_identity_events[event_type=demoted].prior_concept_ids[] -> target_detail_ids[] -> lower_level_detail_placements[].detail_id`."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially usable runtime validation and answerability of demotion continuity."
+    failure_condition: "A runtime validator or ontology author tries to answer the demotion-continuity question and encounters two possible field paths, one of which is not declared."
+    impact: "The answer path is non-unique, which meaningfully weakens practical usability and trust in deterministic validation behavior."
+    evidence_refs: ["round1/pragmatics.md#P2", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:342", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:344", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1015"]
+    severity: medium
+    domain_threshold_used: null
+  - finding_id: "finding-005"
+    lens_id: "evolution"
+    source_ref: "round1/evolution.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"
+    claim: "Demotion lifecycle bridge wording leaves two possible field names for the same transition edge, with `current_detail_ids` undefined and `target_detail_ids` declared."
+    proposed_action: "Make `target_detail_ids[]` the sole demotion bridge, or explicitly add `current_detail_ids[]` to the lifecycle schema and define its relationship to `target_detail_ids[]`; recommended default is to remove `current_detail_ids`."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially change tolerance and replay of lifecycle transitions across iterative rounds or migration."
+    failure_condition: "Future schema migration or runtime validation accepts two names for demoted concept-to-detail continuity, splitting replay paths across versions."
+    impact: "The compatibility fork weakens evolution safety because demoted prior concept IDs no longer have one stable replay path."
+    evidence_refs: ["round1/evolution.md#finding-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"]
+    severity: medium
+    domain_threshold_used: null
+  - finding_id: "finding-006"
+    lens_id: "axiology"
+    source_ref: "round1/axiology.md#A1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-344, .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015"
+    claim: "Undefined `current_detail_ids` weakens the single-authority demotion bridge by creating an implicit alternate field name for the same concept."
+    proposed_action: "Replace the validation expectation with `target_detail_ids` only, unless `current_detail_ids` is deliberately registered in the lifecycle schema and migration story."
+    affected_purpose: "Fresh verification review for the reconstruct top-level concept discovery design patch, especially alignment with one canonical artifact seat and one canonical label per concept or field."
+    failure_condition: "The contract keeps one declared artifact field while validation permits an undeclared synonym for the same demotion bridge."
+    impact: "The mismatch is value-relevant because the patch aims to close authority ambiguity, yet the undeclared alias reintroduces competing field vocabulary."
+    evidence_refs: ["round1/axiology.md#A1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-344", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015", ".onto/principles/ontology-as-code-guideline.md:17-21", ".onto/principles/ontology-as-code-guideline.md:85-99", ".onto/principles/productization-charter.md:44-48"]
+    severity: medium
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

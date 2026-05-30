@@ -1,0 +1,34 @@
+entrypoint: review
+target_scope_candidate:
+  kind: file
+  primary_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-da9e31db/diff-target.patch
+intent_summary: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing prior material issue issue-001
+  from session 20260528-391bbc3f. Confirm whether material
+  documentation/design-contract issues remain in the current working tree diff,
+  especially complete concept-centered lifecycle implementation guidance,
+  retired-seat legacy migration mappings, concept/relation split/merge lifecycle
+  continuity, pressure prior/new status transitions, answerability lifecycle
+  refs, answerability status by list membership, source_authority_scope
+  preservation, material coverage source-authority lifecycle events, README, and
+  IMPLEMENTATION_MAP alignment.
+domain_recommendation: software-engineering
+domain_selection_required: false
+review_mode_recommendation: full
+lens_selection_plan:
+  always_include:
+    - axiology
+  recommended_lenses:
+    - logic
+    - structure
+    - dependency
+    - semantics
+    - pragmatics
+    - evolution
+    - coverage
+    - conciseness
+    - axiology
+  rationale:
+    - host-facing positional invoke currently defaults to full 9-lens review
+      until interactive interpretation is productized.
+ambiguity_notes: []

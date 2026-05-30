@@ -1,0 +1,117 @@
+schema_version: 1
+session_id: "20260528-da9e31db"
+issues:
+  - issue_id: "issue-001"
+    stances:
+      - lens_id: "logic"
+        stance: "not_applicable"
+        rationale: "The logic lens reported no formal contradiction or unsatisfiable claim set within its scope. It did not materially accept or reject the boundary_notes authority-seat mismatch as a logic finding."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "support"
+        rationale: "The structure lens directly identified that boundary_notes maps to top_level_concepts[].boundary_statement while the Seed shape defines top_level_concepts[].boundary instead, creating a dangling migration target."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/structure.md#structure-001"]
+      - lens_id: "dependency"
+        stance: "support"
+        rationale: "The dependency lens directly identified the same absent boundary_statement target as a dangling directed dependency from the retired boundary_notes seat."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/dependency.md#medium-retired-boundary-notes-migration-points-to-a-non-existent-target-authority-seat"]
+      - lens_id: "semantics"
+        stance: "support"
+        rationale: "The semantics lens directly identified source-of-truth ambiguity between boundary_statement and the structured boundary object."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/semantics.md#sem-001"]
+      - lens_id: "pragmatics"
+        stance: "support"
+        rationale: "The pragmatics lens directly identified that consumers cannot answer where legacy boundary_notes should go because boundary_statement, structured boundary summaries, and final-output text are all plausible targets."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/pragmatics.md#finding-pragmatics-001"]
+      - lens_id: "evolution"
+        stance: "support"
+        rationale: "The evolution lens directly identified schema migration fragility because future implementations or validators may fail or invent a new field when preserving boundary_notes."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/evolution.md#medium-boundary-notes-migration-targets-a-field-that-the-concept-centered-seed-shape-does-not-define"]
+      - lens_id: "coverage"
+        stance: "not_applicable"
+        rationale: "The coverage lens found no material coverage omission and did not address the boundary_statement mismatch as a coverage issue."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "not_applicable"
+        rationale: "The conciseness lens found no material duplication or unnecessary concept surface and did not address the boundary_statement mismatch as a conciseness issue."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/conciseness.md"]
+      - lens_id: "axiology"
+        stance: "not_applicable"
+        rationale: "The axiology lens found the patch value-aligned within its scope and did not address the boundary_statement mismatch as an axiology issue."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/axiology.md"]
+  - issue_id: "issue-002"
+    stances:
+      - lens_id: "logic"
+        stance: "not_applicable"
+        rationale: "The logic lens reported no formal contradiction or unsatisfiable claim set and did not materially evaluate alias or source_authority_scope lifecycle traceability as a logic finding."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "narrow"
+        rationale: "The structure lens supports the lifecycle/provenance incompleteness root only for aliases, where aliases are present in the Seed shape but lack an explicit lifecycle connection. It did not support the source_authority_scope state-ref portion."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/structure.md#structure-002"]
+      - lens_id: "dependency"
+        stance: "not_applicable"
+        rationale: "The dependency lens identified only the boundary_notes target issue and did not raise a directed-dependency issue for alias lifecycle or source_authority_scope state refs."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "oppose"
+        rationale: "The semantics lens stated that concept-centered lifecycle guidance and source_authority_scope preservation are semantically addressed, and found no semantic issue beyond the boundary_statement mismatch."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/semantics.md"]
+      - lens_id: "pragmatics"
+        stance: "narrow"
+        rationale: "The pragmatics lens supports the lifecycle/provenance incompleteness root for source_authority_scope_changed because prior and current authority state refs are conditional. It did not support the alias lifecycle portion."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/pragmatics.md#finding-pragmatics-002"]
+      - lens_id: "evolution"
+        stance: "not_applicable"
+        rationale: "The evolution lens identified only the boundary_notes migration issue and did not raise an evolution issue for aliases or source_authority_scope lifecycle refs."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "oppose"
+        rationale: "The coverage lens found no material coverage omission and specifically stated that lifecycle/provenance, material coverage, and source-authority changes are represented in the diff."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "not_applicable"
+        rationale: "The conciseness lens found no material conciseness issue and did not materially evaluate whether alias or source_authority_scope changes need additional lifecycle seats."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/conciseness.md"]
+      - lens_id: "axiology"
+        stance: "not_applicable"
+        rationale: "The axiology lens found the patch value-aligned within its scope and did not address alias or source_authority_scope lifecycle traceability as an axiology issue."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/axiology.md"]
+validation:
+  missing_stances: []

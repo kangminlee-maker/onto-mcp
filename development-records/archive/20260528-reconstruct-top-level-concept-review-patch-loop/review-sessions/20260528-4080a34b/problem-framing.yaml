@@ -1,0 +1,9 @@
+schema_version: 1
+session_id: "20260528-4080a34b"
+classification_context:
+  common_spine_version: 1
+  session_domain: "software-engineering"
+  domain_profile_ref: ".onto/domains/software-engineering/problem_framing_profile.md"
+  domain_profile_doc_type: "custom:problem_framing_profile"
+  domain_profile_status: "applied"
+classifications: []

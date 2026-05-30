@@ -97,12 +97,16 @@ cross-material interpretation belongs to the LLM after runtime observation.
 | Artifact | Required change |
 |---|---|
 | `review-target-profile.yaml` | Preserve `target_material_kind`, detection confidence, confidence basis, and unsupported-material state. |
-| `target-material-profile.yaml` | New reconstruct runtime artifact for material candidates, selected material kind, selected profiles, and support state. |
+| `target-material-profile.yaml` | New reconstruct runtime artifact for material candidates, selected material kind, selected profile snapshots, per-member selected profile ids for `mixed`, `contract_status`, `runtime_implementation_status`, and support state. |
 | `source-inventory.yaml` | Preserve material-specific inventory units and scan boundaries. |
 | `source-observations.yaml` | Include stable observation ids, material kind, adapter id, location, and structural data. |
 | `source-observation-directive-validation.yaml` | Preserve runtime validation of LLM-selected observation refs against `source-observations.yaml`. |
-| `seed-candidate-validation.yaml` | Preserve runtime validation that LLM-authored Seed claims cite selected runtime observations without runtime generating ontology meaning. |
-| `reconstruct-record.yaml` | Preserve refs to material profile, inventory, observations, directives, metrics, and final disposition. |
+| `candidate-disposition-validation.yaml` | Preserve runtime validation that every salient material-derived candidate has one allowed disposition before seed promotion. |
+| `ontology-seed-validation.yaml` | Preserve runtime validation that LLM-authored seed claims cite selected runtime observations, close ids, and do not require runtime to generate ontology meaning. |
+| `query-proofs-validation.yaml` | Preserve runtime validation of executable query/API proof refs when queryability is claimed. |
+| `reconstruct-run-manifest.pre-handoff-validation.yaml` | Preserve selected registry, contract, source profile, validator, reference-standard, version, and migration snapshot consistency before terminal handoff. |
+| `reconstruct-run-manifest.post-publication-validation.yaml` | Preserve complete manifest consistency after final output and record refs exist. |
+| `reconstruct-record.yaml` | Preserve refs to material profile, inventory, observations, directives, seed, validations, handoff, manifest validation, metrics, and final disposition. |
 | future `evolve-target-profile.yaml` | Preserve target refs, `target_material_kind`, support status, and boundary refs before any evolve adapter dispatch. |
 
 Artifact names remain contract-owned. Runtime implementation must either match
@@ -110,21 +114,26 @@ these shapes or update the owning contract before code lands.
 
 ## 6. Runtime Replacement Steps
 
-Implementation should proceed in this order:
+Implementation should proceed in this order. This table defines dependency
+order only; it is not the authority for current material support. Current
+reconstruct profile support, adapter readiness, profile versions, migration
+status, and definition hashes are owned by
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml#source_profile_records`
+and must be copied into the runtime `target-material-profile.yaml` snapshot.
 
-| Step | Status |
+| Step | Runtime boundary replaced |
 |---|---|
-| Add a shared `target_material_kind` detection helper. | implemented |
-| Extend `review-target-profile.yaml` schema and materializer. | implemented |
-| Add reconstruct source profile loader. | implemented |
-| Add unsupported/fail-loud behavior for `unknown` and unsupported formats. | implemented for the current minimal adapter contract: unknown and unsupported refs are recorded and skipped without adapter dispatch |
-| Implement one minimal source adapter, preferably `document` or `spreadsheet`. | implemented: minimal structural observers write source observations for concrete material refs |
-| Define `source-observations.yaml` schema with stable observation ids. | implemented for preparation helper |
-| Validate directive evidence refs against observation ids. | implemented for `SourceObservationDirective` |
-| Validate Seed candidate claims against selected observation evidence refs. | implemented for `SeedCandidateDirective` helper |
-| Assemble reconstruct artifact refs into `reconstruct-record.yaml`. | implemented as record helper |
-| Add a reconstruct Core API facade over bounded runtime helpers. | implemented for preparation, profile listing, directive validation, and record assembly |
-| Add MCP schemas only after runtime contracts and tests exist. | implemented for `onto.list_source_profiles`, `onto.observe_source`, and `onto.validate_reconstruct_directive`; metrics remain future |
+| Add a shared `target_material_kind` detection helper. | Target refs can be classified without semantic interpretation. |
+| Extend `review-target-profile.yaml` schema and materializer. | Review target profiles can preserve material kind and unsupported state. |
+| Add reconstruct source profile loader. | Reconstruct can dereference selected source-profile records from the registry. |
+| Add unsupported/fail-loud behavior for `unknown` and unsupported formats. | Unsupported refs are recorded or halted before adapter dispatch. |
+| Implement one minimal source adapter for a concrete material kind. | A selected concrete profile can produce structural observations without ontology meaning. |
+| Define `source-observations.yaml` schema with stable observation ids. | LLM-authored artifacts can cite runtime observations by stable ids. |
+| Validate directive evidence refs against observation ids. | Source-observation directives cannot cite non-existent runtime evidence. |
+| Validate candidate disposition and ontology seed claims against selected observation evidence refs. | Candidate promotion and seed claims remain grounded in selected observations. |
+| Assemble reconstruct artifact refs into `reconstruct-record.yaml`. | Terminal records can preserve refs to material profile, inventory, observations, validations, manifest validation, and handoff result. |
+| Add a reconstruct Core API facade over bounded runtime helpers. | Host surfaces can call preparation, profile listing, directive validation, and record assembly through a stable API. |
+| Add MCP schemas only after runtime contracts and tests exist. | Public tool schemas expose bounded runtime facts and artifact refs. |
 
 Each step should replace one deterministic boundary. LLM-owned semantic
 judgment remains outside the runtime replacement steps.
@@ -137,6 +146,10 @@ Runtime must validate:
 - `unknown` does not dispatch a material adapter
 - `mixed` records per-member material kinds and one of the support states in
   section 4.1 before adapter dispatch
+- `target-material-profile.yaml` snapshots every selected source profile from
+  `source_profile_records`, including `profile_id`, `definition_ref`,
+  `definition_sha256`, `contract_status`, `runtime_implementation_status`,
+  `schema_version`, `profile_version`, and `migration_status`
 - unsupported formats halt or degrade explicitly
 - source observations do not claim ontology facts such as entity, relation,
   business rule, aggregate root, or policy meaning

@@ -1,0 +1,144 @@
+resolved_target_scope:
+  kind: file
+  resolved_refs:
+    - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/diff-target.patch
+domain_final_selection:
+  recommendation: software-engineering
+  final_value: software-engineering
+  selection_mode: explicit_token
+resolved_session_domain: software-engineering
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_review_mode: full
+resolved_lens_set:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+session_id: 20260528-6dffeec8
+session_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8
+round1_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1
+execution_preparation_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation
+execution_plan_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-plan.yaml
+session_metadata_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/session-metadata.yaml
+interpretation_artifact_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/interpretation.yaml
+binding_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/binding.yaml
+target_snapshot_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/target-snapshot.md
+target_snapshot_manifest_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/target-snapshot-manifest.yaml
+review_target_profile_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/review-target-profile.yaml
+materialized_input_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/materialized-input.md
+context_candidate_assembly_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/context-candidate-assembly.yaml
+actor_invocation_profiles_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/actor-invocation-profiles.yaml
+actor_consumer_bindings_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/actor-consumer-bindings.yaml
+domain_binding_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/domain-binding.yaml
+review_value_alignment_criteria_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/review-value-alignment-criteria.yaml
+review_context_manifest_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-preparation/review-context-manifest.yaml
+synthesis_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/synthesis.md
+finding_ledger_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-ledger.yaml
+finding_relation_graph_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-relation-graph.yaml
+issue_ledger_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/issue-ledger.yaml
+issue_stance_matrix_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/issue-stance-matrix.yaml
+deliberation_plan_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation-plan.yaml
+problem_framing_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/problem-framing.yaml
+lens_completion_barrier_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/lens-completion-barrier.yaml
+deliberation_mode: controlled-lens-deliberation
+deliberation_root_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation
+deliberation_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation.md
+execution_result_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-result.yaml
+error_log_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/error-log.md
+review_record_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/review-record.yaml
+final_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/final-output.md
+boundary_policy:
+  web_research_policy: denied
+  repo_exploration_policy: allowed
+  recursive_reference_expansion_policy: denied
+  filesystem_scope:
+    allowed_roots: &a1
+      - /Users/kangmin/cowork/onto-mcp
+  write_policy:
+    source_mutation_policy: denied
+    allowed_output_refs:
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/logic.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/structure.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/dependency.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/semantics.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/pragmatics.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/evolution.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/coverage.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/conciseness.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/axiology.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/logic-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/structure-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/dependency-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/semantics-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/pragmatics-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/evolution-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/coverage-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/conciseness-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation/round1/axiology-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-ledger.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-relation-graph.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/issue-ledger.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/issue-stance-matrix.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation-plan.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/problem-framing.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/lens-completion-barrier.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/synthesis.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/deliberation.md
+  provenance_policy:
+    extra_exploration_citation_required: true
+    web_source_citation_required: true
+boundary_presentation:
+  role_definition_presentation: embedded_and_ref
+  primary_target_presentation: embedded_and_ref
+  required_context_presentation: ref_only
+  output_seat_presentation: declared
+  control_policy_presentation: declared
+boundary_enforcement_profile:
+  prompt_boundary_enforcement: prompt_declared_only
+  filesystem_boundary_enforcement: prompt_declared_only
+  network_boundary_enforcement: prompt_declared_only
+  write_boundary_enforcement: prompt_declared_only
+effective_boundary_state:
+  web_research:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance; web access is
+        not environment-enforced yet.
+  repo_exploration:
+    requested_policy: allowed
+    effective_policy: allowed
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance for repo
+        exploration scope.
+  recursive_reference_expansion:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on prompt-declared no-hidden-expansion guidance.
+  source_mutation:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution declares output-seat-only writing and source mutation
+        denial in the prompt path.
+  filesystem_scope:
+    requested_allowed_roots: *a1
+    effective_allowed_roots: *a1
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution does not enforce filesystem scope below the host
+        boundary; allowed roots are currently prompt-declared.
+binding_notes:
+  - Explicit domain token software-engineering was provided; runtime used it
+    without target inference.

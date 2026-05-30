@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: "20260528-391bbc3f"
+issues:
+  - issue_id: "issue-001"
+    stances:
+      - lens_id: "logic"
+        stance: "narrow"
+        rationale: "The logic lens found no formal-logic contradiction in the reviewed diff and explicitly passed the lifecycle, pressure transition, answerability status, source_authority_scope, pressure lifecycle, README, and IMPLEMENTATION_MAP checks. Its evidence narrows the issue away from formal contradiction in the core contract and toward practical guidance completeness rather than rejecting the pragmatics and evolution concerns."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "narrow"
+        rationale: "The structure lens found no orphaned design concepts, missing required relationship paths, or competing structural authority introduced by the patch. This narrows the issue to whether implementation and compatibility guidance explicitly enumerate the complete authority surface, not whether the authority graph is structurally disconnected."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/structure.md"]
+      - lens_id: "dependency"
+        stance: "narrow"
+        rationale: "The dependency lens found the directed authority relationships coherent and found no circular, inverted, or competing dependency relationship. This narrows the issue to guidance and migration explicitness while preserving that the canonical authority direction itself appears coherent within boundary."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "narrow"
+        rationale: "The semantics lens found the new concepts semantically distinct and aligned, and noted that remaining implementation work is correctly framed as future concept-centered Seed projection/schema migration. This supports treating the issue as a practical implementation and migration guidance gap rather than a concept-meaning collision."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/semantics.md"]
+      - lens_id: "pragmatics"
+        stance: "support"
+        rationale: "The pragmatics lens directly raised finding-001: the lifecycle schema and validation call out pressure, answerability, detail placement, material coverage/source-authority, and convergence event groups, but the recommended implementation order only names concept and relation identity/provenance/aliasing/split/merge/rename/demotion/convergence changes. It states that a developer using the checklist cannot uniquely answer whether the omitted lifecycle groups are in scope for the same implementation step or left for later."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/pragmatics.md#finding-1", "finding-ledger.yaml#finding-001", "issue-ledger.yaml#issue-001"]
+      - lens_id: "evolution"
+        stance: "support"
+        rationale: "The evolution lens directly raised finding-002: legacy migration coverage omits retired Seed seats and projections such as included_lower_concepts, excluded_or_deferred_details, core_relations, open_questions, deferred_detail_candidates, convergence.remaining_pressures, and prior frontier_refs shapes. It links this to schema/data-model evolution continuity for future runs, same-session continuation, and cross-run lineage consumers."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/evolution.md#finding-1", "finding-ledger.yaml#finding-002", "issue-ledger.yaml#issue-001"]
+      - lens_id: "coverage"
+        stance: "narrow"
+        rationale: "The coverage lens found no material coverage issue for the requested missing-area checks and confirmed that the design remains a contract and migration target rather than implemented schema/runtime closure. This narrows the issue away from broad target coverage failure and toward explicit practical checklist and legacy compatibility mapping gaps raised by pragmatics and evolution."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "narrow"
+        rationale: "The conciseness lens found no redundant concept surface and treated the added authority seats and lifecycle projections as justified. This narrows the issue away from over-specification or duplicate concepts; it does not contradict the need to make practical implementation and migration guidance more explicit."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/conciseness.md"]
+      - lens_id: "axiology"
+        stance: "narrow"
+        rationale: "The axiology lens found no purpose or value-alignment issue and concluded that the patch preserves ontology-as-code values by assigning explicit artifact seats and validation expectations before implementation closure. This narrows the issue to completion of practical guidance and compatibility mapping rather than a value-boundary violation."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/axiology.md"]
+validation:
+  missing_stances: []

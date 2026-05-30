@@ -3,11 +3,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
+  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructCandidateDispositionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
   ReconstructRunManifestArtifact,
-  ReconstructSeedCandidateValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructStageId,
 } from "../core-runtime/reconstruct/artifact-types.js";
@@ -17,6 +18,9 @@ import {
 import {
   materializeReconstructPreparationArtifacts,
 } from "../core-runtime/reconstruct/materialize-preparation.js";
+import {
+  writeTargetMaterialProfileValidationArtifact,
+} from "../core-runtime/reconstruct/material-profile-validation.js";
 import {
   assembleReconstructRecord,
 } from "../core-runtime/reconstruct/record.js";
@@ -38,8 +42,9 @@ import {
   resolveLlmProviderConfig,
 } from "../core-runtime/llm/llm-caller.js";
 import {
-  writeSeedCandidateValidationArtifact,
-} from "../core-runtime/reconstruct/seed-candidate-validation.js";
+  writeActionableOntologySeedValidationArtifact,
+  writeCandidateDispositionValidationArtifact,
+} from "../core-runtime/reconstruct/actionable-seed-validation.js";
 import {
   writeSourceObservationDirectiveValidationArtifact,
 } from "../core-runtime/reconstruct/directive-validation.js";
@@ -47,6 +52,9 @@ import {
   loadReconstructSourceProfiles,
   type ReconstructSourceProfile,
 } from "../core-runtime/reconstruct/source-profiles.js";
+import {
+  assertReconstructDomainId,
+} from "../core-runtime/reconstruct/domain-id.js";
 import type { PipelineExecutionLedger } from "../core-runtime/pipeline-execution-ledger.js";
 import {
   buildReconstructPipelineExecutionLedger,
@@ -69,6 +77,8 @@ export interface PrepareReconstructRequest {
 
 export interface RunReconstructRequest extends PrepareReconstructRequest {
   intent: string;
+  domain?: string;
+  resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
   semanticAuthorRealization?: "mock" | "direct_call";
   confirmationProviderRealization?: "mock" | "direct_call";
 }
@@ -89,11 +99,19 @@ export interface ValidateReconstructSourceObservationDirectiveRequest {
   outputPath?: string;
 }
 
-export interface ValidateReconstructSeedCandidateRequest {
-  seedCandidatePath: string;
+export interface ValidateReconstructCandidateDispositionRequest {
+  candidateInventoryPath: string;
+  candidateDispositionPath: string;
   sourceObservationsPath: string;
-  sourceObservationDirectivePath?: string;
-  sourceObservationDirectiveValidationPath?: string;
+  registryPath?: string;
+  outputPath?: string;
+}
+
+export interface ValidateActionableOntologySeedRequest {
+  ontologySeedPath: string;
+  candidateDispositionPath: string;
+  sourceObservationsPath: string;
+  registryPath?: string;
   outputPath?: string;
 }
 
@@ -169,9 +187,12 @@ export interface OntoReconstructCoreApi {
   validateSourceObservationDirective(
     request: ValidateReconstructSourceObservationDirectiveRequest,
   ): Promise<ReconstructSourceObservationDirectiveValidationArtifact>;
-  validateSeedCandidate(
-    request: ValidateReconstructSeedCandidateRequest,
-  ): Promise<ReconstructSeedCandidateValidationArtifact>;
+  validateCandidateDisposition(
+    request: ValidateReconstructCandidateDispositionRequest,
+  ): Promise<ReconstructCandidateDispositionValidationArtifact>;
+  validateActionableOntologySeed(
+    request: ValidateActionableOntologySeedRequest,
+  ): Promise<ReconstructActionableOntologySeedValidationArtifact>;
   assembleRecord(
     request: AssembleReconstructRecordRequest,
   ): Promise<ReconstructRecordArtifact>;
@@ -260,13 +281,36 @@ function defaultDirectiveValidationOutputPath(request: {
   );
 }
 
-function defaultSeedValidationOutputPath(request: {
-  seedCandidatePath: string;
+function defaultCandidateDispositionValidationOutputPath(request: {
+  candidateDispositionPath: string;
 }): string {
   return path.join(
-    path.dirname(path.resolve(request.seedCandidatePath)),
-    "seed-candidate-validation.yaml",
+    path.dirname(path.resolve(request.candidateDispositionPath)),
+    "candidate-disposition-validation.yaml",
   );
+}
+
+function defaultOntologySeedValidationOutputPath(request: {
+  ontologySeedPath: string;
+}): string {
+  return path.join(
+    path.dirname(path.resolve(request.ontologySeedPath)),
+    "ontology-seed-validation.yaml",
+  );
+}
+
+function defaultReconstructContractRegistryPath(ontoHome?: string): string {
+  return path.join(
+    path.resolve(ontoHome ?? process.cwd()),
+    ".onto",
+    "processes",
+    "reconstruct",
+    "reconstruct-contract-registry.yaml",
+  );
+}
+
+function reconstructContractRegistryPathFromProfilesRoot(profilesRoot: string): string {
+  return path.resolve(profilesRoot, "..", "reconstruct-contract-registry.yaml");
 }
 
 async function readYamlArtifact<T>(filePath: string): Promise<T> {
@@ -383,6 +427,7 @@ function deriveReconstructProgress(args: {
 function recordArtifactRefsFromPreparation(
   refs: {
     target_material_profile: string;
+    target_material_profile_validation?: string;
     source_inventory: string;
     initial_source_frontier: string;
     source_observations: string;
@@ -390,6 +435,8 @@ function recordArtifactRefsFromPreparation(
 ): Partial<ReconstructRecordArtifactRefs> {
   return {
     target_material_profile: refs.target_material_profile,
+    target_material_profile_validation:
+      refs.target_material_profile_validation ?? null,
     source_inventory: refs.source_inventory,
     initial_source_frontier: refs.initial_source_frontier,
     source_observations: refs.source_observations,
@@ -436,10 +483,22 @@ export function createOntoReconstructCoreApi(
           request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
           [projectRoot],
       });
+      const targetMaterialProfileValidationPath = path.join(
+        sessionRoot,
+        "target-material-profile-validation.yaml",
+      );
+      await writeTargetMaterialProfileValidationArtifact({
+        targetMaterialProfilePath: preparationRefs.target_material_profile,
+        registryPath: reconstructContractRegistryPathFromProfilesRoot(profilesRoot),
+        outputPath: targetMaterialProfileValidationPath,
+      });
       const recordPath = path.join(sessionRoot, "reconstruct-record.yaml");
       const reconstructRecord = await assembleReconstructRecord({
         sessionRoot,
-        artifactRefs: recordArtifactRefsFromPreparation(preparationRefs),
+        artifactRefs: recordArtifactRefsFromPreparation({
+          ...preparationRefs,
+          target_material_profile_validation: targetMaterialProfileValidationPath,
+        }),
         outputPath: recordPath,
       });
 
@@ -477,6 +536,9 @@ export function createOntoReconstructCoreApi(
       const semanticAuthorRealization = request.semanticAuthorRealization ?? "direct_call";
       const confirmationProviderRealization =
         request.confirmationProviderRealization ?? "direct_call";
+      if (request.domain) {
+        assertReconstructDomainId(request.domain, "reconstruct domain");
+      }
       const directiveAuthor =
         semanticAuthorRealization === "mock"
           ? createMockReconstructDirectiveAuthor()
@@ -522,6 +584,8 @@ export function createOntoReconstructCoreApi(
             intent: request.intent,
             sessionRoot,
             profilesRoot,
+            ...(request.domain ? { domain: request.domain } : {}),
+            ...(request.resumeMode ? { resumeMode: request.resumeMode } : {}),
             semanticAuthorRealization,
             confirmationProviderRealization,
             directiveAuthor,
@@ -564,29 +628,35 @@ export function createOntoReconstructCoreApi(
       });
     },
 
-    async validateSeedCandidate(
-      request: ValidateReconstructSeedCandidateRequest,
-    ): Promise<ReconstructSeedCandidateValidationArtifact> {
-      return writeSeedCandidateValidationArtifact({
-        seedCandidatePath: path.resolve(request.seedCandidatePath),
+    async validateCandidateDisposition(
+      request: ValidateReconstructCandidateDispositionRequest,
+    ): Promise<ReconstructCandidateDispositionValidationArtifact> {
+      return writeCandidateDispositionValidationArtifact({
+        candidateInventoryPath: path.resolve(request.candidateInventoryPath),
+        candidateDispositionPath: path.resolve(request.candidateDispositionPath),
         sourceObservationsPath: path.resolve(request.sourceObservationsPath),
+        registryPath: path.resolve(
+          request.registryPath ?? defaultReconstructContractRegistryPath(ontoHome),
+        ),
         outputPath: request.outputPath
           ? path.resolve(request.outputPath)
-          : defaultSeedValidationOutputPath(request),
-        ...(request.sourceObservationDirectivePath
-          ? {
-              sourceObservationDirectivePath: path.resolve(
-                request.sourceObservationDirectivePath,
-              ),
-            }
-          : {}),
-        ...(request.sourceObservationDirectiveValidationPath
-          ? {
-              sourceObservationDirectiveValidationPath: path.resolve(
-                request.sourceObservationDirectiveValidationPath,
-              ),
-            }
-          : {}),
+          : defaultCandidateDispositionValidationOutputPath(request),
+      });
+    },
+
+    async validateActionableOntologySeed(
+      request: ValidateActionableOntologySeedRequest,
+    ): Promise<ReconstructActionableOntologySeedValidationArtifact> {
+      return writeActionableOntologySeedValidationArtifact({
+        ontologySeedPath: path.resolve(request.ontologySeedPath),
+        candidateDispositionPath: path.resolve(request.candidateDispositionPath),
+        sourceObservationsPath: path.resolve(request.sourceObservationsPath),
+        registryPath: path.resolve(
+          request.registryPath ?? defaultReconstructContractRegistryPath(ontoHome),
+        ),
+        outputPath: request.outputPath
+          ? path.resolve(request.outputPath)
+          : defaultOntologySeedValidationOutputPath(request),
       });
     },
 

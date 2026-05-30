@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: "20260528-e6edefdf"
+issues:
+  - issue_id: "issue-001"
+    stances:
+      - lens_id: "logic"
+        stance: "not_applicable"
+        rationale: "The logic lens found the lifecycle rules mutually satisfiable and explicitly limited its judgment to formal consistency. It did not make a conciseness-authority judgment about whether mapping arrays and identity event arrays are redundant authority paths."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "oppose"
+        rationale: "The structure lens found no material structural issue and judged the authority seats to be connected explicit reference structures, including lifecycle mappings and events. From the structural axis, it does not accept that the reviewed patch leaves a duplicated authority seat."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/structure.md"]
+      - lens_id: "dependency"
+        stance: "oppose"
+        rationale: "The dependency lens directly found no competing authority edge or diamond authority pattern, and described prior/current array fields as the mapping authority. This rejects the issue root from the dependency-direction perspective."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "oppose"
+        rationale: "The semantics lens found the authority seats aligned with their names and specifically distinguished lifecycle source authority, split/merge mappings, demotion, and migration semantics without finding a naming or meaning conflict. It therefore rejects the root as a semantics issue."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/semantics.md"]
+      - lens_id: "pragmatics"
+        stance: "oppose"
+        rationale: "The pragmatics lens found one practical route for lifecycle questions through current source snapshot authority and authoritative lifecycle mapping arrays, and found no material user-actionability issue. From practical navigability, it rejects that the duplication blocks or materially weakens the user path."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/pragmatics.md"]
+      - lens_id: "evolution"
+        stance: "oppose"
+        rationale: "The evolution lens found no material evolution issue and judged the lifecycle arrays sufficient for rename, split, merge, demotion, and removal across future schema migration. It rejects the root as an evolution blocker or material evolution risk."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "not_applicable"
+        rationale: "The coverage lens found the relevant lifecycle, relation identity, demotion, source snapshot, migration, and convergence areas covered. It does not determine whether two covered fields are overly redundant authority paths, so its stance is not applicable to the conciseness root."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "support"
+        rationale: "The conciseness lens raised the material finding that prior_concept_mappings and concept_identity_events both encode prior/current concept transitions, with the same pattern for relations, creating two practical paths for the same lifecycle mapping relationship."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/conciseness.md#c1"]
+      - lens_id: "axiology"
+        stance: "oppose"
+        rationale: "The axiology lens found no material value-alignment issue and read the patch as preserving mapping arrays as lifecycle authority while identity events carry provenance. This conflicts with the issue root from a value-alignment perspective, while not disproving the conciseness-specific concern."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/axiology.md"]
+validation:
+  missing_stances: []

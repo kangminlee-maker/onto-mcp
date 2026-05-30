@@ -1,0 +1,422 @@
+schema_version: "1"
+session_id: 20260528-4080a34b
+created_at: 2026-05-28T15:05:11+09:00
+execution_contract:
+  schema_version: "1"
+  execution_step_ids:
+    - manifest_validation
+    - lens_dispatch
+    - lens_completion_barrier
+    - finding_ledger
+    - finding_relation_graph
+    - issue_ledger
+    - issue_stance_matrix
+    - deliberation_plan
+    - lens_deliberation_responses
+    - controlled_deliberation
+    - problem_framing
+    - synthesize
+  progress_total_steps: 12
+  resume_token: 3f6d1ec564f87f82f0f72533ea66d9441960e516a492a86bf351127bb6557d2d
+  resume_token_ref: review-run-manifest.execution_contract.resume_token
+  idempotency_scope: session_id
+  idempotency_key: 20260528-4080a34b
+  duplicate_dispatch_policy: session_id_collision_blocks
+review_execution_profile:
+  mode: main-workers
+  teamlead:
+    seat: main
+    llm: &a1
+      auth: oauth
+      provider: openai
+      model: gpt-5.5
+      effort: medium
+      service_tier: fast
+  lens:
+    seat: worker
+    llm: *a1
+  synthesize:
+    seat: worker
+    llm:
+      auth: oauth
+      provider: openai
+      model: gpt-5.5
+      effort: xhigh
+      service_tier: fast
+  deliberation: controlled-lens-deliberation
+  runtime_route:
+    execution_realization: worker
+    host_runtime: codex
+    worker_executor: codex
+    runtime_provider: codex
+    auth_mode: oauth
+  model: gpt-5.5
+  effort: medium
+  service_tier: fast
+  base_url: null
+  trace:
+    - codex worker selected by host-bound OpenAI OAuth settings
+artifact_refs:
+  session_metadata: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/session-metadata.yaml
+  interpretation: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/interpretation.yaml
+  binding: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/binding.yaml
+  execution_plan: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-plan.yaml
+  execution_result: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-result.yaml
+  degradation_summary: null
+  actor_invocation_profiles: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/actor-invocation-profiles.yaml
+  actor_consumer_bindings: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/actor-consumer-bindings.yaml
+  domain_binding: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/domain-binding.yaml
+  review_target_profile: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/review-target-profile.yaml
+  review_value_alignment_criteria: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/review-value-alignment-criteria.yaml
+  review_context_manifest: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/execution-preparation/review-context-manifest.yaml
+  lens_completion_barrier: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/lens-completion-barrier.yaml
+  final_output: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/final-output.md
+  review_record: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/review-record.yaml
+  synthesis_output: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/synthesis.md
+  deliberation_output: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation.md
+  finding_ledger: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-ledger.yaml
+  finding_relation_graph: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-relation-graph.yaml
+  issue_ledger: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-ledger.yaml
+  issue_stance_matrix: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-stance-matrix.yaml
+  problem_framing: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/problem-framing.yaml
+worker_units:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/logic.prompt.md
+    packet_sha256: e53968b88513bf193f02a1e2990ade71dcad426bbb0443fe5d4cd56d3427c23d
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/logic.md
+    output_sha256: fd3ee706bcab27df803b9add15c9bd214f25127e7fb368e67fc0e00521fb7ba8
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:47+09:00
+    duration_ms: 54895
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/structure.prompt.md
+    packet_sha256: ac82cc066918b5bf40a5ba0534591cd0610404deeb9768f21eaadd12f789ae66
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/structure.md
+    output_sha256: 50b4723721a7ed33a468f0346677d22964dc4b76c1204d63638c2c090c31da2a
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:51+09:00
+    duration_ms: 59186
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: dependency
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/dependency.prompt.md
+    packet_sha256: d4d1e8d06720562fa0320e7a26831ccdef830f3cf0bc1f4e005bb60deba5667b
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/dependency.md
+    output_sha256: d496c87201a5f9ee05f712799398b8aaf648bfaf5a28f6d02c81172950867aa9
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:46+09:00
+    duration_ms: 53631
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/semantics.prompt.md
+    packet_sha256: 9b40d0367ae5352562dcfb4d6c56ac973dce49afeacc9b7f7d42b806b830c8f6
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/semantics.md
+    output_sha256: bf7b376fad51425fe5665d03df78675472d55119bc41d339d1232c4a1e1e4c1b
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:43+09:00
+    duration_ms: 51142
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: pragmatics
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/pragmatics.prompt.md
+    packet_sha256: c407c10a448145037965b17048f29586b2a356ef78cf4ca419e5cbb228c4af77
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/pragmatics.md
+    output_sha256: 87e30bc9514869fe88d7b2bfa33c8ba121bd32a8037a61b0d25051c7c6337fdb
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T15:00:13+09:00
+    duration_ms: 80942
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/evolution.prompt.md
+    packet_sha256: 7ce6f282b051c1cd18aa3a96b2fac10739585daf57a3c89665deda58279fe0a3
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/evolution.md
+    output_sha256: cf61c346360b0496c5221740d884216d46b8711cb9865205338eb2df00903bed
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:53+09:00
+    duration_ms: 60798
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/coverage.prompt.md
+    packet_sha256: 2792d361bdad9861d09d26bf56823e11710e9909f964c5149f73271edcd8eb8c
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/coverage.md
+    output_sha256: cb756322bd7c091c1a29fe0d4f0a827237f6a73c7018cf0958392900433f0c53
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:44+09:00
+    duration_ms: 51849
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: conciseness
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/conciseness.prompt.md
+    packet_sha256: 33805dc2e506a2dd10060ceac38fcb251981a61ddeb8e6eec8be4500f53326a1
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/conciseness.md
+    output_sha256: c0148562a62f6adf8cc0aa92183c38c7452152353263ba23f5cb75401cb1fd16
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T14:59:54+09:00
+    duration_ms: 62536
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/axiology.prompt.md
+    packet_sha256: 67570ece4c489052ede91d82c24998f4adc6a5ddb0f92d03ab8e39a10ef0fab1
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/round1/axiology.md
+    output_sha256: 3f2b4bf68b86aa63bb099a2af73ff435348e6c7f0cec5eecbadb6bc6d55f785e
+    status: completed
+    started_at: 2026-05-28T14:58:52+09:00
+    completed_at: 2026-05-28T15:00:07+09:00
+    duration_ms: 74792
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/finding-ledger.prompt.md
+    packet_sha256: 7d7515f92ebbcce4901b1dcd436264afbca79a14a86875819749b188632271a2
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-ledger.yaml
+    output_sha256: 02b2da7934b71c1551a1b793dc7234cd57ced283ea1bb125c423d78ad5c8494f
+    status: completed
+    started_at: 2026-05-28T15:00:13+09:00
+    completed_at: 2026-05-28T15:00:44+09:00
+    duration_ms: 30794
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/finding-relation-graph.prompt.md
+    packet_sha256: 0ddfcd994fcf61cb6460ae35d9b6a8c4d48c7e96daf6d6e72ab57caff3c29ba6
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-relation-graph.yaml
+    output_sha256: 70d1bf39a506c62bed2583f256aa0715cfabd18780b745ee5081dfb87c341e66
+    status: completed
+    started_at: 2026-05-28T15:00:44+09:00
+    completed_at: 2026-05-28T15:01:12+09:00
+    duration_ms: 28369
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/issue-ledger.prompt.md
+    packet_sha256: 5559405fe4ec4d3a127e6169a8dc030726865ca10631647350c417dea0cdd0a3
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-ledger.yaml
+    output_sha256: 12a90bdba5839cf550c0269edf1e20d314dac79f6a7c02dd0e16cf14542e3ada
+    status: completed
+    started_at: 2026-05-28T15:01:12+09:00
+    completed_at: 2026-05-28T15:01:41+09:00
+    duration_ms: 28454
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/issue-stance-matrix.prompt.md
+    packet_sha256: 072cb6212aaad354e21c7af95bbe155d0b420786b5cd7d2d3d073ec73697f84c
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-stance-matrix.yaml
+    output_sha256: 01c156b17affb30080ec93cce574458c9d9f136d6a1b2c102c3f503f9bd28ecc
+    status: completed
+    started_at: 2026-05-28T15:01:41+09:00
+    completed_at: 2026-05-28T15:01:56+09:00
+    duration_ms: 15877
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/deliberation-plan.prompt.md
+    packet_sha256: 217d3c49ea2b1579910187cf8cce8e487043420593f3a953fc54433eeb05fc19
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation-plan.yaml
+    output_sha256: 52067f646abc8474830eed707393aea03d880f316e239c6cd327205605766a97
+    status: completed
+    started_at: 2026-05-28T15:01:56+09:00
+    completed_at: 2026-05-28T15:02:28+09:00
+    duration_ms: 31961
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/problem-framing.prompt.md
+    packet_sha256: 6ab156e56587782e49fc002be7cf9d9d15abf4dd69ec49daeaaeb0301fe448d6
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/problem-framing.yaml
+    output_sha256: b75182f7713da041a074307354f4f5304f0f6d926fa001507af06c639b1d07fc
+    status: completed
+    started_at: 2026-05-28T15:03:18+09:00
+    completed_at: 2026-05-28T15:03:40+09:00
+    duration_ms: 21686
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-logic
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/logic.deliberation.prompt.md
+    packet_sha256: 8a84bed48121c3dc670141678d713b2d5a1ce89cc1bd53ac98467c2af654c610
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/logic-deliberation.md
+    output_sha256: 8a7a30c0a69efe3f4983a8193b1623ead70d76f6ee7be54fb4f801405813c528
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:56+09:00
+    duration_ms: 27974
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-structure
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/structure.deliberation.prompt.md
+    packet_sha256: b7b82a700882078db9c3082787c0e330b94520d50987358afe972617c5f683eb
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/structure-deliberation.md
+    output_sha256: 04acbb51e2a067d2985057d810b0fdff30768b89a3ad957188df51c1278cbe2a
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:54+09:00
+    duration_ms: 25701
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-dependency
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/dependency.deliberation.prompt.md
+    packet_sha256: b887cbae771f35151495e8883ddfb16d7161f84e0a5669b4c0e6d878bd644e70
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/dependency-deliberation.md
+    output_sha256: 11ecbb4fdb372ced961b5958314daf1aaef2d36e3b8367e6cc3a9cf4a9ce187e
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:49+09:00
+    duration_ms: 20215
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-semantics
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/semantics.deliberation.prompt.md
+    packet_sha256: f9736004b91123b36130e86c4ec452291cedc3f2d9900a224d969d19fd293ad1
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/semantics-deliberation.md
+    output_sha256: 2c0822f8940bdb3f9c641d4fe0cf8af5322fac92570dd80f325fa7a187d6e4d0
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:51+09:00
+    duration_ms: 22570
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-pragmatics
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/pragmatics.deliberation.prompt.md
+    packet_sha256: cc47ea1deaced6c63f9939bd579226dbf3aaeb8bdb8b30d34ecabeddf71129da
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/pragmatics-deliberation.md
+    output_sha256: a1b4119b0f43dc29d10c5e5d26ce4d4ee63f156c8bd6a02df779523ad6449270
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:51+09:00
+    duration_ms: 22626
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-evolution
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/evolution.deliberation.prompt.md
+    packet_sha256: a77ca3ec5c2057474f65614812ce91728138b3e7cb154447904952f0e5b1976c
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/evolution-deliberation.md
+    output_sha256: b023b173c744647d1028a0aa62553585ba40fa85907a1712f46dfbbca80d906d
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:48+09:00
+    duration_ms: 19397
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-coverage
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/coverage.deliberation.prompt.md
+    packet_sha256: 99915012a6380bf138321e3bdf5b0651f6c11affa920aedf30c49bf80f402065
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/coverage-deliberation.md
+    output_sha256: 25a8c79f4fcac3abce9a6a6f4ab0794e0a3e8d9c395e2f9e42022012e496d171
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:48+09:00
+    duration_ms: 19795
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-conciseness
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/conciseness.deliberation.prompt.md
+    packet_sha256: 92fcee06ac218c771cd96a175edbc0357a6a005a18dcbb36210d6ad70f639acc
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/conciseness-deliberation.md
+    output_sha256: 7674c67b33ac86c5e300be5ce803c5cff2b9e9c9de9768abe02b56e4f5806fa5
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:48+09:00
+    duration_ms: 19064
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: deliberation-axiology
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/axiology.deliberation.prompt.md
+    packet_sha256: b151db792aa9e60d184fa37a0cc8d55cc117832320dcf02af8a2f49081f563cf
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation/round1/axiology-deliberation.md
+    output_sha256: 8be8da21c8006892451907b383eb3fb954310e1b72114a0dee956a7075e0cf16
+    status: completed
+    started_at: 2026-05-28T15:02:28+09:00
+    completed_at: 2026-05-28T15:02:47+09:00
+    duration_ms: 18169
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/teamlead.deliberation.prompt.md
+    packet_sha256: 38e133d8cc697437d3bfaac6d015459cd01bfe414dc0eeef3818f4c1d7ad4409
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation.md
+    output_sha256: 208e1acad52aa1c4b0cdb905a19ba70bd7efd00a3a2e5f98bdd66d2d3b3d9cdd
+    status: completed
+    started_at: 2026-05-28T15:02:56+09:00
+    completed_at: 2026-05-28T15:03:18+09:00
+    duration_ms: 21430
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: synthesize
+    unit_kind: synthesize
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/prompt-packets/synthesize.runtime.prompt.md
+    packet_sha256: e86e21c9544077b77042d6b0637c6164dc111a0797f166a32690504c5b599bb2
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/synthesis.md
+    output_sha256: 7457173b367baa30333a174c34a12e92858cf1ba6dccec8c77c731a7187420e8
+    status: completed
+    started_at: 2026-05-28T15:03:40+09:00
+    completed_at: 2026-05-28T15:05:11+09:00
+    duration_ms: 91738
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+halt: null
+synthesis_provenance:
+  synthesis_executed: true
+  synthesis_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/synthesis.md
+  synthesis_output_sha256: 7457173b367baa30333a174c34a12e92858cf1ba6dccec8c77c731a7187420e8
+  deliberation_status: performed
+  deliberation_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation.md
+  deliberation_output_sha256: 208e1acad52aa1c4b0cdb905a19ba70bd7efd00a3a2e5f98bdd66d2d3b3d9cdd
+  participating_lens_ids:
+    - logic
+    - structure
+    - dependency
+    - semantics
+    - pragmatics
+    - evolution
+    - coverage
+    - conciseness
+    - axiology
+  degraded_lens_ids: []
+  observed_dispatch_width: 9
+  lens_completion_barrier_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/lens-completion-barrier.yaml
+  issue_artifact_refs:
+    finding_ledger: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-ledger.yaml
+    finding_relation_graph: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/finding-relation-graph.yaml
+    issue_ledger: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-ledger.yaml
+    issue_stance_matrix: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/issue-stance-matrix.yaml
+    deliberation_plan: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/deliberation-plan.yaml
+    problem_framing: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-4080a34b/problem-framing.yaml

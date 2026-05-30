@@ -1,0 +1,40 @@
+entrypoint: review
+target_scope_candidate:
+  kind: file
+  primary_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-e6edefdf/diff-target.patch
+intent_summary: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing material issues from sessions
+  20260528-391bbc3f, 20260528-da9e31db, 20260528-3d59d774, 20260528-29cea5a1,
+  and 20260528-e8c8b240. Confirm whether material documentation/design-contract
+  issues remain in the current working tree diff, especially answerability
+  question ID uniqueness by declared inventory and status buckets,
+  supported_actions[].supported_by_question_ids[] as the sole canonical
+  question-to-action support edge, lifecycle mapping arrays as the only
+  concept/relation mapping authority, lifecycle.source_snapshot_refs as current
+  source snapshot authority with source_snapshot_transition containing prior
+  refs only, relation_participation_exceptions.status collapsed to isolated,
+  demotion bridge from prior concept IDs to lower-level detail IDs, external
+  migration artifact refs, simplified README and IMPLEMENTATION_MAP
+  authority-reference summaries, source_authority_scope_changed state
+  traceability, lifecycle split/merge continuity, pressure transitions, and
+  answerability references.
+domain_recommendation: software-engineering
+domain_selection_required: false
+review_mode_recommendation: full
+lens_selection_plan:
+  always_include:
+    - axiology
+  recommended_lenses:
+    - logic
+    - structure
+    - dependency
+    - semantics
+    - pragmatics
+    - evolution
+    - coverage
+    - conciseness
+    - axiology
+  rationale:
+    - host-facing positional invoke currently defaults to full 9-lens review
+      until interactive interpretation is productized.
+ambiguity_notes: []

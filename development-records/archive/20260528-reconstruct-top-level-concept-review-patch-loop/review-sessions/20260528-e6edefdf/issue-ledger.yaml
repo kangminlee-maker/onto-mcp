@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260528-e6edefdf"
+issues:
+  - issue_id: "issue-001"
+    root_cause_hypothesis: "The reconstruct Seed lifecycle contract has not separated transition mapping authority from lifecycle event provenance, so mapping arrays and identity event arrays can both be treated as authoritative paths for the same prior-to-current concept and relation transitions."
+    root_confidence: "medium"
+    surface_finding_ids: ["finding-001"]
+    relation_refs: []
+    raised_by_lens_ids: ["conciseness"]
+    issue_statement: "Lifecycle identity transition authority is duplicated between mapping arrays and identity event arrays."
+    proposed_action: "Make prior_concept_mappings[] and prior_relation_mappings[] the sole canonical transition mapping authority, and constrain identity events to provenance-only records or generated non-authoritative echoes."
+    affected_purpose: "Maintain a concise, auditably canonical reconstruct Seed design contract with one authority path for lifecycle identity transitions, split/merge continuity, demotion bridges, and relation identity mapping."
+    failure_condition: "When maintainers, validators, or future reconstruct runtimes need to determine the authoritative prior-to-current concept or relation transition from lifecycle data, they can read the relationship from both mapping arrays and identity event arrays."
+    impact: "The happy path remains possible, but trust, auditability, maintainability, and future validator implementation quality are meaningfully weakened because duplicated relationship paths can drift or be interpreted as competing authorities."
+    evidence_refs: ["round1/conciseness.md#c1"]
+    severity: "medium"
+    domain_threshold_used: ".onto/domains/software-engineering/conciseness_rules.md#2-removal-target-patterns-relationship-redundancy"
+    singleton_reason: "No relation was accepted because the finding ledger contains only one finding. The available lens outputs mostly report no material findings, while the single ledgered finding from the conciseness lens concerns duplicated lifecycle mapping authority between mapping arrays and identity event arrays. Within the declared boundary, there is no second finding to relate by common root, causality, dependency, duplication, conflict, or independence."
+validation:
+  unclustered_finding_ids: []

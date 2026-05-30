@@ -2,11 +2,12 @@
 
 > Target material kind: `spreadsheet`
 
-## Support Status
+## Registry Record
 
-Design profile only. Planned first runtime support should cover `.xlsx` and
-`.csv`. Other spreadsheet formats such as `.xls` and `.ods` must fail explicitly
-until adapter support is implemented.
+Current profile id, contract status, runtime implementation status, schema
+version, profile version, migration status, and definition hash are owned by
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml#source_profile_records`.
+This file defines spreadsheet observation semantics only.
 
 ## Target Material Identification Hints
 

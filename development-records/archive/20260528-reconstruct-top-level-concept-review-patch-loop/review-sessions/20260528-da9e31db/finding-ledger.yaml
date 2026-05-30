@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: "20260528-da9e31db"
+findings:
+  - finding_id: "structure-001"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#structure-001"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "contract lines 799, 935, and 997 as cited by structure lens"
+    claim: "The legacy compatibility table maps retired boundary_notes to top_level_concepts[].boundary_statement, but the Seed output shape does not define top_level_concepts[].boundary_statement and instead defines top_level_concepts[].boundary with included_summary, excluded_summary, and deferred_summary."
+    proposed_action: "Either add boundary_statement to top_level_concepts[] as a canonical or derived field, or change the migration and validation language to target the existing top_level_concepts[].boundary object while keeping final-output summaries explicitly derived."
+    affected_purpose: "Fresh verification of the reconstruct top-level concept discovery design patch, especially retired-seat legacy migration mappings and artifact truth."
+    failure_condition: "A migration implementer or deterministic validator follows the retired boundary_notes mapping and cannot find the declared target authority field in the Seed shape."
+    impact: "The migration path points to a missing authority seat, making deterministic migration and validation ambiguous and weakening trust in the design contract."
+    evidence_refs: ["round1/structure.md#structure-001"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "structure-002"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#structure-002"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "contract lines 795, 345-355, and 1082 as cited by structure lens"
+    claim: "The Seed output shape adds top_level_concepts[].aliases and says concept lifecycle must cover aliasing, but the lifecycle schema has no alias-specific event type or prior/current alias fields."
+    proposed_action: "Add alias lifecycle coverage, such as alias_added, alias_removed, or alias_changed events with prior_aliases and current_aliases, or explicitly state that alias changes are covered by renamed and add alias fields to that event."
+    affected_purpose: "Fresh verification of complete concept-centered lifecycle implementation guidance and provenance."
+    failure_condition: "A concept alias changes across Seed lifecycle or migration, but the lifecycle/provenance artifact has no explicit seat to record that change."
+    impact: "Aliases become an orphan artifact property, so future runtime or review could preserve concept IDs while silently changing aliases without traceable provenance."
+    evidence_refs: ["round1/structure.md#structure-002"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "dependency-001"
+    lens_id: "dependency"
+    source_ref: "round1/dependency.md#medium-retired-boundary-notes-migration-points-to-a-non-existent-target-authority-seat"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "contract lines 799-802 and 935 as cited by dependency lens"
+    claim: "The retired boundary_notes migration creates a directed dependency to top_level_concepts[].boundary_statement, but that target authority is absent from the canonical Seed shape."
+    proposed_action: "Change the mapping target to top_level_concepts[].boundary and specify how boundary_notes preserve meaning across included_summary, excluded_summary, and deferred_summary, or add boundary_statement to the canonical concept shape explicitly."
+    affected_purpose: "Fresh verification of retired-seat legacy migration mappings and dependency direction in the design contract."
+    failure_condition: "Downstream migration validation or artifact authoring must follow a directed mapping whose target field does not exist."
+    impact: "The design introduces an implicit dependency and dangling directed relation, weakening reproducibility and validation clarity for the declared review purpose."
+    evidence_refs: ["round1/dependency.md#medium-retired-boundary-notes-migration-points-to-a-non-existent-target-authority-seat"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "SEM-001"
+    lens_id: "semantics"
+    source_ref: "round1/semantics.md#sem-001"
+    target: ".onto/review/20260528-da9e31db/execution-preparation/materialized-input.md"
+    evidence_anchor: "materialized-input lines 831, 988, and 1065 as cited by semantics lens"
+    claim: "boundary_statement is introduced as a target authority for retired boundary_notes and runtime validation, but the concept-centered Seed shape defines boundary as a structured object rather than defining boundary_statement."
+    proposed_action: "Define top_level_concepts[].boundary_statement explicitly as the canonical boundary summary, or change the migration and validation language to target top_level_concepts[].boundary and its included_summary, excluded_summary, and deferred_summary fields."
+    affected_purpose: "Fresh verification of source-of-truth discipline, retired-seat migration mappings, and artifact truth."
+    failure_condition: "Readers or implementers treat boundary_statement as a separate authority field even though the Seed shape has a different boundary authority."
+    impact: "The mismatch creates source-of-truth ambiguity for boundary meaning and weakens semantic trust in the concept-centered Seed contract."
+    evidence_refs: ["round1/semantics.md#sem-001"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-pragmatics-001"
+    lens_id: "pragmatics"
+    source_ref: "round1/pragmatics.md#finding-pragmatics-001"
+    target: ".onto/review/20260528-da9e31db/execution-preparation/materialized-input.md"
+    evidence_anchor: "materialized-input lines 831 and 988 as cited by pragmatics lens"
+    claim: "boundary_notes migration points to top_level_concepts[].boundary_statement even though the Seed output shape defines boundary through included_summary, excluded_summary, and deferred_summary."
+    proposed_action: "Choose one canonical target by either adding boundary_statement to the concept-centered Seed shape or mapping boundary_notes into top_level_concepts[].boundary with a deterministic split rule, while marking final-output text as derived only."
+    affected_purpose: "Fresh verification that retired-seat legacy migration mappings are answerable and usable by real consumers."
+    failure_condition: "A migration implementer asks where legacy boundary_notes go and receives multiple plausible answers: a new boundary_statement field, the structured boundary object, or final-output text."
+    impact: "Consumers cannot answer the migration question with one interpretation, creating competing answers for the same retired-seat migration path."
+    evidence_refs: ["round1/pragmatics.md#finding-pragmatics-001"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-pragmatics-002"
+    lens_id: "pragmatics"
+    source_ref: "round1/pragmatics.md#finding-pragmatics-002"
+    target: ".onto/review/20260528-da9e31db/execution-preparation/materialized-input.md"
+    evidence_anchor: "materialized-input lines 351-358 and 1097-1099 as cited by pragmatics lens"
+    claim: "The source_authority_scope_changed lifecycle event includes changed_authority_fields and prior/current authority refs, but validation only requires the prior/current state refs when available."
+    proposed_action: "Require prior_authority_state_ref and current_authority_state_ref for event_type source_authority_scope_changed, with one explicit exception for initial material coverage creation, or define inline state snapshots as an allowed equivalent."
+    affected_purpose: "Fresh verification of source_authority_scope preservation and material coverage source-authority lifecycle events."
+    failure_condition: "A consumer needs to reconstruct what changed in source_authority_scope from prior state to current state, but prior/current refs are omitted."
+    impact: "changed_authority_fields identifies the changed axis but not the before and after authority values, weakening auditability and answerability of source-authority lifecycle changes."
+    evidence_refs: ["round1/pragmatics.md#finding-pragmatics-002"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "evolution-001"
+    lens_id: "evolution"
+    source_ref: "round1/evolution.md#medium-boundary-notes-migration-targets-a-field-that-the-concept-centered-seed-shape-does-not-define"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "contract lines 799, 935, and 997 as cited by evolution lens"
+    claim: "boundary_notes migration targets top_level_concepts[].boundary_statement, but the concept-centered Seed shape does not define that field."
+    proposed_action: "Add boundary_statement to the concept-centered Seed shape as the canonical concise boundary field, or change the migration target to top_level_concepts[].boundary with an explicit rule for preserving legacy boundary_notes across included_summary, excluded_summary, and deferred_summary."
+    affected_purpose: "Fresh verification of schema migration continuity and retired-seat legacy migration mappings."
+    failure_condition: "A future concept-centered Seed implementation or migration validator tries to preserve boundary_notes and either fails or silently invents a new boundary field."
+    impact: "The schema/data-model migration path becomes fragile, weakening continuity for legacy artifacts and ambiguity control across Seed evolution."
+    evidence_refs: ["round1/evolution.md#medium-boundary-notes-migration-targets-a-field-that-the-concept-centered-seed-shape-does-not-define"]
+    severity: "medium"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

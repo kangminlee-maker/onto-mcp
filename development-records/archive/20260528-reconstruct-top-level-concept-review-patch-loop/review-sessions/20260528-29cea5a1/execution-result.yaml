@@ -1,0 +1,179 @@
+session_id: 20260528-29cea5a1
+session_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1
+execution_realization: worker
+host_runtime: codex
+review_mode: full
+execution_status: halted_partial
+execution_started_at: 2026-05-28T14:29:08+09:00
+execution_completed_at: 2026-05-28T14:33:04+09:00
+total_duration_ms: 235672
+max_concurrent_lenses: 9
+observed_dispatch_width: 9
+planned_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 9
+synthesis_executed: false
+deliberation_status: not_performed
+halt_reason: "Review cancelled by MCP request: Valid medium design-contract
+  issues identified in issue-ledger; cancel before patching current working tree
+  to avoid stale downstream review artifacts."
+halt_phase: cancellation
+halt_unit_id: null
+halt_unit_kind: null
+halt_lens_id: null
+error_log_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/error-log.md
+lens_completion_barrier_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/lens-completion-barrier.yaml
+lens_execution_results:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/logic.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/logic.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:00+09:00
+    duration_ms: 51625
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: structure
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/structure.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/structure.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:13+09:00
+    duration_ms: 64321
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: dependency
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/dependency.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/dependency.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:06+09:00
+    duration_ms: 58072
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/semantics.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/semantics.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:05+09:00
+    duration_ms: 56345
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: pragmatics
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/pragmatics.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/pragmatics.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:16+09:00
+    duration_ms: 67557
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: evolution
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/evolution.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/evolution.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:12+09:00
+    duration_ms: 63732
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/coverage.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/coverage.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:07+09:00
+    duration_ms: 58257
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: conciseness
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/conciseness.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/conciseness.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:04+09:00
+    duration_ms: 55989
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: axiology
+    unit_kind: lens
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/axiology.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/axiology.md
+    status: completed
+    started_at: 2026-05-28T14:29:08+09:00
+    completed_at: 2026-05-28T14:30:12+09:00
+    duration_ms: 63429
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/finding-ledger.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-ledger.yaml
+    status: completed
+    started_at: 2026-05-28T14:30:16+09:00
+    completed_at: 2026-05-28T14:30:59+09:00
+    duration_ms: 43018
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-05-28T14:30:59+09:00
+    completed_at: 2026-05-28T14:31:29+09:00
+    duration_ms: 30340
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/issue-ledger.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-ledger.yaml
+    status: completed
+    started_at: 2026-05-28T14:31:29+09:00
+    completed_at: 2026-05-28T14:32:10+09:00
+    duration_ms: 40556
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-05-28T14:32:10+09:00
+    completed_at: 2026-05-28T14:33:04+09:00
+    duration_ms: 54164
+    timestamp_provenance: runner_wallclock
+    failure_message: null
+deliberation_execution_results: []
+synthesize_execution_result: null

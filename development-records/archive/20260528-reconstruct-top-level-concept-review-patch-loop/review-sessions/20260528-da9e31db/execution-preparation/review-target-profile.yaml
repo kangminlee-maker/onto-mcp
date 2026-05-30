@@ -1,0 +1,73 @@
+schema_version: "1"
+session_id: 20260528-da9e31db
+created_at: 2026-05-28T14:17:53+09:00
+target_scope_kind: file
+materialized_input_kind: single_text
+target_input_kind: git_diff
+target_material_kind: unknown
+requested_target: .
+review_intent_summary: Fresh verification review for the current reconstruct
+  top-level concept discovery design patch after closing prior material issue
+  issue-001 from session 20260528-391bbc3f. Confirm whether material
+  documentation/design-contract issues remain in the current working tree diff,
+  especially complete concept-centered lifecycle implementation guidance,
+  retired-seat legacy migration mappings, concept/relation split/merge lifecycle
+  continuity, pressure prior/new status transitions, answerability lifecycle
+  refs, answerability status by list membership, source_authority_scope
+  preservation, material coverage source-authority lifecycle events, README, and
+  IMPLEMENTATION_MAP alignment.
+artifact_roles:
+  primary: computational_artifact
+  secondary:
+    - record_artifact
+    - configuration_artifact
+domain: software-engineering
+maturity: review_candidate
+closure_level: bounded_partial
+review_goal:
+  - correctness
+  - verifiability
+  - regression_risk
+  - maintainability
+  - provenance
+  - evidence_preservation
+  - auditability
+  - scope_control
+  - precedence
+  - invalid_input_behavior
+  - runtime_contract
+  - test_evidence
+  - error_path_clarity
+  - context_isolation
+  - artifact_truth
+  - fail_loud_behavior
+closure_obligation_policy:
+  - must_close_in_target
+  - must_close_before_next_stage
+  - may_close_during_next_stage
+  - planned_later
+  - out_of_scope
+target_refs:
+  - ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-da9e31db/diff-target.patch
+    role: primary
+    kind: generated
+    exists: true
+    sha256: a2ee0fb6caf5b95543f9a235306b1544ce59c6df2de23d15cd646a76c314a793
+material_profile:
+  target_material_kind: unknown
+  target_material_kind_candidates:
+    - unknown
+  support_status: unknown
+  unsupported_reason: runtime could not classify target material kind safely
+  detection:
+    owner: runtime_heuristic
+    confidence: 0.2
+    confidence_basis: no known target material kind among refs
+boundary:
+  filesystem_allowed_roots:
+    - /Users/kangmin/cowork/onto-mcp
+  source: binding
+inference:
+  owner: runtime_heuristic
+  confidence: 0.9
+  confidence_basis: runtime diff target implies implementation-change review

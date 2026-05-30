@@ -1,0 +1,7 @@
+schema_version: "1"
+session_id: 20260528-e8c8b240
+requested_at: 2026-05-28T14:39:16+09:00
+requested_by: mcp
+reason: Valid material design-contract issues identified in issue-ledger; cancel
+  before patching current working tree to avoid stale downstream review
+  artifacts.

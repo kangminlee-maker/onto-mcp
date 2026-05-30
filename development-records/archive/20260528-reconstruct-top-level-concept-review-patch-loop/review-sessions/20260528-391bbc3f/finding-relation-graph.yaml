@@ -1,0 +1,11 @@
+schema_version: 1
+session_id: "20260528-391bbc3f"
+relations:
+  - relation_id: "rel-001"
+    from_finding_id: "finding-001"
+    to_finding_id: "finding-002"
+    relation: "same_root_candidate"
+    root_hypothesis: "The practical implementation and compatibility guidance does not yet enumerate the complete concept-centered Seed authority surface introduced by the contract, leaving some lifecycle and migration obligations implicit."
+    rationale: "finding-001 reports that implementation step 9 names concept and relation identity/provenance/aliasing/split/merge/rename/demotion/convergence changes but omits explicit pressure, answerability, lower-level detail placement, and material coverage/source-authority lifecycle event groups. finding-002 reports that the legacy compatibility section and implementation path enumerate only a narrower legacy field set while omitting retired frontier, detail, relation, question, and pressure projections. Both findings are supported by evidence that the main contract body defines broader authority seats than the practical implementation or migration guidance explicitly names."
+    confidence: "medium"
+singleton_findings: []

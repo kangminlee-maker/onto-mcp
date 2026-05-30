@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260528-391bbc3f"
+issues:
+  - issue_id: "issue-001"
+    root_cause_hypothesis: "The practical implementation and compatibility guidance does not yet enumerate the complete concept-centered Seed authority surface introduced by the contract, leaving some lifecycle and migration obligations implicit."
+    root_confidence: "medium"
+    surface_finding_ids: ["finding-001", "finding-002"]
+    relation_refs: ["rel-001"]
+    raised_by_lens_ids: ["pragmatics", "evolution"]
+    issue_statement: "The contract body defines a broader concept-centered Seed authority and lifecycle surface than the implementation checklist and legacy compatibility guidance explicitly name."
+    proposed_action: "Expand the implementation and legacy compatibility guidance so it explicitly covers the complete lifecycle and retired-seat migration surface, or references the authoritative lifecycle event groups as the complete implementation target."
+    affected_purpose: "Self-contained agent execution, reviewability, schema/data-model evolution continuity, future runs, same-session continuation, and cross-run lineage consumers for reconstruct top-level concept discovery Seed artifacts."
+    failure_condition: "A developer, runtime builder, or migration consumer follows the practical implementation or compatibility path and cannot determine whether pressure events, answerability events, detail placement events, material coverage/source-authority events, or retired frontier/detail/relation/question/pressure seats are in scope and mapped."
+    impact: "The happy path remains possible, but trust in implementation completeness, migration continuity, auditability, and reviewability is weakened because the practical guidance can be read as a narrower authority surface than the contract requires."
+    evidence_refs: ["round1/pragmatics.md#finding-1", "round1/evolution.md#finding-1"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+validation:
+  unclustered_finding_ids: []

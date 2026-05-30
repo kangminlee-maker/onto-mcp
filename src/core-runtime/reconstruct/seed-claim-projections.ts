@@ -1,6 +1,6 @@
 import type {
+  ReconstructActionableOntologySeedArtifact,
   ReconstructEvidenceRef,
-  ReconstructSeedCandidateArtifact,
   ReconstructSeedClaim,
 } from "./artifact-types.js";
 
@@ -15,131 +15,315 @@ function uniqueEvidenceRefs(refs: ReconstructEvidenceRef[]): ReconstructEvidence
   return [...byKey.values()];
 }
 
-export function seedClaimProjections(
-  seedCandidate: ReconstructSeedCandidateArtifact,
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return isRecord(value) ? value : null;
+}
+
+function recordArray(owner: Record<string, unknown> | null, key: string): Record<string, unknown>[] {
+  const value = owner?.[key];
+  return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : null;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+function evidenceRefs(value: unknown): ReconstructEvidenceRef[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is ReconstructEvidenceRef =>
+    isRecord(item) &&
+    typeof item.observation_id === "string" &&
+    typeof item.target_material_kind === "string" &&
+    typeof item.source_ref === "string" &&
+    typeof item.location === "string"
+  );
+}
+
+function directEvidence(record: Record<string, unknown> | null): ReconstructEvidenceRef[] {
+  return record ? uniqueEvidenceRefs(evidenceRefs(record.evidence_refs)) : [];
+}
+
+function purposeClaimId(seedId: string | null): string {
+  return seedId ? `${seedId}#purpose` : "ontology-seed-purpose";
+}
+
+function claim(args: {
+  id: string | null;
+  seed_ref_path: string;
+  name: string | null;
+  statement: string | null;
+  evidence_refs: ReconstructEvidenceRef[];
+  fallbackName: string;
+}): ReconstructSeedClaim | null {
+  if (!args.id) return null;
+  return {
+    claim_id: args.id,
+    seed_ref_path: args.seed_ref_path,
+    projection_source: "actionable_ontology_seed",
+    evidence_policy: "direct_evidence_only",
+    name: args.name ?? args.fallbackName,
+    statement: args.statement ?? args.name ?? args.fallbackName,
+    evidence_refs: args.evidence_refs,
+  };
+}
+
+function collectRecordClaims(args: {
+  records: Record<string, unknown>[];
+  idKey: string;
+  nameKeys: string[];
+  statementKeys: string[];
+  fallbackPrefix: string;
+  pathPrefix: string;
+}): ReconstructSeedClaim[] {
+  return args.records
+    .map((record, index) => claim({
+      id: stringValue(record[args.idKey]),
+      seed_ref_path: `${args.pathPrefix}[${index}].${args.idKey}`,
+      name: args.nameKeys.map((key) => stringValue(record[key])).find(Boolean) ?? null,
+      statement:
+        args.statementKeys.map((key) => stringValue(record[key])).find(Boolean) ?? null,
+      evidence_refs: directEvidence(record),
+      fallbackName: `${args.fallbackPrefix} ${index + 1}`,
+    }))
+    .filter((item): item is ReconstructSeedClaim => item !== null);
+}
+
+export function ontologySeedClaimProjections(
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
 ): ReconstructSeedClaim[] {
-  const topLevelConcepts = "top_level_concepts" in seedCandidate
-    ? seedCandidate.top_level_concepts
-    : [];
-  const topLevelRelations = "top_level_relations" in seedCandidate
-    ? seedCandidate.top_level_relations
-    : [];
-  const frontierPressureLog = "frontier_pressure_log" in seedCandidate
-    ? seedCandidate.frontier_pressure_log
-    : [];
-  const answerabilityScope = "answerability_scope" in seedCandidate
-    ? seedCandidate.answerability_scope
-    : undefined;
-  const conceptById = new Map(
-    topLevelConcepts.map((concept) => [
-      concept.concept_id,
-      concept,
-    ]),
-  );
-  const relationById = new Map(
-    topLevelRelations.map((relation) => [
-      relation.relation_id,
-      relation,
-    ]),
-  );
-  const pressureById = new Map(
-    frontierPressureLog.map((pressure) => [
-      pressure.pressure_id,
-      pressure,
-    ]),
-  );
-  const declaredQuestionById = new Map(
-    (answerabilityScope?.declared_handoff_questions ?? []).map(
-      (question) => [question.question_id, question],
-    ),
-  );
-  const supportedQuestionEvidenceById = new Map<string, ReconstructEvidenceRef[]>();
+  const seed = recordValue(ontologySeed) ?? {};
+  const seedIdentity = recordValue(seed.seed_identity);
+  const purpose = recordValue(seed.purpose);
+  const conceptualFrame = recordValue(seed.conceptual_frame);
+  const semanticLayer = recordValue(seed.semantic_layer);
+  const kineticLayer = recordValue(seed.kinetic_layer);
+  const dynamicLayer = recordValue(seed.dynamic_layer);
+  const dataBindingLayer = recordValue(seed.data_binding_layer);
 
-  const conceptClaims = [...conceptById.values()].map((concept): ReconstructSeedClaim => ({
-    claim_id: concept.concept_id,
-    name: concept.name,
-    statement: concept.definition,
-    evidence_refs: concept.evidence_refs,
-  }));
-
-  const relationClaims = [...relationById.values()].map((relation): ReconstructSeedClaim => ({
-    claim_id: relation.relation_id,
-    name: relation.relation_label,
-    statement: relation.statement,
-    evidence_refs: relation.evidence_refs,
-  }));
-
-  const answerabilityClaims: ReconstructSeedClaim[] = [];
-  for (const question of answerabilityScope?.supported_questions ?? []) {
-    const evidenceRefs = uniqueEvidenceRefs([
-      ...question.answered_by.concept_ids.flatMap((conceptId) =>
-        conceptById.get(conceptId)?.evidence_refs ?? []
-      ),
-      ...question.answered_by.relation_ids.flatMap((relationId) =>
-        relationById.get(relationId)?.evidence_refs ?? []
-      ),
-    ]);
-    supportedQuestionEvidenceById.set(question.question_id, evidenceRefs);
-    answerabilityClaims.push({
-      claim_id: question.question_id,
-      name: declaredQuestionById.get(question.question_id)?.question ?? question.question_id,
-      statement: `Supported handoff question: ${declaredQuestionById.get(question.question_id)?.question ?? question.question_id}`,
-      evidence_refs: evidenceRefs,
-    });
-  }
-  for (const question of answerabilityScope?.deferred_questions ?? []) {
-    const evidenceRefs = uniqueEvidenceRefs(
-      question.frontier_pressure_ids.flatMap((pressureId) =>
-        pressureById.get(pressureId)?.evidence_refs ?? []
-      ),
-    );
-    answerabilityClaims.push({
-      claim_id: question.question_id,
-      name: declaredQuestionById.get(question.question_id)?.question ?? question.question_id,
-      statement: `Deferred handoff question: ${question.reason_deferred}`,
-      evidence_refs: evidenceRefs,
-    });
-  }
-  for (const question of answerabilityScope?.unsupported_questions ?? []) {
-    answerabilityClaims.push({
-      claim_id: question.question_id,
-      name: declaredQuestionById.get(question.question_id)?.question ?? question.question_id,
-      statement: `Unsupported handoff question: ${question.reason_unsupported}`,
-      evidence_refs: [],
-    });
-  }
-  for (const action of answerabilityScope?.supported_actions ?? []) {
-    const evidenceRefs = uniqueEvidenceRefs(
-      action.supported_by_question_ids.flatMap((questionId) =>
-        supportedQuestionEvidenceById.get(questionId) ?? []
-      ),
-    );
-    answerabilityClaims.push({
-      claim_id: action.action_id,
-      name: action.action,
-      statement: action.readiness_statement,
-      evidence_refs: evidenceRefs,
-    });
-  }
-  for (const action of answerabilityScope?.unsupported_actions ?? []) {
-    answerabilityClaims.push({
-      claim_id: action.action_id,
-      name: action.action,
-      statement: action.reason_unsupported,
-      evidence_refs: [],
-    });
-  }
+  const purposeClaim = claim({
+    id: purposeClaimId(stringValue(seedIdentity?.seed_id)),
+    seed_ref_path: "purpose.declared_purpose",
+    name: stringValue(seedIdentity?.title) ?? "Ontology Seed Purpose",
+    statement: stringValue(purpose?.declared_purpose),
+    evidence_refs: directEvidence(purpose),
+    fallbackName: "Ontology Seed Purpose",
+  });
 
   return [
-    seedCandidate.purpose,
-    ...conceptClaims,
-    ...relationClaims,
-    ...answerabilityClaims,
-    ...("non_goals" in seedCandidate ? seedCandidate.non_goals : []),
-    ...("entities" in seedCandidate ? seedCandidate.entities : []),
-    ...("relations" in seedCandidate ? seedCandidate.relations : []),
-    ...("actions" in seedCandidate ? seedCandidate.actions : []),
-    ...("properties" in seedCandidate ? seedCandidate.properties : []),
-    ...("rules" in seedCandidate ? seedCandidate.rules : []),
+    ...(purposeClaim ? [purposeClaim] : []),
+    ...collectRecordClaims({
+      records: recordArray(conceptualFrame, "concepts"),
+      idKey: "concept_id",
+      nameKeys: ["name"],
+      statementKeys: ["definition", "purpose_role"],
+      fallbackPrefix: "Concept",
+      pathPrefix: "conceptual_frame.concepts",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(conceptualFrame, "associations"),
+      idKey: "association_id",
+      nameKeys: ["association_kind"],
+      statementKeys: ["statement"],
+      fallbackPrefix: "Association",
+      pathPrefix: "conceptual_frame.associations",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(semanticLayer, "object_types"),
+      idKey: "object_type_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Object Type",
+      pathPrefix: "semantic_layer.object_types",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(semanticLayer, "link_types"),
+      idKey: "link_type_id",
+      nameKeys: ["business_meaning"],
+      statementKeys: ["business_meaning"],
+      fallbackPrefix: "Link Type",
+      pathPrefix: "semantic_layer.link_types",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(semanticLayer, "value_types"),
+      idKey: "value_type_id",
+      nameKeys: ["name"],
+      statementKeys: ["representation"],
+      fallbackPrefix: "Value Type",
+      pathPrefix: "semantic_layer.value_types",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(semanticLayer, "constraints"),
+      idKey: "constraint_id",
+      nameKeys: ["constraint_kind"],
+      statementKeys: ["statement"],
+      fallbackPrefix: "Constraint",
+      pathPrefix: "semantic_layer.constraints",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dynamicLayer, "actor_types"),
+      idKey: "actor_type_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Actor Type",
+      pathPrefix: "dynamic_layer.actor_types",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dynamicLayer, "actor_roles"),
+      idKey: "role_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Actor Role",
+      pathPrefix: "dynamic_layer.actor_roles",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dynamicLayer, "permission_policies"),
+      idKey: "policy_id",
+      nameKeys: ["permission_kind"],
+      statementKeys: ["condition", "permission_kind"],
+      fallbackPrefix: "Permission Policy",
+      pathPrefix: "dynamic_layer.permission_policies",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dynamicLayer, "state_models"),
+      idKey: "state_model_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "State Model",
+      pathPrefix: "dynamic_layer.state_models",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dynamicLayer, "lifecycle_rules"),
+      idKey: "rule_id",
+      nameKeys: ["name", "rule_kind"],
+      statementKeys: ["statement", "description"],
+      fallbackPrefix: "Lifecycle Rule",
+      pathPrefix: "dynamic_layer.lifecycle_rules",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(kineticLayer, "action_types"),
+      idKey: "action_type_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Action Type",
+      pathPrefix: "kinetic_layer.action_types",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(kineticLayer, "functions"),
+      idKey: "function_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Function",
+      pathPrefix: "kinetic_layer.functions",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(kineticLayer, "workflows"),
+      idKey: "workflow_id",
+      nameKeys: ["name"],
+      statementKeys: ["description"],
+      fallbackPrefix: "Workflow",
+      pathPrefix: "kinetic_layer.workflows",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dataBindingLayer, "source_bindings"),
+      idKey: "binding_id",
+      nameKeys: ["binding_kind"],
+      statementKeys: ["statement"],
+      fallbackPrefix: "Source Binding",
+      pathPrefix: "data_binding_layer.source_bindings",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dataBindingLayer, "read_models"),
+      idKey: "read_model_id",
+      nameKeys: ["name"],
+      statementKeys: ["transformation_summary"],
+      fallbackPrefix: "Read Model",
+      pathPrefix: "data_binding_layer.read_models",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dataBindingLayer, "writebacks"),
+      idKey: "writeback_id",
+      nameKeys: ["name"],
+      statementKeys: ["writeback_summary", "description"],
+      fallbackPrefix: "Writeback",
+      pathPrefix: "data_binding_layer.writebacks",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(dataBindingLayer, "provenance_bindings"),
+      idKey: "provenance_id",
+      nameKeys: ["author_or_system"],
+      statementKeys: ["timestamp_ref", "statement"],
+      fallbackPrefix: "Provenance Binding",
+      pathPrefix: "data_binding_layer.provenance_bindings",
+    }),
+    ...collectRecordClaims({
+      records: recordArray(seed, "handoff_limitations"),
+      idKey: "limitation_id",
+      nameKeys: ["limitation_kind"],
+      statementKeys: ["description", "mitigation_or_next_action"],
+      fallbackPrefix: "Handoff Limitation",
+      pathPrefix: "handoff_limitations",
+    }),
   ];
+}
+
+export function ontologySeedExcludedClaimIds(
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
+): Set<string> {
+  const seed = recordValue(ontologySeed) ?? {};
+  return new Set(
+    recordArray(seed, "handoff_limitations")
+      .map((limitation) => stringValue(limitation.limitation_id))
+      .filter((id): id is string => id !== null),
+  );
+}
+
+export function ontologySeedAnswerabilitySummary(
+  ontologySeed: ReconstructActionableOntologySeedArtifact,
+): {
+  declared_question_count: number;
+  supported_question_count: number;
+  deferred_question_count: number;
+  unsupported_question_count: number;
+  supported_action_count: number;
+  unsupported_action_count: number;
+} {
+  const seed = recordValue(ontologySeed) ?? {};
+  const validationLayer = recordValue(seed.validation_layer);
+  const kineticLayer = recordValue(seed.kinetic_layer);
+  const handoffLimitations = recordArray(seed, "handoff_limitations");
+  const coverageAxes = stringArray(validationLayer?.coverage_axes);
+  const unsupportedQuestionCandidates = recordArray(
+    validationLayer,
+    "unsupported_question_candidates",
+  );
+  const actionTypes = recordArray(kineticLayer, "action_types");
+  const actionIds = new Set(
+    actionTypes
+      .map((action) => stringValue(action.action_type_id))
+      .filter((id): id is string => id !== null),
+  );
+  const limitedActionIds = new Set(
+    handoffLimitations.flatMap((limitation) => stringArray(limitation.affected_refs))
+      .filter((ref) => actionIds.has(ref)),
+  );
+  return {
+    declared_question_count: coverageAxes.length,
+    supported_question_count: Math.max(0, coverageAxes.length - unsupportedQuestionCandidates.length),
+    deferred_question_count: handoffLimitations.length,
+    unsupported_question_count: unsupportedQuestionCandidates.length,
+    supported_action_count: Math.max(0, actionTypes.length - limitedActionIds.size),
+    unsupported_action_count: limitedActionIds.size,
+  };
 }
