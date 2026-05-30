@@ -7,8 +7,8 @@
 ## 1. Position
 
 `reconstruct` can take a long time because the host LLM must read source
-observations, run reconstruct lens judgments, choose the next unjudged source
-frontier, propose Seed meaning, assess competency questions, and explain
+observations, run reconstruct lens judgments, choose the next unjudged
+source frontier, propose seed meaning, assess competency questions, and explain
 unresolved gaps. The user-facing experience must therefore expose new
 information as it is discovered, not only meta status such as "still running".
 
@@ -34,18 +34,18 @@ The brief must include:
   test/fixture-only profile if a non-product harness is running, with the
   completion claim allowed for that profile
 - model/provider: provider family or realization label without secrets
-- domain: selected domain, no-domain mode, or pending domain-context selection
+- domain: selected domain, no-domain mode, or pending domain competency admission
 - material: `target_material_kind`, target input kind, and unsupported-material
   status if known
 - exploration loop: initial source frontier, round budget if any, and frontier
   validation policy
 - reconstruction direction: what the reconstruct run will try to explain, and
   what it will treat as out of scope
-- ownership boundary: runtime observes and validates; reconstruct lenses judge
-  meaning and source gaps; the user or host confirmation controls Seed
+- ownership boundary: runtime observes and validates; reconstruct lens judgments judge
+  meaning and source gaps; the user or host confirmation controls seed
   acceptance
 - skipped or deferred stages that already narrow downstream authority, such as
-  live lens judgment, source-frontier exploration, domain-context selection,
+  live lens judgment, source-frontier exploration, domain competency admission,
   user confirmation, or competency-question assessment
 
 The opening brief should be declarative. It should not ask the user to approve
@@ -78,9 +78,12 @@ Progress updates should prefer facts such as:
 - per-lens judgment status and newly named semantic gaps
 - source frontier refs requested, accepted, rejected, already observed,
   unsupported, or out of bounds
-- domain context refs and snapshot id
-- Seed claim count by entity, relation, action, property, and rule
-- claim realization stance counts
+- domain competency admission refs and governing snapshot id
+- seed layer count by object, actor, action, workflow, permission, and data
+  binding
+- candidate disposition count by disposition
+- ontology-facing handoff readiness, canonical readiness projection, or
+  limitation count
 - confirmation state counts
 - competency question count and assessment status counts
 - failure classification counts
@@ -89,9 +92,10 @@ Progress updates should prefer facts such as:
 - current halt reason and reusable artifact refs when halted
 - skipped/deferred stage reason and downstream authority impact
 
-Progress updates should avoid pretending that intermediate semantic claims are
-final. Before Seed confirmation, claims are candidates. Before competency
-question assessment, quality statements are preliminary.
+Progress updates should avoid pretending that intermediate semantic content is
+final. Before seed confirmation, seed content is candidate content. Before
+competency-question assessment and handoff validation, quality statements are
+preliminary.
 
 ## 4. Decision Points
 
@@ -104,9 +108,8 @@ Decision points:
 - material kind is unsupported or mixed in a way that changes adapter behavior
 - source frontier expansion would exceed the declared boundary, adapter support,
   or round/cost budget
-- domain context selection changes the interpretation standard
-- Seed claim confirmation requires accepted, rejected, partial, or deferred
-  state
+- domain competency admission changes the interpretation standard
+- seed confirmation requires accepted, rejected, partial, or deferred state
 - unresolved material questions require a final direction: continue, defer, or
   accept with disclosed limits
 
@@ -118,7 +121,7 @@ The host should phrase choices by outcome, not internal jargon.
 separate:
 
 - confirmed Seed content
-- claim realization summary
+- candidate disposition summary
 - competency question assessment summary
 - material failures and unsafe-to-trust gaps
 - revision proposals and action candidates
@@ -132,9 +135,10 @@ of `reconstruct-record.yaml`, `reconstruct-run-manifest.yaml`, and the
 stage-owned artifacts.
 
 Full integral exploration wording is allowed only when the run manifest records
-the full profile and the required exploration, domain-context, Seed,
-confirmation, competency-question, assessment, failure, revision, metrics, stop,
-and final-output stages are trusted or explicitly skipped with trusted reasons.
+the full profile and the required exploration, domain competency admission, Seed,
+confirmation, competency-question, assessment, failure, revision, metrics,
+handoff-validation, and final-output stages are trusted or explicitly skipped
+with trusted reasons.
 
 ## 6. Halted Or Partial Runs
 
@@ -151,9 +155,9 @@ If a run halts, the output should still be useful:
   trusted artifacts
 
 A halted run may provide candidate Seed content only if the corresponding
-artifact and validation refs exist. It may not imply Seed confirmation, CQ
-assessment, failure classification, revision proposal, stop decision, or final
-ontology direction unless those artifacts exist.
+artifact and validation refs exist. It may not imply seed confirmation, CQ
+assessment, failure classification, revision proposal, terminal handoff readiness, or
+final ontology direction unless those artifacts exist.
 
 ## 7. Runtime Payload Expectations
 

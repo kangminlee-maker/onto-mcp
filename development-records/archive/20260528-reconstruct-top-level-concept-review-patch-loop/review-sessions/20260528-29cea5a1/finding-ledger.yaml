@@ -1,0 +1,57 @@
+schema_version: 1
+session_id: "20260528-29cea5a1"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "dependency"
+    source_ref: "round1/dependency.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: "materialized-input.md lines 428-433 and 842-863"
+    claim: "relation_participation is still shown as an unconditional Seed output field under every top_level_concepts[] item, although the contract defines it as an exception/projection seat only for concepts not connected by top_level_relations."
+    proposed_action: "Mark relation_participation as optional and present only for isolated concepts, or move it to a separate relation_participation_exceptions list keyed by concept_id; do not add a connected status unless the contract intentionally wants endpoint membership duplicated."
+    affected_purpose: "The reconstruct top-level concept discovery contract must keep top_level_relations as the canonical relation authority and prevent exception projections from becoming competing relation obligations."
+    failure_condition: "For any connected concept, an implementer treating the Seed output shape as required must either emit an isolation-only relation_participation value that is false or omit a field that the shape appears to require."
+    impact: "This weakens trust in the Seed schema because connected relation participation may be represented through two conflicting dependency paths: endpoint membership and an unconditional concept-level projection."
+    evidence_refs: ["round1/dependency.md#finding-1", "execution-preparation/materialized-input.md#lines-428-433", "execution-preparation/materialized-input.md#lines-842-863"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "semantics"
+    source_ref: "round1/semantics.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:462 and .onto/processes/reconstruct/top-level-concept-discovery-contract.md:815-831"
+    claim: "relation_participation remains semantically ambiguous in the Seed output shape because the field name and enum values describe isolated concepts, but the example shape lists it directly under every top_level_concepts[] item."
+    proposed_action: "Mark relation_participation as optional and exception-only in the output shape, or split the example into a common concept record and an isolated concept exception projection."
+    affected_purpose: "The contract must preserve the meaning that connected participation is derived only from relation endpoint membership while relation_participation records only isolation exceptions."
+    failure_condition: "If implementers treat the output shape as mandatory for every concept, connected concepts have no truthful relation_participation enum value."
+    impact: "This weakens semantic trust in generated Seed artifacts because a field intended as an isolation exception can be read as a required universal concept property."
+    evidence_refs: ["round1/semantics.md#finding-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:462", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:815-831"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-003"
+    lens_id: "semantics"
+    source_ref: "round1/semantics.md#finding-2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:14-17, 184-207, and 961"
+    claim: "The top-level Seed purpose statement still says open questions while the answerability model uses a closed declared_handoff_questions inventory classified into supported_questions, deferred_questions, and unsupported_questions."
+    proposed_action: "Reword the position statement to supported, deferred, and unsupported handoff questions or answerability scope instead of open questions."
+    affected_purpose: "The contract should avoid reintroducing the retired open_questions interpretation and should present answerability as a closed classified inventory."
+    failure_condition: "A reader may treat open questions as an open-ended bucket even though the new contract requires exact partitioning of declared handoff questions."
+    impact: "This is a terminology drift risk, but the later contract and compatibility section provide enough authority that it does not make the reviewed result unsafe for its declared purpose."
+    evidence_refs: ["round1/semantics.md#finding-2", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:14-17", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:184-207", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:961"]
+    severity: "low"
+    domain_threshold_used: null
+  - finding_id: "finding-004"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#c-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:150, 154, 162, 167, 783, 787, 795, and 800"
+    claim: "Question text is defined twice inside answerability_scope because declared_handoff_questions[] owns question_id and question, while supported_questions[], deferred_questions[], and unsupported_questions[] also carry question."
+    proposed_action: "Make declared_handoff_questions[] the sole authority for question text; keep only question_id and status-specific fields in supported_questions[], deferred_questions[], and unsupported_questions[], deriving display text from declared_handoff_questions[].question when needed."
+    affected_purpose: "The answerability contract must keep one authoritative path for each declared handoff question while using membership in supported, deferred, and unsupported buckets only for classification."
+    failure_condition: "If a question_id has one text in declared_handoff_questions[] and another text in a status bucket, consumers cannot know which text is authoritative."
+    impact: "This meaningfully weakens trust and auditability because duplicated question text creates drift risk inside the Seed answerability authority surface."
+    evidence_refs: ["round1/conciseness.md#c-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:150", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:154", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:162", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:167", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:783", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:787", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:795", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:800"]
+    severity: "medium"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

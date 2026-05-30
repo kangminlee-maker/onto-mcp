@@ -1,0 +1,397 @@
+review_record_id: 20260528-6dffeec8
+session_id: 20260528-6dffeec8
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-05-28T14:45:26+09:00
+updated_at: 2026-05-28T14:48:22+09:00
+request_text: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing material issues from sessions
+  20260528-391bbc3f, 20260528-da9e31db, 20260528-3d59d774, 20260528-29cea5a1,
+  20260528-e8c8b240, and 20260528-e6edefdf. Confirm whether material
+  documentation/design-contract issues remain in the current working tree diff,
+  especially concept_identity_events and relation_identity_events as the sole
+  lifecycle transition authority, absence of
+  prior_concept_mappings/prior_relation_mappings from Seed lifecycle authority,
+  answerability question ID uniqueness by declared inventory and status buckets,
+  supported_actions[].supported_by_question_ids[] as the sole canonical
+  question-to-action support edge, lifecycle.source_snapshot_refs as current
+  source snapshot authority with source_snapshot_transition containing prior
+  refs only, relation_participation_exceptions.status collapsed to isolated,
+  demotion bridge from prior concept IDs to lower-level detail IDs, external
+  migration artifact refs, simplified README and IMPLEMENTATION_MAP
+  authority-reference summaries, source_authority_scope_changed state
+  traceability, lifecycle split/merge continuity through identity event arrays,
+  pressure transitions, and answerability references.
+review_target_scope_ref: .onto/review/20260528-6dffeec8/binding.yaml
+interpretation_ref: .onto/review/20260528-6dffeec8/interpretation.yaml
+binding_ref: .onto/review/20260528-6dffeec8/binding.yaml
+domain_final_selection_ref: .onto/review/20260528-6dffeec8/binding.yaml
+resolved_review_mode: full
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+execution_result_ref: .onto/review/20260528-6dffeec8/execution-result.yaml
+session_metadata_ref: .onto/review/20260528-6dffeec8/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260528-6dffeec8/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260528-6dffeec8/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260528-6dffeec8/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260528-6dffeec8/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  logic: .onto/review/20260528-6dffeec8/round1/logic.md
+  structure: .onto/review/20260528-6dffeec8/round1/structure.md
+  dependency: .onto/review/20260528-6dffeec8/round1/dependency.md
+  semantics: .onto/review/20260528-6dffeec8/round1/semantics.md
+  pragmatics: .onto/review/20260528-6dffeec8/round1/pragmatics.md
+  evolution: .onto/review/20260528-6dffeec8/round1/evolution.md
+  coverage: .onto/review/20260528-6dffeec8/round1/coverage.md
+  conciseness: .onto/review/20260528-6dffeec8/round1/conciseness.md
+  axiology: .onto/review/20260528-6dffeec8/round1/axiology.md
+lens_output_schema_version: 2
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: .onto/review/20260528-6dffeec8/degradation-summary.yaml
+per_lens_provenance:
+  logic:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: "version: 7; last_updated: 2026-05-28"
+        anchor: Type System Logic / Fundamental Type Rules
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: "version: 7; last_updated: 2026-05-28"
+        anchor: Constraint Design Logic / Fundamental Constraint Rules
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: "version: 7; last_updated: 2026-05-28"
+        anchor: Error Handling Logic / LLM-Native Failure Posture
+    domain_context_assumptions: []
+  structure:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/structure_spec.md
+        source_version_or_snapshot_id: defce85754cf60b644ab765ef6d11d231fad2544e5ce3e7a946bcaf53d5a427f
+        anchor: Golden Relationships
+    domain_context_assumptions: []
+  dependency:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: sha256:0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+        anchor: Direction Rules / Dependency Direction Vocabulary
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: sha256:0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+        anchor: Event Schema Contract Dependencies
+    domain_context_assumptions: []
+  semantics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: version 8
+        anchor: Architecture Core Terms / Source of Truth
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: version 8
+        anchor: Change Management Terms / Migration
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: version 8
+        anchor: Data/State Management Terms / Snapshot
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: version 8
+        anchor: LLM-Native Engineering Terms / Artifact Truth and Provenance
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4
+        anchor: Response Format Constraints
+    domain_context_assumptions: []
+  pragmatics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/competency_qs.md
+        source_version_or_snapshot_id: version 8 / last_updated 2026-05-28
+        anchor: Applicability verdict protocol; CQ-T-02
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4 / last_updated 2026-05-28
+        anchor: Response Format Constraints; Output Sink Constraints
+    domain_context_assumptions: []
+  evolution:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version 8, last_updated 2026-05-28
+        anchor: "Case SE-03: Schema or Data Model Change"
+    domain_context_assumptions: []
+  coverage:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: "version: 8; last_updated: 2026-05-28"
+        anchor: Major Sub-areas
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: "version: 8; last_updated: 2026-05-28"
+        anchor: Required Concept Categories
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: "version: 4; last_updated: 2026-05-28"
+        anchor: Ownership Boundary Structure
+    domain_context_assumptions: []
+  conciseness:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5"
+        anchor: §1 Allowed Redundancy
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5"
+        anchor: §2 Removal Target Patterns
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5"
+        anchor: §4 Boundaries — Domain-specific Application Cases
+    domain_context_assumptions: []
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions: []
+finding_ledger_ref: .onto/review/20260528-6dffeec8/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260528-6dffeec8/finding-relation-graph.yaml
+issue_ledger_ref: null
+issue_stance_matrix_ref: null
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: medium
+  finding_count: 6
+  issue_count: 0
+  finding_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 6
+    low: 0
+    info: 0
+  issue_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 0
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 6
+  non_material_finding_count: 0
+  material_issues:
+    - issue_id: finding:finding-001
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially confirming that demotion
+        bridges from prior concept IDs to lower-level detail IDs are closed
+        through a canonical lifecycle authority.
+      failure_condition: A contract implementer or runtime validator follows the
+        validation expectation and looks for or accepts `current_detail_ids`,
+        which is not declared in the lifecycle schema.
+      impact: The orphan validation edge weakens the intended single demotion bridge
+        and can introduce a parallel lifecycle transition authority, reducing
+        structural trust in the design contract.
+      evidence_refs:
+        - round1/structure.md#STRUCTURE-1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:344
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013
+      source_lens_ids:
+        - structure
+      action_candidates: &a2
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: Validation references `current_detail_ids`, but the lifecycle
+        schema does not define that edge; the declared demotion bridge field is
+        `concept_identity_events[].target_detail_ids`.
+    - issue_id: finding:finding-002
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially confirming lifecycle
+        transition authority and demotion bridge dependency direction.
+      failure_condition: A validator accepts a demotion bridge through
+        `current_detail_ids`, leaving downstream consumers unable to reliably
+        find the demotion linkage in the declared artifact shape.
+      impact: The implicit dependency path is not anchored to a declared artifact
+        seat, weakening reproducibility and downstream dependency reliability
+        for lifecycle transition replay.
+      evidence_refs:
+        - round1/dependency.md#DEP-1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015
+      source_lens_ids:
+        - dependency
+      action_candidates: &a3
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: Demotion bridge validation names `current_detail_ids` as an
+        alternate dependency edge even though the lifecycle schema and output
+        shape define `target_detail_ids` as the bridge.
+    - issue_id: finding:finding-003
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially preserving a single stable
+        semantic shape for lifecycle transition authority.
+      failure_condition: Readers or implementers interpret `current_detail_ids` as an
+        allowed public schema field even though the documented Seed shape does
+        not define it.
+      impact: The undefined alternate name weakens semantic clarity and can create a
+        second name for the same demotion relation, reducing trust in the
+        canonical field vocabulary.
+      evidence_refs:
+        - round1/semantics.md#finding-1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015
+      source_lens_ids:
+        - semantics
+      action_candidates: &a4
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: "`current_detail_ids` reads like a synonym or alternate
+        lifecycle authority for the same demotion bridge, but it is not
+        introduced as a field, alias, compatibility projection, or retired-seat
+        mapping."
+    - issue_id: finding:finding-004
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially usable runtime validation and
+        answerability of demotion continuity.
+      failure_condition: A runtime validator or ontology author tries to answer the
+        demotion-continuity question and encounters two possible field paths,
+        one of which is not declared.
+      impact: The answer path is non-unique, which meaningfully weakens practical
+        usability and trust in deterministic validation behavior.
+      evidence_refs:
+        - round1/pragmatics.md#P2
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:342
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:344
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1015
+      source_lens_ids:
+        - pragmatics
+      action_candidates: &a5
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: The runtime question path for which lower-level detail
+        currently represents a demoted prior concept becomes ambiguous because
+        validation permits undeclared `current_detail_ids` beside declared
+        `target_detail_ids`.
+    - issue_id: finding:finding-005
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially change tolerance and replay
+        of lifecycle transitions across iterative rounds or migration.
+      failure_condition: Future schema migration or runtime validation accepts two
+        names for demoted concept-to-detail continuity, splitting replay paths
+        across versions.
+      impact: The compatibility fork weakens evolution safety because demoted prior
+        concept IDs no longer have one stable replay path.
+      evidence_refs:
+        - round1/evolution.md#finding-1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-345
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015
+      source_lens_ids:
+        - evolution
+      action_candidates: &a6
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: Demotion lifecycle bridge wording leaves two possible field
+        names for the same transition edge, with `current_detail_ids` undefined
+        and `target_detail_ids` declared.
+    - issue_id: finding:finding-006
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification review for the reconstruct top-level
+        concept discovery design patch, especially alignment with one canonical
+        artifact seat and one canonical label per concept or field.
+      failure_condition: The contract keeps one declared artifact field while
+        validation permits an undeclared synonym for the same demotion bridge.
+      impact: The mismatch is value-relevant because the patch aims to close authority
+        ambiguity, yet the undeclared alias reintroduces competing field
+        vocabulary.
+      evidence_refs:
+        - round1/axiology.md#A1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:338-344
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:1013-1015
+        - .onto/principles/ontology-as-code-guideline.md:17-21
+        - .onto/principles/ontology-as-code-guideline.md:85-99
+        - .onto/principles/productization-charter.md:44-48
+      source_lens_ids:
+        - axiology
+      action_candidates: &a7
+        - continue_review
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+      issue_statement: Undefined `current_detail_ids` weakens the single-authority
+        demotion bridge by creating an implicit alternate field name for the
+        same concept.
+  non_material_findings: []
+  action_candidates:
+    - issue_id: finding:finding-001
+      candidates: *a2
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: finding:finding-002
+      candidates: *a3
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: finding:finding-003
+      candidates: *a4
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: finding:finding-004
+      candidates: *a5
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: finding:finding-005
+      candidates: *a6
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: finding:finding-006
+      candidates: *a7
+      derivation_refs:
+        - finding-ledger.yaml
+      rationale: Finding-level projection is available before root-cause issue
+        classification.
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Review cancelled by MCP request: Valid material design-contract
+        issue identified: undefined current_detail_ids appears as an alternate
+        demotion bridge field while target_detail_ids is the declared canonical
+        field. Cancel before patching current working tree to avoid stale
+        downstream review artifacts."
+synthesis_result_ref: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+final_output_ref: .onto/review/20260528-6dffeec8/final-output.md
+shared_phenomenon_summary: []

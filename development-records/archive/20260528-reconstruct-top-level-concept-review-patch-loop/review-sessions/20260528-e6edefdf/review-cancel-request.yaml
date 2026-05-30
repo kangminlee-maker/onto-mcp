@@ -1,0 +1,7 @@
+schema_version: "1"
+session_id: 20260528-e6edefdf
+requested_at: 2026-05-28T14:43:52+09:00
+requested_by: mcp
+reason: Valid material lifecycle authority duplication issue identified; cancel
+  before patching current working tree to avoid stale downstream review
+  artifacts.

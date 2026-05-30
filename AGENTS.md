@@ -60,10 +60,12 @@ target material 관련 작업 시 추가로 읽을 문서:
 `reconstruct` 작업 시 추가로 읽을 문서:
 
 1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
-2. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
-3. [top-level-concept-discovery-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/top-level-concept-discovery-contract.md)
-4. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
-5. selected source profile under `.onto/processes/reconstruct/source-profiles/`
+2. [actionable-ontology-seed-recomposition-design.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md)
+3. [foundry-style-ontology-seed-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/foundry-style-ontology-seed-contract.md)
+4. [reconstruct-contract-registry.yaml](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-contract-registry.yaml)
+5. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
+6. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
+7. selected source profile under `.onto/processes/reconstruct/source-profiles/`
 
 ---
 

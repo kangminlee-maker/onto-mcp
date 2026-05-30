@@ -1,0 +1,6 @@
+review_target_scope_kind: file
+resolved_target_refs:
+  - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-e8c8b240/diff-target.patch
+review_target_profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-e8c8b240/execution-preparation/review-target-profile.yaml
+captured_at: 2026-05-28T14:34:13+09:00
+capture_reason: prompt-backed review execution

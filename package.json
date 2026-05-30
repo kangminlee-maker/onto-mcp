@@ -32,7 +32,8 @@
   ],
   "scripts": {
     "prepare": "npm run build:ts-core",
-    "build:ts-core": "tsc -p tsconfig.json",
+    "clean:ts-core": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
     "test:review:invocation-runner": "tsx scripts/review-invocation-runner-conformance.ts",
     "test:mcp:review": "tsx scripts/mcp-review-conformance.ts",

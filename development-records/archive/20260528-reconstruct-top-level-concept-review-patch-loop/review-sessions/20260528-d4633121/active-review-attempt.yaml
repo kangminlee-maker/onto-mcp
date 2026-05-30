@@ -1,0 +1,17 @@
+schema_version: "1"
+attempt_id: initial-20260528T055410Z-442a7554
+attempt_kind: initial_review
+session_id: 20260528-d4633121
+session_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121
+project_root: null
+created_at: 2026-05-28T14:54:10+09:00
+updated_at: 2026-05-28T14:56:49+09:00
+status: halted_partial
+active_units:
+  - review_execution
+requested_frontier_units: []
+run_control:
+  stale_after_seconds: 1200
+  source_tool: onto.review
+  request_hash: 3c0d2a8c422672f8738739a88b707c07f0c5148a4166bce693538a9af1df8426
+latest_observed_artifact_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/environment-warnings.yaml

@@ -1,0 +1,6 @@
+schema_version: 1
+session_id: "20260528-e6edefdf"
+relations: []
+singleton_findings:
+  - finding_id: "finding-001"
+    reason: "No relation was accepted because the finding ledger contains only one finding. The available lens outputs mostly report no material findings, while the single ledgered finding from the conciseness lens concerns duplicated lifecycle mapping authority between mapping arrays and identity event arrays. Within the declared boundary, there is no second finding to relate by common root, causality, dependency, duplication, conflict, or independence."

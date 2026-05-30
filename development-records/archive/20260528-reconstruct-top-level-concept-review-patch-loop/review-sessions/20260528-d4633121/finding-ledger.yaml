@@ -1,0 +1,83 @@
+schema_version: 1
+session_id: "20260528-d4633121"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#c-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/review/20260528-d4633121/execution-preparation/materialized-input.md:426-466,846-848,1110-1111"
+    claim: "top_level_relations stores relation_kind and relation_axis as field-level relation authority even though the design-local relation kind table maps each relation_kind to exactly one relation_axis."
+    proposed_action: "Make relation_kind the stored authority and derive relation_axis for display, grouping, validation reports, or explicitly mark relation_axis as a non-authoritative derived projection."
+    affected_purpose: "documentation/design-contract conciseness, artifact truth, auditability, and regression-risk control for reconstruct top-level relation authority"
+    failure_condition: "When relation_kind and relation_axis diverge in a Seed record or future migration, consumers can observe two stored classifications for the same relation fact."
+    impact: "This creates a duplicate authority path for relation classification, weakening trust that the Seed has one canonical source for relation semantics and increasing drift risk in validators and downstream consumers."
+    evidence_refs: ["round1/conciseness.md#c-1"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "conciseness"
+    source_ref: "round1/conciseness.md#c-2"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/review/20260528-d4633121/execution-preparation/materialized-input.md:322-329,1075-1077"
+    claim: "lifecycle pressure_events carries both pressure_ids[] and current_pressure_id without defining a distinct bulk-event meaning that separates the two authorities."
+    proposed_action: "Collapse to one canonical affected-pressure field, or explicitly define multi-pressure event semantics and when current_pressure_id differs from pressure_ids[]."
+    affected_purpose: "documentation/design-contract conciseness, lifecycle authority clarity, deterministic validation, and auditability for pressure transitions"
+    failure_condition: "When a pressure transition event includes both pressure_ids[] and current_pressure_id, future records or validators may encode the affected pressure through two overlapping paths."
+    impact: "This weakens reproducibility and audit trust because the pressure lifecycle event model does not make the canonical pressure reference unambiguous."
+    evidence_refs: ["round1/conciseness.md#c-2"]
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-003"
+    lens_id: "structure"
+    source_ref: "round1/structure.md#residual-risk"
+    target: "TypeScript runtime validators and implementation files"
+    evidence_anchor: "round1/structure.md Residual Risk"
+    claim: "The structure review did not inspect implementation files or runtime validators, so it does not confirm that TypeScript runtime enforcement matches the documented deterministic validation rules."
+    proposed_action: "Verify implementation validators separately before treating runtime enforcement as proven."
+    affected_purpose: "runtime contract, test evidence, and implementation completeness"
+    failure_condition: "If the documentation/design contract is correct but runtime validators are absent or divergent, users may rely on a contract that the product path does not enforce."
+    impact: "This is an evidence boundary rather than a confirmed defect; it limits final-review confidence about implemented runtime completeness."
+    evidence_refs: ["round1/structure.md#residual-risk"]
+    severity: "info"
+    domain_threshold_used: null
+  - finding_id: "finding-004"
+    lens_id: "dependency"
+    source_ref: "round1/dependency.md#residual-risk"
+    target: "implementation code, generated artifacts, and schema validators"
+    evidence_anchor: "round1/dependency.md Residual Risk"
+    claim: "The dependency review did not verify implementation code, generated artifacts, or schema validators beyond the documentation/design-contract diff."
+    proposed_action: "Run a separate implementation-path verification for dependency enforcement if the review decision depends on runtime behavior."
+    affected_purpose: "runtime contract, generated artifact trust, and schema validation evidence"
+    failure_condition: "If implementation dependency edges or generated schemas diverge from the documented authority graph, the declared design may not hold in the executable path."
+    impact: "This preserves uncertainty about runtime dependency enforcement while leaving the documentation/design-contract dependency result otherwise passing."
+    evidence_refs: ["round1/dependency.md#residual-risk"]
+    severity: "info"
+    domain_threshold_used: null
+  - finding_id: "finding-005"
+    lens_id: "evolution"
+    source_ref: "round1/evolution.md#residual-boundary-notes"
+    target: "TypeScript runtime/schema implementation"
+    evidence_anchor: "round1/evolution.md Residual Boundary Notes"
+    claim: "The evolution review treats actual TypeScript runtime and schema implementation as future work outside this diff's completion condition."
+    proposed_action: "Track runtime/schema implementation verification as a later bounded step rather than inferring it from this documentation/design-contract review."
+    affected_purpose: "future implementation path, schema migration confidence, and productized runtime readiness"
+    failure_condition: "If stakeholders interpret the design-contract pass as proof that runtime/schema implementation already exists, readiness may be overstated."
+    impact: "This is an explicit boundary limitation that affects final-review wording about what has and has not been verified."
+    evidence_refs: ["round1/evolution.md#residual-boundary-notes"]
+    severity: "info"
+    domain_threshold_used: null
+  - finding_id: "finding-006"
+    lens_id: "coverage"
+    source_ref: "round1/coverage.md#residual-limitation"
+    target: "implementation code, generated schemas, and runtime tests"
+    evidence_anchor: "round1/coverage.md Residual limitation"
+    claim: "The coverage conclusion is limited to documentation/design-contract coverage and does not verify implementation code, generated schemas, or runtime tests."
+    proposed_action: "Separate documentation/design-contract coverage acceptance from implemented runtime completeness, and run implementation coverage checks when that becomes the target."
+    affected_purpose: "coverage, test evidence, runtime contract, and release-readiness confidence"
+    failure_condition: "If implementation completeness is required for the next stage, this review does not provide sufficient evidence for that condition."
+    impact: "The finding limits the final review's scope claim but does not identify a material issue in the documentation/design-contract patch itself."
+    evidence_refs: ["round1/coverage.md#residual-limitation"]
+    severity: "info"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

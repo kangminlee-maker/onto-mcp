@@ -1,0 +1,47 @@
+entrypoint: review
+target_scope_candidate:
+  kind: file
+  primary_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/diff-target.patch
+intent_summary: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing material issues from sessions
+  20260528-391bbc3f, 20260528-da9e31db, 20260528-3d59d774, 20260528-29cea5a1,
+  20260528-e8c8b240, 20260528-e6edefdf, 20260528-6dffeec8, and
+  20260528-03960a26. Confirm whether material documentation/design-contract
+  issues remain in the current working tree diff, especially
+  concept_identity_events and relation_identity_events as the sole lifecycle
+  transition authority, absence of
+  prior_concept_mappings/prior_relation_mappings from Seed lifecycle authority,
+  absence of undefined current_detail_ids or any alternate demotion bridge
+  field, absence of generic concept_ids/relation_ids inside identity event
+  schemas, concept_identity_events[].target_detail_ids as the sole demotion
+  bridge from prior concept IDs to lower_level_detail_placements[].detail_id,
+  detail_placement_events not carrying prior concept lineage, answerability
+  question ID uniqueness by declared inventory and status buckets,
+  supported_actions[].supported_by_question_ids[] as the sole canonical
+  question-to-action support edge, lifecycle.source_snapshot_refs as current
+  source snapshot authority with source_snapshot_transition containing prior
+  refs only, relation_participation_exceptions.status collapsed to isolated,
+  external migration artifact refs, simplified README and IMPLEMENTATION_MAP
+  authority-reference summaries, source_authority_scope_changed state
+  traceability, lifecycle split/merge continuity through identity event arrays,
+  pressure transitions, and answerability references.
+domain_recommendation: software-engineering
+domain_selection_required: false
+review_mode_recommendation: full
+lens_selection_plan:
+  always_include:
+    - axiology
+  recommended_lenses:
+    - logic
+    - structure
+    - dependency
+    - semantics
+    - pragmatics
+    - evolution
+    - coverage
+    - conciseness
+    - axiology
+  rationale:
+    - host-facing positional invoke currently defaults to full 9-lens review
+      until interactive interpretation is productized.
+ambiguity_notes: []

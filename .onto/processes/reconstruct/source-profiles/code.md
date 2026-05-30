@@ -2,9 +2,12 @@
 
 > Target material kind: `code`
 
-## Support Status
+## Registry Record
 
-Design profile only. Runtime adapter support is not wired in the current repo.
+Current profile id, contract status, runtime implementation status, schema
+version, profile version, migration status, and definition hash are owned by
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml#source_profile_records`.
+This file defines code observation semantics only.
 
 ## Target Material Identification Hints
 
@@ -59,7 +62,7 @@ status field definition -- src/payment.ts:14
 - What user-visible workflow does this code support?
 - Is this code a service, library, script, UI, integration, or test harness?
 - Are there related repositories or documents that define the domain language?
-- Is there a legacy migration or compatibility constraint?
+- Is there a compatibility or migration constraint?
 
 ## Scan Targets
 

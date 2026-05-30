@@ -1,0 +1,30 @@
+schema_version: "1"
+session_id: 20260528-29cea5a1
+created_at: 2026-05-28T14:29:08+09:00
+dispatch_state: allow_dispatch
+criteria:
+  - criterion_id: user-request-intent
+    statement: Fresh verification review for the current reconstruct top-level
+      concept discovery design patch after closing material issues from sessions
+      20260528-391bbc3f, 20260528-da9e31db, and 20260528-3d59d774. Confirm
+      whether material documentation/design-contract issues remain in the
+      current working tree diff, especially demotion bridge from prior concept
+      IDs to lower-level detail IDs, external migration artifact refs, declared
+      handoff question closed inventory, relation_participation as
+      exception/projection instead of connected redeclaration, simplified README
+      and IMPLEMENTATION_MAP authority-reference summaries, retired
+      boundary_notes mapping, alias_changed lifecycle provenance,
+      source_authority_scope_changed state traceability, lifecycle split/merge
+      continuity, pressure transitions, and answerability references.
+    source_kind: invocation_interpretation
+    source_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/interpretation.yaml
+    authority_rank: 1
+    inference_owner: main
+    confidence: 1
+    confidence_basis: explicit invocation intent summary
+    confirmation_status: confirmed
+    ambiguity_status: clear
+    conflict_status: none
+    lifecycle_state: confirmed
+    lineage_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/interpretation.yaml
+    dispatch_decision: allow_dispatch

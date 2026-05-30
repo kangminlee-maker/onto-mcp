@@ -1,0 +1,269 @@
+review_record_id: 20260528-3d59d774
+session_id: 20260528-3d59d774
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-05-28T14:23:12+09:00
+updated_at: 2026-05-28T14:27:54+09:00
+request_text: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing prior material issues from
+  sessions 20260528-391bbc3f and 20260528-da9e31db. Confirm whether material
+  documentation/design-contract issues remain in the current working tree diff,
+  especially retired boundary_notes mapping to the existing structured boundary
+  object, alias_changed lifecycle provenance, source_authority_scope_changed
+  prior/current state traceability, complete concept-centered lifecycle
+  implementation guidance, retired-seat legacy migration mappings,
+  concept/relation split/merge lifecycle continuity, pressure prior/new status
+  transitions, answerability lifecycle refs, answerability status by list
+  membership, README, and IMPLEMENTATION_MAP alignment.
+review_target_scope_ref: .onto/review/20260528-3d59d774/binding.yaml
+interpretation_ref: .onto/review/20260528-3d59d774/interpretation.yaml
+binding_ref: .onto/review/20260528-3d59d774/binding.yaml
+domain_final_selection_ref: .onto/review/20260528-3d59d774/binding.yaml
+resolved_review_mode: full
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+execution_result_ref: .onto/review/20260528-3d59d774/execution-result.yaml
+session_metadata_ref: .onto/review/20260528-3d59d774/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260528-3d59d774/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260528-3d59d774/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260528-3d59d774/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260528-3d59d774/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  logic: .onto/review/20260528-3d59d774/round1/logic.md
+  structure: .onto/review/20260528-3d59d774/round1/structure.md
+  dependency: .onto/review/20260528-3d59d774/round1/dependency.md
+  semantics: .onto/review/20260528-3d59d774/round1/semantics.md
+  pragmatics: .onto/review/20260528-3d59d774/round1/pragmatics.md
+  evolution: .onto/review/20260528-3d59d774/round1/evolution.md
+  coverage: .onto/review/20260528-3d59d774/round1/coverage.md
+  conciseness: .onto/review/20260528-3d59d774/round1/conciseness.md
+  axiology: .onto/review/20260528-3d59d774/round1/axiology.md
+lens_output_schema_version: 2
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: .onto/review/20260528-3d59d774/degradation-summary.yaml
+per_lens_provenance:
+  logic:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: version 7 / last_updated 2026-05-28
+        anchor: Type System Logic / Fundamental Type Rules
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: version 7 / last_updated 2026-05-28
+        anchor: LLM-Native Failure Posture
+    domain_context_assumptions: []
+  structure:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/structure_spec.md
+        source_version_or_snapshot_id: version 6;
+          sha256:defce85754cf60b644ab765ef6d11d231fad2544e5ce3e7a946bcaf53d5a427f
+        anchor: Golden Relationships / LLM-Native System Structure
+    domain_context_assumptions: []
+  dependency:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: "version 6; sha256:
+          0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d"
+        anchor: Direction Rules; Source of Truth Management; AI Supply Chain and
+          Provenance; Dependency Direction for AI Boundaries
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: "version 4; sha256:
+          8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97"
+        anchor: Ownership Boundary Structure; Response Format Constraints; Output Sink
+          Constraints
+    domain_context_assumptions: []
+  semantics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: version 8, last_updated 2026-05-28
+        anchor: LLM-Native Engineering Terms; Document Design Terms; Homonyms Requiring
+          Attention; Interpretation Principles
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4, last_updated 2026-05-28
+        anchor: Ownership Boundary Structure; Response Format Constraints; Output Sink
+          Constraints
+    domain_context_assumptions: []
+  pragmatics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/competency_qs.md
+        source_version_or_snapshot_id: "version: 8"
+        anchor: Applicability verdict protocol
+    domain_context_assumptions: []
+  evolution:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version:8;
+          sha256:2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case SE-03: Schema or Data Model Change"
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version:8;
+          sha256:2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case SE-07: Service or Feature Decommissioning"
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version:4;
+          sha256:8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Ownership Boundary Structure
+    domain_context_assumptions: []
+  coverage:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: version 8; source_sha256
+          6a3ce92472c053d815df3b0f2dfcad2fb01948d98dae4f2f3b316d03cf5467b6
+        anchor: Major Sub-areas; Required Concept Categories; Bias Detection Criteria
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4; source_sha256
+          8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Ownership Boundary Structure; Response Format Constraints; External
+          Content Handling
+    domain_context_assumptions: []
+  conciseness:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5; last_updated: 2026-05-28"
+        anchor: §2 Removal Target Patterns / Relationship Redundancy
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5; last_updated: 2026-05-28"
+        anchor: §2 Removal Target Patterns / Definition Redundancy
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5; last_updated: 2026-05-28"
+        anchor: §4 Boundaries — Domain-specific Application Cases
+    domain_context_assumptions: []
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions: []
+finding_ledger_ref: .onto/review/20260528-3d59d774/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260528-3d59d774/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260528-3d59d774/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260528-3d59d774/issue-stance-matrix.yaml
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: medium
+  finding_count: 5
+  issue_count: 2
+  finding_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 4
+    low: 1
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 2
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 2
+  non_material_finding_count: 0
+  material_issues:
+    - issue_id: issue-001
+      severity: medium
+      material: true
+      affected_purpose: Fresh verification of the reconstruct top-level concept
+        discovery design patch for lifecycle continuity, retired-seat migration
+        mapping traceability, Seed handoff readiness, provenance, auditability,
+        and decision quality.
+      failure_condition: When a demoted concept moves to lower-level detail placement,
+        a migration record relies on an external artifact, or a Seed claims
+        handoff readiness from answerability_scope, runtime validation can
+        verify local structure but cannot prove that the required linked target
+        or complete question inventory was actually represented.
+      impact: Trust, auditability, reproducibility, and decision quality are
+        meaningfully weakened because the artifact can appear complete while
+        omitting the deterministic link or inventory needed to verify the
+        declared review purpose.
+      evidence_refs:
+        - round1/structure.md#finding-1
+        - round1/structure.md#finding-2
+        - round1/pragmatics.md#finding-1
+      source_lens_ids:
+        - structure
+        - pragmatics
+      action_candidates: &a2
+        - accept_risk
+        - follow_up
+      rationale: Several Seed continuity and answerability surfaces can be validly
+        shaped while still failing to prove the intended transition or handoff
+        completeness.
+      issue_statement: Several Seed continuity and answerability surfaces can be
+        validly shaped while still failing to prove the intended transition or
+        handoff completeness.
+    - issue_id: issue-002
+      severity: medium
+      material: true
+      affected_purpose: Maintainability, scope control, precedence, artifact truth,
+        concept economy, and relation authority alignment for the reconstruct
+        Seed design contract.
+      failure_condition: When the canonical contract or relation graph authority
+        changes, active summary docs or subordinate relation participation
+        fields can drift from the source authority while still looking
+        authoritative.
+      impact: Trust and maintainability are meaningfully weakened because multiple
+        active surfaces appear to define the same authority, increasing drift
+        risk and validation complexity.
+      evidence_refs:
+        - round1/conciseness.md#finding-c-1
+        - round1/conciseness.md#finding-c-2
+      source_lens_ids:
+        - conciseness
+      action_candidates: &a3
+        - accept_risk
+        - follow_up
+      rationale: Active documentation and per-concept relation participation fields
+        duplicate authority already owned by the reconstruct contract and
+        top_level_relations.
+      issue_statement: Active documentation and per-concept relation participation
+        fields duplicate authority already owned by the reconstruct contract and
+        top_level_relations.
+  non_material_findings: []
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: Several Seed continuity and answerability surfaces can be validly
+        shaped while still failing to prove the intended transition or handoff
+        completeness.
+    - issue_id: issue-002
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: Active documentation and per-concept relation participation fields
+        duplicate authority already owned by the reconstruct contract and
+        top_level_relations.
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Review cancelled by MCP request: Valid medium design-contract issues
+        identified in issue-ledger; cancel before patching current working tree
+        to avoid stale downstream review artifacts."
+synthesis_result_ref: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+final_output_ref: .onto/review/20260528-3d59d774/final-output.md
+shared_phenomenon_summary: []

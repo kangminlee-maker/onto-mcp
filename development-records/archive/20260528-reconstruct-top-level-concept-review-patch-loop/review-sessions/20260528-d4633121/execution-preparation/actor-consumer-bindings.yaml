@@ -1,0 +1,301 @@
+schema_version: "1"
+session_id: 20260528-d4633121
+created_at: 2026-05-28T14:54:10+09:00
+bindings:
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: teamlead:main
+    consumer_id: teamlead
+    consumer_kind: teamlead
+    lens_id: null
+    applies_to:
+      - review_coordination
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:logic
+    consumer_id: lens:logic
+    consumer_kind: lens
+    lens_id: logic
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:structure
+    consumer_id: lens:structure
+    consumer_kind: lens
+    lens_id: structure
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:dependency
+    consumer_id: lens:dependency
+    consumer_kind: lens
+    lens_id: dependency
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:semantics
+    consumer_id: lens:semantics
+    consumer_kind: lens
+    lens_id: semantics
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:pragmatics
+    consumer_id: lens:pragmatics
+    consumer_kind: lens
+    lens_id: pragmatics
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:evolution
+    consumer_id: lens:evolution
+    consumer_kind: lens
+    lens_id: evolution
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:coverage
+    consumer_id: lens:coverage
+    consumer_kind: lens
+    lens_id: coverage
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:conciseness
+    consumer_id: lens:conciseness
+    consumer_kind: lens
+    lens_id: conciseness
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:axiology
+    consumer_id: lens:axiology
+    consumer_kind: lens
+    lens_id: axiology
+    applies_to:
+      - round1:lens
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:logic
+    consumer_id: deliberation:logic
+    consumer_kind: deliberation
+    lens_id: logic
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:structure
+    consumer_id: deliberation:structure
+    consumer_kind: deliberation
+    lens_id: structure
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:dependency
+    consumer_id: deliberation:dependency
+    consumer_kind: deliberation
+    lens_id: dependency
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:semantics
+    consumer_id: deliberation:semantics
+    consumer_kind: deliberation
+    lens_id: semantics
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:pragmatics
+    consumer_id: deliberation:pragmatics
+    consumer_kind: deliberation
+    lens_id: pragmatics
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:evolution
+    consumer_id: deliberation:evolution
+    consumer_kind: deliberation
+    lens_id: evolution
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:coverage
+    consumer_id: deliberation:coverage
+    consumer_kind: deliberation
+    lens_id: coverage
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:conciseness
+    consumer_id: deliberation:conciseness
+    consumer_kind: deliberation
+    lens_id: conciseness
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:lens
+    actor_kind: lens
+    actor_instance_id: lens:axiology
+    consumer_id: deliberation:axiology
+    consumer_kind: deliberation
+    lens_id: axiology
+    applies_to:
+      - controlled-lens-deliberation:lens-response
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:finding-ledger
+    consumer_id: issue-artifact:finding-ledger
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:finding-ledger
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:finding-relation-graph
+    consumer_id: issue-artifact:finding-relation-graph
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:finding-relation-graph
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:issue-ledger
+    consumer_id: issue-artifact:issue-ledger
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:issue-ledger
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:issue-stance-matrix
+    consumer_id: issue-artifact:issue-stance-matrix
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:issue-stance-matrix
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:deliberation-plan
+    consumer_id: issue-artifact:deliberation-plan
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:deliberation-plan
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: issue-artifact:problem-framing
+    consumer_id: issue-artifact:problem-framing
+    consumer_kind: issue_artifact
+    lens_id: null
+    applies_to:
+      - issue-artifact:problem-framing
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:teamlead
+    actor_kind: teamlead
+    actor_instance_id: controlled-deliberation:teamlead
+    consumer_id: controlled-deliberation
+    consumer_kind: controlled-deliberation
+    lens_id: null
+    applies_to:
+      - controlled-lens-deliberation:teamlead
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted
+  - actor_profile_id: actor:synthesize
+    actor_kind: synthesize
+    actor_instance_id: synthesize:main
+    consumer_id: synthesize
+    consumer_kind: synthesize
+    lens_id: null
+    applies_to:
+      - synthesize
+    profile_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/actor-invocation-profiles.yaml
+    context_access_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-preparation/review-context-manifest.yaml
+    extension_admission_status: admitted

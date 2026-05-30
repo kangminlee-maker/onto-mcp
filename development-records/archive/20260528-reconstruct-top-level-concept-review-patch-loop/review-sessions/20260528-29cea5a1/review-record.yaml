@@ -1,0 +1,293 @@
+review_record_id: 20260528-29cea5a1
+session_id: 20260528-29cea5a1
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-05-28T14:29:08+09:00
+updated_at: 2026-05-28T14:33:04+09:00
+request_text: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing material issues from sessions
+  20260528-391bbc3f, 20260528-da9e31db, and 20260528-3d59d774. Confirm whether
+  material documentation/design-contract issues remain in the current working
+  tree diff, especially demotion bridge from prior concept IDs to lower-level
+  detail IDs, external migration artifact refs, declared handoff question closed
+  inventory, relation_participation as exception/projection instead of connected
+  redeclaration, simplified README and IMPLEMENTATION_MAP authority-reference
+  summaries, retired boundary_notes mapping, alias_changed lifecycle provenance,
+  source_authority_scope_changed state traceability, lifecycle split/merge
+  continuity, pressure transitions, and answerability references.
+review_target_scope_ref: .onto/review/20260528-29cea5a1/binding.yaml
+interpretation_ref: .onto/review/20260528-29cea5a1/interpretation.yaml
+binding_ref: .onto/review/20260528-29cea5a1/binding.yaml
+domain_final_selection_ref: .onto/review/20260528-29cea5a1/binding.yaml
+resolved_review_mode: full
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+execution_result_ref: .onto/review/20260528-29cea5a1/execution-result.yaml
+session_metadata_ref: .onto/review/20260528-29cea5a1/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260528-29cea5a1/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260528-29cea5a1/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260528-29cea5a1/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260528-29cea5a1/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  logic: .onto/review/20260528-29cea5a1/round1/logic.md
+  structure: .onto/review/20260528-29cea5a1/round1/structure.md
+  dependency: .onto/review/20260528-29cea5a1/round1/dependency.md
+  semantics: .onto/review/20260528-29cea5a1/round1/semantics.md
+  pragmatics: .onto/review/20260528-29cea5a1/round1/pragmatics.md
+  evolution: .onto/review/20260528-29cea5a1/round1/evolution.md
+  coverage: .onto/review/20260528-29cea5a1/round1/coverage.md
+  conciseness: .onto/review/20260528-29cea5a1/round1/conciseness.md
+  axiology: .onto/review/20260528-29cea5a1/round1/axiology.md
+lens_output_schema_version: 2
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: .onto/review/20260528-29cea5a1/degradation-summary.yaml
+per_lens_provenance:
+  logic:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: version 7
+        anchor: Constraint Design Logic / LLM-Native Failure Posture
+    domain_context_assumptions: []
+  structure:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/structure_spec.md
+        source_version_or_snapshot_id: version 6
+        anchor: Golden Relationships
+      - source_doc: .onto/domains/software-engineering/structure_spec.md
+        source_version_or_snapshot_id: version 6
+        anchor: LLM-Native System Structure
+    domain_context_assumptions: []
+  dependency:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: "version: 6, last_updated: 2026-05-28"
+        anchor: Direction Rules
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: "version: 6, last_updated: 2026-05-28"
+        anchor: Dependency Direction Vocabulary
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: "version: 4, last_updated: 2026-05-28"
+        anchor: Response Format Constraints
+    domain_context_assumptions: []
+  semantics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: "version: 8; source_sha256:
+          9879135c1a5adf1045c7b8dd61738cd12caa3e8fa0305f1b4095e99649f9dc9c"
+        anchor: LLM-Native Engineering Terms
+    domain_context_assumptions: []
+  pragmatics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/competency_qs.md
+        source_version_or_snapshot_id: ad69bd914792e361584d5c39a3bf179567ec63ce6519da77da025f4584194565
+        anchor: AI Agent and LLM-Native Collaboration (CQ-A)
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: 8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Response Format Constraints / Output Sink Constraints
+    domain_context_assumptions: []
+  evolution:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version:8;
+          sha256:2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case SE-03: Schema or Data Model Change"
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version:8;
+          sha256:2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case AI-07: Generated Artifact Without Provenance"
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version:4;
+          sha256:8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Response Format Constraints
+    domain_context_assumptions: []
+  coverage:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: version 8 / 2026-05-28
+        anchor: Major Sub-areas; LLM-Native Activation Conditions; Required Concept
+          Categories
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4 / 2026-05-28
+        anchor: Ownership Boundary Structure; Response Format Constraints; Output Sink
+          Constraints; External Content Handling
+    domain_context_assumptions:
+      - The reviewed target is a documentation/design-contract diff for
+        reconstruct top-level concept discovery, not a runtime implementation
+        diff.
+      - Web research was denied by the boundary policy, so no external framework
+        text was checked beyond the local domain document anchors.
+  conciseness:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: version 5; last_updated 2026-05-28
+        anchor: 2. Removal Target Patterns / Relationship Redundancy
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: version 5; last_updated 2026-05-28
+        anchor: 1. Allowed Redundancy / State Management
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: version 5; last_updated 2026-05-28
+        anchor: 2. Removal Target Patterns / LLM-Native Context Noise
+    domain_context_assumptions: []
+  axiology:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: sha256:8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Ownership Boundary Structure; Response Format Constraints; External
+          Content Handling; Fail-Loud Interface Rule
+    domain_context_assumptions: []
+finding_ledger_ref: .onto/review/20260528-29cea5a1/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260528-29cea5a1/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260528-29cea5a1/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260528-29cea5a1/issue-stance-matrix.yaml
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: medium
+  finding_count: 4
+  issue_count: 2
+  finding_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 3
+    low: 1
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 2
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 2
+  non_material_finding_count: 0
+  material_issues:
+    - issue_id: issue-001
+      severity: medium
+      material: true
+      affected_purpose: The reconstruct top-level concept discovery contract must keep
+        top_level_relations as the canonical relation authority and preserve
+        connected participation as derived from relation endpoint membership.
+      failure_condition: For any connected concept, an implementer treating the Seed
+        output shape as mandatory must either emit an isolation-only
+        relation_participation value that is false or omit a field that appears
+        required.
+      impact: "This weakens trust in generated Seed artifacts because relation
+        participation can be represented through conflicting dependency and
+        semantic paths: endpoint membership for connected concepts and an
+        unconditional concept-level projection whose values only describe
+        isolated concepts."
+      evidence_refs:
+        - round1/dependency.md#finding-1
+        - round1/semantics.md#finding-1
+        - execution-preparation/materialized-input.md#lines-428-433
+        - execution-preparation/materialized-input.md#lines-842-863
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:462
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:815-831
+      source_lens_ids:
+        - dependency
+        - semantics
+      action_candidates: &a2
+        - accept_risk
+        - follow_up
+      rationale: relation_participation is defined as an exception/projection for
+        isolated concepts, but the output shape can be read as requiring it for
+        every top-level concept.
+      issue_statement: relation_participation is defined as an exception/projection
+        for isolated concepts, but the output shape can be read as requiring it
+        for every top-level concept.
+    - issue_id: issue-002
+      severity: medium
+      material: true
+      affected_purpose: The answerability contract must present a closed declared
+        handoff question inventory with one authoritative question text path and
+        classification by membership in supported, deferred, and unsupported
+        buckets.
+      failure_condition: If readers or consumers encounter open questions wording or
+        mismatched question text between declared_handoff_questions[] and status
+        buckets, they may treat answerability as either an open-ended bucket or
+        an internally conflicting authority surface.
+      impact: This meaningfully weakens trust and auditability for the declared review
+        purpose because duplicated question text creates drift risk in the Seed
+        answerability authority, while the legacy wording adds terminology drift
+        around the same answerability model.
+      evidence_refs:
+        - round1/semantics.md#finding-2
+        - round1/conciseness.md#c-1
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:14-17
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:184-207
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:961
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:150
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:154
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:162
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:167
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:783
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:787
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:795
+        - .onto/processes/reconstruct/top-level-concept-discovery-contract.md:800
+      source_lens_ids:
+        - semantics
+        - conciseness
+      action_candidates: &a3
+        - accept_risk
+        - follow_up
+      rationale: answerability_scope is not fully consolidated around
+        declared_handoff_questions as the sole question authority because the
+        contract still uses legacy open questions wording and repeats question
+        text inside status buckets.
+      issue_statement: answerability_scope is not fully consolidated around
+        declared_handoff_questions as the sole question authority because the
+        contract still uses legacy open questions wording and repeats question
+        text inside status buckets.
+  non_material_findings: []
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: relation_participation is defined as an exception/projection for
+        isolated concepts, but the output shape can be read as requiring it for
+        every top-level concept.
+    - issue_id: issue-002
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: answerability_scope is not fully consolidated around
+        declared_handoff_questions as the sole question authority because the
+        contract still uses legacy open questions wording and repeats question
+        text inside status buckets.
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Review cancelled by MCP request: Valid medium design-contract issues
+        identified in issue-ledger; cancel before patching current working tree
+        to avoid stale downstream review artifacts."
+synthesis_result_ref: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+final_output_ref: .onto/review/20260528-29cea5a1/final-output.md
+shared_phenomenon_summary: []

@@ -1,0 +1,166 @@
+## 2026-05-28T14:45:26+09:00 | review progress 1/12: load execution plan
+session_id=20260528-6dffeec8
+
+## 2026-05-28T14:45:26+09:00 | runner boundary state
+web_research: requested=denied, effective=denied, guarantee=prompt_declared_only
+repo_exploration: requested=allowed, effective=allowed, guarantee=prompt_declared_only
+recursive_reference_expansion: requested=denied, effective=denied, guarantee=prompt_declared_only
+source_mutation: requested=denied, effective=denied, guarantee=prompt_declared_only
+filesystem_scope_effective: /Users/kangmin/cowork/onto-mcp
+filesystem_scope_guarantee: prompt_declared_only
+note.web_research: Current execution relies on declared boundary guidance; web access is not environment-enforced yet.
+note.repo_exploration: Current execution relies on declared boundary guidance for repo exploration scope.
+note.recursive_reference_expansion: Current execution relies on prompt-declared no-hidden-expansion guidance.
+note.source_mutation: Current execution declares output-seat-only writing and source mutation denial in the prompt path.
+note.filesystem_scope: Current execution does not enforce filesystem scope below the host boundary; allowed roots are currently prompt-declared.
+
+## 2026-05-28T14:45:26+09:00 | review progress 2/12: record effective boundary
+web=denied
+repo=allowed
+
+## 2026-05-28T14:45:26+09:00 | review progress 3/12: isolated lens execution
+planned_lens_count=9
+max_concurrent=9
+
+## 2026-05-28T14:45:26+09:00 | runner parallel dispatch policy
+max_concurrent_lenses: 9
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: logic
+unit_id: logic
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/logic.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/logic.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: dependency
+unit_id: dependency
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/dependency.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/dependency.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: coverage
+unit_id: coverage
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/coverage.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/coverage.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: pragmatics
+unit_id: pragmatics
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/pragmatics.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/pragmatics.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: conciseness
+unit_id: conciseness
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/conciseness.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/conciseness.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: axiology
+unit_id: axiology
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/axiology.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/axiology.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: structure
+unit_id: structure
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/structure.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/structure.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: semantics
+unit_id: semantics
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/semantics.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/semantics.md
+
+## 2026-05-28T14:45:26+09:00 | runner dispatch started: evolution
+unit_id: evolution
+unit_kind: lens
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/evolution.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/evolution.md
+
+## 2026-05-28T14:46:11+09:00 | runner dispatch completed: structure
+unit_id: structure
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/structure.md
+
+## 2026-05-28T14:46:16+09:00 | runner dispatch completed: conciseness
+unit_id: conciseness
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/conciseness.md
+
+## 2026-05-28T14:46:19+09:00 | runner dispatch completed: semantics
+unit_id: semantics
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/semantics.md
+
+## 2026-05-28T14:46:19+09:00 | runner dispatch completed: logic
+unit_id: logic
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/logic.md
+
+## 2026-05-28T14:46:22+09:00 | runner dispatch completed: coverage
+unit_id: coverage
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/coverage.md
+
+## 2026-05-28T14:46:22+09:00 | runner dispatch completed: dependency
+unit_id: dependency
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/dependency.md
+
+## 2026-05-28T14:46:34+09:00 | runner dispatch completed: pragmatics
+unit_id: pragmatics
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/pragmatics.md
+
+## 2026-05-28T14:46:38+09:00 | runner dispatch completed: evolution
+unit_id: evolution
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/evolution.md
+
+## 2026-05-28T14:46:46+09:00 | runner dispatch completed: axiology
+unit_id: axiology
+unit_kind: lens
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/round1/axiology.md
+
+## 2026-05-28T14:46:46+09:00 | runner lens completion barrier
+status: passed
+observed_dispatch_width: 9
+completed_lens_count: 9
+degraded_lens_count: 0
+downstream_allowed: true
+
+## 2026-05-28T14:46:46+09:00 | review progress 4/12: finding ledger
+artifact=finding-ledger
+
+## 2026-05-28T14:46:46+09:00 | runner dispatch started: finding-ledger
+unit_id: finding-ledger
+unit_kind: issue_artifact
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/finding-ledger.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-ledger.yaml
+
+## 2026-05-28T14:47:41+09:00 | runner dispatch completed: finding-ledger
+unit_id: finding-ledger
+unit_kind: issue_artifact
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-ledger.yaml
+
+## 2026-05-28T14:47:41+09:00 | review progress 5/12: finding relation graph
+artifact=finding-relation-graph
+
+## 2026-05-28T14:47:41+09:00 | runner dispatch started: finding-relation-graph
+unit_id: finding-relation-graph
+unit_kind: issue_artifact
+packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/prompt-packets/finding-relation-graph.prompt.md
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-relation-graph.yaml
+
+## 2026-05-28T14:48:22+09:00 | runner dispatch completed: finding-relation-graph
+unit_id: finding-relation-graph
+unit_kind: issue_artifact
+output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/finding-relation-graph.yaml
+
+## 2026-05-28T14:48:22+09:00 | runner cancelled
+Review cancelled by MCP request: Valid material design-contract issue identified: undefined current_detail_ids appears as an alternate demotion bridge field while target_detail_ids is the declared canonical field. Cancel before patching current working tree to avoid stale downstream review artifacts.
+requested_at: 2026-05-28T14:48:13+09:00
+phase: before_issue_artifact:issue-ledger
+

@@ -1,0 +1,35 @@
+schema_version: 1
+session_id: "20260528-03960a26"
+issues:
+  - issue_id: "issue-001"
+    root_cause_hypothesis: "The lifecycle event contract still exposes redundant lineage fields outside the intended identity-event authority, so affected identity and demotion continuity can be encoded through multiple schema paths."
+    root_confidence: "high"
+    surface_finding_ids: ["finding-001", "finding-002"]
+    relation_refs: ["rel-001"]
+    raised_by_lens_ids: ["conciseness"]
+    issue_statement: "Lifecycle transition authority is not yet fully singular because concept_identity_events and relation_identity_events retain generic affected-ID fields, while detail_placement_events can still carry prior concept lineage that overlaps with the canonical demotion bridge."
+    proposed_action: "Consolidate lifecycle and demotion lineage so affected identity is expressed only through the prior/current identity arrays and demotion lineage only through concept_identity_events[].target_detail_ids."
+    affected_purpose: "Maintain concept_identity_events and relation_identity_events as the sole lifecycle transition authority, with concept_identity_events[].target_detail_ids as the sole demotion bridge to lower_level_detail_placements[].detail_id."
+    failure_condition: "When future authors or validators update lifecycle transition or demotion data, they can encode the same affected identity or prior-concept-to-detail relationship through generic concept_ids, relation_ids, or detail_placement_events[].prior_concept_ids instead of the intended canonical fields."
+    impact: "This weakens auditability, reproducibility, and contract trust because consumers cannot rely on one canonical path for lifecycle continuity or demotion lineage."
+    evidence_refs: ["round1/conciseness.md#C1", "round1/conciseness.md#C2"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: "issue-002"
+    root_cause_hypothesis: "A consumer-facing phrase still describes lifecycle continuity as prior/current ID mappings even though the canonical lifecycle section defines prior/current ID arrays as the actual authority."
+    root_confidence: "high"
+    surface_finding_ids: ["finding-003", "finding-004"]
+    relation_refs: ["rel-002"]
+    raised_by_lens_ids: ["semantics", "evolution"]
+    issue_statement: "The contract contains a non-material wording risk where informal mapping language could be misread as endorsing a mapping-shaped lifecycle authority."
+    proposed_action: "Tighten the consumer-facing wording so it refers to prior/current ID arrays in concept_identity_events and relation_identity_events."
+    affected_purpose: "Keep lifecycle transition terminology aligned with the canonical identity-event authority."
+    failure_condition: "If a future implementer quotes or revises only the consumer paragraph and ignores the later canonical lifecycle section, they may infer or reintroduce mapping-style authority."
+    impact: "Current evidence shows the later section resolves the authority, so this is interpretation friction rather than a material trust failure."
+    evidence_refs: ["round1/semantics.md#non-blocking-note", "round1/evolution.md#minor-wording-risk"]
+    severity: "low"
+    domain_threshold_used: null
+    singleton_reason: null
+validation:
+  unclustered_finding_ids: []

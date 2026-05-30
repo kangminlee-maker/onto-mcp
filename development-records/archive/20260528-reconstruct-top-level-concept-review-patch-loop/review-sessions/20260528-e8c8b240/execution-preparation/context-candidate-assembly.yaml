@@ -1,0 +1,14 @@
+system_purpose_refs: []
+domain_context_refs:
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/competency_qs.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/concepts.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/conciseness_rules.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/dependency_rules.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/domain_scope.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/extension_cases.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/logic_rules.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/problem_framing_profile.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/prompt_interface.md
+  - /Users/kangmin/cowork/onto-mcp/.onto/domains/software-engineering/structure_spec.md
+role_definition_refs: []
+execution_rule_refs: []

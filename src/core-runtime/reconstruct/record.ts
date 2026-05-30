@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
+  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructCandidateDispositionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
@@ -13,14 +15,17 @@ import type {
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructFailureClassificationArtifact,
   ReconstructFailureClassificationValidationArtifact,
+  ReconstructFinalOutputProvenanceValidationArtifact,
+  ReconstructHandoffDecisionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRevisionProposalArtifact,
   ReconstructRevisionProposalValidationArtifact,
+  ReconstructRunManifestValidationArtifact,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
-  ReconstructSeedCandidateValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructTargetMaterialProfileArtifact,
+  ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
 
 export interface AssembleReconstructRecordParams {
@@ -31,6 +36,7 @@ export interface AssembleReconstructRecordParams {
 
 const RECORD_ARTIFACT_KEYS = [
   "target_material_profile",
+  "target_material_profile_validation",
   "source_inventory",
   "initial_source_frontier",
   "source_observations",
@@ -40,10 +46,11 @@ const RECORD_ARTIFACT_KEYS = [
   "exploration_synthesis",
   "source_frontier",
   "source_frontier_validation",
-  "domain_context_selection",
-  "domain_context_selection_validation",
-  "seed_candidate",
-  "seed_candidate_validation",
+  "candidate_inventory",
+  "candidate_disposition",
+  "candidate_disposition_validation",
+  "ontology_seed",
+  "ontology_seed_validation",
   "claim_realization_map",
   "claim_realization_map_validation",
   "seed_confirmation",
@@ -58,12 +65,17 @@ const RECORD_ARTIFACT_KEYS = [
   "revision_proposal_validation",
   "reconstruct_metrics",
   "stop_decision",
+  "pre_handoff_run_manifest_validation",
+  "post_publication_run_manifest_validation",
+  "handoff_decision_validation",
   "final_output",
+  "final_output_provenance_validation",
   "reconstruct_run_manifest",
 ] as const satisfies readonly (keyof ReconstructRecordArtifactRefs)[];
 
 const PREPARATION_REQUIRED_KEYS = [
   "target_material_profile",
+  "target_material_profile_validation",
   "source_inventory",
   "initial_source_frontier",
   "source_observations",
@@ -107,14 +119,19 @@ async function readYamlIfPresent<T>(ref: string | null): Promise<T | null> {
 
 function projectValidationStatus(
   artifact:
+    | ReconstructTargetMaterialProfileValidationArtifact
     | ReconstructSourceObservationDirectiveValidationArtifact
-    | ReconstructSeedCandidateValidationArtifact
+    | ReconstructCandidateDispositionValidationArtifact
+    | ReconstructActionableOntologySeedValidationArtifact
     | ReconstructClaimRealizationMapValidationArtifact
     | ReconstructSeedConfirmationValidationArtifact
     | ReconstructCompetencyQuestionsValidationArtifact
     | ReconstructCompetencyQuestionAssessmentValidationArtifact
     | ReconstructFailureClassificationValidationArtifact
     | ReconstructRevisionProposalValidationArtifact
+    | ReconstructRunManifestValidationArtifact
+    | ReconstructHandoffDecisionValidationArtifact
+    | ReconstructFinalOutputProvenanceValidationArtifact
     | null,
 ): ReconstructRecordValidationStatusProjection {
   if (!artifact) return "not_available";
@@ -123,8 +140,10 @@ function projectValidationStatus(
 
 function deriveRecordStage(args: {
   missingArtifacts: string[];
+  targetMaterialProfileStatus: ReconstructRecordValidationStatusProjection;
   sourceObservationDirectiveStatus: ReconstructRecordValidationStatusProjection;
-  seedCandidateStatus: ReconstructRecordValidationStatusProjection;
+  candidateDispositionStatus: ReconstructRecordValidationStatusProjection;
+  ontologySeedStatus: ReconstructRecordValidationStatusProjection;
   claimRealizationStatus: ReconstructRecordValidationStatusProjection;
   seedConfirmationValidationStatus: ReconstructRecordValidationStatusProjection;
   competencyQuestionsValidationStatus: ReconstructRecordValidationStatusProjection;
@@ -132,6 +151,10 @@ function deriveRecordStage(args: {
     ReconstructRecordValidationStatusProjection;
   failureClassificationValidationStatus: ReconstructRecordValidationStatusProjection;
   revisionProposalValidationStatus: ReconstructRecordValidationStatusProjection;
+  preHandoffRunManifestValidationStatus: ReconstructRecordValidationStatusProjection;
+  postPublicationRunManifestValidationStatus: ReconstructRecordValidationStatusProjection;
+  handoffDecisionValidationStatus: ReconstructRecordValidationStatusProjection;
+  finalOutputProvenanceValidationStatus: ReconstructRecordValidationStatusProjection;
   seedConfirmationPresent: boolean;
   competencyQuestionsPresent: boolean;
   competencyQuestionAssessmentPresent: boolean;
@@ -150,15 +173,27 @@ function deriveRecordStage(args: {
     args.finalOutputPresent &&
     args.stopDecisionPresent &&
     args.metricsPresent &&
-    args.seedCandidateStatus === "valid" &&
+    args.targetMaterialProfileStatus === "valid" &&
+    args.candidateDispositionStatus === "valid" &&
+    args.ontologySeedStatus === "valid" &&
     args.claimRealizationStatus === "valid" &&
     args.seedConfirmationValidationStatus === "valid" &&
     args.competencyQuestionsValidationStatus === "valid" &&
     args.competencyQuestionAssessmentValidationStatus === "valid" &&
     args.failureClassificationValidationStatus === "valid" &&
-    args.revisionProposalValidationStatus === "valid"
+    args.revisionProposalValidationStatus === "valid" &&
+    args.preHandoffRunManifestValidationStatus === "valid" &&
+    args.postPublicationRunManifestValidationStatus === "valid" &&
+    args.handoffDecisionValidationStatus === "valid" &&
+    args.finalOutputProvenanceValidationStatus === "valid"
   ) {
     return "completed";
+  }
+  if (args.handoffDecisionValidationStatus === "valid") {
+    return "handoff_decision_validated";
+  }
+  if (args.preHandoffRunManifestValidationStatus === "valid") {
+    return "pre_handoff_run_manifest_validated";
   }
   if (args.stopDecisionPresent) {
     return "stop_decision_written";
@@ -199,19 +234,31 @@ function deriveRecordStage(args: {
   if (args.claimRealizationStatus === "valid") {
     return "claim_realization_validated";
   }
-  if (args.seedCandidateStatus === "valid") {
-    return "seed_candidate_validated";
+  if (args.ontologySeedStatus === "valid") {
+    return "ontology_seed_validated";
+  }
+  if (args.candidateDispositionStatus === "valid") {
+    return "candidate_disposition_validated";
   }
   if (args.sourceObservationDirectiveStatus === "valid") {
     return "source_observation_directive_validated";
+  }
+  if (args.targetMaterialProfileStatus === "valid") {
+    return "preparation_artifacts_written";
   }
   return "preparation_artifacts_written";
 }
 
 function buildWarnings(args: {
   missingArtifacts: string[];
+  targetMaterialProfileStatus: ReconstructRecordValidationStatusProjection;
   sourceObservationDirectiveStatus: ReconstructRecordValidationStatusProjection;
-  seedCandidateStatus: ReconstructRecordValidationStatusProjection;
+  candidateDispositionStatus: ReconstructRecordValidationStatusProjection;
+  ontologySeedStatus: ReconstructRecordValidationStatusProjection;
+  preHandoffRunManifestValidationStatus: ReconstructRecordValidationStatusProjection;
+  postPublicationRunManifestValidationStatus: ReconstructRecordValidationStatusProjection;
+  handoffDecisionValidationStatus: ReconstructRecordValidationStatusProjection;
+  finalOutputProvenanceValidationStatus: ReconstructRecordValidationStatusProjection;
 }): string[] {
   const warnings: string[] = [];
   if (args.missingArtifacts.length > 0) {
@@ -220,8 +267,26 @@ function buildWarnings(args: {
   if (args.sourceObservationDirectiveStatus === "invalid") {
     warnings.push("source observation directive validation is invalid");
   }
-  if (args.seedCandidateStatus === "invalid") {
-    warnings.push("seed candidate validation is invalid");
+  if (args.targetMaterialProfileStatus === "invalid") {
+    warnings.push("target material profile validation is invalid");
+  }
+  if (args.candidateDispositionStatus === "invalid") {
+    warnings.push("candidate disposition validation is invalid");
+  }
+  if (args.ontologySeedStatus === "invalid") {
+    warnings.push("ontology seed validation is invalid");
+  }
+  if (args.preHandoffRunManifestValidationStatus === "invalid") {
+    warnings.push("pre-handoff run manifest validation is invalid");
+  }
+  if (args.postPublicationRunManifestValidationStatus === "invalid") {
+    warnings.push("post-publication run manifest validation is invalid");
+  }
+  if (args.handoffDecisionValidationStatus === "invalid") {
+    warnings.push("handoff readiness validation is invalid");
+  }
+  if (args.finalOutputProvenanceValidationStatus === "invalid") {
+    warnings.push("final output provenance validation is invalid");
   }
   return warnings;
 }
@@ -248,13 +313,21 @@ export async function assembleReconstructRecord(
     await readYamlIfPresent<ReconstructTargetMaterialProfileArtifact>(
       artifactRefs.target_material_profile,
     );
+  const targetMaterialProfileValidation =
+    await readYamlIfPresent<ReconstructTargetMaterialProfileValidationArtifact>(
+      artifactRefs.target_material_profile_validation,
+    );
   const sourceObservationDirectiveValidation =
     await readYamlIfPresent<ReconstructSourceObservationDirectiveValidationArtifact>(
       artifactRefs.source_observation_directive_validation,
     );
-  const seedCandidateValidation =
-    await readYamlIfPresent<ReconstructSeedCandidateValidationArtifact>(
-      artifactRefs.seed_candidate_validation,
+  const candidateDispositionValidation =
+    await readYamlIfPresent<ReconstructCandidateDispositionValidationArtifact>(
+      artifactRefs.candidate_disposition_validation,
+    );
+  const ontologySeedValidation =
+    await readYamlIfPresent<ReconstructActionableOntologySeedValidationArtifact>(
+      artifactRefs.ontology_seed_validation,
     );
   const claimRealizationMapValidation =
     await readYamlIfPresent<ReconstructClaimRealizationMapValidationArtifact>(
@@ -304,11 +377,33 @@ export async function assembleReconstructRecord(
     await readYamlIfPresent<ReconstructMetricsArtifact>(
       artifactRefs.reconstruct_metrics,
     );
+  const preHandoffRunManifestValidation =
+    await readYamlIfPresent<ReconstructRunManifestValidationArtifact>(
+      artifactRefs.pre_handoff_run_manifest_validation,
+    );
+  const postPublicationRunManifestValidation =
+    await readYamlIfPresent<ReconstructRunManifestValidationArtifact>(
+      artifactRefs.post_publication_run_manifest_validation,
+    );
+  const handoffDecisionValidation =
+    await readYamlIfPresent<ReconstructHandoffDecisionValidationArtifact>(
+      artifactRefs.handoff_decision_validation,
+    );
+  const finalOutputProvenanceValidation =
+    await readYamlIfPresent<ReconstructFinalOutputProvenanceValidationArtifact>(
+      artifactRefs.final_output_provenance_validation,
+    );
 
+  const targetMaterialProfileStatus = projectValidationStatus(
+    targetMaterialProfileValidation,
+  );
   const sourceObservationDirectiveStatus = projectValidationStatus(
     sourceObservationDirectiveValidation,
   );
-  const seedCandidateStatus = projectValidationStatus(seedCandidateValidation);
+  const candidateDispositionStatus = projectValidationStatus(
+    candidateDispositionValidation,
+  );
+  const ontologySeedStatus = projectValidationStatus(ontologySeedValidation);
   const claimRealizationStatus = projectValidationStatus(
     claimRealizationMapValidation,
   );
@@ -327,16 +422,34 @@ export async function assembleReconstructRecord(
   const revisionProposalValidationStatus = projectValidationStatus(
     revisionProposalValidation,
   );
+  const preHandoffRunManifestValidationStatus = projectValidationStatus(
+    preHandoffRunManifestValidation,
+  );
+  const postPublicationRunManifestValidationStatus = projectValidationStatus(
+    postPublicationRunManifestValidation,
+  );
+  const handoffDecisionValidationStatus = projectValidationStatus(
+    handoffDecisionValidation,
+  );
+  const finalOutputProvenanceValidationStatus = projectValidationStatus(
+    finalOutputProvenanceValidation,
+  );
   const recordStage = deriveRecordStage({
     missingArtifacts,
+    targetMaterialProfileStatus,
     sourceObservationDirectiveStatus,
-    seedCandidateStatus,
+    candidateDispositionStatus,
+    ontologySeedStatus,
     claimRealizationStatus,
     seedConfirmationValidationStatus,
     competencyQuestionsValidationStatus,
     competencyQuestionAssessmentValidationStatus,
     failureClassificationValidationStatus,
     revisionProposalValidationStatus,
+    preHandoffRunManifestValidationStatus,
+    postPublicationRunManifestValidationStatus,
+    handoffDecisionValidationStatus,
+    finalOutputProvenanceValidationStatus,
     seedConfirmationPresent: await exists(artifactRefs.seed_confirmation),
     competencyQuestionsPresent: await exists(artifactRefs.competency_questions),
     competencyQuestionAssessmentPresent:
@@ -361,12 +474,26 @@ export async function assembleReconstructRecord(
     support_status: targetMaterialProfile?.support_status ?? null,
     artifact_refs: artifactRefs,
     validation_summary: {
+      target_material_profile_status: targetMaterialProfileStatus,
       source_observation_directive_status: sourceObservationDirectiveStatus,
-      seed_candidate_status: seedCandidateStatus,
+      candidate_disposition_status: candidateDispositionStatus,
+      ontology_seed_status: ontologySeedStatus,
+      claim_realization_status: claimRealizationStatus,
       seed_confirmation_status:
         seedConfirmation?.confirmation_status ?? "not_available",
-      semantic_claim_count: seedCandidateValidation?.semantic_claim_count ?? null,
-      evidence_ref_count: seedCandidateValidation?.evidence_ref_count ?? null,
+      pre_handoff_run_manifest_status: preHandoffRunManifestValidationStatus,
+      post_publication_run_manifest_status:
+        postPublicationRunManifestValidationStatus,
+      handoff_decision_status: handoffDecisionValidationStatus,
+      final_output_provenance_status: finalOutputProvenanceValidationStatus,
+      semantic_claim_count:
+        reconstructMetrics?.semantic_claim_count ??
+        ontologySeedValidation?.seed_ref_count ??
+        null,
+      evidence_ref_count:
+        reconstructMetrics?.evidence_ref_count ??
+        ontologySeedValidation?.evidence_ref_count ??
+        null,
       confirmed_claim_count:
         reconstructMetrics?.confirmed_claim_count ??
         seedConfirmationValidation?.accepted_claim_ids.length ??
@@ -412,12 +539,14 @@ export async function assembleReconstructRecord(
       semantic_generation: "not_performed",
       runtime_owned_gates: [
         "target_material_profiling",
+        "target_material_profile_validation",
         "source_inventory",
         "initial_source_frontier",
         "source_observation",
         "source_frontier_validation",
         "source_observation_directive_validation",
-        "seed_candidate_validation",
+        "candidate_disposition_validation",
+        "ontology_seed_validation",
         "claim_realization_validation",
         "seed_confirmation_validation",
         "competency_questions_validation",
@@ -425,6 +554,9 @@ export async function assembleReconstructRecord(
         "failure_classification_validation",
         "revision_proposal_validation",
         "final_output_provenance_validation",
+        "pre_handoff_run_manifest_validation",
+        "post_publication_run_manifest_validation",
+        "handoff_decision_validation",
         "reconstruct_metrics",
         "record_assembly",
         "run_manifest_assembly",
@@ -437,8 +569,9 @@ export async function assembleReconstructRecord(
         "lens_judgment",
         "exploration_synthesis",
         "source_frontier",
-        "domain_context_selection",
-        "seed_candidate",
+        "candidate_inventory",
+        "candidate_disposition",
+        "ontology_seed",
         "claim_realization_map",
         "competency_questions",
         "competency_question_assessment",
@@ -450,8 +583,14 @@ export async function assembleReconstructRecord(
     },
     warnings: buildWarnings({
       missingArtifacts,
+      targetMaterialProfileStatus,
       sourceObservationDirectiveStatus,
-      seedCandidateStatus,
+      candidateDispositionStatus,
+      ontologySeedStatus,
+      preHandoffRunManifestValidationStatus,
+      postPublicationRunManifestValidationStatus,
+      handoffDecisionValidationStatus,
+      finalOutputProvenanceValidationStatus,
     }),
   };
 

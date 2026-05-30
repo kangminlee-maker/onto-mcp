@@ -856,6 +856,18 @@ async function main(): Promise<void> {
         toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_result"),
       "continuation and reconstruct MCP tool surfaces must be listed.",
     );
+    const validateReconstructTool = toolsResult.tools?.find((tool) =>
+      tool.name === "onto.validate_reconstruct_directive"
+    );
+    const directiveKindSchema = validateReconstructTool?.inputSchema
+      ?.properties?.directiveKind as { enum?: unknown[] } | undefined;
+    assert(
+      directiveKindSchema?.enum?.includes("source_observation") &&
+        directiveKindSchema.enum.includes("candidate_disposition") &&
+        directiveKindSchema.enum.includes("ontology_seed") &&
+        !directiveKindSchema.enum.includes("seed_candidate"),
+      "onto.validate_reconstruct_directive schema must expose only active directive kinds.",
+    );
 
     const reconstructProjectRoot = await fs.mkdtemp(
       path.join(os.tmpdir(), "onto-mcp-reconstruct-conformance-"),
@@ -892,9 +904,9 @@ async function main(): Promise<void> {
       const observeResult = requireToolResult(requireResult(await client.request("tools/call", {
         name: "onto.observe_source",
         arguments: {
-          projectRoot: reconstructProjectRoot,
-          targetRefs: ["schedule.csv"],
-          sessionRoot: ".onto/reconstruct/mcp-reconstruct-session",
+            projectRoot: reconstructProjectRoot,
+            targetRefs: ["src/feature.ts"],
+            sessionRoot: ".onto/reconstruct/mcp-observe-code-session",
         },
       }), "tools/call onto.observe_source"));
       const observed = observeResult.structuredContent as
@@ -904,7 +916,6 @@ async function main(): Promise<void> {
             artifactRefs?: {
               source_observations?: unknown;
               source_observation_directive_validation?: unknown;
-              seed_candidate_validation?: unknown;
               reconstruct_record?: unknown;
             };
             reconstructRecord?: {
@@ -916,11 +927,11 @@ async function main(): Promise<void> {
         | undefined;
       assert(
         typeof observed?.sessionRoot === "string" &&
-          observed.reconstructRecord?.target_material_kind === "spreadsheet" &&
+          observed.reconstructRecord?.target_material_kind === "code" &&
           observed.reconstructRecord.runtime_boundary?.semantic_generation ===
             "not_performed" &&
           observed.reconstructRecord.record_stage === "preparation_artifacts_written",
-        "onto.observe_source must return spreadsheet reconstruct preparation record without semantic generation.",
+        "onto.observe_source must return code reconstruct preparation record without semantic generation.",
       );
       assert(
         typeof observed.artifactRefs?.source_observations === "string",
@@ -937,16 +948,15 @@ async function main(): Promise<void> {
       const observation = sourceObservations.observations?.[0];
       assert(
         observation?.observation_id &&
-          observation.target_material_kind === "spreadsheet" &&
+          observation.target_material_kind === "code" &&
           observation.source_ref &&
           observation.location,
-        "source observation must preserve spreadsheet material evidence.",
+        "source observation must preserve code material evidence.",
       );
       const directivePath = path.join(
         observed.sessionRoot,
         "source-observation-directive.yaml",
       );
-      const seedCandidatePath = path.join(observed.sessionRoot, "seed-candidate.yaml");
       const evidenceRef = {
         observation_id: observation.observation_id,
         target_material_kind: observation.target_material_kind,
@@ -970,29 +980,6 @@ async function main(): Promise<void> {
         }),
         "utf8",
       );
-      await fs.writeFile(
-        seedCandidatePath,
-        YAML.stringify({
-          schema_version: "1",
-          session_id: observed.sessionId,
-          created_at: "2026-05-27T00:00:00.000Z",
-          purpose: {
-            claim_id: "purpose-1",
-            name: "Observed Spreadsheet Purpose",
-            statement:
-              "Use the observed spreadsheet material as reconstruct seed evidence.",
-            evidence_refs: [evidenceRef],
-          },
-          non_goals: [],
-          entities: [],
-          relations: [],
-          actions: [],
-          properties: [],
-          rules: [],
-          open_questions: [],
-        }),
-        "utf8",
-      );
       const sourceDirectiveValidationResult =
         requireToolResult(requireResult(await client.request("tools/call", {
           name: "onto.validate_reconstruct_directive",
@@ -1008,32 +995,6 @@ async function main(): Promise<void> {
           validation_status?: unknown;
         }).validation_status === "valid",
         "source observation directive validation must be valid.",
-      );
-      const seedDirectiveValidationResult =
-        requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.validate_reconstruct_directive",
-          arguments: {
-            projectRoot: reconstructProjectRoot,
-            directiveKind: "seed_candidate",
-            seedCandidatePath,
-            sourceObservationsPath: observed.artifactRefs.source_observations,
-            sourceObservationDirectivePath: directivePath,
-            sourceObservationDirectiveValidationPath:
-              path.join(
-                observed.sessionRoot,
-                "source-observation-directive-validation.yaml",
-              ),
-          },
-        }), "tools/call onto.validate_reconstruct_directive seed_candidate"));
-      assert(
-        (seedDirectiveValidationResult.structuredContent as {
-          validation_status?: unknown;
-          semantic_claim_count?: unknown;
-        }).validation_status === "valid" &&
-          (seedDirectiveValidationResult.structuredContent as {
-            semantic_claim_count?: unknown;
-          }).semantic_claim_count === 1,
-        "seed candidate validation must be valid and preserve semantic claim count.",
       );
 
       const reconstructResult = requireToolResult(requireResult(await client.request("tools/call", {
@@ -1084,6 +1045,10 @@ async function main(): Promise<void> {
               }>;
             };
             artifactRefs?: {
+              source_observations?: unknown;
+              candidate_inventory?: unknown;
+              candidate_disposition?: unknown;
+              ontology_seed?: unknown;
               final_output?: unknown;
               reconstruct_run_manifest?: unknown;
             };
@@ -1128,13 +1093,61 @@ async function main(): Promise<void> {
           (step) => step.step_id === "seed_confirmation",
         );
       assert(
-        seedCandidateStep?.owner === "host_llm" &&
-          seedCandidateStep.performed_by?.authority === "host_llm" &&
-          seedCandidateStep.performed_by.realization === "mock" &&
+        seedCandidateStep === undefined &&
           seedConfirmationStep?.owner === "host_or_user" &&
           seedConfirmationStep.performed_by?.authority === "host_or_user" &&
           seedConfirmationStep.performed_by.realization === "mock",
-        "reconstruct run manifest must distinguish conceptual owner from actual mock performer.",
+        "reconstruct run manifest must omit retired seed_candidate and preserve seed_confirmation performer.",
+      );
+      const reconstructArtifactRefs = reconstructStructured.artifactRefs;
+      assert(
+        typeof reconstructArtifactRefs?.source_observations === "string" &&
+          typeof reconstructArtifactRefs.candidate_inventory === "string" &&
+          typeof reconstructArtifactRefs.candidate_disposition === "string" &&
+          typeof reconstructArtifactRefs.ontology_seed === "string",
+        "onto.reconstruct must expose source observations, candidate disposition, and ontology seed refs.",
+      );
+      const candidateDispositionValidationResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.validate_reconstruct_directive",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            directiveKind: "candidate_disposition",
+            candidateInventoryPath: reconstructArtifactRefs.candidate_inventory,
+            candidateDispositionPath: reconstructArtifactRefs.candidate_disposition,
+            sourceObservationsPath: reconstructArtifactRefs.source_observations,
+          },
+        }), "tools/call onto.validate_reconstruct_directive candidate_disposition"));
+      assert(
+        (candidateDispositionValidationResult.structuredContent as {
+          validation_status?: unknown;
+          promoted_candidate_count?: unknown;
+        }).validation_status === "valid" &&
+          typeof (candidateDispositionValidationResult.structuredContent as {
+            promoted_candidate_count?: unknown;
+          }).promoted_candidate_count === "number",
+        "candidate disposition validation must be valid and expose promoted candidate count.",
+      );
+      const ontologySeedValidationResult =
+        requireToolResult(requireResult(await client.request("tools/call", {
+          name: "onto.validate_reconstruct_directive",
+          arguments: {
+            projectRoot: reconstructProjectRoot,
+            directiveKind: "ontology_seed",
+            ontologySeedPath: reconstructArtifactRefs.ontology_seed,
+            candidateDispositionPath: reconstructArtifactRefs.candidate_disposition,
+            sourceObservationsPath: reconstructArtifactRefs.source_observations,
+          },
+        }), "tools/call onto.validate_reconstruct_directive ontology_seed"));
+      assert(
+        (ontologySeedValidationResult.structuredContent as {
+          validation_status?: unknown;
+          seed_ref_count?: unknown;
+        }).validation_status === "valid" &&
+          typeof (ontologySeedValidationResult.structuredContent as {
+            seed_ref_count?: unknown;
+          }).seed_ref_count === "number",
+        "ontology seed validation must be valid and expose seed ref count.",
       );
       assert(
         Array.isArray(
@@ -1142,14 +1155,12 @@ async function main(): Promise<void> {
             ?.deferred_artifacts,
         ) &&
           reconstructStructured.reconstructRunManifest.happy_path_scope
-            .deferred_artifacts.includes("domain_context_selection") &&
-          reconstructStructured.reconstructRunManifest.happy_path_scope
-            .deferred_artifacts.includes("domain_context_selection_validation") &&
+            .deferred_artifacts.length === 0 &&
           !reconstructStructured.reconstructRunManifest.happy_path_scope
             .deferred_artifacts.includes("failure_classification") &&
           reconstructStructured.reconstructRunManifest.happy_path_scope
             .implemented_artifacts.includes("revision_proposal"),
-        "reconstruct run manifest must expose post-Seed implemented scope and deferred domain-context scope.",
+        "reconstruct run manifest must expose post-seed implemented scope without retired domain competency selection artifacts.",
       );
       assert(
         typeof reconstructStructured.finalOutputPath === "string" &&

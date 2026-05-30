@@ -1,0 +1,277 @@
+review_record_id: 20260528-03960a26
+session_id: 20260528-03960a26
+entrypoint: review
+record_status: halted_partial
+created_at: 2026-05-28T14:48:56+09:00
+updated_at: 2026-05-28T14:53:00+09:00
+request_text: Fresh verification review for the current reconstruct top-level
+  concept discovery design patch after closing material issues from sessions
+  20260528-391bbc3f, 20260528-da9e31db, 20260528-3d59d774, 20260528-29cea5a1,
+  20260528-e8c8b240, 20260528-e6edefdf, and 20260528-6dffeec8. Confirm whether
+  material documentation/design-contract issues remain in the current working
+  tree diff, especially concept_identity_events and relation_identity_events as
+  the sole lifecycle transition authority, absence of
+  prior_concept_mappings/prior_relation_mappings from Seed lifecycle authority,
+  absence of undefined current_detail_ids or any alternate demotion bridge
+  field, concept_identity_events[].target_detail_ids as the sole demotion bridge
+  from prior concept IDs to lower_level_detail_placements[].detail_id,
+  answerability question ID uniqueness by declared inventory and status buckets,
+  supported_actions[].supported_by_question_ids[] as the sole canonical
+  question-to-action support edge, lifecycle.source_snapshot_refs as current
+  source snapshot authority with source_snapshot_transition containing prior
+  refs only, relation_participation_exceptions.status collapsed to isolated,
+  demotion bridge from prior concept IDs to lower-level detail IDs, external
+  migration artifact refs, simplified README and IMPLEMENTATION_MAP
+  authority-reference summaries, source_authority_scope_changed state
+  traceability, lifecycle split/merge continuity through identity event arrays,
+  pressure transitions, and answerability references.
+review_target_scope_ref: .onto/review/20260528-03960a26/binding.yaml
+interpretation_ref: .onto/review/20260528-03960a26/interpretation.yaml
+binding_ref: .onto/review/20260528-03960a26/binding.yaml
+domain_final_selection_ref: .onto/review/20260528-03960a26/binding.yaml
+resolved_review_mode: full
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+execution_result_ref: .onto/review/20260528-03960a26/execution-result.yaml
+session_metadata_ref: .onto/review/20260528-03960a26/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260528-03960a26/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260528-03960a26/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260528-03960a26/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260528-03960a26/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  logic: .onto/review/20260528-03960a26/round1/logic.md
+  structure: .onto/review/20260528-03960a26/round1/structure.md
+  dependency: .onto/review/20260528-03960a26/round1/dependency.md
+  semantics: .onto/review/20260528-03960a26/round1/semantics.md
+  pragmatics: .onto/review/20260528-03960a26/round1/pragmatics.md
+  evolution: .onto/review/20260528-03960a26/round1/evolution.md
+  coverage: .onto/review/20260528-03960a26/round1/coverage.md
+  conciseness: .onto/review/20260528-03960a26/round1/conciseness.md
+  axiology: .onto/review/20260528-03960a26/round1/axiology.md
+lens_output_schema_version: 2
+participating_lens_ids:
+  - logic
+  - structure
+  - dependency
+  - semantics
+  - pragmatics
+  - evolution
+  - coverage
+  - conciseness
+  - axiology
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: .onto/review/20260528-03960a26/degradation-summary.yaml
+per_lens_provenance:
+  logic:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/logic_rules.md
+        source_version_or_snapshot_id: "version: 7, last_updated: 2026-05-28"
+        anchor: Constraint Design Logic / Fundamental Constraint Rules
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: "version: 4, last_updated: 2026-05-28"
+        anchor: Response Format Constraints
+    domain_context_assumptions: []
+  structure:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/structure_spec.md
+        source_version_or_snapshot_id: sha256:defce85754cf60b644ab765ef6d11d231fad2544e5ce3e7a946bcaf53d5a427f
+        anchor: Required Relationships / Golden Relationships / LLM-Native System
+          Structure
+    domain_context_assumptions: []
+  dependency:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: sha256:0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+        anchor: Direction Rules
+      - source_doc: .onto/domains/software-engineering/dependency_rules.md
+        source_version_or_snapshot_id: sha256:0c68f0ee55e4e7b90bdfaf2948708d402777cb92626e1429468cb75878324e4d
+        anchor: Event Schema Contract Dependencies
+    domain_context_assumptions: []
+  semantics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/concepts.md
+        source_version_or_snapshot_id: "version: 8; source_sha256:
+          9879135c1a5adf1045c7b8dd61738cd12caa3e8fa0305f1b4095e99649f9dc9c"
+        anchor: LLM-Native Engineering Terms
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: "version: 4"
+        anchor: Ownership Boundary Structure
+    domain_context_assumptions: []
+  pragmatics:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/competency_qs.md
+        source_version_or_snapshot_id: version 8
+        anchor: CQ-A-01, CQ-A-02, CQ-A-08, CQ-A-12, CQ-A-14
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: version 4
+        anchor: Response Format Constraints; Ownership Boundary Structure; Output Sink
+          Constraints
+    domain_context_assumptions: []
+  evolution:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version 8; last_updated 2026-05-28; sha256
+          2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case SE-03: Schema or Data Model Change"
+      - source_doc: .onto/domains/software-engineering/extension_cases.md
+        source_version_or_snapshot_id: version 8; last_updated 2026-05-28; sha256
+          2733c8eeda9958f982cdb6f62e462656db1be1cc143f14531519c12b8cd9ac04
+        anchor: "Case AI-07: Generated Artifact Without Provenance"
+    domain_context_assumptions: []
+  coverage:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: "version: 8; last_updated: 2026-05-28"
+        anchor: Major Sub-areas
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: "version: 8; last_updated: 2026-05-28"
+        anchor: LLM-Native Activation Conditions
+      - source_doc: .onto/domains/software-engineering/domain_scope.md
+        source_version_or_snapshot_id: "version: 8; last_updated: 2026-05-28"
+        anchor: Required Concept Categories
+    domain_context_assumptions: []
+  conciseness:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5"
+        anchor: 2. Removal Target Patterns / Relationship Redundancy
+      - source_doc: .onto/domains/software-engineering/conciseness_rules.md
+        source_version_or_snapshot_id: "version: 5"
+        anchor: 2. Removal Target Patterns / Definition Redundancy
+    domain_context_assumptions: []
+  axiology:
+    domain_constraints_used:
+      - source_doc: .onto/domains/software-engineering/prompt_interface.md
+        source_version_or_snapshot_id: sha256:8b201dc3fb2be67d1eb7d22ba85f4476000c137ece501d5712bb261f07740f97
+        anchor: Ownership Boundary Structure; Response Format Constraints; Fail-Loud
+          Interface Rule
+    domain_context_assumptions: []
+finding_ledger_ref: .onto/review/20260528-03960a26/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260528-03960a26/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260528-03960a26/issue-ledger.yaml
+issue_stance_matrix_ref: null
+deliberation_plan_ref: null
+problem_framing_ref: null
+issue_resolution_summary: []
+result_classification_summary:
+  highest_severity: medium
+  finding_count: 4
+  issue_count: 2
+  finding_severity_counts:
+    blocker: 0
+    high: 0
+    medium: 2
+    low: 2
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 0
+    medium: 1
+    low: 1
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 1
+  non_material_finding_count: 1
+  material_issues:
+    - issue_id: issue-001
+      severity: medium
+      material: true
+      affected_purpose: Maintain concept_identity_events and relation_identity_events
+        as the sole lifecycle transition authority, with
+        concept_identity_events[].target_detail_ids as the sole demotion bridge
+        to lower_level_detail_placements[].detail_id.
+      failure_condition: When future authors or validators update lifecycle transition
+        or demotion data, they can encode the same affected identity or
+        prior-concept-to-detail relationship through generic concept_ids,
+        relation_ids, or detail_placement_events[].prior_concept_ids instead of
+        the intended canonical fields.
+      impact: This weakens auditability, reproducibility, and contract trust because
+        consumers cannot rely on one canonical path for lifecycle continuity or
+        demotion lineage.
+      evidence_refs:
+        - round1/conciseness.md#C1
+        - round1/conciseness.md#C2
+      source_lens_ids:
+        - conciseness
+      action_candidates: &a2
+        - accept_risk
+        - follow_up
+      rationale: Lifecycle transition authority is not yet fully singular because
+        concept_identity_events and relation_identity_events retain generic
+        affected-ID fields, while detail_placement_events can still carry prior
+        concept lineage that overlaps with the canonical demotion bridge.
+      issue_statement: Lifecycle transition authority is not yet fully singular
+        because concept_identity_events and relation_identity_events retain
+        generic affected-ID fields, while detail_placement_events can still
+        carry prior concept lineage that overlaps with the canonical demotion
+        bridge.
+  non_material_findings:
+    - issue_id: issue-002
+      severity: low
+      material: false
+      affected_purpose: Keep lifecycle transition terminology aligned with the
+        canonical identity-event authority.
+      failure_condition: If a future implementer quotes or revises only the consumer
+        paragraph and ignores the later canonical lifecycle section, they may
+        infer or reintroduce mapping-style authority.
+      impact: Current evidence shows the later section resolves the authority, so this
+        is interpretation friction rather than a material trust failure.
+      evidence_refs:
+        - round1/semantics.md#non-blocking-note
+        - round1/evolution.md#minor-wording-risk
+      source_lens_ids:
+        - semantics
+        - evolution
+      action_candidates: &a3
+        - follow_up
+      rationale: The contract contains a non-material wording risk where informal
+        mapping language could be misread as endorsing a mapping-shaped
+        lifecycle authority.
+      issue_statement: The contract contains a non-material wording risk where
+        informal mapping language could be misread as endorsing a mapping-shaped
+        lifecycle authority.
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: Lifecycle transition authority is not yet fully singular because
+        concept_identity_events and relation_identity_events retain generic
+        affected-ID fields, while detail_placement_events can still carry prior
+        concept lineage that overlaps with the canonical demotion bridge.
+    - issue_id: issue-002
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+      rationale: The contract contains a non-material wording risk where informal
+        mapping language could be misread as endorsing a mapping-shaped
+        lifecycle authority.
+    - issue_id: runtime-halt
+      candidates:
+        - retry_execution
+        - continue_review
+      derivation_refs:
+        - execution-result.yaml
+      rationale: "Review cancelled by MCP request: Valid material design-contract
+        issues identified: generic concept_ids/relation_ids duplicate
+        identity-event prior/current arrays, and
+        detail_placement_events[].prior_concept_ids risks becoming an alternate
+        demotion bridge beside concept_identity_events[].target_detail_ids.
+        Cancel before patching current working tree to avoid stale downstream
+        review artifacts."
+synthesis_result_ref: null
+deliberation_status: not_performed
+deliberation_result_ref: null
+final_output_ref: .onto/review/20260528-03960a26/final-output.md
+shared_phenomenon_summary: []

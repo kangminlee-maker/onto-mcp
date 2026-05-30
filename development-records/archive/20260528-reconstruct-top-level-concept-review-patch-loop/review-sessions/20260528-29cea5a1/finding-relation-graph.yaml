@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: "20260528-29cea5a1"
+relations:
+  - relation_id: "rel-001"
+    from_finding_id: "finding-001"
+    to_finding_id: "finding-002"
+    relation: "duplicates"
+    root_hypothesis: "The Seed output shape still presents relation_participation as a universal top_level_concepts[] field despite the contract defining it as an isolation-only exception/projection."
+    rationale: "finding-001 and finding-002 cite the same contract area and the same failure mode from different lenses: connected concepts cannot truthfully satisfy an unconditional relation_participation field whose enum only describes isolated concepts. Both propose making the field optional and exception-only or separating the isolated concept projection."
+    confidence: "high"
+  - relation_id: "rel-002"
+    from_finding_id: "finding-003"
+    to_finding_id: "finding-004"
+    relation: "same_root_candidate"
+    root_hypothesis: "Residual answerability_scope cleanup left both legacy wording and duplicate display text paths after the contract moved to a closed declared_handoff_questions inventory."
+    rationale: "finding-003 concerns legacy open questions terminology conflicting with the closed supported/deferred/unsupported inventory, while finding-004 concerns repeated question text across that same inventory and its status buckets. The findings are not duplicates because one is terminology drift and the other is authority duplication, but both arise from incomplete consolidation around declared_handoff_questions as the answerability authority."
+    confidence: "medium"
+singleton_findings: []

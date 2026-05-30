@@ -1,0 +1,93 @@
+schema_version: "1"
+session_id: 20260528-d4633121
+created_at: 2026-05-28T14:56:49+09:00
+warnings:
+  - warningId: environment-warning-20873b2a99f0
+    source: review_runner_warning
+    message: "structure: [plan:executor] kind=codex unit_id=structure model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-6362be46ef03
+    source: review_runner_warning
+    message: "pragmatics: [plan:executor] kind=codex unit_id=pragmatics
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-cac5331b37d2
+    source: review_runner_warning
+    message: "coverage: [plan:executor] kind=codex unit_id=coverage model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-3dd63f65e0cc
+    source: review_runner_warning
+    message: "logic: [plan:executor] kind=codex unit_id=logic model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-71ba7cea9337
+    source: review_runner_warning
+    message: "evolution: [plan:executor] kind=codex unit_id=evolution model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-14a14c21c19f
+    source: review_runner_warning
+    message: "dependency: [plan:executor] kind=codex unit_id=dependency
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-3a0eaf60d978
+    source: review_runner_warning
+    message: "conciseness: [plan:executor] kind=codex unit_id=conciseness
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-b99d5b4ac60b
+    source: review_runner_warning
+    message: "axiology: [plan:executor] kind=codex unit_id=axiology model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-3531f835c86a
+    source: review_runner_warning
+    message: "semantics: [plan:executor] kind=codex unit_id=semantics model=gpt-5.5
+      sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-7b934f64bd0e
+    source: review_runner_warning
+    message: "finding-ledger: [plan:executor] kind=codex unit_id=finding-ledger
+      model=gpt-5.5 sandbox=read-only effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00
+  - warningId: environment-warning-124d53d8607b
+    source: review_runner_warning
+    message: "finding-relation-graph: [plan:executor] kind=codex
+      unit_id=finding-relation-graph model=gpt-5.5 sandbox=read-only
+      effort=medium"
+    fatality: non_fatal
+    affectedCapability: review_execution_observability
+    outputTrustImpact: unknown
+    observedAt: 2026-05-28T14:56:49+09:00

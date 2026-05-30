@@ -1,0 +1,10 @@
+schema_version: "1"
+session_id: 20260528-03960a26
+requested_at: 2026-05-28T14:52:45+09:00
+requested_by: mcp
+reason: "Valid material design-contract issues identified: generic
+  concept_ids/relation_ids duplicate identity-event prior/current arrays, and
+  detail_placement_events[].prior_concept_ids risks becoming an alternate
+  demotion bridge beside concept_identity_events[].target_detail_ids. Cancel
+  before patching current working tree to avoid stale downstream review
+  artifacts."

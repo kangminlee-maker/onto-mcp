@@ -34,20 +34,30 @@ cross-process goal contract lives at
 7. `ReviewRecord` assembly
 8. concise human-readable final output
 
-`reconstruct` now has a current design contract under
-`.onto/processes/reconstruct/`, material-aware runtime helpers, and a bounded
-direct-call integral runner. The runner classifies target material, expands
-directory targets into per-member source observations, writes the initial source
-frontier, runs reconstruct lens judgments and exploration synthesis through a
-configured LLM provider, validates evidence refs, computes deterministic
-metrics including Seed answerability bucket counts, and writes
-`final-output.md`, `reconstruct-run-manifest.yaml`, and the primary
-`reconstruct-record.yaml`. Code is the first fixture; the runner path is shared
-with spreadsheet/document/database material through source profiles and
-material-specific observers. The current public run path defaults to
+`reconstruct` is the next active productization slice. It has active contracts
+under `.onto/processes/reconstruct/`, MCP/direct-call wiring, material-aware
+runtime helpers, and a bounded integral runner. Code is the first partially
+wired runtime profile. Spreadsheet, document, and database profiles are
+contract-active but runtime-planned until their adapters are implemented; mixed
+targets are partial-composite only. The current runner classifies target
+material, expands supported directory targets into per-member source
+observations, writes the initial source frontier, runs reconstruct lens
+judgments and exploration synthesis through a configured LLM provider, validates
+available evidence refs, computes deterministic metrics, and writes
+`reconstruct-run-manifest.yaml`. It emits `final-output.md` and the primary
+`reconstruct-record.yaml` only through the validated handoff path after
+`handoff-decision-validation.yaml` and
+`reconstruct-run-manifest.pre-handoff-validation.yaml` pass; otherwise terminal
+projection must be blocked or limitation-backed. The final
+`reconstruct-run-manifest.post-publication-validation.yaml` is a post-publication audit for the
+complete manifest after final output and record refs exist. The
+current public run path defaults to
 `direct_call` semantic authoring and host-mediated confirmation. It fails loud
-when provider/model/credentials, LLM-authored artifact shape, or runtime gates
-are invalid; domain context selection remains deferred.
+when provider/model/credentials, LLM-authored artifact shape, unsupported
+material, or runtime gates are invalid. Optional reconstruct `domain` input
+admits that domain's `competency_qs.md` into the run governing snapshot for
+domain competency trace validation; there is no separate active
+domain competency selection artifact.
 `evolve` has a future material-kind adapter contract at
 `.onto/processes/evolve/material-kind-adapter-contract.md`, but no active
 runtime or MCP tool. `learn` and `govern` remain separate design slices.
@@ -87,7 +97,7 @@ Available MCP tools:
 | `onto.list_domains` | List available domain ids |
 | `onto.list_source_profiles` | List reconstruct source profiles |
 | `onto.observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
-| `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files |
+| `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct artifacts |
 | `onto.reconstruct` | Run the material-aware direct-call reconstruct path with runtime validation gates |
 | `onto.reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
 | `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
@@ -119,6 +129,7 @@ Minimal reconstruct MCP call shape:
     "projectRoot": "/path/to/project",
     "targetRefs": ["src/example.ts"],
     "intent": "Create a bounded reconstruct Seed from this target.",
+    "domain": "ontology",
     "sessionRoot": ".onto/reconstruct/example-run"
   }
 }
@@ -223,94 +234,84 @@ Primary outputs:
 
 A reconstruct session writes artifacts under `.onto/reconstruct/<session-id>/`.
 
-Implemented direct-call, runtime-gated outputs:
+Target runtime-gated outputs below are a non-authoritative quick map. The active
+artifact and gate catalog authority is
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml`.
 
 | Artifact | Owner | Purpose |
 |---|---|---|
 | `target-material-profile.yaml` | runtime | detected `target_material_kind`, support status, and selected source profiles |
+| `target-material-profile-validation.yaml` | runtime | material profile gate status and selected-profile closure |
 | `source-inventory.yaml` | runtime | material-specific inventory units and scan boundary |
-| `initial-source-frontier.yaml` | runtime | first observation frontier derived from inventory |
-| `source-observations.yaml` | runtime | structural observations with stable evidence ids |
+| `source-observations.yaml` | runtime | structural observations with stable evidence ids and source content fingerprints |
 | `source-observation-directive.yaml` | host LLM author | selected observations for evidence use |
 | `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
+| `*.reuse-provenance.yaml` | runtime | sidecar proof that same-session resume reuses authored YAML only when invocation, source, governing snapshot, and artifact hash match |
 | `rounds/<round-id>/lens-judgments/*.yaml` | host LLM author | reconstruct lens judgments over trusted observations |
 | `rounds/<round-id>/exploration-synthesis.yaml` | host LLM author | integrated gaps and next-source needs |
 | `rounds/<round-id>/source-frontier.yaml` | host LLM author | requested next source refs or no-next-frontier rationale |
-| `rounds/<round-id>/source-frontier-validation.yaml` | runtime | boundary, duplicate, and inventory validation for the frontier |
-| `seed-candidate.yaml` | host LLM author | transitional concept-centered Seed candidate with legacy claim projections |
-| `seed-candidate-validation.yaml` | runtime | Seed claim, concept, relation, pressure, lifecycle, answerability, migration, and evidence-ref validation |
-| `claim-realization-map.yaml` | host LLM author | claim-level evidence stance |
-| `claim-realization-map-validation.yaml` | runtime | claim id, stance enum, and evidence linkage validation |
-| `seed-confirmation.yaml` | host/user mediated | accepted, rejected, partial, or deferred Seed confirmation |
-| `seed-confirmation-validation.yaml` | runtime | confirmation transition validation and derived claim sets |
-| `competency-questions.yaml` | host LLM author | questions linked to confirmed claims |
-| `competency-questions-validation.yaml` | runtime | CQ id, eligible-claim coverage, claim-link, and evidence validation |
-| `competency-question-assessment.yaml` | host LLM author | answer status for every authoritative CQ |
-| `competency-question-assessment-validation.yaml` | runtime | exactly-once CQ assessment validation |
+| `rounds/<round-id>/source-frontier-validation.yaml` | runtime | frontier validation plus explicit dependency proof on `target-material-profile-validation.yaml` |
+| `candidate-inventory.yaml` | host LLM author | salient object, actor, action, workflow, permission, data source, constraint, and concept candidates |
+| `candidate-disposition.yaml` | host LLM author | one disposition for every salient candidate, including planned target seed refs for promoted candidates |
+| `candidate-disposition-validation.yaml` | runtime | inventory/disposition closure and projection validation |
+| `ontology-seed.yaml` | host LLM author | primary actionable ontology seed |
+| `ontology-seed-validation.yaml` | runtime | seed layer, id, binding, disposition, and evidence-ref validation |
+| `claim-realization-map.yaml` | host LLM author | one realization stance for every ontology seed claim |
+| `claim-realization-map-validation.yaml` | runtime | seed-claim closure and realization evidence validation |
+| `competency-questions.yaml` | host LLM author | questions linked to the declared purpose, seed layers, registry facets, proof-contract refs, admitted domain competency ids, and diagnostic/claim-based dispositions |
+| `competency-questions-validation.yaml` | runtime | question id, derived evidence scope, seed-link, evidence, registry facet/proof refs, exactly-one admitted domain competency coverage, and run-manifest admitted domain trace validation |
+| `competency-question-assessment.yaml` | host LLM author + runtime projections | answer status, required seed refs, evidence refs, and downstream effect for every authoritative CQ |
+| `competency-question-assessment-validation.yaml` | runtime | exactly-once CQ assessment validation plus answer-status/downstream-effect and seed/evidence closure |
+| `seed-confirmation.yaml` | host/user mediated | confirmation or limitation decision over validated seed claims before CQ authoring |
+| `seed-confirmation-validation.yaml` | runtime | confirmation closure and CQ eligibility over the validated seed; terminal readiness is owned by `handoff-decision-validation.yaml` |
 | `failure-classification.yaml` | host LLM author | material failure and gap classification |
 | `failure-classification-validation.yaml` | runtime | failure enum, linkage, and materiality validation |
 | `revision-proposal.yaml` | host LLM author | bounded revision/deferral proposals |
 | `revision-proposal-validation.yaml` | runtime | proposal id, target, action, and regression guard validation |
 | `reconstruct-metrics.yaml` | runtime | deterministic counts, answerability bucket counts, unresolved/deferred counts, and pass rate |
-| `stop-decision.yaml` | host LLM author | stop, continue, or ask-user decision based on metrics |
-| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, with deterministic Seed Answerability and provenance sections enforced by runtime |
-| `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, and happy-path scope |
+| `stop-decision.yaml` | host LLM author | proposed stop/continue/ask-user decision; not the readiness authority |
+| `handoff-decision-validation.yaml` | runtime | canonical readiness projection from runtime gates plus `stop-decision.yaml` consistency before final output and record projection |
+| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, seed validity, and handoff limitations |
+| `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, requested domain ids, and happy-path scope |
+| `reconstruct-run-manifest.post-publication-validation.yaml` | runtime | post-publication registry hash, active contract hash, source profile migration, validator, reference-standard, pattern-catalog URI/snapshot, version, and migration snapshot consistency after final output and record refs exist |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
-
-Current deferred reconstruct artifacts are recorded in
-`reconstruct-run-manifest.yaml` under `happy_path_scope.deferred_artifacts`:
-`domain_context_selection` and `domain_context_selection_validation`. Those
-require additional domain selection semantics and are outside the current
-direct-call path.
 
 The runtime keeps full source evidence in `source-observations.yaml`. LLM
 authoring calls may receive compact prompt projections, such as selected
 observations with shortened text excerpts, while validation still checks all
 generated evidence refs against the full artifact truth.
+Terminal projection uses `handoff-decision-validation.yaml.readiness_projection`
+as the readiness authority and requires both validated handoff and a validated
+pre-handoff run-manifest snapshot. The final
+`reconstruct-run-manifest.post-publication-validation.yaml` is the post-publication audit for the
+complete manifest after `final-output.md` and `reconstruct-record.yaml` refs are
+known; it is not a prerequisite for the pre-handoff readiness projection. The
+same artifact records `gate_projection[]`, where each
+active gate is evaluated through the registry `required_when_predicate_catalog`
+before validation status is required.
 
-When a reconstruct run is retried with the same session root, completed
-LLM-authored artifacts are read back from disk and the runner resumes at the
-first missing authored artifact. Runtime validation gates still re-run against
-the current artifact truth, so a retry avoids repeating expensive prompt calls
-without treating stale or malformed YAML as successful output.
+Contract-planned conditional proof authorities are not emitted by the current
+runtime until their validator surfaces are implemented:
 
-Source-ref fields in direct-call Seed outputs are canonicalized narrowly:
-runtime accepts source ref strings, `{ source_ref }` objects, or evidence objects
-with known `observation_id`, and writes the canonical observed `source_ref`
-string before validation. Descriptive `source_authority_scope` output is folded
-into the bounded enum fields plus a retained rationale when it already states an
-observed-source authority boundary.
+| planned artifact | planned authority |
+|---|---|
+| `rounds/<round-id>/source-observation-delta.yaml` / `rounds/<round-id>/source-observation-delta-validation.yaml` | multi-round observation lineage before newly observed frontier evidence is used |
+| `rounds/<round-id>/source-observation-reentry-validation.yaml` | post-use re-entry validation for frontier-triggered observations cited downstream |
+| `query-proofs.yaml` / `query-proofs-validation.yaml` | executable query/API proof rows when queryability or implementation access is claimed |
+| `visualization-proofs.yaml` / `visualization-proofs-validation.yaml` | visualization surface proof rows when static or overview visualization is claimed |
+| `graph-exploration-proofs.yaml` / `graph-exploration-proofs-validation.yaml` | graph navigation/exploration proof rows when traversal or large-graph exploration is claimed |
+| `required-when-evaluation.yaml` / `required-when-evaluation-validation.yaml` | standalone audited conditional-gate applicability trace; the current terminal handoff projection embeds predicate input/result details in `handoff-decision-validation.yaml.gate_projection[]` |
+| `ontology-handoff mapping proof` | per-axis ontology handoff mapping gate once that validator is implemented |
 
-The reconstruct design contract also defines validation artifacts for those
-stages, stable reconstruct stage ids, cross-artifact id authority, and progress
-UX expectations in `.onto/processes/reconstruct/reconstruct-execution-ux-contract.md`.
-Seed discovery is further constrained by
-`.onto/processes/reconstruct/top-level-concept-discovery-contract.md`, which
-defines the Seed as a purpose-relative top-level concept discovery artifact
-rather than a full ontology or broad claim ledger. The contract is the field-level
-authority for the concept-centered Seed surface: answerability, canonical
-relations, lower-level placement, frontier pressure, material coverage and
-source authority, convergence, lifecycle/provenance, migration compatibility, and
-deterministic validation boundaries.
-Direct-call and mock reconstruct authors now emit `seed_schema_version:
-transitional`; runtime validation fails loud on broken concept-centered authority
-refs such as stored relation-axis projections, ambiguous pressure event IDs, dangling
-relation endpoints, missing relation participation closure, invalid pressure
-statuses, incomplete or blank answerability inventory, dangling lifecycle and
-material-coverage refs, missing review profile refs for review-confirmed
-convergence, dangling lower-level detail source provenance, blank pressure
-successors, successor refs on non-superseded pressures, invalid ordered pressure
-event histories, material coverage events that overclaim unrelated material
-kinds, material coverage events that borrow checkpoint-wide material truth
-without event-local authority, exclusion events that use source refs instead of
-the intentional-exclusion checkpoint as material-kind authority, missing relation isolation reasons, source
-snapshot transition omissions, concept-centered fields without
-`seed_schema_version`, mixed `concept_centered` artifacts that retain legacy or
-retired projections without migration records, or migration records that do not
-match the runtime's exact source-field accepted-target mapping table. Pure
-`concept_centered` artifacts can omit legacy projection arrays. Deferred and
-unsupported answerability records remain boundary disclosures and are excluded
-from CQ eligibility even if a confirmation provider accepts them.
+The active seed target is defined by
+`.onto/processes/reconstruct/foundry-style-ontology-seed-contract.md`.
+The full recomposition plan is
+`.onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md`.
+The active contract, source profile, lens judgment, artifact, gate, readiness, and
+projection authority registry is
+`.onto/processes/reconstruct/reconstruct-contract-registry.yaml`.
+The seed is valid only when process completion, seed validation, downstream
+gates, and handoff limitations are reported separately and consistently.
 
 ## Repository Map
 

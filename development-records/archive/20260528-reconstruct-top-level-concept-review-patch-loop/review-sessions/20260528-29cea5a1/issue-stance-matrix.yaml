@@ -1,0 +1,117 @@
+schema_version: 1
+session_id: "20260528-29cea5a1"
+issues:
+  - issue_id: "issue-001"
+    stances:
+      - lens_id: "logic"
+        stance: "narrow"
+        rationale: "The logic lens found no material contradiction and treated optional-versus-required example shape strictness as a schema/structure question unless runtime makes the example mandatory for every item."
+        root_hypothesis_position: "narrows"
+        severity_position: "lowers"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "oppose"
+        rationale: "The structure lens found no material structural issue and stated that relation_participation is structurally demoted to an exception/projection seat while connected participation is derived from top_level_relations endpoint membership."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/structure.md"]
+      - lens_id: "dependency"
+        stance: "support"
+        rationale: "The dependency lens directly identifies relation_participation as an unconditional Seed output field that conflicts with its exception-only dependency role for isolated concepts."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/dependency.md#finding-1"]
+      - lens_id: "semantics"
+        stance: "support"
+        rationale: "The semantics lens directly identifies the same ambiguity: the field meaning and enum values describe isolated concepts, but the output shape lists relation_participation under every top_level_concepts item."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/semantics.md#finding-1"]
+      - lens_id: "pragmatics"
+        stance: "oppose"
+        rationale: "The pragmatics lens found no material practical issue and stated that relation_participation is explicitly an isolation exception/projection rather than a second relation authority."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/pragmatics.md"]
+      - lens_id: "evolution"
+        stance: "oppose"
+        rationale: "The evolution lens found no material evolution issue and treated relation_participation as framed for isolated concepts rather than as a second connected relation authority."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "oppose"
+        rationale: "The coverage lens found no material coverage issue and counted relation_participation as covered as an isolation exception/projection."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "insufficient_evidence"
+        rationale: "The conciseness lens checked relation_participation as not duplicating relation authority, but did not evaluate whether the Seed output shape makes the exception projection appear mandatory for every concept."
+        root_hypothesis_position: "insufficient_evidence"
+        severity_position: "insufficient_evidence"
+        evidence_refs: ["round1/conciseness.md"]
+      - lens_id: "axiology"
+        stance: "oppose"
+        rationale: "The axiology lens found no material value-alignment issue and treated relation authority and answerability additions as strengthening artifact truth and authority boundaries."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/axiology.md"]
+  - issue_id: "issue-002"
+    stances:
+      - lens_id: "logic"
+        stance: "oppose"
+        rationale: "The logic lens found the declared handoff questions model logically compatible and did not find a material contradiction in the supported, deferred, and unsupported question sets."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "oppose"
+        rationale: "The structure lens found answerability closed over declared handoff questions with deterministic validation, and did not identify a structural defect in the answerability authority surface."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/structure.md"]
+      - lens_id: "dependency"
+        stance: "not_applicable"
+        rationale: "The dependency lens raised only the relation_participation dependency issue and did not take a position on answerability_scope wording or duplicated question text."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "narrow"
+        rationale: "The semantics lens supports the legacy open questions wording part of the root but classifies that surface as low severity because later contract and compatibility sections provide stronger authority."
+        root_hypothesis_position: "narrows"
+        severity_position: "lowers"
+        evidence_refs: ["round1/semantics.md#finding-2"]
+      - lens_id: "pragmatics"
+        stance: "oppose"
+        rationale: "The pragmatics lens found the new answerability_scope practically usable and closed, with supported, deferred, and unsupported question IDs matching the declared inventory."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/pragmatics.md"]
+      - lens_id: "evolution"
+        stance: "oppose"
+        rationale: "The evolution lens found no material evolution issue and treated the closed declared handoff question inventory as a change-tolerant improvement."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "oppose"
+        rationale: "The coverage lens found no material coverage gap and counted answerability, deterministic validation, and declared handoff question inventory as covered for the design-contract surface."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "support"
+        rationale: "The conciseness lens directly identifies duplicate question text paths between declared_handoff_questions and the status buckets, and treats that duplication as material because it creates drift risk."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/conciseness.md#c-1"]
+      - lens_id: "axiology"
+        stance: "oppose"
+        rationale: "The axiology lens found the answerability changes value-aligned because they make Seed handoff trust explicit rather than implying full ontology readiness."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/axiology.md"]
+validation:
+  missing_stances: []

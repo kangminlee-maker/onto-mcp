@@ -1,0 +1,117 @@
+schema_version: 1
+session_id: "20260528-3d59d774"
+issues:
+  - issue_id: "issue-001"
+    stances:
+      - lens_id: "logic"
+        stance: "narrow"
+        rationale: "The logic lens found no formal contradiction and reported the current rule set as satisfiable, but it did not disprove the issue's closed-world completeness concern. Its evidence narrows the issue away from logical inconsistency and toward runtime-verifiable bridge or inventory completeness."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "support"
+        rationale: "The structure lens directly supports the continuity portion of the issue by finding that demoted concept lifecycle records lack a deterministic detail target bridge, and it also identified the missing external migration artifact ref seat as a related relationship-seat gap."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/structure.md#finding-1", "round1/structure.md#finding-2"]
+      - lens_id: "dependency"
+        stance: "oppose"
+        rationale: "The dependency lens reported that the patch preserves intended dependency direction and that lifecycle and migration paths use explicit mappings/events. That conflicts with treating the linked-target gap as a dependency-direction issue, though it does not directly eliminate the structural completeness evidence."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "oppose"
+        rationale: "The semantics lens found no material semantic documentation/design-contract issue and treated the relevant authority seats and answerability status semantics as coherent. This opposes a semantic version of the issue, while leaving structural and pragmatic proof gaps to those lenses."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/semantics.md"]
+      - lens_id: "pragmatics"
+        stance: "support"
+        rationale: "The pragmatics lens directly supports the answerability portion of the issue: answerability_scope can be present and valid while still failing to prove that all intended Seed-stage handoff questions were considered."
+        root_hypothesis_position: "narrows"
+        severity_position: "keeps"
+        evidence_refs: ["round1/pragmatics.md#finding-1"]
+      - lens_id: "evolution"
+        stance: "oppose"
+        rationale: "The evolution lens reported no material evolution finding and described identity, migration, lifecycle continuity, answerability status, pressure transitions, and implementation guidance as explicit and change-tolerant. This opposes the issue as an evolution-risk claim within its boundary."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "oppose"
+        rationale: "The coverage lens found that the current diff covers the requested Seed-stage concern categories, including answerability, demoted detail placement, lifecycle/provenance, validation, migration compatibility, and active documentation alignment. This opposes the issue as a coverage gap."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "surface_only"
+        rationale: "The conciseness lens did not raise this issue and its non-issues checked answerability status duplication rather than complete handoff-question inventory or demotion bridge completeness. It provides only limited surface context, not support for the issue root."
+        root_hypothesis_position: "not_applicable"
+        severity_position: "not_applicable"
+        evidence_refs: ["round1/conciseness.md"]
+      - lens_id: "axiology"
+        stance: "oppose"
+        rationale: "The axiology lens found the diff aligned with the product direction because it strengthens runtime-owned deterministic validation and artifact authority seats. This opposes the issue as a value-alignment defect, while not directly rebutting the structure and pragmatics evidence."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/axiology.md"]
+  - issue_id: "issue-002"
+    stances:
+      - lens_id: "logic"
+        stance: "oppose"
+        rationale: "The logic lens explicitly reported that README.md and IMPLEMENTATION_MAP.html summarize the expanded authority surface without contradicting the contract text. This opposes treating the duplication as a logic-level material issue."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/logic.md"]
+      - lens_id: "structure"
+        stance: "oppose"
+        rationale: "The structure lens treated README.md and IMPLEMENTATION_MAP.html as reflecting the new contract areas at summary level, and reported relation graph authority, concept participation, and endpoint validation as structurally connected. This opposes the issue as a structural material problem."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/structure.md"]
+      - lens_id: "dependency"
+        stance: "oppose"
+        rationale: "The dependency lens stated that top_level_relations remains canonical, per-concept relation summaries are derived projections, and README.md plus IMPLEMENTATION_MAP.html point back to the reconstruct contract instead of introducing a second authority. This directly opposes the duplicated-authority root hypothesis."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/dependency.md"]
+      - lens_id: "semantics"
+        stance: "oppose"
+        rationale: "The semantics lens found that README.md and IMPLEMENTATION_MAP.html summarize the same concept-centered authority areas without introducing conflicting vocabulary, and that relation and authority-seat terminology is coherent. This opposes the issue as a semantic material problem."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/semantics.md"]
+      - lens_id: "pragmatics"
+        stance: "oppose"
+        rationale: "The pragmatics lens reported that README.md and IMPLEMENTATION_MAP.html both describe the future concept-centered Seed shape and relevant authority areas. It did not identify the summaries as harmful to practical handoff or decision quality."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/pragmatics.md"]
+      - lens_id: "evolution"
+        stance: "oppose"
+        rationale: "The evolution lens found README.md and IMPLEMENTATION_MAP.html aligned at the level expected for active overview documentation and noted that implementation/schema migration remains future work rather than claimed completion. This opposes the issue as an evolution material risk."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/evolution.md"]
+      - lens_id: "coverage"
+        stance: "oppose"
+        rationale: "The coverage lens reported that README.md and IMPLEMENTATION_MAP.html were updated to reflect the expanded contract scope. It treated that reflection as coverage alignment, not as a duplicate authority issue."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/coverage.md"]
+      - lens_id: "conciseness"
+        stance: "support"
+        rationale: "The conciseness lens directly supports this issue. It found that README.md and IMPLEMENTATION_MAP.html repeat the contract's detailed authority catalog, and that relation_participation.status connected duplicates endpoint membership authority from top_level_relations."
+        root_hypothesis_position: "accepts"
+        severity_position: "keeps"
+        evidence_refs: ["round1/conciseness.md#finding-c-1", "round1/conciseness.md#finding-c-2"]
+      - lens_id: "axiology"
+        stance: "oppose"
+        rationale: "The axiology lens found the README.md and IMPLEMENTATION_MAP.html changes aligned with the contract change and value direction, and did not find that they undermine artifact truth or authority alignment."
+        root_hypothesis_position: "rejects"
+        severity_position: "lowers"
+        evidence_refs: ["round1/axiology.md"]
+validation:
+  missing_stances: []

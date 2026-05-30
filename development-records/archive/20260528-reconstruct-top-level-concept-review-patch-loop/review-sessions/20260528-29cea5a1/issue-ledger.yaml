@@ -1,0 +1,35 @@
+schema_version: 1
+session_id: "20260528-29cea5a1"
+issues:
+  - issue_id: "issue-001"
+    root_cause_hypothesis: "The Seed output shape still presents relation_participation as a universal top_level_concepts[] field despite the contract defining it as an isolation-only exception/projection."
+    root_confidence: "high"
+    surface_finding_ids: ["finding-001", "finding-002"]
+    relation_refs: ["rel-001"]
+    raised_by_lens_ids: ["dependency", "semantics"]
+    issue_statement: "relation_participation is defined as an exception/projection for isolated concepts, but the output shape can be read as requiring it for every top-level concept."
+    proposed_action: "Make relation_participation optional and exception-only in the Seed output shape, or move isolated participation into a separate exception projection keyed by concept_id."
+    affected_purpose: "The reconstruct top-level concept discovery contract must keep top_level_relations as the canonical relation authority and preserve connected participation as derived from relation endpoint membership."
+    failure_condition: "For any connected concept, an implementer treating the Seed output shape as mandatory must either emit an isolation-only relation_participation value that is false or omit a field that appears required."
+    impact: "This weakens trust in generated Seed artifacts because relation participation can be represented through conflicting dependency and semantic paths: endpoint membership for connected concepts and an unconditional concept-level projection whose values only describe isolated concepts."
+    evidence_refs: ["round1/dependency.md#finding-1", "round1/semantics.md#finding-1", "execution-preparation/materialized-input.md#lines-428-433", "execution-preparation/materialized-input.md#lines-842-863", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:462", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:815-831"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: "issue-002"
+    root_cause_hypothesis: "Residual answerability_scope cleanup left both legacy wording and duplicate display text paths after the contract moved to a closed declared_handoff_questions inventory."
+    root_confidence: "medium"
+    surface_finding_ids: ["finding-003", "finding-004"]
+    relation_refs: ["rel-002"]
+    raised_by_lens_ids: ["semantics", "conciseness"]
+    issue_statement: "answerability_scope is not fully consolidated around declared_handoff_questions as the sole question authority because the contract still uses legacy open questions wording and repeats question text inside status buckets."
+    proposed_action: "Reword the top-level purpose statement around supported, deferred, and unsupported handoff questions, and make declared_handoff_questions[] the sole authority for question text while status buckets carry question_id and status-specific fields."
+    affected_purpose: "The answerability contract must present a closed declared handoff question inventory with one authoritative question text path and classification by membership in supported, deferred, and unsupported buckets."
+    failure_condition: "If readers or consumers encounter open questions wording or mismatched question text between declared_handoff_questions[] and status buckets, they may treat answerability as either an open-ended bucket or an internally conflicting authority surface."
+    impact: "This meaningfully weakens trust and auditability for the declared review purpose because duplicated question text creates drift risk in the Seed answerability authority, while the legacy wording adds terminology drift around the same answerability model."
+    evidence_refs: ["round1/semantics.md#finding-2", "round1/conciseness.md#c-1", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:14-17", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:184-207", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:961", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:150", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:154", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:162", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:167", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:783", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:787", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:795", ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:800"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+validation:
+  unclustered_finding_ids: []

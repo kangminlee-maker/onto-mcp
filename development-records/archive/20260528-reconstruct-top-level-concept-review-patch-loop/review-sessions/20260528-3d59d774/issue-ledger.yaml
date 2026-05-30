@@ -1,0 +1,35 @@
+schema_version: 1
+session_id: "20260528-3d59d774"
+issues:
+  - issue_id: "issue-001"
+    root_cause_hypothesis: "The contract relies on structurally present continuity or answerability records without closed-world bridge fields or complete inventories that let runtime validation prove that the referenced lifecycle, artifact, or handoff scope is complete."
+    root_confidence: "medium"
+    surface_finding_ids: ["finding-001", "finding-002", "finding-003"]
+    relation_refs: ["rel-001", "rel-003"]
+    raised_by_lens_ids: ["structure", "pragmatics"]
+    issue_statement: "Several Seed continuity and answerability surfaces can be validly shaped while still failing to prove the intended transition or handoff completeness."
+    proposed_action: "Add explicit bridge or inventory seats for demotion targets, external migration refs, and declared handoff questions, then validate that each continuity or answerability claim resolves to the relevant canonical target exactly once."
+    affected_purpose: "Fresh verification of the reconstruct top-level concept discovery design patch for lifecycle continuity, retired-seat migration mapping traceability, Seed handoff readiness, provenance, auditability, and decision quality."
+    failure_condition: "When a demoted concept moves to lower-level detail placement, a migration record relies on an external artifact, or a Seed claims handoff readiness from answerability_scope, runtime validation can verify local structure but cannot prove that the required linked target or complete question inventory was actually represented."
+    impact: "Trust, auditability, reproducibility, and decision quality are meaningfully weakened because the artifact can appear complete while omitting the deterministic link or inventory needed to verify the declared review purpose."
+    evidence_refs: ["round1/structure.md#finding-1", "round1/structure.md#finding-2", "round1/pragmatics.md#finding-1"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: "issue-002"
+    root_cause_hypothesis: "The patch repeats canonical authority content in subordinate or summary surfaces instead of keeping those surfaces as bounded projections of the source authority."
+    root_confidence: "high"
+    surface_finding_ids: ["finding-004", "finding-005"]
+    relation_refs: ["rel-002"]
+    raised_by_lens_ids: ["conciseness"]
+    issue_statement: "Active documentation and per-concept relation participation fields duplicate authority already owned by the reconstruct contract and top_level_relations."
+    proposed_action: "Keep README.md and IMPLEMENTATION_MAP.html at outcome and authority-reference level, and make relation participation a derived projection or exception seat rather than Seed-authored redeclaration of connected endpoint membership."
+    affected_purpose: "Maintainability, scope control, precedence, artifact truth, concept economy, and relation authority alignment for the reconstruct Seed design contract."
+    failure_condition: "When the canonical contract or relation graph authority changes, active summary docs or subordinate relation participation fields can drift from the source authority while still looking authoritative."
+    impact: "Trust and maintainability are meaningfully weakened because multiple active surfaces appear to define the same authority, increasing drift risk and validation complexity."
+    evidence_refs: ["round1/conciseness.md#finding-c-1", "round1/conciseness.md#finding-c-2"]
+    severity: "medium"
+    domain_threshold_used: null
+    singleton_reason: null
+validation:
+  unclustered_finding_ids: []

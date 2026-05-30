@@ -1,0 +1,215 @@
+session_id: 20260528-29cea5a1
+session_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1
+execution_realization: worker
+host_runtime: codex
+review_mode: full
+interpretation_artifact_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/interpretation.yaml
+binding_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/binding.yaml
+session_metadata_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/session-metadata.yaml
+execution_preparation_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation
+round1_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1
+lens_execution_seats:
+  - lens_id: logic
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/logic.md
+  - lens_id: structure
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/structure.md
+  - lens_id: dependency
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/dependency.md
+  - lens_id: semantics
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/semantics.md
+  - lens_id: pragmatics
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/pragmatics.md
+  - lens_id: evolution
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/evolution.md
+  - lens_id: coverage
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/coverage.md
+  - lens_id: conciseness
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/conciseness.md
+  - lens_id: axiology
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/axiology.md
+prompt_packets_root: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets
+lens_prompt_packet_seats:
+  - lens_id: logic
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/logic.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/logic.md
+  - lens_id: structure
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/structure.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/structure.md
+  - lens_id: dependency
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/dependency.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/dependency.md
+  - lens_id: semantics
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/semantics.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/semantics.md
+  - lens_id: pragmatics
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/pragmatics.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/pragmatics.md
+  - lens_id: evolution
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/evolution.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/evolution.md
+  - lens_id: coverage
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/coverage.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/coverage.md
+  - lens_id: conciseness
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/conciseness.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/conciseness.md
+  - lens_id: axiology
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/axiology.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/axiology.md
+issue_artifact_prompt_packet_seats:
+  - artifact_id: finding-ledger
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/finding-ledger.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-ledger.yaml
+  - artifact_id: finding-relation-graph
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-relation-graph.yaml
+  - artifact_id: issue-ledger
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/issue-ledger.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-ledger.yaml
+  - artifact_id: issue-stance-matrix
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-stance-matrix.yaml
+  - artifact_id: deliberation-plan
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/deliberation-plan.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation-plan.yaml
+  - artifact_id: problem-framing
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/problem-framing.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/problem-framing.yaml
+lens_deliberation_prompt_packet_seats:
+  - lens_id: logic
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/logic.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/logic-deliberation.md
+  - lens_id: structure
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/structure.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/structure-deliberation.md
+  - lens_id: dependency
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/dependency.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/dependency-deliberation.md
+  - lens_id: semantics
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/semantics.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/semantics-deliberation.md
+  - lens_id: pragmatics
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/pragmatics.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/pragmatics-deliberation.md
+  - lens_id: evolution
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/evolution.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/evolution-deliberation.md
+  - lens_id: coverage
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/coverage.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/coverage-deliberation.md
+  - lens_id: conciseness
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/conciseness.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/conciseness-deliberation.md
+  - lens_id: axiology
+    packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/axiology.deliberation.prompt.md
+    output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/axiology-deliberation.md
+teamlead_deliberation_prompt_packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/teamlead.deliberation.prompt.md
+synthesize_prompt_packet_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/prompt-packets/synthesize.prompt.md
+actor_invocation_profiles_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/actor-invocation-profiles.yaml
+actor_consumer_bindings_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/actor-consumer-bindings.yaml
+domain_binding_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/domain-binding.yaml
+review_target_profile_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/review-target-profile.yaml
+review_value_alignment_criteria_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/review-value-alignment-criteria.yaml
+review_context_manifest_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-preparation/review-context-manifest.yaml
+synthesis_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/synthesis.md
+finding_ledger_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-ledger.yaml
+finding_relation_graph_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-relation-graph.yaml
+issue_ledger_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-ledger.yaml
+issue_stance_matrix_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-stance-matrix.yaml
+deliberation_plan_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation-plan.yaml
+problem_framing_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/problem-framing.yaml
+lens_completion_barrier_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/lens-completion-barrier.yaml
+deliberation_mode: controlled-lens-deliberation
+deliberation_root_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation
+deliberation_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation.md
+execution_result_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/execution-result.yaml
+error_log_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/error-log.md
+final_output_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/final-output.md
+review_record_path: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/review-record.yaml
+boundary_policy:
+  web_research_policy: denied
+  repo_exploration_policy: allowed
+  recursive_reference_expansion_policy: denied
+  filesystem_scope:
+    allowed_roots: &a1
+      - /Users/kangmin/cowork/onto-mcp
+  write_policy:
+    source_mutation_policy: denied
+    allowed_output_refs:
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/logic.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/structure.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/dependency.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/semantics.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/pragmatics.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/evolution.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/coverage.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/conciseness.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/round1/axiology.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/logic-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/structure-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/dependency-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/semantics-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/pragmatics-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/evolution-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/coverage-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/conciseness-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation/round1/axiology-deliberation.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-ledger.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/finding-relation-graph.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-ledger.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/issue-stance-matrix.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation-plan.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/problem-framing.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/lens-completion-barrier.yaml
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/synthesis.md
+      - /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-29cea5a1/deliberation.md
+  provenance_policy:
+    extra_exploration_citation_required: true
+    web_source_citation_required: true
+boundary_presentation:
+  role_definition_presentation: embedded_and_ref
+  primary_target_presentation: embedded_and_ref
+  required_context_presentation: ref_only
+  output_seat_presentation: declared
+  control_policy_presentation: declared
+boundary_enforcement_profile:
+  prompt_boundary_enforcement: prompt_declared_only
+  filesystem_boundary_enforcement: prompt_declared_only
+  network_boundary_enforcement: prompt_declared_only
+  write_boundary_enforcement: prompt_declared_only
+effective_boundary_state:
+  web_research:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance; web access is
+        not environment-enforced yet.
+  repo_exploration:
+    requested_policy: allowed
+    effective_policy: allowed
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on declared boundary guidance for repo
+        exploration scope.
+  recursive_reference_expansion:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution relies on prompt-declared no-hidden-expansion guidance.
+  source_mutation:
+    requested_policy: denied
+    effective_policy: denied
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution declares output-seat-only writing and source mutation
+        denial in the prompt path.
+  filesystem_scope:
+    requested_allowed_roots: *a1
+    effective_allowed_roots: *a1
+    guarantee_level: prompt_declared_only
+    notes:
+      - Current execution does not enforce filesystem scope below the host
+        boundary; allowed roots are currently prompt-declared.
+minimum_participating_lenses: 9

@@ -1,0 +1,20 @@
+schema_version: "1"
+session_id: 20260528-6dffeec8
+created_at: 2026-05-28T14:48:22+09:00
+source_execution_result_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/execution-result.yaml
+source_error_log_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-6dffeec8/error-log.md
+execution_status: halted_partial
+degradation_kinds:
+  - halted_partial
+degraded_lens_ids: []
+excluded_lens_ids: []
+halt_reason: "Review cancelled by MCP request: Valid material design-contract
+  issue identified: undefined current_detail_ids appears as an alternate
+  demotion bridge field while target_detail_ids is the declared canonical field.
+  Cancel before patching current working tree to avoid stale downstream review
+  artifacts."
+halt_phase: cancellation
+halt_unit_id: null
+halt_unit_kind: null
+halt_lens_id: null
+failed_units: []

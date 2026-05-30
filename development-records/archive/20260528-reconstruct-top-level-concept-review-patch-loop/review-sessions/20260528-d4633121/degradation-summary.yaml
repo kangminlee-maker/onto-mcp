@@ -1,0 +1,18 @@
+schema_version: "1"
+session_id: 20260528-d4633121
+created_at: 2026-05-28T14:56:49+09:00
+source_execution_result_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/execution-result.yaml
+source_error_log_ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-d4633121/error-log.md
+execution_status: halted_partial
+degradation_kinds:
+  - halted_partial
+degraded_lens_ids: []
+excluded_lens_ids: []
+halt_reason: "Review cancelled by MCP request: Valid material design-contract
+  findings identified in finding-ledger; cancel before patching current working
+  tree to avoid stale downstream review artifacts."
+halt_phase: cancellation
+halt_unit_id: null
+halt_unit_kind: null
+halt_lens_id: null
+failed_units: []

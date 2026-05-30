@@ -1,8 +1,9 @@
 import { describe, expect, it, afterEach } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationsArtifact,
@@ -24,6 +25,10 @@ async function readYaml<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
 }
 
+async function sha256File(filePath: string): Promise<string> {
+  return crypto.createHash("sha256").update(await fs.readFile(filePath)).digest("hex");
+}
+
 afterEach(async () => {
   await Promise.all(
     tmpRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })),
@@ -34,8 +39,8 @@ describe("materializeReconstructPreparationArtifacts", () => {
   it("writes material profile, inventory, and structural observations", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-a");
-    const target = path.join(root, "schedule.csv");
-    await fs.writeFile(target, "account,amount\ncash,10\n", "utf8");
+    const target = path.join(root, "feature.ts");
+    await fs.writeFile(target, "export const feature = true;\n", "utf8");
 
     const refs = await materializeReconstructPreparationArtifacts({
       sessionRoot,
@@ -59,23 +64,30 @@ describe("materializeReconstructPreparationArtifacts", () => {
         refs.initial_source_frontier,
       );
 
-    expect(materialProfile.target_material_kind).toBe("spreadsheet");
+    expect(materialProfile.target_material_kind).toBe("code");
     expect(materialProfile.selected_source_profiles).toHaveLength(1);
+    expect(materialProfile.selected_source_profiles[0]).toEqual(
+      expect.objectContaining({
+        profile_id: "code-source-profile",
+        runtime_implementation_status: "partially_wired",
+        migration_status: "current",
+      }),
+    );
     expect(materialProfile.support_status).toBe("partial");
     expect(inventory.inventory_units).toEqual([
       expect.objectContaining({
         ref: target,
         exists: true,
-        target_material_kind: "spreadsheet",
+        target_material_kind: "code",
         scan_status: "planned",
       }),
     ]);
     expect(observations.observations).toHaveLength(1);
     expect(observations.observations[0]).toEqual(
       expect.objectContaining({
-        observation_id: expect.stringMatching(/^obs_spreadsheet_[0-9a-f]+$/),
-        target_material_kind: "spreadsheet",
-        adapter_id: "minimal-spreadsheet-structure-observer",
+        observation_id: expect.stringMatching(/^obs_code_[0-9a-f]+$/),
+        target_material_kind: "code",
+        adapter_id: "minimal-code-structure-observer",
         source_ref: target,
       }),
     );
@@ -85,9 +97,145 @@ describe("materializeReconstructPreparationArtifacts", () => {
     expect(initialFrontier.source_refs).toEqual([
       expect.objectContaining({
         source_ref: target,
-        target_material_kind: "spreadsheet",
+        target_material_kind: "code",
       }),
     ]);
+  });
+
+  it("uses the default source profile for inventory when another profile sorts first", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-default-profile");
+    const registryPath = path.join(
+      root,
+      ".onto",
+      "processes",
+      "reconstruct",
+      "reconstruct-contract-registry.yaml",
+    );
+    const tempProfilesRoot = path.join(
+      root,
+      ".onto",
+      "processes",
+      "reconstruct",
+      "source-profiles",
+    );
+    const target = path.join(root, "feature.ts");
+    const alternateProfile = path.join(tempProfilesRoot, "aaa-code-alt.md");
+    await fs.mkdir(tempProfilesRoot, { recursive: true });
+    await fs.writeFile(target, "export const feature = true;\n", "utf8");
+    await fs.writeFile(
+      alternateProfile,
+      [
+        "# Source Profile: Alternate Code",
+        "",
+        "> Target material kind: `code`",
+        "",
+        "## Scan Targets",
+        "- alternate code scan",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const registry = parseYaml(await fs.readFile(
+      path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
+      "utf8",
+    )) as Record<string, any>;
+    registry.source_profile_records = registry.source_profile_records.map(
+      (record: Record<string, any>) => {
+        if (typeof record.definition_ref !== "string") return record;
+        return {
+          ...record,
+          definition_ref: path.resolve(record.definition_ref),
+        };
+      },
+    );
+    registry.source_profile_records.push({
+      profile_id: "aaa-code-source-profile",
+      target_material_kind: "code",
+      is_default_for_kind: false,
+      definition_ref: alternateProfile,
+      definition_sha256: await sha256File(alternateProfile),
+      contract_status: "active",
+      runtime_implementation_status: "planned",
+      schema_version: 1,
+      profile_version: 1,
+      migration_status: "current",
+      supersedes: [],
+      replaced_by: [],
+      split_from: [],
+      split_into: [],
+      merged_from: [],
+      merged_into: [],
+    });
+    await fs.writeFile(registryPath, stringifyYaml(registry), "utf8");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot: tempProfilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialProfile =
+      await readYaml<ReconstructTargetMaterialProfileArtifact>(
+        refs.target_material_profile,
+      );
+    const inventory =
+      await readYaml<ReconstructSourceInventoryArtifact>(refs.source_inventory);
+
+    expect(materialProfile.selected_source_profiles[0]).toEqual(
+      expect.objectContaining({
+        profile_id: "code-source-profile",
+        is_default_for_kind: true,
+      }),
+    );
+    expect(inventory.inventory_units[0]).toEqual(
+      expect.objectContaining({
+        scan_status: "planned",
+        profile_ref: expect.stringContaining("code.md"),
+      }),
+    );
+  });
+
+  it("skips contract-active profiles whose runtime adapter is planned", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-planned");
+    const target = path.join(root, "schedule.csv");
+    await fs.writeFile(target, "account,amount\ncash,10\n", "utf8");
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialProfile =
+      await readYaml<ReconstructTargetMaterialProfileArtifact>(
+        refs.target_material_profile,
+      );
+    const inventory =
+      await readYaml<ReconstructSourceInventoryArtifact>(refs.source_inventory);
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(
+        refs.source_observations,
+      );
+
+    expect(materialProfile.target_material_kind).toBe("spreadsheet");
+    expect(materialProfile.support_status).toBe("unsupported");
+    expect(materialProfile.selected_source_profiles[0]).toEqual(
+      expect.objectContaining({
+        profile_id: "spreadsheet-source-profile",
+        runtime_implementation_status: "planned",
+      }),
+    );
+    expect(inventory.inventory_units[0]).toEqual(
+      expect.objectContaining({
+        scan_status: "skipped",
+        skip_reason: expect.stringContaining("runtime_implementation_status=planned"),
+      }),
+    );
+    expect(observations.observations).toEqual([]);
   });
 
   it("keeps unknown targets skipped instead of guessing an adapter", async () => {
@@ -161,7 +309,14 @@ describe("materializeReconstructPreparationArtifacts", () => {
     ]);
     expect(observations.observations.map((observation) =>
       observation.target_material_kind
-    ).sort()).toEqual(["code", "spreadsheet"]);
-    expect(initialFrontier.source_refs).toHaveLength(2);
+    )).toEqual(["code"]);
+    expect(observations.skipped_refs).toEqual([
+      expect.objectContaining({
+        ref: sheet,
+        target_material_kind: "spreadsheet",
+        reason: expect.stringContaining("runtime_implementation_status=planned"),
+      }),
+    ]);
+    expect(initialFrontier.source_refs).toHaveLength(1);
   });
 });

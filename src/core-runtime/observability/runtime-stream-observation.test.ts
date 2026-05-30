@@ -79,7 +79,7 @@ describe("runtime stream observation", () => {
         source: {
           kind: "llm",
           label: "reconstruct",
-          stageId: "seed_candidate",
+          stageId: "ontology_seed",
         },
       },
       () => appendRuntimeModelCallLogFromCurrentContext("openai call: model=\"x\""),
@@ -92,7 +92,7 @@ describe("runtime stream observation", () => {
       source: {
         kind: "llm",
         label: "reconstruct",
-        stageId: "seed_candidate",
+        stageId: "ontology_seed",
       },
       stream: "stderr",
       message: "[model-call] openai call: model=\"x\"",

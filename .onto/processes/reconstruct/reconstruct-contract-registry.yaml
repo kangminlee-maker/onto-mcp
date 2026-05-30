@@ -1,0 +1,1645 @@
+schema_version: 1
+registry_id: reconstruct-active-contract-registry
+status: active
+purpose: Canonical machine-readable registry for active reconstruct contracts, runtime artifact authorities, validation gates, projection policy, and version policy.
+
+authority_scope:
+  decision: canonical_runtime_authority_graph
+  meaning: Runtime validator dispatch, artifact completeness checks, required-gate evaluation, status projections, and reconstruct-record projections must use this registry as the active authority graph.
+  prose_contract_role: Active prose contracts define semantics and rationale; this registry names the executable authority seats that runtime must follow.
+  run_snapshot_rule: Every reconstruct run manifest must record the selected registry ref, registry hash, active contract hashes, source profile ids, lens ids, validator versions, selected reference standard ids, selected reference standard version_or_snapshot_id values, selected pattern catalog ids and snapshots, admitted domain competency admission refs/hashes, admitted competency ids, admitted competency migration mappings, and migration status values used for that run.
+
+active_contract_refs:
+  - contract_id: reconstruct-boundary-contract
+    ref: .onto/processes/reconstruct/reconstruct-boundary-contract.md
+    role: boundary_contract
+    schema_version: 1
+    migration_status: current
+  - contract_id: actionable-ontology-seed-recomposition-design
+    ref: .onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md
+    role: implementation_design
+    schema_version: 1
+    migration_status: current
+  - contract_id: foundry-style-ontology-seed-contract
+    ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md
+    role: seed_contract
+    schema_version: 1
+    migration_status: current
+  - contract_id: reconstruct-execution-ux-contract
+    ref: .onto/processes/reconstruct/reconstruct-execution-ux-contract.md
+    role: execution_ux_contract
+    schema_version: 1
+    migration_status: current
+  - contract_id: source-profile-contract
+    ref: .onto/processes/reconstruct/source-profile-contract.md
+    role: source_profile_contract
+    schema_version: 1
+    migration_status: current
+  - contract_id: target-material-kind-contract
+    ref: .onto/processes/shared/target-material-kind-contract.md
+    role: material_kind_contract
+    schema_version: 1
+    migration_status: current
+  - contract_id: pipeline-execution-ledger-contract
+    ref: .onto/processes/shared/pipeline-execution-ledger-contract.md
+    role: pipeline_ledger_contract
+    schema_version: 1
+    migration_status: current
+
+source_profile_records:
+  - profile_id: code-source-profile
+    target_material_kind: code
+    is_default_for_kind: true
+    definition_ref: .onto/processes/reconstruct/source-profiles/code.md
+    definition_sha256: ac1968b4eb2035c514bf16350e8508f35a260761512e3a9b7f3a8c0026812221
+    contract_status: active
+    runtime_implementation_status: partially_wired
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+  - profile_id: spreadsheet-source-profile
+    target_material_kind: spreadsheet
+    is_default_for_kind: true
+    definition_ref: .onto/processes/reconstruct/source-profiles/spreadsheet.md
+    definition_sha256: d399d5b693b9926f140f1b4f95a5c97b28abc95d652062205e66296588d64b58
+    contract_status: active
+    runtime_implementation_status: planned
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+  - profile_id: database-source-profile
+    target_material_kind: database
+    is_default_for_kind: true
+    definition_ref: .onto/processes/reconstruct/source-profiles/database.md
+    definition_sha256: 50c0fe6935df46ac0343b42ffc7ecc9981687d48ce229e0da28a6efc4c518477
+    contract_status: active
+    runtime_implementation_status: planned
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+  - profile_id: document-source-profile
+    target_material_kind: document
+    is_default_for_kind: true
+    definition_ref: .onto/processes/reconstruct/source-profiles/document.md
+    definition_sha256: db6b0d30008e2dbcd5bf0ba1542e8599874414ded80c10fcb6261f5fa1b3a117
+    contract_status: active
+    runtime_implementation_status: planned
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+  - profile_id: mixed-source-profile
+    target_material_kind: mixed
+    is_default_for_kind: true
+    definition_ref: null
+    definition_sha256: not_applicable
+    contract_status: active_public_kind
+    runtime_implementation_status: partial_composite_only
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+  - profile_id: unknown-source-profile
+    target_material_kind: unknown
+    is_default_for_kind: true
+    definition_ref: null
+    definition_sha256: not_applicable
+    contract_status: active_public_kind
+    runtime_implementation_status: unsupported_halt_or_clarify
+    schema_version: 1
+    profile_version: 1
+    migration_status: current
+    supersedes: []
+    replaced_by: []
+    split_from: []
+    split_into: []
+    merged_from: []
+    merged_into: []
+
+source_profile_migration_policy:
+  migration_fields: [profile_id, profile_version, migration_status, supersedes, replaced_by, split_from, split_into, merged_from, merged_into]
+  migration_status_values: [current, supported_previous, deprecated_supported, replaced, split, merged, unsupported]
+  replay_rule: Previous source profile snapshots must either match an active source_profile_records.profile_id or resolve through supersedes/replaced_by/split_from/split_into/merged_from/merged_into mappings before replay, comparison, or migration projection can be trusted.
+  unresolved_previous_profile_projection: blocked
+
+reconstruct_lens_judgment_registry:
+  - lens_id: logic
+    display_name: Logic
+    purpose: Judge contradiction, type conflict, and constraint conflict in the reconstruct evidence and seed draft.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/logic.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: structure
+    display_name: Structure
+    purpose: Judge isolated elements, broken paths, and missing relations in the reconstruct evidence and seed draft.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/structure.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: dependency
+    display_name: Dependency
+    purpose: Judge cycles, reverse dependencies, and dependency diamonds in the reconstruct evidence and seed draft.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/dependency.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: semantics
+    display_name: Semantics
+    purpose: Judge name-meaning mismatch, synonym drift, and ambiguous semantic boundaries in the reconstruct evidence and seed draft.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/semantics.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: pragmatics
+    display_name: Pragmatics
+    purpose: Judge queryability, actionability, and competency-question fit for the declared reconstruct purpose.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/pragmatics.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: evolution
+    display_name: Evolution
+    purpose: Judge breakage risk when new source material, new domains, or future ontology evolution are added.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/evolution.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: coverage
+    display_name: Coverage
+    purpose: Judge missing subdomains, concept bias, and standard-coverage gaps, including ontology handoff coverage.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/coverage.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: conciseness
+    display_name: Conciseness
+    purpose: Judge duplicate definitions, over-specific concepts, and unnecessary distinctions in the seed draft.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/conciseness.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+  - lens_id: axiology
+    display_name: Axiology
+    purpose: Judge purpose alignment, value conflict, and mission fit for the declared reconstruct use.
+    required: true
+    artifact_glob: rounds/<round-id>/lens-judgments/axiology.yaml
+    prompt_schema_version: 1
+    output_schema_version: 1
+    migration_status: current
+
+coverage_axis_registry:
+  - axis_id: purpose
+  - axis_id: semantic_layer
+  - axis_id: kinetic_layer
+  - axis_id: dynamic_layer
+  - axis_id: data_binding_layer
+  - axis_id: ontology_handoff
+  - axis_id: limitation
+  - axis_id: source_authority
+
+candidate_kind_registry:
+  - candidate_kind_id: object
+    canonical_projection_hint: semantic_layer.object_types
+  - candidate_kind_id: actor
+    canonical_projection_hint: dynamic_layer.actor_types
+  - candidate_kind_id: action
+    canonical_projection_hint: kinetic_layer.action_types
+  - candidate_kind_id: workflow
+    canonical_projection_hint: kinetic_layer.workflows
+  - candidate_kind_id: permission
+    canonical_projection_hint: dynamic_layer.permission_policies
+  - candidate_kind_id: data_source
+    canonical_projection_hint: data_binding_layer.source_bindings
+  - candidate_kind_id: constraint
+    canonical_projection_hint: semantic_layer.constraints
+  - candidate_kind_id: concept
+    canonical_projection_hint: conceptual_frame.concepts
+  - candidate_kind_id: other
+    canonical_projection_hint: candidate_disposition_required
+
+candidate_disposition_registry:
+  - disposition_id: promoted_to_seed_layer
+    meaning: Candidate is planned for promotion into a seed object, actor, action, workflow, permission, data binding, constraint, or concept; target_seed_refs are placement commitments that ontology-seed.yaml must later realize.
+  - disposition_id: represented_as_property
+    meaning: Candidate is better modeled as a property of another object.
+  - disposition_id: represented_as_link
+    meaning: Candidate is better modeled as a link between objects.
+  - disposition_id: represented_as_actor_role
+    meaning: Candidate is a role of an actor type.
+  - disposition_id: represented_as_permission_rule
+    meaning: Candidate is represented by a permission or policy rule.
+  - disposition_id: represented_as_data_binding
+    meaning: Candidate is represented by a data source, read model, writeback, or provenance binding.
+  - disposition_id: represented_as_validation_question
+    meaning: Candidate remains a question needed to validate the seed.
+  - disposition_id: deferred_by_source_gap
+    meaning: Candidate needs unobserved source or user confirmation.
+  - disposition_id: rejected_for_declared_purpose
+    meaning: Candidate is outside the declared reconstruct purpose.
+
+ontology_handoff_axis_registry:
+  - axis_id: classification
+  - axis_id: entity_identity
+  - axis_id: instance_assertion_coverage
+  - axis_id: terminology
+  - axis_id: relation_typing
+  - axis_id: constraints
+  - axis_id: modularity
+  - axis_id: reasoning_or_formalism_profile
+  - axis_id: application_context
+  - axis_id: provenance
+  - axis_id: change_tracking
+  - axis_id: competency_scope
+  - axis_id: alignment
+  - axis_id: graph_connectivity
+  - axis_id: limitations
+
+reasoning_or_formalism_profile_contract:
+  representation_formalism_values:
+    - none
+    - informal_actionable_graph
+    - rdfs
+    - owl
+    - mixed
+    - unknown
+  vocabulary_system_values:
+    - none
+    - skos
+    - rdfs
+    - custom_controlled_vocabulary
+    - mixed
+    - unknown
+  validation_formalism_values:
+    - none
+    - shacl
+    - shex
+    - custom_runtime_validator
+    - mixed
+    - unknown
+  ontology_type_values:
+    - none
+    - taxonomy
+    - application_ontology
+    - domain_ontology
+    - upper_ontology
+    - axiom_based_ontology
+    - action_centric_ontology
+    - knowledge_graph_support_ontology
+    - application_schema_ontology
+    - mixed
+    - unknown
+  alignment_posture_values:
+    - none
+    - external_vocabulary_alignment
+    - upper_ontology_alignment
+    - domain_profile_alignment
+    - custom_alignment
+    - mixed
+    - unknown
+  owl_profile_values:
+    - not_applicable
+    - owl_2_el
+    - owl_2_ql
+    - owl_2_rl
+    - owl_2_dl
+    - owl_2_full
+    - unspecified
+  required_when: ontology_handoff_claim_exists
+  owl_profile_required_when: representation_formalism_is_owl_or_mixed
+  ontology_type_required_when: ontology_handoff_claim_exists
+  missing_required_detail_projection: limited_or_not_ready_with_limitation_ref
+  facet_registry:
+    - facet_id: representation_formalism
+    - facet_id: vocabulary_systems
+    - facet_id: validation_formalisms
+    - facet_id: ontology_type
+    - facet_id: owl_profile
+    - facet_id: alignment_posture
+    - facet_id: reasoning_expectations
+    - facet_id: validation_expectations
+
+ontology_handoff_facet_contract:
+  entity_identity_facet_registry:
+    - facet_id: entity_id_policy
+    - facet_id: uri_or_iri_policy
+    - facet_id: canonical_identifier_refs
+    - facet_id: alias_identifier_refs
+    - facet_id: primitive_vs_defined_status
+    - facet_id: definition_criteria_refs
+  instance_assertion_facet_registry:
+    - facet_id: instance_availability_status
+    - facet_id: instance_refs
+    - facet_id: example_assertion_refs
+    - facet_id: abox_assertion_refs
+    - facet_id: limitation_refs
+  terminology_facet_registry:
+    - facet_id: canonical_label_policy
+    - facet_id: alias_policy
+    - facet_id: hidden_label_policy
+    - facet_id: homonym_policy
+    - facet_id: multilingual_label_policy
+    - facet_id: language_tag_policy
+  relation_type_facet_registry:
+    - facet_id: relation_type_refs
+    - facet_id: formal_relation_semantics
+    - facet_id: domain_range_declarations
+    - facet_id: relation_property_constraints
+  classification_facet_registry:
+    - facet_id: ontology_scope_kind
+    - facet_id: classification_axis_policy
+    - facet_id: classification_level_axis_refs
+    - facet_id: inheritance_model
+    - facet_id: mece_status
+  constraint_facet_registry:
+    - facet_id: tbox_constraints
+    - facet_id: abox_assertion_constraints
+    - facet_id: shape_or_validation_constraints
+    - facet_id: policy_constraints
+  modeling_concern_applicability_registry:
+    - concern_id: ontology_representation_formalism
+      applicability_predicate_id: representation_formalism_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: controlled_vocabulary_modeling
+      applicability_predicate_id: vocabulary_system_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: shape_or_validation_modeling
+      applicability_predicate_id: validation_formalism_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: meta_modeling
+      applicability_predicate_id: meta_level_class_property_relation_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: temporal_modeling
+      applicability_predicate_id: temporal_state_or_event_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: dataset_or_observation_modeling
+      applicability_predicate_id: dataset_observation_or_measurement_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: dataset_or_data_catalog_modeling
+      applicability_predicate_id: dataset_catalog_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: data_integration
+      applicability_predicate_id: data_integration_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: quantity_unit_modeling
+      applicability_predicate_id: quantity_metric_or_unit_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: geospatial_modeling
+      applicability_predicate_id: location_geometry_or_region_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: metadata_and_provenance_modeling
+      applicability_predicate_id: provenance_metadata_or_lineage_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: ontology_design_pattern
+      applicability_predicate_id: reusable_pattern_or_common_relation_shape_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: query_interface
+      applicability_predicate_id: downstream_query_or_access_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: visualization_interface
+      applicability_predicate_id: downstream_visualization_claim_exists
+      required_trace: competency_question_or_limitation_ref
+    - concern_id: graph_exploration_interface
+      applicability_predicate_id: downstream_graph_exploration_claim_exists
+      required_trace: competency_question_or_limitation_ref
+  reference_standard_registry:
+    - standard_ref_id: owl_2
+      concern_ids: [ontology_representation_formalism, meta_modeling]
+      governed_seed_fields:
+        - ontology_handoff.reasoning_or_formalism_profile.representation_formalism
+        - ontology_handoff.reasoning_or_formalism_profile.owl_profile
+      canonical_uri: https://www.w3.org/TR/owl2-overview/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: ontology_handoff.reasoning_or_formalism_profile.owl_profile
+    - standard_ref_id: rdfs
+      concern_ids: [ontology_representation_formalism, controlled_vocabulary_modeling, meta_modeling]
+      governed_seed_fields:
+        - ontology_handoff.reasoning_or_formalism_profile.representation_formalism
+        - ontology_handoff.reasoning_or_formalism_profile.vocabulary_systems
+      canonical_uri: https://www.w3.org/TR/rdf-schema/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: skos
+      concern_ids: [controlled_vocabulary_modeling]
+      governed_seed_fields:
+        - ontology_handoff.reasoning_or_formalism_profile.vocabulary_systems
+      canonical_uri: https://www.w3.org/TR/skos-reference/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: shacl
+      concern_ids: [shape_or_validation_modeling]
+      governed_seed_fields:
+        - ontology_handoff.reasoning_or_formalism_profile.validation_formalisms
+        - ontology_handoff.constraint_mapping.shape_or_validation_constraint_refs
+      canonical_uri: https://www.w3.org/TR/shacl/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: dublin_core_terms
+      concern_ids: [metadata_and_provenance_modeling]
+      governed_seed_fields:
+        - ontology_handoff.metadata_mapping.descriptive_metadata_refs
+        - ontology_handoff.metadata_mapping.bibliographic_metadata_refs
+        - ontology_handoff.metadata_mapping.resource_metadata_refs
+      canonical_uri: https://www.dublincore.org/specifications/dublin-core/dcmi-terms/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: dcat
+      concern_ids: [dataset_or_data_catalog_modeling, data_integration, metadata_and_provenance_modeling]
+      governed_seed_fields:
+        - data_binding_layer.source_bindings
+        - data_binding_layer.read_models
+        - data_binding_layer.provenance_bindings
+      canonical_uri: https://www.w3.org/TR/vocab-dcat/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: w3c_time
+      concern_ids: [temporal_modeling]
+      governed_seed_fields:
+        - dynamic_layer.state_models
+        - dynamic_layer.lifecycle_rules
+        - semantic_layer.value_types
+      canonical_uri: https://www.w3.org/TR/owl-time/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: rdf_data_cube
+      concern_ids: [dataset_or_observation_modeling]
+      governed_seed_fields:
+        - data_binding_layer.read_models
+        - data_binding_layer.source_bindings
+      canonical_uri: https://www.w3.org/TR/vocab-data-cube/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: sosa_ssn
+      concern_ids: [dataset_or_observation_modeling]
+      governed_seed_fields:
+        - data_binding_layer.read_models
+        - data_binding_layer.source_bindings
+      canonical_uri: https://www.w3.org/TR/vocab-ssn/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: qudt
+      concern_ids: [quantity_unit_modeling]
+      governed_seed_fields:
+        - semantic_layer.object_types[].properties
+        - semantic_layer.value_types
+        - data_binding_layer.read_models
+      canonical_uri: https://qudt.org/schema/qudt/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: om
+      concern_ids: [quantity_unit_modeling]
+      governed_seed_fields:
+        - semantic_layer.object_types[].properties
+        - semantic_layer.value_types
+        - data_binding_layer.read_models
+      canonical_uri: https://www.ontology-of-units-of-measure.org/resource/om-2/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: geo_sparql
+      concern_ids: [geospatial_modeling]
+      governed_seed_fields:
+        - semantic_layer.link_types
+        - data_binding_layer.read_models
+      canonical_uri: https://www.ogc.org/standard/geosparql/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: prov_o
+      concern_ids: [metadata_and_provenance_modeling]
+      governed_seed_fields:
+        - ontology_handoff.provenance_mapping.provenance_binding_refs
+      canonical_uri: https://www.w3.org/TR/prov-o/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+    - standard_ref_id: sparql
+      concern_ids: [query_interface]
+      governed_seed_fields:
+        - ontology_handoff.query_access_contract.applies
+      canonical_uri: https://www.w3.org/TR/sparql11-query/
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_version_must_be_recorded_in_reconstruct_run_manifest
+      license_or_usage_constraint: external_standard_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+      profile_or_subset_ref: null
+  reference_pattern_catalog_registry:
+    - pattern_catalog_ref_id: ontology_design_pattern_catalog
+      concern_ids: [ontology_design_pattern]
+      governed_seed_fields:
+        - ontology_handoff.pattern_catalog_mapping.pattern_catalog_refs
+      canonical_uri_policy: selected_run_manifest_value_required
+      canonical_uri_validation_rule: Runtime must validate that each selected pattern catalog canonical URI is recorded in the run manifest, non-empty, and bound to the selected pattern_catalog_ref_id and version_or_snapshot_id for that run; the registry does not compare against a symbolic URI literal.
+      version_or_snapshot_id: run_snapshot_required
+      version_policy: selected_catalog_snapshot_must_be_recorded_in_reconstruct_run_manifest
+      selected_pattern_catalog_ref_id_required_in_run_manifest: true
+      selected_canonical_uri_required_in_run_manifest: true
+      selected_version_or_snapshot_id_required_in_run_manifest: true
+      license_or_usage_constraint: external_catalog_terms_apply
+      supersedes: []
+      migration_status: current
+      compatible_validator_versions: [current]
+  reference_standard_field_path_closure:
+    path_source: ontology_handoff_facet_contract.reference_standard_registry[].governed_seed_fields[]
+    schema_authority_ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md#ActionableOntologySeed
+    validator_owner: ontology-seed-validator
+    rule: Every governed_seed_fields[] path must resolve to a declared ActionableOntologySeed path before a standard_ref_id can be selected.
+    missing_path_projection: blocked
+  reference_pattern_catalog_field_path_closure:
+    path_source: ontology_handoff_facet_contract.reference_pattern_catalog_registry[].governed_seed_fields[]
+    schema_authority_ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md#ActionableOntologySeed
+    validator_owner: ontology-seed-validator
+    rule: Every governed_seed_fields[] path must resolve to a declared ActionableOntologySeed path before a pattern_catalog_ref_id can be selected.
+    missing_path_projection: blocked
+  domain_competency_trace_contract:
+    question_field: competency-questions.yaml.questions[].domain_competency_trace_refs[]
+    validator_owner: competency-questions-validator
+    allowed_ref_kinds:
+      - domain_competency_question_id
+    input_authority_refs:
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    closure_rule: Every domain_competency_trace_refs[] value must resolve to a required_admitted_competency_ids[] value recorded in the reconstruct run-manifest governing snapshot. Domain admission refs and source document refs are not valid trace refs.
+    untraced_generated_question_projection: diagnostic_or_limitation_backed
+    domain_id_contract:
+      validator_owner: runtime
+      grammar: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+      grammar_description: lowercase letters or digits separated by single hyphens
+      rejected_examples:
+        - ../ontology
+        - software/engineering
+        - Software-Engineering
+        - software_engineering
+        - software:engineering
+        - software engineering
+      path_containment_rule: Before stat/read, runtime must resolve each admitted domain competency source path under the selected authority root and reject any path or realpath escape.
+      source_ref_rule: Project-seat competency source refs are project-root-relative POSIX refs; user and installation seats use seat-qualified refs.
+    admitted_domain_competency_ref_taxonomy:
+      admission_refs_field: reconstruct-run-manifest.yaml#governing_snapshot.admitted_domain_competency_refs
+      admission_ref_kind: domain_admission_identity
+      admission_ref_format: domain:<domain_id>
+      source_refs_field: reconstruct-run-manifest.yaml#governing_snapshot.admitted_domain_competency_source_refs
+      source_ref_kind: competency_source_document
+      required_competency_ids_field: reconstruct-run-manifest.yaml#governing_snapshot.required_admitted_competency_ids
+      required_competency_id_format: domain:<domain_id>#<competency_id>
+      trace_ref_rule: competency-questions.yaml.questions[].domain_competency_trace_refs[] may contain only required_competency_ids_field values.
+    admitted_domain_competency_disposition_rule:
+      scope: each_admitted_domain_competency_snapshot
+      source_ref_field: reconstruct-run-manifest.yaml#governing_snapshot.admitted_domain_competency_snapshots[].source_ref
+      admission_policy_id: required_p1_with_all_priorities_metadata
+      supported_runtime_admission_policy_ids: [required_p1_with_all_priorities_metadata]
+      required_priority_values: [P1]
+      metadata_priority_values: [P2, P3]
+      admission_rule: When a domain competency snapshot is admitted into reconstruct run context, runtime must derive required_admitted_competency_ids from that snapshot using the active admission_policy_id; under required_p1_with_all_priorities_metadata, P1 ids are required, while P2 and P3 ids remain in admitted_competencies/admitted_competency_priorities as diagnostic metadata until an explicit downstream claim promotes them in a future admission policy.
+      p1_rule: Every P1 competency question in each admitted domain competency snapshot must have exactly one competency-questions.yaml.questions[] row with coverage_disposition, lifecycle_status, domain_competency_trace_refs[], and limitation_refs[] when disposition is limited, unsupported, deferred, or not_applicable.
+      p2_rule: P2 competency questions in each admitted domain competency snapshot are retained with priority metadata but are not required in competency-questions.yaml until a future explicit downstream promotion policy is implemented.
+      p3_rule: P3 competency questions in each admitted domain competency snapshot are retained with priority metadata but are not required in competency-questions.yaml until a future explicit downstream promotion policy is implemented.
+      allowed_dispositions: [covered, limited, unsupported, deferred, not_applicable]
+      silent_omission_projection: not_ready
+    competency_id_migration_policy:
+      migration_fields: [competency_id, source_version_or_snapshot_id, migration_status, supersedes, replaced_by, split_from, split_into, merged_from, merged_into]
+      migration_status_values: [current, supported_previous, deprecated_supported, replaced, split, merged, unsupported]
+      deprecated_alias_resolution: resolve_to_current_id_or_require_explicit_replacement_disposition
+  predicate_execution_contract:
+    default_predicate_evaluator_id: reconstruct_registry_predicate_v1
+    allowed_predicate_evaluator_ids:
+      - reconstruct_registry_predicate_v1
+      - artifact_exists_v1
+      - downstream_claim_v1
+      - seed_field_presence_v1
+    predicate_phase_values:
+      - gate_applicability
+      - post_required_when_validation
+    default_predicate_phase: gate_applicability
+    evaluator_version_field: predicate_evaluator_version
+    expression_role: truth_expression is a stable evaluator input token, not free prose.
+    snapshot_rule: required-when-evaluation.yaml and reconstruct-run-manifest.yaml must record gate_instance_id, gate_id, predicate_id, predicate_instance_id, predicate_phase, round_id when the gate is round-scoped, concrete input refs, predicate_evaluator_id, predicate_evaluator_version, applicability, result truth value, unknown projection, and explanation.
+    round_scoped_gate_instance_rule: Gates whose validation_artifact_ref contains rounds/<round-id> must emit one concrete required-when evaluation row per observed or requested round_id, using concrete artifact refs rather than the wildcard family as the readiness authority.
+    post_required_when_validation_rule: Predicates with predicate_phase post_required_when_validation are evaluated only after required-when-evaluation-validation.yaml exists; missing or failed required-when-evaluation-validation.yaml is itself a failed required applicable validation artifact for failure classification.
+    unknown_evaluator_projection: blocked
+  handoff_limitation_contract:
+    id_field: limitation_id
+    canonical_location: ontology_seed.handoff_limitations[]
+    allowed_limitation_kind_values:
+      - missing_source
+      - unsupported_axis
+      - insufficient_evidence
+      - unresolved_confirmation
+      - runtime_capability_gap
+      - external_standard_unselected
+    required_fields:
+      - limitation_id
+      - limitation_kind
+      - description
+      - affected_refs
+      - evidence_refs
+    closure_rule: Every limitation_refs[] value in ontology_handoff mappings, modeling concern applicability rows, query access contracts, visualization contracts, graph-exploration contracts, competency questions, assessments, seed confirmation, and terminal handoff readiness validation must resolve to ontology_seed.handoff_limitations[].limitation_id.
+    dangling_ref_projection: not_ready
+  query_access_contract_registry:
+    - contract_ref_id: project_query_access_contract
+      concern_ids: [query_interface]
+      required_when_predicate_id: downstream_query_or_access_claim_exists
+      required_contract_fields:
+        - applies
+      missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  query_proof_authority_contract:
+    authority_ref: query-proofs.yaml
+    validation_ref: query-proofs-validation.yaml
+    id_field: query_proof_id
+    required_when_predicate_id: downstream_query_or_access_claim_exists
+    required_fields:
+      - query_proof_id
+      - question_ids
+      - query_language_or_api
+      - query_artifact_refs
+      - query_test_fixture_refs
+      - expected_answer_shape_refs
+      - observed_execution_result_refs
+      - evidence_refs
+    closure_rule: query-proofs.yaml is the canonical question-to-proof relation; every query proof row question_ids[] value must resolve to competency-questions.yaml and every required query_interface question must have a query proof row or a limitation_ref.
+    ref_closure_authority_refs:
+      - source-observations.yaml
+      - reconstruct-run-manifest.yaml
+      - ontology-seed.yaml
+    missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  visualization_contract_registry:
+    - contract_ref_id: visualization_contract
+      concern_ids: [visualization_interface]
+      required_when_predicate_id: downstream_visualization_claim_exists
+      required_contract_fields:
+        - applies
+      missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  visualization_proof_authority_contract:
+    authority_ref: visualization-proofs.yaml
+    validation_ref: visualization-proofs-validation.yaml
+    id_field: visualization_proof_id
+    required_when_predicate_id: downstream_visualization_claim_exists
+    required_fields:
+      - visualization_proof_id
+      - question_ids
+      - visualization_surface_refs
+      - expected_visualization_shape_refs
+      - observed_visualization_result_refs
+      - evidence_refs
+    closure_rule: visualization-proofs.yaml is the canonical question-to-proof relation; every visualization proof row question_ids[] value must resolve to competency-questions.yaml and every required visualization_interface question must have a visualization proof row or a limitation_ref.
+    ref_closure_authority_refs:
+      - source-observations.yaml
+      - reconstruct-run-manifest.yaml
+      - ontology-seed.yaml
+    missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  graph_exploration_contract_registry:
+    - contract_ref_id: graph_exploration_contract
+      concern_ids: [graph_exploration_interface]
+      required_when_predicate_id: downstream_graph_exploration_claim_exists
+      required_contract_fields:
+        - applies
+      missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  graph_exploration_proof_authority_contract:
+    authority_ref: graph-exploration-proofs.yaml
+    validation_ref: graph-exploration-proofs-validation.yaml
+    id_field: graph_exploration_proof_id
+    required_when_predicate_id: downstream_graph_exploration_claim_exists
+    required_fields:
+      - graph_exploration_proof_id
+      - question_ids
+      - graph_exploration_capability_refs
+      - scale_or_navigation_constraint_refs
+      - observed_exploration_result_refs
+      - evidence_refs
+    closure_rule: graph-exploration-proofs.yaml is the canonical question-to-proof relation; every graph exploration proof row question_ids[] value must resolve to competency-questions.yaml and every required graph_exploration_interface question must have a graph exploration proof row or a limitation_ref.
+    ref_closure_authority_refs:
+      - source-observations.yaml
+      - reconstruct-run-manifest.yaml
+      - ontology-seed.yaml
+    missing_proof_projection: limited_or_not_ready_with_limitation_ref
+  modeling_concern_applicability_predicate_catalog:
+    - predicate_id: representation_formalism_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "ontology_seed.ontology_handoff.reasoning_or_formalism_profile.representation_formalism not in [null, none, unknown]"
+    - predicate_id: vocabulary_system_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "ontology_seed.ontology_handoff.reasoning_or_formalism_profile.vocabulary_systems contains_any_non_none_value"
+    - predicate_id: validation_formalism_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "ontology_seed.ontology_handoff.reasoning_or_formalism_profile.validation_formalisms contains_any_non_none_value or ontology_seed.ontology_handoff.constraint_mapping.shape_or_validation_constraint_refs is not empty"
+    - predicate_id: meta_level_class_property_relation_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_or_downstream_use_claims_classes_properties_relation_types_shapes_or_ontology_design_rules_as_things_to_model"
+    - predicate_id: temporal_state_or_event_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_state_transition_lifecycle_or_time_ref"
+    - predicate_id: dataset_observation_or_measurement_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_dataset_observation_metric_or_measurement_ref"
+    - predicate_id: dataset_catalog_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_dataset_catalog_data_product_source_catalog_or_discoverability_ref"
+    - predicate_id: data_integration_claim_exists
+      input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
+      truth_expression: "downstream_use_claims_heterogeneous_data_integration_semantic_reconciliation_ontology_based_etl_or_ontology_based_data_access"
+    - predicate_id: quantity_metric_or_unit_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_quantity_metric_unit_or_cost_ref"
+    - predicate_id: location_geometry_or_region_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_location_region_geometry_or_geo_ref"
+    - predicate_id: provenance_metadata_or_lineage_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_provenance_metadata_lineage_or_source_binding_ref"
+    - predicate_id: reusable_pattern_or_common_relation_shape_claim_exists
+      input_authority_refs: [ontology-seed.yaml]
+      truth_expression: "seed_has_reusable_pattern_or_common_relation_shape_ref"
+    - predicate_id: downstream_query_or_access_claim_exists
+      predicate_ref: required_when_predicate_catalog.downstream_query_or_access_claim_exists
+      local_role: query_interface_modeling_concern_applicability
+    - predicate_id: downstream_visualization_claim_exists
+      predicate_ref: required_when_predicate_catalog.downstream_visualization_claim_exists
+      local_role: visualization_interface_modeling_concern_applicability
+    - predicate_id: downstream_graph_exploration_claim_exists
+      predicate_ref: required_when_predicate_catalog.downstream_graph_exploration_claim_exists
+      local_role: graph_exploration_interface_modeling_concern_applicability
+
+artifact_authorities:
+  target_material_profile:
+    authority_ref: target-material-profile.yaml
+    validation_ref: target-material-profile-validation.yaml
+    projection_policy: selected_material_kind_support_status_and_profile_id
+    required_snapshot_fields_ref: version_policy.selected_source_profile_snapshot_required_fields
+    snapshot_match_rule: Each selected source profile snapshot must match exactly one source_profile_records row by profile_id and target_material_kind, and must copy every selected_source_profile_snapshot_required_fields value from that row.
+  target_material_profile_validation:
+    authority_ref: target-material-profile-validation.yaml
+    validation_ref: null
+  source_inventory:
+    authority_ref: source-inventory.yaml
+    validation_ref: null
+    projection_policy: refs_hashes_material_kinds_and_support_statuses
+  source_evidence:
+    authority_ref: source-observations.yaml
+    validation_ref: source-observation-directive-validation.yaml
+  source_observation_directive:
+    authority_ref: source-observation-directive.yaml
+    validation_ref: source-observation-directive-validation.yaml
+  source_observation_directive_validation:
+    authority_ref: source-observation-directive-validation.yaml
+    validation_ref: null
+  source_frontier:
+    authority_ref: rounds/<round-id>/source-frontier.yaml
+    validation_ref: rounds/<round-id>/source-frontier-validation.yaml
+  source_frontier_validation:
+    authority_ref: rounds/<round-id>/source-frontier-validation.yaml
+    validation_ref: null
+  lens_judgments:
+    authority_ref: rounds/<round-id>/lens-judgments/*.yaml
+    validation_ref: null
+    registry_ref: reconstruct_lens_judgment_registry
+  lens_judgment_index:
+    authority_ref: rounds/<round-id>/lens-judgment-index.yaml
+    validation_ref: null
+    registry_ref: reconstruct_lens_judgment_registry
+  exploration_synthesis:
+    authority_ref: rounds/<round-id>/exploration-synthesis.yaml
+    validation_ref: null
+  candidate_inventory:
+    authority_ref: candidate-inventory.yaml
+    validation_ref: candidate-disposition-validation.yaml
+  candidate_disposition:
+    authority_ref: candidate-disposition.yaml
+    validation_ref: candidate-disposition-validation.yaml
+  candidate_disposition_validation:
+    authority_ref: candidate-disposition-validation.yaml
+    validation_ref: null
+  ontology_seed:
+    authority_ref: ontology-seed.yaml
+    validation_ref: ontology-seed-validation.yaml
+  ontology_seed_validation:
+    authority_ref: ontology-seed-validation.yaml
+    validation_ref: null
+  claim_realization_map:
+    authority_ref: claim-realization-map.yaml
+    validation_ref: claim-realization-map-validation.yaml
+    projection_policy: per_seed_claim_realization_stance_and_evidence_refs
+  claim_realization_map_validation:
+    authority_ref: claim-realization-map-validation.yaml
+    validation_ref: null
+  competency_questions:
+    authority_ref: competency-questions.yaml
+    validation_ref: competency-questions-validation.yaml
+  competency_questions_validation:
+    authority_ref: competency-questions-validation.yaml
+    validation_ref: null
+  competency_question_assessment:
+    authority_ref: competency-question-assessment.yaml
+    validation_ref: competency-question-assessment-validation.yaml
+  competency_question_assessment_validation:
+    authority_ref: competency-question-assessment-validation.yaml
+    validation_ref: null
+  seed_confirmation:
+    authority_ref: seed-confirmation.yaml
+    validation_ref: seed-confirmation-validation.yaml
+  seed_confirmation_validation:
+    authority_ref: seed-confirmation-validation.yaml
+    validation_ref: null
+  failure_classification:
+    authority_ref: failure-classification.yaml
+    validation_ref: failure-classification-validation.yaml
+  failure_classification_validation:
+    authority_ref: failure-classification-validation.yaml
+    validation_ref: null
+  revision_proposal:
+    authority_ref: revision-proposal.yaml
+    validation_ref: revision-proposal-validation.yaml
+  revision_proposal_validation:
+    authority_ref: revision-proposal-validation.yaml
+    validation_ref: null
+  reconstruct_metrics:
+    authority_ref: reconstruct-metrics.yaml
+    validation_ref: null
+    projection_policy: deterministic_counts_gate_statuses_and_runtime_timings
+  stop_decision:
+    authority_ref: stop-decision.yaml
+    validation_ref: handoff-decision-validation.yaml
+  handoff_decision_validation:
+    authority_ref: handoff-decision-validation.yaml
+    validation_ref: null
+  final_output:
+    authority_ref: final-output.md
+    validation_ref: final-output-provenance-validation.yaml
+    projection_policy: human_readable_projection_of_validated_authorities
+  final_output_provenance_validation:
+    authority_ref: final-output-provenance-validation.yaml
+    validation_ref: null
+    projection_policy: structured_section_bindings_between_final_output_and_terminal_artifact_authorities
+  reconstruct_run_manifest:
+    authority_ref: reconstruct-run-manifest.yaml
+    validation_ref: reconstruct-run-manifest.post-publication-validation.yaml
+    projection_policy: selected_registry_contract_profile_lens_judgment_and_validator_snapshot
+  post_publication_run_manifest_validation:
+    authority_ref: reconstruct-run-manifest.post-publication-validation.yaml
+    validation_ref: null
+    projection_policy: post_publication_audit_after_final_output_and_record_refs_exist
+  pre_handoff_run_manifest:
+    authority_ref: reconstruct-run-manifest.pre-handoff.yaml
+    validation_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
+    projection_policy: pre_terminal_snapshot_used_only_for_handoff_readiness_gate_projection
+  pre_handoff_run_manifest_validation:
+    authority_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
+    validation_ref: null
+  reconstruct_record:
+    authority_ref: reconstruct-record.yaml
+    validation_ref: handoff-decision-validation.yaml
+    projection_policy: refs_hashes_statuses_and_bounded_summaries_emitted_after_handoff_validation_passes
+
+planned_artifact_authorities:
+  observation_lineage:
+    authority_ref: rounds/<round-id>/source-observation-delta.yaml
+    validation_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    activation_condition: multi_round_frontier_observation_runtime_is_implemented
+  observation_lineage_validation:
+    authority_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    validation_ref: null
+    activation_condition: multi_round_frontier_observation_runtime_is_implemented
+  observation_reentry_validation:
+    authority_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+    validation_ref: null
+    activation_condition: downstream_reentry_validation_runtime_is_implemented
+  query_proofs:
+    authority_ref: query-proofs.yaml
+    validation_ref: query-proofs-validation.yaml
+    activation_condition: downstream_query_or_access_claim_runtime_proof_is_implemented
+  query_proofs_validation:
+    authority_ref: query-proofs-validation.yaml
+    validation_ref: null
+    activation_condition: downstream_query_or_access_claim_runtime_proof_is_implemented
+  visualization_proofs:
+    authority_ref: visualization-proofs.yaml
+    validation_ref: visualization-proofs-validation.yaml
+    activation_condition: downstream_visualization_claim_runtime_proof_is_implemented
+  visualization_proofs_validation:
+    authority_ref: visualization-proofs-validation.yaml
+    validation_ref: null
+    activation_condition: downstream_visualization_claim_runtime_proof_is_implemented
+  graph_exploration_proofs:
+    authority_ref: graph-exploration-proofs.yaml
+    validation_ref: graph-exploration-proofs-validation.yaml
+    activation_condition: downstream_graph_exploration_claim_runtime_proof_is_implemented
+  graph_exploration_proofs_validation:
+    authority_ref: graph-exploration-proofs-validation.yaml
+    validation_ref: null
+    activation_condition: downstream_graph_exploration_claim_runtime_proof_is_implemented
+  required_when_evaluation:
+    authority_ref: required-when-evaluation.yaml
+    validation_ref: required-when-evaluation-validation.yaml
+    activation_condition: registry_predicate_evaluator_runtime_is_implemented
+  required_when_evaluation_validation:
+    authority_ref: required-when-evaluation-validation.yaml
+    validation_ref: null
+    activation_condition: registry_predicate_evaluator_runtime_is_implemented
+
+validation_gate_catalog:
+  - gate_id: material_profile_gate
+    validation_artifact_ref: target-material-profile-validation.yaml
+    required_when: always
+  - gate_id: source_frontier_gate
+    validation_artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
+    required_when: source_frontier_exists
+  - gate_id: source_evidence_gate
+    validation_artifact_ref: source-observation-directive-validation.yaml
+    required_when: source_observations_exist
+  - gate_id: candidate_disposition_gate
+    validation_artifact_ref: candidate-disposition-validation.yaml
+    required_when: candidate_inventory_exists
+  - gate_id: ontology_seed_gate
+    validation_artifact_ref: ontology-seed-validation.yaml
+    required_when: seed_validity_or_handoff_readiness_is_projected
+  - gate_id: claim_realization_gate
+    validation_artifact_ref: claim-realization-map-validation.yaml
+    required_when: seed_validity_or_handoff_readiness_is_projected
+  - gate_id: competency_question_coverage_gate
+    validation_artifact_ref: competency-questions-validation.yaml
+    required_when: seed_validity_or_handoff_readiness_is_projected
+  - gate_id: competency_question_assessment_gate
+    validation_artifact_ref: competency-question-assessment-validation.yaml
+    required_when: competency_questions_valid
+  - gate_id: seed_confirmation_gate
+    validation_artifact_ref: seed-confirmation-validation.yaml
+    required_when: seed_validity_or_handoff_readiness_is_projected
+    missing_artifact_projection: blocked
+  - gate_id: pre_handoff_run_manifest_gate
+    validation_artifact_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
+    required_when: always
+  - gate_id: failure_classification_gate
+    validation_artifact_ref: failure-classification-validation.yaml
+    required_when: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
+  - gate_id: revision_proposal_gate
+    validation_artifact_ref: revision-proposal-validation.yaml
+    required_when: validated_failure_or_unresolved_work_exists
+  - gate_id: handoff_gate
+    validation_artifact_ref: handoff-decision-validation.yaml
+    required_when: stop_decision_exists
+
+planned_validation_gate_catalog:
+  - gate_id: round_lineage_gate
+    validation_artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    required_when: source_frontier_observation_occurs
+    activation_condition: multi_round_frontier_observation_runtime_is_implemented
+  - gate_id: observation_reentry_gate
+    validation_artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+    required_when: frontier_observation_used_downstream
+    activation_condition: downstream_reentry_validation_runtime_is_implemented
+  - gate_id: ontology_handoff_mapping_gate
+    validation_artifact_ref: ontology-seed-validation.yaml
+    required_when: ontology_handoff_claim_exists
+    activation_condition: per_axis_ontology_handoff_mapping_validator_is_implemented
+  - gate_id: query_proof_gate
+    validation_artifact_ref: query-proofs-validation.yaml
+    required_when: downstream_query_or_access_claim_exists
+    activation_condition: downstream_query_or_access_claim_runtime_proof_is_implemented
+  - gate_id: visualization_proof_gate
+    validation_artifact_ref: visualization-proofs-validation.yaml
+    required_when: downstream_visualization_claim_exists
+    activation_condition: downstream_visualization_claim_runtime_proof_is_implemented
+  - gate_id: graph_exploration_proof_gate
+    validation_artifact_ref: graph-exploration-proofs-validation.yaml
+    required_when: downstream_graph_exploration_claim_exists
+    activation_condition: downstream_graph_exploration_claim_runtime_proof_is_implemented
+  - gate_id: required_when_evaluation_gate
+    validation_artifact_ref: required-when-evaluation-validation.yaml
+    required_when: always
+    activation_condition: registry_predicate_evaluator_runtime_is_implemented
+
+required_when_predicate_catalog:
+  - predicate_id: always
+    input_authority_refs: []
+    truth_expression: "true"
+    unknown_projection: blocked
+    explanation_template: "This gate is always required."
+  - predicate_id: source_frontier_exists
+    gate_instance_scope: per_round
+    input_authority_refs: [rounds/<round-id>/source-frontier.yaml]
+    truth_expression: "artifact_exists(rounds/<round-id>/source-frontier.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A source frontier artifact exists for this round."
+  - predicate_id: source_observations_exist
+    input_authority_refs: [source-observations.yaml]
+    truth_expression: "artifact_exists(source-observations.yaml) and source_observations.records_count > 0"
+    unknown_projection: blocked
+    explanation_template: "Observed source records exist and require evidence-ref closure."
+  - predicate_id: source_frontier_observation_occurs
+    gate_instance_scope: per_round
+    input_authority_refs: [rounds/<round-id>/source-frontier-validation.yaml, rounds/<round-id>/source-observation-delta.yaml]
+    truth_expression: "source_frontier_validation.status == pass and artifact_exists(rounds/<round-id>/source-observation-delta.yaml)"
+    unknown_projection: blocked
+    explanation_template: "A validated frontier produced new source observations."
+  - predicate_id: frontier_observation_used_downstream
+    gate_instance_scope: per_round
+    input_authority_refs: [rounds/<round-id>/source-observation-delta-validation.yaml, source-observation-directive.yaml, source-observation-directive-validation.yaml, rounds/<round-id>/lens-judgments/*.yaml, rounds/<round-id>/exploration-synthesis.yaml, candidate-inventory.yaml, candidate-disposition.yaml, ontology-seed.yaml]
+    truth_expression: "source_observation_delta_validation.status == pass and source_observation_directive_validation.status == pass and any_downstream_artifact_refs_delta_observation_ids"
+    unknown_projection: blocked
+    explanation_template: "A frontier-triggered observation selected by the directive authority is cited by downstream semantic artifacts."
+  - predicate_id: candidate_inventory_exists
+    input_authority_refs: [candidate-inventory.yaml]
+    truth_expression: "artifact_exists(candidate-inventory.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A candidate inventory exists and requires disposition validation."
+  - predicate_id: ontology_seed_exists
+    input_authority_refs: [ontology-seed.yaml]
+    truth_expression: "artifact_exists(ontology-seed.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "An ontology seed exists and requires seed validation."
+  - predicate_id: ontology_handoff_claim_exists
+    input_authority_refs: [ontology-seed.yaml]
+    truth_expression: "artifact_exists(ontology-seed.yaml) and ontology_seed.ontology_handoff.readiness_claim != null"
+    unknown_projection: not_applicable
+    explanation_template: "The seed makes an ontology-facing handoff claim."
+  - predicate_id: representation_formalism_is_owl_or_mixed
+    input_authority_refs: [ontology-seed.yaml]
+    truth_expression: "ontology_seed.ontology_handoff.reasoning_or_formalism_profile.representation_formalism in ['owl', 'mixed']"
+    unknown_projection: blocked
+    explanation_template: "The ontology handoff reasoning/formalism profile selects OWL or mixed representation formalism and therefore requires an OWL profile answer or limitation."
+  - predicate_id: ontology_seed_shape_valid
+    usage_status: reserved
+    reserved_for: future_competency_question_coverage_precondition
+    input_authority_refs: [ontology-seed-validation.yaml]
+    truth_expression: "ontology_seed_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The seed shape is valid enough to validate competency-question coverage."
+  - predicate_id: competency_questions_exist
+    input_authority_refs: [competency-questions.yaml]
+    truth_expression: "artifact_exists(competency-questions.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A competency-question artifact exists and requires coverage validation."
+  - predicate_id: competency_questions_valid
+    input_authority_refs: [competency-questions-validation.yaml]
+    truth_expression: "competency_questions_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The competency-question authority is valid enough to assess answerability."
+  - predicate_id: seed_validity_or_handoff_readiness_is_projected
+    input_authority_refs: [ontology-seed-validation.yaml, stop-decision.yaml]
+    truth_expression: "seed_validity_projection_requested or handoff_readiness_projection_requested"
+    unknown_projection: blocked
+    explanation_template: "A status/result surface is projecting seed validity or handoff readiness."
+  - predicate_id: downstream_query_or_access_claim_exists
+    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_queryability_api_access_or_implementation_access"
+    unknown_projection: blocked
+    explanation_template: "A downstream query, API access, implementation access, or equivalent ontology access claim exists and requires query proof validation."
+  - predicate_id: downstream_visualization_claim_exists
+    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_visualization_static_view_dashboard_or_hierarchical_overview"
+    unknown_projection: blocked
+    explanation_template: "A downstream visualization claim exists and requires visualization proof validation."
+  - predicate_id: downstream_graph_exploration_claim_exists
+    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_graph_exploration_large_graph_navigation_traversal_or_expand_collapse"
+    unknown_projection: blocked
+    explanation_template: "A downstream graph exploration claim exists and requires graph-exploration proof validation."
+  - predicate_id: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
+    gate_instance_scope: global_with_concrete_gate_instance_inputs
+    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, reconstruct-metrics.yaml]
+    truth_expression: "any_required_applicable_validation_artifact_missing_or_failed or runtime_halted == true or reconstruct_metrics.unresolved_question_count > 0"
+    unknown_projection: blocked
+    explanation_template: "The embedded terminal gate_projection has found a required applicable validation artifact missing or failed, runtime halted, or metrics recorded unresolved work."
+  - predicate_id: validated_failure_or_unresolved_work_exists
+    input_authority_refs: [failure-classification-validation.yaml, reconstruct-metrics.yaml]
+    truth_expression: "failure_classification_validation.validation_status == valid and (failure_classification_validation.material_failure_count > 0 or reconstruct_metrics.unresolved_question_count > 0)"
+    unknown_projection: not_applicable
+    explanation_template: "A validated failure classification or metrics artifact records material failures or unresolved questions that require a bounded revision proposal."
+  - predicate_id: stop_decision_exists
+    input_authority_refs: [stop-decision.yaml]
+    truth_expression: "artifact_exists(stop-decision.yaml)"
+    unknown_projection: blocked
+    explanation_template: "A stop decision exists and requires terminal handoff validation before final output and record projection."
+readiness_projection:
+  runtime_authority: reconstruct_runtime_readiness_projection_v1
+  authority_rule: This registry declares allowed readiness values and semantic mapping labels; the executable precedence and status folding rule is owned by the runtime readinessProjection implementation until a registry-owned readiness-policy evaluator is promoted.
+  canonical_values:
+    - ready
+    - limited
+    - not_ready
+    - blocked
+  supporting_artifact_applicability_values:
+    - applicable
+    - not_applicable
+  mapping:
+    handoff_decision:
+      ready_for_declared_downstream_purpose: ready
+      usable_with_named_limitations: limited
+      not_ready_required_gates_failed: not_ready
+      blocked_missing_source_or_confirmation: blocked
+    ontology_handoff.readiness_claim:
+      ready: ready
+      limited: limited
+      not_ready: not_ready
+      blocked: blocked
+    competency_question_assessment.downstream_effect:
+      ready: ready
+      limited: limited
+      blocks_handoff: not_ready
+      blocked_by_missing_source_or_confirmation: blocked
+  projection_rule: Final output and status/result APIs must project one canonical readiness value plus the artifact-specific supporting fields that caused it.
+  seed_confirmation_lifecycle_policy:
+    seed_confirmation_required_when: seed_validity_or_handoff_readiness_is_projected
+    absent_seed_confirmation_artifact: blocked
+    missing_seed_confirmation_validation_artifact: blocked
+    explicit_limitation_allowed_when: seed-confirmation.yaml exists and seed-confirmation-validation.yaml records a valid confirmation or limitation state against the validated seed. Assessment-aware terminal readiness belongs to handoff-decision-validation.yaml.
+  handoff_validation_policy:
+    gate_membership_authority_ref: validation_gate_catalog
+    terminal_gate_id: handoff_gate
+    terminal_validation_ref: handoff-decision-validation.yaml
+    output_projection_policy: final_output_and_reconstruct_record_are_emitted_after_handoff_validation_passes
+    applicability_source: Runtime evaluates validation_gate_catalog.required_when through required_when_predicate_catalog and records concrete gate instances in handoff-decision-validation.yaml.gate_projection[].
+    conditional_absence_policy:
+      unmet_required_when: not_applicable
+      met_required_when_missing_artifact: blocked
+  conflict_precedence:
+    - blocked
+    - not_ready
+    - limited
+    - ready
+  missing_supporting_validation_policy:
+    missing_applicable_validation_artifact: blocked
+    failed_applicable_validation_artifact: not_ready
+    non_applicable_conditional_validation_artifact: not_applicable
+    skipped_optional_validation_artifact: limited
+  conflict_rule: When supporting artifacts project different canonical values, choose the highest value in conflict_precedence and cite every contributing artifact.
+
+validator_records:
+  - validator_id: target-material-profile-validator
+    gate_ids: [material_profile_gate]
+    validator_version: 1
+    input_authority_refs: [target-material-profile.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - every_selected_source_profile_snapshot_contains_version_policy_required_fields
+      - every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind
+      - mixed_targets_preserve_per_member_selected_profile_id_contract_status_runtime_implementation_status_and_support_state
+    output_ref: target-material-profile-validation.yaml
+  - validator_id: source-frontier-validator
+    gate_ids: [source_frontier_gate]
+    validator_version: 1
+    input_authority_refs:
+      - rounds/<round-id>/source-frontier.yaml
+      - source-inventory.yaml
+      - source-observations.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: rounds/<round-id>/source-frontier-validation.yaml
+  - validator_id: source-observation-directive-validator
+    gate_ids: [source_evidence_gate]
+    validator_version: 1
+    input_authority_refs: [source-observation-directive.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    output_ref: source-observation-directive-validation.yaml
+  - validator_id: candidate-disposition-validator
+    gate_ids: [candidate_disposition_gate]
+    validator_version: 1
+    input_authority_refs: [candidate-inventory.yaml, candidate-disposition.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - validate_candidate_inventory_candidate_kind_against_candidate_kind_registry
+      - validate_candidate_disposition_against_candidate_disposition_registry
+      - require_exactly_one_disposition_for_each_salient_candidate
+      - require_rationale_and_evidence_refs_for_each_disposition
+    output_ref: candidate-disposition-validation.yaml
+  - validator_id: ontology-seed-validator
+    gate_ids: [ontology_seed_gate]
+    validator_version: 1
+    input_authority_refs: [ontology-seed.yaml, candidate-disposition.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - validate_instance_assertion_mapping_status
+      - require_limitation_ref_when_instance_availability_status_is_absent_or_unknown
+      - require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs
+    output_ref: ontology-seed-validation.yaml
+  - validator_id: claim-realization-map-validator
+    gate_ids: [claim_realization_gate]
+    validator_version: 1
+    input_authority_refs: [claim-realization-map.yaml, ontology-seed.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - require_exactly_one_realization_for_each_seed_claim
+      - validate_realization_claim_ids_against_ontology_seed_claim_ids
+      - validate_realization_evidence_refs_against_source_observations
+    output_ref: claim-realization-map-validation.yaml
+  - validator_id: competency-questions-validator
+    gate_ids: [competency_question_coverage_gate]
+    validator_version: 1
+    input_authority_refs: [competency-questions.yaml, ontology-seed.yaml, reconstruct-run-manifest.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - validate_domain_competency_trace_refs_against_run_manifest_context_snapshot
+      - enforce_admitted_domain_competency_disposition_rule
+      - enforce_p3_diagnostic_or_claim_based_admission_disposition_rule
+      - require_unique_question_id
+      - validate_coverage_axes_against_coverage_axis_registry
+      - validate_ontology_handoff_axes_against_ontology_handoff_axis_registry
+      - validate_seed_ref_refs_close_against_known_seed_refs
+      - emit_required_evidence_scope_runtime_projection
+      - validate_limitation_refs_close_against_handoff_limitations
+      - validate_required_ontology_handoff_axis_coverage_or_limitation_backed_disposition
+      - validate_reasoning_formalism_facet_coverage
+      - validate_entity_identity_facet_coverage
+      - validate_instance_assertion_facet_coverage
+      - validate_terminology_facet_coverage
+      - validate_hidden_label_facet_coverage
+      - validate_relation_type_facet_coverage
+      - validate_classification_facet_coverage
+      - validate_classification_level_axis_facet_coverage
+      - validate_constraint_facet_coverage
+      - validate_modeling_concern_facet_coverage
+      - validate_reference_standard_refs_against_reference_standard_registry
+      - validate_pattern_catalog_refs_against_reference_pattern_catalog_registry
+      - validate_query_visualization_graph_contract_refs_when_applicable
+    output_ref: competency-questions-validation.yaml
+  - validator_id: competency-question-assessment-validator
+    gate_ids: [competency_question_assessment_gate]
+    validator_version: 1
+    input_authority_refs: [competency-question-assessment.yaml, competency-questions.yaml, ontology-seed.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    validation_obligations:
+      - require_exactly_one_assessment_per_authoritative_question
+      - validate_answer_status_against_active_answerability_contract
+      - validate_downstream_effect_consistent_with_answer_status
+      - validate_required_seed_refs_close_against_question_seed_refs
+      - validate_answerability_trace_refs_close_against_seed_evidence_limitations_and_proofs
+    output_ref: competency-question-assessment-validation.yaml
+  - validator_id: seed-confirmation-validator
+    gate_ids: [seed_confirmation_gate]
+    validator_version: 1
+    input_authority_refs:
+      - seed-confirmation.yaml
+      - ontology-seed.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: seed-confirmation-validation.yaml
+  - validator_id: pre-handoff-run-manifest-validator
+    gate_ids: [pre_handoff_run_manifest_gate]
+    validator_version: 1
+    input_authority_refs:
+      - reconstruct-run-manifest.pre-handoff.yaml
+      - reconstruct-contract-registry.yaml
+      - <registry:active_contract_refs[].ref>
+      - <run_manifest:selected_source_profiles[].definition_ref where non_null>
+    validation_obligations:
+      - selected_registry_snapshot_contains_registry_ref_and_hash
+      - selected_registry_hash_matches_reconstruct_contract_registry
+      - active_contract_snapshots_contain_version_policy_required_fields
+      - active_contract_snapshots_match_active_contract_refs_by_contract_id_and_ref
+      - active_contract_hashes_match_active_contract_refs
+      - active_contract_migration_status_values_are_allowed
+      - selected_source_profile_snapshots_contain_version_policy_required_fields
+      - selected_source_profile_snapshots_match_source_profile_records_by_profile_id_and_target_material_kind
+      - non_null_selected_source_profile_definition_refs_match_definition_sha256
+      - selected_source_profile_migration_fields_are_recorded
+      - source_profile_migration_refs_resolve_to_source_profile_records_or_prior_snapshots
+      - previous_source_profile_snapshots_validate_old_to_current_profile_mappings
+      - admitted_domain_competency_snapshots_contain_version_policy_required_fields
+      - required_admitted_competency_ids_derive_all_p1_from_admitted_domain_competency_snapshot
+      - p2_and_p3_competencies_remain_priority_metadata_until_explicit_downstream_promotion_policy_exists
+      - required_admitted_competency_ids_match_admitted_domain_competency_snapshot
+      - competency_id_migration_mappings_contain_required_policy_fields
+      - competency_id_migration_status_values_are_allowed
+      - deprecated_or_previous_competency_aliases_resolve_to_current_id_or_explicit_replacement_disposition
+      - split_merged_replaced_competency_ids_close_against_admitted_domain_competency_snapshot
+      - selected_reference_standard_ids_resolve_to_reference_standard_registry
+      - selected_reference_standard_versions_or_snapshots_are_recorded
+      - selected_pattern_catalog_ids_resolve_to_reference_pattern_catalog_registry
+      - selected_pattern_catalog_versions_or_snapshots_are_recorded
+      - selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy
+      - governed_seed_fields_close_against_selected_reference_and_pattern_refs
+      - selected_reference_and_pattern_migration_status_is_compatible
+    output_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
+  - validator_id: failure-classification-validator
+    gate_ids: [failure_classification_gate]
+    validator_version: 1
+    input_authority_refs:
+      - failure-classification.yaml
+      - target-material-profile-validation.yaml
+      - source-observation-directive-validation.yaml
+      - rounds/*/source-frontier-validation.yaml
+      - candidate-disposition-validation.yaml
+      - ontology-seed-validation.yaml
+      - claim-realization-map-validation.yaml
+      - competency-questions-validation.yaml
+      - competency-question-assessment-validation.yaml
+      - seed-confirmation-validation.yaml
+      - reconstruct-run-manifest.pre-handoff-validation.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_failure_trigger_against_active_runtime_validation_authorities
+      - classify_missing_or_failed_active_validation_artifact_as_required_gate_failure
+    output_ref: failure-classification-validation.yaml
+  - validator_id: revision-proposal-validator
+    gate_ids: [revision_proposal_gate]
+    validator_version: 1
+    input_authority_refs: [revision-proposal.yaml, failure-classification.yaml, failure-classification-validation.yaml, reconstruct-contract-registry.yaml]
+    output_ref: revision-proposal-validation.yaml
+  - validator_id: handoff-decision-validator
+    gate_ids: [handoff_gate]
+    validator_version: 1
+    input_authority_refs:
+      - stop-decision.yaml
+      - target-material-profile-validation.yaml
+      - source-observation-directive-validation.yaml
+      - rounds/*/source-frontier-validation.yaml
+      - candidate-disposition-validation.yaml
+      - ontology-seed-validation.yaml
+      - claim-realization-map-validation.yaml
+      - competency-questions-validation.yaml
+      - competency-question-assessment-validation.yaml
+      - seed-confirmation-validation.yaml
+      - reconstruct-run-manifest.pre-handoff-validation.yaml
+      - reconstruct-metrics.yaml
+      - failure-classification-validation.yaml
+      - revision-proposal-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - consume_all_active_validation_gate_statuses_emitted_by_runtime
+      - project_missing_active_validation_artifact_as_blocked
+      - leave_planned_gate_authorities_out_of_terminal_readiness_until_activated
+    output_ref: handoff-decision-validation.yaml
+
+planned_validator_records:
+  - validator_id: source-observation-delta-validator
+    gate_ids: [round_lineage_gate]
+    validator_version: 1
+    input_authority_refs:
+      - rounds/<round-id>/source-observation-delta.yaml
+      - rounds/<round-id>/source-frontier-validation.yaml
+      - source-observations.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+  - validator_id: source-observation-reentry-validator
+    gate_ids: [observation_reentry_gate]
+    validator_version: 1
+    input_authority_refs:
+      - rounds/<round-id>/source-observation-delta-validation.yaml
+      - source-observation-directive.yaml
+      - source-observation-directive-validation.yaml
+      - rounds/<round-id>/lens-judgments/*.yaml
+      - rounds/<round-id>/exploration-synthesis.yaml
+      - candidate-inventory.yaml
+      - candidate-disposition.yaml
+      - candidate-disposition-validation.yaml
+      - ontology-seed.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+  - validator_id: query-proof-validator
+    gate_ids: [query_proof_gate]
+    validator_version: 1
+    input_authority_refs:
+      - query-proofs.yaml
+      - source-observations.yaml
+      - ontology-seed.yaml
+      - competency-questions.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: query-proofs-validation.yaml
+  - validator_id: visualization-proof-validator
+    gate_ids: [visualization_proof_gate]
+    validator_version: 1
+    input_authority_refs:
+      - visualization-proofs.yaml
+      - source-observations.yaml
+      - ontology-seed.yaml
+      - competency-questions.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: visualization-proofs-validation.yaml
+  - validator_id: graph-exploration-proof-validator
+    gate_ids: [graph_exploration_proof_gate]
+    validator_version: 1
+    input_authority_refs:
+      - graph-exploration-proofs.yaml
+      - source-observations.yaml
+      - ontology-seed.yaml
+      - competency-questions.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    output_ref: graph-exploration-proofs-validation.yaml
+  - validator_id: required-when-evaluation-validator
+    gate_ids: [required_when_evaluation_gate]
+    validator_version: 1
+    input_authority_refs:
+      - required-when-evaluation.yaml
+      - ontology-seed.yaml
+      - stop-decision.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+      - <registry:required_when_predicate_catalog[predicate_phase in [null, gate_applicability]].input_authority_refs[]>
+    dynamic_input_authority_rule: Dereference each gate_applicability-phase evaluated predicate_id through required_when_predicate_catalog and validate recorded gate_instance_id, gate_id, predicate_instance_id, round_id, concrete input refs, evaluator id/version, applicability, result truth value, unknown projection, and explanation against that predicate row and validation_gate_catalog.
+    output_ref: required-when-evaluation-validation.yaml
+
+version_policy:
+  contract_schema_version_field: schema_version
+  seed_contract_version_field: seed_identity.schema_version
+  validator_version_field: validator_version
+  runtime_version_field: runtime_version
+  content_hash_field: sha256
+  compatibility_fields:
+    - compatible_runtime_versions
+    - compatible_validator_versions
+    - supersedes_registry_snapshot
+  active_ref_default_compatibility:
+    compatible_runtime_versions:
+      - current
+    compatible_validator_versions:
+      - current
+    supersedes_registry_snapshot: null
+  contract_migration_status_values:
+    - current
+    - supported_previous
+    - deprecated_supported
+    - unsupported
+  active_contract_migration_status_values_ref: version_policy.contract_migration_status_values
+  selected_source_profile_migration_status_values_ref: source_profile_migration_policy.migration_status_values
+  selected_source_profile_snapshot_required_fields:
+    - profile_id
+    - target_material_kind
+    - is_default_for_kind
+    - definition_ref
+    - definition_sha256
+    - contract_status
+    - runtime_implementation_status
+    - schema_version
+    - profile_version
+    - migration_status
+    - supersedes
+    - replaced_by
+    - split_from
+    - split_into
+    - merged_from
+    - merged_into
+  selected_registry_snapshot_required_fields:
+    - registry_ref
+    - registry_sha256
+    - schema_version
+  active_contract_snapshot_required_fields:
+    - contract_id
+    - ref
+    - role
+    - sha256
+    - schema_version
+    - migration_status
+  active_contract_dereference_policy:
+    active_contract_ref: dereference_ref_and_verify_snapshot_hash
+    missing_active_contract_snapshot: blocked
+    active_contract_hash_mismatch: blocked
+  selected_source_profile_dereference_policy:
+    standalone_profile: dereference_non_null_definition_ref_and_verify_hash
+    mixed_profile: validate_per_member_selected_profiles_or_partial_composite_status
+    unknown_profile: validate_unsupported_or_clarification_halt_status_without_definition_ref
+  admitted_domain_competency_snapshot_required_fields:
+    - source_ref
+    - source_sha256
+    - source_seat
+    - authority_resolution_order
+    - domain_id
+    - competency_parser_id
+    - competency_parser_version
+    - admission_policy
+    - admitted_competencies
+    - required_admitted_competency_ids
+    - admitted_competency_priorities
+    - competency_id_migration_mappings
+  governing_snapshot_required_fields:
+    - requested_domain_ids
+    - admitted_domain_competency_refs
+    - admitted_domain_competency_source_refs
+    - admitted_domain_competency_snapshots
+    - required_admitted_competency_ids
+    - admitted_competency_priorities
+    - selected_reference_standard_ids
+    - selected_reference_standard_version_or_snapshot_ids
+    - selected_pattern_catalog_ids
+    - selected_pattern_catalog_version_or_snapshot_ids
+    - selected_pattern_catalog_canonical_uris
+  governing_snapshot_projection_fields:
+    authority_source: admitted_domain_competency_snapshots
+    runtime_projection_fields:
+      - admitted_domain_competency_refs
+      - admitted_domain_competency_source_refs
+      - required_admitted_competency_ids
+      - admitted_competency_priorities
+      - competency_id_migration_mappings
+    rule: Runtime may store these derived aggregates for prompt payloads, exact validation, and downstream gates, but the per-domain admitted_domain_competency_snapshots rows remain the authority for domain competency admission. The admitted_domain_competency_refs projection contains only domain admission identity refs, while admitted_domain_competency_source_refs contains source document refs.
+  selected_reference_authority_snapshot_required_fields:
+    - selected_reference_standard_ids
+    - selected_reference_standard_version_or_snapshot_ids
+    - selected_pattern_catalog_ids
+    - selected_pattern_catalog_version_or_snapshot_ids
+    - selected_pattern_catalog_canonical_uris
+  active_document_rule: Runtime prompt packets may load only active_contract_refs and selected source_profile_records unless the user explicitly asks for archived context.
+  registry_update_required_for:
+    - active contract ref changes
+    - artifact authority changes
+    - root candidate kind changes
+    - root disposition changes
+    - material kind changes
+    - source profile record changes
+    - source profile definition ref changes
+    - source profile definition hash changes
+    - source profile version changes
+    - runtime implementation status value changes
+    - source profile support-status migration changes
+    - validation gate changes
+    - reconstruct lens judgment registry changes
+    - reference standard registry changes
+    - query access contract registry changes
+    - readiness projection changes
+    - validator record changes

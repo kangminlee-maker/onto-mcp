@@ -1,0 +1,33 @@
+schema_version: 1
+session_id: "20260528-391bbc3f"
+findings:
+  - finding_id: "finding-001"
+    lens_id: "pragmatics"
+    source_ref: "round1/pragmatics.md#finding-1"
+    target: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md"
+    evidence_anchor: ".onto/processes/reconstruct/top-level-concept-discovery-contract.md:365-404,986,995,1012,1060"
+    claim: "The implementation checklist does not make the complete lifecycle implementation target answerable because it names concept and relation identity/provenance/aliasing/split/merge/rename/demotion/convergence changes but omits explicit pressure events, answerability events, detail placement events, and material coverage/source-authority events."
+    proposed_action: "Expand implementation step 9 to name the complete lifecycle surface, including concept identity, relation identity, frontier pressure status transitions, lower-level detail placement, answerability question/action changes, material coverage/source-authority changes, and convergence changes, or reference the lifecycle event groups in section 6 as the complete implementation target."
+    affected_purpose: "Self-contained agent execution and reviewability for the reconstruct top-level concept discovery design contract."
+    failure_condition: "A developer or runtime builder follows the recommended implementation order as the practical execution path and cannot determine whether pressure events, answerability events, detail placement events, and material coverage/source-authority events are in scope for the same implementation step or deferred."
+    impact: "The happy path remains possible, but practical implementation and review trust are weakened because the contract body and execution checklist can be read as different lifecycle targets."
+    evidence_refs:
+      - "round1/pragmatics.md#finding-1"
+    severity: "medium"
+    domain_threshold_used: null
+  - finding_id: "finding-002"
+    lens_id: "evolution"
+    source_ref: "round1/evolution.md#finding-1"
+    target: ".onto/review/20260528-391bbc3f/execution-preparation/materialized-input.md"
+    evidence_anchor: ".onto/review/20260528-391bbc3f/execution-preparation/materialized-input.md:941,955,981,1142"
+    claim: "Legacy migration coverage still omits several retired Seed seats and projections, including included_lower_concepts, excluded_or_deferred_details, core_relations, open_questions, deferred_detail_candidates, convergence.remaining_pressures, and prior frontier_refs shapes."
+    proposed_action: "Extend the Legacy Compatibility section and implementation path with explicit mappings from retired reconstruct-local seats to the new authorities, and state that transitional Seeds exposing those old seats must carry migration_records before claiming migration compatibility."
+    affected_purpose: "Schema/data-model evolution continuity for future runs, same-session continuation, and cross-run lineage consumers of Seed artifacts."
+    failure_condition: "Older Seed artifacts or transitional Seed outputs contain retired frontier, detail, relation, question, or pressure fields that are not mapped to the new concept-centered authorities."
+    impact: "The new contract otherwise requires identity and pressure preservation, but unmapped legacy seats can lose lifecycle continuity and weaken migration trust."
+    evidence_refs:
+      - "round1/evolution.md#finding-1"
+    severity: "medium"
+    domain_threshold_used: null
+validation:
+  unaddressable_findings: []

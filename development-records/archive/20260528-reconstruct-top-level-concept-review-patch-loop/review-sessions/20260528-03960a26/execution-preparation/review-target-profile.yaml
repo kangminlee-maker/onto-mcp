@@ -1,0 +1,85 @@
+schema_version: "1"
+session_id: 20260528-03960a26
+created_at: 2026-05-28T14:48:56+09:00
+target_scope_kind: file
+materialized_input_kind: single_text
+target_input_kind: git_diff
+target_material_kind: unknown
+requested_target: .
+review_intent_summary: Fresh verification review for the current reconstruct
+  top-level concept discovery design patch after closing material issues from
+  sessions 20260528-391bbc3f, 20260528-da9e31db, 20260528-3d59d774,
+  20260528-29cea5a1, 20260528-e8c8b240, 20260528-e6edefdf, and
+  20260528-6dffeec8. Confirm whether material documentation/design-contract
+  issues remain in the current working tree diff, especially
+  concept_identity_events and relation_identity_events as the sole lifecycle
+  transition authority, absence of
+  prior_concept_mappings/prior_relation_mappings from Seed lifecycle authority,
+  absence of undefined current_detail_ids or any alternate demotion bridge
+  field, concept_identity_events[].target_detail_ids as the sole demotion bridge
+  from prior concept IDs to lower_level_detail_placements[].detail_id,
+  answerability question ID uniqueness by declared inventory and status buckets,
+  supported_actions[].supported_by_question_ids[] as the sole canonical
+  question-to-action support edge, lifecycle.source_snapshot_refs as current
+  source snapshot authority with source_snapshot_transition containing prior
+  refs only, relation_participation_exceptions.status collapsed to isolated,
+  demotion bridge from prior concept IDs to lower-level detail IDs, external
+  migration artifact refs, simplified README and IMPLEMENTATION_MAP
+  authority-reference summaries, source_authority_scope_changed state
+  traceability, lifecycle split/merge continuity through identity event arrays,
+  pressure transitions, and answerability references.
+artifact_roles:
+  primary: computational_artifact
+  secondary:
+    - record_artifact
+    - configuration_artifact
+domain: software-engineering
+maturity: review_candidate
+closure_level: bounded_partial
+review_goal:
+  - correctness
+  - verifiability
+  - regression_risk
+  - maintainability
+  - provenance
+  - evidence_preservation
+  - auditability
+  - scope_control
+  - precedence
+  - invalid_input_behavior
+  - runtime_contract
+  - test_evidence
+  - error_path_clarity
+  - context_isolation
+  - artifact_truth
+  - fail_loud_behavior
+closure_obligation_policy:
+  - must_close_in_target
+  - must_close_before_next_stage
+  - may_close_during_next_stage
+  - planned_later
+  - out_of_scope
+target_refs:
+  - ref: /Users/kangmin/cowork/onto-mcp/.onto/review/20260528-03960a26/diff-target.patch
+    role: primary
+    kind: generated
+    exists: true
+    sha256: e6fb7a9a105845e9dc9464a194091d44895722df7e85210388449c9bab6248df
+material_profile:
+  target_material_kind: unknown
+  target_material_kind_candidates:
+    - unknown
+  support_status: unknown
+  unsupported_reason: runtime could not classify target material kind safely
+  detection:
+    owner: runtime_heuristic
+    confidence: 0.2
+    confidence_basis: no known target material kind among refs
+boundary:
+  filesystem_allowed_roots:
+    - /Users/kangmin/cowork/onto-mcp
+  source: binding
+inference:
+  owner: runtime_heuristic
+  confidence: 0.9
+  confidence_basis: runtime diff target implies implementation-change review
