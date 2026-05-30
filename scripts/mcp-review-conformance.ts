@@ -808,6 +808,17 @@ async function main(): Promise<void> {
     const toolsResult = requireResult(await client.request("tools/list"), "tools/list") as {
       tools?: Array<{ name?: string; inputSchema?: { properties?: Record<string, unknown> } }>;
     };
+    // Anthropic tool API rejects top-level oneOf/allOf/anyOf in input_schema, which
+    // 400s the entire request when onto is enabled. Guard every tool's inputSchema.
+    for (const tool of toolsResult.tools ?? []) {
+      const schema = (tool.inputSchema ?? {}) as Record<string, unknown>;
+      for (const forbidden of ["oneOf", "allOf", "anyOf"]) {
+        assert(
+          !(forbidden in schema),
+          `tool ${tool.name ?? "(unknown)"} inputSchema must not use top-level ${forbidden} (Anthropic tool API rejects it).`,
+        );
+      }
+    }
     const reviewTool = toolsResult.tools?.find((tool) => tool.name === "onto.review");
     assert(reviewTool, "onto.review tool missing from tools/list.");
     const deliberationSchema = reviewTool.inputSchema?.properties?.deliberation as

@@ -432,37 +432,17 @@ const RECONSTRUCT_SESSION_INPUT_SCHEMA: JsonValue = {
   },
 };
 
+// NOTE: top-level `allOf`/`oneOf`/`anyOf` is rejected by the Anthropic tool API
+// ("input_schema does not support oneOf/allOf/anyOf at the top level"), which 400s
+// the whole request when onto is enabled. Per-`directiveKind` required-field rules
+// are enforced at runtime by OntoValidateReconstructDirectiveToolInputSchema
+// (a Zod discriminatedUnion) in the handler, so they are intentionally not encoded
+// here. Keep this schema a flat object: common required fields plus optional
+// per-kind properties documented in their descriptions.
 const VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
   required: ["directiveKind", "sourceObservationsPath"],
-  allOf: [
-    {
-      if: {
-        properties: { directiveKind: { const: "source_observation" } },
-        required: ["directiveKind"],
-      },
-      then: { required: ["directivePath"] },
-    },
-    {
-      if: {
-        properties: { directiveKind: { const: "candidate_disposition" } },
-        required: ["directiveKind"],
-      },
-      then: {
-        required: ["candidateInventoryPath", "candidateDispositionPath"],
-      },
-    },
-    {
-      if: {
-        properties: { directiveKind: { const: "ontology_seed" } },
-        required: ["directiveKind"],
-      },
-      then: {
-        required: ["ontologySeedPath", "candidateDispositionPath"],
-      },
-    },
-  ],
   properties: {
     directiveKind: {
       type: "string",
