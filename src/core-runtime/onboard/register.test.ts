@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { parseRegisterArgs, runRegister } from "./register.js";
-import { createCliHost, type CommandRunner, type CommandRun } from "./cli-host.js";
+import {
+  createCliHost,
+  createClaudeCodeHost,
+  type CommandRunner,
+  type CommandRun,
+} from "./cli-host.js";
 import {
   type ApplyResult,
   type HostId,
@@ -41,6 +46,11 @@ describe("parseRegisterArgs", () => {
     const parsed = parseRegisterArgs(["--all", "--wat"]);
     expect(parsed.hosts).toBe("all");
     expect(parsed.unknownFlags).toEqual(["--wat"]);
+  });
+
+  it("parses --claude-config-dir", () => {
+    const parsed = parseRegisterArgs(["--claude-config-dir", "/Users/x/.claude-1"]);
+    expect(parsed.claudeConfigDir).toBe("/Users/x/.claude-1");
   });
 });
 
@@ -111,69 +121,91 @@ describe("runRegister — orchestration", () => {
 });
 
 describe("createCliHost — mocked runner", () => {
-  function runner(overrides: Partial<CommandRunner> & { listText?: string }): CommandRunner {
-    const calls: string[][] = [];
-    const base: CommandRunner = {
-      exists: () => true,
-      run: (command, args): CommandRun => {
-        calls.push([command, ...args]);
-        if (args[0] === "mcp" && args[1] === "list") {
-          return { status: 0, stdout: overrides.listText ?? "", stderr: "" };
+  const entry: RegistrationEntry = { name: "onto", command: "onto", args: ["mcp"] };
+
+  const codexSpec = {
+    id: "codex" as const,
+    displayName: "Codex CLI",
+    cli: "codex",
+    addArgs: (e: RegistrationEntry) => ["mcp", "add", e.name, "--", e.command, ...e.args],
+    removeArgs: (e: RegistrationEntry) => ["mcp", "remove", e.name],
+    listArgs: () => ["mcp", "list"],
+    manualInstructions: () => "manual",
+  };
+
+  interface FakeOpts {
+    existsCli?: boolean;
+    preRegistered?: boolean;
+    addEffective?: boolean; // does `mcp add` actually take effect?
+    listSucceeds?: boolean; // does `mcp list` exit 0?
+    addStatus?: number;
+  }
+
+  /** Stateful fake: `mcp list` reflects whether `mcp add`/`remove` ran. */
+  function fakeRunner(opts: FakeOpts = {}): CommandRunner & { envs: Array<Record<string, string> | undefined> } {
+    const {
+      existsCli = true,
+      preRegistered = false,
+      addEffective = true,
+      listSucceeds = true,
+      addStatus = 0,
+    } = opts;
+    let present = preRegistered;
+    const envs: Array<Record<string, string> | undefined> = [];
+    return {
+      envs,
+      exists: () => existsCli,
+      run: (_command, args, env): CommandRun => {
+        envs.push(env);
+        if (args[1] === "list") {
+          if (!listSucceeds) return { status: 1, stdout: "", stderr: "list failed" };
+          return { status: 0, stdout: present ? "onto  enabled\n" : "", stderr: "" };
+        }
+        if (args[1] === "add") {
+          if (addStatus === 0 && addEffective) present = true;
+          return addStatus === 0
+            ? { status: 0, stdout: "", stderr: "" }
+            : { status: addStatus, stdout: "", stderr: "boom" };
+        }
+        if (args[1] === "remove") {
+          present = false;
+          return { status: 0, stdout: "", stderr: "" };
         }
         return { status: 0, stdout: "", stderr: "" };
       },
     };
-    return { ...base, ...overrides, run: overrides.run ?? base.run };
   }
 
-  const entry: RegistrationEntry = { name: "onto", command: "onto", args: ["mcp"] };
-
-  it("registers when not already present", async () => {
-    const host = createCliHost(
-      {
-        id: "codex",
-        displayName: "Codex CLI",
-        cli: "codex",
-        addArgs: (e) => ["mcp", "add", e.name, "--", e.command, ...e.args],
-        removeArgs: (e) => ["mcp", "remove", e.name],
-        listArgs: () => ["mcp", "list"],
-        manualInstructions: () => "manual",
-      },
-      runner({ listText: "" }),
-    );
+  it("registers when absent and the add is verified present", async () => {
+    const host = createCliHost(codexSpec, fakeRunner({ preRegistered: false }));
     const result = await host.apply(entry, { force: false, dryRun: false });
     expect(result.outcome).toBe("registered");
   });
 
   it("skips when already present and not forced", async () => {
-    const host = createCliHost(
-      {
-        id: "codex",
-        displayName: "Codex CLI",
-        cli: "codex",
-        addArgs: (e) => ["mcp", "add", e.name, "--", e.command, ...e.args],
-        removeArgs: (e) => ["mcp", "remove", e.name],
-        listArgs: () => ["mcp", "list"],
-        manualInstructions: () => "manual",
-      },
-      runner({ listText: "onto  enabled\n" }),
-    );
+    const host = createCliHost(codexSpec, fakeRunner({ preRegistered: true }));
     const result = await host.apply(entry, { force: false, dryRun: false });
     expect(result.outcome).toBe("skipped");
   });
 
+  it("reports failed when add exits 0 but the entry is not listed (wrapper/alias no-op)", async () => {
+    const host = createCliHost(codexSpec, fakeRunner({ addEffective: false }));
+    const result = await host.apply(entry, { force: false, dryRun: false });
+    expect(result.outcome).toBe("failed");
+    expect(result.detail).toContain("not listed afterward");
+  });
+
+  it("registers with an unverified note when list cannot confirm", async () => {
+    const host = createCliHost(codexSpec, fakeRunner({ listSucceeds: false }));
+    const result = await host.apply(entry, { force: false, dryRun: false });
+    expect(result.outcome).toBe("registered");
+    expect(result.detail).toContain("could not verify");
+  });
+
   it("emits manual outcome when CLI is absent", async () => {
     const host = createCliHost(
-      {
-        id: "codex",
-        displayName: "Codex CLI",
-        cli: "codex",
-        addArgs: (e) => ["mcp", "add", e.name, "--", e.command, ...e.args],
-        removeArgs: (e) => ["mcp", "remove", e.name],
-        listArgs: () => ["mcp", "list"],
-        manualInstructions: () => "install codex",
-      },
-      runner({ exists: () => false }),
+      { ...codexSpec, manualInstructions: () => "install codex" },
+      fakeRunner({ existsCli: false }),
     );
     const result = await host.apply(entry, { force: false, dryRun: false });
     expect(result.outcome).toBe("manual");
@@ -181,28 +213,23 @@ describe("createCliHost — mocked runner", () => {
   });
 
   it("reports failed when add command errors", async () => {
-    const failRunner: CommandRunner = {
-      exists: () => true,
-      run: (_command, args) => {
-        if (args[1] === "list") return { status: 0, stdout: "", stderr: "" };
-        return { status: 1, stdout: "", stderr: "boom" };
-      },
-    };
-    const host = createCliHost(
-      {
-        id: "codex",
-        displayName: "Codex CLI",
-        cli: "codex",
-        addArgs: (e) => ["mcp", "add", e.name, "--", e.command, ...e.args],
-        removeArgs: (e) => ["mcp", "remove", e.name],
-        listArgs: () => ["mcp", "list"],
-        manualInstructions: () => "manual",
-      },
-      failRunner,
-    );
+    const host = createCliHost(codexSpec, fakeRunner({ addStatus: 1 }));
     const result = await host.apply(entry, { force: false, dryRun: false });
     expect(result.outcome).toBe("failed");
     expect(result.detail).toBe("boom");
+  });
+
+  it("Claude Code host pins CLAUDE_CONFIG_DIR onto every CLI call", async () => {
+    const runner = fakeRunner({ preRegistered: false });
+    const host = createClaudeCodeHost({ configDir: "/Users/x/.claude-1", runner });
+    await host.apply(entry, { force: false, dryRun: false });
+    expect(runner.envs.length).toBeGreaterThan(0);
+    for (const env of runner.envs) {
+      expect(env).toEqual({ CLAUDE_CONFIG_DIR: "/Users/x/.claude-1" });
+    }
+    expect(host.plan(entry, { force: false, dryRun: false }).summary).toContain(
+      "config dir: /Users/x/.claude-1",
+    );
   });
 });
 

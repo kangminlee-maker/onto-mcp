@@ -100,11 +100,25 @@ Mechanism per host:
 | Cursor | edits `mcpServers.onto` in `~/.cursor/mcp.json` |
 
 For the CLI-backed hosts, `onto register` prefers the official CLI and falls back
-to printing manual instructions when it is not on PATH. JSON edits preserve any
+to printing manual instructions when it is not on PATH. It verifies the result
+after `mcp add` and reports `failed` (not a false `registered`) if the CLI exits
+successfully but the server is not listed afterward — e.g. when `claude` on PATH
+is an alias/wrapper or points at the wrong profile. JSON edits preserve any
 servers already present and are idempotent (re-running reports `skipped`).
 Registration writes only host-owned config; it never writes onto runtime data.
 Restart the host app after registering to pick up the new server. Override the
 launched command or server name with `--command <cmd>` / `--name <id>`.
+
+**Claude Code profiles.** Claude Code stores MCP servers per config directory
+(`CLAUDE_CONFIG_DIR`). If you run multiple profiles (e.g. `~/.claude`,
+`~/.claude-1`), target one explicitly so registration lands in the right place:
+
+```bash
+onto register --hosts claude-code --claude-config-dir ~/.claude-1 --yes
+```
+
+When `--claude-config-dir` is omitted, an ambient `CLAUDE_CONFIG_DIR` is honored
+(shown in the plan), otherwise the claude default `~/.claude` is used.
 
 For project-local installs, add `onto-mcp` to the project and run the local
 binary:

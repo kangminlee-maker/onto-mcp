@@ -26,6 +26,7 @@ export interface ParsedRegisterArgs {
   help: boolean;
   name: string;
   command: string;
+  claudeConfigDir: string | undefined;
   unknownFlags: string[];
   invalidHosts: string[];
 }
@@ -47,6 +48,8 @@ const USAGE = [
   "  --force            Re-register CLI hosts even if already present",
   "  --name <id>        MCP server name (default: onto)",
   "  --command <cmd>    Executable the host launches (default: onto)",
+  "  --claude-config-dir <path>  Target a Claude Code profile (sets",
+  "                     CLAUDE_CONFIG_DIR; default: ambient env or ~/.claude)",
   "  --help, -h         Show this help",
 ].join("\n");
 
@@ -60,6 +63,7 @@ export function parseRegisterArgs(argv: string[]): ParsedRegisterArgs {
     help: false,
     name: "onto",
     command: "onto",
+    claudeConfigDir: undefined,
     unknownFlags: [],
     invalidHosts: [],
   };
@@ -105,6 +109,9 @@ export function parseRegisterArgs(argv: string[]): ParsedRegisterArgs {
         break;
       case "--command":
         parsed.command = argv[++i] ?? parsed.command;
+        break;
+      case "--claude-config-dir":
+        parsed.claudeConfigDir = argv[++i] ?? parsed.claudeConfigDir;
         break;
       default:
         parsed.unknownFlags.push(arg);
@@ -180,7 +187,11 @@ export async function runRegister(
     return 1;
   }
 
-  const targets = deps.targets ?? getDefaultHostTargets();
+  const targets =
+    deps.targets ??
+    getDefaultHostTargets(
+      parsed.claudeConfigDir ? { claudeConfigDir: parsed.claudeConfigDir } : {},
+    );
   const isTty = deps.isTty ?? Boolean(process.stdin.isTTY);
 
   if (parsed.list) {
