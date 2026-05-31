@@ -176,12 +176,54 @@ function parseDomainConstraints(
   );
 }
 
-function parseStringList(
+/**
+ * Parse a lens section that is a list of free-text strings (e.g. Domain Context
+ * Assumptions).
+ *
+ * The lens-output contract asks for a YAML list, but lens output is LLM-authored
+ * prose and models routinely emit natural markdown bullets such as
+ * `- "PATH resolution" means ...`, which are valid markdown yet invalid YAML (a
+ * quoted scalar followed by more text -> "Unexpected scalar at node end"). That
+ * brittleness failed real ReviewRecord assembly. Accept a valid YAML string list
+ * first (preserves `[]`, `- none`, and clean YAML lists), then fall back to
+ * parsing markdown bullet lines as literal strings. Structured object sections
+ * (e.g. Domain Constraints Used) stay strict via parseYamlList/parseDomainConstraints.
+ *
+ * Exported for unit testing.
+ */
+export function parseStringList(
   sectionText: string,
   label: string,
 ): string[] {
-  return parseYamlList(sectionText, label).map((item, index) =>
-    requireNonEmptyString(item, `${label}[${index}]`),
+  const source = extractYamlFence(sectionText);
+  if (source.length === 0) return [];
+
+  let yamlParsed: unknown;
+  let yamlParseOk = true;
+  try {
+    yamlParsed = YAML.parse(source);
+  } catch {
+    yamlParseOk = false;
+  }
+  if (
+    yamlParseOk &&
+    Array.isArray(yamlParsed) &&
+    yamlParsed.every(
+      (item) => typeof item === "string" && item.trim().length > 0,
+    )
+  ) {
+    return (yamlParsed as string[]).map((item) => item.trim());
+  }
+
+  // Fallback: treat markdown bullet lines as literal strings.
+  const bullets = source
+    .split(/\r?\n/u)
+    .map((line) => /^\s*[-*]\s+(.*\S)\s*$/u.exec(line)?.[1]?.trim())
+    .filter((item): item is string => Boolean(item && item.length > 0));
+  if (bullets.length > 0) return bullets;
+
+  throw new Error(
+    `Expected a YAML list of strings or a markdown bullet list in ${label}.`,
   );
 }
 
