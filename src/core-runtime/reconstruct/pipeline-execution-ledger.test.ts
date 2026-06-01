@@ -39,6 +39,10 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     exploration_synthesis: null,
     source_frontier: null,
     source_frontier_validation: null,
+    source_purpose_candidates: null,
+    source_purpose_candidates_validation: null,
+    purpose_confirmation: null,
+    purpose_confirmation_validation: null,
     candidate_inventory: null,
     candidate_disposition: null,
     candidate_disposition_validation: null,
@@ -61,6 +65,12 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     pre_handoff_run_manifest_validation: null,
     post_publication_run_manifest_validation: null,
     handoff_decision_validation: null,
+    maturation_baseline: null,
+    maturation_baseline_validation: null,
+    actionability_matrix: null,
+    actionability_matrix_validation: null,
+    maturation_question_frontier: null,
+    maturation_question_frontier_validation: null,
     final_output: null,
     final_output_provenance_validation: null,
     reconstruct_run_manifest: null,
@@ -361,6 +371,18 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const candidateInventory = await writeArtifact(
       path.join(root, "candidate-inventory.yaml"),
     );
+    const sourcePurposeCandidates = await writeArtifact(
+      path.join(root, "source-purpose-candidates.yaml"),
+    );
+    const sourcePurposeCandidatesValidation = await writeArtifact(
+      path.join(root, "source-purpose-candidates-validation.yaml"),
+    );
+    const purposeConfirmation = await writeArtifact(
+      path.join(root, "purpose-confirmation.yaml"),
+    );
+    const purposeConfirmationValidation = await writeArtifact(
+      path.join(root, "purpose-confirmation-validation.yaml"),
+    );
     const candidateDisposition = await writeArtifact(
       path.join(root, "candidate-disposition.yaml"),
     );
@@ -380,6 +402,10 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         exploration_synthesis: explorationSynthesis,
         source_frontier: sourceFrontier,
         source_frontier_validation: sourceFrontierValidation,
+        source_purpose_candidates: sourcePurposeCandidates,
+        source_purpose_candidates_validation: sourcePurposeCandidatesValidation,
+        purpose_confirmation: purposeConfirmation,
+        purpose_confirmation_validation: purposeConfirmationValidation,
         candidate_inventory: candidateInventory,
         candidate_disposition: candidateDisposition,
       }),
@@ -413,6 +439,10 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         exploration_synthesis: explorationSynthesis,
         source_frontier: sourceFrontier,
         source_frontier_validation: sourceFrontierValidation,
+        source_purpose_candidates: sourcePurposeCandidates,
+        source_purpose_candidates_validation: sourcePurposeCandidatesValidation,
+        purpose_confirmation: purposeConfirmation,
+        purpose_confirmation_validation: purposeConfirmationValidation,
         candidate_inventory: candidateInventory,
         candidate_disposition: candidateDisposition,
         candidate_disposition_validation: candidateDispositionValidation,
@@ -450,6 +480,10 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_purpose_candidates",
+      "source_purpose_candidates_validation",
+      "purpose_confirmation",
+      "purpose_confirmation_validation",
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
@@ -499,6 +533,10 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_purpose_candidates",
+      "source_purpose_candidates_validation",
+      "purpose_confirmation",
+      "purpose_confirmation_validation",
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
@@ -546,6 +584,10 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_purpose_candidates",
+      "source_purpose_candidates_validation",
+      "purpose_confirmation",
+      "purpose_confirmation_validation",
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
@@ -567,6 +609,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "stop_decision",
       "pre_handoff_run_manifest_validation",
       "handoff_decision_validation",
+      "maturation_baseline",
+      "maturation_baseline_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
+      "maturation_question_frontier",
+      "maturation_question_frontier_validation",
       "final_output",
     ];
     for (const key of presentKeys) {

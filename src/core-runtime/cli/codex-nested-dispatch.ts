@@ -183,8 +183,8 @@ export function resolveCodexSpawnConfig(
   const execution = config.review?.execution;
   const inherited = config.llm;
   return {
-    teamlead: codexConfigFromRef(execution?.teamlead.llm, inherited) ?? {},
-    lens: codexConfigFromRef(execution?.lens.llm, inherited) ?? {},
+    teamlead: codexConfigFromRef(execution?.teamlead?.llm, inherited) ?? {},
+    lens: codexConfigFromRef(execution?.lens?.llm, inherited) ?? {},
   };
 }
 

@@ -214,13 +214,16 @@ host LLM and user-mediated flow.
 
 ## Provider And Route Selection
 
-`llm.provider` is user configuration authority for the model provider:
-`openai`, `anthropic`, `grok`, or `lmstudio`. Review execution then derives
-the runtime route from that input, auth mode, host availability, and the review
-execution profile. Route-derived fields such as executor, resolved provider,
-and auth mode are reported for observability. The TS route projection helper is
-an internal derivation point; MCP and CLI entrypoints accept the parent
-execution profile inputs, then report route visibility after derivation.
+`llm.default.provider` is user configuration authority for the default model
+provider: `openai`, `anthropic`, `grok`, or `lmstudio`. Review actor settings
+may override only the fields that differ from `llm.default`. Review execution
+route selection belongs to `review.execution.executor`: `auto` derives the
+route from the LLM selection, auth mode, host availability, and execution
+topology, while `codex`, `direct_call`, and `mock` pin the executor.
+Route-derived fields such as executor, resolved provider, and auth mode are reported
+for observability. The TS route projection helper is an internal derivation
+point; MCP and CLI entrypoints accept the parent execution profile inputs, then
+report route visibility after derivation.
 
 ```text
 review requested

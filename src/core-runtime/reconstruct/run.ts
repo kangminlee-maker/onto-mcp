@@ -17,6 +17,8 @@ import type {
   ReconstructCompetencyQuestionsArtifact,
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructEvidenceRef,
+  ReconstructAnswerSupportLedgerArtifact,
+  ReconstructAnswerSupportLedgerValidationArtifact,
   ReconstructExplorationSynthesisArtifact,
   ReconstructFailureClassificationArtifact,
   ReconstructFailureClassificationValidationArtifact,
@@ -26,9 +28,29 @@ import type {
   ReconstructLensJudgmentIndexArtifact,
   ReconstructFailureKind,
   ReconstructHandoffDecisionValidationArtifact,
+  ReconstructActionabilityMatrixArtifact,
+  ReconstructActionabilityMatrixValidationArtifact,
+  ReconstructMaturationAnswerClaimsArtifact,
+  ReconstructMaturationAnswerClaimsValidationArtifact,
+  ReconstructMaturationAuthorityResponseArtifact,
+  ReconstructMaturationAuthorityResponseValidationArtifact,
+  ReconstructMaturationBaselineArtifact,
+  ReconstructMaturationBaselineValidationArtifact,
+  ReconstructMaturationClosureFrontierArtifact,
+  ReconstructMaturationClosureFrontierValidationArtifact,
+  ReconstructMaturationContinuationDecisionArtifact,
+  ReconstructMaturationContinuationDecisionValidationArtifact,
+  ReconstructMaturationQuestionFrontierArtifact,
+  ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMetricsArtifact,
+  ReconstructOntologyExpansionArtifact,
+  ReconstructOntologyExpansionValidationArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
+  ReconstructPurposeConfirmationArtifact,
+  ReconstructPurposeConfirmationValidationArtifact,
+  ReconstructSourcePurposeCandidatesArtifact,
+  ReconstructSourcePurposeCandidatesValidationArtifact,
   ReconstructRevisionProposalAction,
   ReconstructRevisionProposalArtifact,
   ReconstructRevisionProposalValidationArtifact,
@@ -83,6 +105,25 @@ import {
   writeCandidateDispositionValidationArtifact,
 } from "./ontology-seed-validation.js";
 import {
+  writePurposeConfirmationValidationArtifact,
+  writeSourcePurposeCandidatesValidationArtifact,
+} from "./purpose-authority-validation.js";
+import {
+  writeActionabilityMatrixArtifact,
+  writeActionabilityMatrixValidationArtifact,
+  writeAnswerSupportLedgerValidationArtifact,
+  writeMaturationAnswerClaimsValidationArtifact,
+  writeMaturationAuthorityResponseArtifact,
+  writeMaturationAuthorityResponseValidationArtifact,
+  writeMaturationBaselineArtifact,
+  writeMaturationBaselineValidationArtifact,
+  writeMaturationClosureFrontierValidationArtifact,
+  writeMaturationContinuationDecisionArtifact,
+  writeMaturationContinuationDecisionValidationArtifact,
+  writeMaturationQuestionFrontierValidationArtifact,
+  writeOntologyExpansionValidationArtifact,
+} from "./maturation-validation.js";
+import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
 } from "./contract-registry.js";
@@ -113,6 +154,9 @@ export interface ReconstructDirectiveAuthor {
   writeSourceFrontier(
     input: ReconstructSourceFrontierAuthorInput,
   ): Promise<ReconstructSourceFrontierArtifact>;
+  writeSourcePurposeCandidates(
+    input: ReconstructSourcePurposeCandidatesAuthorInput,
+  ): Promise<ReconstructSourcePurposeCandidatesArtifact>;
   writeCandidateInventory(
     input: ReconstructCandidateInventoryAuthorInput,
   ): Promise<ReconstructCandidateInventoryArtifact>;
@@ -140,6 +184,21 @@ export interface ReconstructDirectiveAuthor {
   writeStopDecision(
     input: ReconstructStopDecisionAuthorInput,
   ): Promise<ReconstructStopDecisionArtifact>;
+  writeMaturationQuestionFrontier(
+    input: ReconstructMaturationQuestionFrontierAuthorInput,
+  ): Promise<ReconstructMaturationQuestionFrontierArtifact>;
+  writeMaturationClosureFrontier(
+    input: ReconstructMaturationClosureFrontierAuthorInput,
+  ): Promise<ReconstructMaturationClosureFrontierArtifact>;
+  writeAnswerSupportLedger(
+    input: ReconstructAnswerSupportLedgerAuthorInput,
+  ): Promise<ReconstructAnswerSupportLedgerArtifact>;
+  writeMaturationAnswerClaims(
+    input: ReconstructMaturationAnswerClaimsAuthorInput,
+  ): Promise<ReconstructMaturationAnswerClaimsArtifact>;
+  writeOntologyExpansion(
+    input: ReconstructOntologyExpansionAuthorInput,
+  ): Promise<ReconstructOntologyExpansionArtifact>;
   writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
 }
 
@@ -149,6 +208,9 @@ export type ReconstructConfirmationProviderRealization = "mock" | "direct_call";
 export interface ReconstructConfirmationProvider {
   readonly providerId: string;
   readonly owner: "host_or_user" | "mock";
+  confirmPurpose(
+    input: ReconstructPurposeConfirmationInput,
+  ): Promise<ReconstructPurposeConfirmationArtifact>;
   confirmOntologySeed(
     input: ReconstructSeedConfirmationInput,
   ): Promise<ReconstructSeedConfirmationArtifact>;
@@ -197,6 +259,11 @@ export interface ReconstructSourceFrontierAuthorInput {
 export interface ReconstructCandidateInventoryAuthorInput {
   sessionId: string;
   intent: string;
+  sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
+  sourcePurposeCandidatesValidation:
+    ReconstructSourcePurposeCandidatesValidationArtifact;
+  purposeConfirmationValidation:
+    ReconstructPurposeConfirmationValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
   sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
@@ -209,6 +276,8 @@ export interface ReconstructCandidateInventoryAuthorInput {
 export interface ReconstructCandidateDispositionAuthorInput {
   sessionId: string;
   intent: string;
+  sourcePurposeCandidatesValidation:
+    ReconstructSourcePurposeCandidatesValidationArtifact;
   candidateInventory: ReconstructCandidateInventoryArtifact;
   candidateInventoryRef: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -219,6 +288,16 @@ export interface ReconstructOntologySeedAuthorInput {
   sessionId: string;
   intent: string;
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
+  sourcePurposeCandidatesRef: string;
+  sourcePurposeCandidatesValidation:
+    ReconstructSourcePurposeCandidatesValidationArtifact;
+  sourcePurposeCandidatesValidationRef: string;
+  purposeConfirmation: ReconstructPurposeConfirmationArtifact;
+  purposeConfirmationRef: string;
+  purposeConfirmationValidation:
+    ReconstructPurposeConfirmationValidationArtifact;
+  purposeConfirmationValidationRef: string;
   candidateInventory: ReconstructCandidateInventoryArtifact;
   candidateInventoryRef: string;
   candidateDisposition: ReconstructCandidateDispositionArtifact;
@@ -226,6 +305,28 @@ export interface ReconstructOntologySeedAuthorInput {
   sourceObservations: ReconstructSourceObservationsArtifact;
   sourceObservationsRef: string;
   contractRegistry: ReconstructContractRegistry;
+}
+
+export interface ReconstructSourcePurposeCandidatesAuthorInput {
+  sessionId: string;
+  intent: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  sourceObservationDirective: ReconstructSourceObservationDirectiveArtifact;
+  lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact;
+  explorationSynthesis: ReconstructExplorationSynthesisArtifact;
+  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
+  contractRegistry: ReconstructContractRegistry;
+}
+
+export interface ReconstructPurposeConfirmationInput {
+  sessionId: string;
+  sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact;
+  sourcePurposeCandidatesRef: string;
+  sourcePurposeCandidatesValidation:
+    ReconstructSourcePurposeCandidatesValidationArtifact;
+  sourcePurposeCandidatesValidationRef: string;
 }
 
 export interface ReconstructSeedConfirmationInput {
@@ -292,6 +393,66 @@ export interface ReconstructStopDecisionAuthorInput {
   revisionProposal: ReconstructRevisionProposalArtifact;
 }
 
+export interface ReconstructMaturationQuestionFrontierAuthorInput {
+  sessionId: string;
+  maturationBaseline: ReconstructMaturationBaselineArtifact;
+  maturationBaselineRef: string;
+  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
+  maturationBaselineValidationRef: string;
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
+  actionabilityMatrixRef: string;
+  actionabilityMatrixValidation: ReconstructActionabilityMatrixValidationArtifact;
+  actionabilityMatrixValidationRef: string;
+}
+
+export interface ReconstructMaturationClosureFrontierAuthorInput {
+  sessionId: string;
+  roundId: string;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationQuestionFrontierRef: string;
+  maturationQuestionFrontierValidation:
+    ReconstructMaturationQuestionFrontierValidationArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
+export interface ReconstructAnswerSupportLedgerAuthorInput {
+  sessionId: string;
+  roundId: string;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationQuestionFrontierRef: string;
+  maturationQuestionFrontierValidation:
+    ReconstructMaturationQuestionFrontierValidationArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  maturationClosureFrontierValidation:
+    ReconstructMaturationClosureFrontierValidationArtifact;
+  maturationAuthorityResponse: ReconstructMaturationAuthorityResponseArtifact;
+  maturationAuthorityResponseValidation:
+    ReconstructMaturationAuthorityResponseValidationArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
+export interface ReconstructMaturationAnswerClaimsAuthorInput {
+  sessionId: string;
+  roundId: string;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationQuestionFrontierValidation:
+    ReconstructMaturationQuestionFrontierValidationArtifact;
+  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
+  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
+export interface ReconstructOntologyExpansionAuthorInput {
+  sessionId: string;
+  answerClaims: ReconstructMaturationAnswerClaimsArtifact;
+  answerClaimsRef: string;
+  answerClaimsValidation: ReconstructMaturationAnswerClaimsValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
+  ontologySeedRef: string;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}
+
 export interface ReconstructFinalOutputAuthorInput {
   sessionId: string;
   intent: string;
@@ -318,6 +479,27 @@ export interface ReconstructFinalOutputAuthorInput {
   stopDecision: ReconstructStopDecisionArtifact;
   preHandoffRunManifestValidation: ReconstructRunManifestValidationArtifact;
   handoffDecisionValidation: ReconstructHandoffDecisionValidationArtifact;
+  maturationBaseline: ReconstructMaturationBaselineArtifact;
+  maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
+  actionabilityMatrixValidation: ReconstructActionabilityMatrixValidationArtifact;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationQuestionFrontierValidation:
+    ReconstructMaturationQuestionFrontierValidationArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  maturationClosureFrontierValidation:
+    ReconstructMaturationClosureFrontierValidationArtifact;
+  answerSupportLedger: ReconstructAnswerSupportLedgerArtifact;
+  answerSupportLedgerValidation: ReconstructAnswerSupportLedgerValidationArtifact;
+  maturationAnswerClaims: ReconstructMaturationAnswerClaimsArtifact;
+  maturationAnswerClaimsValidation:
+    ReconstructMaturationAnswerClaimsValidationArtifact;
+  ontologyExpansion: ReconstructOntologyExpansionArtifact;
+  ontologyExpansionValidation: ReconstructOntologyExpansionValidationArtifact;
+  maturationContinuationDecision:
+    ReconstructMaturationContinuationDecisionArtifact;
+  maturationContinuationDecisionValidation:
+    ReconstructMaturationContinuationDecisionValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   artifactRefs: ReconstructRecordArtifactRefs;
   reconstructRecordPath: string;
@@ -948,6 +1130,12 @@ function artifactRefsWithDefaults(args: {
     exploration_synthesis: args.refs.exploration_synthesis ?? null,
     source_frontier: args.refs.source_frontier ?? null,
     source_frontier_validation: args.refs.source_frontier_validation ?? null,
+    source_purpose_candidates: args.refs.source_purpose_candidates ?? null,
+    source_purpose_candidates_validation:
+      args.refs.source_purpose_candidates_validation ?? null,
+    purpose_confirmation: args.refs.purpose_confirmation ?? null,
+    purpose_confirmation_validation:
+      args.refs.purpose_confirmation_validation ?? null,
     candidate_inventory: args.refs.candidate_inventory ?? null,
     candidate_disposition: args.refs.candidate_disposition ?? null,
     candidate_disposition_validation:
@@ -981,6 +1169,37 @@ function artifactRefsWithDefaults(args: {
       args.refs.post_publication_run_manifest_validation ?? null,
     handoff_decision_validation:
       args.refs.handoff_decision_validation ?? null,
+    maturation_baseline: args.refs.maturation_baseline ?? null,
+    maturation_baseline_validation:
+      args.refs.maturation_baseline_validation ?? null,
+    actionability_matrix: args.refs.actionability_matrix ?? null,
+    actionability_matrix_validation:
+      args.refs.actionability_matrix_validation ?? null,
+    maturation_question_frontier:
+      args.refs.maturation_question_frontier ?? null,
+    maturation_question_frontier_validation:
+      args.refs.maturation_question_frontier_validation ?? null,
+    maturation_closure_frontier:
+      args.refs.maturation_closure_frontier ?? null,
+    maturation_closure_frontier_validation:
+      args.refs.maturation_closure_frontier_validation ?? null,
+    maturation_authority_response:
+      args.refs.maturation_authority_response ?? null,
+    maturation_authority_response_validation:
+      args.refs.maturation_authority_response_validation ?? null,
+    answer_support_ledger: args.refs.answer_support_ledger ?? null,
+    answer_support_ledger_validation:
+      args.refs.answer_support_ledger_validation ?? null,
+    maturation_answer_claims: args.refs.maturation_answer_claims ?? null,
+    maturation_answer_claims_validation:
+      args.refs.maturation_answer_claims_validation ?? null,
+    ontology_expansion: args.refs.ontology_expansion ?? null,
+    ontology_expansion_validation:
+      args.refs.ontology_expansion_validation ?? null,
+    maturation_continuation_decision:
+      args.refs.maturation_continuation_decision ?? null,
+    maturation_continuation_decision_validation:
+      args.refs.maturation_continuation_decision_validation ?? null,
     final_output: args.refs.final_output ?? null,
     final_output_provenance_validation:
       args.refs.final_output_provenance_validation ?? null,
@@ -1067,6 +1286,24 @@ function createRunManifest(args: {
     : {
       ...args.artifactRefs,
       handoff_decision_validation: null,
+      maturation_baseline: null,
+      maturation_baseline_validation: null,
+      actionability_matrix: null,
+      actionability_matrix_validation: null,
+      maturation_question_frontier: null,
+      maturation_question_frontier_validation: null,
+      maturation_closure_frontier: null,
+      maturation_closure_frontier_validation: null,
+      maturation_authority_response: null,
+      maturation_authority_response_validation: null,
+      answer_support_ledger: null,
+      answer_support_ledger_validation: null,
+      maturation_answer_claims: null,
+      maturation_answer_claims_validation: null,
+      ontology_expansion: null,
+      ontology_expansion_validation: null,
+      maturation_continuation_decision: null,
+      maturation_continuation_decision_validation: null,
       final_output: null,
     };
   return {
@@ -1115,6 +1352,10 @@ function createRunManifest(args: {
         "exploration_synthesis",
         "source_frontier",
         "source_frontier_validation",
+        "source_purpose_candidates",
+        "source_purpose_candidates_validation",
+        "purpose_confirmation",
+        "purpose_confirmation_validation",
         "candidate_inventory",
         "candidate_disposition",
         "candidate_disposition_validation",
@@ -1139,6 +1380,24 @@ function createRunManifest(args: {
         "reconstruct_run_manifest",
         ...(args.terminalArtifactsCompleted
           ? [
+            "maturation_baseline",
+            "maturation_baseline_validation",
+            "actionability_matrix",
+            "actionability_matrix_validation",
+            "maturation_question_frontier",
+            "maturation_question_frontier_validation",
+            "maturation_closure_frontier",
+            "maturation_closure_frontier_validation",
+            "maturation_authority_response",
+            "maturation_authority_response_validation",
+            "answer_support_ledger",
+            "answer_support_ledger_validation",
+            "maturation_answer_claims",
+            "maturation_answer_claims_validation",
+            "ontology_expansion",
+            "ontology_expansion_validation",
+            "maturation_continuation_decision",
+            "maturation_continuation_decision_validation",
             "final_output",
             "final_output_provenance_validation",
             "post_publication_run_manifest_validation",
@@ -1202,6 +1461,34 @@ function createRunManifest(args: {
       completedStep("source_frontier_validation", "runtime", runtimePerformer(), [
         args.artifactRefs.source_frontier_validation,
       ].filter((ref): ref is string => ref !== null)),
+      completedStep(
+        "source_purpose_candidates",
+        "host_llm",
+        directiveAuthorPerformer(args.directiveAuthor),
+        [args.artifactRefs.source_purpose_candidates]
+          .filter((ref): ref is string => ref !== null),
+      ),
+      completedStep(
+        "source_purpose_candidates_validation",
+        "runtime",
+        runtimePerformer(),
+        [args.artifactRefs.source_purpose_candidates_validation]
+          .filter((ref): ref is string => ref !== null),
+      ),
+      completedStep(
+        "purpose_confirmation",
+        "host_or_user",
+        confirmationProviderPerformer(args.confirmationProvider),
+        [args.artifactRefs.purpose_confirmation]
+          .filter((ref): ref is string => ref !== null),
+      ),
+      completedStep(
+        "purpose_confirmation_validation",
+        "runtime",
+        runtimePerformer(),
+        [args.artifactRefs.purpose_confirmation_validation]
+          .filter((ref): ref is string => ref !== null),
+      ),
       completedStep(
         "candidate_inventory",
         "host_llm",
@@ -1312,6 +1599,224 @@ function createRunManifest(args: {
           runtimePerformer(),
           "handoff-decision-validation.yaml is emitted after pre-handoff manifest validation.",
           "Pre-handoff manifest validation must not certify future handoff validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_baseline", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_baseline,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_baseline",
+          "runtime",
+          runtimePerformer(),
+          "maturation-baseline.yaml is emitted after handoff validation.",
+          "Pre-handoff manifest validation must not certify future maturation baseline.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_baseline_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_baseline_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_baseline_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-baseline-validation.yaml is emitted after maturation baseline.",
+          "Pre-handoff manifest validation must not certify future maturation baseline validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("actionability_matrix", "runtime", runtimePerformer(), [
+          args.artifactRefs.actionability_matrix,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "actionability_matrix",
+          "runtime",
+          runtimePerformer(),
+          "actionability-matrix.yaml is emitted after maturation baseline validation.",
+          "Pre-handoff manifest validation must not certify future actionability matrix.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("actionability_matrix_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.actionability_matrix_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "actionability_matrix_validation",
+          "runtime",
+          runtimePerformer(),
+          "actionability-matrix-validation.yaml is emitted after actionability matrix.",
+          "Pre-handoff manifest validation must not certify future actionability matrix validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "maturation_question_frontier",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.maturation_question_frontier]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "maturation_question_frontier",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "maturation-question-frontier.yaml is emitted after actionability matrix validation.",
+          "Pre-handoff manifest validation must not certify future maturation question frontier.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_question_frontier_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_question_frontier_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_question_frontier_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-question-frontier-validation.yaml is emitted after question frontier.",
+          "Pre-handoff manifest validation must not certify future maturation question frontier validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "maturation_closure_frontier",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.maturation_closure_frontier]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "maturation_closure_frontier",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "maturation-closure-frontier.yaml is emitted after question frontier validation.",
+          "Pre-handoff manifest validation must not certify future maturation closure frontier.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_closure_frontier_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_closure_frontier_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_closure_frontier_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-closure-frontier-validation.yaml is emitted after closure frontier.",
+          "Pre-handoff manifest validation must not certify future maturation closure frontier validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_authority_response", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_authority_response,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_authority_response",
+          "runtime",
+          runtimePerformer(),
+          "maturation-authority-response.yaml is emitted after closure frontier validation.",
+          "Pre-handoff manifest validation must not certify future maturation authority response.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_authority_response_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_authority_response_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_authority_response_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-authority-response-validation.yaml is emitted after authority response.",
+          "Pre-handoff manifest validation must not certify future maturation authority response validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "answer_support_ledger",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.answer_support_ledger]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "answer_support_ledger",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "answer-support-ledger.yaml is emitted after authority response validation.",
+          "Pre-handoff manifest validation must not certify future answer support ledger.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("answer_support_ledger_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.answer_support_ledger_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "answer_support_ledger_validation",
+          "runtime",
+          runtimePerformer(),
+          "answer-support-ledger-validation.yaml is emitted after answer support ledger.",
+          "Pre-handoff manifest validation must not certify future answer support validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "maturation_answer_claims",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.maturation_answer_claims]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "maturation_answer_claims",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "maturation-answer-claims.yaml is emitted after answer support validation.",
+          "Pre-handoff manifest validation must not certify future maturation answer claims.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_answer_claims_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_answer_claims_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_answer_claims_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-answer-claims-validation.yaml is emitted after answer claims.",
+          "Pre-handoff manifest validation must not certify future maturation answer claims validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep(
+          "ontology_expansion",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          [args.artifactRefs.ontology_expansion]
+            .filter((ref): ref is string => ref !== null),
+        )
+        : skippedStep(
+          "ontology_expansion",
+          "host_llm",
+          directiveAuthorPerformer(args.directiveAuthor),
+          "ontology-expansion.yaml is emitted after answer claims validation.",
+          "Pre-handoff manifest validation must not certify future ontology expansion.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("ontology_expansion_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.ontology_expansion_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "ontology_expansion_validation",
+          "runtime",
+          runtimePerformer(),
+          "ontology-expansion-validation.yaml is emitted after ontology expansion.",
+          "Pre-handoff manifest validation must not certify future ontology expansion validation.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_continuation_decision", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_continuation_decision,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_continuation_decision",
+          "runtime",
+          runtimePerformer(),
+          "maturation-continuation-decision.yaml is emitted after ontology expansion validation.",
+          "Pre-handoff manifest validation must not certify future maturation continuation decision.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("maturation_continuation_decision_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.maturation_continuation_decision_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "maturation_continuation_decision_validation",
+          "runtime",
+          runtimePerformer(),
+          "maturation-continuation-decision-validation.yaml is emitted after continuation decision.",
+          "Pre-handoff manifest validation must not certify future maturation continuation validation.",
         ),
       args.terminalArtifactsCompleted
         ? completedStep(
@@ -1510,6 +2015,8 @@ const ACTIONABLE_ONTOLOGY_SEED_JSON_SHAPE = [
   "handoff_limitations=[{limitation_id,limitation_kind,description,affected_refs,missing_source_refs,mitigation_or_next_action,evidence_refs}]",
           "Every evidence_refs item must be an object copied from an observed source with observation_id,target_material_kind,source_ref,location. Do not use a bare observation id string in evidence_refs.",
           "Use the exact *_id key names above. Do not use id, claim_id, or candidate_id as a substitute for concept_id, object_type_id, actor_type_id, action_type_id, workflow_id, limitation_id, etc.",
+          "conceptual_frame.associations[].source_concept_id and target_concept_id may only reference conceptual_frame.concepts[].concept_id values. Do not point conceptual associations at object_type_id, workflow_id, action_type_id, binding_id, policy_id, or limitation_id values.",
+          "Every limitation_refs value anywhere in the seed must resolve to exactly one handoff_limitations[].limitation_id in the same seed. If you preserve or invent a limitation id, also create the corresponding handoff limitation row.",
           "data_binding_layer.source_bindings.source_ref, read_models.source_refs, writebacks.target_source_refs, provenance_bindings.source_ref, source_authority.included_source_refs, and source_authority.excluded_source_refs must use only observed_source_refs.",
           "Do not put runtime artifact refs such as source-observations.yaml, candidate-disposition.yaml, validation files, or final-output.md into source_ref fields. Runtime artifacts may be named in timestamp_ref, authority_ref, rationale, or mapping text only.",
           "Skipped or unsupported material refs must not appear in included_source_refs or excluded_source_refs; record them in source_authority.source_gaps or handoff_limitations.missing_source_refs instead.",
@@ -1556,6 +2063,196 @@ function evidenceRefsFromIds(args: {
   return refs;
 }
 
+function sourcePurposeCandidateFromLlm(args: {
+  raw: Record<string, unknown>;
+  index: number;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): ReconstructSourcePurposeCandidatesArtifact["purpose_candidates"][number] {
+  const raw = args.raw;
+  const candidatePath = `purpose_candidates[${args.index}]`;
+  const evidenceObservationIds = stringArray(
+    raw.supporting_evidence_observation_ids,
+    `${candidatePath}.supporting_evidence_observation_ids`,
+  );
+  const supportingEvidenceRefs = evidenceRefsFromIds({
+    observationIds: evidenceObservationIds,
+    sourceObservations: args.sourceObservations,
+    fieldName: `${candidatePath}.supporting_evidence_observation_ids`,
+  });
+  const adequacyFrame = recordValue(
+    raw.adequacy_frame,
+    `${candidatePath}.adequacy_frame`,
+  );
+  const materialKindRequirements = recordValue(
+    adequacyFrame.material_kind_requirements,
+    `${candidatePath}.adequacy_frame.material_kind_requirements`,
+  );
+  const targetMaterialKind = enumString(
+    materialKindRequirements.target_material_kind,
+    TARGET_MATERIAL_KINDS,
+    `${candidatePath}.adequacy_frame.material_kind_requirements.target_material_kind`,
+  );
+  return {
+    purpose_candidate_id: optionalString(raw.purpose_candidate_id) ??
+      `purpose_candidate_${args.index + 1}`,
+    statement: stringValue(raw.statement, `${candidatePath}.statement`),
+    rank: enumString(
+      raw.rank,
+      ["primary", "secondary", "candidate", "rejected"] as const,
+      `${candidatePath}.rank`,
+    ),
+    purpose_source_status: enumString(
+      raw.purpose_source_status,
+      [
+        "explicit_source_declared",
+        "convergent_inferred",
+        "limitation_backed",
+        "unresolved",
+      ] as const,
+      `${candidatePath}.purpose_source_status`,
+    ),
+    evidence_kind_refs: stringArray(
+      raw.evidence_kind_refs,
+      `${candidatePath}.evidence_kind_refs`,
+    ).map((kind) =>
+      enumString(
+        kind,
+        ["P1", "P2", "P3", "P4", "P5"] as const,
+        `${candidatePath}.evidence_kind_refs[]`,
+      )
+    ),
+    supporting_evidence_refs: supportingEvidenceRefs,
+    contradicting_source_refs: stringArray(
+      raw.contradicting_source_refs ?? [],
+      `${candidatePath}.contradicting_source_refs`,
+    ),
+    adequacy_frame: {
+      frame_id: stringValue(
+        adequacyFrame.frame_id,
+        `${candidatePath}.adequacy_frame.frame_id`,
+      ),
+      frame_kind: stringValue(
+        adequacyFrame.frame_kind,
+        `${candidatePath}.adequacy_frame.frame_kind`,
+      ),
+      frame_status: enumString(
+        adequacyFrame.frame_status,
+        [
+          "source_declared",
+          "evidence_inferred",
+          "limitation_backed",
+          "unresolved",
+        ] as const,
+        `${candidatePath}.adequacy_frame.frame_status`,
+      ),
+      adequacy_claim: stringValue(
+        adequacyFrame.adequacy_claim,
+        `${candidatePath}.adequacy_frame.adequacy_claim`,
+      ),
+      material_kind_requirements: {
+        target_material_kind: targetMaterialKind,
+        required_facets: stringArray(
+          materialKindRequirements.required_facets,
+          `${candidatePath}.adequacy_frame.material_kind_requirements.required_facets`,
+        ),
+        optional_facets: stringArray(
+          materialKindRequirements.optional_facets ?? [],
+          `${candidatePath}.adequacy_frame.material_kind_requirements.optional_facets`,
+        ),
+        rationale: stringValue(
+          materialKindRequirements.rationale,
+          `${candidatePath}.adequacy_frame.material_kind_requirements.rationale`,
+        ),
+      },
+      required_elements: records(
+        adequacyFrame.required_elements,
+        `${candidatePath}.adequacy_frame.required_elements`,
+      ).map((element, elementIndex) => {
+        const elementPath =
+          `${candidatePath}.adequacy_frame.required_elements[${elementIndex}]`;
+        const elementEvidenceIds = stringArray(
+          element.supporting_evidence_observation_ids ?? evidenceObservationIds,
+          `${elementPath}.supporting_evidence_observation_ids`,
+        );
+        const supportingEvidenceRefs = evidenceRefsFromIds({
+          observationIds: elementEvidenceIds,
+          sourceObservations: args.sourceObservations,
+          fieldName: `${elementPath}.supporting_evidence_observation_ids`,
+        });
+        const memberTargetMaterialKindRaw = optionalString(
+          element.member_target_material_kind,
+        );
+        const authoredMemberScopeRefs = stringArray(
+          element.member_scope_refs ?? [],
+          `${elementPath}.member_scope_refs`,
+        );
+        const authoredMemberSourceRefs = stringArray(
+          element.member_source_refs ?? [],
+          `${elementPath}.member_source_refs`,
+        );
+        const authoredCrossMaterialRefRefs = stringArray(
+          element.cross_material_ref_refs ?? [],
+          `${elementPath}.cross_material_ref_refs`,
+        );
+        const derivedMemberTargetMaterialKind =
+          derivedTargetMaterialKindFromEvidence(supportingEvidenceRefs);
+        return {
+          element_id: stringValue(element.element_id, `${elementPath}.element_id`),
+          element_kind: stringValue(element.element_kind, `${elementPath}.element_kind`),
+          material_facet_kind: stringValue(
+            element.material_facet_kind,
+            `${elementPath}.material_facet_kind`,
+          ),
+          description: stringValue(element.description, `${elementPath}.description`),
+          actionability_surface_refs: stringArray(
+            element.actionability_surface_refs,
+            `${elementPath}.actionability_surface_refs`,
+          ),
+          maturity_dimension_refs: stringArray(
+            element.maturity_dimension_refs,
+            `${elementPath}.maturity_dimension_refs`,
+          ),
+          member_scope_refs: authoredMemberScopeRefs.length > 0
+            ? authoredMemberScopeRefs
+            : derivedMemberScopeRefsFromEvidence(supportingEvidenceRefs),
+          member_target_material_kind: memberTargetMaterialKindRaw
+            ? enumString(
+              memberTargetMaterialKindRaw,
+              TARGET_MATERIAL_KINDS,
+              `${elementPath}.member_target_material_kind`,
+            )
+            : derivedMemberTargetMaterialKind,
+          member_source_refs: authoredMemberSourceRefs.length > 0
+            ? authoredMemberSourceRefs
+            : uniqueEvidenceSourceRefs(supportingEvidenceRefs),
+          cross_material_ref_refs: authoredCrossMaterialRefRefs.length > 0
+            ? authoredCrossMaterialRefRefs
+            : uniqueEvidenceSourceRefs(supportingEvidenceRefs),
+          supporting_evidence_refs: supportingEvidenceRefs,
+          expected_seed_ref_families: stringArray(
+            element.expected_seed_ref_families,
+            `${elementPath}.expected_seed_ref_families`,
+          ),
+          closure_expectation: enumString(
+            element.closure_expectation,
+            ["model_or_limit", "frontier_required"] as const,
+            `${elementPath}.closure_expectation`,
+          ),
+        };
+      }),
+    },
+    ranking_rationale: stringValue(
+      raw.ranking_rationale,
+      `${candidatePath}.ranking_rationale`,
+    ),
+    limitation_refs: stringArray(
+      raw.limitation_refs ?? [],
+      `${candidatePath}.limitation_refs`,
+    ),
+  };
+}
+
 function candidateKindIds(registry: ReconstructContractRegistry): string[] {
   return registry.candidate_kind_registry.map((record) => record.candidate_kind_id);
 }
@@ -1585,7 +2282,7 @@ function proofContractIds(records: Array<{ contract_ref_id: string }>): string[]
 function candidateTargetRefPlacementHint(dispositionId: string): string {
   switch (dispositionId) {
     case "promoted_to_seed_layer":
-      return "place the target_seed_ref exactly as a first-class seed record id: concept_id, object_type_id, link_type_id, value_type_id, constraint_id, actor_type_id, role_id, policy_id, action_type_id, function_id, workflow_id, state_model_id, lifecycle rule_id, binding_id, read_model_id, writeback_id, or provenance_id";
+      return "place the target_seed_ref exactly as a first-class seed record id: concept_id, object_type_id, link_type_id, value_type_id, constraint_id, actor_type_id, role_id, policy_id, action_type_id, function_id, workflow_id, state_model_id, lifecycle rule_id, binding_id, read_model_id, writeback_id, provenance_id, or limitation_id";
     case "represented_as_property":
       return "place the target_seed_ref exactly as a semantic_layer.object_types[].properties[].property_id";
     case "represented_as_link":
@@ -1627,6 +2324,28 @@ function evidenceObservationIdsFromEvidenceRefs(
   return evidenceRefs.map((ref) => ref.observation_id);
 }
 
+function uniqueEvidenceSourceRefs(
+  evidenceRefs: ReconstructEvidenceRef[],
+): string[] {
+  return [...new Set(evidenceRefs.map((ref) => ref.source_ref))];
+}
+
+function derivedMemberScopeRefsFromEvidence(
+  evidenceRefs: ReconstructEvidenceRef[],
+): string[] {
+  return [
+    ...new Set(evidenceRefs.map((ref) => `observation:${ref.observation_id}`)),
+  ];
+}
+
+function derivedTargetMaterialKindFromEvidence(
+  evidenceRefs: ReconstructEvidenceRef[],
+): TargetMaterialKind | null {
+  const kinds = [...new Set(evidenceRefs.map((ref) => ref.target_material_kind))];
+  if (kinds.length === 0) return null;
+  return kinds.length === 1 ? kinds[0]! : "mixed";
+}
+
 function ontologySeedObservationIds(args: {
   candidateInventory: ReconstructCandidateInventoryArtifact;
   candidateDisposition: ReconstructCandidateDispositionArtifact;
@@ -1640,6 +2359,29 @@ function ontologySeedObservationIds(args: {
     ),
   ];
   return [...new Set(ids)].slice(0, ONTOLOGY_SEED_OBSERVATION_LIMIT);
+}
+
+function candidateInventoryObservationIds(
+  candidateInventory: ReconstructCandidateInventoryArtifact,
+): string[] {
+  return [
+    ...new Set(
+      candidateInventory.candidates.flatMap((candidate) =>
+        evidenceObservationIdsFromEvidenceRefs(candidate.evidence_refs)
+      ),
+    ),
+  ];
+}
+
+function observedSourceRefsForObservationIds(
+  sourceObservations: ReconstructSourceObservationsArtifact,
+  observationIds: string[],
+): string[] {
+  const allowedObservationIds = new Set(observationIds);
+  const sourceRefs = sourceObservations.observations
+    .filter((observation) => allowedObservationIds.has(observation.observation_id))
+    .map((observation) => observation.source_ref);
+  return [...new Set(sourceRefs)].slice(0, ONTOLOGY_SEED_OBSERVATION_LIMIT);
 }
 
 function compactCandidateInventoryForPrompt(
@@ -1808,6 +2550,199 @@ function candidateDispositionItemFromLlm(args: {
 
 function firstEvidenceRef(sourceObservations: ReconstructSourceObservationsArtifact): ReconstructEvidenceRef {
   return evidenceRefFromObservation(requireFirstObservation(sourceObservations));
+}
+
+function mockSourcePurposeCandidates(args: {
+  sessionId: string;
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsRef: string;
+  authorId: string;
+}): ReconstructSourcePurposeCandidatesArtifact {
+  const evidence = firstEvidenceRef(args.sourceObservations);
+  const mixedMemberScopeRefs =
+    args.targetMaterialProfile.target_material_kind === "mixed"
+      ? args.sourceObservations.observations.map((observation) =>
+        observation.observation_id
+      )
+      : [];
+  const mixedMemberSourceRefs =
+    args.targetMaterialProfile.target_material_kind === "mixed"
+      ? [...new Set(args.sourceObservations.observations.map((observation) =>
+        observation.source_ref
+      ))]
+      : [];
+  const mixedMemberTargetKind =
+    args.targetMaterialProfile.target_material_kind === "mixed"
+      ? evidence.target_material_kind
+      : null;
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    target_material_kind: args.targetMaterialProfile.target_material_kind,
+    source_observations_ref: args.sourceObservationsRef,
+    selected_source_profile_refs: args.targetMaterialProfile.selected_source_profiles,
+    purpose_candidates: [
+      {
+        purpose_candidate_id: "purpose-explain-observed-material",
+        statement:
+          "Explain the observed source material as an ontology seed that can support the next maturation iteration.",
+        rank: "primary",
+        purpose_source_status: "explicit_source_declared",
+        evidence_kind_refs: ["P1", "P2"],
+        supporting_evidence_refs: [evidence],
+        contradicting_source_refs: [],
+        adequacy_frame: {
+          frame_id: "frame-observed-material-maturation",
+          frame_kind: "operational_ontology_seed",
+          frame_status: "source_declared",
+          adequacy_claim:
+            "The seed must preserve observable objects, actors, actions, data bindings, and limitations needed for maturation.",
+          material_kind_requirements: {
+            target_material_kind: args.targetMaterialProfile.target_material_kind,
+            required_facets: ["object", "actor", "action", "data_source", "limitation"],
+            optional_facets: ["permission", "workflow"],
+            rationale:
+              "The mock path needs a compact but actionability-aware purpose frame.",
+          },
+          required_elements: [
+            {
+              element_id: "purpose-element-static-observed-material",
+              element_kind: "object",
+              material_facet_kind: "object",
+              description: "Represent the observed material and its evidence source.",
+              actionability_surface_refs: ["static_surface"],
+              maturity_dimension_refs: ["structure", "evidence"],
+              member_scope_refs: mixedMemberScopeRefs,
+              member_target_material_kind: mixedMemberTargetKind,
+              member_source_refs: mixedMemberSourceRefs,
+              cross_material_ref_refs: mixedMemberSourceRefs,
+              supporting_evidence_refs: [evidence],
+              expected_seed_ref_families: ["semantic_layer.object_types"],
+              closure_expectation: "model_or_limit",
+            },
+            {
+              element_id: "purpose-element-kinetic-explain-seed",
+              element_kind: "action",
+              material_facet_kind: "action",
+              description: "Represent the action of explaining the seed.",
+              actionability_surface_refs: ["kinetic_surface"],
+              maturity_dimension_refs: ["intent", "relation"],
+              member_scope_refs: mixedMemberScopeRefs,
+              member_target_material_kind: mixedMemberTargetKind,
+              member_source_refs: mixedMemberSourceRefs,
+              cross_material_ref_refs: mixedMemberSourceRefs,
+              supporting_evidence_refs: [evidence],
+              expected_seed_ref_families: ["kinetic_layer.action_types"],
+              closure_expectation: "model_or_limit",
+            },
+            {
+              element_id: "purpose-element-dynamic-boundary",
+              element_kind: "limitation",
+              material_facet_kind: "limitation",
+              description: "Represent uncertainty and runtime boundaries for maturation.",
+              actionability_surface_refs: ["dynamic_surface"],
+              maturity_dimension_refs: ["context", "external"],
+              member_scope_refs: mixedMemberScopeRefs,
+              member_target_material_kind: mixedMemberTargetKind,
+              member_source_refs: mixedMemberSourceRefs,
+              cross_material_ref_refs: mixedMemberSourceRefs,
+              supporting_evidence_refs: [evidence],
+              expected_seed_ref_families: ["handoff_limitations"],
+              closure_expectation: "model_or_limit",
+            },
+          ],
+        },
+        ranking_rationale:
+          "The mock path uses the observed material and declared reconstruct intent as direct source-purpose evidence.",
+        limitation_refs: [],
+      },
+    ],
+    selection: {
+      primary_purpose_candidate_id: "purpose-explain-observed-material",
+      selection_basis: "Mock selected the only source-backed purpose candidate.",
+      confirmation_policy_hint:
+        "Direct source-declared purpose does not require separate user confirmation.",
+      unresolved_reason: null,
+    },
+    directive_author: {
+      owner: "mock",
+      author_id: args.authorId,
+    },
+  };
+}
+
+function slugId(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "item";
+}
+
+function maturationQuestionFrontierRows(
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact,
+): ReconstructActionabilityMatrixArtifact["rows"] {
+  return actionabilityMatrix.rows.filter((row) =>
+    row.member_readiness === "frontier_required" &&
+    (row.materiality === "blocker" || row.materiality === "high")
+  );
+}
+
+function derivedMaturationQuestionFrontier(args: {
+  sessionId: string;
+  maturationBaselineRef: string;
+  maturationBaselineValidationRef: string;
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
+  actionabilityMatrixRef: string;
+  actionabilityMatrixValidationRef: string;
+  owner: "host_llm" | "mock";
+  authorId: string;
+}): ReconstructMaturationQuestionFrontierArtifact {
+  const rows = maturationQuestionFrontierRows(args.actionabilityMatrix);
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    maturation_baseline_ref: args.maturationBaselineRef,
+    maturation_baseline_validation_ref: args.maturationBaselineValidationRef,
+    actionability_matrix_ref: args.actionabilityMatrixRef,
+    actionability_matrix_validation_ref: args.actionabilityMatrixValidationRef,
+    questions: rows.map((row, index) => ({
+      question_id: `maturation-question-${index + 1}-${slugId(row.matrix_row_id)}`,
+      question:
+        `What evidence or authority is needed to validate ${row.purpose_element_ref} for ${row.actionability_surface_ref}/${row.maturity_dimension_ref}?`,
+      materiality: row.materiality,
+      materiality_ref: row.materiality_ref,
+      actionability_surface_refs: [row.actionability_surface_ref],
+      maturity_dimension_refs: [row.maturity_dimension_ref],
+      purpose_element_refs: [row.purpose_element_ref],
+      baseline_row_refs: row.baseline_row_refs,
+      competency_question_refs: row.competency_question_refs,
+      competency_assessment_refs: row.competency_assessment_refs,
+      domain_competency_trace_refs: [],
+      seed_ref_refs: row.supporting_refs.filter((ref) => !ref.endsWith(".yaml")),
+      current_answer_status: "unsupported",
+      expected_answer_kind: "explanation",
+      evidence_needed:
+        row.next_action || "Additional source evidence or authority is needed.",
+      authority_need: {
+        authority_kind: "none",
+        authority_scope: null,
+        blocking_if_unavailable: row.materiality === "blocker",
+        expected_response_kind: "unavailable_reason",
+      },
+      closure_frontier_hint_refs: row.member_source_refs.length > 0
+        ? row.member_source_refs.map((ref) => `source:${ref}`)
+        : row.baseline_row_refs.map((ref) => `baseline:${ref}`),
+      limitation_refs: row.limitation_refs,
+    })),
+    directive_author: {
+      owner: args.owner,
+      author_id: args.authorId,
+    },
+  };
 }
 
 function mockCandidateInventory(args: {
@@ -2367,6 +3302,7 @@ interface ObservationPromptPayloadOptions {
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
 const SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT = 300;
 const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
+const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
@@ -2862,6 +3798,85 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
     },
 
+    async writeSourcePurposeCandidates(input) {
+      const selectedObservationIdsForPurpose = selectedObservationIds(
+        input.sourceObservationDirective,
+      );
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "SourcePurposeCandidates",
+        maxTokens: 5200,
+        systemPrompt: [
+          baseSystem,
+          "Author source-purpose-candidates.yaml. Determine the target's source-derived purpose from observed source material, not from the user's generic reconstruct intent.",
+          "Always return at least one purpose candidate and exactly one primary candidate. Preserve rejected or contradicted alternatives instead of deleting them.",
+          "Use purpose_source_status exactly; never use source_purpose_status or inference_status.",
+          "P1 means the purpose is directly declared by the source. P2 means repeated source structure implies the same purpose. P3 means code/data workflow implies it. P4 means user-facing or operational language implies it. P5 means weak contextual hint only.",
+          "A primary purpose that is not explicit_source_declared must cite at least two evidence_kind_refs and one must be P2, P3, or P4.",
+          "Every required element must map to actionability_surface_refs including one or more of static_surface, kinetic_surface, dynamic_surface, and maturity_dimension_refs such as structure, relation, intent, principle, context, evidence, external.",
+          "Each candidate shape: {\"purpose_candidate_id\":\"purpose-...\",\"statement\":\"...\",\"rank\":\"primary|secondary|candidate|rejected\",\"purpose_source_status\":\"explicit_source_declared|convergent_inferred|limitation_backed|unresolved\",\"evidence_kind_refs\":[\"P1|P2|P3|P4|P5\"],\"supporting_evidence_observation_ids\":[\"...\"],\"contradicting_source_refs\":[\"...\"],\"adequacy_frame\":{\"frame_id\":\"...\",\"frame_kind\":\"...\",\"frame_status\":\"source_declared|evidence_inferred|limitation_backed|unresolved\",\"adequacy_claim\":\"...\",\"material_kind_requirements\":{\"target_material_kind\":\"...\",\"required_facets\":[\"...\"],\"optional_facets\":[\"...\"],\"rationale\":\"...\"},\"required_elements\":[{\"element_id\":\"...\",\"element_kind\":\"...\",\"material_facet_kind\":\"...\",\"description\":\"...\",\"actionability_surface_refs\":[\"static_surface|kinetic_surface|dynamic_surface\"],\"maturity_dimension_refs\":[\"structure|relation|intent|principle|context|evidence|external\"],\"member_scope_refs\":[\"...\"],\"member_target_material_kind\":\"code|spreadsheet|document|database|mixed|unknown\", \"member_source_refs\":[\"...\"],\"cross_material_ref_refs\":[\"...\"],\"supporting_evidence_observation_ids\":[\"...\"],\"expected_seed_ref_families\":[\"semantic_layer.object_types|dynamic_layer.actor_types|kinetic_layer.action_types|dynamic_layer.permission_policies|data_binding_layer.source_bindings|handoff_limitations\"],\"closure_expectation\":\"model_or_limit|frontier_required\"}]},\"ranking_rationale\":\"...\",\"limitation_refs\":[\"...\"]}.",
+          "For mixed targets, every required element that is not limitation-backed must carry member lineage: non-empty member_scope_refs, member_target_material_kind, member_source_refs, and cross_material_ref_refs. Use the supporting evidence source_ref values as member_source_refs and cross_material_ref_refs when no narrower lineage exists.",
+          "For non-mixed targets, member_scope_refs, member_source_refs, and cross_material_ref_refs may be empty and member_target_material_kind may be omitted.",
+          "JSON shape: {\"purpose_candidates\":[candidate],\"selection\":{\"primary_purpose_candidate_id\":\"...\",\"selection_basis\":\"...\",\"confirmation_policy_hint\":\"...\",\"unresolved_reason\":\"... or null\"}}",
+        ].join("\n"),
+        userPayload: {
+          session_id: input.sessionId,
+          intent: input.intent,
+          target_material_profile:
+            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+          source_observations_ref: input.sourceObservationsRef,
+          selected_observation_ids: selectedObservationIdsForPurpose,
+          selected_observations: input.sourceObservationDirective.selected_observations,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            observationIds: selectedObservationIdsForPurpose,
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
+          lens_judgment_index: input.lensJudgmentIndex,
+          exploration_synthesis: input.explorationSynthesis,
+          source_frontier_validation: input.sourceFrontierValidation,
+        },
+      });
+      const purposeCandidates = records(
+        raw.purpose_candidates,
+        "purpose_candidates",
+      ).map((candidate, index) =>
+        sourcePurposeCandidateFromLlm({
+          raw: candidate,
+          index,
+          targetMaterialProfile: input.targetMaterialProfile,
+          sourceObservations: input.sourceObservations,
+        })
+      );
+      const selection = recordValue(raw.selection, "selection");
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        target_material_kind: input.targetMaterialProfile.target_material_kind,
+        source_observations_ref: input.sourceObservationsRef,
+        selected_source_profile_refs: input.targetMaterialProfile.selected_source_profiles,
+        purpose_candidates: purposeCandidates,
+        selection: {
+          primary_purpose_candidate_id:
+            optionalString(selection.primary_purpose_candidate_id),
+          selection_basis: stringValue(
+            selection.selection_basis,
+            "selection.selection_basis",
+          ),
+          confirmation_policy_hint: stringValue(
+            selection.confirmation_policy_hint,
+            "selection.confirmation_policy_hint",
+          ),
+          unresolved_reason: optionalString(selection.unresolved_reason),
+        },
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
+      };
+    },
+
     async writeCandidateInventory(input) {
       const requiredCoverageObservationIds = selectedObservationIds(
         input.sourceObservationDirective,
@@ -2916,6 +3931,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeCandidateDisposition(input) {
+      const candidateObservationIds =
+        candidateInventoryObservationIds(input.candidateInventory);
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -2925,8 +3942,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           baseSystem,
           "Author candidate-disposition.yaml. Every candidate from candidate-inventory.yaml must receive exactly one disposition.",
           `Allowed disposition_id values: ${candidateDispositionIds(input.contractRegistry).join(", ")}.`,
-          "Use promoted_to_seed_layer only when target_seed_refs names planned canonical seed refs that ontology-seed.yaml must later realize. Use non-promoted dispositions when the candidate is represented, deferred, rejected, or only validation-facing.",
-          "target_seed_refs is required for promoted_to_seed_layer and every represented_as_* disposition. If no concrete target seed ref can be named, use deferred_by_source_gap or rejected_for_declared_purpose instead of a represented_as_* disposition.",
+          "This is a seed-kernel narrowing step. ontology-seed.yaml must become the first valid operational kernel, not an exhaustive ontology of every observed candidate.",
+          `Keep total target_seed_refs across promoted_to_seed_layer and represented_as_* dispositions within ${SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET} unless exceeding that budget is strictly necessary to represent the primary source-derived purpose across static, kinetic, and dynamic surfaces.`,
+          "Use promoted_to_seed_layer only for kernel-critical concepts, objects, actors, actions, workflows, permissions, bindings, or limitations that ontology-seed.yaml must realize now to remain coherent for the declared purpose.",
+          "Use deferred_to_maturation for relevant evidence-backed candidates that can be preserved for the maturation frontier without becoming immediate seed target obligations.",
+          "Use represented_as_validation_question only for a small number of material questions that block first-kernel validity. Do not convert every uncertainty or later improvement into a seed validation-question obligation.",
+          "Use deferred_by_source_gap when the candidate needs unobserved source or user confirmation. Use rejected_for_declared_purpose when it is outside the declared purpose.",
+          "target_seed_refs is required for promoted_to_seed_layer and every represented_as_* disposition. If no concrete target seed ref should be realized in the first seed kernel, use deferred_to_maturation, deferred_by_source_gap, or rejected_for_declared_purpose instead of a represented_as_* disposition.",
           "represented_as_actor_role may target only future dynamic_layer.actor_roles[].role_id values such as role_admin or role_dashboard_user. If a candidate needs actor_type_id values such as actor_user, use promoted_to_seed_layer instead.",
           "represented_as_property may target only future semantic_layer.object_types[].properties[].property_id values. Do not use represented_as_property for constraints, lifecycle rules, value literals, or policies unless the exact target ref will be copied into an object properties array.",
           "represented_as_link, represented_as_permission_rule, represented_as_data_binding, and represented_as_validation_question likewise require target refs that can be copied exactly into their named seed family.",
@@ -2937,8 +3959,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         userPayload: {
           intent: input.intent,
           candidate_inventory_ref: input.candidateInventoryRef,
-          candidate_inventory: input.candidateInventory,
+          candidate_inventory:
+            compactCandidateInventoryForPrompt(input.candidateInventory),
           source_observations: observationPromptPayload(input.sourceObservations, {
+            observationIds: candidateObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
           }),
         },
@@ -2963,6 +3987,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeOntologySeed(input) {
+      const seedObservationIds = ontologySeedObservationIds({
+        candidateInventory: input.candidateInventory,
+        candidateDisposition: input.candidateDisposition,
+      });
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -2971,6 +3999,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           "Author ontology-seed.yaml as an OntologySeed. This is not a concept map only and it is not action-ready by itself; it must include operational objects, actors, actions, permissions, data bindings, validation requirements, ontology maturation mapping, source authority, and limitations for the next maturation iteration.",
+          "Author a compact but schema-valid first-pass seed kernel. The goal is to satisfy required target refs, actionability surfaces, evidence closure, and handoff limits, not to exhaustively model every observed detail.",
+          "Never return an error object or ask to split the response. If the full ontology would be large, choose the smallest valid record set that realizes candidate_target_ref_obligations and records the rest as maturation limitations or deferred validation questions.",
+          "Use concise strings. Prefer one sentence for descriptions, rationales, statements, conditions, and summaries.",
+          "Keep record arrays bounded unless a candidate_target_ref_obligation requires more: concepts <= 12, associations <= 12, object_types <= 10, properties <= 5 per object, link_types <= 8, value_types <= 8, constraints <= 8, actor_types <= 8, actor_roles <= 8, permission_policies <= 10, action_types <= 8, workflows <= 5, source_bindings <= 12, read_models <= 8, unsupported_question_candidates <= 12, handoff_limitations <= 16.",
+          "For evidence_refs, copy only the strongest one or two evidence objects needed to support the row. Do not duplicate every available evidence object across every row.",
+          "Use source-purpose-candidates.yaml and purpose-confirmation-validation.yaml as the purpose authority. ontology-seed.yaml.purpose is only a bounded projection of the selected validated purpose candidate and confirmation result.",
           "Use candidate-disposition.yaml as the disposition authority. Do not duplicate the full disposition ledger in ontology-seed.yaml.",
           `validation_layer.coverage_axes allowed values: ${coverageAxisIds(input.contractRegistry).join(", ")}.`,
           "validation_layer.coverage_axes must include static_surface, kinetic_surface, and dynamic_surface. Static surface covers what exists and what evidence grounds it; kinetic surface covers who can do what and what changes; dynamic surface covers conditions, permissions, states, exceptions, runtime context, external dependencies, and unresolved decisions that change the answer.",
@@ -2989,11 +4023,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Every concept_id/object_type_id/actor_type_id/action_type_id/limitation_id must be stable and meaningful, for example object_user or action_review_session; do not use generic ids like ontology_seed.",
           "Every *_id value must be globally unique across the seed, except semantic_layer.object_types[].primary_key.property_id may reference a property_id from that same object's properties array.",
           "Use only observed_source_refs for every source_ref field. Use skipped_source_ref_summary only to describe aggregate source gaps or representative handoff limitations.",
+          "observed_source_refs is a bounded source-ref allowlist matching source_observations. Do not cite source refs that are absent from this allowlist.",
           "Do not use reconstruct runtime artifact names as source_ref values; they are artifact truth refs, not source evidence refs.",
           "The userPayload is intentionally compact. Treat candidate_inventory, candidate_disposition, candidate_target_ref_obligations, and source_observations as sufficient seed-authoring authority; do not request or invent omitted source details.",
           "candidate_inventory and candidate_disposition use evidence_observation_ids to avoid duplicate evidence payloads. Build seed evidence_refs by copying the matching full evidence objects from source_observations.",
           "source_observations is a bounded evidence-ref catalog for seed authoring, not the complete source-observations artifact. Use only listed observation ids in seed evidence_refs.",
           "skipped_source_ref_summary is a bounded summary. Do not expand it into exhaustive skipped ref lists in ontology-seed.yaml; record aggregate source gaps or representative limitations instead.",
+          "Before returning, run a reference-closure check: every conceptual association endpoint exists in conceptual_frame.concepts, every limitation_refs id exists in handoff_limitations, and every seed_ref_refs/affected_refs/target_ref points to an id defined in this same seed.",
           "Before returning, check every object_type_id has data binding coverage or appears in a handoff limitation affected_refs array.",
           "Every action must have actor_type_ids and object refs, or a handoff limitation. Every action must have permission policy coverage or a limitation. Every object must have source/read/provenance data binding coverage or a limitation.",
           "Any field named evidence_refs is reserved for evidence arrays only. Never put prose, policy text, artifact names, or source_ref strings in evidence_refs; use statement, rationale, policy, authority_scope, timestamp_ref, or *_mapping text fields instead.",
@@ -3003,6 +4039,20 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           intent: input.intent,
           target_material_profile:
             compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+          source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
+          source_purpose_candidates_validation_ref:
+            input.sourcePurposeCandidatesValidationRef,
+          selected_source_purpose_candidate_id:
+            input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id,
+          selected_source_purpose_frame_id:
+            input.sourcePurposeCandidatesValidation.selected_purpose_frame_id,
+          source_purpose_confirmation_required:
+            input.sourcePurposeCandidatesValidation.confirmation_required,
+          purpose_confirmation_ref: input.purposeConfirmationRef,
+          purpose_confirmation_validation_ref:
+            input.purposeConfirmationValidationRef,
+          purpose_confirmation_validation: input.purposeConfirmationValidation,
+          source_purpose_candidates: input.sourcePurposeCandidates,
           candidate_inventory_ref: input.candidateInventoryRef,
           candidate_inventory:
             compactCandidateInventoryForPrompt(input.candidateInventory),
@@ -3013,14 +4063,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             candidateTargetRefObligations(input.candidateDisposition),
           source_observations_ref: input.sourceObservationsRef,
           source_observations: observationPromptPayload(input.sourceObservations, {
-            observationIds: ontologySeedObservationIds({
-              candidateInventory: input.candidateInventory,
-              candidateDisposition: input.candidateDisposition,
-            }),
+            observationIds: seedObservationIds,
             includeStructuralData: false,
           }),
-          observed_source_refs: input.sourceObservations.observations
-            .map((observation) => observation.source_ref),
+          observed_source_refs: observedSourceRefsForObservationIds(
+            input.sourceObservations,
+            seedObservationIds,
+          ),
           skipped_source_ref_summary: skippedSourceRefPromptSummary({
             targetMaterialProfile: input.targetMaterialProfile,
             sourceObservations: input.sourceObservations,
@@ -3915,6 +4964,582 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
     },
 
+    async writeMaturationQuestionFrontier(input) {
+      const frontierRows = maturationQuestionFrontierRows(input.actionabilityMatrix);
+      if (frontierRows.length === 0) {
+        return derivedMaturationQuestionFrontier({
+          sessionId: input.sessionId,
+          maturationBaselineRef: input.maturationBaselineRef,
+          maturationBaselineValidationRef: input.maturationBaselineValidationRef,
+          actionabilityMatrix: input.actionabilityMatrix,
+          actionabilityMatrixRef: input.actionabilityMatrixRef,
+          actionabilityMatrixValidationRef: input.actionabilityMatrixValidationRef,
+          owner: "host_llm",
+          authorId,
+        });
+      }
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "MaturationQuestionFrontier",
+        maxTokens: 4200,
+        systemPrompt: [
+          baseSystem,
+          "Author maturation-question-frontier.yaml. Create concrete questions only for material actionability rows that remain frontier_required.",
+          "Preserve row ids, purpose elements, actionability surfaces, maturity dimensions, competency refs, and materiality from the matrix. Do not invent seed refs.",
+          "Each blocker/high question must cite a closure_frontier_hint_refs entry, a limitation_refs entry, or an authority_need whose authority_kind is not none.",
+          "JSON shape: {\"questions\":[{\"question_id\":\"...\",\"question\":\"...\",\"materiality\":\"blocker|high|medium|low|info\",\"materiality_ref\":\"...\",\"actionability_surface_refs\":[\"...\"],\"maturity_dimension_refs\":[\"...\"],\"purpose_element_refs\":[\"...\"],\"baseline_row_refs\":[\"...\"],\"competency_question_refs\":[\"...\"],\"competency_assessment_refs\":[\"...\"],\"domain_competency_trace_refs\":[\"...\"],\"seed_ref_refs\":[\"...\"],\"current_answer_status\":\"answerable|partially_answerable|unsupported|deferred|contradicted|not_applicable\",\"expected_answer_kind\":\"yes_no|explanation|list|mapping|gap_statement\",\"evidence_needed\":\"...\",\"authority_need\":{\"authority_kind\":\"none|user|external_system|domain_standard|runtime_capability\",\"authority_scope\":\"... or null\",\"blocking_if_unavailable\":true,\"expected_response_kind\":\"confirmation|value|policy|capability|external_reference|unavailable_reason\"},\"closure_frontier_hint_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
+        ].join("\n"),
+        userPayload: {
+          maturation_baseline_ref: input.maturationBaselineRef,
+          maturation_baseline_validation_ref: input.maturationBaselineValidationRef,
+          actionability_matrix_ref: input.actionabilityMatrixRef,
+          actionability_matrix_validation_ref:
+            input.actionabilityMatrixValidationRef,
+          frontier_required_rows: frontierRows,
+        },
+      });
+      const questions = records(raw.questions, "questions").map((question, index) => {
+        const fieldName = `questions[${index}]`;
+        const authorityNeed = recordValue(
+          question.authority_need,
+          `${fieldName}.authority_need`,
+        );
+        return {
+          question_id:
+            optionalString(question.question_id) ?? `maturation-question-${index + 1}`,
+          question: stringValue(question.question, `${fieldName}.question`),
+          materiality: enumString(
+            question.materiality,
+            ["blocker", "high", "medium", "low", "info"] as const,
+            `${fieldName}.materiality`,
+          ),
+          materiality_ref: stringValue(
+            question.materiality_ref,
+            `${fieldName}.materiality_ref`,
+          ),
+          actionability_surface_refs: stringArray(
+            question.actionability_surface_refs,
+            `${fieldName}.actionability_surface_refs`,
+          ),
+          maturity_dimension_refs: stringArray(
+            question.maturity_dimension_refs,
+            `${fieldName}.maturity_dimension_refs`,
+          ),
+          purpose_element_refs: stringArray(
+            question.purpose_element_refs,
+            `${fieldName}.purpose_element_refs`,
+          ),
+          baseline_row_refs: stringArray(
+            question.baseline_row_refs,
+            `${fieldName}.baseline_row_refs`,
+          ),
+          competency_question_refs: stringArray(
+            question.competency_question_refs ?? [],
+            `${fieldName}.competency_question_refs`,
+          ),
+          competency_assessment_refs: stringArray(
+            question.competency_assessment_refs ?? [],
+            `${fieldName}.competency_assessment_refs`,
+          ),
+          domain_competency_trace_refs: stringArray(
+            question.domain_competency_trace_refs ?? [],
+            `${fieldName}.domain_competency_trace_refs`,
+          ),
+          seed_ref_refs: stringArray(
+            question.seed_ref_refs ?? [],
+            `${fieldName}.seed_ref_refs`,
+          ),
+          current_answer_status: enumString(
+            question.current_answer_status,
+            ANSWER_STATUSES,
+            `${fieldName}.current_answer_status`,
+          ),
+          expected_answer_kind: enumString(
+            question.expected_answer_kind,
+            ["yes_no", "explanation", "list", "mapping", "gap_statement"] as const,
+            `${fieldName}.expected_answer_kind`,
+          ),
+          evidence_needed: stringValue(
+            question.evidence_needed,
+            `${fieldName}.evidence_needed`,
+          ),
+          authority_need: {
+            authority_kind: enumString(
+              authorityNeed.authority_kind,
+              [
+                "none",
+                "user",
+                "external_system",
+                "domain_standard",
+                "runtime_capability",
+              ] as const,
+              `${fieldName}.authority_need.authority_kind`,
+            ),
+            authority_scope: optionalString(authorityNeed.authority_scope),
+            blocking_if_unavailable:
+              Boolean(authorityNeed.blocking_if_unavailable),
+            expected_response_kind: enumString(
+              authorityNeed.expected_response_kind,
+              [
+                "confirmation",
+                "value",
+                "policy",
+                "capability",
+                "external_reference",
+                "unavailable_reason",
+              ] as const,
+              `${fieldName}.authority_need.expected_response_kind`,
+            ),
+          },
+          closure_frontier_hint_refs: stringArray(
+            question.closure_frontier_hint_refs ?? [],
+            `${fieldName}.closure_frontier_hint_refs`,
+          ),
+          limitation_refs: stringArray(
+            question.limitation_refs ?? [],
+            `${fieldName}.limitation_refs`,
+          ),
+        };
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        maturation_baseline_ref: input.maturationBaselineRef,
+        maturation_baseline_validation_ref: input.maturationBaselineValidationRef,
+        actionability_matrix_ref: input.actionabilityMatrixRef,
+        actionability_matrix_validation_ref:
+          input.actionabilityMatrixValidationRef,
+        questions,
+        directive_author: {
+          owner: "host_llm",
+          author_id: authorId,
+        },
+      };
+    },
+
+    async writeMaturationClosureFrontier(input) {
+      const materialQuestions = input.maturationQuestionFrontier.questions.filter(
+        (question) =>
+          (question.materiality === "blocker" || question.materiality === "high") &&
+          question.current_answer_status !== "answerable" &&
+          question.current_answer_status !== "not_applicable",
+      );
+      if (materialQuestions.length === 0) {
+        return {
+          schema_version: "1",
+          session_id: input.sessionId,
+          created_at: isoNow(),
+          round_id: input.roundId,
+          question_frontier_ref: input.maturationQuestionFrontierRef,
+          source_requests: [],
+          authority_requests: [],
+          directive_author: { owner: "host_llm", author_id: authorId },
+        };
+      }
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "MaturationClosureFrontier",
+        maxTokens: 3600,
+        systemPrompt: [
+          baseSystem,
+          "Author maturation-closure-frontier.yaml. Name only next authority needed to answer material unanswered maturation questions.",
+          "Source requests may target only inventory_source_refs that are not in observed_source_refs. Do not request already observed source refs.",
+          "Authority requests are for user, external_system, domain_standard, or runtime_capability gaps. Do not encode source locations as authority requests.",
+          "If no available source or authority can advance a question, leave requests empty; continuation decision will project blocked.",
+          "JSON shape: {\"source_requests\":[{\"source_request_id\":\"...\",\"question_refs\":[\"...\"],\"member_scope_refs\":[\"...\"],\"member_source_refs\":[\"...\"],\"cross_material_ref_refs\":[\"...\"],\"requested_source_ref\":\"...\",\"requested_location\":\"... or null\",\"target_material_kind\":\"code|spreadsheet|document|database|mixed|unknown\",\"expected_evidence_kind\":\"...\",\"reason\":\"...\"}],\"authority_requests\":[{\"authority_request_id\":\"...\",\"question_refs\":[\"...\"],\"authority_kind\":\"user|external_system|domain_standard|runtime_capability\",\"authority_scope\":\"...\",\"request_summary\":\"...\",\"request_rationale\":\"...\",\"blocking_if_unavailable\":true,\"expected_response_kind\":\"confirmation|value|policy|capability|external_reference|unavailable_reason\",\"limitation_refs\":[\"...\"]}]}",
+        ].join("\n"),
+        userPayload: {
+          round_id: input.roundId,
+          question_frontier_ref: input.maturationQuestionFrontierRef,
+          question_frontier_validation:
+            input.maturationQuestionFrontierValidation,
+          material_questions: materialQuestions,
+          inventory_source_refs: input.sourceInventory.inventory_units.map((unit) => ({
+            ref: unit.ref,
+            target_material_kind: unit.target_material_kind,
+            exists: unit.exists,
+            scan_status: unit.scan_status,
+          })),
+          observed_source_refs: input.sourceObservations.observations
+            .map((observation) => observation.source_ref),
+        },
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        question_frontier_ref: input.maturationQuestionFrontierRef,
+        source_requests: records(raw.source_requests ?? [], "source_requests")
+          .map((request, index) => ({
+            source_request_id: optionalString(request.source_request_id) ??
+              `maturation-source-request-${index + 1}`,
+            question_refs: stringArray(
+              request.question_refs,
+              `source_requests[${index}].question_refs`,
+            ),
+            member_scope_refs: stringArray(
+              request.member_scope_refs ?? [],
+              `source_requests[${index}].member_scope_refs`,
+            ),
+            member_source_refs: stringArray(
+              request.member_source_refs ?? [],
+              `source_requests[${index}].member_source_refs`,
+            ),
+            cross_material_ref_refs: stringArray(
+              request.cross_material_ref_refs ?? [],
+              `source_requests[${index}].cross_material_ref_refs`,
+            ),
+            requested_source_ref: stringValue(
+              request.requested_source_ref,
+              `source_requests[${index}].requested_source_ref`,
+            ),
+            requested_location: optionalString(request.requested_location),
+            target_material_kind: enumString(
+              request.target_material_kind,
+              TARGET_MATERIAL_KINDS,
+              `source_requests[${index}].target_material_kind`,
+            ),
+            expected_evidence_kind: stringValue(
+              request.expected_evidence_kind,
+              `source_requests[${index}].expected_evidence_kind`,
+            ),
+            reason: stringValue(request.reason, `source_requests[${index}].reason`),
+          })),
+        authority_requests: records(
+          raw.authority_requests ?? [],
+          "authority_requests",
+        ).map((request, index) => ({
+          authority_request_id: optionalString(request.authority_request_id) ??
+            `maturation-authority-request-${index + 1}`,
+          question_refs: stringArray(
+            request.question_refs,
+            `authority_requests[${index}].question_refs`,
+          ),
+          authority_kind: enumString(
+            request.authority_kind,
+            ["user", "external_system", "domain_standard", "runtime_capability"] as const,
+            `authority_requests[${index}].authority_kind`,
+          ),
+          authority_scope: stringValue(
+            request.authority_scope,
+            `authority_requests[${index}].authority_scope`,
+          ),
+          request_summary: stringValue(
+            request.request_summary,
+            `authority_requests[${index}].request_summary`,
+          ),
+          request_rationale: stringValue(
+            request.request_rationale,
+            `authority_requests[${index}].request_rationale`,
+          ),
+          blocking_if_unavailable: Boolean(request.blocking_if_unavailable),
+          expected_response_kind: enumString(
+            request.expected_response_kind,
+            [
+              "confirmation",
+              "value",
+              "policy",
+              "capability",
+              "external_reference",
+              "unavailable_reason",
+            ] as const,
+            `authority_requests[${index}].expected_response_kind`,
+          ),
+          limitation_refs: stringArray(
+            request.limitation_refs ?? [],
+            `authority_requests[${index}].limitation_refs`,
+          ),
+        })),
+        directive_author: { owner: "host_llm", author_id: authorId },
+      };
+    },
+
+    async writeAnswerSupportLedger(input) {
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "AnswerSupportLedger",
+        maxTokens: 3800,
+        systemPrompt: [
+          baseSystem,
+          "Author answer-support-ledger.yaml. Include evidence clusters only when the current evidence or explicit authority can positively support an answer.",
+          "Do not create clusters for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
+          "For convergent_source_evidence, cite at least two independent evidence_observation_ids unless the answer is direct_authority.",
+          "JSON shape: {\"evidence_clusters\":[{\"evidence_cluster_id\":\"...\",\"question_refs\":[\"...\"],\"support_mode\":\"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence\",\"proposed_answer_summary\":\"...\",\"evidence_observation_ids\":[\"...\"],\"proof_refs\":[\"...\"],\"user_confirmation_refs\":[\"...\"],\"authority_response_refs\":[\"...\"],\"independence_basis\":\"...\",\"contradiction_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
+        ].join("\n"),
+        userPayload: {
+          round_id: input.roundId,
+          question_frontier_ref: input.maturationQuestionFrontierRef,
+          question_frontier_validation:
+            input.maturationQuestionFrontierValidation,
+          questions: input.maturationQuestionFrontier.questions,
+          closure_frontier: input.maturationClosureFrontier,
+          closure_frontier_validation: input.maturationClosureFrontierValidation,
+          authority_response: input.maturationAuthorityResponse,
+          authority_response_validation:
+            input.maturationAuthorityResponseValidation,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          }),
+        },
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        evidence_clusters: records(
+          raw.evidence_clusters ?? [],
+          "evidence_clusters",
+        ).map((cluster, index) => ({
+          evidence_cluster_id: optionalString(cluster.evidence_cluster_id) ??
+            `evidence-cluster-${index + 1}`,
+          question_refs: stringArray(
+            cluster.question_refs,
+            `evidence_clusters[${index}].question_refs`,
+          ),
+          support_mode: enumString(
+            cluster.support_mode,
+            [
+              "direct_authority",
+              "runtime_proof",
+              "user_confirmation",
+              "authority_response",
+              "convergent_source_evidence",
+            ] as const,
+            `evidence_clusters[${index}].support_mode`,
+          ),
+          proposed_answer_summary: stringValue(
+            cluster.proposed_answer_summary,
+            `evidence_clusters[${index}].proposed_answer_summary`,
+          ),
+          evidence_refs: evidenceRefsFromIds({
+            observationIds: stringArray(
+              cluster.evidence_observation_ids ?? [],
+              `evidence_clusters[${index}].evidence_observation_ids`,
+            ),
+            sourceObservations: input.sourceObservations,
+            fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
+          }),
+          proof_refs: stringArray(
+            cluster.proof_refs ?? [],
+            `evidence_clusters[${index}].proof_refs`,
+          ),
+          user_confirmation_refs: stringArray(
+            cluster.user_confirmation_refs ?? [],
+            `evidence_clusters[${index}].user_confirmation_refs`,
+          ),
+          authority_response_refs: stringArray(
+            cluster.authority_response_refs ?? [],
+            `evidence_clusters[${index}].authority_response_refs`,
+          ),
+          independence_basis: stringValue(
+            cluster.independence_basis,
+            `evidence_clusters[${index}].independence_basis`,
+          ),
+          contradiction_refs: stringArray(
+            cluster.contradiction_refs ?? [],
+            `evidence_clusters[${index}].contradiction_refs`,
+          ),
+          limitation_refs: stringArray(
+            cluster.limitation_refs ?? [],
+            `evidence_clusters[${index}].limitation_refs`,
+          ),
+        })),
+        directive_author: { owner: "host_llm", author_id: authorId },
+      };
+    },
+
+    async writeMaturationAnswerClaims(input) {
+      if (input.answerSupportLedger.evidence_clusters.length === 0) {
+        return {
+          schema_version: "1",
+          session_id: input.sessionId,
+          created_at: isoNow(),
+          round_id: input.roundId,
+          answer_claims: [],
+          directive_author: { owner: "host_llm", author_id: authorId },
+        };
+      }
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "MaturationAnswerClaims",
+        maxTokens: 3200,
+        systemPrompt: [
+          baseSystem,
+          "Author maturation-answer-claims.yaml from validated positive support clusters only.",
+          "Do not write claims for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
+          "Partially answered claims must include limitation_refs for the remaining gap.",
+          "JSON shape: {\"answer_claims\":[{\"answer_claim_id\":\"...\",\"question_id\":\"...\",\"answer\":\"...\",\"answer_status\":\"answered|partially_answered\",\"support_mode\":\"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence\",\"evidence_cluster_refs\":[\"...\"],\"supporting_evidence_observation_ids\":[\"...\"],\"target_surface_refs\":[\"...\"],\"target_dimension_refs\":[\"...\"],\"purpose_element_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
+        ].join("\n"),
+        userPayload: {
+          question_frontier_validation:
+            input.maturationQuestionFrontierValidation,
+          questions: input.maturationQuestionFrontier.questions,
+          answer_support_validation: input.answerSupportLedgerValidation,
+          evidence_clusters: input.answerSupportLedger.evidence_clusters,
+        },
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        answer_claims: records(raw.answer_claims ?? [], "answer_claims")
+          .map((claim, index) => ({
+            answer_claim_id: optionalString(claim.answer_claim_id) ??
+              `maturation-answer-claim-${index + 1}`,
+            question_id: stringValue(
+              claim.question_id,
+              `answer_claims[${index}].question_id`,
+            ),
+            answer: stringValue(claim.answer, `answer_claims[${index}].answer`),
+            answer_status: enumString(
+              claim.answer_status,
+              ["answered", "partially_answered"] as const,
+              `answer_claims[${index}].answer_status`,
+            ),
+            support_mode: enumString(
+              claim.support_mode,
+              [
+                "direct_authority",
+                "runtime_proof",
+                "user_confirmation",
+                "authority_response",
+                "convergent_source_evidence",
+              ] as const,
+              `answer_claims[${index}].support_mode`,
+            ),
+            evidence_cluster_refs: stringArray(
+              claim.evidence_cluster_refs,
+              `answer_claims[${index}].evidence_cluster_refs`,
+            ),
+            supporting_evidence_refs: evidenceRefsFromIds({
+              observationIds: stringArray(
+                claim.supporting_evidence_observation_ids ?? [],
+                `answer_claims[${index}].supporting_evidence_observation_ids`,
+              ),
+              sourceObservations: input.sourceObservations,
+              fieldName:
+                `answer_claims[${index}].supporting_evidence_observation_ids`,
+            }),
+            target_surface_refs: stringArray(
+              claim.target_surface_refs,
+              `answer_claims[${index}].target_surface_refs`,
+            ),
+            target_dimension_refs: stringArray(
+              claim.target_dimension_refs,
+              `answer_claims[${index}].target_dimension_refs`,
+            ),
+            purpose_element_refs: stringArray(
+              claim.purpose_element_refs,
+              `answer_claims[${index}].purpose_element_refs`,
+            ),
+            limitation_refs: stringArray(
+              claim.limitation_refs ?? [],
+              `answer_claims[${index}].limitation_refs`,
+            ),
+          })),
+        directive_author: { owner: "host_llm", author_id: authorId },
+      };
+    },
+
+    async writeOntologyExpansion(input) {
+      if (input.answerClaims.answer_claims.length === 0) {
+        return {
+          schema_version: "1",
+          session_id: input.sessionId,
+          created_at: isoNow(),
+          answer_claims_ref: input.answerClaimsRef,
+          source_seed_ref: input.ontologySeedRef,
+          expansions: [],
+          directive_author: { owner: "host_llm", author_id: authorId },
+        };
+      }
+      const raw = await callJsonAuthor({
+        llmCall,
+        llmConfig,
+        artifactName: "OntologyExpansion",
+        maxTokens: 3200,
+        systemPrompt: [
+          baseSystem,
+          "Author ontology-expansion.yaml as an overlay. Never rewrite ontology-seed.yaml in place.",
+          "Prefer refine/reuse before add. Use add with increases_surface only when the answer claim proves a new concept is required.",
+          "JSON shape: {\"expansions\":[{\"expansion_id\":\"...\",\"operation\":\"add|refine|defer|reject\",\"target_surface_refs\":[\"...\"],\"target_dimension_refs\":[\"...\"],\"target_seed_or_ontology_refs\":[\"...\"],\"purpose_element_refs\":[\"...\"],\"answer_claim_refs\":[\"...\"],\"evidence_observation_ids\":[\"...\"],\"concept_economy_effect\":\"reduces_surface|preserves_surface|increases_surface\",\"rationale\":\"...\",\"limitation_refs\":[\"...\"]}]}",
+        ].join("\n"),
+        userPayload: {
+          ontology_seed_ref: input.ontologySeedRef,
+          ontology_seed_summary: ontologySeedSummaryLines(input.ontologySeed),
+          answer_claims_validation: input.answerClaimsValidation,
+          answer_claims: input.answerClaims.answer_claims,
+        },
+      });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        answer_claims_ref: input.answerClaimsRef,
+        source_seed_ref: input.ontologySeedRef,
+        expansions: records(raw.expansions ?? [], "expansions")
+          .map((expansion, index) => ({
+            expansion_id: optionalString(expansion.expansion_id) ??
+              `ontology-expansion-${index + 1}`,
+            operation: enumString(
+              expansion.operation,
+              ["add", "refine", "defer", "reject"] as const,
+              `expansions[${index}].operation`,
+            ),
+            target_surface_refs: stringArray(
+              expansion.target_surface_refs,
+              `expansions[${index}].target_surface_refs`,
+            ),
+            target_dimension_refs: stringArray(
+              expansion.target_dimension_refs,
+              `expansions[${index}].target_dimension_refs`,
+            ),
+            target_seed_or_ontology_refs: stringArray(
+              expansion.target_seed_or_ontology_refs,
+              `expansions[${index}].target_seed_or_ontology_refs`,
+            ),
+            purpose_element_refs: stringArray(
+              expansion.purpose_element_refs,
+              `expansions[${index}].purpose_element_refs`,
+            ),
+            answer_claim_refs: stringArray(
+              expansion.answer_claim_refs,
+              `expansions[${index}].answer_claim_refs`,
+            ),
+            evidence_refs: evidenceRefsFromIds({
+              observationIds: stringArray(
+                expansion.evidence_observation_ids ?? [],
+                `expansions[${index}].evidence_observation_ids`,
+              ),
+              sourceObservations: input.sourceObservations,
+              fieldName: `expansions[${index}].evidence_observation_ids`,
+            }),
+            concept_economy_effect: enumString(
+              expansion.concept_economy_effect,
+              ["reduces_surface", "preserves_surface", "increases_surface"] as const,
+              `expansions[${index}].concept_economy_effect`,
+            ),
+            rationale: stringValue(
+              expansion.rationale,
+              `expansions[${index}].rationale`,
+            ),
+            limitation_refs: stringArray(
+              expansion.limitation_refs ?? [],
+              `expansions[${index}].limitation_refs`,
+            ),
+          })),
+        directive_author: { owner: "host_llm", author_id: authorId },
+      };
+    },
+
     async writeFinalOutput(input) {
       const seedClaims = ontologyClaims(input.ontologySeed);
       const result = await llmCall(
@@ -4036,6 +5661,26 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 input.preHandoffRunManifestValidation.skipped_step_count,
             },
           handoff_decision_validation: input.handoffDecisionValidation,
+          maturation_summary: {
+            baseline_rows: input.maturationBaseline.baseline_rows.length,
+            matrix_rows: input.actionabilityMatrix.rows.length,
+            frontier_questions:
+              input.maturationQuestionFrontier.questions.length,
+            closure_source_requests:
+              input.maturationClosureFrontier.source_requests.length,
+            closure_authority_requests:
+              input.maturationClosureFrontier.authority_requests.length,
+            evidence_clusters:
+              input.answerSupportLedger.evidence_clusters.length,
+            answer_claims:
+              input.maturationAnswerClaims.answer_claims.length,
+            ontology_expansions:
+              input.ontologyExpansion.expansions.length,
+            continuation_decision:
+              input.maturationContinuationDecision.decision_state,
+            continuation_validation:
+              input.maturationContinuationDecisionValidation.validation_status,
+          },
           artifact_refs: input.artifactRefs,
           reconstruct_record_path: input.reconstructRecordPath,
           reconstruct_run_manifest_path: input.reconstructRunManifestPath,
@@ -4144,6 +5789,16 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
           author_id: authorId,
         },
       };
+    },
+
+    async writeSourcePurposeCandidates(input) {
+      return mockSourcePurposeCandidates({
+        sessionId: input.sessionId,
+        targetMaterialProfile: input.targetMaterialProfile,
+        sourceObservations: input.sourceObservations,
+        sourceObservationsRef: input.sourceObservationsRef,
+        authorId,
+      });
     },
 
     async writeCandidateInventory(input) {
@@ -4475,6 +6130,78 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
       };
     },
 
+    async writeMaturationQuestionFrontier(input) {
+      return derivedMaturationQuestionFrontier({
+        sessionId: input.sessionId,
+        maturationBaselineRef: input.maturationBaselineRef,
+        maturationBaselineValidationRef: input.maturationBaselineValidationRef,
+        actionabilityMatrix: input.actionabilityMatrix,
+        actionabilityMatrixRef: input.actionabilityMatrixRef,
+        actionabilityMatrixValidationRef: input.actionabilityMatrixValidationRef,
+        owner: "mock",
+        authorId,
+      });
+    },
+
+    async writeMaturationClosureFrontier(input) {
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        question_frontier_ref: input.maturationQuestionFrontierRef,
+        source_requests: [],
+        authority_requests: [],
+        directive_author: {
+          owner: "mock",
+          author_id: authorId,
+        },
+      };
+    },
+
+    async writeAnswerSupportLedger(input) {
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        evidence_clusters: [],
+        directive_author: {
+          owner: "mock",
+          author_id: authorId,
+        },
+      };
+    },
+
+    async writeMaturationAnswerClaims(input) {
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        round_id: input.roundId,
+        answer_claims: [],
+        directive_author: {
+          owner: "mock",
+          author_id: authorId,
+        },
+      };
+    },
+
+    async writeOntologyExpansion(input) {
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        answer_claims_ref: input.answerClaimsRef,
+        source_seed_ref: input.ontologySeedRef,
+        expansions: [],
+        directive_author: {
+          owner: "mock",
+          author_id: authorId,
+        },
+      };
+    },
+
     async writeFinalOutput(input) {
       const confirmedClaims = ontologyClaims(input.ontologySeed).filter((claim) =>
         input.seedConfirmationValidation.accepted_claim_ids.includes(claim.claim_id)
@@ -4603,6 +6330,43 @@ export function createAutoAcceptReconstructConfirmationProvider():
   return {
     providerId,
     owner: "mock",
+    async confirmPurpose(input) {
+      const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
+        .find((candidate) =>
+          candidate.purpose_candidate_id ===
+            input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id
+        );
+      const confirmationRequired =
+        input.sourcePurposeCandidatesValidation.confirmation_required;
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
+        source_purpose_candidates_validation_ref:
+          input.sourcePurposeCandidatesValidationRef,
+        purpose_candidate_id:
+          input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id,
+        confirmation_status: confirmationRequired ? "confirmed" : "not_required",
+        confirmed_statement: selectedCandidate?.statement ?? null,
+        revised_statement: null,
+        confirmed_frame_element_refs:
+          selectedCandidate?.adequacy_frame.required_elements.map((element) =>
+            element.element_id
+          ) ?? [],
+        rejected_frame_element_refs: [],
+        user_response_summary: confirmationRequired
+          ? "Mock provider confirmed the inferred source purpose for test execution."
+          : "Mock provider recorded that direct source-declared purpose confirmation was not required.",
+        source_conflict_policy:
+          "No source conflict was introduced by the mock confirmation provider.",
+        limitation_refs: [],
+        confirmation_provider: {
+          owner: "mock",
+          provider_id: providerId,
+        },
+      };
+    },
     async confirmOntologySeed(input) {
       const claims = ontologyClaims(input.ontologySeed);
       const canAccept = input.ontologySeedValidation.validation_status === "valid";
@@ -4662,6 +6426,108 @@ export function createDirectCallReconstructConfirmationProvider(args: {
   return {
     providerId,
     owner: "host_or_user",
+    async confirmPurpose(input) {
+      const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
+        .find((candidate) =>
+          candidate.purpose_candidate_id ===
+            input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id
+        );
+      if (!selectedCandidate) {
+        throw new Error("Purpose confirmation cannot find selected source-purpose candidate.");
+      }
+      if (!input.sourcePurposeCandidatesValidation.confirmation_required) {
+        return {
+          schema_version: "1",
+          session_id: input.sessionId,
+          created_at: isoNow(),
+          source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
+          source_purpose_candidates_validation_ref:
+            input.sourcePurposeCandidatesValidationRef,
+          purpose_candidate_id: selectedCandidate.purpose_candidate_id,
+          confirmation_status: "not_required",
+          confirmed_statement: selectedCandidate.statement,
+          revised_statement: null,
+          confirmed_frame_element_refs:
+            selectedCandidate.adequacy_frame.required_elements.map((element) =>
+              element.element_id
+            ),
+          rejected_frame_element_refs: [],
+          user_response_summary:
+            "The selected purpose was directly source-declared; no user confirmation was required.",
+          source_conflict_policy:
+            "Use source-purpose-candidates-validation as the purpose authority.",
+          limitation_refs: [],
+          confirmation_provider: {
+            owner: "host_or_user",
+            provider_id: providerId,
+          },
+        };
+      }
+      const result = await llmCall(
+        [
+          "You are mediating source-derived purpose confirmation for a non-interactive host.",
+          "Return only valid JSON. Do not wrap in Markdown.",
+          "The source-purpose validator has determined that the selected purpose was inferred or limitation-backed and therefore needs confirmation before seed readiness can honestly project ready or limited.",
+          "Classify whether the selected purpose can be confirmed for seed authoring. Do not invent new evidence or erase source conflicts.",
+          "Use confirmed only when the selected statement is acceptable as-is. Use revised_confirmed only when a revised_statement is supplied and still grounded in the same source-purpose candidate. Use rejected, pending, revised_pending_evidence_check, or not_available when the seed should not proceed.",
+          "JSON shape: {\"confirmation_status\":\"confirmed|rejected|revised_pending_evidence_check|revised_confirmed|pending|not_available\",\"confirmed_statement\":\"... or null\",\"revised_statement\":\"... or null\",\"confirmed_frame_element_refs\":[\"...\"],\"rejected_frame_element_refs\":[\"...\"],\"user_response_summary\":\"...\",\"source_conflict_policy\":\"...\",\"limitation_refs\":[\"...\"]}",
+        ].join("\n"),
+        JSON.stringify({
+          source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
+          source_purpose_candidates_validation_ref:
+            input.sourcePurposeCandidatesValidationRef,
+          selected_candidate: selectedCandidate,
+          validation: input.sourcePurposeCandidatesValidation,
+        }, null, 2),
+        { ...llmConfig, max_tokens: 2400 },
+      );
+      const raw = parseLlmJsonObject(result.text, "PurposeConfirmation");
+      const status = enumString(
+        raw.confirmation_status,
+        [
+          "pending",
+          "confirmed",
+          "rejected",
+          "revised_pending_evidence_check",
+          "revised_confirmed",
+          "not_available",
+        ] as const,
+        "confirmation_status",
+      );
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        created_at: isoNow(),
+        source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
+        source_purpose_candidates_validation_ref:
+          input.sourcePurposeCandidatesValidationRef,
+        purpose_candidate_id: selectedCandidate.purpose_candidate_id,
+        confirmation_status: status,
+        confirmed_statement: optionalString(raw.confirmed_statement),
+        revised_statement: optionalString(raw.revised_statement),
+        confirmed_frame_element_refs: stringArray(
+          raw.confirmed_frame_element_refs,
+          "confirmed_frame_element_refs",
+        ),
+        rejected_frame_element_refs: stringArray(
+          raw.rejected_frame_element_refs,
+          "rejected_frame_element_refs",
+        ),
+        user_response_summary: stringValue(
+          raw.user_response_summary,
+          "user_response_summary",
+        ),
+        source_conflict_policy: stringValue(
+          raw.source_conflict_policy,
+          "source_conflict_policy",
+        ),
+        limitation_refs: stringArray(raw.limitation_refs, "limitation_refs"),
+        confirmation_provider: {
+          owner: "host_or_user",
+          provider_id: providerId,
+        },
+      };
+    },
     async confirmOntologySeed(input) {
       const claimSummaries = ontologyClaims(input.ontologySeed).map((claim) => ({
         claim_id: claim.claim_id,
@@ -5054,6 +6920,9 @@ function appendFinalOutputAnswerabilitySection(
 function appendFinalOutputArtifactTruthSection(
   finalOutputText: string,
   args: {
+    sourcePurposeCandidatesPath: string;
+    sourcePurposeCandidatesValidationPath: string;
+    purposeConfirmationValidationPath: string;
     ontologySeedPath: string;
     ontologySeedValidationPath: string;
     claimRealizationMapPath: string;
@@ -5064,6 +6933,24 @@ function appendFinalOutputArtifactTruthSection(
     preHandoffManifestPath: string;
     preHandoffRunManifestValidationPath: string;
     handoffDecisionValidationPath: string;
+    maturationBaselinePath: string;
+    maturationBaselineValidationPath: string;
+    actionabilityMatrixPath: string;
+    actionabilityMatrixValidationPath: string;
+    maturationQuestionFrontierPath: string;
+    maturationQuestionFrontierValidationPath: string;
+    maturationClosureFrontierPath: string;
+    maturationClosureFrontierValidationPath: string;
+    maturationAuthorityResponsePath: string;
+    maturationAuthorityResponseValidationPath: string;
+    answerSupportLedgerPath: string;
+    answerSupportLedgerValidationPath: string;
+    maturationAnswerClaimsPath: string;
+    maturationAnswerClaimsValidationPath: string;
+    ontologyExpansionPath: string;
+    ontologyExpansionValidationPath: string;
+    maturationContinuationDecisionPath: string;
+    maturationContinuationDecisionValidationPath: string;
     recordPath: string;
     manifestPath: string;
   },
@@ -5072,6 +6959,9 @@ function appendFinalOutputArtifactTruthSection(
   const content = [
     heading,
     "",
+    `- Source purpose candidates: ${args.sourcePurposeCandidatesPath}`,
+    `- Source purpose candidates validation: ${args.sourcePurposeCandidatesValidationPath}`,
+    `- Purpose confirmation validation: ${args.purposeConfirmationValidationPath}`,
     `- Ontology seed: ${args.ontologySeedPath}`,
     `- Ontology seed validation: ${args.ontologySeedValidationPath}`,
     `- Claim realization map: ${args.claimRealizationMapPath}`,
@@ -5082,6 +6972,24 @@ function appendFinalOutputArtifactTruthSection(
     `- Pre-handoff run manifest: ${args.preHandoffManifestPath}`,
     `- Pre-handoff run manifest validation: ${args.preHandoffRunManifestValidationPath}`,
     `- Handoff decision validation: ${args.handoffDecisionValidationPath}`,
+    `- Maturation baseline: ${args.maturationBaselinePath}`,
+    `- Maturation baseline validation: ${args.maturationBaselineValidationPath}`,
+    `- Actionability matrix: ${args.actionabilityMatrixPath}`,
+    `- Actionability matrix validation: ${args.actionabilityMatrixValidationPath}`,
+    `- Maturation question frontier: ${args.maturationQuestionFrontierPath}`,
+    `- Maturation question frontier validation: ${args.maturationQuestionFrontierValidationPath}`,
+    `- Maturation closure frontier: ${args.maturationClosureFrontierPath}`,
+    `- Maturation closure frontier validation: ${args.maturationClosureFrontierValidationPath}`,
+    `- Maturation authority response: ${args.maturationAuthorityResponsePath}`,
+    `- Maturation authority response validation: ${args.maturationAuthorityResponseValidationPath}`,
+    `- Answer support ledger: ${args.answerSupportLedgerPath}`,
+    `- Answer support ledger validation: ${args.answerSupportLedgerValidationPath}`,
+    `- Maturation answer claims: ${args.maturationAnswerClaimsPath}`,
+    `- Maturation answer claims validation: ${args.maturationAnswerClaimsValidationPath}`,
+    `- Ontology expansion: ${args.ontologyExpansionPath}`,
+    `- Ontology expansion validation: ${args.ontologyExpansionValidationPath}`,
+    `- Maturation continuation decision: ${args.maturationContinuationDecisionPath}`,
+    `- Maturation continuation decision validation: ${args.maturationContinuationDecisionValidationPath}`,
     `- Reconstruct record: ${args.recordPath}`,
     `- Reconstruct run manifest: ${args.manifestPath}`,
     "",
@@ -5172,6 +7080,9 @@ function finalOutputProvenanceSectionBindings(args: {
   competencyQuestionsValidationPath: string;
   competencyQuestionAssessmentPath: string;
   competencyQuestionAssessmentValidationPath: string;
+  sourcePurposeCandidatesPath: string;
+  sourcePurposeCandidatesValidationPath: string;
+  purposeConfirmationValidationPath: string;
   failureClassificationPath: string;
   failureClassificationValidationPath: string;
   revisionProposalPath: string;
@@ -5181,6 +7092,24 @@ function finalOutputProvenanceSectionBindings(args: {
   preHandoffManifestPath: string;
   preHandoffRunManifestValidationPath: string;
   handoffDecisionValidationPath: string;
+  maturationBaselinePath: string;
+  maturationBaselineValidationPath: string;
+  actionabilityMatrixPath: string;
+  actionabilityMatrixValidationPath: string;
+  maturationQuestionFrontierPath: string;
+  maturationQuestionFrontierValidationPath: string;
+  maturationClosureFrontierPath: string;
+  maturationClosureFrontierValidationPath: string;
+  maturationAuthorityResponsePath: string;
+  maturationAuthorityResponseValidationPath: string;
+  answerSupportLedgerPath: string;
+  answerSupportLedgerValidationPath: string;
+  maturationAnswerClaimsPath: string;
+  maturationAnswerClaimsValidationPath: string;
+  ontologyExpansionPath: string;
+  ontologyExpansionValidationPath: string;
+  maturationContinuationDecisionPath: string;
+  maturationContinuationDecisionValidationPath: string;
   recordPath: string;
   manifestPath: string;
   finalOutputProvenanceValidationPath: string;
@@ -5209,6 +7138,9 @@ function finalOutputProvenanceSectionBindings(args: {
         args.finalOutputProvenanceValidationPath,
       ],
       required_fragments: [
+        args.sourcePurposeCandidatesPath,
+        args.sourcePurposeCandidatesValidationPath,
+        args.purposeConfirmationValidationPath,
         args.ontologySeedPath,
         args.ontologySeedValidationPath,
         args.claimRealizationMapPath,
@@ -5219,6 +7151,24 @@ function finalOutputProvenanceSectionBindings(args: {
         args.preHandoffManifestPath,
         args.preHandoffRunManifestValidationPath,
         args.handoffDecisionValidationPath,
+        args.maturationBaselinePath,
+        args.maturationBaselineValidationPath,
+        args.actionabilityMatrixPath,
+        args.actionabilityMatrixValidationPath,
+        args.maturationQuestionFrontierPath,
+        args.maturationQuestionFrontierValidationPath,
+        args.maturationClosureFrontierPath,
+        args.maturationClosureFrontierValidationPath,
+        args.maturationAuthorityResponsePath,
+        args.maturationAuthorityResponseValidationPath,
+        args.answerSupportLedgerPath,
+        args.answerSupportLedgerValidationPath,
+        args.maturationAnswerClaimsPath,
+        args.maturationAnswerClaimsValidationPath,
+        args.ontologyExpansionPath,
+        args.ontologyExpansionValidationPath,
+        args.maturationContinuationDecisionPath,
+        args.maturationContinuationDecisionValidationPath,
         args.recordPath,
         args.manifestPath,
       ],
@@ -5590,6 +7540,71 @@ export async function runReconstruct(
     throw new Error("reconstruct exploration did not produce terminal round artifacts.");
   }
 
+  const sourcePurposeCandidatesPath = path.join(
+    sessionRoot,
+    "source-purpose-candidates.yaml",
+  );
+  const sourcePurposeCandidates = await writeAuthoredYamlDocument(
+    sourcePurposeCandidatesPath,
+    "source-purpose-candidates.yaml",
+    () => directiveAuthor.writeSourcePurposeCandidates({
+      sessionId,
+      intent: params.intent,
+      targetMaterialProfile,
+      sourceObservations,
+      sourceObservationsRef: preparationRefs.source_observations,
+      sourceObservationDirective,
+      lensJudgmentIndex,
+      explorationSynthesis,
+      sourceFrontierValidation,
+      contractRegistry,
+    }),
+  );
+  const sourcePurposeCandidatesValidationPath = path.join(
+    sessionRoot,
+    "source-purpose-candidates-validation.yaml",
+  );
+  const sourcePurposeCandidatesValidation =
+    await writeSourcePurposeCandidatesValidationArtifact({
+      sourcePurposeCandidatesPath,
+      sourceObservationsPath: preparationRefs.source_observations,
+      registryPath: contractRegistryPath,
+      outputPath: sourcePurposeCandidatesValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "source-purpose-candidates",
+    artifactRef: sourcePurposeCandidatesValidationPath,
+    validation: sourcePurposeCandidatesValidation,
+  });
+
+  const purposeConfirmationPath = path.join(sessionRoot, "purpose-confirmation.yaml");
+  const purposeConfirmation = await writeAuthoredYamlDocument(
+    purposeConfirmationPath,
+    "purpose-confirmation.yaml",
+    () => confirmationProvider.confirmPurpose({
+      sessionId,
+      sourcePurposeCandidates,
+      sourcePurposeCandidatesRef: sourcePurposeCandidatesPath,
+      sourcePurposeCandidatesValidation,
+      sourcePurposeCandidatesValidationRef: sourcePurposeCandidatesValidationPath,
+    }),
+  );
+  const purposeConfirmationValidationPath = path.join(
+    sessionRoot,
+    "purpose-confirmation-validation.yaml",
+  );
+  const purposeConfirmationValidation =
+    await writePurposeConfirmationValidationArtifact({
+      purposeConfirmationPath,
+      sourcePurposeCandidatesValidationPath,
+      outputPath: purposeConfirmationValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "purpose-confirmation",
+    artifactRef: purposeConfirmationValidationPath,
+    validation: purposeConfirmationValidation,
+  });
+
   const candidateInventoryPath = path.join(sessionRoot, "candidate-inventory.yaml");
   const candidateInventory = await writeAuthoredYamlDocument(
     candidateInventoryPath,
@@ -5597,6 +7612,9 @@ export async function runReconstruct(
     () => directiveAuthor.writeCandidateInventory({
       sessionId,
       intent: params.intent,
+      sourcePurposeCandidates,
+      sourcePurposeCandidatesValidation,
+      purposeConfirmationValidation,
       sourceObservations,
       sourceObservationsRef: preparationRefs.source_observations,
       sourceObservationDirective,
@@ -5617,6 +7635,7 @@ export async function runReconstruct(
     () => directiveAuthor.writeCandidateDisposition({
       sessionId,
       intent: params.intent,
+      sourcePurposeCandidatesValidation,
       candidateInventory,
       candidateInventoryRef: candidateInventoryPath,
       sourceObservations,
@@ -5649,6 +7668,14 @@ export async function runReconstruct(
       sessionId,
       intent: params.intent,
       targetMaterialProfile,
+      sourcePurposeCandidates,
+      sourcePurposeCandidatesRef: sourcePurposeCandidatesPath,
+      sourcePurposeCandidatesValidation,
+      sourcePurposeCandidatesValidationRef: sourcePurposeCandidatesValidationPath,
+      purposeConfirmation,
+      purposeConfirmationRef: purposeConfirmationPath,
+      purposeConfirmationValidation,
+      purposeConfirmationValidationRef: purposeConfirmationValidationPath,
       candidateInventory,
       candidateInventoryRef: candidateInventoryPath,
       candidateDisposition,
@@ -5927,6 +7954,69 @@ export async function runReconstruct(
     sessionRoot,
     "handoff-decision-validation.yaml",
   );
+  const maturationBaselinePath = path.join(sessionRoot, "maturation-baseline.yaml");
+  const maturationBaselineValidationPath = path.join(
+    sessionRoot,
+    "maturation-baseline-validation.yaml",
+  );
+  const actionabilityMatrixPath = path.join(sessionRoot, "actionability-matrix.yaml");
+  const actionabilityMatrixValidationPath = path.join(
+    sessionRoot,
+    "actionability-matrix-validation.yaml",
+  );
+  const maturationQuestionFrontierPath = path.join(
+    sessionRoot,
+    "maturation-question-frontier.yaml",
+  );
+  const maturationQuestionFrontierValidationPath = path.join(
+    sessionRoot,
+    "maturation-question-frontier-validation.yaml",
+  );
+  const maturationClosureFrontierPath = path.join(
+    sessionRoot,
+    "maturation-closure-frontier.yaml",
+  );
+  const maturationClosureFrontierValidationPath = path.join(
+    sessionRoot,
+    "maturation-closure-frontier-validation.yaml",
+  );
+  const maturationAuthorityResponsePath = path.join(
+    sessionRoot,
+    "maturation-authority-response.yaml",
+  );
+  const maturationAuthorityResponseValidationPath = path.join(
+    sessionRoot,
+    "maturation-authority-response-validation.yaml",
+  );
+  const answerSupportLedgerPath = path.join(
+    sessionRoot,
+    "answer-support-ledger.yaml",
+  );
+  const answerSupportLedgerValidationPath = path.join(
+    sessionRoot,
+    "answer-support-ledger-validation.yaml",
+  );
+  const maturationAnswerClaimsPath = path.join(
+    sessionRoot,
+    "maturation-answer-claims.yaml",
+  );
+  const maturationAnswerClaimsValidationPath = path.join(
+    sessionRoot,
+    "maturation-answer-claims-validation.yaml",
+  );
+  const ontologyExpansionPath = path.join(sessionRoot, "ontology-expansion.yaml");
+  const ontologyExpansionValidationPath = path.join(
+    sessionRoot,
+    "ontology-expansion-validation.yaml",
+  );
+  const maturationContinuationDecisionPath = path.join(
+    sessionRoot,
+    "maturation-continuation-decision.yaml",
+  );
+  const maturationContinuationDecisionValidationPath = path.join(
+    sessionRoot,
+    "maturation-continuation-decision-validation.yaml",
+  );
   const recordPath = path.join(sessionRoot, "reconstruct-record.yaml");
   const prePublicationRecordPath = path.join(
     sessionRoot,
@@ -5946,6 +8036,10 @@ export async function runReconstruct(
       exploration_synthesis: explorationSynthesisPath,
       source_frontier: sourceFrontierPath,
       source_frontier_validation: sourceFrontierValidationPath,
+      source_purpose_candidates: sourcePurposeCandidatesPath,
+      source_purpose_candidates_validation: sourcePurposeCandidatesValidationPath,
+      purpose_confirmation: purposeConfirmationPath,
+      purpose_confirmation_validation: purposeConfirmationValidationPath,
       candidate_inventory: candidateInventoryPath,
       candidate_disposition: candidateDispositionPath,
       candidate_disposition_validation: candidateDispositionValidationPath,
@@ -5970,6 +8064,28 @@ export async function runReconstruct(
       post_publication_run_manifest_validation:
         postPublicationRunManifestValidationPath,
       handoff_decision_validation: handoffDecisionValidationPath,
+      maturation_baseline: maturationBaselinePath,
+      maturation_baseline_validation: maturationBaselineValidationPath,
+      actionability_matrix: actionabilityMatrixPath,
+      actionability_matrix_validation: actionabilityMatrixValidationPath,
+      maturation_question_frontier: maturationQuestionFrontierPath,
+      maturation_question_frontier_validation:
+        maturationQuestionFrontierValidationPath,
+      maturation_closure_frontier: maturationClosureFrontierPath,
+      maturation_closure_frontier_validation:
+        maturationClosureFrontierValidationPath,
+      maturation_authority_response: maturationAuthorityResponsePath,
+      maturation_authority_response_validation:
+        maturationAuthorityResponseValidationPath,
+      answer_support_ledger: answerSupportLedgerPath,
+      answer_support_ledger_validation: answerSupportLedgerValidationPath,
+      maturation_answer_claims: maturationAnswerClaimsPath,
+      maturation_answer_claims_validation: maturationAnswerClaimsValidationPath,
+      ontology_expansion: ontologyExpansionPath,
+      ontology_expansion_validation: ontologyExpansionValidationPath,
+      maturation_continuation_decision: maturationContinuationDecisionPath,
+      maturation_continuation_decision_validation:
+        maturationContinuationDecisionValidationPath,
       final_output: finalOutputPath,
       final_output_provenance_validation: finalOutputProvenanceValidationPath,
       reconstruct_run_manifest: manifestPath,
@@ -6022,6 +8138,8 @@ export async function runReconstruct(
     targetMaterialProfileValidationPath,
     sourceObservationDirectiveValidationPath,
     sourceFrontierValidationPath,
+    sourcePurposeCandidatesValidationPath,
+    purposeConfirmationValidationPath,
     candidateDispositionValidationPath,
     ontologySeedValidationPath,
     claimRealizationMapValidationPath,
@@ -6037,6 +8155,245 @@ export async function runReconstruct(
     artifactName: "handoff-decision",
     artifactRef: handoffDecisionValidationPath,
     validation: handoffDecisionValidation,
+  });
+  const maturationBaseline = await writeMaturationBaselineArtifact({
+    sessionId,
+    sourceSeedPath: ontologySeedPath,
+    sourceSeedValidationPath: ontologySeedValidationPath,
+    sourceClaimRealizationMapValidationPath: claimRealizationMapValidationPath,
+    sourceCompetencyAssessmentPath: competencyQuestionAssessmentPath,
+    sourceCompetencyAssessmentValidationPath:
+      competencyQuestionAssessmentValidationPath,
+    sourceReconstructRecordPath: prePublicationRecordPath,
+    sourceRunManifestPath: preHandoffManifestPath,
+    sourceHandoffDecisionValidationPath: handoffDecisionValidationPath,
+    sourcePurposeCandidatesPath: sourcePurposeCandidatesPath,
+    sourcePurposeCandidatesValidationPath: sourcePurposeCandidatesValidationPath,
+    purposeConfirmationValidationPath: purposeConfirmationValidationPath,
+    competencyQuestionsPath,
+    outputPath: maturationBaselinePath,
+  });
+  const maturationBaselineValidation =
+    await writeMaturationBaselineValidationArtifact({
+      maturationBaselinePath,
+      sourceSeedValidationPath: ontologySeedValidationPath,
+      sourcePurposeCandidatesPath,
+      sourcePurposeCandidatesValidationPath,
+      purposeConfirmationValidationPath,
+      competencyQuestionAssessmentValidationPath,
+      handoffDecisionValidationPath,
+      outputPath: maturationBaselineValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-baseline",
+    artifactRef: maturationBaselineValidationPath,
+    validation: maturationBaselineValidation,
+  });
+  const actionabilityMatrix = await writeActionabilityMatrixArtifact({
+    sessionId,
+    maturationBaselinePath,
+    maturationBaselineValidationPath,
+    outputPath: actionabilityMatrixPath,
+  });
+  const actionabilityMatrixValidation =
+    await writeActionabilityMatrixValidationArtifact({
+      actionabilityMatrixPath,
+      maturationBaselinePath,
+      maturationBaselineValidationPath,
+      outputPath: actionabilityMatrixValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "actionability-matrix",
+    artifactRef: actionabilityMatrixValidationPath,
+    validation: actionabilityMatrixValidation,
+  });
+  const maturationQuestionFrontier = await writeAuthoredYamlDocument(
+    maturationQuestionFrontierPath,
+    "maturation-question-frontier.yaml",
+    () => directiveAuthor.writeMaturationQuestionFrontier({
+      sessionId,
+      maturationBaseline,
+      maturationBaselineRef: maturationBaselinePath,
+      maturationBaselineValidation,
+      maturationBaselineValidationRef: maturationBaselineValidationPath,
+      actionabilityMatrix,
+      actionabilityMatrixRef: actionabilityMatrixPath,
+      actionabilityMatrixValidation,
+      actionabilityMatrixValidationRef: actionabilityMatrixValidationPath,
+    }),
+  );
+  const maturationQuestionFrontierValidation =
+    await writeMaturationQuestionFrontierValidationArtifact({
+      maturationQuestionFrontierPath,
+      maturationBaselinePath,
+      maturationBaselineValidationPath,
+      actionabilityMatrixPath,
+      actionabilityMatrixValidationPath,
+      outputPath: maturationQuestionFrontierValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-question-frontier",
+    artifactRef: maturationQuestionFrontierValidationPath,
+    validation: maturationQuestionFrontierValidation,
+  });
+  const maturationClosureFrontier = await writeAuthoredYamlDocument(
+    maturationClosureFrontierPath,
+    "maturation-closure-frontier.yaml",
+    () => directiveAuthor.writeMaturationClosureFrontier({
+      sessionId,
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier,
+      maturationQuestionFrontierRef: maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidation,
+      sourceInventory,
+      sourceObservations,
+    }),
+  );
+  const maturationClosureFrontierValidation =
+    await writeMaturationClosureFrontierValidationArtifact({
+      maturationClosureFrontierPath,
+      maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidationPath,
+      sourceInventoryPath: preparationRefs.source_inventory,
+      sourceObservationsPath: preparationRefs.source_observations,
+      targetMaterialProfileValidationPath,
+      outputPath: maturationClosureFrontierValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-closure-frontier",
+    artifactRef: maturationClosureFrontierValidationPath,
+    validation: maturationClosureFrontierValidation,
+  });
+  const maturationAuthorityResponse =
+    await writeMaturationAuthorityResponseArtifact({
+      sessionId,
+      closureFrontierPath: maturationClosureFrontierPath,
+      outputPath: maturationAuthorityResponsePath,
+    });
+  const maturationAuthorityResponseValidation =
+    await writeMaturationAuthorityResponseValidationArtifact({
+      maturationAuthorityResponsePath,
+      maturationClosureFrontierPath,
+      maturationClosureFrontierValidationPath,
+      outputPath: maturationAuthorityResponseValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-authority-response",
+    artifactRef: maturationAuthorityResponseValidationPath,
+    validation: maturationAuthorityResponseValidation,
+  });
+  const answerSupportLedger = await writeAuthoredYamlDocument(
+    answerSupportLedgerPath,
+    "answer-support-ledger.yaml",
+    () => directiveAuthor.writeAnswerSupportLedger({
+      sessionId,
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier,
+      maturationQuestionFrontierRef: maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidation,
+      maturationClosureFrontier,
+      maturationClosureFrontierValidation,
+      maturationAuthorityResponse,
+      maturationAuthorityResponseValidation,
+      sourceObservations,
+    }),
+  );
+  const answerSupportLedgerValidation =
+    await writeAnswerSupportLedgerValidationArtifact({
+      answerSupportLedgerPath,
+      maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidationPath,
+      sourceObservationsPath: preparationRefs.source_observations,
+      purposeConfirmationValidationPath,
+      maturationAuthorityResponsePath,
+      maturationAuthorityResponseValidationPath,
+      outputPath: answerSupportLedgerValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "answer-support-ledger",
+    artifactRef: answerSupportLedgerValidationPath,
+    validation: answerSupportLedgerValidation,
+  });
+  const maturationAnswerClaims = await writeAuthoredYamlDocument(
+    maturationAnswerClaimsPath,
+    "maturation-answer-claims.yaml",
+    () => directiveAuthor.writeMaturationAnswerClaims({
+      sessionId,
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier,
+      maturationQuestionFrontierValidation,
+      answerSupportLedger,
+      answerSupportLedgerValidation,
+      sourceObservations,
+    }),
+  );
+  const maturationAnswerClaimsValidation =
+    await writeMaturationAnswerClaimsValidationArtifact({
+      maturationAnswerClaimsPath,
+      answerSupportLedgerPath,
+      answerSupportLedgerValidationPath,
+      maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidationPath,
+      outputPath: maturationAnswerClaimsValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-answer-claims",
+    artifactRef: maturationAnswerClaimsValidationPath,
+    validation: maturationAnswerClaimsValidation,
+  });
+  const ontologyExpansion = await writeAuthoredYamlDocument(
+    ontologyExpansionPath,
+    "ontology-expansion.yaml",
+    () => directiveAuthor.writeOntologyExpansion({
+      sessionId,
+      answerClaims: maturationAnswerClaims,
+      answerClaimsRef: maturationAnswerClaimsPath,
+      answerClaimsValidation: maturationAnswerClaimsValidation,
+      ontologySeed,
+      ontologySeedRef: ontologySeedPath,
+      sourceObservations,
+    }),
+  );
+  const ontologyExpansionValidation =
+    await writeOntologyExpansionValidationArtifact({
+      ontologyExpansionPath,
+      maturationAnswerClaimsPath,
+      maturationAnswerClaimsValidationPath,
+      outputPath: ontologyExpansionValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "ontology-expansion",
+    artifactRef: ontologyExpansionValidationPath,
+    validation: ontologyExpansionValidation,
+  });
+  const maturationContinuationDecision =
+    await writeMaturationContinuationDecisionArtifact({
+      sessionId,
+      actionabilityMatrixPath,
+      actionabilityMatrixValidationPath,
+      maturationQuestionFrontierPath,
+      maturationClosureFrontierPath,
+      maturationClosureFrontierValidationPath,
+      maturationAuthorityResponsePath,
+      ontologyExpansionValidationPath,
+      outputPath: maturationContinuationDecisionPath,
+    });
+  const maturationContinuationDecisionValidation =
+    await writeMaturationContinuationDecisionValidationArtifact({
+      maturationContinuationDecisionPath,
+      actionabilityMatrixPath,
+      actionabilityMatrixValidationPath,
+      maturationQuestionFrontierValidationPath,
+      maturationClosureFrontierValidationPath,
+      answerSupportLedgerValidationPath,
+      maturationAuthorityResponseValidationPath,
+      ontologyExpansionValidationPath,
+      outputPath: maturationContinuationDecisionValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "maturation-continuation-decision",
+    artifactRef: maturationContinuationDecisionValidationPath,
+    validation: maturationContinuationDecisionValidation,
   });
   const interimRecord = await assembleReconstructRecord({
     sessionRoot,
@@ -6069,6 +8426,22 @@ export async function runReconstruct(
       stopDecision,
       preHandoffRunManifestValidation,
       handoffDecisionValidation,
+      maturationBaseline,
+      maturationBaselineValidation,
+      actionabilityMatrix,
+      actionabilityMatrixValidation,
+      maturationQuestionFrontier,
+      maturationQuestionFrontierValidation,
+      maturationClosureFrontier,
+      maturationClosureFrontierValidation,
+      answerSupportLedger,
+      answerSupportLedgerValidation,
+      maturationAnswerClaims,
+      maturationAnswerClaimsValidation,
+      ontologyExpansion,
+      ontologyExpansionValidation,
+      maturationContinuationDecision,
+      maturationContinuationDecisionValidation,
       sourceObservations,
       artifactRefs,
       reconstructRecordPath: recordPath,
@@ -6082,6 +8455,9 @@ export async function runReconstruct(
     candidateInventoryPath,
     candidateDispositionPath,
     candidateDispositionValidationPath,
+    sourcePurposeCandidatesPath,
+    sourcePurposeCandidatesValidationPath,
+    purposeConfirmationValidationPath,
     ontologySeedPath,
     ontologySeedValidationPath,
     claimRealizationMapPath,
@@ -6092,6 +8468,24 @@ export async function runReconstruct(
     preHandoffManifestPath,
     preHandoffRunManifestValidationPath,
     handoffDecisionValidationPath,
+    maturationBaselinePath,
+    maturationBaselineValidationPath,
+    actionabilityMatrixPath,
+    actionabilityMatrixValidationPath,
+    maturationQuestionFrontierPath,
+    maturationQuestionFrontierValidationPath,
+    maturationClosureFrontierPath,
+    maturationClosureFrontierValidationPath,
+    maturationAuthorityResponsePath,
+    maturationAuthorityResponseValidationPath,
+    answerSupportLedgerPath,
+    answerSupportLedgerValidationPath,
+    maturationAnswerClaimsPath,
+    maturationAnswerClaimsValidationPath,
+    ontologyExpansionPath,
+    ontologyExpansionValidationPath,
+    maturationContinuationDecisionPath,
+    maturationContinuationDecisionValidationPath,
     finalOutputProvenanceValidationPath,
     preHandoffRunManifestValidation.validation_status,
     handoffDecisionValidation.readiness_projection,
@@ -6107,6 +8501,9 @@ export async function runReconstruct(
     ontologySeedValidationPath,
     claimRealizationMapPath,
     claimRealizationMapValidationPath,
+    sourcePurposeCandidatesPath,
+    sourcePurposeCandidatesValidationPath,
+    purposeConfirmationValidationPath,
     seedConfirmationValidationPath,
     competencyQuestionsPath,
     competencyQuestionsValidationPath,
@@ -6121,6 +8518,24 @@ export async function runReconstruct(
     preHandoffManifestPath,
     preHandoffRunManifestValidationPath,
     handoffDecisionValidationPath,
+    maturationBaselinePath,
+    maturationBaselineValidationPath,
+    actionabilityMatrixPath,
+    actionabilityMatrixValidationPath,
+    maturationQuestionFrontierPath,
+    maturationQuestionFrontierValidationPath,
+    maturationClosureFrontierPath,
+    maturationClosureFrontierValidationPath,
+    maturationAuthorityResponsePath,
+    maturationAuthorityResponseValidationPath,
+    answerSupportLedgerPath,
+    answerSupportLedgerValidationPath,
+    maturationAnswerClaimsPath,
+    maturationAnswerClaimsValidationPath,
+    ontologyExpansionPath,
+    ontologyExpansionValidationPath,
+    maturationContinuationDecisionPath,
+    maturationContinuationDecisionValidationPath,
     recordPath,
     manifestPath,
     finalOutputProvenanceValidationPath,
@@ -6135,6 +8550,9 @@ export async function runReconstruct(
     {
       ontologySeedPath,
       ontologySeedValidationPath,
+      sourcePurposeCandidatesPath,
+      sourcePurposeCandidatesValidationPath,
+      purposeConfirmationValidationPath,
       claimRealizationMapPath,
       seedConfirmationValidationPath,
       competencyQuestionAssessmentPath,
@@ -6143,6 +8561,24 @@ export async function runReconstruct(
       preHandoffManifestPath,
       preHandoffRunManifestValidationPath,
       handoffDecisionValidationPath,
+      maturationBaselinePath,
+      maturationBaselineValidationPath,
+      actionabilityMatrixPath,
+      actionabilityMatrixValidationPath,
+      maturationQuestionFrontierPath,
+      maturationQuestionFrontierValidationPath,
+      maturationClosureFrontierPath,
+      maturationClosureFrontierValidationPath,
+      maturationAuthorityResponsePath,
+      maturationAuthorityResponseValidationPath,
+      answerSupportLedgerPath,
+      answerSupportLedgerValidationPath,
+      maturationAnswerClaimsPath,
+      maturationAnswerClaimsValidationPath,
+      ontologyExpansionPath,
+      ontologyExpansionValidationPath,
+      maturationContinuationDecisionPath,
+      maturationContinuationDecisionValidationPath,
       recordPath,
       manifestPath,
     },

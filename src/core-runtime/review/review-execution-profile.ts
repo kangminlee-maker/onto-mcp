@@ -1,8 +1,8 @@
 import type {
   OntoSettings,
-  ReviewExecutionSettings,
   ReviewLlmRef,
   ReviewWorkerSeat,
+  ResolvedReviewExecutionSettings,
 } from "../discovery/settings-chain.js";
 import { defaultReviewExecution } from "../discovery/settings-chain.js";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
@@ -28,11 +28,11 @@ export interface ReviewExecutionActorProfile {
 }
 
 export interface ReviewExecutionProfile {
-  mode: ReviewExecutionSettings["mode"];
+  mode: ResolvedReviewExecutionSettings["mode"];
   teamlead: ReviewExecutionActorProfile;
   lens: ReviewExecutionActorProfile;
   synthesize: ReviewExecutionActorProfile;
-  deliberation: ReviewExecutionSettings["deliberation"];
+  deliberation: ResolvedReviewExecutionSettings["deliberation"];
   worker_executor: ReviewWorkerExecutor;
   host: ReviewExecutionHost;
   provider?: LlmProviderName;
@@ -55,7 +55,7 @@ export interface ResolveReviewExecutionProfileArgs {
   codexAvailable?: boolean;
 }
 
-function settingsExecution(settings: OntoSettings): ReviewExecutionSettings {
+function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
   const execution = settings.review?.execution;
   if (!execution) return defaults;
@@ -64,15 +64,15 @@ function settingsExecution(settings: OntoSettings): ReviewExecutionSettings {
     ...execution,
     teamlead: {
       ...defaults.teamlead,
-      ...execution.teamlead,
+      ...(execution.teamlead ?? {}),
     },
     lens: {
       ...defaults.lens,
-      ...execution.lens,
+      ...(execution.lens ?? {}),
     },
     synthesize: {
       ...defaults.synthesize,
-      ...execution.synthesize,
+      ...(execution.synthesize ?? {}),
     },
   };
 }
@@ -175,6 +175,7 @@ export function resolveReviewExecutionProfile(
     args.codexAvailable ?? detectCodexBinaryAvailable();
   const envHost = hostFromEnv(env);
   const selection = normalizeLlmModelSwitcher(args.settings.llm);
+  const execution = settingsExecution(args.settings);
 
   if (env.ONTO_HOST_RUNTIME?.trim().toLowerCase() === "claude") {
     return noHost(
@@ -183,9 +184,60 @@ export function resolveReviewExecutionProfile(
     );
   }
 
+  if (execution.executor === "mock") {
+    log("mock executor selected by review.execution.executor=mock");
+    return {
+      type: "resolved",
+      profile: buildProfile({
+        settings: args.settings,
+        workerExecutor: "mock",
+        host: "standalone",
+        trace,
+      }),
+    };
+  }
+
+  if (execution.executor === "codex") {
+    if (!codexAvailable) {
+      return noHost(
+        trace,
+        "review.execution.executor=codex requires an available codex worker.",
+      );
+    }
+    log("codex worker selected by review.execution.executor=codex");
+    return {
+      type: "resolved",
+      profile: buildProfile({
+        settings: args.settings,
+        workerExecutor: "codex",
+        host: "codex",
+        trace,
+      }),
+    };
+  }
+
+  if (execution.executor === "direct_call") {
+    if (!selection || selection.provider === "codex") {
+      return noHost(
+        trace,
+        "review.execution.executor=direct_call requires llm.default to select an API/local provider.",
+      );
+    }
+    log("direct-call selected by review.execution.executor=direct_call");
+    return {
+      type: "resolved",
+      profile: buildProfile({
+        settings: args.settings,
+        workerExecutor: "direct_call",
+        host: selection.provider,
+        trace,
+      }),
+    };
+  }
+
   if (selection && selection.auth !== "oauth") {
     log(
-      `direct-call selected by llm.auth=${selection.auth} llm.provider=${selection.provider}`,
+      `direct-call selected by llm.default.auth=${selection.auth} llm.default.provider=${selection.provider}`,
     );
     return {
       type: "resolved",
@@ -252,7 +304,7 @@ export function resolveReviewExecutionProfile(
     if (!codexAvailable) {
       return noHost(
         trace,
-        "llm.auth=oauth with llm.provider=openai requires an available Codex worker.",
+        "llm.default.auth=oauth with llm.default.provider=openai requires an available Codex worker.",
       );
     }
     log("codex worker selected by host-bound OpenAI OAuth settings");

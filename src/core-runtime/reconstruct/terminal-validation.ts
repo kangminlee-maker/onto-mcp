@@ -20,6 +20,8 @@ import type {
   ReconstructRunManifestValidationArtifact,
   ReconstructSelectedSourceProfileRef,
   ReconstructSeedConfirmationValidationArtifact,
+  ReconstructSourcePurposeCandidatesValidationArtifact,
+  ReconstructPurposeConfirmationValidationArtifact,
   ReconstructSourceObservationsArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
@@ -270,6 +272,10 @@ function validationArtifactStatuses(args: {
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
+  sourcePurposeCandidatesValidation?:
+    ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
+  purposeConfirmationValidation?:
+    ReconstructPurposeConfirmationValidationArtifact | null | undefined;
   candidateDispositionValidation:
     ReconstructCandidateDispositionValidationArtifact | null | undefined;
   ontologySeedValidation:
@@ -292,6 +298,14 @@ function validationArtifactStatuses(args: {
       statusOf(args.sourceObservationDirectiveValidation),
     ],
     ["source-frontier-validation.yaml", statusOf(args.sourceFrontierValidation)],
+    [
+      "source-purpose-candidates-validation.yaml",
+      statusOf(args.sourcePurposeCandidatesValidation),
+    ],
+    [
+      "purpose-confirmation-validation.yaml",
+      statusOf(args.purposeConfirmationValidation),
+    ],
     [
       "candidate-disposition-validation.yaml",
       statusOf(args.candidateDispositionValidation),
@@ -878,6 +892,10 @@ export function validateHandoffDecision(args: {
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
+  sourcePurposeCandidatesValidation?:
+    ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
+  purposeConfirmationValidation?:
+    ReconstructPurposeConfirmationValidationArtifact | null | undefined;
   candidateDispositionValidation:
     ReconstructCandidateDispositionValidationArtifact | null | undefined;
   ontologySeedValidation:
@@ -1036,6 +1054,8 @@ export async function writeHandoffDecisionValidationArtifact(args: {
   targetMaterialProfileValidationPath: string;
   sourceObservationDirectiveValidationPath: string;
   sourceFrontierValidationPath: string;
+  sourcePurposeCandidatesValidationPath?: string | null;
+  purposeConfirmationValidationPath?: string | null;
   candidateDispositionValidationPath: string;
   ontologySeedValidationPath: string;
   claimRealizationMapValidationPath: string;
@@ -1067,6 +1087,8 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     targetMaterialProfileValidation,
     sourceObservationDirectiveValidation,
     sourceFrontierValidation,
+    sourcePurposeCandidatesValidation,
+    purposeConfirmationValidation,
     candidateDispositionValidation,
     ontologySeed,
     ontologySeedValidation,
@@ -1087,6 +1109,16 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     readYamlDocumentIfPresent<ReconstructSourceFrontierValidationArtifact>(
       args.sourceFrontierValidationPath,
     ),
+    args.sourcePurposeCandidatesValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourcePurposeCandidatesValidationArtifact>(
+        args.sourcePurposeCandidatesValidationPath,
+      )
+      : Promise.resolve(null),
+    args.purposeConfirmationValidationPath
+      ? readYamlDocumentIfPresent<ReconstructPurposeConfirmationValidationArtifact>(
+        args.purposeConfirmationValidationPath,
+      )
+      : Promise.resolve(null),
     readYamlDocumentIfPresent<ReconstructCandidateDispositionValidationArtifact>(
       args.candidateDispositionValidationPath,
     ),
@@ -1142,6 +1174,12 @@ export async function writeHandoffDecisionValidationArtifact(args: {
         ? args.sourceObservationDirectiveValidationPath
         : null,
       sourceFrontierValidation ? args.sourceFrontierValidationPath : null,
+      sourcePurposeCandidatesValidation
+        ? args.sourcePurposeCandidatesValidationPath
+        : null,
+      purposeConfirmationValidation
+        ? args.purposeConfirmationValidationPath
+        : null,
       candidateDispositionValidation ? args.candidateDispositionValidationPath : null,
       ontologySeedValidation ? args.ontologySeedValidationPath : null,
       claimRealizationMapValidation ? args.claimRealizationMapValidationPath : null,
@@ -1168,6 +1206,13 @@ export async function writeHandoffDecisionValidationArtifact(args: {
           : null,
       "source-frontier-validation.yaml": sourceFrontierValidation
         ? args.sourceFrontierValidationPath
+        : null,
+      "source-purpose-candidates-validation.yaml":
+        sourcePurposeCandidatesValidation
+          ? args.sourcePurposeCandidatesValidationPath
+          : null,
+      "purpose-confirmation-validation.yaml": purposeConfirmationValidation
+        ? args.purposeConfirmationValidationPath
         : null,
       "candidate-disposition-validation.yaml": candidateDispositionValidation
         ? args.candidateDispositionValidationPath
@@ -1201,6 +1246,8 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     targetMaterialProfileValidation,
     sourceObservationDirectiveValidation,
     sourceFrontierValidation,
+    sourcePurposeCandidatesValidation,
+    purposeConfirmationValidation,
     candidateDispositionValidation,
     ontologySeedValidation,
     claimRealizationMapValidation,

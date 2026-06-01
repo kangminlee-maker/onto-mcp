@@ -66,8 +66,7 @@ import { parsePacketBoundaryPolicy } from "../review/packet-boundary-policy.js";
 import { parseParticipatingLensPaths } from "../review/participating-lens-paths.js";
 import { auditCitations, type CitationAuditResult } from "../review/citation-audit.js";
 import {
-  assertNoUnsupportedConfigFiles,
-  projectSettingsPath,
+  resolveSettingsChain,
 } from "../discovery/settings-chain.js";
 import { stripWrappingCodeFence } from "./strip-wrapping-code-fence.js";
 
@@ -357,18 +356,7 @@ function asToolLoopProvider(provider: string | undefined): ToolLoopProvider | nu
 }
 
 async function loadOntoConfig(projectRoot: string): Promise<LlmProviderConfigInputs> {
-  await assertNoUnsupportedConfigFiles(projectRoot);
-  const configPath = projectSettingsPath(projectRoot);
-  try {
-    const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
-    if (parsed && typeof parsed === "object") {
-      return parsed as LlmProviderConfigInputs;
-    }
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw error;
-  }
-  return {};
+  return resolveSettingsChain("", projectRoot);
 }
 
 async function readPacketAndEmbed(

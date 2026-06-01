@@ -631,6 +631,7 @@ describe("OntologySeed validators", () => {
       registry,
     });
 
+    expect(seedValidation.violations).toEqual([]);
     expect(seedValidation.validation_status).toBe("valid");
   });
 
@@ -746,7 +747,7 @@ describe("OntologySeed validators", () => {
       .not.toContain("duplicate_id");
   });
 
-  it("accepts promoted candidate targets for first-class value types and actor roles", async () => {
+  it("accepts promoted candidate targets for first-class value types, actor roles, and handoff limitations", async () => {
     const registry = await loadReconstructContractRegistry({
       registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
     });
@@ -756,6 +757,15 @@ describe("OntologySeed validators", () => {
       name: "Work Type",
       representation: "enum",
       constraints: [],
+      evidence_refs: [evidenceRef()],
+    });
+    seed.handoff_limitations.push({
+      limitation_id: "limitation-phase1-scope",
+      limitation_kind: "insufficient_evidence",
+      description: "Phase 1 scope remains a named seed limitation.",
+      affected_refs: ["object-dashboard"],
+      missing_source_refs: [],
+      mitigation_or_next_action: "Revisit in maturation.",
       evidence_refs: [evidenceRef()],
     });
     const disposition = candidateDisposition();
@@ -774,6 +784,13 @@ describe("OntologySeed validators", () => {
         rationale: "Dashboard Viewer is a first-class dynamic seed actor role.",
         evidence_refs: [evidenceRef()],
       },
+      {
+        candidate_id: "candidate-phase1-scope",
+        disposition_id: "promoted_to_seed_layer",
+        target_seed_refs: ["limitation-phase1-scope"],
+        rationale: "Phase 1 scope is a first-class handoff limitation.",
+        evidence_refs: [evidenceRef()],
+      },
     );
 
     const seedValidation = validateOntologySeed({
@@ -783,6 +800,7 @@ describe("OntologySeed validators", () => {
       registry,
     });
 
+    expect(seedValidation.violations).toEqual([]);
     expect(seedValidation.validation_status).toBe("valid");
   });
 

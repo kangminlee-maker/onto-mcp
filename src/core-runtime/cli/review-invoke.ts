@@ -938,8 +938,8 @@ function buildNoHostDetectedError(): Error {
       "현재 설정과 실행 환경에서 사용 가능한 worker 경로를 찾지 못했습니다.",
       "",
       "다음 중 한 가지로 해결하세요:",
-      "  1. `.onto/settings.json` 에 llm: { auth: api_key, provider, model } 설정",
-      "  2. local 실행은 llm.auth=local + llm.provider=lmstudio 로 설정",
+      "  1. `.onto/settings.json` 에 llm.default: { auth: api_key, provider, model } 설정",
+      "  2. local 실행은 llm.default.auth=local + llm.default.provider=lmstudio 로 설정",
       "  3. OpenAI OAuth는 Codex worker가 필요하므로 codex 설치와 로그인을 확인",
       "  4. 테스트 실행은 --executor-realization mock 사용",
     ].join("\n"),
@@ -1439,7 +1439,7 @@ function collectConfiguredDomainTokens(ontoConfig: OntoConfig): string[] {
     }
   };
 
-  pushTokenList(ontoConfig.domains);
+  pushTokenList(ontoConfig.review?.domains ?? ontoConfig.domains);
   return collected;
 }
 
@@ -1980,7 +1980,7 @@ function resolveReviewMode(argv: string[], ontoConfig?: OntoConfig): ReviewMode 
   if (explicitValue === "core-axis" || explicitValue === "full") {
     return explicitValue;
   }
-  const configValue = ontoConfig?.review_mode;
+  const configValue = ontoConfig?.review?.mode ?? ontoConfig?.review_mode;
   if (configValue === "core-axis" || configValue === "full") {
     return configValue;
   }
@@ -2804,36 +2804,46 @@ function appendDirectoryListingConfigArgs(
   ontoConfig: OntoConfig,
 ): string[] {
   const result = [...targetArgv];
+  const context = ontoConfig.review?.context;
+  const excludedNames = context?.excluded_names ?? ontoConfig.excluded_names ?? [];
 
   if (
     readMultiOptionValuesFromArgv(result, "excluded-name").length === 0 &&
-    Array.isArray(ontoConfig.excluded_names) &&
-    ontoConfig.excluded_names.length > 0
+    excludedNames.length > 0
   ) {
-    for (const name of ontoConfig.excluded_names) {
+    for (const name of excludedNames) {
       result.push("--excluded-name", name);
     }
   }
 
   if (
     readSingleOptionValueFromArgv(result, "max-listing-depth") === undefined &&
-    ontoConfig.max_listing_depth !== undefined
+    (context?.max_listing_depth ?? ontoConfig.max_listing_depth) !== undefined
   ) {
-    result.push("--max-listing-depth", String(ontoConfig.max_listing_depth));
+    result.push(
+      "--max-listing-depth",
+      String(context?.max_listing_depth ?? ontoConfig.max_listing_depth),
+    );
   }
 
   if (
     readSingleOptionValueFromArgv(result, "max-listing-entries") === undefined &&
-    ontoConfig.max_listing_entries !== undefined
+    (context?.max_listing_entries ?? ontoConfig.max_listing_entries) !== undefined
   ) {
-    result.push("--max-listing-entries", String(ontoConfig.max_listing_entries));
+    result.push(
+      "--max-listing-entries",
+      String(context?.max_listing_entries ?? ontoConfig.max_listing_entries),
+    );
   }
 
   if (
     readSingleOptionValueFromArgv(result, "max-embed-lines") === undefined &&
-    ontoConfig.max_embed_lines !== undefined
+    (context?.max_embed_lines ?? ontoConfig.max_embed_lines) !== undefined
   ) {
-    result.push("--max-embed-lines", String(ontoConfig.max_embed_lines));
+    result.push(
+      "--max-embed-lines",
+      String(context?.max_embed_lines ?? ontoConfig.max_embed_lines),
+    );
   }
 
   return result;

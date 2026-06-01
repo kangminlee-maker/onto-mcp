@@ -594,13 +594,14 @@ tools; the runtime owns artifacts and validation. Two product paths exist:
 ## Prerequisite: configure a provider
 
 \`review\` and \`reconstruct\` execute real LLM work and FAIL LOUD if no provider is
-configured. Set an \`llm\` block in \`{projectRoot}/.onto/settings.json\` or
+configured. Set \`llm.default\` in \`{projectRoot}/.onto/settings.json\` or
 \`~/.onto/settings.json\`, e.g. Codex OAuth:
 
-    { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } }
+    { "schema_version": "settings.json/v2", "llm": { "default": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } } }
 
 Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
-that API; local+lmstudio -> local endpoint. Listing tools needs no provider.
+that API; local+lmstudio -> local endpoint. Review execution may be pinned with
+\`review.execution.executor\` or left as \`auto\`. Listing tools needs no provider.
 
 ## Review — happy path
 

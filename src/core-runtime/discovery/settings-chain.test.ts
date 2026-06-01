@@ -61,11 +61,115 @@ describe("resolveSettingsChain", () => {
     expect(settings.llm?.model).toBe("gpt-5.5");
     expect(settings.llm?.effort).toBe("medium");
     expect(settings.llm?.service_tier).toBe("fast");
-    expect(settings.review?.execution.mode).toBe("main-workers");
-    expect(settings.review?.execution.teamlead.seat).toBe("main");
-    expect(settings.review?.execution.lens.seat).toBe("worker");
-    expect(settings.review?.execution.synthesize.seat).toBe("worker");
-    expect(settings.review?.execution.synthesize.llm).toBe("inherit");
+    expect(settings.review?.execution?.mode).toBe("main-workers");
+    expect(settings.review?.execution?.teamlead?.seat).toBe("main");
+    expect(settings.review?.execution?.lens?.seat).toBe("worker");
+    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
+    expect(settings.review?.execution?.synthesize?.llm).toBe("inherit");
+  });
+
+  it("normalizes v2 settings into the runtime projection", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
+      llm: {
+        default: {
+          auth: "oauth",
+          provider: "openai",
+          model: "gpt-5.5",
+          effort: "medium",
+          service_tier: "fast",
+        },
+      },
+      review: {
+        mode: "core-axis",
+        domains: ["software-engineering"],
+        context: {
+          excluded_names: [".turbo"],
+          max_listing_depth: 4,
+          max_listing_entries: 250,
+          max_embed_lines: 120,
+        },
+        execution: {
+          executor: "codex",
+          topology: "main-workers",
+          actors: {
+            teamlead: { seat: "main" },
+            lens: { seat: "worker" },
+            synthesize: {
+              seat: "worker",
+              llm: { effort: "xhigh" },
+            },
+          },
+          deliberation: "controlled-lens-deliberation",
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.schema_version).toBe("settings.json/v2");
+    expect(settings.llm?.model).toBe("gpt-5.5");
+    expect(settings.review_mode).toBe("core-axis");
+    expect(settings.domains).toEqual(["software-engineering"]);
+    expect(settings.max_listing_depth).toBe(4);
+    expect(settings.review?.mode).toBe("core-axis");
+    expect(settings.review?.context?.excluded_names).toEqual([".turbo"]);
+    expect(settings.review?.execution?.executor).toBe("codex");
+    expect(settings.review?.execution?.mode).toBe("main-workers");
+    expect(settings.review?.execution?.synthesize?.llm).toEqual({
+      effort: "xhigh",
+    });
+  });
+
+  it("keeps user execution settings when project v2 only changes review mode", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      schema_version: "settings.json/v2",
+      llm: {
+        default: {
+          auth: "oauth",
+          provider: "openai",
+          model: "gpt-5.5",
+        },
+      },
+      review: {
+        execution: {
+          executor: "codex",
+          topology: "nested-workers",
+          actors: {
+            teamlead: {
+              seat: "worker",
+              llm: { effort: "high" },
+            },
+            lens: { seat: "worker" },
+            synthesize: {
+              seat: "worker",
+              llm: { effort: "xhigh" },
+            },
+          },
+        },
+      },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
+      review: {
+        mode: "core-axis",
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review_mode).toBe("core-axis");
+    expect(settings.review?.execution?.executor).toBe("codex");
+    expect(settings.review?.execution?.mode).toBe("nested-workers");
+    expect(settings.review?.execution?.teamlead?.seat).toBe("worker");
+    expect(settings.review?.execution?.teamlead?.llm).toEqual({
+      effort: "high",
+    });
+    expect(settings.review?.execution?.synthesize?.llm).toEqual({
+      effort: "xhigh",
+    });
   });
 
   it("fails loudly when unsupported YAML config exists", async () => {
@@ -94,17 +198,20 @@ describe("resolveSettingsChain", () => {
   it("validates nested-workers seat constraints", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
       review: {
         execution: {
-          mode: "nested-workers",
-          teamlead: { seat: "main" },
-          lens: { seat: "worker" },
+          topology: "nested-workers",
+          actors: {
+            teamlead: { seat: "main" },
+            lens: { seat: "worker" },
+          },
         },
       },
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "nested-workers requires review.execution.teamlead.seat=worker",
+      "nested-workers requires review.execution.actors.teamlead.seat=worker",
     );
   });
 
@@ -148,8 +255,8 @@ describe("resolveSettingsChain", () => {
 
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
-    expect(settings.review?.execution.synthesize.seat).toBe("worker");
-    expect(settings.review?.execution.synthesize.llm).toEqual({
+    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
+    expect(settings.review?.execution?.synthesize?.llm).toEqual({
       auth: "oauth",
       provider: "openai",
       model: "gpt-5.5",
@@ -161,27 +268,33 @@ describe("resolveSettingsChain", () => {
   it("requires synthesize seat to stay worker", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
       review: {
         execution: {
-          synthesize: { seat: "main" },
+          actors: {
+            synthesize: { seat: "main" },
+          },
         },
       },
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "review.execution.synthesize.seat must be worker",
+      "review.execution.actors.synthesize.seat must be worker",
     );
   });
 
-  it("requires actor llm partials to inherit from a root llm", async () => {
+  it("requires actor llm partials to inherit from llm.default", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
       review: {
         execution: {
-          synthesize: {
-            seat: "worker",
-            llm: {
-              effort: "xhigh",
+          actors: {
+            synthesize: {
+              seat: "worker",
+              llm: {
+                effort: "xhigh",
+              },
             },
           },
         },
@@ -189,7 +302,7 @@ describe("resolveSettingsChain", () => {
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "review.execution.synthesize.llm must provide llm.provider or inherit from root llm",
+      "review.execution.actors.synthesize.llm must provide provider/auth fields or inherit from llm.default",
     );
   });
 
@@ -206,7 +319,7 @@ describe("resolveSettingsChain", () => {
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "llm.service_tier is codex-only",
+      "service_tier is codex-only",
     );
   });
 });

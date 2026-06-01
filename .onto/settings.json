@@ -1,31 +1,35 @@
 {
-  "domains": [],
-  "review_mode": "full",
+  "schema_version": "settings.json/v2",
+  "llm": {
+    "default": {
+      "auth": "oauth",
+      "provider": "openai",
+      "model": "gpt-5.5",
+      "effort": "medium",
+      "service_tier": "fast"
+    }
+  },
   "review": {
+    "mode": "full",
+    "domains": [],
     "execution": {
-      "mode": "main-workers",
-      "teamlead": {
-        "seat": "main",
-        "llm": "inherit"
-      },
-      "lens": {
-        "seat": "worker",
-        "llm": "inherit"
-      },
-      "synthesize": {
-        "seat": "worker",
-        "llm": {
-          "effort": "xhigh"
+      "executor": "auto",
+      "topology": "main-workers",
+      "actors": {
+        "teamlead": {
+          "seat": "main"
+        },
+        "lens": {
+          "seat": "worker"
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "effort": "xhigh"
+          }
         }
       },
       "deliberation": "controlled-lens-deliberation"
     }
-  },
-  "llm": {
-    "auth": "oauth",
-    "provider": "openai",
-    "model": "gpt-5.5",
-    "effort": "medium",
-    "service_tier": "fast"
   }
 }

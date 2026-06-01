@@ -2,13 +2,13 @@ export type LlmAuthMode = "api_key" | "oauth" | "local";
 export type LlmProviderName = "openai" | "anthropic" | "grok" | "lmstudio";
 
 export interface LlmModelSwitcherConfig {
-  provider?: LlmProviderName;
-  auth?: LlmAuthMode;
-  model?: string;
-  base_url?: string;
-  effort?: string;
-  service_tier?: string;
-  api_key_env?: string;
+  provider?: LlmProviderName | undefined;
+  auth?: LlmAuthMode | undefined;
+  model?: string | undefined;
+  base_url?: string | undefined;
+  effort?: string | undefined;
+  service_tier?: string | undefined;
+  api_key_env?: string | undefined;
 }
 
 export type RuntimeLlmProvider =
@@ -41,23 +41,23 @@ export function normalizeLlmModelSwitcher(
 
   if (auth === "oauth" && provider !== "openai") {
     throw new Error(
-      `llm.auth=oauth is only supported with llm.provider=openai; got provider=${provider}.`,
+      `auth=oauth is only supported with provider=openai; got provider=${provider}.`,
     );
   }
   if (auth === "local" && provider !== "lmstudio") {
     throw new Error(
-      `llm.auth=local is only supported with llm.provider=lmstudio; got provider=${provider}.`,
+      `auth=local is only supported with provider=lmstudio; got provider=${provider}.`,
     );
   }
   if (provider === "lmstudio" && auth !== "local") {
-    throw new Error("llm.provider=lmstudio requires llm.auth=local.");
+    throw new Error("provider=lmstudio requires auth=local.");
   }
   if (provider !== "lmstudio" && auth === "local") {
-    throw new Error("llm.auth=local currently requires llm.provider=lmstudio.");
+    throw new Error("auth=local currently requires provider=lmstudio.");
   }
   if (config.service_tier && !(provider === "openai" && auth === "oauth")) {
     throw new Error(
-      "llm.service_tier is codex-only and requires llm.auth=oauth with llm.provider=openai.",
+      "service_tier is codex-only and requires auth=oauth with provider=openai.",
     );
   }
 
@@ -79,7 +79,7 @@ export function normalizeLlmModelSwitcher(
       };
     case "anthropic":
       if (auth !== "api_key") {
-        throw new Error("llm.provider=anthropic requires llm.auth=api_key.");
+        throw new Error("provider=anthropic requires auth=api_key.");
       }
       return {
         provider: "anthropic",
@@ -87,7 +87,7 @@ export function normalizeLlmModelSwitcher(
       };
     case "grok":
       if (auth !== "api_key") {
-        throw new Error("llm.provider=grok requires llm.auth=api_key.");
+        throw new Error("provider=grok requires auth=api_key.");
       }
       return {
         provider: "grok",

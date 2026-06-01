@@ -1014,6 +1014,19 @@ describe("runReconstruct", () => {
       : [firstObservationId];
     const firstMaterialKind = observations[0]?.target_material_kind ?? "code";
     const firstSourceRef = observations[0]?.source_ref ?? "src/feature.ts";
+    const targetMaterialKind =
+      input.target_material_profile?.target_material_kind ?? firstMaterialKind;
+    const mixedMemberScopeRefs = targetMaterialKind === "mixed"
+      ? evidenceObservationIds
+      : [];
+    const mixedMemberSourceRefs = targetMaterialKind === "mixed"
+      ? [...new Set(observations.map((observation) =>
+        observation.source_ref ?? firstSourceRef
+      ))]
+      : [];
+    const mixedMemberTargetKind = targetMaterialKind === "mixed"
+      ? firstMaterialKind
+      : null;
     let text: string;
     if (systemPrompt.includes("Select observations")) {
       text = JSON.stringify({
@@ -1048,6 +1061,90 @@ describe("runReconstruct", () => {
       text = JSON.stringify({
         frontier_refs: [],
         no_next_frontier_rationale: "No next frontier is required for this fixture.",
+      });
+    } else if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+      text = JSON.stringify({
+        purpose_candidates: [
+          {
+            purpose_candidate_id: "purpose-candidate-fixture-service",
+            statement: "Explain fixture service structure for bounded handoff.",
+            rank: "primary",
+            purpose_source_status: "explicit_source_declared",
+            evidence_kind_refs: ["P1", "P2"],
+            supporting_evidence_observation_ids: evidenceObservationIds,
+            contradicting_source_refs: [],
+            adequacy_frame: {
+              frame_id: "purpose-frame-fixture-service",
+              frame_kind: "operational_ontology_seed",
+              frame_status: "source_declared",
+              adequacy_claim:
+                "The seed is adequate when it represents the fixture service, fixture user, explanation action, and source evidence binding.",
+              material_kind_requirements: {
+                target_material_kind: targetMaterialKind,
+                required_facets: ["object", "actor", "action", "evidence"],
+                optional_facets: ["policy", "state"],
+                rationale:
+                  "The fixture source needs object, actor, action, and evidence facets for bounded handoff.",
+              },
+              required_elements: [
+                {
+                  element_id: "purpose-element-fixture-service",
+                  element_kind: "object",
+                  material_facet_kind: "object",
+                  description: "Fixture service is represented as the target object.",
+                  actionability_surface_refs: ["static_surface"],
+                  maturity_dimension_refs: ["structure", "evidence"],
+                  member_scope_refs: mixedMemberScopeRefs,
+                  member_target_material_kind: mixedMemberTargetKind,
+                  member_source_refs: mixedMemberSourceRefs,
+                  cross_material_ref_refs: mixedMemberSourceRefs,
+                  supporting_evidence_observation_ids: evidenceObservationIds,
+                  expected_seed_ref_families: ["semantic_layer.object_types"],
+                  closure_expectation: "model_or_limit",
+                },
+                {
+                  element_id: "purpose-element-fixture-user",
+                  element_kind: "actor",
+                  material_facet_kind: "actor",
+                  description: "Fixture user is represented as the acting principal.",
+                  actionability_surface_refs: ["dynamic_surface"],
+                  maturity_dimension_refs: ["context", "relation"],
+                  member_scope_refs: mixedMemberScopeRefs,
+                  member_target_material_kind: mixedMemberTargetKind,
+                  member_source_refs: mixedMemberSourceRefs,
+                  cross_material_ref_refs: mixedMemberSourceRefs,
+                  supporting_evidence_observation_ids: evidenceObservationIds,
+                  expected_seed_ref_families: ["dynamic_layer.actor_types"],
+                  closure_expectation: "model_or_limit",
+                },
+                {
+                  element_id: "purpose-element-explain-fixture",
+                  element_kind: "action",
+                  material_facet_kind: "action",
+                  description:
+                    "Explain Fixture is represented as the purpose-supporting action.",
+                  actionability_surface_refs: ["kinetic_surface"],
+                  maturity_dimension_refs: ["intent", "relation"],
+                  member_scope_refs: mixedMemberScopeRefs,
+                  member_target_material_kind: mixedMemberTargetKind,
+                  member_source_refs: mixedMemberSourceRefs,
+                  cross_material_ref_refs: mixedMemberSourceRefs,
+                  supporting_evidence_observation_ids: evidenceObservationIds,
+                  expected_seed_ref_families: ["kinetic_layer.action_types"],
+                  closure_expectation: "model_or_limit",
+                },
+              ],
+            },
+            ranking_rationale: "Fixture source names a service object and explanation action.",
+            limitation_refs: [],
+          },
+        ],
+        selection: {
+          primary_purpose_candidate_id: "purpose-candidate-fixture-service",
+          selection_basis: "Fixture direct-call test selected the source-declared purpose.",
+          confirmation_policy_hint: "Source-declared purpose does not require confirmation.",
+          unresolved_reason: null,
+        },
       });
     } else if (systemPrompt.includes("Author candidate-inventory.yaml")) {
       text = JSON.stringify({
@@ -1544,6 +1641,23 @@ describe("runReconstruct", () => {
         rationale: "The fixture has no unresolved questions.",
         next_actions: [],
       });
+    } else if (systemPrompt.includes("Author maturation-closure-frontier.yaml")) {
+      text = JSON.stringify({
+        source_requests: [],
+        authority_requests: [],
+      });
+    } else if (systemPrompt.includes("Author answer-support-ledger.yaml")) {
+      text = JSON.stringify({
+        evidence_clusters: [],
+      });
+    } else if (systemPrompt.includes("Author maturation-answer-claims.yaml")) {
+      text = JSON.stringify({
+        answer_claims: [],
+      });
+    } else if (systemPrompt.includes("Author ontology-expansion.yaml")) {
+      text = JSON.stringify({
+        expansions: [],
+      });
     } else if (systemPrompt.includes("writing the final reconstruct result")) {
       text = [
         "# Reconstruct Result",
@@ -1691,6 +1805,18 @@ describe("runReconstruct", () => {
       .toContain("ontology-seed.yaml");
     expect(record.artifact_refs.ontology_seed_validation)
       .toContain("ontology-seed-validation.yaml");
+    expect(record.artifact_refs.maturation_baseline)
+      .toContain("maturation-baseline.yaml");
+    expect(record.artifact_refs.maturation_baseline_validation)
+      .toContain("maturation-baseline-validation.yaml");
+    expect(record.artifact_refs.actionability_matrix)
+      .toContain("actionability-matrix.yaml");
+    expect(record.artifact_refs.actionability_matrix_validation)
+      .toContain("actionability-matrix-validation.yaml");
+    expect(record.artifact_refs.maturation_question_frontier)
+      .toContain("maturation-question-frontier.yaml");
+    expect(record.artifact_refs.maturation_question_frontier_validation)
+      .toContain("maturation-question-frontier-validation.yaml");
     expect(record.validation_summary.failure_count).toBe(0);
     expect(record.validation_summary.revision_proposal_count).toBe(0);
     expect(manifest.runtime_boundary).toMatchObject({
@@ -1728,6 +1854,12 @@ describe("runReconstruct", () => {
     )).toMatchObject({ status: "skipped" });
     expect(preHandoffManifest.steps.find((step) => step.step_id === "record_assembly"))
       .toMatchObject({ status: "skipped" });
+    expect(preHandoffManifest.steps.find((step) =>
+      step.step_id === "maturation_baseline"
+    )).toMatchObject({ status: "skipped" });
+    expect(manifest.steps.find((step) =>
+      step.step_id === "maturation_question_frontier_validation"
+    )).toMatchObject({ status: "completed" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
       "target_material_profile",
@@ -1741,6 +1873,10 @@ describe("runReconstruct", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_purpose_candidates",
+      "source_purpose_candidates_validation",
+      "purpose_confirmation",
+      "purpose_confirmation_validation",
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
@@ -1762,6 +1898,24 @@ describe("runReconstruct", () => {
       "stop_decision",
       "pre_handoff_run_manifest_validation",
       "handoff_decision_validation",
+      "maturation_baseline",
+      "maturation_baseline_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
+      "maturation_question_frontier",
+      "maturation_question_frontier_validation",
+      "maturation_closure_frontier",
+      "maturation_closure_frontier_validation",
+      "maturation_authority_response",
+      "maturation_authority_response_validation",
+      "answer_support_ledger",
+      "answer_support_ledger_validation",
+      "maturation_answer_claims",
+      "maturation_answer_claims_validation",
+      "ontology_expansion",
+      "ontology_expansion_validation",
+      "maturation_continuation_decision",
+      "maturation_continuation_decision_validation",
       "final_output",
       "final_output_provenance_validation",
       "record_assembly",
@@ -1776,6 +1930,7 @@ describe("runReconstruct", () => {
     const confirmationProvider: ReconstructConfirmationProvider = {
       providerId: "fixture-reject-first-claim-provider",
       owner: "mock" as const,
+      confirmPurpose: baseConfirmationProvider.confirmPurpose.bind(baseConfirmationProvider),
       async confirmOntologySeed(input) {
         const artifact = await baseConfirmationProvider.confirmOntologySeed(input);
         const [rejectedClaimId, ...acceptedClaimIds] = artifact.confirmed_claim_ids;
@@ -1946,20 +2101,34 @@ describe("runReconstruct", () => {
       "utf8",
     );
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "direct-run");
+    const sourcePurposeSystemPrompts: string[] = [];
+    const candidateDispositionSystemPrompts: string[] = [];
+    const candidateDispositionPayloads: Array<{
+      candidate_inventory?: unknown;
+    }> = [];
     const ontologySeedSystemPrompts: string[] = [];
     const ontologySeedPayloads: Array<{
       source_observations?: Array<{
         observation_id: string;
+        source_ref?: string;
         structural_data?: {
           content_excerpt?: string;
           prompt_content_excerpt_truncated?: boolean;
         };
       }>;
+      observed_source_refs?: string[];
     }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
     > = [];
     const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+        sourcePurposeSystemPrompts.push(systemPrompt);
+      }
+      if (systemPrompt.includes("Author candidate-disposition.yaml")) {
+        candidateDispositionSystemPrompts.push(systemPrompt);
+        candidateDispositionPayloads.push(JSON.parse(userPrompt));
+      }
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         ontologySeedSystemPrompts.push(systemPrompt);
         ontologySeedPayloads.push(JSON.parse(userPrompt));
@@ -2042,12 +2211,34 @@ describe("runReconstruct", () => {
         }),
       ]),
     );
+    expect(sourcePurposeSystemPrompts[0])
+      .toContain("For mixed targets, every required element");
+    expect(candidateDispositionSystemPrompts[0])
+      .toContain("first valid operational kernel");
+    expect(candidateDispositionSystemPrompts[0]).toContain("deferred_to_maturation");
+    expect(JSON.stringify(candidateDispositionPayloads[0]?.candidate_inventory))
+      .not.toContain("evidence_refs");
+    expect(JSON.stringify(candidateDispositionPayloads[0]?.candidate_inventory))
+      .toContain("evidence_observation_ids");
     expect(ontologySeedSystemPrompts[0]).toContain("OntologySeed");
-    expect(ontologySeedPayloads[0]?.source_observations).toHaveLength(2);
+    expect(ontologySeedSystemPrompts[0])
+      .toContain("compact but schema-valid first-pass seed kernel");
+    expect(ontologySeedSystemPrompts[0])
+      .toContain("Every limitation_refs value anywhere in the seed must resolve");
+    expect(ontologySeedSystemPrompts[0])
+      .toContain("conceptual_frame.associations[].source_concept_id");
+    expect(ontologySeedPayloads[0]?.source_observations?.length).toBeGreaterThan(0);
+    expect(ontologySeedPayloads[0]?.source_observations?.length)
+      .toBeLessThanOrEqual(160);
     expect(ontologySeedPayloads[0]?.source_observations).toEqual(
       expect.arrayContaining([
         expect.not.objectContaining({ structural_data: expect.anything() }),
       ]),
+    );
+    expect(ontologySeedPayloads[0]?.observed_source_refs).toEqual(
+      ontologySeedPayloads[0]?.source_observations?.map((observation) =>
+        observation.source_ref
+      ),
     );
     expect(ontologySeedPayloads[0]?.target_material_profile?.detection)
       .toHaveProperty("per_ref_count");

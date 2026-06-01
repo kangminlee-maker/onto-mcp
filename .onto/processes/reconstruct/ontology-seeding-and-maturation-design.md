@@ -250,12 +250,11 @@ seeding runtime can produce source-purpose candidates, purpose confirmation
 validation, surface-mapped candidate disposition, and surface-closure seed
 validation against a real source.
 
-Current active runtime must not require source-purpose or purpose-confirmation
-refs until the corresponding planned artifact authority, validation authority,
-gate, validator, predicate, and activation condition are promoted together.
-Before that promotion, `ontology-seed.yaml` may carry only a seed-local purpose
-projection validated against source observations, target-material profile
-evidence, candidate disposition, and limitations.
+Current active runtime requires source-purpose and purpose-confirmation refs for
+seed validity and seed-iteration readiness projection. These refs are promoted
+artifact authorities with runtime validators. `ontology-seed.yaml` may carry
+only a bounded projection of the selected validated source-purpose authority and
+confirmation result.
 
 The first implementation must not create compatibility projections for legacy
 seed names. If an old artifact shape remains in tests or docs, migrate or remove
@@ -554,6 +553,8 @@ Candidate validation must additionally enforce:
   `PurposeAdequacyFrame.required_elements[]`;
 - every `promoted_to_seed_layer` disposition has `target_seed_refs[]`, and seed
   validation later proves those refs exist;
+- `deferred_to_maturation` dispositions preserve relevant evidence-backed
+  candidates that are not needed for the first valid seed kernel;
 - `deferred_by_source_gap` dispositions cite a limitation or source frontier;
 - rejected candidates keep evidence and rationale so salience is not silently
   lost.
@@ -1958,19 +1959,20 @@ Implementation file map:
 | artifact/type seats | `src/core-runtime/reconstruct/artifact-types.ts` |
 | registry/gate authority | `.onto/processes/reconstruct/reconstruct-contract-registry.yaml`, `src/core-runtime/reconstruct/contract-registry.ts` |
 | seeding runtime sequence and prompts | `src/core-runtime/reconstruct/run.ts` |
-| source-purpose candidate validation | new `src/core-runtime/reconstruct/purpose-candidates-validation.ts` plus tests |
-| purpose confirmation validation | new or extended `src/core-runtime/reconstruct/purpose-confirmation-validation.ts` plus tests |
+| source-purpose candidate validation | `src/core-runtime/reconstruct/purpose-authority-validation.ts` plus tests |
+| purpose confirmation validation | `src/core-runtime/reconstruct/purpose-authority-validation.ts` plus tests |
+| maturation M1-M4 projection validation | `src/core-runtime/reconstruct/maturation-validation.ts` plus tests |
 | candidate surface/facet validation | existing candidate-disposition validation path and tests |
 | seed surface closure validation | `src/core-runtime/reconstruct/ontology-seed-validation.ts` and tests |
 | post-seed readiness and terminal projection | `src/core-runtime/reconstruct/post-seed-validation.ts`, `src/core-runtime/reconstruct/terminal-validation.ts`, `src/core-runtime/reconstruct/record.ts` |
 | MCP/API projection | `src/core-api/reconstruct-api.ts`, `src/mcp/server.ts` |
 | active docs and user-facing guide | this document, `operational-ontology-seed-contract.md`, `README.md`, `IMPLEMENTATION_MAP.html` |
 
-First implementation branch must start with Stage 0, then prioritize seeding
-S1-S8. Maturation M1-M2 can follow once seed readiness has real-source evidence.
-M3-M4 should not be promoted until source-frontier observation,
-maturation-authority-response validation, and answer-support-ledger validation
-are real runtime behavior.
+Current implementation has promoted seeding source-purpose authority and the
+first-pass maturation surface M1-M4. Multi-round source-observation delta,
+source-observation re-entry validation, proof authorities, and final
+`actionable-ontology.yaml` projection remain planned until their runtime gates
+and validators are real behavior.
 
 Required test path for each implementation slice:
 
@@ -2198,7 +2200,7 @@ target produces:
    limitations, and
 13. a reconstruct record whose artifact refs are the source of truth.
 
-The maturation stage is implemented when a fresh run can continue from that
+The full maturation stage is implemented when a fresh run can continue from that
 seed and produce:
 
 1. `maturation-runtime-capability-profile.yaml`,
@@ -2206,15 +2208,15 @@ seed and produce:
    and their validations when planned maturation gates are promoted or maturation
    execution is requested,
 2. `maturation-baseline.yaml` and validation,
-3. `maturation-question-frontier.yaml` and validation,
-4. `maturation-closure-frontier.yaml` and validation when additional evidence is
+3. `actionability-matrix.yaml` and validation,
+4. `maturation-question-frontier.yaml` and validation,
+5. `maturation-closure-frontier.yaml` and validation when additional evidence is
    needed,
-5. `answer-support-ledger.yaml` and validation,
-6. `maturation-authority-response.yaml` and validation when user,
+6. `answer-support-ledger.yaml` and validation,
+7. `maturation-authority-response.yaml` and validation when user,
    runtime-capability, external-system, or domain-standard authority is needed,
-7. `maturation-answer-claims.yaml` and validation,
-8. `ontology-expansion.yaml` and validation,
-9. `actionability-matrix.yaml` and validation,
+8. `maturation-answer-claims.yaml` and validation,
+9. `ontology-expansion.yaml` and validation,
 10. `maturation-continuation-decision.yaml` and validation, and
 11. `actionable-ontology.yaml` plus validation when readiness is
    `actionable_limited` or `actionable_ready`.

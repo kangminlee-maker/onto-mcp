@@ -3,9 +3,9 @@
  *
  * Canonical provider resolution:
  *   1. Caller-explicit: callLlm(..., { provider }) — one provider only.
- *   2. `llm.auth=oauth + llm.provider=openai` — Codex worker.
- *   3. `llm.auth=api_key` — OpenAI / Anthropic / Grok API key from env.
- *   4. `llm.auth=local + llm.provider=lmstudio` — local OpenAI-style endpoint.
+ *   2. `llm.default.auth=oauth + llm.default.provider=openai` — Codex worker.
+ *   3. `llm.default.auth=api_key` — OpenAI / Anthropic / Grok API key from env.
+ *   4. `llm.default.auth=local + llm.default.provider=lmstudio` — local OpenAI-style endpoint.
  *
  *   Priority 0 (special): ONTO_LLM_MOCK=1 → in-process mock (test only)
  *
@@ -288,7 +288,7 @@ function explicitProviderMissingCredentialError(
         ? "OPENAI_API_KEY"
         : "XAI_API_KEY or GROK_API_KEY";
   return [
-    `llm.provider=${provider} 명시적으로 선택되었으나 ${envVar}가 환경변수에 없습니다.`,
+    `LLM provider=${provider} 명시적으로 선택되었으나 ${envVar}가 환경변수에 없습니다.`,
     ...(provider === "openai"
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),

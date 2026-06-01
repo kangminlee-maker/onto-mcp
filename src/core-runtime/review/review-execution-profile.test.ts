@@ -45,4 +45,62 @@ describe("resolveReviewExecutionProfile", () => {
       service_tier: "fast",
     });
   });
+
+  it("honors explicit direct-call executor settings", () => {
+    const execution = defaultReviewExecution();
+    const settings: OntoSettings = {
+      llm: {
+        auth: "api_key",
+        provider: "openai",
+        model: "gpt-5.5",
+      },
+      review: {
+        execution: {
+          ...execution,
+          executor: "direct_call",
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: true,
+      env: {},
+    });
+
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.profile.worker_executor).toBe("direct_call");
+    expect(result.profile.host).toBe("openai");
+  });
+
+  it("honors explicit codex executor settings", () => {
+    const execution = defaultReviewExecution();
+    const settings: OntoSettings = {
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "gpt-5.5",
+      },
+      review: {
+        execution: {
+          ...execution,
+          executor: "codex",
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: true,
+      env: {},
+    });
+
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.profile.worker_executor).toBe("codex");
+    expect(result.profile.host).toBe("codex");
+  });
 });

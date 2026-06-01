@@ -190,8 +190,8 @@ describe("B. settings-chain llm model switcher", () => {
       llm: { auth: "oauth", provider: "openai", model: "gpt-5.4", effort: "xhigh" },
     });
     const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
-    assertEqual(config.llm?.auth, "oauth", "llm.auth parsed");
-    assertEqual(config.llm?.provider, "openai", "llm.provider parsed");
+    assertEqual(config.llm?.auth, "oauth", "llm default auth parsed");
+    assertEqual(config.llm?.provider, "openai", "llm default provider parsed");
     assertEqual(config.llm?.model, "gpt-5.4", "llm.model parsed");
     assertEqual(config.llm?.effort, "xhigh", "llm.effort parsed");
   });
@@ -251,8 +251,8 @@ describe("B. settings-chain llm model switcher", () => {
       },
     });
     const config = await withHomeDir(homeDir, () => resolveSettingsChain(homeDir, projDir));
-    assertEqual(config.review?.execution.mode, "main-workers", "review execution parsed");
-    assertEqual(config.llm?.provider, "anthropic", "llm.provider parsed");
+    assertEqual(config.review?.execution?.mode, "main-workers", "review execution parsed");
+    assertEqual(config.llm?.provider, "anthropic", "llm default provider parsed");
     assertEqual(config.llm?.model, "claude-sonnet-4-6", "llm.model parsed");
   });
 

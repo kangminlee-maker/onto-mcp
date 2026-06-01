@@ -796,6 +796,7 @@ function allowedCandidateTargetFamilies(dispositionId: string): string[] {
         "data_binding_layer.read_models",
         "data_binding_layer.writebacks",
         "data_binding_layer.provenance_bindings",
+        "handoff_limitations",
       ];
     case "represented_as_property":
       return ["semantic_layer.object_type_properties"];
@@ -1678,7 +1679,10 @@ export function validateOntologySeed(args: {
       seedRefs,
       violations,
     });
-    if (limitationId) limitationIds.add(limitationId);
+    if (limitationId) {
+      limitationIds.add(limitationId);
+      addSeedRefFamily(seedRefFamilies, "handoff_limitations", limitationId);
+    }
   }
   collectNestedLimitationRefs({
     value: seed,

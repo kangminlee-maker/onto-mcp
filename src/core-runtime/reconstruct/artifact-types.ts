@@ -179,6 +179,169 @@ export interface ReconstructEvidenceRef {
   location: string;
 }
 
+export type ReconstructPurposeEvidenceKind = "P1" | "P2" | "P3" | "P4" | "P5";
+export type ReconstructPurposeSourceStatus =
+  | "explicit_source_declared"
+  | "convergent_inferred"
+  | "limitation_backed"
+  | "unresolved";
+
+export interface ReconstructPurposeAdequacyRequiredElement {
+  element_id: string;
+  element_kind: string;
+  material_facet_kind: string;
+  description: string;
+  actionability_surface_refs: string[];
+  maturity_dimension_refs: string[];
+  member_scope_refs: string[];
+  member_target_material_kind: TargetMaterialKind | null;
+  member_source_refs: string[];
+  cross_material_ref_refs: string[];
+  supporting_evidence_refs: ReconstructEvidenceRef[];
+  expected_seed_ref_families: string[];
+  closure_expectation: "model_or_limit" | "frontier_required";
+}
+
+export interface ReconstructPurposeAdequacyFrame {
+  frame_id: string;
+  frame_kind: string;
+  frame_status:
+    | "source_declared"
+    | "evidence_inferred"
+    | "limitation_backed"
+    | "unresolved";
+  adequacy_claim: string;
+  material_kind_requirements: {
+    target_material_kind: TargetMaterialKind;
+    required_facets: string[];
+    optional_facets: string[];
+    rationale: string;
+  };
+  required_elements: ReconstructPurposeAdequacyRequiredElement[];
+}
+
+export interface ReconstructSourcePurposeCandidate {
+  purpose_candidate_id: string;
+  statement: string;
+  rank: "primary" | "secondary" | "candidate" | "rejected";
+  purpose_source_status: ReconstructPurposeSourceStatus;
+  evidence_kind_refs: ReconstructPurposeEvidenceKind[];
+  supporting_evidence_refs: ReconstructEvidenceRef[];
+  contradicting_source_refs: string[];
+  adequacy_frame: ReconstructPurposeAdequacyFrame;
+  ranking_rationale: string;
+  limitation_refs: string[];
+}
+
+export interface ReconstructSourcePurposeCandidatesArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  target_material_kind: TargetMaterialKind;
+  source_observations_ref: string | null;
+  selected_source_profile_refs: ReconstructSelectedSourceProfileRef[];
+  purpose_candidates: ReconstructSourcePurposeCandidate[];
+  selection: {
+    primary_purpose_candidate_id: string | null;
+    selection_basis: string;
+    confirmation_policy_hint: string;
+    unresolved_reason: string | null;
+  };
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructSourcePurposeValidationViolation {
+  code:
+    | "schema_shape_invalid"
+    | "session_id_mismatch"
+    | "duplicate_id"
+    | "missing_required_field"
+    | "missing_primary_purpose"
+    | "multiple_primary_purpose"
+    | "selected_primary_mismatch"
+    | "invalid_enum"
+    | "alias_field_present"
+    | "p5_only_primary"
+    | "insufficient_inferred_evidence"
+    | "evidence_ref_missing"
+    | "evidence_ref_shape_invalid"
+    | "unknown_observation_ref"
+    | "material_kind_mismatch"
+    | "source_ref_mismatch"
+    | "location_mismatch"
+    | "required_element_missing"
+    | "mixed_lineage_missing"
+    | "contradiction_unresolved"
+    | "conflicting_state";
+  message: string;
+  subject_id: string | null;
+  evidence_ref: ReconstructEvidenceRef | null;
+}
+
+export interface ReconstructSourcePurposeCandidatesValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_purpose_candidates_ref: string | null;
+  source_observations_ref: string | null;
+  registry_ref: string | null;
+  validation_status: "valid" | "invalid";
+  selected_purpose_candidate_id: string | null;
+  selected_purpose_frame_id: string | null;
+  confirmation_required: boolean;
+  validation_results: string[];
+  violations: ReconstructSourcePurposeValidationViolation[];
+}
+
+export interface ReconstructPurposeConfirmationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_purpose_candidates_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  purpose_candidate_id: string | null;
+  confirmation_status:
+    | "not_required"
+    | "pending"
+    | "confirmed"
+    | "rejected"
+    | "revised_pending_evidence_check"
+    | "revised_confirmed"
+    | "not_available";
+  confirmed_statement: string | null;
+  revised_statement: string | null;
+  confirmed_frame_element_refs: string[];
+  rejected_frame_element_refs: string[];
+  user_response_summary: string;
+  source_conflict_policy: string;
+  limitation_refs: string[];
+  confirmation_provider: {
+    owner: "host_or_user" | "mock";
+    provider_id: string;
+  };
+}
+
+export interface ReconstructPurposeConfirmationValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  purpose_confirmation_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  purpose_projection_status: "usable" | "blocked" | "rerun_required";
+  confirmed_purpose_candidate_id: string | null;
+  confirmed_statement: string | null;
+  seed_readiness_effect:
+    | "may_project_ready_or_limited"
+    | "must_project_blocked"
+    | "must_rerun_purpose_discovery";
+  validation_results: string[];
+  violations: ReconstructSourcePurposeValidationViolation[];
+}
+
 export interface ReconstructCandidateInventoryCandidate {
   candidate_id: string;
   candidate_kind: string;
@@ -434,6 +597,10 @@ export const RECONSTRUCT_STAGE_IDS = [
   "exploration_synthesis",
   "source_frontier",
   "source_frontier_validation",
+  "source_purpose_candidates",
+  "source_purpose_candidates_validation",
+  "purpose_confirmation",
+  "purpose_confirmation_validation",
   "candidate_inventory",
   "candidate_disposition",
   "candidate_disposition_validation",
@@ -455,6 +622,24 @@ export const RECONSTRUCT_STAGE_IDS = [
   "stop_decision",
   "pre_handoff_run_manifest_validation",
   "handoff_decision_validation",
+  "maturation_baseline",
+  "maturation_baseline_validation",
+  "actionability_matrix",
+  "actionability_matrix_validation",
+  "maturation_question_frontier",
+  "maturation_question_frontier_validation",
+  "maturation_closure_frontier",
+  "maturation_closure_frontier_validation",
+  "maturation_authority_response",
+  "maturation_authority_response_validation",
+  "answer_support_ledger",
+  "answer_support_ledger_validation",
+  "maturation_answer_claims",
+  "maturation_answer_claims_validation",
+  "ontology_expansion",
+  "ontology_expansion_validation",
+  "maturation_continuation_decision",
+  "maturation_continuation_decision_validation",
   "final_output",
   "final_output_provenance_validation",
   "record_assembly",
@@ -702,6 +887,503 @@ export interface ReconstructCompetencyQuestionAssessmentValidationArtifact {
   answer_status_counts: Record<ReconstructCompetencyQuestionAnswerStatus, number>;
   validation_results: string[];
   violations: ReconstructPostSeedValidationViolation[];
+}
+
+export type ReconstructMaturationMateriality =
+  | "blocker"
+  | "high"
+  | "medium"
+  | "low"
+  | "info";
+
+export type ReconstructMaturityLevel =
+  | "L0_missing"
+  | "L1_identified"
+  | "L2_modeled"
+  | "L3_evidenced"
+  | "L4_validated_for_purpose";
+
+export interface ReconstructMaturationBaselineRow {
+  baseline_row_id: string;
+  purpose_element_ref: string;
+  actionability_surface_ref: string;
+  maturity_dimension_ref: string;
+  materiality: ReconstructMaturationMateriality;
+  materiality_ref: string;
+  member_scope_refs: string[];
+  member_target_material_kind: TargetMaterialKind | null;
+  member_source_refs: string[];
+  cross_material_ref_refs: string[];
+  competency_question_refs: string[];
+  competency_assessment_refs: string[];
+  domain_competency_trace_refs: string[];
+  maturity_level: ReconstructMaturityLevel;
+  supporting_seed_refs: string[];
+  supporting_evidence_refs: ReconstructEvidenceRef[];
+  supporting_validation_refs: string[];
+  limitation_refs: string[];
+  blocking_reason: string | null;
+}
+
+export interface ReconstructMaturationBaselineArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_seed_ref: string | null;
+  source_seed_validation_ref: string | null;
+  source_claim_realization_map_validation_ref: string | null;
+  source_competency_assessment_ref: string | null;
+  source_reconstruct_record_ref: string | null;
+  source_run_manifest_ref: string | null;
+  source_handoff_decision_validation_ref: string | null;
+  purpose_frame_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  purpose_confirmation_validation_ref: string | null;
+  baseline_rows: ReconstructMaturationBaselineRow[];
+}
+
+export interface ReconstructMaturationValidationViolation {
+  code:
+    | "session_id_mismatch"
+    | "prior_validation_invalid"
+    | "duplicate_id"
+    | "unknown_id"
+    | "missing_required_ref"
+    | "missing_required_coverage"
+    | "invalid_enum"
+    | "mixed_lineage_missing"
+    | "conflicting_state"
+    | "already_observed_source_ref"
+    | "unsupported_source_ref"
+    | "semantic_only_location"
+    | "support_mode_missing_authority"
+    | "insufficient_independent_evidence"
+    | "seed_authority_rewrite_attempt";
+  message: string;
+  subject_id: string | null;
+}
+
+export interface ReconstructMaturationBaselineValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_baseline_ref: string | null;
+  source_seed_validation_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  purpose_confirmation_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  baseline_row_count: number;
+  material_row_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructActionabilityMatrixRow {
+  matrix_row_id: string;
+  baseline_row_refs: string[];
+  purpose_element_ref: string;
+  actionability_surface_ref: string;
+  maturity_dimension_ref: string;
+  materiality: ReconstructMaturationMateriality;
+  materiality_ref: string;
+  member_scope_refs: string[];
+  member_target_material_kind: TargetMaterialKind | null;
+  member_readiness:
+    | "closed"
+    | "limitation_backed"
+    | "frontier_required"
+    | "out_of_scope";
+  member_source_refs: string[];
+  cross_material_ref_refs: string[];
+  competency_question_refs: string[];
+  competency_assessment_refs: string[];
+  maturity_level: ReconstructMaturityLevel;
+  supporting_refs: string[];
+  blocking_question_refs: string[];
+  limitation_refs: string[];
+  next_action: string;
+}
+
+export interface ReconstructActionabilityMatrixArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_baseline_ref: string | null;
+  maturation_baseline_validation_ref: string | null;
+  rows: ReconstructActionabilityMatrixRow[];
+}
+
+export interface ReconstructActionabilityMatrixValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  actionability_matrix_ref: string | null;
+  maturation_baseline_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  matrix_row_count: number;
+  frontier_required_row_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructMaturationQuestionFrontierQuestion {
+  question_id: string;
+  question: string;
+  materiality: ReconstructMaturationMateriality;
+  materiality_ref: string;
+  actionability_surface_refs: string[];
+  maturity_dimension_refs: string[];
+  purpose_element_refs: string[];
+  baseline_row_refs: string[];
+  competency_question_refs: string[];
+  competency_assessment_refs: string[];
+  domain_competency_trace_refs: string[];
+  seed_ref_refs: string[];
+  current_answer_status: ReconstructCompetencyQuestionAnswerStatus;
+  expected_answer_kind: "yes_no" | "explanation" | "list" | "mapping" | "gap_statement";
+  evidence_needed: string;
+  authority_need: {
+    authority_kind:
+      | "none"
+      | "user"
+      | "external_system"
+      | "domain_standard"
+      | "runtime_capability";
+    authority_scope: string | null;
+    blocking_if_unavailable: boolean;
+    expected_response_kind:
+      | "confirmation"
+      | "value"
+      | "policy"
+      | "capability"
+      | "external_reference"
+      | "unavailable_reason";
+  };
+  closure_frontier_hint_refs: string[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructMaturationQuestionFrontierArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_baseline_ref: string | null;
+  maturation_baseline_validation_ref: string | null;
+  actionability_matrix_ref: string | null;
+  actionability_matrix_validation_ref: string | null;
+  questions: ReconstructMaturationQuestionFrontierQuestion[];
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructMaturationQuestionFrontierValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_question_frontier_ref: string | null;
+  maturation_baseline_validation_ref: string | null;
+  actionability_matrix_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  question_count: number;
+  material_frontier_question_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export type ReconstructMaturationAuthorityKind =
+  | "user"
+  | "external_system"
+  | "domain_standard"
+  | "runtime_capability";
+
+export type ReconstructMaturationExpectedResponseKind =
+  | "confirmation"
+  | "value"
+  | "policy"
+  | "capability"
+  | "external_reference"
+  | "unavailable_reason";
+
+export type ReconstructMaturationSupportMode =
+  | "direct_authority"
+  | "runtime_proof"
+  | "user_confirmation"
+  | "authority_response"
+  | "convergent_source_evidence";
+
+export interface ReconstructMaturationClosureFrontierSourceRequest {
+  source_request_id: string;
+  question_refs: string[];
+  member_scope_refs: string[];
+  member_source_refs: string[];
+  cross_material_ref_refs: string[];
+  requested_source_ref: string;
+  requested_location: string | null;
+  target_material_kind: TargetMaterialKind;
+  expected_evidence_kind: string;
+  reason: string;
+}
+
+export interface ReconstructMaturationClosureFrontierAuthorityRequest {
+  authority_request_id: string;
+  question_refs: string[];
+  authority_kind: ReconstructMaturationAuthorityKind;
+  authority_scope: string;
+  request_summary: string;
+  request_rationale: string;
+  blocking_if_unavailable: boolean;
+  expected_response_kind: ReconstructMaturationExpectedResponseKind;
+  limitation_refs: string[];
+}
+
+export interface ReconstructMaturationClosureFrontierArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  question_frontier_ref: string | null;
+  source_requests: ReconstructMaturationClosureFrontierSourceRequest[];
+  authority_requests: ReconstructMaturationClosureFrontierAuthorityRequest[];
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructMaturationClosureFrontierValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_closure_frontier_ref: string | null;
+  maturation_question_frontier_validation_ref: string | null;
+  source_inventory_ref: string | null;
+  source_observations_ref: string | null;
+  validation_status: "valid" | "invalid";
+  source_request_count: number;
+  authority_request_count: number;
+  accepted_source_request_ids: string[];
+  rejected_source_requests: Array<{
+    source_request_id: string | null;
+    requested_source_ref: string | null;
+    reason: string;
+  }>;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructMaturationAuthorityResponse {
+  authority_response_id: string;
+  authority_request_ref: string;
+  authority_kind: ReconstructMaturationAuthorityKind;
+  authority_identity: {
+    authority_id: string;
+    authority_label: string;
+    authority_role: string;
+  };
+  authority_snapshot_ref: string | null;
+  authority_version_or_timestamp: string | null;
+  response_status:
+    | "provided"
+    | "unavailable"
+    | "rejected"
+    | "deferred"
+    | "contradicted";
+  response_summary: string;
+  response_source_ref: string | null;
+  supporting_refs: string[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructMaturationAuthorityResponseArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  closure_frontier_ref: string | null;
+  responses: ReconstructMaturationAuthorityResponse[];
+}
+
+export interface ReconstructMaturationAuthorityResponseValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_authority_response_ref: string | null;
+  maturation_closure_frontier_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  response_count: number;
+  provided_response_count: number;
+  unavailable_response_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructAnswerSupportEvidenceCluster {
+  evidence_cluster_id: string;
+  question_refs: string[];
+  support_mode: ReconstructMaturationSupportMode;
+  proposed_answer_summary: string;
+  evidence_refs: ReconstructEvidenceRef[];
+  proof_refs: string[];
+  user_confirmation_refs: string[];
+  authority_response_refs: string[];
+  independence_basis: string;
+  contradiction_refs: string[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructAnswerSupportLedgerArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  evidence_clusters: ReconstructAnswerSupportEvidenceCluster[];
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructAnswerSupportLedgerValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  answer_support_ledger_ref: string | null;
+  maturation_question_frontier_validation_ref: string | null;
+  maturation_authority_response_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  evidence_cluster_count: number;
+  supported_question_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructMaturationAnswerClaim {
+  answer_claim_id: string;
+  question_id: string;
+  answer: string;
+  answer_status: "answered" | "partially_answered";
+  support_mode: ReconstructMaturationSupportMode;
+  evidence_cluster_refs: string[];
+  supporting_evidence_refs: ReconstructEvidenceRef[];
+  target_surface_refs: string[];
+  target_dimension_refs: string[];
+  purpose_element_refs: string[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructMaturationAnswerClaimsArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  round_id: string;
+  answer_claims: ReconstructMaturationAnswerClaim[];
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructMaturationAnswerClaimsValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_answer_claims_ref: string | null;
+  answer_support_ledger_validation_ref: string | null;
+  maturation_question_frontier_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  answer_claim_count: number;
+  answered_question_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export interface ReconstructOntologyExpansionEntry {
+  expansion_id: string;
+  operation: "add" | "refine" | "defer" | "reject";
+  target_surface_refs: string[];
+  target_dimension_refs: string[];
+  target_seed_or_ontology_refs: string[];
+  purpose_element_refs: string[];
+  answer_claim_refs: string[];
+  evidence_refs: ReconstructEvidenceRef[];
+  concept_economy_effect:
+    | "reduces_surface"
+    | "preserves_surface"
+    | "increases_surface";
+  rationale: string;
+  limitation_refs: string[];
+}
+
+export interface ReconstructOntologyExpansionArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  answer_claims_ref: string | null;
+  source_seed_ref: string | null;
+  expansions: ReconstructOntologyExpansionEntry[];
+  directive_author: {
+    owner: "host_llm" | "mock";
+    author_id: string;
+  };
+}
+
+export interface ReconstructOntologyExpansionValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  ontology_expansion_ref: string | null;
+  maturation_answer_claims_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  expansion_count: number;
+  operation_counts: Record<ReconstructOntologyExpansionEntry["operation"], number>;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export type ReconstructMaturationContinuationDecisionState =
+  | "continue"
+  | "ask_user"
+  | "blocked"
+  | "actionable_limited"
+  | "actionable_ready";
+
+export interface ReconstructMaturationContinuationDecisionArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  actionability_matrix_validation_ref: string | null;
+  decision_state: ReconstructMaturationContinuationDecisionState;
+  state_rationale: string;
+  blocking_row_refs: string[];
+  next_frontier_refs: string[];
+  authority_request_refs: string[];
+  authority_response_refs: string[];
+  claim_scope: {
+    included_row_refs: string[];
+    excluded_row_refs: string[];
+    exclusion_rationale: string | null;
+  };
+  limitation_refs: string[];
+}
+
+export interface ReconstructMaturationContinuationDecisionValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_continuation_decision_ref: string | null;
+  actionability_matrix_validation_ref: string | null;
+  maturation_question_frontier_validation_ref: string | null;
+  maturation_closure_frontier_validation_ref: string | null;
+  answer_support_ledger_validation_ref: string | null;
+  maturation_authority_response_validation_ref: string | null;
+  ontology_expansion_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  decision_state: ReconstructMaturationContinuationDecisionState;
+  blocking_row_count: number;
+  next_frontier_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
 }
 
 export type ReconstructFailureKind =
@@ -1140,6 +1822,10 @@ export interface ReconstructRecordArtifactRefs {
   exploration_synthesis: string | null;
   source_frontier: string | null;
   source_frontier_validation: string | null;
+  source_purpose_candidates: string | null;
+  source_purpose_candidates_validation: string | null;
+  purpose_confirmation: string | null;
+  purpose_confirmation_validation: string | null;
   candidate_inventory: string | null;
   candidate_disposition: string | null;
   candidate_disposition_validation: string | null;
@@ -1162,6 +1848,24 @@ export interface ReconstructRecordArtifactRefs {
   pre_handoff_run_manifest_validation: string | null;
   post_publication_run_manifest_validation: string | null;
   handoff_decision_validation: string | null;
+  maturation_baseline: string | null;
+  maturation_baseline_validation: string | null;
+  actionability_matrix: string | null;
+  actionability_matrix_validation: string | null;
+  maturation_question_frontier: string | null;
+  maturation_question_frontier_validation: string | null;
+  maturation_closure_frontier: string | null;
+  maturation_closure_frontier_validation: string | null;
+  maturation_authority_response: string | null;
+  maturation_authority_response_validation: string | null;
+  answer_support_ledger: string | null;
+  answer_support_ledger_validation: string | null;
+  maturation_answer_claims: string | null;
+  maturation_answer_claims_validation: string | null;
+  ontology_expansion: string | null;
+  ontology_expansion_validation: string | null;
+  maturation_continuation_decision: string | null;
+  maturation_continuation_decision_validation: string | null;
   final_output: string | null;
   final_output_provenance_validation: string | null;
   reconstruct_run_manifest: string | null;

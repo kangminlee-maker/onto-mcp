@@ -112,21 +112,23 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     expect(md.resolved_llm_plan?.model).toBe("claude-sonnet-4-6");
   });
 
-  it("omits resolved_llm_plan field when settings.json is missing", async () => {
+  it("omits resolved_llm_plan field when effective settings has no LLM fields", async () => {
     const { sessionMetadataPath } =
-      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+      await bootstrapInvocationBindingArtifacts({
+        ...commonParams(tmp),
+        ontoConfig: {},
+      });
 
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeUndefined();
   });
 
-  it("omits resolved_llm_plan field when settings.json has no LLM fields", async () => {
-    // Fixture writes an orthogonal-only field so the settings JSON is
-    // non-empty but carries no LLM profile information.
-    await writeConfig(tmp, { domains: ["software-engineering"] });
-
+  it("omits resolved_llm_plan field when effective settings has only non-LLM fields", async () => {
     const { sessionMetadataPath } =
-      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+      await bootstrapInvocationBindingArtifacts({
+        ...commonParams(tmp),
+        ontoConfig: { domains: ["software-engineering"] },
+      });
 
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeUndefined();
@@ -318,6 +320,7 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       ...commonParams(tmp),
       executionRealization: "direct-call",
       hostRuntime: "openai",
+      ontoConfig: {},
     });
 
     const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);

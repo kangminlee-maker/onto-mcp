@@ -37,12 +37,11 @@ import {
   type LlmModelSwitcherConfig,
 } from "../llm/model-switcher.js";
 import {
-  assertNoUnsupportedConfigFiles,
   defaultReviewExecution,
+  resolveSettingsChain,
   type OntoSettings,
-  type ReviewExecutionSettings,
   type ReviewLlmRef,
-  projectSettingsPath,
+  type ResolvedReviewExecutionSettings,
 } from "../discovery/settings-chain.js";
 import {
   ensureDirectory,
@@ -133,14 +132,7 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
 async function loadOntoConfigForPlan(
   projectRoot: string,
 ): Promise<OntoSettings> {
-  await assertNoUnsupportedConfigFiles(projectRoot);
-  const configPath = projectSettingsPath(projectRoot);
-  if (!(await fileExists(configPath))) return {};
-  const parsed = JSON.parse(await fs.readFile(configPath, "utf8"));
-  if (parsed && typeof parsed === "object") {
-    return parsed as OntoSettings;
-  }
-  return {};
+  return resolveSettingsChain("", projectRoot);
 }
 
 /**
@@ -162,7 +154,7 @@ function derivePlanTimeLlmResolution(
 
 function resolveReviewExecutionSettingsForArtifacts(
   config: OntoSettings,
-): ReviewExecutionSettings {
+): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
   const execution = config.review?.execution;
   if (!execution) return defaults;
@@ -171,15 +163,15 @@ function resolveReviewExecutionSettingsForArtifacts(
     ...execution,
     teamlead: {
       ...defaults.teamlead,
-      ...execution.teamlead,
+      ...(execution.teamlead ?? {}),
     },
     lens: {
       ...defaults.lens,
-      ...execution.lens,
+      ...(execution.lens ?? {}),
     },
     synthesize: {
       ...defaults.synthesize,
-      ...execution.synthesize,
+      ...(execution.synthesize ?? {}),
     },
   };
 }
@@ -844,7 +836,10 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: ["review.execution.teamlead.llm", "llm"],
+        sourceSettingsRefs: [
+          "review.execution.actors.teamlead.llm",
+          "llm.default",
+        ],
       }),
       buildActorInvocationProfile({
         actorKind: "lens",
@@ -853,7 +848,7 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: ["review.execution.lens.llm", "llm"],
+        sourceSettingsRefs: ["review.execution.actors.lens.llm", "llm.default"],
       }),
       buildActorInvocationProfile({
         actorKind: "synthesize",
@@ -862,7 +857,10 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: ["review.execution.synthesize.llm", "llm"],
+        sourceSettingsRefs: [
+          "review.execution.actors.synthesize.llm",
+          "llm.default",
+        ],
       }),
     ],
   };

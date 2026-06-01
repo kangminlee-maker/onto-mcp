@@ -831,9 +831,13 @@ seed refs that the later `ontology-seed.yaml` must realize as first-class
 seed-layer records. Allowed promoted refs include concepts, object types, link
 types, value types, constraints, actor types, actor roles, permission policies,
 action types, functions, workflows, state models, lifecycle rules, data
-bindings, read models, writebacks, and provenance bindings. Runtime first
+bindings, read models, writebacks, provenance bindings, and handoff
+limitations. Runtime first
 validates that every disposition has allowed shape, rationale, and evidence
 refs, then validates that the seed realizes each planned promoted target.
+Relevant candidates that are not required for the first valid seed kernel use
+`deferred_to_maturation`; this preserves evidence for later maturation without
+forcing `ontology-seed.yaml` to realize every observed candidate in one pass.
 
 ## 13. Ontology-Facing Maturation Handoff
 
