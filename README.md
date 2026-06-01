@@ -150,6 +150,22 @@ MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
 final result to the user without inventing settings or findings.
 
+### Self-documentation (resources and prompts)
+
+The server advertises MCP `resources` and `prompts` so a host LLM can learn onto
+without external docs:
+
+- **Resource `onto://usage`** — a usage guide covering provider setup, the review
+  and reconstruct workflows, the running-handle polling pattern, and output-size
+  guidance. Discover with `resources/list`, read with `resources/read`.
+- **Prompts** (`prompts/list` / `prompts/get`) — canonical task templates
+  `review_target` (args: `target`, `intent`, `reviewMode`) and `reconstruct_seed`
+  (args: `targetRefs`, `intent`) that expand into ready-to-run instructions.
+
+`onto_review_status` accepts `projectionLevel` (`compact` | `standard` | `full`,
+default `full`); use `compact` in token-limited hosts since the full status can be
+large.
+
 When `onto_review`, `onto_review_continue`, or `onto_reconstruct` starts, the
 runtime writes a session-local `runtime-events.ndjson` stream and tries to open
 `scripts/onto-runtime-watch.sh` in a supported terminal split/tab. Current
