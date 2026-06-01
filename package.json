@@ -34,6 +34,7 @@
   "scripts": {
     "prepare": "npm run build:ts-core",
     "postinstall": "node scripts/postinstall-hint.js",
+    "version:next": "node scripts/next-version.mjs",
     "clean:ts-core": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
