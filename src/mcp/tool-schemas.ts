@@ -60,6 +60,7 @@ export const OntoReviewStatusInputSchema = z.object({
   domain: z.string().min(1).optional(),
   requestHash: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(20).optional(),
+  projectionLevel: z.enum(["compact", "standard", "full"]).optional(),
 }).strict().refine((input) => (
   typeof input.sessionRoot === "string" || input.latest === true
 ), {

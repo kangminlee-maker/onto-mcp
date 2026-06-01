@@ -218,6 +218,12 @@ const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
       type: "number",
       description: "Maximum latest-session matches to include. Defaults to 5.",
     },
+    projectionLevel: {
+      type: "string",
+      enum: ["compact", "standard", "full"],
+      description:
+        "Status payload size. Default full returns the complete status and can be large (tens of KB); pass compact for a small status (session id, status, run control, artifact refs, route summary) suited to token-limited hosts, or standard to also keep a trimmed pipeline ledger and continuation summary. For final results prefer onto_review_result.",
+    },
   },
 };
 
@@ -498,13 +504,13 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review",
     description:
-      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly.",
+      "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly. Long-running: if it returns a running handle (status=running), poll onto_review_status (with the same sessionRoot, or latest=true) until status=completed, then read onto_review_result. Requires an llm provider configured in .onto/settings.json (or ~/.onto/settings.json); see the onto://usage resource. Read onto://usage first if unsure of the workflow.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
     name: "onto_prepare_review",
     description:
-      "Prepare an onto review session and prompt packets without executing lens units.",
+      "Prepare an onto review session and prompt packets without executing lens units. Follow with onto_review_continue to execute the prepared session. Most callers should use onto_review directly; see the onto://usage resource.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
@@ -522,7 +528,7 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review_status",
     description:
-      "Read structured status and artifact refs for a review session, or recover the latest matching session.",
+      "Read structured status and artifact refs for a review session, or recover the latest matching session. The default payload is complete and can be large; pass projectionLevel=compact for a small status in token-limited hosts.",
     inputSchema: REVIEW_STATUS_INPUT_SCHEMA,
   },
   {
@@ -579,6 +585,139 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   },
 ];
 
+const USAGE_GUIDE = `# Using onto via MCP
+
+onto is an ontology-as-code review runtime. The host LLM drives it through MCP
+tools; the runtime owns artifacts and validation. Two product paths exist:
+\`review\` (mature) and \`reconstruct\`.
+
+## Prerequisite: configure a provider
+
+\`review\` and \`reconstruct\` execute real LLM work and FAIL LOUD if no provider is
+configured. Set an \`llm\` block in \`{projectRoot}/.onto/settings.json\` or
+\`~/.onto/settings.json\`, e.g. Codex OAuth:
+
+    { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } }
+
+Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
+that API; local+lmstudio -> local endpoint. Listing tools needs no provider.
+
+## Review — happy path
+
+1. Call \`onto_review\` with { target, intent } (target = file/dir/token). Optional:
+   reviewMode ("core-axis" cheaper, "full"), domain or noDomain=true, lensIds.
+2. review is long-running. If the result status is "running", it returns a run
+   handle; poll \`onto_review_status\` (same sessionRoot, or latest=true) until
+   status="completed". onto_review_status default payload is large — pass
+   projectionLevel="compact" in token-limited hosts.
+3. Read \`onto_review_result\` (projectionLevel compact|standard|full) for the
+   ReviewRecord + final output. Present using the result's llmPresentation prompts.
+
+Other review tools: \`onto_prepare_review\` (materialize without executing) then
+\`onto_review_continue\`; \`onto_review_cancel\` to stop a running session.
+Discover options with \`onto_list_lenses\` and \`onto_list_domains\`.
+
+## Reconstruct — multi-step (LLM authors artifacts between steps)
+
+1. \`onto_observe_source\` { targetRefs } -> structural observations (no meaning).
+2. The LLM authors the directive YAML (source observation / candidate disposition
+   / ontology seed); validate each with \`onto_validate_reconstruct_directive\`
+   (directiveKind selects which artifact shape).
+3. \`onto_reconstruct\` { targetRefs, intent } runs the material-aware path with
+   validation gates; poll \`onto_reconstruct_status\`; read \`onto_reconstruct_result\`.
+Discover material profiles with \`onto_list_source_profiles\`.
+
+## Notes
+
+- Tool results put structured data in structuredContent and a JSON mirror in text.
+- llmPresentation prompts (in results) tell you how to explain runs to the user —
+  they are presentation guidance, not operating instructions.
+- onto writes only under \`{projectRoot}/.onto/\`; it never mutates your sources.
+`;
+
+interface ResourceDefinition {
+  uri: string;
+  name: string;
+  description: string;
+  mimeType: string;
+  text: string;
+}
+
+const RESOURCE_DEFINITIONS: ResourceDefinition[] = [
+  {
+    uri: "onto://usage",
+    name: "onto usage guide",
+    description:
+      "How to use onto through MCP: provider setup, the review and reconstruct workflows, polling, and output-size guidance.",
+    mimeType: "text/markdown",
+    text: USAGE_GUIDE,
+  },
+];
+
+interface PromptArgument {
+  name: string;
+  description: string;
+  required: boolean;
+}
+
+interface PromptDefinition {
+  name: string;
+  description: string;
+  arguments: PromptArgument[];
+  build: (args: Record<string, unknown>) => string;
+}
+
+function promptArg(args: Record<string, unknown>, key: string): string {
+  const value = args[key];
+  return typeof value === "string" && value.trim().length > 0 ? value.trim() : "";
+}
+
+const PROMPT_DEFINITIONS: PromptDefinition[] = [
+  {
+    name: "review_target",
+    description:
+      "Review a file, directory, or bundle with onto and report the outcome.",
+    arguments: [
+      { name: "target", description: "File, directory, or target token to review.", required: true },
+      { name: "intent", description: "What the review should verify or decide.", required: false },
+      { name: "reviewMode", description: "core-axis (cheaper) or full.", required: false },
+    ],
+    build: (args) => {
+      const target = promptArg(args, "target") || "<target>";
+      const intent = promptArg(args, "intent") || `Review ${target} for correctness, risks, and clarity.`;
+      const reviewMode = promptArg(args, "reviewMode") || "core-axis";
+      return [
+        `Use the onto MCP server to review ${target}.`,
+        `Call onto_review with target="${target}", intent="${intent}", reviewMode="${reviewMode}".`,
+        "If the result status is \"running\", poll onto_review_status (same sessionRoot, projectionLevel=compact) until status=completed,",
+        "then read onto_review_result and summarize highest severity, material issues, and action candidates using its llmPresentation.",
+        "If unsure about setup or the workflow, read the onto://usage resource first.",
+      ].join("\n");
+    },
+  },
+  {
+    name: "reconstruct_seed",
+    description:
+      "Reconstruct an actionable ontology seed from sources with onto.",
+    arguments: [
+      { name: "targetRefs", description: "Comma-separated project-relative target refs.", required: true },
+      { name: "intent", description: "Declared reconstruction purpose.", required: false },
+    ],
+    build: (args) => {
+      const targetRefs = promptArg(args, "targetRefs") || "<comma-separated refs>";
+      const intent = promptArg(args, "intent") || "Reconstruct a bounded actionable ontology seed from these targets.";
+      return [
+        `Use the onto MCP server to reconstruct from: ${targetRefs}.`,
+        "First call onto_observe_source with those targetRefs.",
+        "Author the required directive YAML, validating each with onto_validate_reconstruct_directive,",
+        `then call onto_reconstruct with targetRefs and intent="${intent}".`,
+        "Poll onto_reconstruct_status until terminal, then read onto_reconstruct_result.",
+        "Read the onto://usage resource for the full reconstruct workflow.",
+      ].join("\n");
+    },
+  },
+];
+
 async function readPackageVersion(): Promise<string> {
   return readOntoVersion();
 }
@@ -627,6 +766,92 @@ function formatToolResult(data: unknown): JsonValue {
     content: [{ type: "text", text }],
     structuredContent: data as JsonValue,
   };
+}
+
+type ReviewStatusProjection = "compact" | "standard" | "full";
+
+/**
+ * Trim an onto_review_status payload for token-limited hosts. `full` (default)
+ * returns the status unchanged. `compact` keeps only small top-level facts;
+ * `standard` additionally keeps a trimmed pipeline ledger (unit id/kind/status/
+ * trust) and a continuation summary (ids only). The largest fields
+ * (`llmPresentation`, full ledger refs/hashes, full continuation objects) are
+ * dropped below `full`. For final results use onto_review_result.
+ */
+function projectReviewStatus(status: unknown, level: ReviewStatusProjection): unknown {
+  if (level === "full") return status;
+  if (status === null || typeof status !== "object" || Array.isArray(status)) {
+    return status;
+  }
+  const source = status as Record<string, unknown>;
+  const out: Record<string, unknown> = { projectionLevel: level };
+  const keepKeys = [
+    "sessionId",
+    "sessionRoot",
+    "status",
+    "artifactRefs",
+    "failureRefs",
+    "structuredFailures",
+    "routeVisibility",
+    "runControl",
+    "targetMaterialSupport",
+    "environmentWarnings",
+    "latestSessionMatches",
+  ];
+  for (const key of keepKeys) {
+    if (key in source) out[key] = source[key];
+  }
+  if (level === "compact") return out;
+
+  // standard: add a trimmed pipeline ledger and a continuation summary.
+  const ledger = source.pipelineExecutionLedger;
+  if (ledger && typeof ledger === "object" && !Array.isArray(ledger)) {
+    const ledgerObj = ledger as Record<string, unknown>;
+    const units = Array.isArray(ledgerObj.units) ? ledgerObj.units : [];
+    out.pipelineExecutionLedger = {
+      ...(ledgerObj.schemaVersion !== undefined
+        ? { schemaVersion: ledgerObj.schemaVersion }
+        : {}),
+      ...(ledgerObj.pipeline !== undefined ? { pipeline: ledgerObj.pipeline } : {}),
+      units: units.map((unit) =>
+        unit && typeof unit === "object" && !Array.isArray(unit)
+          ? {
+              unitId: (unit as Record<string, unknown>).unitId ?? null,
+              unitKind: (unit as Record<string, unknown>).unitKind ?? null,
+              status: (unit as Record<string, unknown>).status ?? null,
+              trustStatus: (unit as Record<string, unknown>).trustStatus ?? null,
+            }
+          : unit,
+      ),
+    };
+  }
+  const continuation = source.continuationPlan;
+  if (continuation && typeof continuation === "object" && !Array.isArray(continuation)) {
+    const continuationObj = continuation as Record<string, unknown>;
+    const unitIds = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map((entry) =>
+            entry && typeof entry === "object" && !Array.isArray(entry)
+              ? ((entry as Record<string, unknown>).unitId ?? null)
+              : entry,
+          )
+        : value;
+    out.continuationPlan = {
+      ...(continuationObj.eligible !== undefined
+        ? { eligible: continuationObj.eligible }
+        : {}),
+      ...(continuationObj.ineligibleReason !== undefined
+        ? { ineligibleReason: continuationObj.ineligibleReason }
+        : {}),
+      ...(continuationObj.frontierUnits !== undefined
+        ? { frontierUnits: unitIds(continuationObj.frontierUnits) }
+        : {}),
+      ...(continuationObj.downstreamUnits !== undefined
+        ? { downstreamUnits: unitIds(continuationObj.downstreamUnits) }
+        : {}),
+    };
+  }
+  return out;
 }
 
 function progressTokenFromToolCallParams(
@@ -1128,13 +1353,19 @@ async function callTool(
       }
       case "onto_review_status": {
         const parsed = OntoReviewStatusInputSchema.parse(args);
+        const statusProjection = parsed.projectionLevel ?? "full";
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         if (parsed.sessionRoot) {
           const sessionRoot = await resolveAllowedSessionRoot({
             sessionRoot: parsed.sessionRoot,
             projectRoot,
           });
-          return formatToolResult(await reviewApi.getReviewStatus(sessionRoot));
+          return formatToolResult(
+            projectReviewStatus(
+              await reviewApi.getReviewStatus(sessionRoot),
+              statusProjection,
+            ),
+          );
         }
         const latestSessionMatches = await reviewApi.findLatestReviewSessions({
           projectRoot,
@@ -1161,10 +1392,15 @@ async function callTool(
           sessionRoot: latest.sessionRoot,
           projectRoot,
         });
-        return formatToolResult({
-          ...(await reviewApi.getReviewStatus(sessionRoot)),
-          latestSessionMatches,
-        });
+        return formatToolResult(
+          projectReviewStatus(
+            {
+              ...(await reviewApi.getReviewStatus(sessionRoot)),
+              latestSessionMatches,
+            },
+            statusProjection,
+          ),
+        );
       }
       case "onto_review_result": {
         const parsed = OntoReviewResultInputSchema.parse(args);
@@ -1412,7 +1648,7 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
     case "initialize":
       return jsonRpcResult(message.id, {
         protocolVersion: "2024-11-05",
-        capabilities: { tools: {} },
+        capabilities: { tools: {}, resources: {}, prompts: {} },
         serverInfo: {
           name: "onto-mcp",
           version: await readPackageVersion(),
@@ -1422,6 +1658,66 @@ async function handleRequest(message: JsonRpcRequest): Promise<JsonValue | null>
       return jsonRpcResult(message.id, {});
     case "tools/list":
       return jsonRpcResult(message.id, { tools: TOOL_DEFINITIONS });
+    case "resources/list":
+      return jsonRpcResult(message.id, {
+        resources: RESOURCE_DEFINITIONS.map(({ uri, name, description, mimeType }) => ({
+          uri,
+          name,
+          description,
+          mimeType,
+        })),
+      });
+    case "resources/read": {
+      const params = message.params as { uri?: unknown } | undefined;
+      const uri = typeof params?.uri === "string" ? params.uri : undefined;
+      const resource = RESOURCE_DEFINITIONS.find((entry) => entry.uri === uri);
+      if (!resource) {
+        return jsonRpcError(message.id, -32602, `Unknown resource: ${uri ?? "(missing)"}`);
+      }
+      return jsonRpcResult(message.id, {
+        contents: [
+          { uri: resource.uri, mimeType: resource.mimeType, text: resource.text },
+        ],
+      });
+    }
+    case "prompts/list":
+      return jsonRpcResult(message.id, {
+        prompts: PROMPT_DEFINITIONS.map(({ name, description, arguments: promptArgs }) => ({
+          name,
+          description,
+          arguments: promptArgs.map((arg) => ({
+            name: arg.name,
+            description: arg.description,
+            required: arg.required,
+          })),
+        })),
+      } as JsonValue);
+    case "prompts/get": {
+      const params = message.params as
+        | { name?: unknown; arguments?: unknown }
+        | undefined;
+      const prompt = PROMPT_DEFINITIONS.find((entry) => entry.name === params?.name);
+      if (!prompt) {
+        return jsonRpcError(
+          message.id,
+          -32602,
+          `Unknown prompt: ${typeof params?.name === "string" ? params.name : "(missing)"}`,
+        );
+      }
+      const promptArguments =
+        params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments)
+          ? (params.arguments as Record<string, unknown>)
+          : {};
+      return jsonRpcResult(message.id, {
+        description: prompt.description,
+        messages: [
+          {
+            role: "user",
+            content: { type: "text", text: prompt.build(promptArguments) },
+          },
+        ],
+      });
+    }
     case "tools/call": {
       const params = message.params as
         | { name?: unknown; arguments?: unknown }

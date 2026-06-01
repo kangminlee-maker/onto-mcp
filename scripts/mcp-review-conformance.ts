@@ -829,8 +829,47 @@ async function main(): Promise<void> {
         `tool name ${tool.name ?? "(unknown)"} must match ^[a-zA-Z0-9_-]{1,64}$ (no dots; strict hosts reject it).`,
       );
     }
+    // Self-documentation surface: resources (usage guide) and prompts (canonical tasks).
+    const resourcesResult = requireResult(
+      await client.request("resources/list"),
+      "resources/list",
+    ) as { resources?: Array<{ uri?: string }> };
+    assert(
+      (resourcesResult.resources ?? []).some((r) => r.uri === "onto://usage"),
+      "resources/list must expose onto://usage.",
+    );
+    const usageRead = requireResult(
+      await client.request("resources/read", { uri: "onto://usage" }),
+      "resources/read onto://usage",
+    ) as { contents?: Array<{ text?: string }> };
+    assert(
+      typeof usageRead.contents?.[0]?.text === "string" &&
+        usageRead.contents[0].text.length > 200,
+      "resources/read onto://usage must return non-empty guide text.",
+    );
+    const promptsResult = requireResult(
+      await client.request("prompts/list"),
+      "prompts/list",
+    ) as { prompts?: Array<{ name?: string }> };
+    assert(
+      (promptsResult.prompts ?? []).some((p) => p.name === "review_target"),
+      "prompts/list must expose review_target.",
+    );
+    const promptGet = requireResult(
+      await client.request("prompts/get", {
+        name: "review_target",
+        arguments: { target: "src/cli.ts" },
+      }),
+      "prompts/get review_target",
+    ) as { messages?: Array<{ content?: { text?: string } }> };
+    assert(
+      typeof promptGet.messages?.[0]?.content?.text === "string" &&
+        promptGet.messages[0].content.text.includes("onto_review"),
+      "prompts/get review_target must return a usable instruction message.",
+    );
+
     const reviewTool = toolsResult.tools?.find((tool) => tool.name === "onto_review");
-    assert(reviewTool, "onto.review tool missing from tools/list.");
+    assert(reviewTool, "onto_review tool missing from tools/list.");
     const deliberationSchema = reviewTool.inputSchema?.properties?.deliberation as
       | { enum?: unknown[] }
       | undefined;
