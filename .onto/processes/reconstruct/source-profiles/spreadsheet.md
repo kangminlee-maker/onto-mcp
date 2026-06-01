@@ -67,6 +67,32 @@ formula =SUM(B2:B10) -- Sheet1:B11
 - Who primarily uses this file?
 - Is there an existing domain glossary or accounting policy reference?
 
+## Purpose Evidence Cues
+
+- workbook title, sheet names, summary sheet, dashboard sheet, or cover sheet
+- input regions, named ranges, data validation, and editable cells
+- formulas, cross-sheet references, lookup tables, and calculation outputs
+- output cells, totals, variance columns, decision cells, or review markers
+- assumptions, notes, source-data tabs, external data connections, or refresh
+  metadata
+
+## Purpose Adequacy Facet Guidance
+
+Common spreadsheet facets include:
+
+- workbook purpose and primary consumer
+- input data, assumptions, and source data
+- calculation, formula dependency, lookup, or transformation
+- output, decision cell, report section, or dashboard view
+- control, validation, review, or approval marker
+- provenance, refresh boundary, external connection, or manual edit boundary
+
+These facets are guidance, not a closed enum. Do not infer accounting or
+business meaning from layout alone. If a workbook exposes a source-backed facet
+outside this list, record it in the `PurposeAdequacyFrame` with evidence and
+promote it to this profile only after repeated real-source runs justify the
+refinement.
+
 ## Scan Targets
 
 - sheet list and used range per sheet

@@ -1522,7 +1522,7 @@ async function callTool(
         }
         if (parsed.directiveKind === "ontology_seed") {
           return formatToolResult(
-            await reconstructApi.validateActionableOntologySeed({
+            await reconstructApi.validateOntologySeed({
               ontologySeedPath: resolveInsideProject({
                 projectRoot,
                 ref: parsed.ontologySeedPath,

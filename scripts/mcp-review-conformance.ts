@@ -1115,7 +1115,7 @@ async function main(): Promise<void> {
                 semantic_author_realization?: unknown;
                 confirmation_provider_realization?: unknown;
               };
-              happy_path_scope?: {
+              purpose_adequacy_scope?: {
                 implemented_artifacts?: unknown;
                 deferred_artifacts?: unknown;
               };
@@ -1236,16 +1236,16 @@ async function main(): Promise<void> {
       );
       assert(
         Array.isArray(
-          reconstructStructured.reconstructRunManifest?.happy_path_scope
+          reconstructStructured.reconstructRunManifest?.purpose_adequacy_scope
             ?.deferred_artifacts,
         ) &&
-          reconstructStructured.reconstructRunManifest.happy_path_scope
+          reconstructStructured.reconstructRunManifest.purpose_adequacy_scope
             .deferred_artifacts.length === 0 &&
-          !reconstructStructured.reconstructRunManifest.happy_path_scope
+          !reconstructStructured.reconstructRunManifest.purpose_adequacy_scope
             .deferred_artifacts.includes("failure_classification") &&
-          reconstructStructured.reconstructRunManifest.happy_path_scope
+          reconstructStructured.reconstructRunManifest.purpose_adequacy_scope
             .implemented_artifacts.includes("revision_proposal"),
-        "reconstruct run manifest must expose post-seed implemented scope without retired domain competency selection artifacts.",
+        "reconstruct run manifest must expose purpose adequacy implemented scope without retired domain competency selection artifacts.",
       );
       assert(
         typeof reconstructStructured.finalOutputPath === "string" &&

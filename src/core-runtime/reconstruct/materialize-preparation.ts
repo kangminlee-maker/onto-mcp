@@ -56,16 +56,15 @@ async function writeYamlDocument(filePath: string, value: unknown): Promise<void
 }
 
 function stableObservationId(args: {
-  targetMaterialKind: TargetMaterialKind;
   sourceRef: string;
   location: string;
 }): string {
   const digest = crypto
     .createHash("sha256")
-    .update(`${args.targetMaterialKind}\n${path.resolve(args.sourceRef)}\n${args.location}`)
+    .update(`${path.resolve(args.sourceRef)}\n${args.location}`)
     .digest("hex")
     .slice(0, 16);
-  return `obs_${args.targetMaterialKind}_${digest}`;
+  return `obs_${digest}`;
 }
 
 function supportForMaterial(args: {
@@ -205,7 +204,7 @@ async function textStats(ref: string): Promise<{
   }
 }
 
-async function buildObservation(
+export async function buildReconstructSourceObservation(
   detection: TargetMaterialRefDetection,
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
@@ -223,7 +222,6 @@ async function buildObservation(
   };
   const observation: ReconstructSourceObservation = {
     observation_id: stableObservationId({
-      targetMaterialKind: detection.kind,
       sourceRef: detection.ref,
       location,
     }),
@@ -403,7 +401,7 @@ export async function materializeReconstructPreparationArtifacts(
     }
     const refDetection = detection.per_ref.find((candidate) => candidate.ref === unit.ref);
     if (!refDetection) continue;
-    const observation = await buildObservation(refDetection);
+    const observation = await buildReconstructSourceObservation(refDetection);
     if (observation) observations.push(observation);
   }
 

@@ -67,6 +67,33 @@ FK absence -- public.orders.user_id
 - Are there read models, reporting tables, or compatibility tables mixed with
   transactional schema?
 
+## Purpose Evidence Cues
+
+- schema names, table clusters, view names, migration labels, or comments
+- primary keys, foreign keys, constraints, indexes, and uniqueness patterns
+- reporting views, stored queries, materialized views, or downstream exports
+- write paths, triggers, stored procedures, event tables, or audit/provenance
+  tables
+- ORM mappings, migration history, seed data, or service/database integration
+  references
+
+## Purpose Adequacy Facet Guidance
+
+Common database facets include:
+
+- central entity/table or record family
+- relationship, cardinality, and constraint boundary
+- read model, report, query, or analytical output
+- write/update boundary, trigger, procedure, or lifecycle rule
+- identity, uniqueness, validation, and integrity policy
+- provenance, audit trail, migration history, or external integration boundary
+
+These facets are guidance, not a closed enum. Do not assign business relation
+meaning from schema shape alone. If a database target exposes a source-backed
+facet outside this list, record it in the `PurposeAdequacyFrame` with evidence
+and promote it to this profile only after repeated real-source runs justify the
+refinement.
+
 ## Scan Targets
 
 - schema list

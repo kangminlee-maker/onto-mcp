@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import path from "node:path";
 import type {
-  ReconstructActionableOntologySeedArtifact,
+  ReconstructOntologySeedArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructMetricsArtifact,
   ReconstructRunManifestArtifact,
@@ -143,7 +143,7 @@ function multiRoundManifest(): ReconstructRunManifestArtifact {
 async function validateFixture(args: {
   manifest: ReconstructRunManifestArtifact;
   stopDecision?: ReconstructStopDecisionArtifact["decision"];
-  ontologySeed?: ReconstructActionableOntologySeedArtifact | null;
+  ontologySeed?: ReconstructOntologySeedArtifact | null;
   competencyQuestionAssessment?: ReconstructCompetencyQuestionAssessmentArtifact | null;
   sourceFrontierValidation?: { validation_status: "valid" | "invalid" } | null;
   validationArtifactRefs?: Record<string, string | null | undefined>;
@@ -233,7 +233,7 @@ async function validateFixture(args: {
 }
 
 describe("terminal reconstruct validation", () => {
-  it("rejects terminal handoff when stop decision is not stop", async () => {
+  it("does not reject continue decisions as seed-readiness inconsistency", async () => {
     const result = await validateFixture({
       manifest: manifest(null),
     });
@@ -242,10 +242,10 @@ describe("terminal reconstruct validation", () => {
     expect(result.violations.some((violation) =>
       violation.code === "handoff_decision_inconsistent" &&
       violation.subject_id === "continue"
-    )).toBe(true);
+    )).toBe(false);
   });
 
-  it("requires seed validation for handoff readiness even when the seed artifact is absent", async () => {
+  it("requires seed validation for seed iteration readiness even when the seed artifact is absent", async () => {
     const result = await validateFixture({
       manifest: manifest(null),
     });
@@ -255,7 +255,7 @@ describe("terminal reconstruct validation", () => {
     );
 
     expect(seedGate?.predicate_truth_expression).toBe(
-      "seed_validity_projection_requested or handoff_readiness_projection_requested",
+      "seed_validity_projection_requested or seed_iteration_readiness_projection_requested",
     );
     expect(seedGate?.applicability).toBe("applicable");
     expect(seedGate?.validation_status).toBe("not_available");
@@ -264,7 +264,7 @@ describe("terminal reconstruct validation", () => {
     )).toBe(true);
   });
 
-  it("folds ontology handoff readiness into terminal readiness", async () => {
+  it("folds ontology seed iteration readiness into terminal readiness", async () => {
     const baseRegistry = await loadReconstructContractRegistry({ registryPath });
     const result = await validateFixture({
       manifest: manifest(null),
@@ -411,7 +411,7 @@ describe("terminal reconstruct validation", () => {
           reconstruct_record: "/tmp/onto-missing-reconstruct-record.yaml",
         },
         governing_snapshot: null,
-        happy_path_scope: {
+        purpose_adequacy_scope: {
           implemented_artifacts: [],
           deferred_artifacts: [],
           deferred_reason: "test",

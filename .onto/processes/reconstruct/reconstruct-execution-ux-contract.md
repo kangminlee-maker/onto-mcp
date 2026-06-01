@@ -82,7 +82,7 @@ Progress updates should prefer facts such as:
 - seed layer count by object, actor, action, workflow, permission, and data
   binding
 - candidate disposition count by disposition
-- ontology-facing handoff readiness, canonical readiness projection, or
+- ontology-facing seed iteration readiness, canonical readiness projection, or
   limitation count
 - confirmation state counts
 - competency question count and assessment status counts
@@ -156,7 +156,7 @@ If a run halts, the output should still be useful:
 
 A halted run may provide candidate Seed content only if the corresponding
 artifact and validation refs exist. It may not imply seed confirmation, CQ
-assessment, failure classification, revision proposal, terminal handoff readiness, or
+  assessment, failure classification, revision proposal, terminal seed iteration readiness, or
 final ontology direction unless those artifacts exist.
 
 ## 7. Runtime Payload Expectations

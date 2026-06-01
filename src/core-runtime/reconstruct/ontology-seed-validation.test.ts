@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import path from "node:path";
 import { loadReconstructContractRegistry } from "./contract-registry.js";
 import {
-  validateActionableOntologySeed,
+  validateOntologySeed,
   validateCandidateDisposition,
-} from "./actionable-seed-validation.js";
+} from "./ontology-seed-validation.js";
 import type {
   ReconstructCandidateDispositionArtifact,
   ReconstructCandidateInventoryArtifact,
@@ -235,6 +235,9 @@ function ontologyHandoffFixture(): Record<string, unknown> {
     competency_scope_mapping: {
       expected_coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -262,7 +265,7 @@ function ontologyHandoffFixture(): Record<string, unknown> {
       ],
     },
     reference_standard_mapping: {
-      standard_refs: ["foundry_style_seed_contract"],
+      standard_refs: ["operational_ontology_seed_contract"],
       mapped_concern_refs: ["classification", "entity_identity"],
       limitation_refs: [],
     },
@@ -296,7 +299,87 @@ function ontologySeed(): Record<string, unknown> {
       authoring_profile: "test-fixture",
     },
     purpose: {
+      reconstruct_intent: "Explain the dashboard enough to support ontology handoff.",
       declared_purpose: "Explain the dashboard enough to support ontology handoff.",
+      purpose_source_status: "convergent_inferred",
+      purpose_evidence_policy: {
+        accepted_evidence_kind: "P3 observable purpose support",
+        acceptance_basis: "The fixture source provides object, actor, action, and evidence facets.",
+      },
+      purpose_confirmation: {
+        required: false,
+        status: "not_required",
+        confirmed_purpose_candidate_id: "purpose-candidate-dashboard",
+        prompt_summary: "No confirmation required for static validator fixture.",
+        user_response_summary: "Not required.",
+        source_conflict_policy: "no source conflict observed",
+        limitation_refs: [],
+      },
+      purpose_candidates: [
+        {
+          purpose_candidate_id: "purpose-candidate-dashboard",
+          statement: "Explain the dashboard enough to support ontology handoff.",
+          rank: "primary",
+          purpose_source_status: "convergent_inferred",
+          evidence_kind_refs: ["P3", "P4"],
+          supporting_source_refs: [sourceRef],
+          contradicting_source_refs: [],
+          adequacy_signal_coverage: {
+            material_kind: "code",
+            required_facets: ["object", "actor", "action", "evidence"],
+            covered_facets: ["object", "actor", "action", "evidence"],
+            missing_facets: [],
+          },
+          ranking_rationale: "The fixture seed models the dashboard, user, and view action.",
+          limitation_refs: [],
+        },
+      ],
+      purpose_adequacy_frame: {
+        frame_id: "purpose-frame-dashboard",
+        name: "Dashboard Purpose Adequacy",
+        frame_kind: "product_operation",
+        frame_status: "evidence_inferred",
+        adequacy_claim:
+          "The seed is adequate when it represents the dashboard object, user actor, view action, and source evidence binding.",
+        ranking_rationale:
+          "The fixture source supports a dashboard view purpose with object, actor, action, and evidence facets.",
+        material_kind_requirements: {
+          target_material_kind: "code",
+          required_facets: ["object", "actor", "action", "evidence"],
+          optional_facets: ["policy", "state"],
+          rationale: "The code fixture requires product-operation facets for ontology handoff.",
+        },
+        required_elements: [
+          {
+            element_id: "purpose-element-dashboard",
+            element_kind: "object",
+            description: "The dashboard object is represented.",
+            seed_ref_refs: ["object-dashboard"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+          {
+            element_id: "purpose-element-user",
+            element_kind: "actor",
+            description: "The user actor is represented.",
+            seed_ref_refs: ["actor-user"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+          {
+            element_id: "purpose-element-view",
+            element_kind: "action",
+            description: "The dashboard view action is represented.",
+            seed_ref_refs: ["action-view-dashboard"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+        ],
+        source_refs: [sourceRef],
+        evidence_refs: [evidence],
+        limitation_refs: [],
+      },
+      secondary_purpose_frames: [],
       intended_decisions: ["Decide whether the dashboard object and user action are represented."],
       intended_actions: ["Plan ontology review of the dashboard service."],
       non_goals: [],
@@ -452,6 +535,9 @@ function ontologySeed(): Record<string, unknown> {
       },
       coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -489,8 +575,8 @@ function ontologySeed(): Record<string, unknown> {
   };
 }
 
-describe("ActionableOntologySeed validators", () => {
-  it("validates candidate disposition and actionable seed closure", async () => {
+describe("OntologySeed validators", () => {
+  it("validates candidate disposition and ontology seed closure", async () => {
     const registry = await loadReconstructContractRegistry({
       registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
     });
@@ -502,7 +588,7 @@ describe("ActionableOntologySeed validators", () => {
       registry,
       sourceObservationsRef: "/tmp/source-observations.yaml",
     });
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: ontologySeed(),
       candidateDisposition: candidateDisposition(),
       sourceObservations: observations,
@@ -518,6 +604,68 @@ describe("ActionableOntologySeed validators", () => {
     expect(seedValidation.evidence_ref_count).toBeGreaterThan(0);
   });
 
+  it("allows purpose adequacy elements to cite unsupported question candidates", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
+    });
+    const seed = ontologySeed();
+    ((seed.validation_layer as any).unsupported_question_candidates as any[]).push({
+      candidate_id: "question-dashboard-confirmation-needed",
+      question: "Can the dashboard purpose be confirmed by a canonical question catalog?",
+      unsupported_reason: "The fixture preserves the question as validation handoff.",
+      needed_source_or_confirmation: "canonical question catalog",
+    });
+    ((seed.purpose as any).purpose_adequacy_frame.required_elements as any[]).push({
+      element_id: "purpose-element-validation-handoff",
+      element_kind: "validation_handoff",
+      description: "The purpose frame preserves validation handoff questions.",
+      seed_ref_refs: ["question-dashboard-confirmation-needed"],
+      evidence_refs: [evidenceRef()],
+      limitation_refs: [],
+    });
+
+    const seedValidation = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(seedValidation.validation_status).toBe("valid");
+  });
+
+  it("requires static, kinetic, and dynamic actionability coverage axes", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
+    });
+    const seed = ontologySeed();
+    (seed.validation_layer as any).coverage_axes = [
+      "purpose",
+      "kinetic_surface",
+      "dynamic_surface",
+      "semantic_layer",
+      "kinetic_layer",
+      "dynamic_layer",
+      "data_binding_layer",
+      "ontology_handoff",
+      "limitation",
+      "source_authority",
+    ];
+
+    const seedValidation = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(seedValidation.validation_status).toBe("invalid");
+    expect(seedValidation.violations).toContainEqual(expect.objectContaining({
+      code: "missing_required_field",
+      subject_id: "static_surface",
+    }));
+  });
+
   it("rejects ready ontology handoff mappings that contain only empty shells", async () => {
     const registry = await loadReconstructContractRegistry({
       registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
@@ -527,7 +675,7 @@ describe("ActionableOntologySeed validators", () => {
       limitation_refs: [],
     };
 
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: seed,
       candidateDisposition: candidateDisposition(),
       sourceObservations: sourceObservations(),
@@ -586,7 +734,7 @@ describe("ActionableOntologySeed validators", () => {
       },
     ];
 
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: seed,
       candidateDisposition: candidateDisposition(),
       sourceObservations: sourceObservations(),
@@ -598,6 +746,46 @@ describe("ActionableOntologySeed validators", () => {
       .not.toContain("duplicate_id");
   });
 
+  it("accepts promoted candidate targets for first-class value types and actor roles", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
+    });
+    const seed = ontologySeed();
+    ((seed.semantic_layer as any).value_types as any[]).push({
+      value_type_id: "value-type-work-type",
+      name: "Work Type",
+      representation: "enum",
+      constraints: [],
+      evidence_refs: [evidenceRef()],
+    });
+    const disposition = candidateDisposition();
+    disposition.dispositions.push(
+      {
+        candidate_id: "candidate-work-type",
+        disposition_id: "promoted_to_seed_layer",
+        target_seed_refs: ["value-type-work-type"],
+        rationale: "Work Type is a first-class semantic seed value type.",
+        evidence_refs: [evidenceRef()],
+      },
+      {
+        candidate_id: "candidate-dashboard-role",
+        disposition_id: "promoted_to_seed_layer",
+        target_seed_refs: ["role-dashboard-viewer"],
+        rationale: "Dashboard Viewer is a first-class dynamic seed actor role.",
+        evidence_refs: [evidenceRef()],
+      },
+    );
+
+    const seedValidation = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: disposition,
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(seedValidation.validation_status).toBe("valid");
+  });
+
   it("rejects prose values in fields named evidence_refs", async () => {
     const registry = await loadReconstructContractRegistry({
       registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
@@ -606,7 +794,7 @@ describe("ActionableOntologySeed validators", () => {
     ((seed.ontology_handoff as any).provenance_mapping as any).evidence_refs =
       "Evidence is described in prose here.";
 
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: seed,
       candidateDisposition: candidateDisposition(),
       sourceObservations: sourceObservations(),
@@ -627,7 +815,7 @@ describe("ActionableOntologySeed validators", () => {
     ((seed.ontology_handoff as any).reasoning_or_formalism_profile)
       .representation_formalism = "spreadsheet_magic";
 
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: seed,
       candidateDisposition: candidateDisposition(),
       sourceObservations: sourceObservations(),
@@ -638,6 +826,28 @@ describe("ActionableOntologySeed validators", () => {
     expect(seedValidation.violations.filter((violation) =>
       violation.code === "invalid_enum"
     ).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("rejects candidate disposition aliases used as seed status values", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml"),
+    });
+    const seed = ontologySeed();
+    ((seed.semantic_layer as any).object_types[0]).status = "promoted";
+    ((seed.kinetic_layer as any).action_types[0]).status = "promoted";
+
+    const seedValidation = validateOntologySeed({
+      ontologySeed: seed,
+      candidateDisposition: candidateDisposition(),
+      sourceObservations: sourceObservations(),
+      registry,
+    });
+
+    expect(seedValidation.validation_status).toBe("invalid");
+    expect(seedValidation.violations.filter((violation) =>
+      violation.code === "invalid_enum" &&
+      violation.message.includes("has invalid value promoted")
+    )).toHaveLength(2);
   });
 
   it("rejects missing dispositions and promoted target refs that are not in the seed", async () => {
@@ -659,7 +869,7 @@ describe("ActionableOntologySeed validators", () => {
       sourceObservations: observations,
       registry,
     });
-    const seedValidation = validateActionableOntologySeed({
+    const seedValidation = validateOntologySeed({
       ontologySeed: badSeed,
       candidateDisposition: badDisposition,
       sourceObservations: observations,

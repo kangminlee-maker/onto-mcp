@@ -11,8 +11,10 @@ import type {
   ReconstructInitialSourceFrontierArtifact,
 } from "./artifact-types.js";
 import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
+import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 
 const profilesRoot = path.resolve(".onto/processes/reconstruct/source-profiles");
+const registryPath = path.resolve(".onto/processes/reconstruct/reconstruct-contract-registry.yaml");
 const tmpRoots: string[] = [];
 
 async function makeTmpProject(): Promise<string> {
@@ -85,7 +87,7 @@ describe("materializeReconstructPreparationArtifacts", () => {
     expect(observations.observations).toHaveLength(1);
     expect(observations.observations[0]).toEqual(
       expect.objectContaining({
-        observation_id: expect.stringMatching(/^obs_code_[0-9a-f]+$/),
+        observation_id: expect.stringMatching(/^obs_[0-9a-f]+$/),
         target_material_kind: "code",
         adapter_id: "minimal-code-structure-observer",
         source_ref: target,
@@ -318,5 +320,14 @@ describe("materializeReconstructPreparationArtifacts", () => {
       }),
     ]);
     expect(initialFrontier.source_refs).toHaveLength(1);
+
+    const validation = await writeTargetMaterialProfileValidationArtifact({
+      targetMaterialProfilePath: refs.target_material_profile,
+      registryPath,
+      outputPath: path.join(sessionRoot, "target-material-profile-validation.yaml"),
+    });
+
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
   });
 });

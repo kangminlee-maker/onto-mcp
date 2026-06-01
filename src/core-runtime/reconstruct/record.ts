@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
@@ -122,7 +122,7 @@ function projectValidationStatus(
     | ReconstructTargetMaterialProfileValidationArtifact
     | ReconstructSourceObservationDirectiveValidationArtifact
     | ReconstructCandidateDispositionValidationArtifact
-    | ReconstructActionableOntologySeedValidationArtifact
+    | ReconstructOntologySeedValidationArtifact
     | ReconstructClaimRealizationMapValidationArtifact
     | ReconstructSeedConfirmationValidationArtifact
     | ReconstructCompetencyQuestionsValidationArtifact
@@ -283,7 +283,7 @@ function buildWarnings(args: {
     warnings.push("post-publication run manifest validation is invalid");
   }
   if (args.handoffDecisionValidationStatus === "invalid") {
-    warnings.push("handoff readiness validation is invalid");
+    warnings.push("seed-readiness validation is invalid");
   }
   if (args.finalOutputProvenanceValidationStatus === "invalid") {
     warnings.push("final output provenance validation is invalid");
@@ -326,7 +326,7 @@ export async function assembleReconstructRecord(
       artifactRefs.candidate_disposition_validation,
     );
   const ontologySeedValidation =
-    await readYamlIfPresent<ReconstructActionableOntologySeedValidationArtifact>(
+    await readYamlIfPresent<ReconstructOntologySeedValidationArtifact>(
       artifactRefs.ontology_seed_validation,
     );
   const claimRealizationMapValidation =

@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedArtifact,
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructCandidateInventoryArtifact,
@@ -56,10 +56,14 @@ import { callLlm, type LlmCallConfig, type LlmCallResult } from "../llm/llm-call
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   TARGET_MATERIAL_KINDS,
+  type TargetMaterialRefDetection,
   type TargetMaterialKind,
 } from "../target-material-kind.js";
 import { writeSourceObservationDirectiveValidationArtifact } from "./directive-validation.js";
-import { materializeReconstructPreparationArtifacts } from "./materialize-preparation.js";
+import {
+  buildReconstructSourceObservation,
+  materializeReconstructPreparationArtifacts,
+} from "./materialize-preparation.js";
 import { writeTargetMaterialProfileValidationArtifact } from "./material-profile-validation.js";
 import {
   ANSWER_STATUSES,
@@ -74,9 +78,10 @@ import {
 } from "./post-seed-validation.js";
 import { assembleReconstructRecord } from "./record.js";
 import {
-  writeActionableOntologySeedValidationArtifact,
+  collectOntologySeedRefs,
+  writeOntologySeedValidationArtifact,
   writeCandidateDispositionValidationArtifact,
-} from "./actionable-seed-validation.js";
+} from "./ontology-seed-validation.js";
 import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
@@ -116,7 +121,7 @@ export interface ReconstructDirectiveAuthor {
   ): Promise<ReconstructCandidateDispositionArtifact>;
   writeOntologySeed(
     input: ReconstructOntologySeedAuthorInput,
-  ): Promise<ReconstructActionableOntologySeedArtifact>;
+  ): Promise<ReconstructOntologySeedArtifact>;
   writeClaimRealizationMap(
     input: ReconstructClaimRealizationAuthorInput,
   ): Promise<ReconstructClaimRealizationMapArtifact>;
@@ -181,6 +186,8 @@ export interface ReconstructSourceFrontierAuthorInput {
   sessionId: string;
   intent: string;
   roundId: string;
+  maxExplorationRounds: number;
+  isFinalExplorationRound: boolean;
   explorationSynthesis: ReconstructExplorationSynthesisArtifact;
   explorationSynthesisRef: string;
   sourceInventory: ReconstructSourceInventoryArtifact;
@@ -223,25 +230,25 @@ export interface ReconstructOntologySeedAuthorInput {
 
 export interface ReconstructSeedConfirmationInput {
   sessionId: string;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
   ontologySeedRef: string;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   ontologySeedValidationRef: string;
 }
 
 export interface ReconstructClaimRealizationAuthorInput {
   sessionId: string;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
   ontologySeedRef: string;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
 }
 
 export interface ReconstructCompetencyQuestionAuthorInput {
   sessionId: string;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
   ontologySeedRef: string;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
   seedConfirmationValidationRef: string;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
@@ -292,8 +299,8 @@ export interface ReconstructFinalOutputAuthorInput {
   candidateInventory: ReconstructCandidateInventoryArtifact;
   candidateDisposition: ReconstructCandidateDispositionArtifact;
   candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
   claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
   seedConfirmation: ReconstructSeedConfirmationArtifact;
@@ -653,7 +660,7 @@ async function writeFreshAuthoredYamlDocument<T>(
 }
 
 function ontologyClaims(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): ReconstructSeedClaim[] {
   return ontologySeedClaimProjections(ontologySeed);
 }
@@ -690,13 +697,13 @@ function claimRealizationTargets(
 }
 
 function answerabilitySummary(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): ReconstructMetricsArtifact["answerability_summary"] {
   return ontologySeedAnswerabilitySummary(ontologySeed);
 }
 
 function ontologySeedSummaryLines(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): string[] {
   const claims = ontologyClaims(ontologySeed);
   const summary = ontologySeedAnswerabilitySummary(ontologySeed);
@@ -781,7 +788,7 @@ function requireFirstObservation(
   const observation = sourceObservations.observations[0];
   if (!observation) {
     throw new Error(
-      "reconstruct happy path requires at least one runtime source observation.",
+      "reconstruct purpose adequacy requires at least one runtime source observation.",
     );
   }
   return observation;
@@ -817,8 +824,8 @@ function calculateMetrics(args: {
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact;
   candidateDispositionValidation: ReconstructCandidateDispositionValidationArtifact;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   claimRealizationMapValidation: ReconstructClaimRealizationMapValidationArtifact;
   seedConfirmation: ReconstructSeedConfirmationArtifact;
   seedConfirmationValidation: ReconstructSeedConfirmationValidationArtifact;
@@ -1077,7 +1084,7 @@ function createRunManifest(args: {
           : "full_integral_exploration",
       runner:
         args.semanticAuthorRealization === "mock"
-          ? "material-aware-happy-path"
+          ? "material-aware-purpose-adequacy"
           : "integral-exploration-direct-call",
       semantic_author_realization: args.semanticAuthorRealization,
       confirmation_provider_realization: args.confirmationProviderRealization,
@@ -1095,7 +1102,7 @@ function createRunManifest(args: {
         : null,
     },
     governing_snapshot: args.governingSnapshot,
-    happy_path_scope: {
+    purpose_adequacy_scope: {
       implemented_artifacts: [
         "target_material_profile",
         "target_material_profile_validation",
@@ -1407,6 +1414,13 @@ function parseLlmJsonObject(text: string, artifactName: string): Record<string, 
   }
 }
 
+function jsonRepairMaxTokens(originalText: string, requestedMaxTokens: number): number {
+  return Math.min(
+    16000,
+    Math.max(requestedMaxTokens * 2, Math.ceil(originalText.length / 3) + 1024),
+  );
+}
+
 function records(value: unknown, fieldName: string): Record<string, unknown>[] {
   if (!Array.isArray(value)) {
     throw new Error(`${fieldName} must be an array.`);
@@ -1482,11 +1496,11 @@ function enumChoices(values: readonly string[]): string {
 const ACTIONABLE_ONTOLOGY_SEED_JSON_SHAPE = [
   "Return exactly one JSON object with these root fields:",
   "seed_identity={schema_version,seed_id,title,target_refs,generated_at,authoring_profile}",
-  "purpose={declared_purpose,intended_decisions,intended_actions,non_goals,evidence_refs}",
+  "purpose={reconstruct_intent,declared_purpose,purpose_source_status,purpose_evidence_policy:{accepted_evidence_kind,acceptance_basis},purpose_confirmation:{required,status,confirmed_purpose_candidate_id,prompt_summary,user_response_summary,source_conflict_policy,limitation_refs},purpose_candidates:[{purpose_candidate_id,statement,rank,purpose_source_status,evidence_kind_refs,supporting_source_refs,contradicting_source_refs,adequacy_signal_coverage:{material_kind,required_facets,covered_facets,missing_facets},ranking_rationale,limitation_refs}],purpose_adequacy_frame:{frame_id,name,frame_kind,frame_status,adequacy_claim,ranking_rationale,material_kind_requirements:{target_material_kind,required_facets,optional_facets,rationale},required_elements:[{element_id,element_kind,description,seed_ref_refs,evidence_refs,limitation_refs}],source_refs,evidence_refs,limitation_refs},secondary_purpose_frames,intended_decisions,intended_actions,non_goals,evidence_refs}",
   "decision_context={principal_user,downstream_use,decision_boundary,risk_notes}",
   "conceptual_frame={concepts:[{concept_id,name,definition,purpose_role,evidence_refs,confidence}],associations:[{association_id,source_concept_id,target_concept_id,association_kind,statement,evidence_refs}]}",
-  "semantic_layer={object_types:[{object_type_id,name,object_kind,description,primary_key:{property_id,name,value_type,evidence_refs},properties:[{property_id,name,value_type,nullable,description,constraints,evidence_refs}],backing_source_refs,evidence_refs,status}],link_types:[{link_type_id,source_object_type_id,target_object_type_id,cardinality,business_meaning,evidence_refs}],value_types:[{value_type_id,name,representation,constraints,evidence_refs}],constraints:[{constraint_id,target_ref,constraint_kind,statement,evidence_refs}]}",
-  "kinetic_layer={action_types:[{action_type_id,name,description,actor_type_ids,target_object_type_ids,affected_object_type_ids,parameters:[{parameter_id,name,value_source,value_type,required}],preconditions:[{precondition_id,statement,evidence_refs}],postconditions:[{postcondition_id,statement,evidence_refs}],side_effects:[{side_effect_id,statement,failure_behavior,evidence_refs}],writeback_behavior:{writes,writeback_source_refs,rationale},evidence_refs,status}],functions:[{function_id,name,input_type_refs,return_type_ref,purity,evidence_refs}],workflows:[{workflow_id,name,ordered_action_type_ids,trigger,terminal_state,evidence_refs}]}",
+  "semantic_layer={object_types:[{object_type_id,name,object_kind,description,primary_key:{property_id,name,value_type,evidence_refs},properties:[{property_id,name,value_type,nullable,description,constraints,evidence_refs}],backing_source_refs,evidence_refs,status:confirmed|provisional|deferred}],link_types:[{link_type_id,source_object_type_id,target_object_type_id,cardinality,business_meaning,evidence_refs}],value_types:[{value_type_id,name,representation,constraints,evidence_refs}],constraints:[{constraint_id,target_ref,constraint_kind,statement,evidence_refs}]}",
+  "kinetic_layer={action_types:[{action_type_id,name,description,actor_type_ids,target_object_type_ids,affected_object_type_ids,parameters:[{parameter_id,name,value_source,value_type,required}],preconditions:[{precondition_id,statement,evidence_refs}],postconditions:[{postcondition_id,statement,evidence_refs}],side_effects:[{side_effect_id,statement,failure_behavior,evidence_refs}],writeback_behavior:{writes,writeback_source_refs,rationale},evidence_refs,status:confirmed|provisional|deferred}],functions:[{function_id,name,input_type_refs,return_type_ref,purity,evidence_refs}],workflows:[{workflow_id,name,ordered_action_type_ids,trigger,terminal_state,evidence_refs}]}",
   "dynamic_layer={actor_types:[{actor_type_id,name,actor_kind,role_refs,description,evidence_refs}],actor_roles:[{role_id,name,holder_actor_type_ids,authority_scope_refs,evidence_refs}],permission_policies:[{policy_id,actor_type_id,action_type_id,object_type_id,permission_kind,condition,evidence_refs}],state_models:[{state_model_id,object_type_id,states,transitions:[{transition_id,from_state,to_state,action_type_id,evidence_refs}]}],lifecycle_rules:[{rule_id,target_ref,statement,evidence_refs}]}",
   "data_binding_layer={source_bindings:[{binding_id,seed_ref,source_ref,binding_kind,statement,evidence_refs}],read_models:[{read_model_id,name,object_type_ids,source_refs,transformation_summary,evidence_refs}],writebacks:[{writeback_id,action_type_id,target_source_refs,write_mode,evidence_refs}],provenance_bindings:[{provenance_id,seed_ref,source_ref,author_or_system,timestamp_ref,evidence_refs}]}",
   "validation_layer={question_authority_ref:{authority_scope,projection_policy},coverage_axes,unsupported_question_candidates:[{candidate_id,question,unsupported_reason,needed_source_or_confirmation}],runtime_validation_refs:[{authority_scope,projection_policy}]}",
@@ -1519,14 +1533,24 @@ function evidenceRefsFromIds(args: {
   fieldName: string;
 }): ReconstructEvidenceRef[] {
   const byId = evidenceRefByObservationId(args.sourceObservations);
-  const refs = args.observationIds.map((observationId) => {
+  const refs: ReconstructEvidenceRef[] = [];
+  const unknownObservationIds: string[] = [];
+  for (const observationId of args.observationIds) {
     const ref = byId.get(observationId);
     if (!ref) {
-      throw new Error(`${args.fieldName} references unknown observation id: ${observationId}`);
+      unknownObservationIds.push(observationId);
+      continue;
     }
-    return ref;
-  });
+    refs.push(ref);
+  }
   if (refs.length === 0) {
+    if (unknownObservationIds.length > 0) {
+      throw new Error(
+        `${args.fieldName} references no known observation ids; unknown ids: ${
+          unknownObservationIds.slice(0, 8).join(", ")
+        }${unknownObservationIds.length > 8 ? ", ..." : ""}`,
+      );
+    }
     throw new Error(`${args.fieldName} must reference at least one observation id.`);
   }
   return refs;
@@ -1556,6 +1580,184 @@ function modelingConcernIds(registry: ReconstructContractRegistry): string[] {
 
 function proofContractIds(records: Array<{ contract_ref_id: string }>): string[] {
   return records.map((record) => record.contract_ref_id);
+}
+
+function candidateTargetRefPlacementHint(dispositionId: string): string {
+  switch (dispositionId) {
+    case "promoted_to_seed_layer":
+      return "place the target_seed_ref exactly as a first-class seed record id: concept_id, object_type_id, link_type_id, value_type_id, constraint_id, actor_type_id, role_id, policy_id, action_type_id, function_id, workflow_id, state_model_id, lifecycle rule_id, binding_id, read_model_id, writeback_id, or provenance_id";
+    case "represented_as_property":
+      return "place the target_seed_ref exactly as a semantic_layer.object_types[].properties[].property_id";
+    case "represented_as_link":
+      return "place the target_seed_ref exactly as a semantic_layer.link_types[].link_type_id";
+    case "represented_as_actor_role":
+      return "place the target_seed_ref exactly as a dynamic_layer.actor_roles[].role_id";
+    case "represented_as_permission_rule":
+      return "place the target_seed_ref exactly as a dynamic_layer.permission_policies[].policy_id";
+    case "represented_as_data_binding":
+      return "place the target_seed_ref exactly as a data_binding_layer source/read/write/provenance binding id";
+    case "represented_as_validation_question":
+      return "represent the target_seed_ref in validation_layer.unsupported_question_candidates[].candidate_id or a validation question handoff path";
+    default:
+      return "do not invent a seed id unless this disposition declares target_seed_refs";
+  }
+}
+
+function candidateTargetRefObligations(
+  candidateDisposition: ReconstructCandidateDispositionArtifact,
+): Array<{
+  candidate_id: string;
+  disposition_id: string;
+  target_seed_ref: string;
+  placement_hint: string;
+}> {
+  return candidateDisposition.dispositions.flatMap((disposition) =>
+    disposition.target_seed_refs.map((targetSeedRef) => ({
+      candidate_id: disposition.candidate_id,
+      disposition_id: disposition.disposition_id,
+      target_seed_ref: targetSeedRef,
+      placement_hint: candidateTargetRefPlacementHint(disposition.disposition_id),
+    }))
+  );
+}
+
+function evidenceObservationIdsFromEvidenceRefs(
+  evidenceRefs: ReconstructEvidenceRef[],
+): string[] {
+  return evidenceRefs.map((ref) => ref.observation_id);
+}
+
+function ontologySeedObservationIds(args: {
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  candidateDisposition: ReconstructCandidateDispositionArtifact;
+}): string[] {
+  const ids = [
+    ...args.candidateDisposition.dispositions.flatMap((disposition) =>
+      evidenceObservationIdsFromEvidenceRefs(disposition.evidence_refs)
+    ),
+    ...args.candidateInventory.candidates.flatMap((candidate) =>
+      evidenceObservationIdsFromEvidenceRefs(candidate.evidence_refs)
+    ),
+  ];
+  return [...new Set(ids)].slice(0, ONTOLOGY_SEED_OBSERVATION_LIMIT);
+}
+
+function compactCandidateInventoryForPrompt(
+  candidateInventory: ReconstructCandidateInventoryArtifact,
+): unknown {
+  return {
+    schema_version: candidateInventory.schema_version,
+    session_id: candidateInventory.session_id,
+    source_observations_ref: candidateInventory.source_observations_ref,
+    required_coverage_observation_ids:
+      candidateInventory.required_coverage_observation_ids ?? [],
+    candidate_count: candidateInventory.candidates.length,
+    candidates: candidateInventory.candidates.map((candidate) => ({
+      candidate_id: candidate.candidate_id,
+      candidate_kind: candidate.candidate_kind,
+      name: candidate.name,
+      description: candidate.description,
+      salience: candidate.salience,
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(candidate.evidence_refs),
+    })),
+  };
+}
+
+function compactCandidateDispositionForPrompt(
+  candidateDisposition: ReconstructCandidateDispositionArtifact,
+): unknown {
+  return {
+    schema_version: candidateDisposition.schema_version,
+    session_id: candidateDisposition.session_id,
+    candidate_inventory_ref: candidateDisposition.candidate_inventory_ref,
+    disposition_count: candidateDisposition.dispositions.length,
+    dispositions: candidateDisposition.dispositions.map((disposition) => ({
+      candidate_id: disposition.candidate_id,
+      disposition_id: disposition.disposition_id,
+      target_seed_refs: disposition.target_seed_refs,
+      rationale: disposition.rationale,
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(disposition.evidence_refs),
+    })),
+  };
+}
+
+function compactTargetMaterialProfileForPrompt(
+  profile: ReconstructTargetMaterialProfileArtifact,
+): unknown {
+  const perRefCounts = new Map<string, number>();
+  for (const ref of profile.detection.per_ref) {
+    perRefCounts.set(ref.kind, (perRefCounts.get(ref.kind) ?? 0) + 1);
+  }
+  return {
+    schema_version: profile.schema_version,
+    session_id: profile.session_id,
+    target_refs: profile.target_refs,
+    target_material_kind: profile.target_material_kind,
+    target_material_kind_candidates: profile.target_material_kind_candidates,
+    support_status: profile.support_status,
+    unsupported_reason: profile.unsupported_reason,
+    detection: {
+      owner: profile.detection.owner,
+      confidence: profile.detection.confidence,
+      confidence_basis: profile.detection.confidence_basis,
+      per_ref_count: profile.detection.per_ref.length,
+      per_ref_counts_by_kind: Object.fromEntries(perRefCounts),
+    },
+    selected_source_profiles: profile.selected_source_profiles.map((sourceProfile) => ({
+      profile_id: sourceProfile.profile_id,
+      target_material_kind: sourceProfile.target_material_kind,
+      contract_status: sourceProfile.contract_status,
+      runtime_implementation_status: sourceProfile.runtime_implementation_status,
+      support_summary: sourceProfile.support_summary,
+    })),
+  };
+}
+
+function skippedSourceRefPromptSummary(args: {
+  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+}): unknown {
+  const observedSourceRefs = new Set(
+    args.sourceObservations.observations.map((observation) =>
+      path.resolve(observation.source_ref)
+    ),
+  );
+  const skipped = args.targetMaterialProfile.detection.per_ref.filter((ref) =>
+    !observedSourceRefs.has(path.resolve(ref.ref))
+  );
+  return {
+    skipped_ref_count: skipped.length,
+    sample_refs: skipped.slice(0, SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT)
+      .map((ref) => ({
+        source_ref: ref.ref,
+        target_material_kind: ref.kind,
+        confidence_basis: ref.confidence_basis,
+      })),
+    sample_limit: SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT,
+  };
+}
+
+function ontologySeedMaturationHandoffPrompt(
+  registry: ReconstructContractRegistry,
+): string {
+  const values = registry.reasoning_or_formalism_profile_values;
+  const concernIds = modelingConcernIds(registry);
+  return [
+    "ontology_handoff machine-shape requirements:",
+    `reasoning_or_formalism_profile.representation_formalism allowed values: ${values.representation_formalism_values.join(", ")}.`,
+    `reasoning_or_formalism_profile.vocabulary_systems must be an array using values: ${values.vocabulary_system_values.join(", ")}.`,
+    `reasoning_or_formalism_profile.validation_formalisms must be an array using values: ${values.validation_formalism_values.join(", ")}.`,
+    `reasoning_or_formalism_profile.ontology_type allowed values: ${values.ontology_type_values.join(", ")}.`,
+    `reasoning_or_formalism_profile.owl_profile allowed values: ${values.owl_profile_values.join(", ")}. Use not_applicable when representation_formalism is not owl or mixed.`,
+    `reasoning_or_formalism_profile.alignment_posture allowed values: ${values.alignment_posture_values.join(", ")}.`,
+    "Do not replace reasoning_or_formalism_profile with a prose-only content object; include the enum fields above plus limitation_refs and rationale/evidence_refs when useful.",
+    "instance_assertion_mapping must include instance_availability_status: present|absent|unknown|not_applicable. Use absent or unknown with limitation_refs when live instances are not enumerated.",
+    "modeling_concern_applicability must be {\"rows\":[{\"concern_id\":\"...\",\"applies\":true|false|\"unknown\"|\"not_applicable\",\"limitation_refs\":[\"...\"],\"rationale\":\"...\",\"evidence_refs\":[...]}]}.",
+    `Use concern_id values from this registry set when applicable: ${concernIds.join(", ")}.`,
+    "query_access_contract, visualization_contract, and graph_exploration_contract must each include applies:true|false|\"unknown\"|\"not_applicable\". If applies is true or unknown, cite limitation_refs until proof validation artifacts are active.",
+  ].join("\n");
 }
 
 function candidateInventoryItemFromLlm(args: {
@@ -1619,6 +1821,7 @@ function mockCandidateInventory(args: {
     session_id: args.sessionId,
     created_at: isoNow(),
     source_observations_ref: "source-observations.yaml",
+    required_coverage_observation_ids: [evidence.observation_id],
     candidates: [
       {
         candidate_id: "candidate-observed-material",
@@ -1682,7 +1885,7 @@ function mockCandidateDisposition(args: {
       target_seed_refs: [
         targetByCandidateId.get(candidate.candidate_id) ?? `seed-ref-${candidate.candidate_id}`,
       ],
-      rationale: `${candidate.name} is promoted into the mock actionable seed surface.`,
+      rationale: `${candidate.name} is promoted into the mock ontology seed surface.`,
       evidence_refs: candidate.evidence_refs,
     })),
     directive_author: {
@@ -1800,6 +2003,9 @@ function mockOntologyHandoff(): Record<string, unknown> {
     competency_scope_mapping: {
       expected_coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -1831,7 +2037,7 @@ function mockOntologyHandoff(): Record<string, unknown> {
       ],
     },
     reference_standard_mapping: {
-      standard_refs: ["foundry_style_seed_contract"],
+      standard_refs: ["operational_ontology_seed_contract"],
       mapped_concern_refs: ["classification", "entity_identity"],
       limitation_refs: [],
     },
@@ -1856,13 +2062,13 @@ function mockOntologyHandoff(): Record<string, unknown> {
   };
 }
 
-function mockActionableOntologySeed(args: {
+function mockOntologySeed(args: {
   sessionId: string;
   intent: string;
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   authorId: string;
-}): ReconstructActionableOntologySeedArtifact {
+}): ReconstructOntologySeedArtifact {
   const evidence = firstEvidenceRef(args.sourceObservations);
   const sourceRef = evidence.source_ref;
   return {
@@ -1875,7 +2081,88 @@ function mockActionableOntologySeed(args: {
       authoring_profile: args.authorId,
     },
     purpose: {
+      reconstruct_intent: args.intent,
       declared_purpose: args.intent,
+      purpose_source_status: "convergent_inferred",
+      purpose_evidence_policy: {
+        accepted_evidence_kind: "P3 observable purpose support",
+        acceptance_basis: "Mock path uses the first runtime source observation as bounded evidence.",
+      },
+      purpose_confirmation: {
+        required: false,
+        status: "not_required",
+        confirmed_purpose_candidate_id: "purpose-candidate-observed-material",
+        prompt_summary: "Mock confirmation is not required for fixture authorship.",
+        user_response_summary: "Not required for fixture authorship.",
+        source_conflict_policy: "no conflict observed in fixture source",
+        limitation_refs: [],
+      },
+      purpose_candidates: [
+        {
+          purpose_candidate_id: "purpose-candidate-observed-material",
+          statement: args.intent,
+          rank: "primary",
+          purpose_source_status: "convergent_inferred",
+          evidence_kind_refs: ["P3", "P4"],
+          supporting_source_refs: [sourceRef],
+          contradicting_source_refs: [],
+          adequacy_signal_coverage: {
+            material_kind: args.targetMaterialProfile.target_material_kind,
+            required_facets: ["object", "actor", "action", "evidence"],
+            covered_facets: ["object", "actor", "action", "evidence"],
+            missing_facets: [],
+          },
+          ranking_rationale: "Fixture source has one observed material unit used for bounded seed handoff.",
+          limitation_refs: [],
+        },
+      ],
+      purpose_adequacy_frame: {
+        frame_id: "purpose-frame-observed-material",
+        name: "Observed Material Purpose Adequacy",
+        frame_kind: "mixed_material",
+        frame_status: "evidence_inferred",
+        adequacy_claim:
+          "The seed is adequate when it names the observed material, the reconstruct user, the explanation action, and the evidence binding.",
+        ranking_rationale:
+          "The frame is derived from the material-aware observation and bounded mock handoff purpose.",
+        material_kind_requirements: {
+          target_material_kind: args.targetMaterialProfile.target_material_kind,
+          required_facets: ["object", "actor", "action", "evidence"],
+          optional_facets: ["policy", "state"],
+          rationale:
+            "A bounded fixture seed needs enough structure to support the next maturation iteration.",
+        },
+        required_elements: [
+          {
+            element_id: "purpose-element-observed-material",
+            element_kind: "object",
+            description: "Observed material is represented as a seed object.",
+            seed_ref_refs: ["object-observed-material"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+          {
+            element_id: "purpose-element-reconstruct-user",
+            element_kind: "actor",
+            description: "The reconstruct user is represented as the actor for seed explanation.",
+            seed_ref_refs: ["actor-reconstruct-user"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+          {
+            element_id: "purpose-element-explain-seed",
+            element_kind: "action",
+            description: "The explanation action is represented for bounded seed handoff.",
+            seed_ref_refs: ["action-explain-seed"],
+            evidence_refs: [evidence],
+            limitation_refs: [],
+          },
+        ],
+        source_refs: [sourceRef],
+        evidence_refs: [evidence],
+        limitation_refs: [],
+      },
+      secondary_purpose_frames: [],
       intended_decisions: ["Decide whether the observed material can be handed off as a bounded seed."],
       intended_actions: ["Explain the observed material from validated evidence."],
       non_goals: ["Full formal ontology generation is outside this mock path."],
@@ -2031,6 +2318,9 @@ function mockActionableOntologySeed(args: {
       },
       coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -2071,9 +2361,14 @@ function mockActionableOntologySeed(args: {
 interface ObservationPromptPayloadOptions {
   observationIds?: readonly string[];
   contentExcerptCharLimit?: number;
+  includeStructuralData?: boolean;
 }
 
 const PROMPT_OBSERVATION_EXCERPT_LIMIT = 1200;
+const SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT = 300;
+const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
+const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
+const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
 
@@ -2111,17 +2406,22 @@ function observationPromptPayload(
     .filter((observation) =>
       !allowedObservationIds || allowedObservationIds.has(observation.observation_id)
     )
-    .map((observation) => ({
-    observation_id: observation.observation_id,
-    target_material_kind: observation.target_material_kind,
-    source_ref: observation.source_ref,
-    location: observation.location,
-    summary: observation.summary,
-    structural_data: compactStructuralDataForPrompt(
-      observation.structural_data,
-      options.contentExcerptCharLimit,
-    ),
-  }));
+    .map((observation) => {
+      const payload: Record<string, unknown> = {
+        observation_id: observation.observation_id,
+        target_material_kind: observation.target_material_kind,
+        source_ref: observation.source_ref,
+        location: observation.location,
+        summary: observation.summary,
+      };
+      if (options.includeStructuralData !== false) {
+        payload.structural_data = compactStructuralDataForPrompt(
+          observation.structural_data,
+          options.contentExcerptCharLimit,
+        );
+      }
+      return payload;
+    });
 }
 
 function selectedObservationIds(
@@ -2179,7 +2479,40 @@ async function callJsonAuthor(args: {
     JSON.stringify(args.userPayload, null, 2),
     { ...args.llmConfig, max_tokens: args.maxTokens },
   );
-  return parseLlmJsonObject(result.text, args.artifactName);
+  try {
+    return parseLlmJsonObject(result.text, args.artifactName);
+  } catch (initialError) {
+    const repairResult = await args.llmCall(
+      [
+        "Repair malformed JSON for a runtime artifact.",
+        `Artifact: ${args.artifactName}`,
+        "Return exactly one valid JSON object and nothing else.",
+        "Preserve all existing keys, ids, strings, arrays, and object values.",
+        "Only add, remove, or replace JSON punctuation needed to make the object parse.",
+        "Do not add new facts, do not summarize, and do not translate text.",
+      ].join("\n"),
+      JSON.stringify({
+        artifact_name: args.artifactName,
+        parse_error: initialError instanceof Error
+          ? initialError.message
+          : String(initialError),
+        malformed_json_text: result.text,
+      }, null, 2),
+      {
+        ...args.llmConfig,
+        max_tokens: jsonRepairMaxTokens(result.text, args.maxTokens),
+      },
+    );
+    try {
+      return parseLlmJsonObject(repairResult.text, args.artifactName);
+    } catch (repairError) {
+      throw new Error(
+        `${args.artifactName} author returned invalid JSON and repair failed: ${
+          repairError instanceof Error ? repairError.message : String(repairError)
+        }`,
+      );
+    }
+  }
 }
 
 export function createDirectCallReconstructDirectiveAuthor(args: {
@@ -2193,6 +2526,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     "You are authoring reconstruct semantic artifacts.",
     "Return only valid JSON. Do not wrap in Markdown.",
     "Use only provided observation ids as evidence. Do not invent source refs, ids, files, or facts.",
+    "Observation ids are opaque runtime identifiers. Copy them verbatim; never rewrite prefixes, suffixes, material kinds, or hashes.",
     "Runtime will validate ids and refs. If evidence is insufficient, mark gaps or open questions instead of guessing.",
   ].join("\n");
 
@@ -2214,6 +2548,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           baseSystem,
           "Select observations that should become evidence candidates for the declared reconstruct purpose.",
           "selected_observations is a set keyed by observation_id. Include each observation_id at most once; if one observation supports multiple rationales, combine them in one selection_rationale.",
+          `Select at most ${SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT} observations, ordered from most to least important for the declared purpose. Do not describe unselected observations.`,
           "Copy observation_id verbatim from available_observation_ids. Do not invent, rename, or duplicate observation ids.",
           "JSON shape: {\"selected_observations\":[{\"observation_id\":\"...\",\"selection_rationale\":\"...\"}],\"open_questions\":[\"...\"]}",
         ].join("\n"),
@@ -2221,7 +2556,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           intent: input.intent,
           target_material_profile: input.targetMaterialProfile,
           available_observation_ids: availableObservationIds,
-          source_observations: observationPromptPayload(input.sourceObservations),
+          selection_limit: SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT,
+          source_observations: observationPromptPayload(input.sourceObservations, {
+            contentExcerptCharLimit: SOURCE_OBSERVATION_DIRECTIVE_EXCERPT_LIMIT,
+          }),
         },
       });
       const byId = new Map(
@@ -2230,41 +2568,61 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           observation,
         ]),
       );
-      const selectedIds = new Set<string>();
-      const selected = records(
+      const selected: ReconstructSourceObservationDirectiveArtifact["selected_observations"] = [];
+      const selectedById = new Map<
+        string,
+        ReconstructSourceObservationDirectiveArtifact["selected_observations"][number]
+      >();
+      for (const [index, selection] of records(
         raw.selected_observations,
         "selected_observations",
-      ).map((selection, index) => {
+      ).entries()) {
         const observationId = stringValue(
           selection.observation_id,
           `selected_observations[${index}].observation_id`,
         );
-        if (selectedIds.has(observationId)) {
-          throw new Error(
-            `SourceObservationDirective repeats observation id: ${observationId}`,
-          );
-        }
-        selectedIds.add(observationId);
         const observation = byId.get(observationId);
         if (!observation) {
           throw new Error(
             `SourceObservationDirective selected unknown observation id: ${observationId}`,
           );
         }
-        return {
+        const selectionRationale = stringValue(
+          selection.selection_rationale,
+          `selected_observations[${index}].selection_rationale`,
+        );
+        const existing = selectedById.get(observationId);
+        if (existing) {
+          existing.selection_rationale = [
+            existing.selection_rationale,
+            selectionRationale,
+          ].filter((value, valueIndex, values) =>
+            values.indexOf(value) === valueIndex
+          ).join(" | ");
+          continue;
+        }
+        const selectedObservation = {
           ...evidenceRefFromObservation(observation),
-          selection_rationale: stringValue(
-            selection.selection_rationale,
-            `selected_observations[${index}].selection_rationale`,
-          ),
+          selection_rationale: selectionRationale,
         };
-      });
+        selected.push(selectedObservation);
+        selectedById.set(observationId, selectedObservation);
+      }
+      const openQuestions = stringArray(raw.open_questions, "open_questions");
+      if (selected.length > SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT) {
+        const overflowCount =
+          selected.length - SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT;
+        selected.length = SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT;
+        openQuestions.push(
+          `Runtime kept the first ${SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT} selected observations and dropped ${overflowCount} lower-priority duplicate-limit overflow selection(s).`,
+        );
+      }
       return {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
         selected_observations: selected,
-        open_questions: stringArray(raw.open_questions, "open_questions"),
+        open_questions: openQuestions,
       };
     },
 
@@ -2278,11 +2636,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           baseSystem,
           `You are the ${input.lensId} reconstruct lens. Apply this lens contract:`,
           input.lensPrompt,
+          "Every candidate label and semantic gap must cite at least one evidence_observation_ids value from valid_observation_ids. Omit any label or gap that cannot be grounded in observed evidence.",
           "JSON shape: {\"candidate_labels\":[{\"label_id\":\"...\",\"label\":\"...\",\"evidence_observation_ids\":[\"...\"],\"rationale\":\"...\"}],\"semantic_gaps\":[{\"gap_id\":\"...\",\"description\":\"...\",\"evidence_observation_ids\":[\"...\"],\"requested_source_refs\":[\"...\"],\"materiality_rationale\":\"...\"}],\"no_next_frontier_rationale\":\"... or null\"}",
         ].join("\n"),
         userPayload: {
           intent: input.intent,
           round_id: input.roundId,
+          valid_observation_ids: selectedObservationIds(input.sourceObservationDirective),
           source_observation_directive_ref: input.sourceObservationDirectiveRef,
           selected_observations: input.sourceObservationDirective.selected_observations,
           source_observations: observationPromptPayload(input.sourceObservations, {
@@ -2291,22 +2651,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           }),
         },
       });
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        lens_id: input.lensId,
-        created_at: isoNow(),
-        source_observation_directive_ref: input.sourceObservationDirectiveRef,
-        candidate_labels: records(raw.candidate_labels ?? [], "candidate_labels")
-          .map((label, index) => ({
+      const candidateLabels = records(raw.candidate_labels ?? [], "candidate_labels")
+        .flatMap((label, index) => {
+          const evidenceObservationIds = stringArray(
+            label.evidence_observation_ids,
+            `candidate_labels[${index}].evidence_observation_ids`,
+          );
+          if (evidenceObservationIds.length === 0) return [];
+          return [{
             label_id: optionalString(label.label_id) ?? `${input.lensId}-label-${index + 1}`,
             label: stringValue(label.label, `candidate_labels[${index}].label`),
             evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                label.evidence_observation_ids,
-                `candidate_labels[${index}].evidence_observation_ids`,
-              ),
+              observationIds: evidenceObservationIds,
               sourceObservations: input.sourceObservations,
               fieldName: `candidate_labels[${index}].evidence_observation_ids`,
             }),
@@ -2314,19 +2670,23 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               label.rationale,
               `candidate_labels[${index}].rationale`,
             ),
-          })),
-        semantic_gaps: records(raw.semantic_gaps ?? [], "semantic_gaps")
-          .map((gap, index) => ({
+          }];
+        });
+      const semanticGaps = records(raw.semantic_gaps ?? [], "semantic_gaps")
+        .flatMap((gap, index) => {
+          const evidenceObservationIds = stringArray(
+            gap.evidence_observation_ids,
+            `semantic_gaps[${index}].evidence_observation_ids`,
+          );
+          if (evidenceObservationIds.length === 0) return [];
+          return [{
             gap_id: optionalString(gap.gap_id) ?? `${input.lensId}-gap-${index + 1}`,
             description: stringValue(
               gap.description,
               `semantic_gaps[${index}].description`,
             ),
             evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                gap.evidence_observation_ids,
-                `semantic_gaps[${index}].evidence_observation_ids`,
-              ),
+              observationIds: evidenceObservationIds,
               sourceObservations: input.sourceObservations,
               fieldName: `semantic_gaps[${index}].evidence_observation_ids`,
             }),
@@ -2338,7 +2698,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               gap.materiality_rationale,
               `semantic_gaps[${index}].materiality_rationale`,
             ),
-          })),
+          }];
+        });
+      return {
+        schema_version: "1",
+        session_id: input.sessionId,
+        round_id: input.roundId,
+        lens_id: input.lensId,
+        created_at: isoNow(),
+        source_observation_directive_ref: input.sourceObservationDirectiveRef,
+        candidate_labels: candidateLabels,
+        semantic_gaps: semanticGaps,
         no_next_frontier_rationale: optionalString(raw.no_next_frontier_rationale),
         directive_author: {
           owner: "host_llm",
@@ -2432,11 +2802,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Convert exploration synthesis into a concrete source frontier. If no new source should be read, return an empty frontier_refs array and a no_next_frontier_rationale.",
           "Frontier refs are only for not-yet-observed refs that are already present in inventory_source_refs. Do not request refs listed in observed_source_refs. Do not invent relative paths outside inventory_source_refs.",
           "If every useful next source is already observed, return frontier_refs: [] and explain the remaining source-depth limitation in no_next_frontier_rationale.",
+          input.isFinalExplorationRound
+            ? "This is the final exploration round. Return frontier_refs: [] even if more source could be useful; record remaining source-depth limitations in no_next_frontier_rationale."
+            : "This is not the final exploration round. Request only concrete, high-value next refs.",
           "JSON shape: {\"frontier_refs\":[{\"source_ref\":\"...\",\"rationale\":\"...\",\"priority\":\"high|medium|low\"}],\"no_next_frontier_rationale\":\"... or null\"}",
         ].join("\n"),
         userPayload: {
           intent: input.intent,
           round_id: input.roundId,
+          exploration_budget: {
+            max_rounds: input.maxExplorationRounds,
+            is_final_round: input.isFinalExplorationRound,
+          },
           exploration_synthesis_ref: input.explorationSynthesisRef,
           exploration_synthesis: input.explorationSynthesis,
           inventory_source_refs: input.sourceInventory.inventory_units
@@ -2460,14 +2837,24 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             priority,
           };
         });
+      const terminalBudgetRationale = input.isFinalExplorationRound && frontierRefs.length > 0
+        ? [
+          `Final exploration round ${input.roundId} reached the configured max_rounds=${input.maxExplorationRounds}.`,
+          `Runtime converted ${frontierRefs.length} proposed next source ref(s) into a bounded source-depth limitation instead of opening another observation round.`,
+          raw.no_next_frontier_rationale
+            ? `Author rationale: ${String(raw.no_next_frontier_rationale)}`
+            : "No author terminal rationale was provided.",
+        ].join(" ")
+        : null;
       return {
         schema_version: "1",
         session_id: input.sessionId,
         round_id: input.roundId,
         created_at: isoNow(),
         exploration_synthesis_ref: input.explorationSynthesisRef,
-        frontier_refs: frontierRefs,
-        no_next_frontier_rationale: optionalString(raw.no_next_frontier_rationale),
+        frontier_refs: terminalBudgetRationale ? [] : frontierRefs,
+        no_next_frontier_rationale:
+          terminalBudgetRationale ?? optionalString(raw.no_next_frontier_rationale),
         directive_author: {
           owner: "host_llm",
           author_id: authorId,
@@ -2476,6 +2863,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeCandidateInventory(input) {
+      const requiredCoverageObservationIds = selectedObservationIds(
+        input.sourceObservationDirective,
+      );
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -2484,7 +2874,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         systemPrompt: [
           baseSystem,
           "Author candidate-inventory.yaml. Inventory every high-salience object, actor, action, workflow, permission, data source, constraint, and concept candidate that the observed evidence may support.",
-          "Every provided source observation must appear in at least one candidate evidence_observation_ids array. If an observation only shows absence, boundary, or limitation evidence, create a low-salience validation or limitation candidate for that observation.",
+          "Every required_coverage_observation_ids value must appear in at least one candidate evidence_observation_ids array. If an observation only shows absence, boundary, or limitation evidence, create a low-salience validation or limitation candidate for that observation.",
           `Allowed candidate_kind values: ${candidateKindIds(input.contractRegistry).join(", ")}.`,
           "Do not decide placement here. This artifact only records candidates that must not vanish before disposition.",
           "Each candidate shape: {\"candidate_id\":\"candidate-...\",\"candidate_kind\":\"...\",\"name\":\"...\",\"description\":\"...\",\"salience\":\"high|medium|low\",\"evidence_observation_ids\":[\"...\"]}.",
@@ -2494,8 +2884,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           session_id: input.sessionId,
           intent: input.intent,
           selected_observations: input.sourceObservationDirective.selected_observations,
+          required_coverage_observation_ids: requiredCoverageObservationIds,
           source_observations_ref: input.sourceObservationsRef,
           source_observations: observationPromptPayload(input.sourceObservations, {
+            observationIds: requiredCoverageObservationIds,
             contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
           }),
           lens_judgment_index: input.lensJudgmentIndex,
@@ -2508,6 +2900,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         session_id: input.sessionId,
         created_at: isoNow(),
         source_observations_ref: input.sourceObservationsRef,
+        required_coverage_observation_ids: requiredCoverageObservationIds,
         candidates: records(raw.candidates, "candidates").map((candidate, index) =>
           candidateInventoryItemFromLlm({
             raw: candidate,
@@ -2533,6 +2926,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Author candidate-disposition.yaml. Every candidate from candidate-inventory.yaml must receive exactly one disposition.",
           `Allowed disposition_id values: ${candidateDispositionIds(input.contractRegistry).join(", ")}.`,
           "Use promoted_to_seed_layer only when target_seed_refs names planned canonical seed refs that ontology-seed.yaml must later realize. Use non-promoted dispositions when the candidate is represented, deferred, rejected, or only validation-facing.",
+          "target_seed_refs is required for promoted_to_seed_layer and every represented_as_* disposition. If no concrete target seed ref can be named, use deferred_by_source_gap or rejected_for_declared_purpose instead of a represented_as_* disposition.",
+          "represented_as_actor_role may target only future dynamic_layer.actor_roles[].role_id values such as role_admin or role_dashboard_user. If a candidate needs actor_type_id values such as actor_user, use promoted_to_seed_layer instead.",
+          "represented_as_property may target only future semantic_layer.object_types[].properties[].property_id values. Do not use represented_as_property for constraints, lifecycle rules, value literals, or policies unless the exact target ref will be copied into an object properties array.",
+          "represented_as_link, represented_as_permission_rule, represented_as_data_binding, and represented_as_validation_question likewise require target refs that can be copied exactly into their named seed family.",
+          "target_seed_refs are literal future seed IDs, not display paths. Choose values that ontology-seed.yaml can copy exactly into the relevant *_id field. Prefer object_user, actor_user, role_admin, action_classify_session, workflow_session_ingest, policy_public_api_allowlist, binding_ontology_authority_files, value_type_work_type, or property_session_token_breakdown style ids over namespace paths such as seed.entities.user.",
           "Each disposition shape: {\"candidate_id\":\"...\",\"disposition_id\":\"...\",\"target_seed_refs\":[\"...\"],\"rationale\":\"...\",\"evidence_observation_ids\":[\"...\"]}.",
           "JSON shape: {\"dispositions\":[disposition]}",
         ].join("\n"),
@@ -2568,23 +2966,34 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
-        artifactName: "ActionableOntologySeed",
+        artifactName: "OntologySeed",
         maxTokens: 9000,
         systemPrompt: [
           baseSystem,
-          "Author ontology-seed.yaml as an ActionableOntologySeed. This is not a concept map only; it must include operational objects, actors, actions, permissions, data bindings, validation requirements, ontology handoff mapping, source authority, and limitations.",
+          "Author ontology-seed.yaml as an OntologySeed. This is not a concept map only and it is not action-ready by itself; it must include operational objects, actors, actions, permissions, data bindings, validation requirements, ontology maturation mapping, source authority, and limitations for the next maturation iteration.",
           "Use candidate-disposition.yaml as the disposition authority. Do not duplicate the full disposition ledger in ontology-seed.yaml.",
           `validation_layer.coverage_axes allowed values: ${coverageAxisIds(input.contractRegistry).join(", ")}.`,
+          "validation_layer.coverage_axes must include static_surface, kinetic_surface, and dynamic_surface. Static surface covers what exists and what evidence grounds it; kinetic surface covers who can do what and what changes; dynamic surface covers conditions, permissions, states, exceptions, runtime context, external dependencies, and unresolved decisions that change the answer.",
           ACTIONABLE_ONTOLOGY_SEED_JSON_SHAPE,
+          ontologySeedMaturationHandoffPrompt(input.contractRegistry),
           "candidate_disposition_authority_ref must be {\"authority_scope\":\"external_candidate_disposition\",\"projection_policy\":\"reference_only\"}; concrete candidate artifact refs are owned by reconstruct-record.yaml and reconstruct-run-manifest.yaml.",
           "validation_layer.question_authority_ref must declare {\"authority_scope\":\"canonical_question_set\",\"projection_policy\":\"record_manifest_ref\"}; validation_layer.runtime_validation_refs may name authority scopes, but must not contain concrete runtime artifact filenames.",
-          "ontology_handoff.readiness_claim must be one of ready, limited, not_ready, blocked. Use limited or not_ready when source evidence leaves explicit handoff limitations.",
+          "ontology_handoff.readiness_claim must be one of ready, limited, not_ready, blocked. Interpret this as seed iteration readiness, not action readiness. Use limited or not_ready when source evidence leaves explicit maturation limitations.",
           "When ontology_handoff.readiness_claim is ready, every ontology_handoff mapping object must include concrete mapping content or limitation_refs. Empty shells such as {\"limitation_refs\":[]} are invalid.",
+          "candidate_disposition target_seed_refs are validator obligations. Every target_seed_ref listed in userPayload.candidate_target_ref_obligations must appear exactly as a seed *_id in the placement hinted there. Do not rename those refs to cleaner local aliases.",
+          "For represented_as_property obligations, copy each target_seed_ref exactly into semantic_layer.object_types[].properties[].property_id. Do not satisfy a property obligation by creating a constraint_id, rule_id, policy_id, value_type_id, or prose limitation with the same meaning.",
+          "For represented_as_actor_role obligations, copy each target_seed_ref exactly into dynamic_layer.actor_roles[].role_id. Actor type ids such as actor_user do not satisfy actor-role obligations.",
+          "For represented_as_* obligations, exact placement is mandatory even when the same meaning also deserves a constraint, lifecycle rule, permission, or limitation elsewhere.",
+          "Seed status fields describe evidential certainty only and must be one of confirmed, provisional, deferred. Never use promoted as a seed status; promoted_to_seed_layer belongs only to candidate-disposition.yaml.",
           "Object types need object_type_id and properties arrays. Actor types belong in dynamic_layer.actor_types with actor_type_id, not semantic_layer.actor_types. Actions belong in kinetic_layer.action_types with action_type_id.",
           "Every concept_id/object_type_id/actor_type_id/action_type_id/limitation_id must be stable and meaningful, for example object_user or action_review_session; do not use generic ids like ontology_seed.",
           "Every *_id value must be globally unique across the seed, except semantic_layer.object_types[].primary_key.property_id may reference a property_id from that same object's properties array.",
-          "Use only observed_source_refs for every source_ref field. Use skipped_source_refs only in source_authority.source_gaps or handoff_limitations.missing_source_refs.",
+          "Use only observed_source_refs for every source_ref field. Use skipped_source_ref_summary only to describe aggregate source gaps or representative handoff limitations.",
           "Do not use reconstruct runtime artifact names as source_ref values; they are artifact truth refs, not source evidence refs.",
+          "The userPayload is intentionally compact. Treat candidate_inventory, candidate_disposition, candidate_target_ref_obligations, and source_observations as sufficient seed-authoring authority; do not request or invent omitted source details.",
+          "candidate_inventory and candidate_disposition use evidence_observation_ids to avoid duplicate evidence payloads. Build seed evidence_refs by copying the matching full evidence objects from source_observations.",
+          "source_observations is a bounded evidence-ref catalog for seed authoring, not the complete source-observations artifact. Use only listed observation ids in seed evidence_refs.",
+          "skipped_source_ref_summary is a bounded summary. Do not expand it into exhaustive skipped ref lists in ontology-seed.yaml; record aggregate source gaps or representative limitations instead.",
           "Before returning, check every object_type_id has data binding coverage or appears in a handoff limitation affected_refs array.",
           "Every action must have actor_type_ids and object refs, or a handoff limitation. Every action must have permission policy coverage or a limitation. Every object must have source/read/provenance data binding coverage or a limitation.",
           "Any field named evidence_refs is reserved for evidence arrays only. Never put prose, policy text, artifact names, or source_ref strings in evidence_refs; use statement, rationale, policy, authority_scope, timestamp_ref, or *_mapping text fields instead.",
@@ -2592,28 +3001,30 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ].join("\n"),
         userPayload: {
           intent: input.intent,
-          target_material_profile: input.targetMaterialProfile,
+          target_material_profile:
+            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
           candidate_inventory_ref: input.candidateInventoryRef,
-          candidate_inventory: input.candidateInventory,
+          candidate_inventory:
+            compactCandidateInventoryForPrompt(input.candidateInventory),
           candidate_disposition_ref: input.candidateDispositionRef,
-          candidate_disposition: input.candidateDisposition,
+          candidate_disposition:
+            compactCandidateDispositionForPrompt(input.candidateDisposition),
+          candidate_target_ref_obligations:
+            candidateTargetRefObligations(input.candidateDisposition),
           source_observations_ref: input.sourceObservationsRef,
           source_observations: observationPromptPayload(input.sourceObservations, {
-            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            observationIds: ontologySeedObservationIds({
+              candidateInventory: input.candidateInventory,
+              candidateDisposition: input.candidateDisposition,
+            }),
+            includeStructuralData: false,
           }),
           observed_source_refs: input.sourceObservations.observations
             .map((observation) => observation.source_ref),
-          skipped_source_refs: input.targetMaterialProfile.detection.per_ref
-            .filter((ref) =>
-              !input.sourceObservations.observations.some((observation) =>
-                path.resolve(observation.source_ref) === path.resolve(ref.ref)
-              )
-            )
-            .map((ref) => ({
-              source_ref: ref.ref,
-              target_material_kind: ref.kind,
-              confidence_basis: ref.confidence_basis,
-            })),
+          skipped_source_ref_summary: skippedSourceRefPromptSummary({
+            targetMaterialProfile: input.targetMaterialProfile,
+            sourceObservations: input.sourceObservations,
+          }),
         },
       });
       return raw;
@@ -2634,6 +3045,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Return exactly one claim_realizations item for every allowed_claims item.",
           "Copy claim_id verbatim from allowed_claims[].claim_id. Do not invent, rename, normalize, shorten, or derive claim_id values from limitations, unsupported question candidates, source refs, or runtime artifact names.",
           "Do not include any claim_id outside allowed_claims. If a claim is limited or not realized, keep the allowed claim_id and use deferred_or_non_goal or unknown with rationale.",
+          "If allowed_claims[].evidence_observation_ids is empty, classify that allowed claim as deferred_or_non_goal because no source evidence can support a stronger stance.",
           "JSON shape: {\"claim_realizations\":[{\"claim_id\":\"...\",\"stance\":\"...\",\"rationale\":\"...\"}]}",
         ].join("\n"),
         userPayload: {
@@ -2666,21 +3078,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           throw new Error(`ClaimRealizationMap repeats claim id: ${claimId}`);
         }
         seenClaimIds.add(claimId);
-        const stance = stringValue(
+        const rawStance = stringValue(
           realization.stance,
           `claim_realizations[${index}].stance`,
         ) as ReconstructClaimRealizationStance;
-        if (!CLAIM_REALIZATION_STANCES.includes(stance)) {
-          throw new Error(`ClaimRealizationMap stance is invalid for ${claimId}: ${stance}`);
+        if (!CLAIM_REALIZATION_STANCES.includes(rawStance)) {
+          throw new Error(`ClaimRealizationMap stance is invalid for ${claimId}: ${rawStance}`);
         }
+        const stance =
+          claim.evidence_refs.length === 0 && rawStance !== "deferred_or_non_goal"
+            ? "deferred_or_non_goal"
+            : rawStance;
+        const rationale = stringValue(
+          realization.rationale,
+          `claim_realizations[${index}].rationale`,
+        );
         return {
           claim_id: claimId,
           stance,
           evidence_refs: claim.evidence_refs,
-          rationale: stringValue(
-            realization.rationale,
-            `claim_realizations[${index}].rationale`,
-          ),
+          rationale: stance === rawStance
+            ? rationale
+            : `${rationale} Runtime normalized this claim to deferred_or_non_goal because the projected seed claim has no evidence refs.`,
         };
       });
       const missingClaimIds = claims
@@ -2710,6 +3129,11 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       const eligibleClaimIds = new Set(
         input.seedConfirmationValidation.cq_eligible_claim_ids,
       );
+      const excludedClaimIds = ontologySeedExcludedClaimIds(input.ontologySeed);
+      const seedRefIds = new Set([
+        ...collectOntologySeedRefs(input.ontologySeed),
+        ...ontologyClaims(input.ontologySeed).map((claim) => claim.claim_id),
+      ]);
       const eligibleClaims = ontologyClaims(input.ontologySeed)
         .filter((claim) => eligibleClaimIds.has(claim.claim_id));
       const requiredDomainCompetencyIds = new Set(
@@ -2721,6 +3145,12 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         ).filter((competency) =>
           requiredDomainCompetencyIds.has(competency.qualified_competency_id)
         );
+      const domainCompetencySourceAnchorById = new Map(
+        domainCompetencyRows.map((competency) => [
+          competency.qualified_competency_id,
+          competency.source_anchor,
+        ]),
+      );
       const domainCompetencyPromptRows = domainCompetencyRows.map((competency) => ({
         competency_id: competency.qualified_competency_id,
         priority: competency.priority,
@@ -2805,11 +3235,18 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             domainBatchOnly
               ? "This is a required domain competency batch. Do not attempt broad claim coverage in this call; emit exactly one question for each required_domain_competency_question_rows item."
               : "Every cq_eligible_claim_id in the payload must appear in at least one linked_claim_ids array. Group related claims when useful, but do not leave an eligible claim untested.",
+            "linked_claim_ids may only contain eligible_claims[].claim_id values from the payload. Handoff limitation ids are not claim links; cite them only in limitation_refs.",
+            "seed_ref_refs may only contain actual seed record ids or eligible claim ids. Do not use object paths such as ontology_handoff.classification_mapping.",
             "Each question must also declare coverage axis refs, ontology handoff refs, facet refs, modeling concern refs, proof contract refs, domain trace refs, disposition, answer kind, handoff relevance, lifecycle status, rationale, seed refs, limitation refs, reference standard refs, and pattern catalog refs. Use [] only when a category is intentionally not applicable. Runtime derives required_evidence_scope from these refs.",
+            "Reference arrays must use only ids from the corresponding allowed_* payload lists. Do not infer ids from ontology seed object paths or prose field names.",
             "domain_competency_trace_refs may only use required_admitted_competency_ids from the payload. Domain admission refs and source document refs are not valid trace refs.",
             "If required_domain_competency_question_rows is non-empty, emit exactly one question for each row. That question must include domain_competency_trace_refs with that row's competency_id exactly once across the whole batch.",
             "For each domain competency trace, include one domain_competency_semantic_assessments row. The row is LLM-authored semantic judgment; runtime validates refs, source_anchor, enum values, rationale, and evidence, but does not perform string-similarity semantic judging.",
-            "coverage_disposition must be one of covered, limited, unsupported, deferred, not_applicable. Non-covered questions must cite limitation_refs.",
+            "Each domain_competency_semantic_assessments row must repeat the evidence_observation_ids that ground that semantic judgment. When the whole question is grounded by the same source evidence, repeat the question evidence in the assessment row.",
+            "If required_domain_competency_question_rows is empty, domain_competency_trace_refs and domain_competency_semantic_assessments must both be [].",
+            "When required_domain_competency_question_rows is non-empty, domain competency traces may only use competency_id values from those rows, and source_anchor must be copied exactly from the matching row.",
+            "coverage_disposition must be one of covered, limited, unsupported, deferred, not_applicable. Non-covered questions must cite limitation_refs. Non-covered includes limited, unsupported, deferred, and not_applicable.",
+            "Coverage must preserve actionability: include static_surface, kinetic_surface, and dynamic_surface across the question set whenever those ids are in allowed_coverage_axis_ids. Static questions test what exists and what evidence grounds it; kinetic questions test actions, workflows, and effects; dynamic questions test conditions, permissions, states, exceptions, runtime context, external dependencies, and unresolved decisions.",
             domainBatchOnly
               ? "Use the allowed axis and facet refs that apply to this domain competency row; do not invent refs outside the allowed lists."
               : "Across the question set, cover every allowed coverage axis and every allowed ontology handoff axis at least once; use limitation_refs for limited axes.",
@@ -2851,6 +3288,9 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           ...records(rawBatch.questions, "questions").map((question, index) => ({
             ...question,
             question_id: `${args.questionIdPrefix}-${index + 1}`,
+            __batch_domain_competency_ids: args.domainRows.map((row) =>
+              row.competency_id
+            ),
           })),
         );
         openQuestions.push(...stringArray(rawBatch.open_questions, "open_questions"));
@@ -2888,26 +3328,42 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           questionIdPrefix: "cq",
         });
       }
+      const coveredEligibleClaimIds = (): Set<string> =>
+        new Set(
+          rawQuestionRows.flatMap((question, index) =>
+            stringArray(
+              question.linked_claim_ids,
+              `questions[${index}].linked_claim_ids`,
+            ).filter((claimId) => eligibleClaimIds.has(claimId))
+          ),
+        );
+      const coveredAfterInitialBatches = coveredEligibleClaimIds();
+      const missingEligibleClaims = eligibleClaims.filter((claim) =>
+        !coveredAfterInitialBatches.has(claim.claim_id)
+      );
+      if (missingEligibleClaims.length > 0) {
+        await callCompetencyQuestionBatch({
+          eligibleClaimRows: missingEligibleClaims,
+          domainRows: [],
+          observationIds: claimEvidenceObservationIds(missingEligibleClaims),
+          questionIdPrefix: "cq-claim-repair",
+        });
+      }
       const raw = {
         questions: rawQuestionRows,
         open_questions: openQuestions,
       };
-      return {
+      const artifact: ReconstructCompetencyQuestionsArtifact = {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
         seed_confirmation_ref: null,
         ontology_seed_ref: input.ontologySeedRef,
         questions: records(raw.questions, "questions").map((question, index) => {
-          const linkedClaimIds = stringArray(
+          const rawLinkedClaimIds = stringArray(
             question.linked_claim_ids,
             `questions[${index}].linked_claim_ids`,
           );
-          for (const claimId of linkedClaimIds) {
-            if (!eligibleClaimIds.has(claimId)) {
-              throw new Error(`CompetencyQuestions linked non-eligible claim id: ${claimId}`);
-            }
-          }
           const coverageAxisRefs = stringArray(
             question.coverage_axis_refs,
             `questions[${index}].coverage_axis_refs`,
@@ -2919,11 +3375,28 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           const seedRefRefs = stringArray(
             question.seed_ref_refs,
             `questions[${index}].seed_ref_refs`,
-          );
+          ).filter((ref) => seedRefIds.has(ref));
           const limitationRefs = stringArray(
             question.limitation_refs,
             `questions[${index}].limitation_refs`,
           );
+          const linkedClaimIds = rawLinkedClaimIds.filter((claimId) =>
+            eligibleClaimIds.has(claimId)
+          );
+          const linkedLimitationRefs = rawLinkedClaimIds.filter((claimId) =>
+            excludedClaimIds.has(claimId)
+          );
+          const invalidLinkedClaimIds = rawLinkedClaimIds.filter((claimId) =>
+            !eligibleClaimIds.has(claimId) && !excludedClaimIds.has(claimId)
+          );
+          if (invalidLinkedClaimIds.length > 0) {
+            throw new Error(
+              `CompetencyQuestions linked non-eligible claim id: ${invalidLinkedClaimIds[0]}`,
+            );
+          }
+          const normalizedLimitationRefs = [
+            ...new Set([...limitationRefs, ...linkedLimitationRefs]),
+          ];
           const reasoningOrFormalismFacets = stringArray(
             question.reasoning_or_formalism_facets,
             `questions[${index}].reasoning_or_formalism_facets`,
@@ -2956,44 +3429,65 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             question.modeling_concern_facets,
             `questions[${index}].modeling_concern_facets`,
           );
+          const allowedBatchDomainCompetencyIds = new Set(
+            stringArray(
+              question.__batch_domain_competency_ids ?? [],
+              `questions[${index}].__batch_domain_competency_ids`,
+            ),
+          );
           const domainCompetencyTraceRefs = stringArray(
             question.domain_competency_trace_refs,
             `questions[${index}].domain_competency_trace_refs`,
+          ).filter((competencyId) =>
+            allowedBatchDomainCompetencyIds.has(competencyId)
+          );
+          const questionEvidenceObservationIds = stringArray(
+            question.evidence_observation_ids,
+            `questions[${index}].evidence_observation_ids`,
           );
           const domainCompetencySemanticAssessments = records(
             question.domain_competency_semantic_assessments ?? [],
             `questions[${index}].domain_competency_semantic_assessments`,
-          ).map((assessment, assessmentIndex) => ({
-            competency_id: stringValue(
+          ).map((assessment, assessmentIndex) => {
+            const competencyId = stringValue(
               assessment.competency_id,
               `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].competency_id`,
-            ),
-            source_anchor: stringValue(
-              assessment.source_anchor,
-              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].source_anchor`,
-            ),
-            applicability_verdict: stringValue(
-              assessment.applicability_verdict,
-              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].applicability_verdict`,
-            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["applicability_verdict"],
-            semantic_alignment: stringValue(
-              assessment.semantic_alignment,
-              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].semantic_alignment`,
-            ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["semantic_alignment"],
-            rationale: stringValue(
-              assessment.rationale,
-              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].rationale`,
-            ),
-            evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                assessment.evidence_observation_ids,
-                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
+            );
+            const assessmentEvidenceObservationIds = stringArray(
+              assessment.evidence_observation_ids,
+              `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
+            );
+            return {
+              competency_id: competencyId,
+              source_anchor: domainCompetencySourceAnchorById.get(competencyId) ??
+                stringValue(
+                  assessment.source_anchor,
+                  `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].source_anchor`,
+                ),
+              applicability_verdict: stringValue(
+                assessment.applicability_verdict,
+                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].applicability_verdict`,
+              ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["applicability_verdict"],
+              semantic_alignment: stringValue(
+                assessment.semantic_alignment,
+                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].semantic_alignment`,
+              ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["domain_competency_semantic_assessments"][number]["semantic_alignment"],
+              rationale: stringValue(
+                assessment.rationale,
+                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].rationale`,
               ),
-              sourceObservations: input.sourceObservations,
-              fieldName:
-                `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
-            }),
-          }));
+              evidence_refs: evidenceRefsFromIds({
+                observationIds: assessmentEvidenceObservationIds.length > 0
+                  ? assessmentEvidenceObservationIds
+                  : questionEvidenceObservationIds,
+                sourceObservations: input.sourceObservations,
+                fieldName:
+                  `questions[${index}].domain_competency_semantic_assessments[${assessmentIndex}].evidence_observation_ids`,
+              }),
+            };
+          }).filter((assessment) =>
+            allowedBatchDomainCompetencyIds.has(assessment.competency_id)
+          );
           const referenceStandardRefs = stringArray(
             question.reference_standard_refs,
             `questions[${index}].reference_standard_refs`,
@@ -3021,7 +3515,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             coverage_axis_refs: coverageAxisRefs,
             ontology_handoff_axis_refs: ontologyHandoffAxisRefs,
             seed_ref_refs: seedRefRefs,
-            limitation_refs: limitationRefs,
+            limitation_refs: normalizedLimitationRefs,
             reasoning_or_formalism_facets: reasoningOrFormalismFacets,
             entity_identity_facets: entityIdentityFacets,
             instance_assertion_facets: instanceAssertionFacets,
@@ -3056,10 +3550,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             ) as ReconstructCompetencyQuestionsArtifact["questions"][number]["lifecycle_status"],
             rationale: stringValue(question.rationale, `questions[${index}].rationale`),
             evidence_refs: evidenceRefsFromIds({
-              observationIds: stringArray(
-                question.evidence_observation_ids,
-                `questions[${index}].evidence_observation_ids`,
-              ),
+              observationIds: questionEvidenceObservationIds,
               sourceObservations: input.sourceObservations,
               fieldName: `questions[${index}].evidence_observation_ids`,
             }),
@@ -3071,6 +3562,111 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           author_id: authorId,
         },
       };
+      const missingLimitationQuestions = artifact.questions.filter((question) =>
+        question.coverage_disposition !== "covered" &&
+        question.limitation_refs.length === 0
+      );
+      const limitationRows = records(
+        input.ontologySeed.handoff_limitations,
+        "ontology_seed.handoff_limitations",
+      ).map((limitation, index) => ({
+        limitation_id: stringValue(
+          limitation.limitation_id,
+          `ontology_seed.handoff_limitations[${index}].limitation_id`,
+        ),
+        limitation_kind: stringValue(
+          limitation.limitation_kind,
+          `ontology_seed.handoff_limitations[${index}].limitation_kind`,
+        ),
+        description: stringValue(
+          limitation.description,
+          `ontology_seed.handoff_limitations[${index}].description`,
+        ),
+        affected_refs: stringArray(
+          limitation.affected_refs,
+          `ontology_seed.handoff_limitations[${index}].affected_refs`,
+        ),
+        mitigation_or_next_action: stringValue(
+          limitation.mitigation_or_next_action,
+          `ontology_seed.handoff_limitations[${index}].mitigation_or_next_action`,
+        ),
+      }));
+      if (missingLimitationQuestions.length > 0 && limitationRows.length > 0) {
+        const rawRepair = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "CompetencyQuestionsLimitationRepair",
+          maxTokens: 1200,
+          systemPrompt: [
+            baseSystem,
+            "Repair competency-question rows that are non-covered but omitted limitation_refs.",
+            "Use only allowed_limitation_rows[].limitation_id values. Do not invent limitation ids.",
+            "Prefer preserving the original coverage_disposition and adding the most specific applicable limitation_refs.",
+            "Change coverage_disposition to covered only when the original limited, unsupported, deferred, or not_applicable disposition was clearly wrong.",
+            "Return one repair row for each input question. If no valid limitation applies and the row is not covered, return [] for limitation_refs so runtime validation can fail loudly.",
+            "JSON shape: {\"repairs\":[{\"question_id\":\"...\",\"coverage_disposition\":\"covered|limited|unsupported|deferred|not_applicable\",\"limitation_refs\":[\"...\"],\"rationale_appendix\":\"...\"}]}",
+          ].join("\n"),
+          userPayload: {
+            allowed_limitation_rows: limitationRows,
+            questions: missingLimitationQuestions.map((question) => ({
+              question_id: question.question_id,
+              question: question.question,
+              coverage_disposition: question.coverage_disposition,
+              coverage_axis_refs: question.coverage_axis_refs,
+              ontology_handoff_axis_refs: question.ontology_handoff_axis_refs,
+              seed_ref_refs: question.seed_ref_refs,
+              domain_competency_trace_refs: question.domain_competency_trace_refs,
+              domain_competency_semantic_assessments:
+                question.domain_competency_semantic_assessments.map((assessment) => ({
+                  competency_id: assessment.competency_id,
+                  applicability_verdict: assessment.applicability_verdict,
+                  semantic_alignment: assessment.semantic_alignment,
+                  rationale: assessment.rationale,
+                })),
+              rationale: question.rationale,
+            })),
+          },
+        });
+        const allowedLimitationIds = new Set(
+          limitationRows.map((limitation) => limitation.limitation_id),
+        );
+        const allowedDispositions = new Set([
+          "covered",
+          "limited",
+          "unsupported",
+          "deferred",
+          "not_applicable",
+        ]);
+        const repairByQuestionId = new Map(
+          records(rawRepair.repairs, "repairs").map((repair, index) => [
+            stringValue(repair.question_id, `repairs[${index}].question_id`),
+            repair,
+          ]),
+        );
+        artifact.questions = artifact.questions.map((question) => {
+          const repair = repairByQuestionId.get(question.question_id);
+          if (!repair) return question;
+          const repairedLimitationRefs = stringArray(
+            repair.limitation_refs,
+            `repairs[${question.question_id}].limitation_refs`,
+          ).filter((limitationId) => allowedLimitationIds.has(limitationId));
+          const repairedDisposition = optionalString(repair.coverage_disposition);
+          const rationaleAppendix = optionalString(repair.rationale_appendix);
+          return {
+            ...question,
+            coverage_disposition: allowedDispositions.has(repairedDisposition ?? "")
+              ? repairedDisposition as ReconstructCompetencyQuestionsArtifact["questions"][number]["coverage_disposition"]
+              : question.coverage_disposition,
+            limitation_refs: [
+              ...new Set([...question.limitation_refs, ...repairedLimitationRefs]),
+            ],
+            rationale: rationaleAppendix
+              ? `${question.rationale}\nLimitation repair: ${rationaleAppendix}`
+              : question.rationale,
+          };
+        });
+      }
+      return artifact;
     },
 
     async writeCompetencyQuestionAssessment(input) {
@@ -3275,8 +3871,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         maxTokens: 1600,
         systemPrompt: [
           baseSystem,
-          "Decide whether the current reconstructed result is decision-ready for the declared purpose. This is a presentation decision, not user control.",
-          "Use ActionableOntologySeed and downstream runtime validations as the primary authority.",
+          "Decide whether the current reconstructed result is ready for the next ontology maturation iteration. This is a presentation decision, not user control.",
+          "Use OntologySeed and downstream runtime validations as the primary authority. Do not treat the seed as an action-ready ontology.",
           `Allowed decision values for this run: ${allowedDecisions.join(", ")}.`,
           "Return decision must be copied from the allowed decision values. If material failures, partial/deferred/rejected claims, or unresolved questions remain, do not return stop.",
           "JSON shape: {\"decision\":\"stop|continue|ask_user\",\"rationale\":\"...\",\"next_actions\":[\"...\"]}",
@@ -3320,35 +3916,125 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeFinalOutput(input) {
+      const seedClaims = ontologyClaims(input.ontologySeed);
       const result = await llmCall(
         [
           "You are writing the final reconstruct result for the user.",
           "Write concise Markdown. Ground every important statement in artifact refs or ids.",
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
-          "ActionableOntologySeed is the primary and only active seed authority.",
-          "Include execution profile, completion scope, skipped/deferred stages, confirmed Seed content, Seed answerability buckets, CQ assessment, material failures, revision proposals, and artifact truth.",
+          "OntologySeed is the primary and only active seed authority. It is not action-ready by itself.",
+          "Include execution profile, completion scope, skipped/deferred stages, confirmed seed content, seed answerability buckets, CQ assessment, material failures as maturation frontier, revision proposals, and artifact truth.",
           "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
         ].join("\n"),
         JSON.stringify({
           session_id: input.sessionId,
           intent: input.intent,
-          target_material_profile: input.targetMaterialProfile,
-          candidate_inventory: input.candidateInventory,
-          candidate_disposition: input.candidateDisposition,
-          candidate_disposition_validation: input.candidateDispositionValidation,
-          ontology_seed: input.ontologySeed,
-          ontology_seed_validation: input.ontologySeedValidation,
-          claim_realization_map: input.claimRealizationMap,
-          seed_confirmation: input.seedConfirmation,
-          seed_confirmation_validation: input.seedConfirmationValidation,
-          competency_questions: input.competencyQuestions,
-          competency_question_assessment: input.competencyQuestionAssessment,
-          failure_classification: input.failureClassification,
-          revision_proposal: input.revisionProposal,
+          target_material_profile:
+            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+          candidate_inventory_summary: {
+            candidate_count: input.candidateInventory.candidates.length,
+            candidates: input.candidateInventory.candidates.slice(0, 80).map((candidate) => ({
+              candidate_id: candidate.candidate_id,
+              candidate_kind: candidate.candidate_kind,
+              name: candidate.name,
+              salience: candidate.salience,
+            })),
+          },
+          candidate_disposition_summary: {
+            disposition_count: input.candidateDisposition.dispositions.length,
+            validation_status: input.candidateDispositionValidation.validation_status,
+            promoted_count: input.candidateDisposition.dispositions.filter((disposition) =>
+              disposition.disposition_id === "promoted_to_seed_layer"
+            ).length,
+          },
+          ontology_seed_summary: {
+            summary_lines: ontologySeedSummaryLines(input.ontologySeed),
+            validation_status: input.ontologySeedValidation.validation_status,
+            seed_ref_count: input.ontologySeedValidation.seed_ref_count,
+            evidence_ref_count: input.ontologySeedValidation.evidence_ref_count,
+            limitation_count: input.ontologySeedValidation.limitation_count,
+            claim_count: seedClaims.length,
+            claims: claimRealizationTargets(seedClaims).slice(0, 180),
+          },
+          claim_realization_summary: {
+            validation_status: input.claimRealizationMapValidation.validation_status,
+            stance_counts:
+              input.claimRealizationMapValidation.stance_counts,
+            realized_claim_count:
+              input.claimRealizationMapValidation.realized_claim_count,
+          },
+          seed_confirmation_summary: {
+            confirmation_status: input.seedConfirmation.confirmation_status,
+            accepted_claim_count:
+              input.seedConfirmationValidation.accepted_claim_ids.length,
+            rejected_claim_count:
+              input.seedConfirmationValidation.rejected_claim_ids.length,
+            partial_claim_count:
+              input.seedConfirmationValidation.partial_claim_ids.length,
+            deferred_claim_count:
+              input.seedConfirmationValidation.deferred_claim_ids.length,
+            cq_eligible_claim_count:
+              input.seedConfirmationValidation.cq_eligible_claim_ids.length,
+          },
+          competency_question_summary: {
+            question_count: input.competencyQuestions.questions.length,
+            validation_status: input.competencyQuestionsValidation.validation_status,
+            required_domain_competency_ids:
+              input.competencyQuestionsValidation.required_admitted_competency_ids,
+            questions: input.competencyQuestions.questions.map((question) => ({
+              question_id: question.question_id,
+              question: question.question,
+              linked_claim_ids: question.linked_claim_ids,
+              limitation_refs: question.limitation_refs,
+              domain_competency_trace_refs: question.domain_competency_trace_refs,
+              coverage_disposition: question.coverage_disposition,
+              handoff_relevance: question.handoff_relevance,
+            })),
+          },
+          competency_question_assessment_summary: {
+            validation_status:
+              input.competencyQuestionAssessmentValidation.validation_status,
+            answer_status_counts:
+              input.competencyQuestionAssessmentValidation.answer_status_counts,
+            assessments: input.competencyQuestionAssessment.assessments.map((assessment) => ({
+              question_id: assessment.question_id,
+              answer_status: assessment.answer_status,
+              downstream_effect: assessment.downstream_effect,
+              linked_claim_ids: assessment.linked_claim_ids,
+              missing_source_or_confirmation:
+                assessment.missing_source_or_confirmation,
+              evidence_observation_ids:
+                evidenceObservationIdsFromEvidenceRefs(assessment.evidence_refs),
+              answer_summary: assessment.answer_summary,
+            })),
+          },
+          failure_classification_summary: {
+            validation_status:
+              input.failureClassificationValidation.validation_status,
+            failure_count:
+              input.failureClassificationValidation.failure_count,
+            material_failure_count:
+              input.failureClassificationValidation.material_failure_count,
+            failure_kind_counts:
+              input.failureClassificationValidation.failure_kind_counts,
+            failures: input.failureClassification.failures,
+          },
+          revision_proposal_summary: {
+            validation_status: input.revisionProposalValidation.validation_status,
+            proposal_count: input.revisionProposal.proposals.length,
+            proposals: input.revisionProposal.proposals,
+          },
           metrics: input.metrics,
           stop_decision: input.stopDecision,
           pre_handoff_run_manifest_validation:
-            input.preHandoffRunManifestValidation,
+            {
+              validation_status:
+                input.preHandoffRunManifestValidation.validation_status,
+              completed_step_count:
+                input.preHandoffRunManifestValidation.completed_step_count,
+              skipped_step_count:
+                input.preHandoffRunManifestValidation.skipped_step_count,
+            },
           handoff_decision_validation: input.handoffDecisionValidation,
           artifact_refs: input.artifactRefs,
           reconstruct_record_path: input.reconstructRecordPath,
@@ -3477,7 +4163,7 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
     },
 
     async writeOntologySeed(input) {
-      return mockActionableOntologySeed({
+      return mockOntologySeed({
         sessionId: input.sessionId,
         intent: input.intent,
         targetMaterialProfile: input.targetMaterialProfile,
@@ -3561,7 +4247,7 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
             handoff_relevance: "required" as const,
             lifecycle_status: "active" as const,
             rationale:
-              `Mock competency question covers claim ${claim.claim_id} and all registry-required happy-path axes.`,
+              `Mock competency question covers claim ${claim.claim_id} and all registry-required purpose adequacy axes.`,
             evidence_refs: claim.evidence_refs,
           };
           return question;
@@ -3777,7 +4463,7 @@ export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuth
         declared_purpose: input.intent,
         metrics_ref: input.metricsRef,
         rationale: shouldStop
-          ? "All happy-path runtime gates passed and the primary ontology seed was accepted."
+          ? "All purpose adequacy runtime gates passed and the primary ontology seed was accepted."
           : "One or more reconstruct gates remains unresolved.",
         next_actions: shouldStop
           ? []
@@ -4108,6 +4794,13 @@ function validateSourceFrontier(args: {
     args.sourceFrontier.frontier_refs.length === 0 &&
     typeof args.sourceFrontier.no_next_frontier_rationale === "string" &&
     args.sourceFrontier.no_next_frontier_rationale.length > 0;
+  const terminalAlreadyObservedFrontier =
+    accepted.length === 0 &&
+    rejected.length > 0 &&
+    rejected.every((frontier) => frontier.reason === "already_observed");
+  const fatalRejectedFrontiers = rejected.filter((frontier) =>
+    frontier.reason !== "already_observed"
+  );
   const upstreamValid =
     args.targetMaterialProfileValidation.validation_status === "valid";
   if (!upstreamValid) {
@@ -4119,8 +4812,12 @@ function validateSourceFrontier(args: {
   }
   const valid =
     upstreamValid &&
-    rejected.length === 0 &&
-    (accepted.length > 0 || noNextFrontierAccepted);
+    fatalRejectedFrontiers.length === 0 &&
+    (
+      accepted.length > 0 ||
+      noNextFrontierAccepted ||
+      terminalAlreadyObservedFrontier
+    );
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -4143,8 +4840,91 @@ function validateSourceFrontier(args: {
       ...(valid ? ["source_frontier_boundary_valid"] : []),
       ...(upstreamValid ? ["target_material_profile_validation_valid"] : []),
       ...(noNextFrontierAccepted ? ["no_next_frontier_rationale_present"] : []),
+      ...(terminalAlreadyObservedFrontier
+        ? ["terminal_frontier_refs_already_observed"]
+        : []),
     ],
   };
+}
+
+const MAX_RECONSTRUCT_EXPLORATION_ROUNDS = 5;
+
+async function observeAcceptedFrontierRefs(args: {
+  sourceFrontier: ReconstructSourceFrontierArtifact;
+  sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact;
+  sourceInventory: ReconstructSourceInventoryArtifact;
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  sourceObservationsPath: string;
+}): Promise<ReconstructSourceObservationsArtifact> {
+  const observedSourceRefs = new Set(
+    args.sourceObservations.observations.map((observation) =>
+      path.resolve(observation.source_ref)
+    ),
+  );
+  const frontierById = new Map(
+    args.sourceFrontier.frontier_refs.map((frontier) => [
+      frontier.frontier_ref_id,
+      frontier,
+    ]),
+  );
+  const inventoryByRef = new Map(
+    args.sourceInventory.inventory_units.map((unit) => [
+      path.resolve(unit.ref),
+      unit,
+    ]),
+  );
+  const addedObservations: ReconstructSourceObservationsArtifact["observations"] = [];
+
+  for (const frontierRefId of args.sourceFrontierValidation.accepted_frontier_ref_ids) {
+    const frontier = frontierById.get(frontierRefId);
+    if (!frontier) {
+      throw new Error(`accepted source frontier id has no source-frontier row: ${frontierRefId}`);
+    }
+    const resolvedSourceRef = path.resolve(frontier.source_ref);
+    if (observedSourceRefs.has(resolvedSourceRef)) continue;
+    const inventoryUnit = inventoryByRef.get(resolvedSourceRef);
+    if (!inventoryUnit) {
+      throw new Error(
+        `accepted source frontier ref is not present in source inventory: ${frontier.source_ref}`,
+      );
+    }
+    const detection: TargetMaterialRefDetection = {
+      ref: inventoryUnit.ref,
+      exists: inventoryUnit.exists,
+      kind: inventoryUnit.target_material_kind,
+      confidence: inventoryUnit.exists ? 0.92 : 0.1,
+      confidence_basis:
+        `source-frontier accepted inventory ref ${frontierRefId}`,
+    };
+    const observation = await buildReconstructSourceObservation(detection);
+    if (!observation) {
+      throw new Error(
+        `accepted source frontier ref cannot be observed by current runtime: ${frontier.source_ref}`,
+      );
+    }
+    addedObservations.push(observation);
+    observedSourceRefs.add(resolvedSourceRef);
+  }
+
+  const nextSourceObservations: ReconstructSourceObservationsArtifact = {
+    ...args.sourceObservations,
+    created_at: isoNow(),
+    observations: [
+      ...args.sourceObservations.observations,
+      ...addedObservations,
+    ],
+    skipped_refs: args.sourceObservations.skipped_refs.filter((skipped) =>
+      !observedSourceRefs.has(path.resolve(skipped.ref))
+    ),
+    validation_results: [
+      ...new Set([
+        ...args.sourceObservations.validation_results,
+        "source_frontier_refs_observed",
+      ]),
+    ],
+  };
+  await writeYamlDocument(args.sourceObservationsPath, nextSourceObservations);
+  return nextSourceObservations;
 }
 
 function appendFinalOutputProvenanceFooter(
@@ -4221,18 +5001,53 @@ function appendFinalOutputProvenanceBindingsSection(
   ].join("\n");
 }
 
+function replaceMarkdownSectionContent(
+  markdown: string,
+  heading: string,
+  content: string,
+): string {
+  const lines = markdown.split(/\r?\n/);
+  const start = lines.findIndex((line) => line.trim() === heading);
+  if (start < 0) return markdown;
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s+/.test(lines[index]?.trim() ?? "")) {
+      end = index;
+      break;
+    }
+  }
+  return [
+    ...lines.slice(0, start),
+    content.trimEnd(),
+    ...lines.slice(end),
+  ].join("\n");
+}
+
 function appendFinalOutputAnswerabilitySection(
   finalOutputText: string,
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): string {
-  if (finalOutputText.includes("## Seed Answerability")) return finalOutputText;
-  return [
-    finalOutputText.trimEnd(),
-    "",
+  const content = [
     "## Seed Answerability",
     "",
     ...ontologySeedSummaryLines(ontologySeed),
     "",
+  ].join("\n");
+  if (
+    finalOutputText.split(/\r?\n/).some((line) =>
+      line.trim() === "## Seed Answerability"
+    )
+  ) {
+    return replaceMarkdownSectionContent(
+      finalOutputText,
+      "## Seed Answerability",
+      content,
+    );
+  }
+  return [
+    finalOutputText.trimEnd(),
+    "",
+    content,
   ].join("\n");
 }
 
@@ -4386,7 +5201,7 @@ function finalOutputProvenanceSectionBindings(args: {
     {
       section_id: "artifact-truth",
       heading: "Artifact Truth",
-      claim_summary: "Terminal artifact truth is grounded in the pre-handoff manifest validation, handoff readiness validation, final output provenance, and planned terminal record paths.",
+      claim_summary: "Terminal artifact truth is grounded in the pre-handoff manifest validation, seed-readiness validation, final output provenance, and planned terminal record paths.",
       authority_refs: [args.recordPath, args.manifestPath, args.preHandoffManifestPath],
       validation_refs: [
         args.preHandoffRunManifestValidationPath,
@@ -4494,7 +5309,7 @@ export async function runReconstruct(
     await readYamlDocument<ReconstructTargetMaterialProfileArtifact>(
       preparationRefs.target_material_profile,
     );
-  const sourceObservations =
+  let sourceObservations =
     await readYamlDocument<ReconstructSourceObservationsArtifact>(
       preparationRefs.source_observations,
     );
@@ -4537,24 +5352,27 @@ export async function runReconstruct(
     lensIds,
     admittedDomainIds: params.domain ? [params.domain] : [],
   });
-  currentAuthoredArtifactCompatibility = authoredArtifactCompatibility({
-    sessionId,
-    intent: params.intent,
-    targetRefs,
-    targetMaterialProfile,
-    sourceInventory,
-    sourceObservations,
-    governingSnapshot,
-    semanticAuthorRealization: params.semanticAuthorRealization,
-    confirmationProviderRealization: params.confirmationProviderRealization,
-    directiveAuthor,
-    confirmationProvider,
-  });
-  const sourceObservationDirectivePath = path.join(
+  const refreshAuthoredArtifactCompatibility = (): void => {
+    currentAuthoredArtifactCompatibility = authoredArtifactCompatibility({
+      sessionId,
+      intent: params.intent,
+      targetRefs,
+      targetMaterialProfile,
+      sourceInventory,
+      sourceObservations,
+      governingSnapshot,
+      semanticAuthorRealization: params.semanticAuthorRealization,
+      confirmationProviderRealization: params.confirmationProviderRealization,
+      directiveAuthor,
+      confirmationProvider,
+    });
+  };
+  refreshAuthoredArtifactCompatibility();
+  let sourceObservationDirectivePath = path.join(
     sessionRoot,
     "source-observation-directive.yaml",
   );
-  const sourceObservationDirective =
+  let sourceObservationDirective =
     await writeAuthoredYamlDocument(
       sourceObservationDirectivePath,
       "source-observation-directive.yaml",
@@ -4565,11 +5383,11 @@ export async function runReconstruct(
         sourceObservations,
       }),
     );
-  const sourceObservationDirectiveValidationPath = path.join(
+  let sourceObservationDirectiveValidationPath = path.join(
     sessionRoot,
     "source-observation-directive-validation.yaml",
   );
-  const sourceObservationDirectiveValidation =
+  let sourceObservationDirectiveValidation =
     await writeSourceObservationDirectiveValidationArtifact({
       directivePath: sourceObservationDirectivePath,
       sourceObservationsPath: preparationRefs.source_observations,
@@ -4580,123 +5398,196 @@ export async function runReconstruct(
     artifactRef: sourceObservationDirectiveValidationPath,
     validation: sourceObservationDirectiveValidation,
   });
-  const roundId = "round-1";
-  const roundRoot = path.join(sessionRoot, "rounds", roundId);
-  const roundObservationDirectivePath = path.join(
-    roundRoot,
-    "source-observation-directive.yaml",
-  );
-  const roundObservationDirectiveValidationPath = path.join(
-    roundRoot,
-    "source-observation-directive-validation.yaml",
-  );
-  await writeYamlDocument(roundObservationDirectivePath, sourceObservationDirective);
-  await writeYamlDocument(
-    roundObservationDirectiveValidationPath,
-    sourceObservationDirectiveValidation,
-  );
+  let lensJudgmentIndexPath = "";
+  let lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact | null = null;
+  let explorationSynthesisPath = "";
+  let explorationSynthesis: ReconstructExplorationSynthesisArtifact | null = null;
+  let sourceFrontierPath = "";
+  let sourceFrontierValidationPath = "";
+  let sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null = null;
 
-  const lensJudgmentRoot = path.join(roundRoot, "lens-judgments");
-  const lensJudgments: ReconstructLensJudgmentArtifact[] = [];
-  const lensJudgmentRefs: Array<{ lens_id: string; artifact_ref: string }> = [];
-  for (const lensId of lensIds) {
-    const lensPrompt = await readLensPrompt({
-      profilesRoot: path.resolve(params.profilesRoot),
-      lensId,
-    });
-    const lensJudgmentPath = path.join(lensJudgmentRoot, `${lensId}.yaml`);
-    const lensJudgment = await writeAuthoredYamlDocument(
-      lensJudgmentPath,
-      `lens judgment ${lensId}`,
-      () => directiveAuthor.writeLensJudgment({
+  for (let roundNumber = 1; roundNumber <= MAX_RECONSTRUCT_EXPLORATION_ROUNDS; roundNumber += 1) {
+    const roundId = `round-${roundNumber}`;
+    const roundRoot = path.join(sessionRoot, "rounds", roundId);
+    const roundObservationDirectivePath = path.join(
+      roundRoot,
+      "source-observation-directive.yaml",
+    );
+    const roundObservationDirectiveValidationPath = path.join(
+      roundRoot,
+      "source-observation-directive-validation.yaml",
+    );
+    if (roundNumber === 1) {
+      await writeYamlDocument(roundObservationDirectivePath, sourceObservationDirective);
+      sourceObservationDirectiveValidation =
+        await writeSourceObservationDirectiveValidationArtifact({
+          directivePath: roundObservationDirectivePath,
+          sourceObservationsPath: preparationRefs.source_observations,
+          outputPath: roundObservationDirectiveValidationPath,
+        });
+      assertRuntimeValidationValid({
+        artifactName: `source-observation-directive ${roundId}`,
+        artifactRef: roundObservationDirectiveValidationPath,
+        validation: sourceObservationDirectiveValidation,
+      });
+    } else {
+      sourceObservationDirectivePath = roundObservationDirectivePath;
+      sourceObservationDirective = await writeAuthoredYamlDocument(
+        sourceObservationDirectivePath,
+        `source-observation-directive ${roundId}`,
+        () => directiveAuthor.writeSourceObservationDirective({
+          sessionId,
+          intent: params.intent,
+          targetMaterialProfile,
+          sourceObservations,
+        }),
+      );
+      sourceObservationDirectiveValidationPath =
+        roundObservationDirectiveValidationPath;
+      sourceObservationDirectiveValidation =
+        await writeSourceObservationDirectiveValidationArtifact({
+          directivePath: sourceObservationDirectivePath,
+          sourceObservationsPath: preparationRefs.source_observations,
+          outputPath: sourceObservationDirectiveValidationPath,
+        });
+      assertRuntimeValidationValid({
+        artifactName: `source-observation-directive ${roundId}`,
+        artifactRef: sourceObservationDirectiveValidationPath,
+        validation: sourceObservationDirectiveValidation,
+      });
+    }
+    sourceObservationDirectivePath = roundObservationDirectivePath;
+    sourceObservationDirectiveValidationPath =
+      roundObservationDirectiveValidationPath;
+
+    const lensJudgmentRoot = path.join(roundRoot, "lens-judgments");
+    const lensJudgments: ReconstructLensJudgmentArtifact[] = [];
+    const lensJudgmentRefs: Array<{ lens_id: string; artifact_ref: string }> = [];
+    for (const lensId of lensIds) {
+      const lensPrompt = await readLensPrompt({
+        profilesRoot: path.resolve(params.profilesRoot),
+        lensId,
+      });
+      const lensJudgmentPath = path.join(lensJudgmentRoot, `${lensId}.yaml`);
+      const lensJudgment = await writeAuthoredYamlDocument(
+        lensJudgmentPath,
+        `lens judgment ${lensId} ${roundId}`,
+        () => directiveAuthor.writeLensJudgment({
+          sessionId,
+          intent: params.intent,
+          roundId,
+          lensId,
+          lensPrompt,
+          sourceObservations,
+          sourceObservationDirective,
+          sourceObservationDirectiveRef: roundObservationDirectivePath,
+        }),
+      );
+      lensJudgments.push(lensJudgment);
+      lensJudgmentRefs.push({
+        lens_id: lensId,
+        artifact_ref: lensJudgmentPath,
+      });
+    }
+    lensJudgmentIndexPath = path.join(roundRoot, "lens-judgment-index.yaml");
+    lensJudgmentIndex = {
+      schema_version: "1",
+      session_id: sessionId,
+      round_id: roundId,
+      created_at: isoNow(),
+      lens_judgment_refs: lensJudgmentRefs,
+    };
+    await writeYamlDocument(lensJudgmentIndexPath, lensJudgmentIndex);
+
+    explorationSynthesisPath = path.join(
+      roundRoot,
+      "exploration-synthesis.yaml",
+    );
+    const roundExplorationSynthesis = await writeAuthoredYamlDocument(
+      explorationSynthesisPath,
+      `exploration-synthesis.yaml ${roundId}`,
+      () => directiveAuthor.writeExplorationSynthesis({
         sessionId,
         intent: params.intent,
         roundId,
-        lensId,
-        lensPrompt,
+        lensJudgments,
+        lensJudgmentIndexRef: lensJudgmentIndexPath,
         sourceObservations,
-        sourceObservationDirective,
-        sourceObservationDirectiveRef: roundObservationDirectivePath,
+        sourceObservationsRef: preparationRefs.source_observations,
       }),
     );
-    lensJudgments.push(lensJudgment);
-    lensJudgmentRefs.push({
-      lens_id: lensId,
-      artifact_ref: lensJudgmentPath,
-    });
-  }
-  const lensJudgmentIndexPath = path.join(roundRoot, "lens-judgment-index.yaml");
-  const lensJudgmentIndex: ReconstructLensJudgmentIndexArtifact = {
-    schema_version: "1",
-    session_id: sessionId,
-    round_id: roundId,
-    created_at: isoNow(),
-    lens_judgment_refs: lensJudgmentRefs,
-  };
-  await writeYamlDocument(lensJudgmentIndexPath, lensJudgmentIndex);
+    explorationSynthesis = roundExplorationSynthesis;
 
-  const explorationSynthesisPath = path.join(
-    roundRoot,
-    "exploration-synthesis.yaml",
-  );
-  const explorationSynthesis = await writeAuthoredYamlDocument(
-    explorationSynthesisPath,
-    "exploration-synthesis.yaml",
-    () => directiveAuthor.writeExplorationSynthesis({
+    sourceFrontierPath = path.join(roundRoot, "source-frontier.yaml");
+    const sourceFrontier = await writeAuthoredYamlDocument(
+      sourceFrontierPath,
+      `source-frontier.yaml ${roundId}`,
+      () => directiveAuthor.writeSourceFrontier({
+        sessionId,
+        intent: params.intent,
+        roundId,
+        maxExplorationRounds: MAX_RECONSTRUCT_EXPLORATION_ROUNDS,
+        isFinalExplorationRound:
+          roundNumber === MAX_RECONSTRUCT_EXPLORATION_ROUNDS,
+        explorationSynthesis: roundExplorationSynthesis,
+        explorationSynthesisRef: explorationSynthesisPath,
+        sourceInventory,
+        sourceObservations,
+      }),
+    );
+    sourceFrontierValidationPath = path.join(
+      roundRoot,
+      "source-frontier-validation.yaml",
+    );
+    sourceFrontierValidation = validateSourceFrontier({
       sessionId,
-      intent: params.intent,
       roundId,
-      lensJudgments,
-      lensJudgmentIndexRef: lensJudgmentIndexPath,
+      sourceFrontier,
+      sourceFrontierRef: sourceFrontierPath,
+      sourceInventory,
+      sourceInventoryRef: preparationRefs.source_inventory,
       sourceObservations,
       sourceObservationsRef: preparationRefs.source_observations,
-    }),
-  );
-
-  const sourceFrontierPath = path.join(roundRoot, "source-frontier.yaml");
-  const sourceFrontier = await writeAuthoredYamlDocument(
-    sourceFrontierPath,
-    "source-frontier.yaml",
-    () => directiveAuthor.writeSourceFrontier({
-      sessionId,
-      intent: params.intent,
-      roundId,
-      explorationSynthesis,
-      explorationSynthesisRef: explorationSynthesisPath,
+      targetMaterialProfileValidation,
+      targetMaterialProfileValidationRef: targetMaterialProfileValidationPath,
+    });
+    await writeYamlDocument(sourceFrontierValidationPath, sourceFrontierValidation);
+    assertRuntimeValidationValid({
+      artifactName: "source-frontier",
+      artifactRef: sourceFrontierValidationPath,
+      validation: sourceFrontierValidation,
+    });
+    if (sourceFrontierValidation.accepted_frontier_ref_ids.length === 0) {
+      break;
+    }
+    if (roundNumber === MAX_RECONSTRUCT_EXPLORATION_ROUNDS) {
+      throw new Error(
+        [
+          "source-frontier accepted new source refs after the maximum exploration rounds.",
+          "The reconstruct run did not converge to a terminal frontier before semantic authoring.",
+          `max_rounds=${MAX_RECONSTRUCT_EXPLORATION_ROUNDS}`,
+          `accepted_frontier_ref_ids=${sourceFrontierValidation.accepted_frontier_ref_ids.join(",")}`,
+        ].join(" "),
+      );
+    }
+    sourceObservations = await observeAcceptedFrontierRefs({
+      sourceFrontier,
+      sourceFrontierValidation,
       sourceInventory,
       sourceObservations,
-    }),
-  );
-  const sourceFrontierValidationPath = path.join(
-    roundRoot,
-    "source-frontier-validation.yaml",
-  );
-  const sourceFrontierValidation = validateSourceFrontier({
-    sessionId,
-    roundId,
-    sourceFrontier,
-    sourceFrontierRef: sourceFrontierPath,
-    sourceInventory,
-    sourceInventoryRef: preparationRefs.source_inventory,
-    sourceObservations,
-    sourceObservationsRef: preparationRefs.source_observations,
-    targetMaterialProfileValidation,
-    targetMaterialProfileValidationRef: targetMaterialProfileValidationPath,
-  });
-  await writeYamlDocument(sourceFrontierValidationPath, sourceFrontierValidation);
-  assertRuntimeValidationValid({
-    artifactName: "source-frontier",
-    artifactRef: sourceFrontierValidationPath,
-    validation: sourceFrontierValidation,
-  });
-  if (sourceFrontierValidation.accepted_frontier_ref_ids.length > 0) {
-    throw new Error(
-      [
-        "source-frontier accepted new source refs, but this runner has no multi-round observation loop yet.",
-        "Use no_next_frontier_rationale for terminal frontier or implement observation of accepted refs before semantic authoring.",
-        `accepted_frontier_ref_ids=${sourceFrontierValidation.accepted_frontier_ref_ids.join(",")}`,
-      ].join(" "),
-    );
+      sourceObservationsPath: preparationRefs.source_observations,
+    });
+    refreshAuthoredArtifactCompatibility();
+  }
+
+  if (
+    !lensJudgmentIndex ||
+    !explorationSynthesis ||
+    !sourceFrontierValidation ||
+    !sourceObservationDirective ||
+    !sourceObservationDirectiveValidation
+  ) {
+    throw new Error("reconstruct exploration did not produce terminal round artifacts.");
   }
 
   const candidateInventoryPath = path.join(sessionRoot, "candidate-inventory.yaml");
@@ -4772,7 +5663,7 @@ export async function runReconstruct(
     "ontology-seed-validation.yaml",
   );
   const ontologySeedValidation =
-    await writeActionableOntologySeedValidationArtifact({
+    await writeOntologySeedValidationArtifact({
       ontologySeedPath,
       candidateDispositionPath,
       sourceObservationsPath: preparationRefs.source_observations,

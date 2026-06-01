@@ -193,6 +193,7 @@ export interface ReconstructCandidateInventoryArtifact {
   session_id: string;
   created_at: string;
   source_observations_ref: string | null;
+  required_coverage_observation_ids?: string[];
   candidates: ReconstructCandidateInventoryCandidate[];
   directive_author: {
     owner: "host_llm" | "mock";
@@ -261,7 +262,7 @@ export interface ReconstructCandidateDispositionValidationArtifact {
   violations: ReconstructCandidateDispositionValidationViolation[];
 }
 
-export interface ReconstructActionableOntologySeedValidationViolation {
+export interface ReconstructOntologySeedValidationViolation {
   code:
     | "schema_shape_invalid"
     | "session_id_mismatch"
@@ -288,7 +289,7 @@ export interface ReconstructActionableOntologySeedValidationViolation {
   observation_id: string | null;
 }
 
-export interface ReconstructActionableOntologySeedValidationArtifact {
+export interface ReconstructOntologySeedValidationArtifact {
   schema_version: "1";
   session_id: string;
   created_at: string;
@@ -301,10 +302,10 @@ export interface ReconstructActionableOntologySeedValidationArtifact {
   evidence_ref_count: number;
   limitation_count: number;
   validation_results: string[];
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }
 
-export type ReconstructActionableOntologySeedArtifact = Record<string, unknown>;
+export type ReconstructOntologySeedArtifact = Record<string, unknown>;
 
 export interface ReconstructSeedClaim {
   claim_id: string;
@@ -999,7 +1000,7 @@ export interface ReconstructRunManifestArtifact {
   intent: string;
   execution_profile: {
     profile_kind: "observer_gate_slice" | "mock_semantic_slice" | "full_integral_exploration";
-    runner: "material-aware-happy-path" | "integral-exploration-direct-call";
+    runner: "material-aware-purpose-adequacy" | "integral-exploration-direct-call";
     semantic_author_realization: "mock" | "direct_call";
     confirmation_provider_realization: "mock" | "direct_call";
     directive_author_id: string;
@@ -1010,7 +1011,7 @@ export interface ReconstructRunManifestArtifact {
     reconstruct_record: string | null;
   };
   governing_snapshot: ReconstructRunGoverningSnapshot;
-  happy_path_scope: {
+  purpose_adequacy_scope: {
     implemented_artifacts: string[];
     deferred_artifacts: string[];
     deferred_reason: string;

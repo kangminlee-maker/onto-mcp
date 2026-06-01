@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
@@ -42,9 +42,9 @@ import {
   resolveLlmProviderConfig,
 } from "../core-runtime/llm/llm-caller.js";
 import {
-  writeActionableOntologySeedValidationArtifact,
+  writeOntologySeedValidationArtifact,
   writeCandidateDispositionValidationArtifact,
-} from "../core-runtime/reconstruct/actionable-seed-validation.js";
+} from "../core-runtime/reconstruct/ontology-seed-validation.js";
 import {
   writeSourceObservationDirectiveValidationArtifact,
 } from "../core-runtime/reconstruct/directive-validation.js";
@@ -107,7 +107,7 @@ export interface ValidateReconstructCandidateDispositionRequest {
   outputPath?: string;
 }
 
-export interface ValidateActionableOntologySeedRequest {
+export interface ValidateOntologySeedRequest {
   ontologySeedPath: string;
   candidateDispositionPath: string;
   sourceObservationsPath: string;
@@ -190,9 +190,9 @@ export interface OntoReconstructCoreApi {
   validateCandidateDisposition(
     request: ValidateReconstructCandidateDispositionRequest,
   ): Promise<ReconstructCandidateDispositionValidationArtifact>;
-  validateActionableOntologySeed(
-    request: ValidateActionableOntologySeedRequest,
-  ): Promise<ReconstructActionableOntologySeedValidationArtifact>;
+  validateOntologySeed(
+    request: ValidateOntologySeedRequest,
+  ): Promise<ReconstructOntologySeedValidationArtifact>;
   assembleRecord(
     request: AssembleReconstructRecordRequest,
   ): Promise<ReconstructRecordArtifact>;
@@ -644,10 +644,10 @@ export function createOntoReconstructCoreApi(
       });
     },
 
-    async validateActionableOntologySeed(
-      request: ValidateActionableOntologySeedRequest,
-    ): Promise<ReconstructActionableOntologySeedValidationArtifact> {
-      return writeActionableOntologySeedValidationArtifact({
+    async validateOntologySeed(
+      request: ValidateOntologySeedRequest,
+    ): Promise<ReconstructOntologySeedValidationArtifact> {
+      return writeOntologySeedValidationArtifact({
         ontologySeedPath: path.resolve(request.ontologySeedPath),
         candidateDispositionPath: path.resolve(request.candidateDispositionPath),
         sourceObservationsPath: path.resolve(request.sourceObservationsPath),

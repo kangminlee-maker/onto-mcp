@@ -64,6 +64,35 @@ refund deadline statement -- policy.md:Section 3.2
 - Is there an existing domain glossary?
 - Is this document authoritative, advisory, historical, or draft?
 
+## Purpose Evidence Cues
+
+- title, subtitle, introduction, abstract, executive summary, or conclusion
+- audience statement, owner, status, effective date, or authority marker
+- decision records, action requests, policy statements, requirements, or claims
+- tables, lists, callouts, references, citations, and definitions
+- open questions, risks, unresolved decisions, or follow-up sections
+
+Meeting records are handled as document material unless a future dedicated
+material kind is introduced. Useful meeting-record cues include agenda,
+participants, decisions, action items, owners, due dates, rationale, and
+unresolved topics.
+
+## Purpose Adequacy Facet Guidance
+
+Common document facets include:
+
+- audience or stakeholder
+- subject, thesis, claim, policy, decision, or request
+- evidence, citation, rationale, or source reference
+- obligation, action item, owner, due date, or acceptance criterion
+- authority, status, timeline, or scope boundary
+- unresolved topic, risk, exception, or limitation
+
+These facets are guidance, not a closed enum. Do not force documents or meeting
+records into a workflow. If a document exposes a source-backed facet outside
+this list, record it in the `PurposeAdequacyFrame` with evidence and promote it
+to this profile only after repeated real-source runs justify the refinement.
+
 ## Scan Targets
 
 - table of contents

@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedArtifact,
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructClaimRealizationMapArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructClaimRealizationStance,
@@ -32,7 +32,7 @@ import {
   ontologySeedClaimProjections,
   ontologySeedExcludedClaimIds,
 } from "./seed-claim-projections.js";
-import { collectActionableOntologySeedRefs } from "./actionable-seed-validation.js";
+import { collectOntologySeedRefs } from "./ontology-seed-validation.js";
 import {
   loadReconstructContractRegistry,
   type ReconstructContractRegistry,
@@ -222,7 +222,7 @@ function recordArray(value: unknown): Record<string, unknown>[] {
 }
 
 function seedRecordArray(
-  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  seed: ReconstructOntologySeedArtifact | undefined,
   key: string,
 ): Record<string, unknown>[] {
   return recordArray(seed?.[key]);
@@ -234,7 +234,7 @@ function stringField(record: Record<string, unknown>, key: string): string | nul
 }
 
 function seedLimitationIds(
-  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  seed: ReconstructOntologySeedArtifact | undefined,
 ): Set<string> {
   return new Set(
     seedRecordArray(seed, "handoff_limitations")
@@ -244,10 +244,10 @@ function seedLimitationIds(
 }
 
 function knownSeedRefs(
-  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  seed: ReconstructOntologySeedArtifact | undefined,
 ): Set<string> {
   if (!seed) return new Set();
-  const refs = collectActionableOntologySeedRefs(seed);
+  const refs = collectOntologySeedRefs(seed);
   for (const claim of ontologySeedClaimProjections(seed)) {
     refs.add(claim.claim_id);
   }
@@ -622,7 +622,7 @@ function expectedDownstreamEffect(
 }
 
 function hasSeedSection(
-  seed: ReconstructActionableOntologySeedArtifact | undefined,
+  seed: ReconstructOntologySeedArtifact | undefined,
   section: string,
 ): boolean {
   const value = seed?.[section];
@@ -635,7 +635,7 @@ function hasSeedSection(
 
 function requiredCoverageAxisIds(args: {
   registry?: ReconstructContractRegistry | undefined;
-  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+  seed?: ReconstructOntologySeedArtifact | undefined;
 }): Set<string> {
   const registered = new Set(
     args.registry?.coverage_axis_registry.map((record) => record.axis_id) ?? [],
@@ -666,7 +666,7 @@ function requiredCoverageAxisIds(args: {
 
 function requiredOntologyHandoffAxisIds(args: {
   registry?: ReconstructContractRegistry | undefined;
-  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+  seed?: ReconstructOntologySeedArtifact | undefined;
 }): Set<string> {
   const registered = new Set(
     args.registry?.ontology_handoff_axis_registry.map((record) => record.axis_id) ??
@@ -905,7 +905,7 @@ function contractApplies(
 }
 
 function requiredModelingConcernIds(args: {
-  seed?: ReconstructActionableOntologySeedArtifact | undefined;
+  seed?: ReconstructOntologySeedArtifact | undefined;
   registry?: ReconstructContractRegistry | undefined;
 }): Set<string> {
   const registered = new Set(
@@ -973,7 +973,7 @@ function requiredModelingConcernIds(args: {
 
 export function validateClaimRealizationMapForOntologySeed(args: {
   claimRealizationMap: ReconstructClaimRealizationMapArtifact;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
   claimRealizationMapRef?: string | null;
   ontologySeedRef?: string | null;
@@ -1003,8 +1003,8 @@ export function validateClaimRealizationMapForOntologySeed(args: {
 
 export function validateSeedConfirmationForOntologySeed(args: {
   seedConfirmation: ReconstructSeedConfirmationArtifact;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   seedConfirmationRef?: string | null;
   ontologySeedRef?: string | null;
   ontologySeedValidationRef?: string | null;
@@ -1120,8 +1120,8 @@ export function validateCompetencyQuestions(args: {
 
 export function validateCompetencyQuestionsForOntologySeed(args: {
   competencyQuestions: ReconstructCompetencyQuestionsArtifact;
-  ontologySeed: ReconstructActionableOntologySeedArtifact;
-  ontologySeedValidation: ReconstructActionableOntologySeedValidationArtifact;
+  ontologySeed: ReconstructOntologySeedArtifact;
+  ontologySeedValidation: ReconstructOntologySeedValidationArtifact;
   seedConfirmationValidation?: ReconstructSeedConfirmationValidationArtifact | null;
   sourceObservations: ReconstructSourceObservationsArtifact;
   contractRegistry: ReconstructContractRegistry;
@@ -1193,7 +1193,7 @@ function validateCompetencyQuestionsAgainstEligibleClaims(args: {
   competencyQuestions: ReconstructCompetencyQuestionsArtifact;
   eligibleClaimIds: string[];
   sourceObservations: ReconstructSourceObservationsArtifact;
-  ontologySeed?: ReconstructActionableOntologySeedArtifact;
+  ontologySeed?: ReconstructOntologySeedArtifact;
   contractRegistry?: ReconstructContractRegistry;
   governingSnapshot?: ReconstructRunGoverningSnapshot | null;
   competencyQuestionsRef?: string | null;
@@ -2110,7 +2110,7 @@ export async function writeClaimRealizationMapValidationForOntologySeedArtifact(
       readYamlDocument<ReconstructClaimRealizationMapArtifact>(
         args.claimRealizationMapPath,
       ),
-      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+      readYamlDocument<ReconstructOntologySeedArtifact>(
         args.ontologySeedPath,
       ),
       readYamlDocument<ReconstructSourceObservationsArtifact>(
@@ -2144,10 +2144,10 @@ export async function writeSeedConfirmationValidationForOntologySeedArtifact(arg
       readYamlDocument<ReconstructSeedConfirmationArtifact>(
         args.seedConfirmationPath,
       ),
-      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+      readYamlDocument<ReconstructOntologySeedArtifact>(
         args.ontologySeedPath,
       ),
-      readYamlDocument<ReconstructActionableOntologySeedValidationArtifact>(
+      readYamlDocument<ReconstructOntologySeedValidationArtifact>(
         args.ontologySeedValidationPath,
       ),
     ]);
@@ -2216,10 +2216,10 @@ export async function writeCompetencyQuestionsValidationForOntologySeedArtifact(
       readYamlDocument<ReconstructCompetencyQuestionsArtifact>(
         args.competencyQuestionsPath,
       ),
-      readYamlDocument<ReconstructActionableOntologySeedArtifact>(
+      readYamlDocument<ReconstructOntologySeedArtifact>(
         args.ontologySeedPath,
       ),
-      readYamlDocument<ReconstructActionableOntologySeedValidationArtifact>(
+      readYamlDocument<ReconstructOntologySeedValidationArtifact>(
         args.ontologySeedValidationPath,
       ),
       readYamlDocument<ReconstructSourceObservationsArtifact>(

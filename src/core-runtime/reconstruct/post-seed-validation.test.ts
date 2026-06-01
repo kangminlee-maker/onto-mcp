@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type {
-  ReconstructActionableOntologySeedArtifact,
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructClaimRealizationMapArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
@@ -95,6 +95,12 @@ function competencyCoverageRefs(seedRefRefs: string[] = []) {
     ...refs,
   };
 }
+
+it("keeps metadata mapping as a registry-owned ontology handoff axis", () => {
+  expect(
+    contractRegistry.ontology_handoff_axis_registry.map((record) => record.axis_id),
+  ).toContain("metadata_mapping");
+});
 
 function ontologyHandoffFixture(): Record<string, unknown> {
   return {
@@ -192,6 +198,9 @@ function ontologyHandoffFixture(): Record<string, unknown> {
     competency_scope_mapping: {
       expected_coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -219,7 +228,7 @@ function ontologyHandoffFixture(): Record<string, unknown> {
       ],
     },
     reference_standard_mapping: {
-      standard_refs: ["foundry_style_seed_contract"],
+      standard_refs: ["operational_ontology_seed_contract"],
       mapped_concern_refs: ["classification", "entity_identity"],
       limitation_refs: [],
     },
@@ -351,7 +360,7 @@ function sourceObservations(): ReconstructSourceObservationsArtifact {
   };
 }
 
-function ontologySeed(): ReconstructActionableOntologySeedArtifact {
+function ontologySeed(): ReconstructOntologySeedArtifact {
   return {
     seed_identity: {
       schema_version: "1",
@@ -509,6 +518,9 @@ function ontologySeed(): ReconstructActionableOntologySeedArtifact {
       },
       coverage_axes: [
         "purpose",
+        "static_surface",
+        "kinetic_surface",
+        "dynamic_surface",
         "semantic_layer",
         "kinetic_layer",
         "dynamic_layer",
@@ -542,7 +554,7 @@ function ontologySeed(): ReconstructActionableOntologySeedArtifact {
 }
 
 function ontologySeedValidation():
-  ReconstructActionableOntologySeedValidationArtifact {
+  ReconstructOntologySeedValidationArtifact {
   return {
     schema_version: "1",
     session_id: "session-1",
@@ -582,6 +594,39 @@ describe("post-seed reconstruct validation", () => {
       statement: "Explain fixture behavior.",
     });
     expect(purposeClaim?.claim_id).not.toBe(seed.seed_identity.seed_id);
+  });
+
+  it("projects nested state transition evidence onto state model claims", () => {
+    const seed = ontologySeed();
+    const transitionEvidence = {
+      ...evidenceRef,
+      observation_id: "obs-state-transition",
+    };
+    const dynamicLayer = seed.dynamic_layer as { state_models: Record<string, unknown>[] };
+    dynamicLayer.state_models = [
+      {
+        state_model_id: "state-model-1",
+        name: "Fixture State Model",
+        description: "Observed fixture state changes.",
+        object_type_id: "object-1",
+        transitions: [
+          {
+            transition_id: "transition-1",
+            from_state: "pending",
+            to_state: "approved",
+            action_type_id: "action-1",
+            evidence_refs: [transitionEvidence],
+          },
+        ],
+      },
+    ];
+
+    const stateModelClaim = ontologySeedClaimProjections(seed).find((claim) =>
+      claim.claim_id === "state-model-1"
+    );
+
+    expect(stateModelClaim?.evidence_refs.map((ref) => ref.observation_id))
+      .toEqual(["obs-state-transition"]);
   });
 
   it("validates ontology-seed authority through downstream claim gates", () => {

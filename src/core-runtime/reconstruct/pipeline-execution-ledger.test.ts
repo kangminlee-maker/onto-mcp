@@ -323,7 +323,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     ).toBe("untrusted");
   });
 
-  it("links actionable seed artifacts through candidate and ontology validation gates", async () => {
+  it("links ontology seed artifacts through candidate and ontology validation gates", async () => {
     const root = await tempSessionRoot();
     const targetMaterialProfile = await writeArtifact(
       path.join(root, "target-material-profile.yaml"),

@@ -84,6 +84,17 @@ function selectedProfileFieldMissing(
   return selected[field] === undefined;
 }
 
+function refMatchesTargetOrDescendant(args: {
+  targetRef: string;
+  detectionRef: string;
+}): boolean {
+  const targetRef = path.resolve(args.targetRef);
+  const detectionRef = path.resolve(args.detectionRef);
+  if (detectionRef === targetRef) return true;
+  const relative = path.relative(targetRef, detectionRef);
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
 export function validateTargetMaterialProfile(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   contractRegistry: ReconstructContractRegistry;
@@ -122,11 +133,14 @@ export function validateTargetMaterialProfile(args: {
     }));
   }
 
-  const detectionRefs = new Set(profile.detection.per_ref.map((detection) =>
-    path.resolve(detection.ref)
-  ));
   for (const targetRef of profile.target_refs) {
-    if (!detectionRefs.has(path.resolve(targetRef))) {
+    const hasMatchingDetection = profile.detection.per_ref.some((detection) =>
+      refMatchesTargetOrDescendant({
+        targetRef,
+        detectionRef: detection.ref,
+      })
+    );
+    if (!hasMatchingDetection) {
       violations.push(violation({
         code: "detection_ref_mismatch",
         message: `target ref has no matching detection row: ${targetRef}`,

@@ -1,5 +1,5 @@
 import type {
-  ReconstructActionableOntologySeedArtifact,
+  ReconstructOntologySeedArtifact,
   ReconstructEvidenceRef,
   ReconstructSeedClaim,
 } from "./artifact-types.js";
@@ -55,6 +55,19 @@ function directEvidence(record: Record<string, unknown> | null): ReconstructEvid
   return record ? uniqueEvidenceRefs(evidenceRefs(record.evidence_refs)) : [];
 }
 
+function nestedRecordEvidence(
+  record: Record<string, unknown> | null,
+  nestedKeys: string[],
+): ReconstructEvidenceRef[] {
+  if (!record) return [];
+  return uniqueEvidenceRefs([
+    ...directEvidence(record),
+    ...nestedKeys.flatMap((key) =>
+      recordArray(record, key).flatMap((nestedRecord) => directEvidence(nestedRecord))
+    ),
+  ]);
+}
+
 function purposeClaimId(seedId: string | null): string {
   return seedId ? `${seedId}#purpose` : "ontology-seed-purpose";
 }
@@ -86,6 +99,7 @@ function collectRecordClaims(args: {
   statementKeys: string[];
   fallbackPrefix: string;
   pathPrefix: string;
+  evidence?: (record: Record<string, unknown>) => ReconstructEvidenceRef[];
 }): ReconstructSeedClaim[] {
   return args.records
     .map((record, index) => claim({
@@ -94,14 +108,14 @@ function collectRecordClaims(args: {
       name: args.nameKeys.map((key) => stringValue(record[key])).find(Boolean) ?? null,
       statement:
         args.statementKeys.map((key) => stringValue(record[key])).find(Boolean) ?? null,
-      evidence_refs: directEvidence(record),
+      evidence_refs: args.evidence ? args.evidence(record) : directEvidence(record),
       fallbackName: `${args.fallbackPrefix} ${index + 1}`,
     }))
     .filter((item): item is ReconstructSeedClaim => item !== null);
 }
 
 export function ontologySeedClaimProjections(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): ReconstructSeedClaim[] {
   const seed = recordValue(ontologySeed) ?? {};
   const seedIdentity = recordValue(seed.seed_identity);
@@ -202,6 +216,7 @@ export function ontologySeedClaimProjections(
       statementKeys: ["description"],
       fallbackPrefix: "State Model",
       pathPrefix: "dynamic_layer.state_models",
+      evidence: (record) => nestedRecordEvidence(record, ["transitions"]),
     }),
     ...collectRecordClaims({
       records: recordArray(dynamicLayer, "lifecycle_rules"),
@@ -279,7 +294,7 @@ export function ontologySeedClaimProjections(
 }
 
 export function ontologySeedExcludedClaimIds(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): Set<string> {
   const seed = recordValue(ontologySeed) ?? {};
   return new Set(
@@ -290,7 +305,7 @@ export function ontologySeedExcludedClaimIds(
 }
 
 export function ontologySeedAnswerabilitySummary(
-  ontologySeed: ReconstructActionableOntologySeedArtifact,
+  ontologySeed: ReconstructOntologySeedArtifact,
 ): {
   declared_question_count: number;
   supported_question_count: number;

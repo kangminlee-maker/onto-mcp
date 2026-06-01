@@ -15,13 +15,13 @@ active_contract_refs:
     role: boundary_contract
     schema_version: 1
     migration_status: current
-  - contract_id: actionable-ontology-seed-recomposition-design
-    ref: .onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md
+  - contract_id: ontology-seeding-and-maturation-design
+    ref: .onto/processes/reconstruct/ontology-seeding-and-maturation-design.md
     role: implementation_design
     schema_version: 1
     migration_status: current
-  - contract_id: foundry-style-ontology-seed-contract
-    ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md
+  - contract_id: operational-ontology-seed-contract
+    ref: .onto/processes/reconstruct/operational-ontology-seed-contract.md
     role: seed_contract
     schema_version: 1
     migration_status: current
@@ -51,11 +51,11 @@ source_profile_records:
     target_material_kind: code
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/code.md
-    definition_sha256: ac1968b4eb2035c514bf16350e8508f35a260761512e3a9b7f3a8c0026812221
+    definition_sha256: d653edf326eaf6202f42659fc33051c559830ce2b51d304436185b9468d29523
     contract_status: active
     runtime_implementation_status: partially_wired
     schema_version: 1
-    profile_version: 1
+    profile_version: 2
     migration_status: current
     supersedes: []
     replaced_by: []
@@ -67,11 +67,11 @@ source_profile_records:
     target_material_kind: spreadsheet
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/spreadsheet.md
-    definition_sha256: d399d5b693b9926f140f1b4f95a5c97b28abc95d652062205e66296588d64b58
+    definition_sha256: 35fa949f3fc680b52f3e8ff78eeb9754b86d068e6b20dca51f4107ba881b868f
     contract_status: active
     runtime_implementation_status: planned
     schema_version: 1
-    profile_version: 1
+    profile_version: 2
     migration_status: current
     supersedes: []
     replaced_by: []
@@ -83,11 +83,11 @@ source_profile_records:
     target_material_kind: database
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/database.md
-    definition_sha256: 50c0fe6935df46ac0343b42ffc7ecc9981687d48ce229e0da28a6efc4c518477
+    definition_sha256: 42ef7fef86daa5b379d5d54301ad648c1935fdfe2f9ce950fead96cf3b2dce9d
     contract_status: active
     runtime_implementation_status: planned
     schema_version: 1
-    profile_version: 1
+    profile_version: 2
     migration_status: current
     supersedes: []
     replaced_by: []
@@ -99,11 +99,11 @@ source_profile_records:
     target_material_kind: document
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/document.md
-    definition_sha256: db6b0d30008e2dbcd5bf0ba1542e8599874414ded80c10fcb6261f5fa1b3a117
+    definition_sha256: 8848ccda2f9ffc1336af78f73133f38037e3dd96f9b4a0cbf10b7c568a21dcf9
     contract_status: active
     runtime_implementation_status: planned
     schema_version: 1
-    profile_version: 1
+    profile_version: 2
     migration_status: current
     supersedes: []
     replaced_by: []
@@ -226,6 +226,9 @@ reconstruct_lens_judgment_registry:
 
 coverage_axis_registry:
   - axis_id: purpose
+  - axis_id: static_surface
+  - axis_id: kinetic_surface
+  - axis_id: dynamic_surface
   - axis_id: semantic_layer
   - axis_id: kinetic_layer
   - axis_id: dynamic_layer
@@ -256,7 +259,7 @@ candidate_kind_registry:
 
 candidate_disposition_registry:
   - disposition_id: promoted_to_seed_layer
-    meaning: Candidate is planned for promotion into a seed object, actor, action, workflow, permission, data binding, constraint, or concept; target_seed_refs are placement commitments that ontology-seed.yaml must later realize.
+    meaning: Candidate is planned for promotion into one or more first-class seed-layer records, including concept, object, link, value type, constraint, actor, role, permission, action, function, workflow, state model, lifecycle rule, data binding, read model, writeback, or provenance binding; target_seed_refs are placement commitments that ontology-seed.yaml must later realize.
   - disposition_id: represented_as_property
     meaning: Candidate is better modeled as a property of another object.
   - disposition_id: represented_as_link
@@ -284,6 +287,7 @@ ontology_handoff_axis_registry:
   - axis_id: modularity
   - axis_id: reasoning_or_formalism_profile
   - axis_id: application_context
+  - axis_id: metadata_mapping
   - axis_id: provenance
   - axis_id: change_tracking
   - axis_id: competency_scope
@@ -641,15 +645,15 @@ ontology_handoff_facet_contract:
       compatible_validator_versions: [current]
   reference_standard_field_path_closure:
     path_source: ontology_handoff_facet_contract.reference_standard_registry[].governed_seed_fields[]
-    schema_authority_ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md#ActionableOntologySeed
+    schema_authority_ref: .onto/processes/reconstruct/operational-ontology-seed-contract.md#OntologySeed
     validator_owner: ontology-seed-validator
-    rule: Every governed_seed_fields[] path must resolve to a declared ActionableOntologySeed path before a standard_ref_id can be selected.
+    rule: Every governed_seed_fields[] path must resolve to a declared OntologySeed path before a standard_ref_id can be selected.
     missing_path_projection: blocked
   reference_pattern_catalog_field_path_closure:
     path_source: ontology_handoff_facet_contract.reference_pattern_catalog_registry[].governed_seed_fields[]
-    schema_authority_ref: .onto/processes/reconstruct/foundry-style-ontology-seed-contract.md#ActionableOntologySeed
+    schema_authority_ref: .onto/processes/reconstruct/operational-ontology-seed-contract.md#OntologySeed
     validator_owner: ontology-seed-validator
-    rule: Every governed_seed_fields[] path must resolve to a declared ActionableOntologySeed path before a pattern_catalog_ref_id can be selected.
+    rule: Every governed_seed_fields[] path must resolve to a declared OntologySeed path before a pattern_catalog_ref_id can be selected.
     missing_path_projection: blocked
   domain_competency_trace_contract:
     question_field: competency-questions.yaml.questions[].domain_competency_trace_refs[]
@@ -733,7 +737,7 @@ ontology_handoff_facet_contract:
       - description
       - affected_refs
       - evidence_refs
-    closure_rule: Every limitation_refs[] value in ontology_handoff mappings, modeling concern applicability rows, query access contracts, visualization contracts, graph-exploration contracts, competency questions, assessments, seed confirmation, and terminal handoff readiness validation must resolve to ontology_seed.handoff_limitations[].limitation_id.
+    closure_rule: Every limitation_refs[] value in ontology_handoff mappings, modeling concern applicability rows, query access contracts, visualization contracts, graph-exploration contracts, competency questions, assessments, seed confirmation, and terminal seed-readiness validation must resolve to ontology_seed.handoff_limitations[].limitation_id.
     dangling_ref_projection: not_ready
   query_access_contract_registry:
     - contract_ref_id: project_query_access_contract
@@ -980,7 +984,7 @@ artifact_authorities:
   pre_handoff_run_manifest:
     authority_ref: reconstruct-run-manifest.pre-handoff.yaml
     validation_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
-    projection_policy: pre_terminal_snapshot_used_only_for_handoff_readiness_gate_projection
+    projection_policy: pre_terminal_snapshot_used_only_for_seed_iteration_readiness_gate_projection
   pre_handoff_run_manifest_validation:
     authority_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
     validation_ref: null
@@ -990,14 +994,140 @@ artifact_authorities:
     projection_policy: refs_hashes_statuses_and_bounded_summaries_emitted_after_handoff_validation_passes
 
 planned_artifact_authorities:
+  source_purpose_candidates:
+    authority_ref: source-purpose-candidates.yaml
+    validation_ref: source-purpose-candidates-validation.yaml
+    activation_condition: source_purpose_candidate_runtime_is_implemented
+  source_purpose_candidates_validation:
+    authority_ref: source-purpose-candidates-validation.yaml
+    validation_ref: null
+    activation_condition: source_purpose_candidate_runtime_is_implemented
+  purpose_confirmation:
+    authority_ref: purpose-confirmation.yaml
+    validation_ref: purpose-confirmation-validation.yaml
+    activation_condition: purpose_confirmation_runtime_is_implemented
+  purpose_confirmation_validation:
+    authority_ref: purpose-confirmation-validation.yaml
+    validation_ref: null
+    activation_condition: purpose_confirmation_runtime_is_implemented
+  maturation_promotion_request:
+    authority_ref: maturation-promotion-request.yaml
+    validation_ref: maturation-promotion-request-validation.yaml
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_promotion_request_validation:
+    authority_ref: maturation-promotion-request-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_runtime_capability_profile:
+    authority_ref: maturation-runtime-capability-profile.yaml
+    validation_ref: maturation-runtime-capability-profile-validation.yaml
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_runtime_capability_profile_validation:
+    authority_ref: maturation-runtime-capability-profile-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_promotion_readiness:
+    authority_ref: maturation-promotion-readiness.yaml
+    validation_ref: maturation-promotion-readiness-validation.yaml
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_promotion_readiness_validation:
+    authority_ref: maturation-promotion-readiness-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  maturation_baseline:
+    authority_ref: maturation-baseline.yaml
+    validation_ref: maturation-baseline-validation.yaml
+    activation_condition: maturation_baseline_runtime_is_implemented
+  maturation_baseline_validation:
+    authority_ref: maturation-baseline-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_baseline_runtime_is_implemented
+  maturation_question_frontier:
+    authority_ref: maturation-question-frontier.yaml
+    validation_ref: maturation-question-frontier-validation.yaml
+    activation_condition: maturation_question_frontier_runtime_is_implemented
+  maturation_question_frontier_validation:
+    authority_ref: maturation-question-frontier-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_question_frontier_runtime_is_implemented
+  maturation_closure_frontier:
+    authority_ref: maturation-closure-frontier.yaml
+    validation_ref: maturation-closure-frontier-validation.yaml
+    activation_condition: maturation_closure_frontier_runtime_is_implemented
+  maturation_closure_frontier_validation:
+    authority_ref: maturation-closure-frontier-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_closure_frontier_runtime_is_implemented
+  answer_support_ledger:
+    authority_ref: answer-support-ledger.yaml
+    validation_ref: answer-support-ledger-validation.yaml
+    activation_condition: answer_support_runtime_is_implemented
+  answer_support_ledger_validation:
+    authority_ref: answer-support-ledger-validation.yaml
+    validation_ref: null
+    activation_condition: answer_support_runtime_is_implemented
+  maturation_authority_response:
+    authority_ref: maturation-authority-response.yaml
+    validation_ref: maturation-authority-response-validation.yaml
+    activation_condition: maturation_authority_response_runtime_is_implemented
+  maturation_authority_response_validation:
+    authority_ref: maturation-authority-response-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_authority_response_runtime_is_implemented
+  maturation_answer_claims:
+    authority_ref: maturation-answer-claims.yaml
+    validation_ref: maturation-answer-claims-validation.yaml
+    activation_condition: maturation_answer_claim_runtime_is_implemented
+  maturation_answer_claims_validation:
+    authority_ref: maturation-answer-claims-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_answer_claim_runtime_is_implemented
+  ontology_expansion:
+    authority_ref: ontology-expansion.yaml
+    validation_ref: ontology-expansion-validation.yaml
+    activation_condition: ontology_expansion_runtime_is_implemented
+  ontology_expansion_validation:
+    authority_ref: ontology-expansion-validation.yaml
+    validation_ref: null
+    activation_condition: ontology_expansion_runtime_is_implemented
+  actionability_matrix:
+    authority_ref: actionability-matrix.yaml
+    validation_ref: actionability-matrix-validation.yaml
+    activation_condition: actionability_matrix_runtime_is_implemented
+  actionability_matrix_validation:
+    authority_ref: actionability-matrix-validation.yaml
+    validation_ref: null
+    activation_condition: actionability_matrix_runtime_is_implemented
+  maturation_continuation_decision:
+    authority_ref: maturation-continuation-decision.yaml
+    validation_ref: maturation-continuation-decision-validation.yaml
+    activation_condition: maturation_continuation_decision_runtime_is_implemented
+  maturation_continuation_decision_validation:
+    authority_ref: maturation-continuation-decision-validation.yaml
+    validation_ref: null
+    activation_condition: maturation_continuation_decision_runtime_is_implemented
+  actionable_ontology:
+    authority_ref: actionable-ontology.yaml
+    validation_ref: actionable-ontology-validation.yaml
+    activation_condition: actionable_ontology_runtime_is_implemented
+  actionable_ontology_validation:
+    authority_ref: actionable-ontology-validation.yaml
+    validation_ref: null
+    activation_condition: actionable_ontology_runtime_is_implemented
   observation_lineage:
     authority_ref: rounds/<round-id>/source-observation-delta.yaml
     validation_ref: rounds/<round-id>/source-observation-delta-validation.yaml
     activation_condition: multi_round_frontier_observation_runtime_is_implemented
+    projection_policy: canonical_per_round_observation_delta_for_source_frontier_and_maturation_closure_frontier
+    lineage_identity_rule: source_observation_delta.frontier_kind and source_observation_delta.frontier_validation_ref distinguish seeding source-frontier observations from maturation closure-frontier observations.
   observation_lineage_validation:
     authority_ref: rounds/<round-id>/source-observation-delta-validation.yaml
     validation_ref: null
     activation_condition: multi_round_frontier_observation_runtime_is_implemented
+  ontology_handoff_mapping_validation:
+    authority_ref: ontology-handoff-mapping-validation.yaml
+    validation_ref: null
+    activation_condition: per_axis_ontology_handoff_mapping_validator_is_implemented
   observation_reentry_validation:
     authority_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
     validation_ref: null
@@ -1050,19 +1180,19 @@ validation_gate_catalog:
     required_when: candidate_inventory_exists
   - gate_id: ontology_seed_gate
     validation_artifact_ref: ontology-seed-validation.yaml
-    required_when: seed_validity_or_handoff_readiness_is_projected
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: claim_realization_gate
     validation_artifact_ref: claim-realization-map-validation.yaml
-    required_when: seed_validity_or_handoff_readiness_is_projected
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: competency_question_coverage_gate
     validation_artifact_ref: competency-questions-validation.yaml
-    required_when: seed_validity_or_handoff_readiness_is_projected
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: competency_question_assessment_gate
     validation_artifact_ref: competency-question-assessment-validation.yaml
     required_when: competency_questions_valid
   - gate_id: seed_confirmation_gate
     validation_artifact_ref: seed-confirmation-validation.yaml
-    required_when: seed_validity_or_handoff_readiness_is_projected
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
     missing_artifact_projection: blocked
   - gate_id: pre_handoff_run_manifest_gate
     validation_artifact_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
@@ -1078,16 +1208,130 @@ validation_gate_catalog:
     required_when: stop_decision_exists
 
 planned_validation_gate_catalog:
+  - gate_id: source_purpose_candidates_gate
+    validation_artifact_ref: source-purpose-candidates-validation.yaml
+    required_when: source_purpose_authority_required
+    activation_condition: source_purpose_candidate_runtime_is_implemented
+  - gate_id: purpose_confirmation_gate
+    validation_artifact_ref: purpose-confirmation-validation.yaml
+    required_when: purpose_confirmation_required
+    activation_condition: purpose_confirmation_runtime_is_implemented
+    activation_prerequisites:
+      - source_purpose_candidate_runtime_is_implemented
+    missing_runtime_projection: blocked
+  - gate_id: maturation_promotion_request_gate
+    validation_artifact_ref: maturation-promotion-request-validation.yaml
+    required_when: maturation_promotion_request_exists
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+  - gate_id: maturation_runtime_capability_profile_gate
+    validation_artifact_ref: maturation-runtime-capability-profile-validation.yaml
+    required_when: maturation_gate_promotion_requested
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_promotion_request_validation_is_valid
+  - gate_id: maturation_promotion_readiness_gate
+    validation_artifact_ref: maturation-promotion-readiness-validation.yaml
+    required_when: maturation_gate_promotion_requested
+    activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_promotion_request_validation_is_valid
+      - maturation_runtime_capability_profile_valid
+  - gate_id: maturation_baseline_gate
+    validation_artifact_ref: maturation-baseline-validation.yaml
+    required_when: maturation_baseline_required
+    activation_condition: maturation_baseline_runtime_is_implemented
+    activation_prerequisites:
+      - source_purpose_candidate_runtime_is_implemented
+      - source_handoff_decision_validation_is_valid
+      - ontology_seed_validation_is_valid
+      - claim_realization_map_validation_is_valid
+      - competency_question_assessment_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: actionability_matrix_gate
+    validation_artifact_ref: actionability-matrix-validation.yaml
+    required_when: actionability_matrix_required
+    activation_condition: actionability_matrix_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_baseline_runtime_is_implemented
+      - maturation_baseline_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: maturation_question_frontier_gate
+    validation_artifact_ref: maturation-question-frontier-validation.yaml
+    required_when: maturation_question_frontier_required
+    activation_condition: maturation_question_frontier_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_baseline_runtime_is_implemented
+      - maturation_baseline_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: maturation_closure_frontier_gate
+    validation_artifact_ref: maturation-closure-frontier-validation.yaml
+    required_when: maturation_closure_frontier_exists
+    activation_condition: maturation_closure_frontier_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_question_frontier_runtime_is_implemented
+      - maturation_question_frontier_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: answer_support_gate
+    validation_artifact_ref: answer-support-ledger-validation.yaml
+    required_when: answer_support_ledger_exists
+    activation_condition: answer_support_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_question_frontier_runtime_is_implemented
+      - maturation_question_frontier_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: maturation_authority_response_gate
+    validation_artifact_ref: maturation-authority-response-validation.yaml
+    required_when: maturation_authority_response_exists
+    activation_condition: maturation_authority_response_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_closure_frontier_runtime_is_implemented
+      - maturation_closure_frontier_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: maturation_answer_claim_gate
+    validation_artifact_ref: maturation-answer-claims-validation.yaml
+    required_when: maturation_answer_claims_exist
+    activation_condition: maturation_answer_claim_runtime_is_implemented
+    activation_prerequisites:
+      - answer_support_runtime_is_implemented
+      - answer_support_ledger_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: ontology_expansion_gate
+    validation_artifact_ref: ontology-expansion-validation.yaml
+    required_when: ontology_expansion_exists
+    activation_condition: ontology_expansion_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_answer_claim_runtime_is_implemented
+      - maturation_answer_claims_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: actionable_ontology_gate
+    validation_artifact_ref: actionable-ontology-validation.yaml
+    required_when: actionable_ontology_exists
+    activation_condition: actionable_ontology_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_continuation_decision_runtime_is_implemented
+      - maturation_continuation_decision_validation_is_valid
+      - actionability_matrix_validation_is_valid
+      - maturation_promotion_readiness_valid
+  - gate_id: maturation_continuation_decision_gate
+    validation_artifact_ref: maturation-continuation-decision-validation.yaml
+    required_when: maturation_continuation_decision_exists
+    activation_condition: maturation_continuation_decision_runtime_is_implemented
+    activation_prerequisites:
+      - maturation_baseline_runtime_is_implemented
+      - maturation_baseline_validation_is_valid
+      - actionability_matrix_runtime_is_implemented
+      - actionability_matrix_validation_is_valid
+      - maturation_promotion_readiness_valid
   - gate_id: round_lineage_gate
     validation_artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
-    required_when: source_frontier_observation_occurs
+    required_when: frontier_observation_occurs
     activation_condition: multi_round_frontier_observation_runtime_is_implemented
   - gate_id: observation_reentry_gate
     validation_artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
     required_when: frontier_observation_used_downstream
     activation_condition: downstream_reentry_validation_runtime_is_implemented
   - gate_id: ontology_handoff_mapping_gate
-    validation_artifact_ref: ontology-seed-validation.yaml
+    validation_artifact_ref: ontology-handoff-mapping-validation.yaml
     required_when: ontology_handoff_claim_exists
     activation_condition: per_axis_ontology_handoff_mapping_validator_is_implemented
   - gate_id: query_proof_gate
@@ -1107,6 +1351,13 @@ planned_validation_gate_catalog:
     required_when: always
     activation_condition: registry_predicate_evaluator_runtime_is_implemented
 
+required_when_predicate_family_catalog:
+  - predicate_family_id: frontier_observation_use_by_downstream_artifact
+    parameter_names: [gate_instance_scope, downstream_artifact_ref, downstream_validation_ref]
+    concept_rule: Generated instances all mean that a validated frontier-triggered observation delta is actually cited by a specific downstream artifact before re-entry validation consumes that artifact or its validation.
+    instance_naming_rule: <downstream_artifact_key>_uses_frontier_observation
+    concept_economy_rule: Add a new generated instance only when a new downstream artifact can cite frontier observation ids; do not invent a new predicate concept for each artifact family.
+
 required_when_predicate_catalog:
   - predicate_id: always
     input_authority_refs: []
@@ -1124,28 +1375,298 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(source-observations.yaml) and source_observations.records_count > 0"
     unknown_projection: blocked
     explanation_template: "Observed source records exist and require evidence-ref closure."
-  - predicate_id: source_frontier_observation_occurs
+  - predicate_id: frontier_observation_occurs
     gate_instance_scope: per_round
-    input_authority_refs: [rounds/<round-id>/source-frontier-validation.yaml, rounds/<round-id>/source-observation-delta.yaml]
-    truth_expression: "source_frontier_validation.status == pass and artifact_exists(rounds/<round-id>/source-observation-delta.yaml)"
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
+    truth_expression: "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind in ['source_frontier', 'maturation_closure_frontier']"
     unknown_projection: blocked
-    explanation_template: "A validated frontier produced new source observations."
+    explanation_template: "A source-frontier or maturation-closure-frontier observation delta exists and requires lineage validation before downstream semantic use."
+  - predicate_id: source_frontier_observation_delta
+    gate_instance_scope: per_round
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
+    truth_expression: "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind == 'source_frontier'"
+    unknown_projection: not_applicable
+    explanation_template: "The round observation delta was triggered by the seeding source frontier."
+  - predicate_id: maturation_closure_frontier_observation_delta
+    gate_instance_scope: per_round
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
+    truth_expression: "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind == 'maturation_closure_frontier'"
+    unknown_projection: not_applicable
+    explanation_template: "The round observation delta was triggered by the maturation closure frontier."
   - predicate_id: frontier_observation_used_downstream
+    derived_from_predicate_family_id: frontier_observation_use_by_downstream_artifact
     gate_instance_scope: per_round
-    input_authority_refs: [rounds/<round-id>/source-observation-delta-validation.yaml, source-observation-directive.yaml, source-observation-directive-validation.yaml, rounds/<round-id>/lens-judgments/*.yaml, rounds/<round-id>/exploration-synthesis.yaml, candidate-inventory.yaml, candidate-disposition.yaml, ontology-seed.yaml]
-    truth_expression: "source_observation_delta_validation.status == pass and source_observation_directive_validation.status == pass and any_downstream_artifact_refs_delta_observation_ids"
+    input_authority_refs:
+      - <registry:required_when_predicate_catalog[predicate_family_id == frontier_observation_use_by_downstream_artifact].input_authority_refs[]>
+    dynamic_input_authority_rule: Evaluate every generated frontier_observation_use_by_downstream_artifact predicate instance for the round from registry input refs; this aggregate predicate is true only when at least one generated instance is true.
+    truth_expression: "any_generated_predicate_instance(frontier_observation_use_by_downstream_artifact).truth_value == true"
     unknown_projection: blocked
-    explanation_template: "A frontier-triggered observation selected by the directive authority is cited by downstream semantic artifacts."
+    explanation_template: "At least one registry-generated downstream artifact predicate cites a frontier-triggered observation delta."
+  - predicate_id: lens_judgments_use_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: rounds/<round-id>/lens-judgments/*.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, rounds/<round-id>/lens-judgments/*.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and any_lens_judgment_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Round lens judgments cite observation ids from a frontier-triggered observation delta."
+  - predicate_id: exploration_synthesis_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: rounds/<round-id>/exploration-synthesis.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, rounds/<round-id>/exploration-synthesis.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and exploration_synthesis_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Round exploration synthesis cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: source_purpose_candidates_use_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: source-purpose-candidates.yaml
+    downstream_validation_ref: source-purpose-candidates-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, source-purpose-candidates.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and source_purpose_candidates_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Source-purpose candidates cite observation ids from a frontier-triggered observation delta."
+  - predicate_id: candidate_inventory_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: candidate-inventory.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, candidate-inventory.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and candidate_inventory_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Candidate inventory cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: candidate_disposition_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: candidate-disposition.yaml
+    downstream_validation_ref: candidate-disposition-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, candidate-disposition.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and candidate_disposition_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Candidate disposition cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: ontology_seed_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: ontology-seed.yaml
+    downstream_validation_ref: ontology-seed-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, ontology-seed.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and ontology_seed_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Ontology seed cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: answer_support_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: answer-support-ledger.yaml
+    downstream_validation_ref: answer-support-ledger-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, answer-support-ledger.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and answer_support_ledger_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Answer support ledger cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: maturation_answer_claims_use_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: maturation-answer-claims.yaml
+    downstream_validation_ref: maturation-answer-claims-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, maturation-answer-claims.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and maturation_answer_claims_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Maturation answer claims cite observation ids from a frontier-triggered observation delta."
+  - predicate_id: ontology_expansion_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: ontology-expansion.yaml
+    downstream_validation_ref: ontology-expansion-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, ontology-expansion.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and ontology_expansion_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Ontology expansion cites observation ids from a frontier-triggered observation delta."
+  - predicate_id: actionability_matrix_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: actionability-matrix.yaml
+    downstream_validation_ref: actionability-matrix-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, actionability-matrix.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and actionability_matrix_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Actionability matrix cites or derives from observation ids from a frontier-triggered observation delta."
+  - predicate_id: maturation_continuation_decision_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: maturation-continuation-decision.yaml
+    downstream_validation_ref: maturation-continuation-decision-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, maturation-continuation-decision.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and maturation_continuation_decision_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Maturation continuation decision cites or derives from observation ids from a frontier-triggered observation delta."
+  - predicate_id: actionable_ontology_uses_frontier_observation
+    predicate_family_id: frontier_observation_use_by_downstream_artifact
+    gate_instance_scope: per_round
+    downstream_artifact_ref: actionable-ontology.yaml
+    downstream_validation_ref: actionable-ontology-validation.yaml
+    input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml, rounds/<round-id>/source-observation-delta-validation.yaml, actionable-ontology.yaml]
+    truth_expression: "source_observation_delta_validation.validation_status == valid and actionable_ontology_refs_delta_observation_ids"
+    unknown_projection: not_applicable
+    explanation_template: "Actionable ontology cites or derives from observation ids from a frontier-triggered observation delta."
   - predicate_id: candidate_inventory_exists
     input_authority_refs: [candidate-inventory.yaml]
     truth_expression: "artifact_exists(candidate-inventory.yaml)"
     unknown_projection: not_applicable
     explanation_template: "A candidate inventory exists and requires disposition validation."
-  - predicate_id: ontology_seed_exists
-    input_authority_refs: [ontology-seed.yaml]
-    truth_expression: "artifact_exists(ontology-seed.yaml)"
+  - predicate_id: source_purpose_authority_required
+    input_authority_refs: [ontology-seed.yaml, maturation-baseline.yaml, source-purpose-candidates.yaml]
+    truth_expression: "source_purpose_candidate_runtime_is_implemented and (artifact_exists(ontology-seed.yaml) or artifact_exists(maturation-baseline.yaml) or artifact_exists(source-purpose-candidates.yaml))"
+    unknown_projection: blocked
+    explanation_template: "When the source-purpose authority runtime is promoted, seed or maturation projection requires a source-purpose candidate authority even if the artifact is missing."
+  - predicate_id: purpose_confirmation_required
+    input_authority_refs: [source-purpose-candidates-validation.yaml]
+    truth_expression: "source_purpose_candidates_validation.confirmation_required == true"
+    unknown_projection: blocked
+    explanation_template: "The validated source-purpose candidate authority requires user-mediated purpose confirmation validation."
+  - predicate_id: maturation_promotion_request_exists
+    input_authority_refs: [maturation-promotion-request.yaml]
+    truth_expression: "artifact_exists(maturation-promotion-request.yaml)"
     unknown_projection: not_applicable
-    explanation_template: "An ontology seed exists and requires seed validation."
+    explanation_template: "A durable maturation promotion request artifact exists and requires validation."
+  - predicate_id: maturation_gate_promotion_requested
+    input_authority_refs: [maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
+    truth_expression: "maturation_promotion_request_validation.validation_status == valid and maturation_promotion_request.request_status in ['requested', 'accepted'] and (maturation_promotion_request.request_kind in ['maturation_execution', 'gate_promotion', 'combined'])"
+    unknown_projection: blocked
+    explanation_template: "A validated durable maturation execution or planned-gate promotion request requires runtime capability and promotion-readiness validation."
+  - predicate_id: maturation_promotion_request_validation_is_valid
+    input_authority_refs: [maturation-promotion-request-validation.yaml]
+    truth_expression: "maturation_promotion_request_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The durable maturation promotion request has passed validation."
+  - predicate_id: maturation_baseline_required
+    input_authority_refs: [maturation-baseline.yaml, maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
+    truth_expression: "artifact_exists(maturation-baseline.yaml) or (maturation_promotion_request_validation.validation_status == valid and maturation_promotion_request.request_status in ['requested', 'accepted'] and maturation_promotion_request.request_kind in ['maturation_execution', 'combined'])"
+    unknown_projection: blocked
+    explanation_template: "A maturation baseline is required when the artifact exists or a validated maturation execution request exists."
+  - predicate_id: actionability_matrix_required
+    input_authority_refs: [actionability-matrix.yaml, maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
+    truth_expression: "artifact_exists(actionability-matrix.yaml) or (maturation_promotion_request_validation.validation_status == valid and maturation_promotion_request.request_status in ['requested', 'accepted'] and maturation_promotion_request.request_kind in ['maturation_execution', 'combined'])"
+    unknown_projection: blocked
+    explanation_template: "An actionability matrix is required when the artifact exists or a validated maturation execution request exists."
+  - predicate_id: maturation_question_frontier_required
+    input_authority_refs: [maturation-question-frontier.yaml, maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
+    truth_expression: "artifact_exists(maturation-question-frontier.yaml) or (maturation_promotion_request_validation.validation_status == valid and maturation_promotion_request.request_status in ['requested', 'accepted'] and maturation_promotion_request.request_kind in ['maturation_execution', 'combined'])"
+    unknown_projection: blocked
+    explanation_template: "A maturation question frontier is required when the artifact exists or a validated maturation execution request exists."
+  - predicate_id: maturation_runtime_capability_profile_valid
+    input_authority_refs: [maturation-runtime-capability-profile-validation.yaml]
+    truth_expression: "maturation_runtime_capability_profile_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The runtime capability profile is valid enough to evaluate planned maturation gate promotion."
+  - predicate_id: maturation_promotion_readiness_valid
+    input_authority_refs: [maturation-promotion-readiness-validation.yaml]
+    truth_expression: "maturation_promotion_readiness_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation promotion readiness authority is valid enough to activate planned maturation gates."
+  - predicate_id: source_handoff_decision_validation_is_valid
+    input_authority_refs: [<maturation_promotion_request.source_handoff_decision_validation_ref>]
+    truth_expression: "source_handoff_decision_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The source seed session handoff validation referenced by the maturation request is valid."
+  - predicate_id: ontology_seed_validation_is_valid
+    input_authority_refs: [ontology-seed-validation.yaml]
+    truth_expression: "ontology_seed_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The ontology seed validation authority is valid for maturation promotion."
+  - predicate_id: claim_realization_map_validation_is_valid
+    input_authority_refs: [claim-realization-map-validation.yaml]
+    truth_expression: "claim_realization_map_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The claim realization map validation authority is valid for maturation promotion."
+  - predicate_id: competency_question_assessment_validation_is_valid
+    input_authority_refs: [competency-question-assessment-validation.yaml]
+    truth_expression: "competency_question_assessment_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The competency-question assessment validation authority is valid for maturation promotion."
+  - predicate_id: maturation_baseline_validation_is_valid
+    input_authority_refs: [maturation-baseline-validation.yaml]
+    truth_expression: "maturation_baseline_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation baseline validation authority is valid for downstream promotion."
+  - predicate_id: actionability_matrix_validation_is_valid
+    input_authority_refs: [actionability-matrix-validation.yaml]
+    truth_expression: "actionability_matrix_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The actionability matrix validation authority is valid for downstream promotion."
+  - predicate_id: maturation_question_frontier_validation_is_valid
+    input_authority_refs: [maturation-question-frontier-validation.yaml]
+    truth_expression: "maturation_question_frontier_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation question frontier validation authority is valid for downstream promotion."
+  - predicate_id: maturation_closure_frontier_validation_is_valid
+    input_authority_refs: [maturation-closure-frontier-validation.yaml]
+    truth_expression: "maturation_closure_frontier_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation closure frontier validation authority is valid for downstream promotion."
+  - predicate_id: answer_support_ledger_validation_is_valid
+    input_authority_refs: [answer-support-ledger-validation.yaml]
+    truth_expression: "answer_support_ledger_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The answer support ledger validation authority is valid for downstream promotion."
+  - predicate_id: maturation_authority_response_validation_is_valid
+    input_authority_refs: [maturation-authority-response-validation.yaml]
+    truth_expression: "maturation_authority_response_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation authority response validation authority is valid for downstream promotion when applicable."
+  - predicate_id: maturation_answer_claims_validation_is_valid
+    input_authority_refs: [maturation-answer-claims-validation.yaml]
+    truth_expression: "maturation_answer_claims_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation answer claims validation authority is valid for downstream promotion."
+  - predicate_id: ontology_expansion_validation_is_valid
+    input_authority_refs: [ontology-expansion-validation.yaml]
+    truth_expression: "ontology_expansion_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The ontology expansion validation authority is valid for downstream promotion when applicable."
+  - predicate_id: maturation_continuation_decision_validation_is_valid
+    input_authority_refs: [maturation-continuation-decision-validation.yaml]
+    truth_expression: "maturation_continuation_decision_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The maturation continuation decision validation authority is valid for actionable ontology promotion."
+  - predicate_id: maturation_continuation_decision_exists
+    input_authority_refs: [maturation-continuation-decision.yaml]
+    truth_expression: "artifact_exists(maturation-continuation-decision.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A maturation continuation decision exists and requires validation before actionable ontology use."
+  - predicate_id: maturation_question_frontier_exists
+    input_authority_refs: [maturation-question-frontier.yaml]
+    truth_expression: "artifact_exists(maturation-question-frontier.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A maturation question frontier exists and requires frontier validation."
+  - predicate_id: maturation_closure_frontier_exists
+    input_authority_refs: [maturation-closure-frontier.yaml]
+    truth_expression: "artifact_exists(maturation-closure-frontier.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A maturation closure frontier exists and requires frontier validation."
+  - predicate_id: answer_support_ledger_exists
+    input_authority_refs: [answer-support-ledger.yaml]
+    truth_expression: "artifact_exists(answer-support-ledger.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "An answer support ledger exists and requires support-ledger validation."
+  - predicate_id: maturation_authority_response_exists
+    input_authority_refs: [maturation-authority-response.yaml]
+    truth_expression: "artifact_exists(maturation-authority-response.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A maturation authority response exists and requires response validation before answer support or continuation decisions consume it."
+  - predicate_id: maturation_answer_claims_exist
+    input_authority_refs: [maturation-answer-claims.yaml]
+    truth_expression: "artifact_exists(maturation-answer-claims.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "Maturation answer claims exist and require answer-claim validation."
+  - predicate_id: ontology_expansion_exists
+    input_authority_refs: [ontology-expansion.yaml]
+    truth_expression: "artifact_exists(ontology-expansion.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "An ontology expansion exists and requires expansion validation."
+  - predicate_id: actionable_ontology_exists
+    input_authority_refs: [actionable-ontology.yaml]
+    truth_expression: "artifact_exists(actionable-ontology.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "An actionable ontology projection exists and requires actionable-ontology validation."
   - predicate_id: ontology_handoff_claim_exists
     input_authority_refs: [ontology-seed.yaml]
     truth_expression: "artifact_exists(ontology-seed.yaml) and ontology_seed.ontology_handoff.readiness_claim != null"
@@ -1163,39 +1684,35 @@ required_when_predicate_catalog:
     truth_expression: "ontology_seed_validation.validation_status == valid"
     unknown_projection: blocked
     explanation_template: "The seed shape is valid enough to validate competency-question coverage."
-  - predicate_id: competency_questions_exist
-    input_authority_refs: [competency-questions.yaml]
-    truth_expression: "artifact_exists(competency-questions.yaml)"
-    unknown_projection: not_applicable
-    explanation_template: "A competency-question artifact exists and requires coverage validation."
   - predicate_id: competency_questions_valid
     input_authority_refs: [competency-questions-validation.yaml]
     truth_expression: "competency_questions_validation.validation_status == valid"
     unknown_projection: blocked
     explanation_template: "The competency-question authority is valid enough to assess answerability."
-  - predicate_id: seed_validity_or_handoff_readiness_is_projected
+  - predicate_id: seed_validity_or_seed_iteration_readiness_is_projected
     input_authority_refs: [ontology-seed-validation.yaml, stop-decision.yaml]
-    truth_expression: "seed_validity_projection_requested or handoff_readiness_projection_requested"
+    truth_expression: "seed_validity_projection_requested or seed_iteration_readiness_projection_requested"
     unknown_projection: blocked
-    explanation_template: "A status/result surface is projecting seed validity or handoff readiness."
+    explanation_template: "A status/result surface is projecting seed validity or seed iteration readiness."
   - predicate_id: downstream_query_or_access_claim_exists
-    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
-    truth_expression: "downstream_use_claims_queryability_api_access_or_implementation_access"
+    input_authority_refs: [ontology-seed.yaml, actionability-matrix.yaml, maturation-continuation-decision.yaml, actionable-ontology.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_queryability_api_access_or_implementation_access or actionability_matrix_claims_runtime_query_or_access_surface or actionable_ontology_claims_runtime_query_or_access_surface"
     unknown_projection: blocked
     explanation_template: "A downstream query, API access, implementation access, or equivalent ontology access claim exists and requires query proof validation."
   - predicate_id: downstream_visualization_claim_exists
-    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
-    truth_expression: "downstream_use_claims_visualization_static_view_dashboard_or_hierarchical_overview"
+    input_authority_refs: [ontology-seed.yaml, actionability-matrix.yaml, maturation-continuation-decision.yaml, actionable-ontology.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_visualization_static_view_dashboard_or_hierarchical_overview or actionability_matrix_claims_visualization_surface or actionable_ontology_claims_visualization_surface"
     unknown_projection: blocked
     explanation_template: "A downstream visualization claim exists and requires visualization proof validation."
   - predicate_id: downstream_graph_exploration_claim_exists
-    input_authority_refs: [ontology-seed.yaml, stop-decision.yaml]
-    truth_expression: "downstream_use_claims_graph_exploration_large_graph_navigation_traversal_or_expand_collapse"
+    input_authority_refs: [ontology-seed.yaml, actionability-matrix.yaml, maturation-continuation-decision.yaml, actionable-ontology.yaml, stop-decision.yaml]
+    truth_expression: "downstream_use_claims_graph_exploration_large_graph_navigation_traversal_or_expand_collapse or actionability_matrix_claims_graph_exploration_surface or actionable_ontology_claims_graph_exploration_surface"
     unknown_projection: blocked
     explanation_template: "A downstream graph exploration claim exists and requires graph-exploration proof validation."
   - predicate_id: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
     gate_instance_scope: global_with_concrete_gate_instance_inputs
-    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, reconstruct-metrics.yaml]
+    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, source-purpose-candidates-validation.yaml, purpose-confirmation-validation.yaml, maturation-promotion-request-validation.yaml, maturation-runtime-capability-profile-validation.yaml, maturation-promotion-readiness-validation.yaml, maturation-baseline-validation.yaml, actionability-matrix-validation.yaml, maturation-question-frontier-validation.yaml, maturation-closure-frontier-validation.yaml, answer-support-ledger-validation.yaml, maturation-authority-response-validation.yaml, maturation-answer-claims-validation.yaml, ontology-expansion-validation.yaml, maturation-continuation-decision-validation.yaml, actionable-ontology-validation.yaml, ontology-handoff-mapping-validation.yaml, rounds/*/source-observation-delta-validation.yaml, rounds/*/source-observation-reentry-validation.yaml, query-proofs-validation.yaml, visualization-proofs-validation.yaml, graph-exploration-proofs-validation.yaml, required-when-evaluation-validation.yaml, reconstruct-metrics.yaml]
+    dynamic_input_authority_rule: Consume every validation_artifact_ref from validation_gate_catalog and planned_validation_gate_catalog whose required_when predicate evaluates true for the concrete gate instance; hand-maintained lists are non-authoritative cache hints only.
     truth_expression: "any_required_applicable_validation_artifact_missing_or_failed or runtime_halted == true or reconstruct_metrics.unresolved_question_count > 0"
     unknown_projection: blocked
     explanation_template: "The embedded terminal gate_projection has found a required applicable validation artifact missing or failed, runtime halted, or metrics recorded unresolved work."
@@ -1222,9 +1739,9 @@ readiness_projection:
     - not_applicable
   mapping:
     handoff_decision:
-      ready_for_declared_downstream_purpose: ready
-      usable_with_named_limitations: limited
-      not_ready_required_gates_failed: not_ready
+      ready_for_next_maturation_iteration: ready
+      usable_for_maturation_with_named_limitations: limited
+      not_ready_required_seed_gates_failed: not_ready
       blocked_missing_source_or_confirmation: blocked
     ontology_handoff.readiness_claim:
       ready: ready
@@ -1236,22 +1753,76 @@ readiness_projection:
       limited: limited
       blocks_handoff: not_ready
       blocked_by_missing_source_or_confirmation: blocked
-  projection_rule: Final output and status/result APIs must project one canonical readiness value plus the artifact-specific supporting fields that caused it.
+  projection_rule: Final output and status/result APIs must project one canonical seed iteration readiness value plus the artifact-specific supporting fields that caused it.
+  status_result_projection_contract:
+    projection_authority_ref: handoff-decision-validation.yaml
+    status_surface_refs:
+      - core-api.reconstruct_status
+      - core-api.reconstruct_result
+      - mcp.onto_reconstruct_status
+      - mcp.onto_reconstruct_result
+      - final-output.md
+      - reconstruct-record.yaml
+    required_gate_projection_fields:
+      - gate_instance_id
+      - gate_id
+      - source_catalog_id
+      - validation_artifact_ref
+      - required_when_predicate_id
+      - activation_condition
+      - activation_status
+      - applicability
+      - validation_status
+      - readiness_effect
+      - limitation_refs
+      - explanation
+    planned_gate_activation_status_values:
+      - inactive
+      - requested
+      - promoted
+      - applicable
+      - not_applicable
+      - blocked_missing_runtime
+      - blocked_missing_validation
+      - failed_validation
+    unknown_or_duplicate_gate_projection: blocked
+    hidden_applicable_gate_projection: blocked
+    mixed_member_lineage_projection:
+      authority_ref: target-material-profile-validation.yaml
+      required_when: target-material-profile.yaml.target_material_kind == mixed
+      required_fields:
+        - member_id
+        - target_ref
+        - target_material_kind
+        - selected_profile_id
+        - selected_source_profile_snapshot_ref
+        - source_profile_definition_sha256
+        - support_state
+        - runtime_implementation_status
+        - source_refs
+        - cross_material_ref_refs
+        - purpose_element_refs
+        - validation_ref
+        - limitation_refs
+        - aggregate_readiness_effect
+        - next_action
+      projection_rule: Status/result/final-output surfaces must expose member lineage for every mixed target when aggregate readiness is ready, limited, not_ready, or blocked. For limited, not_ready, or blocked aggregate readiness, the projection must identify the member that caused the readiness effect. For ready aggregate readiness, the projection must still let callers inspect which member or cross-material ref grounds each modeled purpose element without reopening target-material-profile.yaml or candidate artifacts.
   seed_confirmation_lifecycle_policy:
-    seed_confirmation_required_when: seed_validity_or_handoff_readiness_is_projected
+    seed_confirmation_required_when: seed_validity_or_seed_iteration_readiness_is_projected
     absent_seed_confirmation_artifact: blocked
     missing_seed_confirmation_validation_artifact: blocked
-    explicit_limitation_allowed_when: seed-confirmation.yaml exists and seed-confirmation-validation.yaml records a valid confirmation or limitation state against the validated seed. Assessment-aware terminal readiness belongs to handoff-decision-validation.yaml.
+    explicit_limitation_allowed_when: seed-confirmation.yaml exists and seed-confirmation-validation.yaml records a valid confirmation or limitation state against the validated seed. Assessment-aware terminal seed iteration readiness belongs to handoff-decision-validation.yaml.
   handoff_validation_policy:
-    gate_membership_authority_ref: validation_gate_catalog
+    gate_membership_authority_ref: [validation_gate_catalog, planned_validation_gate_catalog]
     terminal_gate_id: handoff_gate
     terminal_validation_ref: handoff-decision-validation.yaml
     output_projection_policy: final_output_and_reconstruct_record_are_emitted_after_handoff_validation_passes
-    applicability_source: Runtime evaluates validation_gate_catalog.required_when through required_when_predicate_catalog and records concrete gate instances in handoff-decision-validation.yaml.gate_projection[].
+    applicability_source: Runtime evaluates active validation_gate_catalog.required_when plus promoted or requested planned_validation_gate_catalog.required_when through required_when_predicate_catalog and records concrete gate instances in handoff-decision-validation.yaml.gate_projection[].
+    promoted_planned_gate_policy: A planned gate becomes terminal-readiness-applicable when its activation_condition is implemented and its required_when predicate is true; accepted maturation execution additionally admits maturation_baseline_gate, actionability_matrix_gate, and maturation_question_frontier_gate through their *_required predicates even if the artifacts are missing.
     conditional_absence_policy:
       unmet_required_when: not_applicable
       met_required_when_missing_artifact: blocked
-  conflict_precedence:
+  strictness_order_high_to_low:
     - blocked
     - not_ready
     - limited
@@ -1261,7 +1832,7 @@ readiness_projection:
     failed_applicable_validation_artifact: not_ready
     non_applicable_conditional_validation_artifact: not_applicable
     skipped_optional_validation_artifact: limited
-  conflict_rule: When supporting artifacts project different canonical values, choose the highest value in conflict_precedence and cite every contributing artifact.
+  conflict_rule: When supporting artifacts project different canonical values, choose the first value in strictness_order_high_to_low that appears among contributing artifacts; lower list index is stricter and wins. Cite every contributing artifact.
 
 validator_records:
   - validator_id: target-material-profile-validator
@@ -1272,6 +1843,9 @@ validator_records:
       - every_selected_source_profile_snapshot_contains_version_policy_required_fields
       - every_selected_source_profile_snapshot_matches_source_profile_records_by_profile_id_and_target_material_kind
       - mixed_targets_preserve_per_member_selected_profile_id_contract_status_runtime_implementation_status_and_support_state
+      - mixed_targets_preserve_per_member_source_profile_snapshot_ref_definition_hash_and_source_refs
+      - mixed_targets_preserve_member_to_aggregate_purpose_requirement_mapping_or_limitation
+      - partial_composite_member_support_limits_aggregate_ready_projection
     output_ref: target-material-profile-validation.yaml
   - validator_id: source-frontier-validator
     gate_ids: [source_frontier_gate]
@@ -1291,21 +1865,71 @@ validator_records:
   - validator_id: candidate-disposition-validator
     gate_ids: [candidate_disposition_gate]
     validator_version: 1
-    input_authority_refs: [candidate-inventory.yaml, candidate-disposition.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    input_authority_refs:
+      - candidate-inventory.yaml
+      - candidate-disposition.yaml
+      - source-observations.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: source-purpose-candidates-validation.yaml
+        activation_condition: source_purpose_candidate_runtime_is_implemented
+        consumed_for:
+          - validate_candidate_purpose_element_refs_against_selected_purpose_frame
     validation_obligations:
       - validate_candidate_inventory_candidate_kind_against_candidate_kind_registry
       - validate_candidate_disposition_against_candidate_disposition_registry
       - require_exactly_one_disposition_for_each_salient_candidate
       - require_rationale_and_evidence_refs_for_each_disposition
+      - validate_candidate_actionability_surface_refs_against_registry_surface_values
+      - require_high_salience_non_rejected_candidates_to_carry_surface_and_purpose_element_refs
+      - validate_promoted_candidate_target_seed_refs_are_declared_for_promoted_dispositions
+      - require_deferred_or_source_gap_disposition_to_cite_limitation_or_frontier
+    conditional_validation_obligations:
+      - obligation_id: validate_candidate_purpose_element_refs_against_selected_purpose_frame
+        activation_condition: source_purpose_candidate_runtime_is_implemented
+        input_authority_refs: [source-purpose-candidates-validation.yaml]
     output_ref: candidate-disposition-validation.yaml
   - validator_id: ontology-seed-validator
     gate_ids: [ontology_seed_gate]
     validator_version: 1
-    input_authority_refs: [ontology-seed.yaml, candidate-disposition.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
+    input_authority_refs:
+      - ontology-seed.yaml
+      - candidate-disposition-validation.yaml
+      - source-observations.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: source-purpose-candidates-validation.yaml
+        activation_condition: source_purpose_candidate_runtime_is_implemented
+        consumed_for:
+          - validate_seed_purpose_projection_equivalence_against_selected_source_purpose_candidate
+          - validate_purpose_adequacy_frame_projection_equivalence_against_selected_validated_frame
+      - artifact_ref: purpose-confirmation-validation.yaml
+        activation_condition: purpose_confirmation_runtime_is_implemented
+        consumed_for:
+          - validate_seed_purpose_confirmation_projection_against_purpose_confirmation_validation
     validation_obligations:
+      - require_static_kinetic_dynamic_actionability_coverage_axes
+      - validate_required_element_surface_dimension_closure
+      - validate_required_element_closure_status_consistent_with_seed_evidence_and_limitation_refs
+      - require_mixed_purpose_frame_projection_elements_to_preserve_member_source_and_cross_material_lineage_or_limitation
+      - validate_purpose_required_element_seed_ref_refs_against_known_seed_refs
+      - validate_promoted_candidate_target_seed_refs_are_realized
+      - validate_dynamic_boundaries_have_unique_ids_and_close_target_refs
       - validate_instance_assertion_mapping_status
       - require_limitation_ref_when_instance_availability_status_is_absent_or_unknown
       - require_ready_ontology_handoff_mappings_to_have_substantive_content_or_limitation_refs
+    conditional_validation_obligations:
+      - obligation_id: validate_seed_purpose_projection_equivalence_against_selected_source_purpose_candidate
+        activation_condition: source_purpose_candidate_runtime_is_implemented
+        input_authority_refs: [source-purpose-candidates-validation.yaml]
+      - obligation_id: validate_purpose_adequacy_frame_projection_equivalence_against_selected_validated_frame
+        activation_condition: source_purpose_candidate_runtime_is_implemented
+        input_authority_refs: [source-purpose-candidates-validation.yaml]
+      - obligation_id: validate_seed_purpose_confirmation_projection_against_purpose_confirmation_validation
+        activation_condition: purpose_confirmation_runtime_is_implemented
+        input_authority_refs: [purpose-confirmation-validation.yaml]
     output_ref: ontology-seed-validation.yaml
   - validator_id: claim-realization-map-validator
     gate_ids: [claim_realization_gate]
@@ -1419,9 +2043,102 @@ validator_records:
       - reconstruct-run-manifest.pre-handoff-validation.yaml
       - reconstruct-run-manifest.yaml
       - reconstruct-contract-registry.yaml
+    dynamic_input_authority_rule: Consume every validation_artifact_ref from validation_gate_catalog and planned_validation_gate_catalog whose required_when predicate evaluates true for the concrete failure-classification gate projection; hand-maintained conditional_input_authority_refs are non-authoritative cache hints only.
+    conditional_input_authority_refs:
+      - artifact_ref: source-purpose-candidates-validation.yaml
+        required_when: source_purpose_authority_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: purpose-confirmation-validation.yaml
+        required_when: purpose_confirmation_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-promotion-request-validation.yaml
+        required_when: maturation_promotion_request_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-runtime-capability-profile-validation.yaml
+        required_when: maturation_gate_promotion_requested
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-promotion-readiness-validation.yaml
+        required_when: maturation_gate_promotion_requested
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-baseline-validation.yaml
+        required_when: maturation_baseline_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: actionability-matrix-validation.yaml
+        required_when: actionability_matrix_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-question-frontier-validation.yaml
+        required_when: maturation_question_frontier_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-closure-frontier-validation.yaml
+        required_when: maturation_closure_frontier_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: answer-support-ledger-validation.yaml
+        required_when: answer_support_ledger_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-authority-response-validation.yaml
+        required_when: maturation_authority_response_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-answer-claims-validation.yaml
+        required_when: maturation_answer_claims_exist
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: ontology-expansion-validation.yaml
+        required_when: ontology_expansion_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: maturation-continuation-decision-validation.yaml
+        required_when: maturation_continuation_decision_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: actionable-ontology-validation.yaml
+        required_when: actionable_ontology_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+        required_when: frontier_observation_occurs
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+        required_when: frontier_observation_used_downstream
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: ontology-handoff-mapping-validation.yaml
+        required_when: ontology_handoff_claim_exists
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: required-when-evaluation-validation.yaml
+        required_when: always
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
     validation_obligations:
       - validate_failure_trigger_against_active_runtime_validation_authorities
       - classify_missing_or_failed_active_validation_artifact_as_required_gate_failure
+      - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - classify_missing_or_failed_promoted_maturation_validation_artifact_as_required_gate_failure
+      - derive_planned_gate_failure_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
     output_ref: failure-classification-validation.yaml
   - validator_id: revision-proposal-validator
     gate_ids: [revision_proposal_gate]
@@ -1443,41 +2160,615 @@ validator_records:
       - competency-question-assessment-validation.yaml
       - seed-confirmation-validation.yaml
       - reconstruct-run-manifest.pre-handoff-validation.yaml
+      - required-when-evaluation-validation.yaml
       - reconstruct-metrics.yaml
-      - failure-classification-validation.yaml
-      - revision-proposal-validation.yaml
       - reconstruct-contract-registry.yaml
+    dynamic_input_authority_rule: Consume every validation_artifact_ref from validation_gate_catalog and planned_validation_gate_catalog whose required_when predicate evaluates true for the concrete terminal gate projection; hand-maintained conditional_input_authority_refs are non-authoritative cache hints only.
+    conditional_input_authority_refs:
+      - artifact_ref: failure-classification-validation.yaml
+        required_when: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
+        consumed_for:
+          - consume_failed_or_halted_run_classification_when_present
+      - artifact_ref: revision-proposal-validation.yaml
+        required_when: validated_failure_or_unresolved_work_exists
+        consumed_for:
+          - consume_revision_proposal_when_present
+      - artifact_ref: maturation-promotion-request-validation.yaml
+        required_when: maturation_promotion_request_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-runtime-capability-profile-validation.yaml
+        required_when: maturation_gate_promotion_requested
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-promotion-readiness-validation.yaml
+        required_when: maturation_gate_promotion_requested
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-baseline-validation.yaml
+        required_when: maturation_baseline_required
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: actionability-matrix-validation.yaml
+        required_when: actionability_matrix_required
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-question-frontier-validation.yaml
+        required_when: maturation_question_frontier_required
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-closure-frontier-validation.yaml
+        required_when: maturation_closure_frontier_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: answer-support-ledger-validation.yaml
+        required_when: answer_support_ledger_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-authority-response-validation.yaml
+        required_when: maturation_authority_response_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-answer-claims-validation.yaml
+        required_when: maturation_answer_claims_exist
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: ontology-expansion-validation.yaml
+        required_when: ontology_expansion_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: maturation-continuation-decision-validation.yaml
+        required_when: maturation_continuation_decision_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: actionable-ontology-validation.yaml
+        required_when: actionable_ontology_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+        required_when: frontier_observation_occurs
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+        required_when: frontier_observation_used_downstream
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: ontology-handoff-mapping-validation.yaml
+        required_when: ontology_handoff_claim_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: required-when-evaluation-validation.yaml
+        required_when: always
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
     validation_obligations:
       - consume_all_active_validation_gate_statuses_emitted_by_runtime
       - project_missing_active_validation_artifact_as_blocked
-      - leave_planned_gate_authorities_out_of_terminal_readiness_until_activated
+      - consume_all_requested_or_promoted_planned_gate_statuses_emitted_by_runtime
+      - project_missing_required_promoted_or_requested_planned_gate_validation_artifact_as_blocked
+      - validate_accepted_maturation_execution_minimum_output_gates_are_terminal_projected
+      - validate_failure_classification_covers_failed_or_missing_requested_planned_gates
+      - derive_terminal_planned_gate_inputs_from_registry_gate_catalogs_not_hand_maintained_lists
+      - do_not_require_failure_or_revision_artifacts_for_clean_stop_decisions
     output_ref: handoff-decision-validation.yaml
 
 planned_validator_records:
+  - validator_id: source-purpose-candidates-validator
+    gate_ids: [source_purpose_candidates_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-purpose-candidates.yaml
+      - source-observations.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - require_exactly_one_primary_purpose_candidate_when_selected
+      - require_purpose_candidate_status_field_to_be_purpose_source_status
+      - validate_purpose_candidate_evidence_refs_against_source_observations
+      - reject_p5_only_primary_purpose_candidate
+      - require_non_p1_primary_to_have_two_evidence_kinds_and_one_p2_p3_or_p4
+      - require_purpose_adequacy_frame_elements_to_have_surface_dimension_facet_and_evidence_or_limitation_state
+      - require_mixed_purpose_frame_elements_to_carry_member_scope_refs_member_target_material_kind_member_source_refs_and_cross_material_ref_refs_or_validated_exclusion
+      - preserve_contradictions_in_candidate_status_or_limitations
+      - derive_confirmation_required_from_selected_purpose_source_status
+      - expose_selected_purpose_candidate_id_and_frame_id_for_seed_projection_equivalence
+    output_ref: source-purpose-candidates-validation.yaml
+  - validator_id: purpose-confirmation-validator
+    gate_ids: [purpose_confirmation_gate]
+    validator_version: 1
+    input_authority_refs:
+      - purpose-confirmation.yaml
+      - source-purpose-candidates-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - require_confirmation_for_inferred_or_limitation_backed_purpose
+      - validate_confirmation_status_against_source_purpose_candidate_status_and_validation_confirmation_required
+      - validate_confirmation_status_against_selected_purpose_candidate
+      - block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
+      - require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun
+    output_ref: purpose-confirmation-validation.yaml
+  - validator_id: maturation-promotion-request-validator
+    gate_ids: [maturation_promotion_request_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-promotion-request.yaml
+      - reconstruct-record.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_request_id_request_kind_request_status_and_requested_gate_ids
+      - validate_requested_gate_ids_exist_in_planned_validation_gate_catalog
+      - require_maturation_execution_requests_to_include_minimum_output_gate_ids_or_blocking_limitation_refs
+      - require_maturation_execution_minimum_outputs_to_include_baseline_actionability_matrix_and_question_frontier
+      - validate_request_trigger_ref_is_durable_artifact_or_user_authority_ref
+      - validate_source_handoff_decision_validation_ref_points_to_prior_or_source_seed_session
+      - validate_request_records_source_session_root_run_manifest_ref_and_request_timestamp
+      - reject_runtime_local_booleans_as_unreplayable_request_authority
+    output_ref: maturation-promotion-request-validation.yaml
+  - validator_id: maturation-runtime-capability-profile-validator
+    gate_ids: [maturation_runtime_capability_profile_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-runtime-capability-profile.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_capability_profile_declares_each_planned_maturation_gate_activation_flag
+      - validate_activation_flags_are_runtime_observed_not_prompt_authored
+      - validate_profile_records_validator_ids_versions_required_when_predicates_and_supported_artifact_writers
+      - reject_gate_activation_without_matching_runtime_writer_validator_and_predicate_evaluator_capability
+    output_ref: maturation-runtime-capability-profile-validation.yaml
+  - validator_id: maturation-promotion-readiness-validator
+    gate_ids: [maturation_promotion_readiness_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-promotion-readiness.yaml
+      - maturation-promotion-request-validation.yaml
+      - maturation-runtime-capability-profile-validation.yaml
+      - ontology-seed-validation.yaml
+      - claim-realization-map-validation.yaml
+      - competency-question-assessment-validation.yaml
+      - <maturation_promotion_request.source_handoff_decision_validation_ref>
+      - reconstruct-record.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: source-purpose-candidates-validation.yaml
+        required_when: source_purpose_authority_required
+        consumed_for:
+          - validate_promotion_readiness_consumes_source_purpose_authority_when_required
+      - artifact_ref: purpose-confirmation-validation.yaml
+        required_when: purpose_confirmation_required
+        consumed_for:
+          - validate_promotion_readiness_consumes_confirmed_inferred_purpose_before_baseline_promotion
+    validation_obligations:
+      - validate_promotion_readiness_matches_validated_promotion_request
+      - validate_source_handoff_decision_ref_is_prior_or_source_session_not_current_terminal_handoff
+      - validate_requested_gate_promotions_have_runtime_capability_flag_true
+      - validate_maturation_execution_requests_activate_minimum_output_gates_or_project_blocked
+      - validate_each_requested_gate_has_upstream_validation_authority_implemented_and_valid
+      - evaluate_activation_prerequisite_validation_state_predicates_for_each_requested_gate
+      - reject_promotion_when_upstream_validation_state_predicate_is_missing_unknown_or_false
+      - validate_source_purpose_candidate_and_purpose_confirmation_paths_before_baseline_promotion
+      - reject_maturation_execution_when_seed_authority_is_not_ready_limited_or_validated_for_maturation
+      - emit_per_gate_promotion_decision_with_missing_authority_refs
+    output_ref: maturation-promotion-readiness-validation.yaml
+  - validator_id: maturation-baseline-validator
+    gate_ids: [maturation_baseline_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-baseline.yaml
+      - ontology-seed-validation.yaml
+      - source-purpose-candidates-validation.yaml
+      - claim-realization-map-validation.yaml
+      - competency-question-assessment-validation.yaml
+      - <maturation_baseline.source_handoff_decision_validation_ref>
+      - reconstruct-record.yaml
+      - reconstruct-run-manifest.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: purpose-confirmation-validation.yaml
+        required_when: purpose_confirmation_required
+        consumed_for:
+          - validate_baseline_uses_confirmed_inferred_purpose_only
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_baseline_uses_claimed_runtime_or_query_proofs_only_after_validation
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_baseline_uses_claimed_visualization_proofs_only_after_validation
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_baseline_uses_claimed_graph_exploration_proofs_only_after_validation
+    validation_obligations:
+      - validate_baseline_rows_cover_selected_purpose_frame_required_elements
+      - validate_baseline_rows_cover_static_kinetic_dynamic_surfaces_and_maturity_dimensions
+      - validate_baseline_rows_trace_to_seed_refs_limitations_or_validated_assessment_gaps
+      - validate_baseline_claim_refs_against_claim_realization_map_validation
+      - validate_source_handoff_decision_validation_ref_points_to_prior_or_source_seed_session
+      - validate_baseline_source_run_refs_against_reconstruct_record_and_run_manifest_snapshot
+      - validate_direct_p1_purpose_baseline_uses_source_purpose_candidate_validation_confirmation_required_false
+      - validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage
+      - validate_competency_question_and_domain_coverage_lineage_refs
+      - validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
+      - require_unclosed_blocker_or_high_rows_to_project_frontier_or_user_authority_need
+      - preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
+    output_ref: maturation-baseline-validation.yaml
+  - validator_id: actionability-matrix-validator
+    gate_ids: [actionability_matrix_gate]
+    validator_version: 1
+    input_authority_refs:
+      - actionability-matrix.yaml
+      - maturation-baseline-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: maturation-question-frontier-validation.yaml
+        required_when: maturation_question_frontier_exists
+        consumed_for:
+          - validate_blocking_question_refs_against_validated_question_frontier
+      - artifact_ref: maturation-answer-claims-validation.yaml
+        required_when: maturation_answer_claims_exist
+        consumed_for:
+          - validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
+      - artifact_ref: ontology-expansion-validation.yaml
+        required_when: ontology_expansion_exists
+        consumed_for:
+          - validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_matrix_runtime_or_query_claim_rows_have_validated_proof_refs
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_matrix_visualization_claim_rows_have_validated_proof_refs
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_matrix_graph_exploration_claim_rows_have_validated_proof_refs
+    validation_obligations:
+      - support_zero_delta_baseline_only_matrix_when_no_maturation_deltas_exist
+      - validate_matrix_rows_derive_from_validated_baseline_and_any_applicable_validated_deltas
+      - reject_matrix_rows_without_baseline_row_or_applicable_validated_expansion_ref
+      - validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+      - validate_maturity_level_against_supporting_refs_blocking_questions_and_limitations
+      - validate_row_materiality_or_materiality_refs_from_baseline_or_blocking_questions
+      - validate_blocking_question_refs_against_validated_question_frontier
+      - require_required_domain_competency_failures_to_project_baseline_row_frontier_limitation_or_authority_need
+      - validate_mixed_matrix_rows_preserve_member_readiness_and_cross_material_lineage
+      - validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
+      - require_blocker_and_high_rows_to_be_l4_limitation_backed_or_continuation_blocking
+      - preserve_recomputation_inputs_for_actionability_continuation_projection
+    output_ref: actionability-matrix-validation.yaml
+  - validator_id: maturation-continuation-decision-validator
+    gate_ids: [maturation_continuation_decision_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-continuation-decision.yaml
+      - actionability-matrix-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: maturation-question-frontier-validation.yaml
+        required_when: maturation_question_frontier_exists
+        consumed_for:
+          - validate_continuation_state_against_validated_frontier_state
+      - artifact_ref: maturation-closure-frontier-validation.yaml
+        required_when: maturation_closure_frontier_exists
+        consumed_for:
+          - validate_continuation_state_against_available_next_authority
+      - artifact_ref: answer-support-ledger-validation.yaml
+        required_when: answer_support_ledger_exists
+        consumed_for:
+          - validate_continuation_state_against_validated_support_state
+      - artifact_ref: maturation-authority-response-validation.yaml
+        required_when: maturation_authority_response_exists
+        consumed_for:
+          - validate_continuation_state_against_authority_response_state
+    validation_obligations:
+      - validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
+      - reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
+      - validate_continue_ask_user_or_blocked_state_against_available_next_authority
+      - validate_limitation_refs_and_row_scope_for_actionable_limited_state
+      - require_required_domain_competency_failures_to_remain_in_continuation_state_until_closed_or_limitation_backed
+    output_ref: maturation-continuation-decision-validation.yaml
+  - validator_id: maturation-question-frontier-validator
+    gate_ids: [maturation_question_frontier_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-question-frontier.yaml
+      - maturation-baseline-validation.yaml
+      - ontology-seed.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - require_unique_question_id
+      - validate_question_materiality_surface_dimension_and_answer_status_enums
+      - validate_question_refs_against_baseline_seed_and_limitation_authorities
+      - validate_competency_question_assessment_and_domain_trace_refs
+      - validate_authority_need_rows_are_first_class_and_scope_to_questions
+      - require_blocker_and_high_questions_to_have_closure_frontier_limitation_or_authority_need
+    output_ref: maturation-question-frontier-validation.yaml
+  - validator_id: maturation-closure-frontier-validator
+    gate_ids: [maturation_closure_frontier_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-closure-frontier.yaml
+      - maturation-question-frontier-validation.yaml
+      - source-inventory.yaml
+      - source-observations.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - reject_duplicate_or_already_observed_source_requests
+      - reject_unsupported_material_refs
+      - reject_semantic_only_locations
+      - validate_closure_frontier_question_refs_against_material_unanswered_questions
+      - validate_closure_frontier_source_requests_preserve_member_and_cross_material_lineage
+      - require_unique_authority_request_id
+      - validate_authority_request_kind_expected_response_kind_and_scope
+      - validate_authority_request_question_refs_against_material_unanswered_questions
+      - validate_authority_request_blocking_semantics_against_question_materiality
+      - reject_duplicate_authority_requests_for_same_question_authority_kind_and_scope
+      - reject_authority_requests_that_encode_source_locations_or_semantic_only_locations
+    output_ref: maturation-closure-frontier-validation.yaml
+  - validator_id: answer-support-ledger-validator
+    gate_ids: [answer_support_gate]
+    validator_version: 1
+    input_authority_refs:
+      - answer-support-ledger.yaml
+      - maturation-question-frontier-validation.yaml
+      - source-observations.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: purpose-confirmation-validation.yaml
+        required_when: purpose_confirmation_required
+        consumed_for:
+          - validate_user_confirmation_support_mode
+      - artifact_ref: maturation-authority-response-validation.yaml
+        required_when: maturation_authority_response_exists
+        consumed_for:
+          - validate_external_or_runtime_authority_support_mode
+    validation_obligations:
+      - validate_evidence_cluster_question_refs
+      - validate_support_mode_required_refs
+      - validate_user_confirmation_support_mode
+      - validate_external_or_runtime_authority_support_mode
+      - require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
+      - require_contradictions_to_be_recorded_and_bounded
+    output_ref: answer-support-ledger-validation.yaml
+  - validator_id: maturation-authority-response-validator
+    gate_ids: [maturation_authority_response_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-authority-response.yaml
+      - maturation-closure-frontier-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_authority_response_refs_against_maturation_closure_frontier_authority_requests
+      - validate_authority_identity_and_snapshot_refs_are_recorded
+      - validate_authority_response_status_and_scope
+      - preserve_unavailable_or_rejected_authority_as_blocked_or_limitation_state
+      - reject_authority_response_that_claims_source_evidence_without_source_observation_refs
+    output_ref: maturation-authority-response-validation.yaml
+  - validator_id: maturation-answer-claims-validator
+    gate_ids: [maturation_answer_claim_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-answer-claims.yaml
+      - answer-support-ledger-validation.yaml
+      - maturation-question-frontier-validation.yaml
+      - ontology-seed.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_answer_claim_question_refs
+      - validate_support_mode_against_valid_evidence_cluster_or_authority
+      - require_partial_answers_to_have_limitation_or_frontier_refs
+      - validate_answer_claim_surface_dimension_and_purpose_element_refs
+    output_ref: maturation-answer-claims-validation.yaml
+  - validator_id: ontology-expansion-validator
+    gate_ids: [ontology_expansion_gate]
+    validator_version: 1
+    input_authority_refs:
+      - ontology-expansion.yaml
+      - maturation-answer-claims-validation.yaml
+      - ontology-seed.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_expansion_answer_claim_refs
+      - validate_expansion_evidence_refs_against_valid_answer_support_ledger_or_seed_authority
+      - require_concept_economy_rationale_when_surface_increases
+      - prevent_in_place_seed_authority_rewrite
+    output_ref: ontology-expansion-validation.yaml
+  - validator_id: actionable-ontology-validator
+    gate_ids: [actionable_ontology_gate]
+    validator_version: 1
+    input_authority_refs:
+      - actionable-ontology.yaml
+      - actionability-matrix-validation.yaml
+      - maturation-continuation-decision-validation.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: ontology-expansion-validation.yaml
+        required_when: ontology_expansion_exists
+        consumed_for:
+          - require_every_projected_ontology_row_to_trace_to_seed_expansion_or_limitation
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_actionable_runtime_or_query_claims_have_validated_proof_refs
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_actionable_visualization_claims_have_validated_proof_refs
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_actionable_graph_exploration_claims_have_validated_proof_refs
+    validation_obligations:
+      - validate_actionability_claim_against_maturation_continuation_decision
+      - require_every_projected_ontology_row_to_trace_to_seed_expansion_or_limitation
+      - require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded
+      - validate_actionable_limited_claim_scope_rows
+      - validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
+      - reject_actionable_ready_when_material_blocker_or_high_question_remains
+    output_ref: actionable-ontology-validation.yaml
+  - validator_id: ontology-handoff-mapping-validator
+    gate_ids: [ontology_handoff_mapping_gate]
+    validator_version: 1
+    input_authority_refs:
+      - ontology-seed.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_ontology_handoff_axis_refs_against_registry
+      - validate_ready_handoff_mappings_have_substantive_content_or_limitation_refs
+      - validate_handoff_mapping_claims_against_seed_refs_and_limitations
+    output_ref: ontology-handoff-mapping-validation.yaml
   - validator_id: source-observation-delta-validator
     gate_ids: [round_lineage_gate]
     validator_version: 1
     input_authority_refs:
       - rounds/<round-id>/source-observation-delta.yaml
-      - rounds/<round-id>/source-frontier-validation.yaml
       - source-observations.yaml
       - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
+        required_when: source_frontier_observation_delta
+        consumed_for:
+          - validate_delta_frontier_validation_ref_matches_frontier_kind
+      - artifact_ref: maturation-closure-frontier-validation.yaml
+        required_when: maturation_closure_frontier_observation_delta
+        consumed_for:
+          - validate_delta_frontier_validation_ref_matches_frontier_kind
+          - validate_maturation_delta_question_refs_against_maturation_closure_frontier_validation
+    validation_obligations:
+      - validate_delta_frontier_kind_is_source_frontier_or_maturation_closure_frontier
+      - validate_delta_frontier_validation_ref_matches_frontier_kind
+      - validate_delta_observation_refs_are_newly_observed_for_round
+      - validate_maturation_delta_question_refs_against_maturation_closure_frontier_validation
     output_ref: rounds/<round-id>/source-observation-delta-validation.yaml
   - validator_id: source-observation-reentry-validator
     gate_ids: [observation_reentry_gate]
     validator_version: 1
     input_authority_refs:
+      - rounds/<round-id>/source-observation-delta.yaml
       - rounds/<round-id>/source-observation-delta-validation.yaml
-      - source-observation-directive.yaml
-      - source-observation-directive-validation.yaml
-      - rounds/<round-id>/lens-judgments/*.yaml
-      - rounds/<round-id>/exploration-synthesis.yaml
-      - candidate-inventory.yaml
-      - candidate-disposition.yaml
-      - candidate-disposition-validation.yaml
-      - ontology-seed.yaml
-      - ontology-seed-validation.yaml
+      - source-observations.yaml
       - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
+        required_when: source_frontier_observation_delta
+        consumed_for:
+          - validate_source_frontier_delta_authorization_before_reentry
+      - artifact_ref: maturation-closure-frontier-validation.yaml
+        required_when: maturation_closure_frontier_observation_delta
+        consumed_for:
+          - validate_maturation_closure_delta_authorization_before_reentry
+      - artifact_ref: rounds/<round-id>/lens-judgments/*.yaml
+        required_when: lens_judgments_use_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: rounds/<round-id>/exploration-synthesis.yaml
+        required_when: exploration_synthesis_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: source-purpose-candidates.yaml
+        required_when: source_purpose_candidates_use_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: source-purpose-candidates-validation.yaml
+        required_when: source_purpose_candidates_use_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: candidate-inventory.yaml
+        required_when: candidate_inventory_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: candidate-disposition.yaml
+        required_when: candidate_disposition_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: candidate-disposition-validation.yaml
+        required_when: candidate_disposition_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: ontology-seed.yaml
+        required_when: ontology_seed_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: ontology-seed-validation.yaml
+        required_when: ontology_seed_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: answer-support-ledger.yaml
+        required_when: answer_support_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: answer-support-ledger-validation.yaml
+        required_when: answer_support_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: maturation-answer-claims.yaml
+        required_when: maturation_answer_claims_use_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: maturation-answer-claims-validation.yaml
+        required_when: maturation_answer_claims_use_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: ontology-expansion.yaml
+        required_when: ontology_expansion_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_refs_to_delta_observation_ids
+      - artifact_ref: ontology-expansion-validation.yaml
+        required_when: ontology_expansion_uses_frontier_observation
+        consumed_for:
+          - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - artifact_ref: actionability-matrix.yaml
+        required_when: actionability_matrix_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - artifact_ref: actionability-matrix-validation.yaml
+        required_when: actionability_matrix_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - artifact_ref: maturation-continuation-decision.yaml
+        required_when: maturation_continuation_decision_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - artifact_ref: maturation-continuation-decision-validation.yaml
+        required_when: maturation_continuation_decision_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - artifact_ref: actionable-ontology.yaml
+        required_when: actionable_ontology_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - artifact_ref: actionable-ontology-validation.yaml
+        required_when: actionable_ontology_uses_frontier_observation
+        consumed_for:
+          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+    validation_obligations:
+      - validate_reentry_authorization_matches_delta_frontier_kind
+      - validate_downstream_refs_to_delta_observation_ids
+      - validate_downstream_artifact_passed_applicable_validation_before_reentry
+      - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
+      - emit_downstream_use_index_for_frontier_observations
     output_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
   - validator_id: query-proof-validator
     gate_ids: [query_proof_gate]
@@ -1522,7 +2813,7 @@ planned_validator_records:
       - reconstruct-run-manifest.yaml
       - reconstruct-contract-registry.yaml
       - <registry:required_when_predicate_catalog[predicate_phase in [null, gate_applicability]].input_authority_refs[]>
-    dynamic_input_authority_rule: Dereference each gate_applicability-phase evaluated predicate_id through required_when_predicate_catalog and validate recorded gate_instance_id, gate_id, predicate_instance_id, round_id, concrete input refs, evaluator id/version, applicability, result truth value, unknown projection, and explanation against that predicate row and validation_gate_catalog.
+    dynamic_input_authority_rule: Dereference each gate_applicability-phase evaluated predicate_id through required_when_predicate_catalog and validate recorded gate_instance_id, gate_id, source_catalog_id, predicate_instance_id, round_id, concrete input refs, evaluator id/version, applicability, result truth value, unknown projection, and explanation against that predicate row and exactly one matching gate row from validation_gate_catalog or planned_validation_gate_catalog; unknown or duplicate active/planned gate_id matches fail closed.
     output_ref: required-when-evaluation-validation.yaml
 
 version_policy:

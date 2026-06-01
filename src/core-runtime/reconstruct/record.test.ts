@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructFinalOutputProvenanceValidationArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
@@ -172,7 +172,7 @@ function targetMaterialProfileValidation(
   };
 }
 
-function ontologySeedValidation(sessionId: string): ReconstructActionableOntologySeedValidationArtifact {
+function ontologySeedValidation(sessionId: string): ReconstructOntologySeedValidationArtifact {
   return {
     schema_version: "1",
     session_id: sessionId,

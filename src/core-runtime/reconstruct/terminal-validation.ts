@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
-  ReconstructActionableOntologySeedArtifact,
-  ReconstructActionableOntologySeedValidationArtifact,
+  ReconstructOntologySeedArtifact,
+  ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
@@ -186,7 +186,7 @@ function statusOf(
 function readinessProjection(args: {
   statuses: Record<string, ReconstructRecordValidationStatusProjection>;
   metrics: ReconstructMetricsArtifact;
-  ontologySeed?: ReconstructActionableOntologySeedArtifact | null | undefined;
+  ontologySeed?: ReconstructOntologySeedArtifact | null | undefined;
   competencyQuestionAssessment?:
     | ReconstructCompetencyQuestionAssessmentArtifact
     | null
@@ -273,7 +273,7 @@ function validationArtifactStatuses(args: {
   candidateDispositionValidation:
     ReconstructCandidateDispositionValidationArtifact | null | undefined;
   ontologySeedValidation:
-    ReconstructActionableOntologySeedValidationArtifact | null | undefined;
+    ReconstructOntologySeedValidationArtifact | null | undefined;
   claimRealizationMapValidation:
     ReconstructClaimRealizationMapValidationArtifact | null | undefined;
   competencyQuestionsValidation:
@@ -512,7 +512,7 @@ function isSupportedPredicateTruthExpression(
       "artifact_exists(source-observations.yaml) and source_observations.records_count > 0" ||
     expression === "competency_questions_validation.validation_status == valid" ||
     expression ===
-      "seed_validity_projection_requested or handoff_readiness_projection_requested" ||
+      "seed_validity_projection_requested or seed_iteration_readiness_projection_requested" ||
     expression === "any_required_applicable_validation_artifact_missing_or_failed" ||
     expression ===
       "failure_classification_validation.validation_status == valid and (failure_classification_validation.material_failure_count > 0 or reconstruct_metrics.unresolved_question_count > 0)" ||
@@ -560,7 +560,7 @@ function evaluatePredicateTruthExpression(args: {
   }
   if (
     expression ===
-      "seed_validity_projection_requested or handoff_readiness_projection_requested"
+      "seed_validity_projection_requested or seed_iteration_readiness_projection_requested"
   ) {
     return artifactExists(args.inputIndex, "ontology-seed-validation.yaml", args.roundId) ||
       artifactExists(args.inputIndex, "stop-decision.yaml", args.roundId);
@@ -863,7 +863,7 @@ export function validateHandoffDecision(args: {
   manifestValidation: ReconstructRunManifestValidationArtifact;
   manifestValidationRef?: string | null;
   manifest?: ReconstructRunManifestArtifact | null;
-  ontologySeed?: ReconstructActionableOntologySeedArtifact | null;
+  ontologySeed?: ReconstructOntologySeedArtifact | null;
   competencyQuestionAssessment?: ReconstructCompetencyQuestionAssessmentArtifact | null;
   predicateInputRefs?: Array<string | null | undefined>;
   predicateFacts?: PredicateRuntimeFacts;
@@ -881,7 +881,7 @@ export function validateHandoffDecision(args: {
   candidateDispositionValidation:
     ReconstructCandidateDispositionValidationArtifact | null | undefined;
   ontologySeedValidation:
-    ReconstructActionableOntologySeedValidationArtifact | null | undefined;
+    ReconstructOntologySeedValidationArtifact | null | undefined;
   claimRealizationMapValidation:
     ReconstructClaimRealizationMapValidationArtifact | null | undefined;
   competencyQuestionsValidation:
@@ -976,15 +976,6 @@ export function validateHandoffDecision(args: {
       subjectId: args.stopDecision.decision,
     }));
   }
-  if (args.stopDecision.decision !== "stop") {
-    violations.push(violation({
-      code: "handoff_decision_inconsistent",
-      message:
-        `terminal handoff requires stop decision; received ${args.stopDecision.decision}`,
-      subjectId: args.stopDecision.decision,
-    }));
-  }
-
   return {
     schema_version: "1",
     session_id: args.stopDecision.session_id,
@@ -1099,10 +1090,10 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     readYamlDocumentIfPresent<ReconstructCandidateDispositionValidationArtifact>(
       args.candidateDispositionValidationPath,
     ),
-    readYamlDocumentIfPresent<ReconstructActionableOntologySeedArtifact>(
+    readYamlDocumentIfPresent<ReconstructOntologySeedArtifact>(
       manifest?.artifact_refs.ontology_seed,
     ),
-    readYamlDocumentIfPresent<ReconstructActionableOntologySeedValidationArtifact>(
+    readYamlDocumentIfPresent<ReconstructOntologySeedValidationArtifact>(
       args.ontologySeedValidationPath,
     ),
     readYamlDocumentIfPresent<ReconstructClaimRealizationMapValidationArtifact>(

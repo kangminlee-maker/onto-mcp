@@ -6,8 +6,8 @@ import {
   type ReconstructContractRegistry,
 } from "./contract-registry.js";
 import type {
-  ReconstructActionableOntologySeedValidationArtifact,
-  ReconstructActionableOntologySeedValidationViolation,
+  ReconstructOntologySeedValidationArtifact,
+  ReconstructOntologySeedValidationViolation,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructCandidateDispositionValidationViolation,
   ReconstructEvidenceRef,
@@ -18,7 +18,7 @@ type CandidateValidationViolationCode =
   ReconstructCandidateDispositionValidationViolation["code"];
 
 type SeedValidationViolationCode =
-  ReconstructActionableOntologySeedValidationViolation["code"];
+  ReconstructOntologySeedValidationViolation["code"];
 
 function isoNow(): string {
   return new Date().toISOString();
@@ -95,7 +95,7 @@ const ACTIONABLE_ONTOLOGY_SEED_ID_KEYS = new Set([
   "candidate_id",
 ]);
 
-export function collectActionableOntologySeedRefs(seed: unknown): Set<string> {
+export function collectOntologySeedRefs(seed: unknown): Set<string> {
   const refs = new Set<string>();
   const visit = (value: unknown) => {
     if (Array.isArray(value)) {
@@ -375,13 +375,20 @@ export function validateCandidateDisposition(args: {
     }
   }
 
-  for (const observation of args.sourceObservations.observations) {
-    if (!candidateEvidenceObservationIds.has(observation.observation_id)) {
+  const requiredCoverageObservationIds =
+    stringArray(inventory?.required_coverage_observation_ids);
+  const requiredCoverageIds = requiredCoverageObservationIds.length > 0
+    ? requiredCoverageObservationIds
+    : args.sourceObservations.observations.map((observation) =>
+      observation.observation_id
+    );
+  for (const observationId of requiredCoverageIds) {
+    if (!candidateEvidenceObservationIds.has(observationId)) {
       violations.push(candidateValidationViolation({
         code: "source_observation_coverage_missing",
         message:
-          `source observation has no candidate inventory coverage: ${observation.observation_id}`,
-        observationId: observation.observation_id,
+          `source observation has no candidate inventory coverage: ${observationId}`,
+        observationId,
       }));
     }
   }
@@ -500,7 +507,7 @@ function seedValidationViolation(args: {
   message: string;
   subjectId?: string | null;
   observationId?: string | null;
-}): ReconstructActionableOntologySeedValidationViolation {
+}): ReconstructOntologySeedValidationViolation {
   return {
     code: args.code,
     message: args.message,
@@ -510,6 +517,11 @@ function seedValidationViolation(args: {
 }
 
 const SEED_DECLARED_STATUS_VALUES = ["confirmed", "provisional", "deferred"] as const;
+const REQUIRED_ACTIONABILITY_COVERAGE_AXES = [
+  "static_surface",
+  "kinetic_surface",
+  "dynamic_surface",
+] as const;
 const INSTANCE_AVAILABILITY_STATUS_VALUES = [
   "present",
   "absent",
@@ -578,7 +590,7 @@ function hasSubstantiveHandoffContent(value: unknown): boolean {
 
 function validateReadyHandoffMappings(args: {
   ontologyHandoff: Record<string, unknown> | null;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): void {
   for (const key of READY_HANDOFF_MAPPING_KEYS) {
     const mapping = args.ontologyHandoff?.[key];
@@ -610,7 +622,7 @@ function validateOptionalEnum(args: {
   allowed: readonly string[];
   fieldPath: string;
   subjectId?: string | null;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): string | null {
   const value = optionalString(args.value);
   if (!value) {
@@ -636,7 +648,7 @@ function validateEnumArray(args: {
   allowed: readonly string[];
   fieldPath: string;
   subjectId?: string | null;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): string[] {
   const values = readArray(
     args.value,
@@ -659,7 +671,7 @@ function recordsFromSeed(args: {
   owner: Record<string, unknown> | null;
   key: string;
   path: string;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): Record<string, unknown>[] {
   const value = args.owner?.[args.key];
   if (!Array.isArray(value)) {
@@ -687,7 +699,7 @@ function addSeedId(args: {
   id: string | null;
   fieldPath: string;
   seedRefs: Set<string>;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): void {
   if (!args.id) {
     args.violations.push(seedValidationViolation({
@@ -711,7 +723,7 @@ function addRequiredString(args: {
   owner: Record<string, unknown> | null;
   key: string;
   fieldPath: string;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): string | null {
   const value = optionalString(args.owner?.[args.key]);
   if (!value) {
@@ -728,7 +740,7 @@ function checkKnownRefs(args: {
   knownRefs: Set<string>;
   fieldPath: string;
   subjectId?: string | null;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): void {
   for (const ref of args.refs) {
     if (!args.knownRefs.has(ref)) {
@@ -769,11 +781,17 @@ function allowedCandidateTargetFamilies(dispositionId: string): string[] {
       return [
         "conceptual_frame.concepts",
         "semantic_layer.object_types",
+        "semantic_layer.link_types",
+        "semantic_layer.value_types",
         "semantic_layer.constraints",
         "dynamic_layer.actor_types",
+        "dynamic_layer.actor_roles",
         "dynamic_layer.permission_policies",
         "kinetic_layer.action_types",
+        "kinetic_layer.functions",
         "kinetic_layer.workflows",
+        "dynamic_layer.state_models",
+        "dynamic_layer.lifecycle_rules",
         "data_binding_layer.source_bindings",
         "data_binding_layer.read_models",
         "data_binding_layer.writebacks",
@@ -805,7 +823,7 @@ function collectNestedEvidenceRefs(args: {
   value: unknown;
   path: string;
   sourceObservations: ReconstructSourceObservationsArtifact;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): number {
   let count = 0;
   if (Array.isArray(args.value)) {
@@ -852,7 +870,7 @@ function collectNestedLimitationRefs(args: {
   value: unknown;
   path: string;
   limitationIds: Set<string>;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): void {
   if (Array.isArray(args.value)) {
     for (const [index, item] of args.value.entries()) {
@@ -896,7 +914,7 @@ function checkSourceRefs(args: {
   refs: string[];
   observedSourceRefs: Set<string>;
   fieldPath: string;
-  violations: ReconstructActionableOntologySeedValidationViolation[];
+  violations: ReconstructOntologySeedValidationViolation[];
 }): void {
   for (const ref of args.refs) {
     if (!args.observedSourceRefs.has(normalizeSourceRef(ref))) {
@@ -909,7 +927,7 @@ function checkSourceRefs(args: {
   }
 }
 
-export function validateActionableOntologySeed(args: {
+export function validateOntologySeed(args: {
   ontologySeed: unknown;
   candidateDisposition: unknown;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -918,8 +936,8 @@ export function validateActionableOntologySeed(args: {
   candidateDispositionRef?: string | null;
   sourceObservationsRef?: string | null;
   registryRef?: string | null;
-}): ReconstructActionableOntologySeedValidationArtifact {
-  const violations: ReconstructActionableOntologySeedValidationViolation[] = [];
+}): ReconstructOntologySeedValidationArtifact {
+  const violations: ReconstructOntologySeedValidationViolation[] = [];
   const addShapeViolation = (_code: "schema_shape_invalid", message: string) => {
     violations.push(seedValidationViolation({ code: "schema_shape_invalid", message }));
   };
@@ -1693,13 +1711,180 @@ export function validateActionableOntologySeed(args: {
   const allowedCoverageAxes = new Set(
     args.registry.coverage_axis_registry.map((record) => record.axis_id),
   );
-  for (const axis of stringArray(validationLayer?.coverage_axes)) {
+  const declaredCoverageAxes = stringArray(validationLayer?.coverage_axes);
+  for (const axis of declaredCoverageAxes) {
     if (!allowedCoverageAxes.has(axis)) {
       violations.push(seedValidationViolation({
         code: "invalid_enum",
         message: `validation_layer.coverage_axes contains unknown axis ${axis}`,
         subjectId: axis,
       }));
+    }
+  }
+  const declaredCoverageAxisSet = new Set(declaredCoverageAxes);
+  for (const requiredAxis of REQUIRED_ACTIONABILITY_COVERAGE_AXES) {
+    if (allowedCoverageAxes.has(requiredAxis) && !declaredCoverageAxisSet.has(requiredAxis)) {
+      violations.push(seedValidationViolation({
+        code: "missing_required_field",
+        message:
+          `validation_layer.coverage_axes must include actionability axis ${requiredAxis}`,
+        subjectId: requiredAxis,
+      }));
+    }
+  }
+
+  const purposeAdequacyFrame = isRecord(purpose?.purpose_adequacy_frame)
+    ? purpose?.purpose_adequacy_frame as Record<string, unknown>
+    : null;
+  if (!purposeAdequacyFrame) {
+    violations.push(seedValidationViolation({
+      code: "missing_required_field",
+      message: "ontology_seed.purpose.purpose_adequacy_frame must be an object",
+      subjectId: seedId,
+    }));
+  } else {
+    const framePath = "ontology_seed.purpose.purpose_adequacy_frame";
+    const frameId = addRequiredString({
+      owner: purposeAdequacyFrame,
+      key: "frame_id",
+      fieldPath: framePath,
+      violations,
+    });
+    for (const key of [
+      "name",
+      "frame_kind",
+      "frame_status",
+      "adequacy_claim",
+      "ranking_rationale",
+    ]) {
+      addRequiredString({
+        owner: purposeAdequacyFrame,
+        key,
+        fieldPath: framePath,
+        violations,
+      });
+    }
+    readEvidenceRefs({
+      value: purposeAdequacyFrame.evidence_refs,
+      fieldPath: `${framePath}.evidence_refs`,
+      subjectId: frameId,
+      required: true,
+      sourceObservations: args.sourceObservations,
+      addViolation: (violation) => {
+        violations.push(seedValidationViolation({
+          code: violation.code,
+          message: violation.message,
+          subjectId: violation.subjectId ?? null,
+          observationId: violation.observationId ?? null,
+        }));
+      },
+    });
+
+    const materialRequirements = isRecord(purposeAdequacyFrame.material_kind_requirements)
+      ? purposeAdequacyFrame.material_kind_requirements as Record<string, unknown>
+      : null;
+    if (!materialRequirements) {
+      violations.push(seedValidationViolation({
+        code: "missing_required_field",
+        message: `${framePath}.material_kind_requirements must be an object`,
+        subjectId: frameId,
+      }));
+    } else {
+      addRequiredString({
+        owner: materialRequirements,
+        key: "target_material_kind",
+        fieldPath: `${framePath}.material_kind_requirements`,
+        violations,
+      });
+      addRequiredString({
+        owner: materialRequirements,
+        key: "rationale",
+        fieldPath: `${framePath}.material_kind_requirements`,
+        violations,
+      });
+      for (const key of ["required_facets", "optional_facets"]) {
+        if (!Array.isArray(materialRequirements[key])) {
+          violations.push(seedValidationViolation({
+            code: "missing_required_field",
+            message: `${framePath}.material_kind_requirements.${key} must be an array`,
+            subjectId: frameId,
+          }));
+        }
+      }
+    }
+
+    const requiredElements = recordsFromSeed({
+      owner: purposeAdequacyFrame,
+      key: "required_elements",
+      path: framePath,
+      violations,
+    });
+    if (requiredElements.length === 0) {
+      violations.push(seedValidationViolation({
+        code: "missing_required_field",
+        message: `${framePath}.required_elements must include at least one element`,
+        subjectId: frameId,
+      }));
+    }
+    for (const [index, element] of requiredElements.entries()) {
+      const elementPath = `${framePath}.required_elements[${index}]`;
+      const elementId = addRequiredString({
+        owner: element,
+        key: "element_id",
+        fieldPath: elementPath,
+        violations,
+      });
+      addRequiredString({
+        owner: element,
+        key: "element_kind",
+        fieldPath: elementPath,
+        violations,
+      });
+      addRequiredString({
+        owner: element,
+        key: "description",
+        fieldPath: elementPath,
+        violations,
+      });
+      const seedRefRefs = stringArray(element.seed_ref_refs);
+      const limitationRefs = stringArray(element.limitation_refs);
+      if (seedRefRefs.length === 0 && limitationRefs.length === 0) {
+        violations.push(seedValidationViolation({
+          code: "missing_required_field",
+          message:
+            `${elementPath} must cite seed_ref_refs or limitation_refs for purpose adequacy closure`,
+          subjectId: elementId,
+        }));
+      }
+      checkKnownRefs({
+        refs: seedRefRefs,
+        knownRefs: seedRefs,
+        fieldPath: `${elementPath}.seed_ref_refs`,
+        subjectId: elementId,
+        violations,
+      });
+      checkKnownRefs({
+        refs: limitationRefs,
+        knownRefs: limitationIds,
+        fieldPath: `${elementPath}.limitation_refs`,
+        subjectId: elementId,
+        violations,
+      });
+      readEvidenceRefs({
+        value: element.evidence_refs,
+        fieldPath: `${elementPath}.evidence_refs`,
+        subjectId: elementId,
+        required: true,
+        sourceObservations: args.sourceObservations,
+        addViolation: (violation) => {
+          violations.push(seedValidationViolation({
+            code: violation.code,
+            message: violation.message,
+            subjectId: violation.subjectId ?? null,
+            observationId: violation.observationId ?? null,
+          }));
+        },
+      });
     }
   }
 
@@ -1730,7 +1915,7 @@ export function validateActionableOntologySeed(args: {
   } else if (readinessClaim !== "ready" && limitationIds.size === 0) {
     violations.push(seedValidationViolation({
       code: "missing_required_field",
-      message: "non-ready ontology handoff readiness must cite explicit handoff limitations",
+      message: "non-ready seed iteration readiness must cite explicit maturation limitations",
       subjectId: readinessClaim,
     }));
   } else if (readinessClaim === "ready") {
@@ -2056,13 +2241,13 @@ export async function writeCandidateDispositionValidationArtifact(args: {
   return validation;
 }
 
-export async function writeActionableOntologySeedValidationArtifact(args: {
+export async function writeOntologySeedValidationArtifact(args: {
   ontologySeedPath: string;
   candidateDispositionPath: string;
   sourceObservationsPath: string;
   registryPath: string;
   outputPath: string;
-}): Promise<ReconstructActionableOntologySeedValidationArtifact> {
+}): Promise<ReconstructOntologySeedValidationArtifact> {
   const [ontologySeed, candidateDisposition, sourceObservations, registry] =
     await Promise.all([
       readYamlDocument<unknown>(args.ontologySeedPath),
@@ -2072,7 +2257,7 @@ export async function writeActionableOntologySeedValidationArtifact(args: {
       ),
       loadReconstructContractRegistry({ registryPath: args.registryPath }),
     ]);
-  const validation = validateActionableOntologySeed({
+  const validation = validateOntologySeed({
     ontologySeed,
     candidateDisposition,
     sourceObservations,

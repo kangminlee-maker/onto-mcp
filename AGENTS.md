@@ -60,8 +60,8 @@ target material 관련 작업 시 추가로 읽을 문서:
 `reconstruct` 작업 시 추가로 읽을 문서:
 
 1. [reconstruct-boundary-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-boundary-contract.md)
-2. [actionable-ontology-seed-recomposition-design.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md)
-3. [foundry-style-ontology-seed-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/foundry-style-ontology-seed-contract.md)
+2. [ontology-seeding-and-maturation-design.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md)
+3. [operational-ontology-seed-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/operational-ontology-seed-contract.md)
 4. [reconstruct-contract-registry.yaml](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-contract-registry.yaml)
 5. [reconstruct-execution-ux-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/reconstruct-execution-ux-contract.md)
 6. [source-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/reconstruct/source-profile-contract.md)
@@ -90,6 +90,7 @@ target material 관련 작업 시 추가로 읽을 문서:
 - `호출 해석 (InvocationInterpretation)` — LLM 소유
 - `호출 고정 (InvocationBinding)` — runtime 소유
 - `대상물 형식 (TargetMaterialKind)` — code/spreadsheet/document/database/mixed/unknown 처리 축
+- `목적 적합성 프레임 (PurposeAdequacyFrame)` — reconstruct 대상 목적을 만족하려면 대상물 형식별로 어떤 요소가 표현되어야 하는지 정의하는 축
 - `리뷰 기록 (ReviewRecord)` — primary artifact
 - `맥락 격리 추론 단위 (ContextIsolatedReasoningUnit)` — lens 실행 원칙
 

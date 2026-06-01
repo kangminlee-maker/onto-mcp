@@ -314,7 +314,7 @@ artifact and gate catalog authority is
 | `candidate-inventory.yaml` | host LLM author | salient object, actor, action, workflow, permission, data source, constraint, and concept candidates |
 | `candidate-disposition.yaml` | host LLM author | one disposition for every salient candidate, including planned target seed refs for promoted candidates |
 | `candidate-disposition-validation.yaml` | runtime | inventory/disposition closure and projection validation |
-| `ontology-seed.yaml` | host LLM author | primary actionable ontology seed |
+| `ontology-seed.yaml` | host LLM author | primary ontology seed for maturation iteration |
 | `ontology-seed-validation.yaml` | runtime | seed layer, id, binding, disposition, and evidence-ref validation |
 | `claim-realization-map.yaml` | host LLM author | one realization stance for every ontology seed claim |
 | `claim-realization-map-validation.yaml` | runtime | seed-claim closure and realization evidence validation |
@@ -323,16 +323,16 @@ artifact and gate catalog authority is
 | `competency-question-assessment.yaml` | host LLM author + runtime projections | answer status, required seed refs, evidence refs, and downstream effect for every authoritative CQ |
 | `competency-question-assessment-validation.yaml` | runtime | exactly-once CQ assessment validation plus answer-status/downstream-effect and seed/evidence closure |
 | `seed-confirmation.yaml` | host/user mediated | confirmation or limitation decision over validated seed claims before CQ authoring |
-| `seed-confirmation-validation.yaml` | runtime | confirmation closure and CQ eligibility over the validated seed; terminal readiness is owned by `handoff-decision-validation.yaml` |
+| `seed-confirmation-validation.yaml` | runtime | confirmation closure and CQ eligibility over the validated seed; terminal seed iteration readiness is owned by `handoff-decision-validation.yaml` |
 | `failure-classification.yaml` | host LLM author | material failure and gap classification |
 | `failure-classification-validation.yaml` | runtime | failure enum, linkage, and materiality validation |
 | `revision-proposal.yaml` | host LLM author | bounded revision/deferral proposals |
 | `revision-proposal-validation.yaml` | runtime | proposal id, target, action, and regression guard validation |
 | `reconstruct-metrics.yaml` | runtime | deterministic counts, answerability bucket counts, unresolved/deferred counts, and pass rate |
 | `stop-decision.yaml` | host LLM author | proposed stop/continue/ask-user decision; not the readiness authority |
-| `handoff-decision-validation.yaml` | runtime | canonical readiness projection from runtime gates plus `stop-decision.yaml` consistency before final output and record projection |
-| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, seed validity, and handoff limitations |
-| `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, requested domain ids, and happy-path scope |
+| `handoff-decision-validation.yaml` | runtime | canonical seed iteration readiness projection from runtime gates plus `stop-decision.yaml` consistency before final output and record projection |
+| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, seed validity, and maturation limitations |
+| `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, requested domain ids, and purpose adequacy scope |
 | `reconstruct-run-manifest.post-publication-validation.yaml` | runtime | post-publication registry hash, active contract hash, source profile migration, validator, reference-standard, pattern-catalog URI/snapshot, version, and migration snapshot consistency after final output and record refs exist |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
 
@@ -341,11 +341,11 @@ authoring calls may receive compact prompt projections, such as selected
 observations with shortened text excerpts, while validation still checks all
 generated evidence refs against the full artifact truth.
 Terminal projection uses `handoff-decision-validation.yaml.readiness_projection`
-as the readiness authority and requires both validated handoff and a validated
+as the seed iteration readiness authority and requires both validated handoff and a validated
 pre-handoff run-manifest snapshot. The final
 `reconstruct-run-manifest.post-publication-validation.yaml` is the post-publication audit for the
 complete manifest after `final-output.md` and `reconstruct-record.yaml` refs are
-known; it is not a prerequisite for the pre-handoff readiness projection. The
+known; it is not a prerequisite for the pre-handoff seed iteration readiness projection. The
 same artifact records `gate_projection[]`, where each
 active gate is evaluated through the registry `required_when_predicate_catalog`
 before validation status is required.
@@ -364,14 +364,19 @@ runtime until their validator surfaces are implemented:
 | `ontology-handoff mapping proof` | per-axis ontology handoff mapping gate once that validator is implemented |
 
 The active seed target is defined by
-`.onto/processes/reconstruct/foundry-style-ontology-seed-contract.md`.
-The full recomposition plan is
-`.onto/processes/reconstruct/actionable-ontology-seed-recomposition-design.md`.
-The active contract, source profile, lens judgment, artifact, gate, readiness, and
+`.onto/processes/reconstruct/operational-ontology-seed-contract.md`.
+The full seeding and maturation plan is
+`.onto/processes/reconstruct/ontology-seeding-and-maturation-design.md`.
+The active contract, source profile, lens judgment, artifact, gate, seed iteration readiness, and
 projection authority registry is
 `.onto/processes/reconstruct/reconstruct-contract-registry.yaml`.
 The seed is valid only when process completion, seed validation, downstream
-gates, and handoff limitations are reported separately and consistently.
+gates, and maturation limitations are reported separately and consistently.
+The seed and later maturation loop judge actionability through three coverage
+surfaces: `static_surface` for what exists and what evidence grounds it,
+`kinetic_surface` for who can do what and what changes, and `dynamic_surface`
+for conditions, permissions, states, exceptions, runtime context, external
+dependencies, and unresolved decisions that change the answer.
 
 ## Repository Map
 
