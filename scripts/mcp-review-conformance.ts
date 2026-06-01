@@ -737,7 +737,7 @@ async function waitForMcpReviewStatus(args: {
   let latest: unknown;
   while (Date.now() < deadline) {
     const statusResult = requireToolResult(requireResult(await args.client.request("tools/call", {
-      name: "onto.review_status",
+      name: "onto_review_status",
       arguments: {
         projectRoot: args.projectRoot,
         sessionRoot: args.sessionRoot,
@@ -819,7 +819,17 @@ async function main(): Promise<void> {
         );
       }
     }
-    const reviewTool = toolsResult.tools?.find((tool) => tool.name === "onto.review");
+    // Tool names must match the MCP/host name pattern ^[a-zA-Z0-9_-]{1,64}$.
+    // A dot (e.g. "onto.review") fails strict hosts like Claude Desktop and
+    // rejects the whole tool list. Names use underscores ("onto_review").
+    const toolNamePattern = /^[a-zA-Z0-9_-]{1,64}$/u;
+    for (const tool of toolsResult.tools ?? []) {
+      assert(
+        typeof tool.name === "string" && toolNamePattern.test(tool.name),
+        `tool name ${tool.name ?? "(unknown)"} must match ^[a-zA-Z0-9_-]{1,64}$ (no dots; strict hosts reject it).`,
+      );
+    }
+    const reviewTool = toolsResult.tools?.find((tool) => tool.name === "onto_review");
     assert(reviewTool, "onto.review tool missing from tools/list.");
     const deliberationSchema = reviewTool.inputSchema?.properties?.deliberation as
       | { enum?: unknown[] }
@@ -840,7 +850,7 @@ async function main(): Promise<void> {
         "returnRunningAfterMs" in (reviewTool.inputSchema?.properties ?? {}),
       "onto.review schema must expose explicit target contract fields.",
     );
-    const reviewResultToolDefinition = toolsResult.tools?.find((tool) => tool.name === "onto.review_result");
+    const reviewResultToolDefinition = toolsResult.tools?.find((tool) => tool.name === "onto_review_result");
     const projectionSchema = reviewResultToolDefinition?.inputSchema?.properties?.projectionLevel as
       | { enum?: unknown[] }
       | undefined;
@@ -850,25 +860,25 @@ async function main(): Promise<void> {
         projectionSchema.enum.includes("full"),
       "onto.review_result schema must expose compact/standard/full projection levels.",
     );
-    const reviewStatusTool = toolsResult.tools?.find((tool) => tool.name === "onto.review_status");
+    const reviewStatusTool = toolsResult.tools?.find((tool) => tool.name === "onto_review_status");
     assert(
       "latest" in (reviewStatusTool?.inputSchema?.properties ?? {}) &&
         "requestHash" in (reviewStatusTool?.inputSchema?.properties ?? {}),
       "onto.review_status schema must expose latest-session recovery filters.",
     );
     assert(
-        toolsResult.tools?.some((tool) => tool.name === "onto.list_source_profiles") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.review_continue") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.review_cancel") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.observe_source") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.validate_reconstruct_directive") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_status") &&
-        toolsResult.tools?.some((tool) => tool.name === "onto.reconstruct_result"),
+        toolsResult.tools?.some((tool) => tool.name === "onto_list_source_profiles") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_review_continue") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_review_cancel") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_observe_source") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_validate_reconstruct_directive") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_reconstruct") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_reconstruct_status") &&
+        toolsResult.tools?.some((tool) => tool.name === "onto_reconstruct_result"),
       "continuation and reconstruct MCP tool surfaces must be listed.",
     );
     const validateReconstructTool = toolsResult.tools?.find((tool) =>
-      tool.name === "onto.validate_reconstruct_directive"
+      tool.name === "onto_validate_reconstruct_directive"
     );
     const directiveKindSchema = validateReconstructTool?.inputSchema
       ?.properties?.directiveKind as { enum?: unknown[] } | undefined;
@@ -896,7 +906,7 @@ async function main(): Promise<void> {
         "utf8",
       );
       const profilesResult = requireToolResult(requireResult(await client.request("tools/call", {
-        name: "onto.list_source_profiles",
+        name: "onto_list_source_profiles",
         arguments: {
           projectRoot: reconstructProjectRoot,
         },
@@ -923,7 +933,7 @@ async function main(): Promise<void> {
       );
 
       const domainsResult = requireToolResult(requireResult(await client.request("tools/call", {
-        name: "onto.list_domains",
+        name: "onto_list_domains",
         arguments: {
           projectRoot: reconstructProjectRoot,
         },
@@ -938,7 +948,7 @@ async function main(): Promise<void> {
       );
 
       const observeResult = requireToolResult(requireResult(await client.request("tools/call", {
-        name: "onto.observe_source",
+        name: "onto_observe_source",
         arguments: {
             projectRoot: reconstructProjectRoot,
             targetRefs: ["src/feature.ts"],
@@ -1018,7 +1028,7 @@ async function main(): Promise<void> {
       );
       const sourceDirectiveValidationResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.validate_reconstruct_directive",
+          name: "onto_validate_reconstruct_directive",
           arguments: {
             projectRoot: reconstructProjectRoot,
             directiveKind: "source_observation",
@@ -1034,7 +1044,7 @@ async function main(): Promise<void> {
       );
 
       const reconstructResult = requireToolResult(requireResult(await client.request("tools/call", {
-        name: "onto.reconstruct",
+        name: "onto_reconstruct",
         arguments: {
           projectRoot: reconstructProjectRoot,
           targetRefs: ["src/feature.ts"],
@@ -1145,7 +1155,7 @@ async function main(): Promise<void> {
       );
       const candidateDispositionValidationResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.validate_reconstruct_directive",
+          name: "onto_validate_reconstruct_directive",
           arguments: {
             projectRoot: reconstructProjectRoot,
             directiveKind: "candidate_disposition",
@@ -1166,7 +1176,7 @@ async function main(): Promise<void> {
       );
       const ontologySeedValidationResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.validate_reconstruct_directive",
+          name: "onto_validate_reconstruct_directive",
           arguments: {
             projectRoot: reconstructProjectRoot,
             directiveKind: "ontology_seed",
@@ -1219,7 +1229,7 @@ async function main(): Promise<void> {
       );
       const reconstructStatusResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.reconstruct_status",
+          name: "onto_reconstruct_status",
           arguments: {
             projectRoot: reconstructProjectRoot,
             sessionRoot: ".onto/reconstruct/mcp-code-run",
@@ -1241,7 +1251,7 @@ async function main(): Promise<void> {
       );
       const reconstructResultReadback =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.reconstruct_result",
+          name: "onto_reconstruct_result",
           arguments: {
             projectRoot: reconstructProjectRoot,
             sessionRoot: ".onto/reconstruct/mcp-code-run",
@@ -1280,7 +1290,7 @@ async function main(): Promise<void> {
         await fs.symlink(outsideReconstructSessionRoot, symlinkSessionRoot, "dir");
         const reconstructBoundaryError =
           requireToolError(requireResult(await client.request("tools/call", {
-            name: "onto.reconstruct_status",
+            name: "onto_reconstruct_status",
             arguments: {
               projectRoot: reconstructProjectRoot,
               sessionRoot: ".onto/reconstruct/escaped-session",
@@ -1304,7 +1314,7 @@ async function main(): Promise<void> {
 
     const reviewProgressToken = "onto-review-conformance-progress";
     const callResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review",
+      name: "onto_review",
       _meta: { progressToken: reviewProgressToken },
       arguments: {
         projectRoot,
@@ -1335,7 +1345,7 @@ async function main(): Promise<void> {
     const numericProgressToken = 42;
     const beforeNumericProgress = client.notifications.length;
     const numericTokenCallResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review",
+      name: "onto_review",
       _meta: { progressToken: numericProgressToken },
       arguments: {
         projectRoot,
@@ -1393,7 +1403,7 @@ async function main(): Promise<void> {
       "review-target-profile must expose closure obligation policy.",
     );
     const reviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review_result",
+      name: "onto_review_result",
       arguments: { sessionRoot, projectionLevel: "full" },
     }), "tools/call onto.review_result"));
     const reviewResultStructured = reviewResultTool.structuredContent as
@@ -1433,7 +1443,7 @@ async function main(): Promise<void> {
       "onto.review_result",
     );
     const compactReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review_result",
+      name: "onto_review_result",
       arguments: { sessionRoot, projectionLevel: "compact" },
     }), "tools/call onto.review_result compact"));
     const compactReviewResult = compactReviewResultTool.structuredContent as
@@ -1779,7 +1789,7 @@ async function main(): Promise<void> {
 
     const beforeNoTokenProgress = client.notifications.length;
     const singleLensCallResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review",
+      name: "onto_review",
       arguments: {
         projectRoot,
         target: "package.json",
@@ -1865,7 +1875,7 @@ async function main(): Promise<void> {
     );
 
     const bundlePrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.prepare_review",
+      name: "onto_prepare_review",
       arguments: {
         projectRoot,
         target: "package.json",
@@ -1910,7 +1920,7 @@ async function main(): Promise<void> {
     );
 
     const targetShapeError = requireToolError(requireResult(await client.request("tools/call", {
-      name: "onto.prepare_review",
+      name: "onto_prepare_review",
       arguments: {
         projectRoot,
         target: "package.json",
@@ -1930,7 +1940,7 @@ async function main(): Promise<void> {
     const outsideBundleRef = path.join(testHome, "outside-bundle-ref.txt");
     await fs.writeFile(outsideBundleRef, "outside bundle ref", "utf8");
     const boundaryError = requireToolError(requireResult(await client.request("tools/call", {
-      name: "onto.prepare_review",
+      name: "onto_prepare_review",
       arguments: {
         projectRoot,
         target: "package.json",
@@ -1952,7 +1962,7 @@ async function main(): Promise<void> {
     const diffRange = resolveNonEmptyGitDiffRange(projectRoot);
     if (diffRange) {
       const diffPrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
-        name: "onto.prepare_review",
+        name: "onto_prepare_review",
         arguments: {
           projectRoot,
           target: ".",
@@ -1988,7 +1998,7 @@ async function main(): Promise<void> {
     }
 
     const domainPrepareResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.prepare_review",
+      name: "onto_prepare_review",
       arguments: {
         projectRoot,
         target: "package.json",
@@ -2068,7 +2078,7 @@ async function main(): Promise<void> {
     try {
       const beforeInvalidTokenProgress = client.notifications.length;
       const retiredConfigError = requireToolError(requireResult(await client.request("tools/call", {
-        name: "onto.review",
+        name: "onto_review",
         _meta: { progressToken: { invalid: true } },
         arguments: {
           projectRoot: retiredProjectRoot,
@@ -2119,7 +2129,7 @@ async function main(): Promise<void> {
     );
     try {
       const settingsValidationError = requireToolError(requireResult(await client.request("tools/call", {
-        name: "onto.review",
+        name: "onto_review",
         arguments: {
           projectRoot: invalidSettingsProjectRoot,
           target: "target.txt",
@@ -2151,7 +2161,7 @@ async function main(): Promise<void> {
 
     const relativeSessionRoot = path.relative(projectRoot, sessionRoot);
     const relativeStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review_status",
+      name: "onto_review_status",
       arguments: {
         sessionRoot: relativeSessionRoot,
         projectRoot,
@@ -2210,7 +2220,7 @@ async function main(): Promise<void> {
       "completed onto.review must expose runHandle.requestHash for recovery.",
     );
     const latestStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
-      name: "onto.review_status",
+      name: "onto_review_status",
       arguments: {
         projectRoot,
         latest: true,
@@ -2256,7 +2266,7 @@ async function main(): Promise<void> {
         clientInfo: { name: "onto-mcp-delayed-conformance", version: "0.0.0" },
       }), "initialize delayed server");
       const runningCall = requireToolResult(requireResult(await delayedClient.request("tools/call", {
-        name: "onto.review",
+        name: "onto_review",
         arguments: {
           projectRoot,
           target: "package.json",
@@ -2277,7 +2287,7 @@ async function main(): Promise<void> {
         "running delayed review must expose requestHash.",
       );
       const runningLatest = requireToolResult(requireResult(await delayedClient.request("tools/call", {
-        name: "onto.review_status",
+        name: "onto_review_status",
         arguments: {
           projectRoot,
           latest: true,
@@ -2298,7 +2308,7 @@ async function main(): Promise<void> {
         "latest recovery must find the delayed review session.",
       );
       const duplicateContinue = requireToolResult(requireResult(await delayedClient.request("tools/call", {
-        name: "onto.review_continue",
+        name: "onto_review_continue",
         arguments: {
           projectRoot,
           sessionRoot: runningStructured.sessionRoot,
@@ -2314,7 +2324,7 @@ async function main(): Promise<void> {
         "review_continue must report already_running for an active review.",
       );
       const cancelResult = requireToolResult(requireResult(await delayedClient.request("tools/call", {
-        name: "onto.review_cancel",
+        name: "onto_review_cancel",
         arguments: {
           projectRoot,
           sessionRoot: runningStructured.sessionRoot,
@@ -2367,7 +2377,7 @@ async function main(): Promise<void> {
     }
 
     const blockedSessionRead = requireToolError(requireResult(await client.request("tools/call", {
-      name: "onto.review_status",
+      name: "onto_review_status",
       arguments: {
         sessionRoot: path.join(os.tmpdir(), "not-owned-review-session"),
       },
@@ -2407,7 +2417,7 @@ async function main(): Promise<void> {
         clientInfo: { name: "onto-mcp-malformed-conformance", version: "0.0.0" },
       }), "initialize malformed server");
       const malformedResult = requireToolError(requireResult(await malformedClient.request("tools/call", {
-        name: "onto.review",
+        name: "onto_review",
         arguments: {
           projectRoot,
           target: "package.json",
@@ -2448,7 +2458,7 @@ async function main(): Promise<void> {
       );
       const malformedSessionRoot = path.dirname(malformedExecutionPlan);
       const malformedStatusResult = requireToolResult(requireResult(await malformedClient.request("tools/call", {
-        name: "onto.review_status",
+        name: "onto_review_status",
         arguments: {
           sessionRoot: malformedSessionRoot,
           projectRoot,
@@ -2495,7 +2505,7 @@ async function main(): Promise<void> {
       );
       const continuedMalformedResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.review_continue",
+          name: "onto_review_continue",
           arguments: {
             sessionRoot: malformedSessionRoot,
             projectRoot,
@@ -2561,7 +2571,7 @@ async function main(): Promise<void> {
       );
       const continuedStatusResult =
         requireToolResult(requireResult(await client.request("tools/call", {
-          name: "onto.review_status",
+          name: "onto_review_status",
           arguments: {
             sessionRoot: malformedSessionRoot,
             projectRoot,
