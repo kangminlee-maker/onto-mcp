@@ -429,7 +429,7 @@ async function runMcp(
   const progressToken = `invocation-conformance-${fixture.name}`;
   const before = client.notifications.length;
   const result = requireToolResult(requireResult(await client.request("tools/call", {
-    name: "onto.review",
+    name: "onto_review",
     _meta: { progressToken },
     arguments: requestArgs(projectRoot, fixture),
   }), `tools/call onto.review ${fixture.name}`));
@@ -522,7 +522,7 @@ async function expectCoreApiFailure(projectRoot: string): Promise<void> {
 
 async function expectMcpFailure(client: McpClient, projectRoot: string): Promise<void> {
   requireToolError(requireResult(await client.request("tools/call", {
-    name: "onto.review",
+    name: "onto_review",
     arguments: {
       projectRoot,
       target: "src/feature.ts",

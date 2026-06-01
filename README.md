@@ -132,25 +132,25 @@ Available MCP tools:
 
 | Tool | Purpose |
 |---|---|
-| `onto.review` | Run the full review path and return artifact refs plus summary |
-| `onto.prepare_review` | Prepare a review session and prompt packets |
-| `onto.review_continue` | Continue a prepared or halted review from the ledger frontier |
-| `onto.review_status` | Read structured status and artifact refs |
-| `onto.review_result` | Read `review-record.yaml` and final output |
-| `onto.list_lenses` | List canonical lens sets |
-| `onto.list_domains` | List available domain ids |
-| `onto.list_source_profiles` | List reconstruct source profiles |
-| `onto.observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
-| `onto.validate_reconstruct_directive` | Validate LLM-authored reconstruct artifacts |
-| `onto.reconstruct` | Run the material-aware direct-call reconstruct path with runtime validation gates |
-| `onto.reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
-| `onto.reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
+| `onto_review` | Run the full review path and return artifact refs plus summary |
+| `onto_prepare_review` | Prepare a review session and prompt packets |
+| `onto_review_continue` | Continue a prepared or halted review from the ledger frontier |
+| `onto_review_status` | Read structured status and artifact refs |
+| `onto_review_result` | Read `review-record.yaml` and final output |
+| `onto_list_lenses` | List canonical lens sets |
+| `onto_list_domains` | List available domain ids |
+| `onto_list_source_profiles` | List reconstruct source profiles |
+| `onto_observe_source` | Materialize reconstruct material profile, inventory, source observations, and initial record |
+| `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct artifacts |
+| `onto_reconstruct` | Run the material-aware direct-call reconstruct path with runtime validation gates |
+| `onto_reconstruct_status` | Read reconstruct session status, progress, counts, and artifact refs |
+| `onto_reconstruct_result` | Read `reconstruct-record.yaml`, run manifest, progress projection, and final output |
 
 MCP results include `llmPresentation` prompts. The runtime supplies bounded
 facts; the host LLM should use those prompts to explain the opening brief and
 final result to the user without inventing settings or findings.
 
-When `onto.review`, `onto.review_continue`, or `onto.reconstruct` starts, the
+When `onto_review`, `onto_review_continue`, or `onto_reconstruct` starts, the
 runtime writes a session-local `runtime-events.ndjson` stream and tries to open
 `scripts/onto-runtime-watch.sh` in a supported terminal split/tab. Current
 automatic attach targets are `tmux`, Codex Desktop with a configured launcher
@@ -168,7 +168,7 @@ Minimal reconstruct MCP call shape:
 
 ```json
 {
-  "name": "onto.reconstruct",
+  "name": "onto_reconstruct",
   "arguments": {
     "projectRoot": "/path/to/project",
     "targetRefs": ["src/example.ts"],

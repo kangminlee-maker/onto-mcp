@@ -161,7 +161,7 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
     returnRunningAfterMs: {
       type: "number",
       description:
-        "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto.review returns a running handle and background execution continues.",
+        "Optional synchronous wait budget in milliseconds. When exceeded after session planning, onto_review returns a running handle and background execution continues.",
     },
   },
 };
@@ -496,83 +496,83 @@ const VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA: JsonValue = {
 
 const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
-    name: "onto.review",
+    name: "onto_review",
     description:
       "Run an onto review: isolated parallel lens review followed by controlled synthesize/deliberation and ReviewRecord assembly.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
-    name: "onto.prepare_review",
+    name: "onto_prepare_review",
     description:
       "Prepare an onto review session and prompt packets without executing lens units.",
     inputSchema: REVIEW_INPUT_SCHEMA,
   },
   {
-    name: "onto.review_continue",
+    name: "onto_review_continue",
     description:
       "Continue a review session when runControl.continuationAvailable is true by reusing trusted PipelineExecutionLedger units and rerunning only the continuation frontier and downstream units.",
     inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
   },
   {
-    name: "onto.review_cancel",
+    name: "onto_review_cancel",
     description:
       "Request cancellation for a running review session. The runner writes a halted cancellation result at the next runtime cancellation checkpoint.",
     inputSchema: REVIEW_CANCEL_INPUT_SCHEMA,
   },
   {
-    name: "onto.review_status",
+    name: "onto_review_status",
     description:
       "Read structured status and artifact refs for a review session, or recover the latest matching session.",
     inputSchema: REVIEW_STATUS_INPUT_SCHEMA,
   },
   {
-    name: "onto.review_result",
+    name: "onto_review_result",
     description:
       "Read the ReviewRecord and rendered final output for a completed review session with compact/standard/full projections.",
     inputSchema: REVIEW_RESULT_INPUT_SCHEMA,
   },
   {
-    name: "onto.list_lenses",
+    name: "onto_list_lenses",
     description: "List canonical full and core-axis review lens ids.",
     inputSchema: { type: "object", additionalProperties: false, properties: {} },
   },
   {
-    name: "onto.list_domains",
+    name: "onto_list_domains",
     description: "List available domain ids from project, user, and installation domain seats.",
     inputSchema: LIST_DOMAINS_INPUT_SCHEMA,
   },
   {
-    name: "onto.list_source_profiles",
+    name: "onto_list_source_profiles",
     description:
       "List reconstruct source profiles by target_material_kind and support status.",
     inputSchema: LIST_SOURCE_PROFILES_INPUT_SCHEMA,
   },
   {
-    name: "onto.observe_source",
+    name: "onto_observe_source",
     description:
       "Prepare reconstruct material profiling, inventory, structural source observations, and reconstruct-record refs without generating ontology meaning.",
     inputSchema: OBSERVE_SOURCE_INPUT_SCHEMA,
   },
   {
-    name: "onto.validate_reconstruct_directive",
+    name: "onto_validate_reconstruct_directive",
     description:
       "Validate LLM-authored reconstruct artifacts against runtime observations, registry enums, and evidence refs without repairing or rewriting them.",
     inputSchema: VALIDATE_RECONSTRUCT_DIRECTIVE_INPUT_SCHEMA,
   },
   {
-    name: "onto.reconstruct",
+    name: "onto_reconstruct",
     description:
       "Run the material-aware reconstruct path with live semantic authoring, runtime validation gates, final-output.md, and reconstruct-record.yaml refs.",
     inputSchema: RECONSTRUCT_INPUT_SCHEMA,
   },
   {
-    name: "onto.reconstruct_status",
+    name: "onto_reconstruct_status",
     description:
       "Read structured status, stage progress, liveness, count summary, and artifact refs for a reconstruct session.",
     inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
   },
   {
-    name: "onto.reconstruct_result",
+    name: "onto_reconstruct_result",
     description:
       "Read the reconstruct record, run manifest, stage progress, final output, and artifact refs for a reconstruct session.",
     inputSchema: RECONSTRUCT_SESSION_INPUT_SCHEMA,
@@ -1063,7 +1063,7 @@ async function callTool(
 ): Promise<JsonValue> {
   try {
     switch (name) {
-      case "onto.review": {
+      case "onto_review": {
         const parsed = OntoReviewToolInputSchema.parse(args);
         if (parsed.prepareOnly) {
           const prepared = await reviewApi.prepareReview(toReviewRequest(parsed));
@@ -1084,12 +1084,12 @@ async function callTool(
         });
         return formatToolResult(result);
       }
-      case "onto.prepare_review": {
+      case "onto_prepare_review": {
         const parsed = OntoPrepareReviewToolInputSchema.parse(args);
         const result = await reviewApi.prepareReview(toReviewRequest(parsed));
         return formatToolResult(result);
       }
-      case "onto.review_continue": {
+      case "onto_review_continue": {
         const parsed = OntoReviewContinueToolInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = await resolveAllowedSessionRoot({
@@ -1111,7 +1111,7 @@ async function callTool(
         });
         return formatToolResult(result);
       }
-      case "onto.review_cancel": {
+      case "onto_review_cancel": {
         const parsed = OntoReviewCancelToolInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = await resolveAllowedSessionRoot({
@@ -1126,7 +1126,7 @@ async function callTool(
           }),
         );
       }
-      case "onto.review_status": {
+      case "onto_review_status": {
         const parsed = OntoReviewStatusInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         if (parsed.sessionRoot) {
@@ -1166,7 +1166,7 @@ async function callTool(
           latestSessionMatches,
         });
       }
-      case "onto.review_result": {
+      case "onto_review_result": {
         const parsed = OntoReviewResultInputSchema.parse(args);
         const sessionRoot = await resolveAllowedSessionRoot(parsed);
         return formatToolResult(
@@ -1175,15 +1175,15 @@ async function callTool(
           }),
         );
       }
-      case "onto.list_lenses":
+      case "onto_list_lenses":
         return formatToolResult(await reviewApi.listLenses());
-      case "onto.list_domains": {
+      case "onto_list_domains": {
         const parsed = OntoListDomainsToolInputSchema.parse(args ?? {});
         const domains = await reviewApi.listDomains(parsed.projectRoot);
         // Wrap the array so structuredContent is a JSON object (MCP requirement).
         return formatToolResult({ domains });
       }
-      case "onto.list_source_profiles": {
+      case "onto_list_source_profiles": {
         const parsed = OntoListSourceProfilesToolInputSchema.parse(args ?? {});
         const sourceProfiles = await reconstructApi.listSourceProfiles(
           parsed.projectRoot,
@@ -1191,7 +1191,7 @@ async function callTool(
         // Wrap the array so structuredContent is a JSON object (MCP requirement).
         return formatToolResult({ sourceProfiles });
       }
-      case "onto.observe_source": {
+      case "onto_observe_source": {
         const parsed = OntoObserveSourceToolInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = resolveReconstructSessionRoot({
@@ -1229,7 +1229,7 @@ async function callTool(
           }),
         );
       }
-      case "onto.validate_reconstruct_directive": {
+      case "onto_validate_reconstruct_directive": {
         const parsed = OntoValidateReconstructDirectiveToolInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sourceObservationsPath = resolveInsideProject({
@@ -1313,7 +1313,7 @@ async function callTool(
         }
         throw new Error("Unsupported reconstruct directive kind.");
       }
-      case "onto.reconstruct": {
+      case "onto_reconstruct": {
         const parsed = OntoReconstructToolInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = resolveReconstructSessionRoot({
@@ -1357,7 +1357,7 @@ async function callTool(
           }),
         );
       }
-      case "onto.reconstruct_status": {
+      case "onto_reconstruct_status": {
         const parsed = OntoReconstructSessionInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = await resolveAllowedReconstructSessionRoot({
@@ -1366,7 +1366,7 @@ async function callTool(
         });
         return formatToolResult(await reconstructApi.getRunStatus(sessionRoot));
       }
-      case "onto.reconstruct_result": {
+      case "onto_reconstruct_result": {
         const parsed = OntoReconstructSessionInputSchema.parse(args);
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         const sessionRoot = await resolveAllowedReconstructSessionRoot({

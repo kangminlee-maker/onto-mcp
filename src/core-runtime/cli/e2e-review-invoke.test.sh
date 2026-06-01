@@ -857,7 +857,7 @@ echo "=== E40: onto-help ==="
 E40_OUT=$(onto --help 2>&1)
 E40_EXIT=$?
 
-if [ $E40_EXIT -eq 0 ] && echo "$E40_OUT" | grep -q "Usage: onto mcp" && echo "$E40_OUT" | grep -q "onto.review"; then
+if [ $E40_EXIT -eq 0 ] && echo "$E40_OUT" | grep -q "Usage: onto mcp" && echo "$E40_OUT" | grep -q "onto_review"; then
   echo "  PASS  E40: onto-help"
   PASS_COUNT=$((PASS_COUNT + 1))
 else

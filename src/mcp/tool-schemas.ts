@@ -149,20 +149,20 @@ export const OntoValidateReconstructDirectiveToolInputSchema = z.discriminatedUn
 );
 
 export const OntoToolNames = [
-  "onto.review",
-  "onto.prepare_review",
-  "onto.review_continue",
-  "onto.review_cancel",
-  "onto.review_status",
-  "onto.review_result",
-  "onto.list_lenses",
-  "onto.list_domains",
-  "onto.list_source_profiles",
-  "onto.observe_source",
-  "onto.validate_reconstruct_directive",
-  "onto.reconstruct",
-  "onto.reconstruct_status",
-  "onto.reconstruct_result",
+  "onto_review",
+  "onto_prepare_review",
+  "onto_review_continue",
+  "onto_review_cancel",
+  "onto_review_status",
+  "onto_review_result",
+  "onto_list_lenses",
+  "onto_list_domains",
+  "onto_list_source_profiles",
+  "onto_observe_source",
+  "onto_validate_reconstruct_directive",
+  "onto_reconstruct",
+  "onto_reconstruct_status",
+  "onto_reconstruct_result",
 ] as const;
 
 export type OntoToolName = (typeof OntoToolNames)[number];
