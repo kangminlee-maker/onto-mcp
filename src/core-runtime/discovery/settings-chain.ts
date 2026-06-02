@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { parse as parseYaml } from "yaml";
 import { z } from "zod";
 import {
   normalizeLlmModelSwitcher,
@@ -21,6 +22,18 @@ const LlmSettingsSchema = z
     auth: LlmAuthModeSchema.optional(),
     provider: LlmProviderSchema.optional(),
     model: z.string().min(1).optional(),
+    base_url: z.string().min(1).optional(),
+    effort: z.string().min(1).optional(),
+    service_tier: z.string().min(1).optional(),
+    api_key_env: z.string().min(1).optional(),
+  })
+  .strict();
+
+const FullLlmSettingsSchema = z
+  .object({
+    auth: LlmAuthModeSchema,
+    provider: LlmProviderSchema,
+    model: z.string().min(1),
     base_url: z.string().min(1).optional(),
     effort: z.string().min(1).optional(),
     service_tier: z.string().min(1).optional(),
@@ -235,10 +248,101 @@ const V2SettingsSchema = z
   })
   .strict();
 
-const SettingsSchema = z.union([V1SettingsSchema, V2SettingsSchema]);
+const V3ReviewActorSettingsSchema = z
+  .object({
+    seat: ReviewWorkerSeatSchema.optional(),
+    llm: FullLlmSettingsSchema,
+  })
+  .strict();
+
+const V3ReviewExecutionSettingsSchema = z
+  .object({
+    topology: ReviewExecutionModeSchema.optional(),
+    executor: ReviewExecutorSelectionSchema.optional(),
+    actors: z
+      .object({
+        teamlead: V3ReviewActorSettingsSchema.optional(),
+        lens: V3ReviewActorSettingsSchema.optional(),
+        synthesize: V3ReviewActorSettingsSchema.optional(),
+      })
+      .strict()
+      .optional(),
+    deliberation: ReviewDeliberationSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const topology = value.topology ?? "main-workers";
+    const teamleadSeat = value.actors?.teamlead?.seat ?? "main";
+    const lensSeat = value.actors?.lens?.seat ?? "worker";
+    const synthesizeSeat = value.actors?.synthesize?.seat ?? "worker";
+
+    if (topology === "main-workers" && teamleadSeat !== "main") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actors", "teamlead", "seat"],
+        message: "main-workers requires review.execution.actors.teamlead.seat=main.",
+      });
+    }
+    if (topology === "main-workers" && lensSeat !== "worker") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actors", "lens", "seat"],
+        message: "main-workers requires review.execution.actors.lens.seat=worker.",
+      });
+    }
+    if (topology === "nested-workers" && teamleadSeat !== "worker") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actors", "teamlead", "seat"],
+        message: "nested-workers requires review.execution.actors.teamlead.seat=worker.",
+      });
+    }
+    if (topology === "nested-workers" && lensSeat !== "worker") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actors", "lens", "seat"],
+        message: "nested-workers requires review.execution.actors.lens.seat=worker.",
+      });
+    }
+    if (synthesizeSeat !== "worker") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["actors", "synthesize", "seat"],
+        message: "review.execution.actors.synthesize.seat must be worker.",
+      });
+    }
+  });
+
+const V3ReviewSettingsSchema = z
+  .object({
+    mode: z.enum(["core-axis", "full"]).optional(),
+    domains: z.array(z.string().min(1)).optional(),
+    context: z
+      .object({
+        excluded_names: z.array(z.string().min(1)).optional(),
+        max_listing_depth: z.union([z.number(), z.string()]).optional(),
+        max_listing_entries: z.union([z.number(), z.string()]).optional(),
+        max_embed_lines: z.union([z.number(), z.string()]).optional(),
+      })
+      .strict()
+      .optional(),
+    execution: V3ReviewExecutionSettingsSchema.optional(),
+  })
+  .strict();
+
+const V3SettingsSchema = z
+  .object({
+    schema_version: z.literal("settings.json/v3"),
+    review: V3ReviewSettingsSchema.optional(),
+  })
+  .strict();
+
+const SettingsSchema = z.union([V1SettingsSchema, V2SettingsSchema, V3SettingsSchema]);
 const NormalizedSettingsSchema = z
   .object({
-    schema_version: z.enum(["settings.json/v1", "settings.json/v2"]).optional(),
+    schema_version: z
+      .enum(["settings.json/v1", "settings.json/v2", "settings.json/v3"])
+      .optional(),
     llm: LlmSettingsSchema.optional(),
     review: ReviewSettingsSchema.optional(),
     review_mode: z.enum(["core-axis", "full"]).optional(),
@@ -251,6 +355,7 @@ const NormalizedSettingsSchema = z
   .strict();
 type V1Settings = z.infer<typeof V1SettingsSchema>;
 type V2Settings = z.infer<typeof V2SettingsSchema>;
+type V3Settings = z.infer<typeof V3SettingsSchema>;
 type ParsedSettings = z.infer<typeof SettingsSchema>;
 
 export type ReviewExecutionMode = z.infer<typeof ReviewExecutionModeSchema>;
@@ -324,7 +429,7 @@ export interface ReviewSettings {
 }
 
 export interface OntoSettings {
-  schema_version?: "settings.json/v1" | "settings.json/v2";
+  schema_version?: "settings.json/v1" | "settings.json/v2" | "settings.json/v3";
   llm?: LlmModelSwitcherConfig;
   review?: ReviewSettings;
   review_mode?: "core-axis" | "full";
@@ -589,20 +694,91 @@ function normalizeV2Settings(settings: V2Settings): OntoSettings {
   };
 }
 
+function v3ActorSettings(
+  actor: z.infer<typeof V3ReviewActorSettingsSchema>,
+): ReviewActorSettings {
+  return {
+    ...(actor.seat !== undefined ? { seat: actor.seat } : {}),
+    llm: actor.llm,
+  };
+}
+
+function normalizeV3Settings(settings: V3Settings): OntoSettings {
+  const execution = settings.review?.execution;
+  const mode = settings.review?.mode;
+  const domains = settings.review?.domains;
+  const context = settings.review?.context
+    ? definedReviewContext(settings.review.context)
+    : undefined;
+  let review: ReviewSettings | undefined;
+  if (settings.review) {
+    review = {};
+    if (execution) {
+      const normalizedExecution: ReviewExecutionSettings = {};
+      if (execution.actors?.teamlead) {
+        normalizedExecution.teamlead = v3ActorSettings(execution.actors.teamlead);
+      }
+      if (execution.actors?.lens) {
+        normalizedExecution.lens = v3ActorSettings(execution.actors.lens);
+      }
+      if (execution.actors?.synthesize) {
+        normalizedExecution.synthesize = v3ActorSettings(
+          execution.actors.synthesize,
+        );
+      }
+      if (execution.topology !== undefined) {
+        normalizedExecution.mode = execution.topology;
+      }
+      if (execution.executor !== undefined) {
+        normalizedExecution.executor = execution.executor;
+      }
+      if (execution.deliberation !== undefined) {
+        normalizedExecution.deliberation = execution.deliberation;
+      }
+      review.execution = normalizedExecution;
+    }
+    if (mode !== undefined) review.mode = mode;
+    if (domains !== undefined) review.domains = domains;
+    if (context) review.context = context;
+  }
+  return {
+    schema_version: "settings.json/v3",
+    ...(review ? { review } : {}),
+    ...(mode !== undefined ? { review_mode: mode } : {}),
+    ...(domains !== undefined ? { domains } : {}),
+    ...(context?.excluded_names !== undefined
+      ? { excluded_names: context.excluded_names }
+      : {}),
+    ...(context?.max_listing_depth !== undefined
+      ? { max_listing_depth: context.max_listing_depth }
+      : {}),
+    ...(context?.max_listing_entries !== undefined
+      ? { max_listing_entries: context.max_listing_entries }
+      : {}),
+    ...(context?.max_embed_lines !== undefined
+      ? { max_embed_lines: context.max_embed_lines }
+      : {}),
+  };
+}
+
 function normalizeParsedSettings(settings: ParsedSettings): OntoSettings {
-  return settings.schema_version === "settings.json/v2"
-    ? normalizeV2Settings(settings)
-    : normalizeV1Settings(settings);
+  if (settings.schema_version === "settings.json/v3") {
+    return normalizeV3Settings(settings);
+  }
+  if (settings.schema_version === "settings.json/v2") {
+    return normalizeV2Settings(settings);
+  }
+  return normalizeV1Settings(settings);
 }
 
 async function readSettingsAt(filePath: string): Promise<OntoSettings> {
   if (!(await fileExists(filePath))) return {};
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
+    parsed = parseYaml(await fs.readFile(filePath, "utf8"));
   } catch (error) {
     throw new OntoSettingsValidationError({
-      message: `Failed to parse settings JSON at ${filePath}: ${
+      message: `Failed to parse settings at ${filePath}: ${
         error instanceof Error ? error.message : String(error)
       }`,
       settingsPath: filePath,
@@ -616,7 +792,13 @@ async function readSettingsAt(filePath: string): Promise<OntoSettings> {
     parsed !== null &&
     typeof parsed === "object" &&
     !Array.isArray(parsed) &&
-    (parsed as { schema_version?: unknown }).schema_version === "settings.json/v2"
+    (parsed as { schema_version?: unknown }).schema_version === "settings.json/v3"
+      ? V3SettingsSchema
+      : parsed !== null &&
+          typeof parsed === "object" &&
+          !Array.isArray(parsed) &&
+          (parsed as { schema_version?: unknown }).schema_version ===
+            "settings.json/v2"
       ? V2SettingsSchema
       : V1SettingsSchema;
   const result = schema.safeParse(parsed);
@@ -646,13 +828,16 @@ function mergeReviewActorSettings(
   defaultActor: ResolvedReviewActorSettings,
   userActor: ReviewActorSettings | undefined,
   projectActor: ReviewActorSettings | undefined,
+  llmMergeMode: "overlay" | "replace",
 ): ResolvedReviewActorSettings {
   const userLlm = userActor?.llm ?? defaultActor.llm;
   const projectLlm = projectActor?.llm;
   const mergedLlm =
-    userLlm !== "inherit" &&
-    projectLlm !== undefined &&
-    projectLlm !== "inherit"
+    llmMergeMode === "replace"
+      ? projectLlm ?? userLlm
+      : userLlm !== "inherit" &&
+          projectLlm !== undefined &&
+          projectLlm !== "inherit"
       ? { ...userLlm, ...projectLlm }
       : projectLlm ?? userLlm;
   return {
@@ -707,7 +892,7 @@ function resolveActorLlmForValidation(
   const selection = normalizeLlmModelSwitcher(resolved);
   if (!selection) {
     throw new Error(
-      `review.execution.actors.${actorName}.llm must provide provider/auth fields or inherit from llm.default.`,
+      `review.execution.actors.${actorName}.llm must provide provider/auth fields or use a legacy inherited llm setting.`,
     );
   }
   return resolved;
@@ -717,8 +902,13 @@ function mergeSettings(
   user: OntoSettings,
   project: OntoSettings,
 ): OntoSettings {
+  const projectUsesActorOwnedLlm = project.schema_version === "settings.json/v3";
   const llm =
-    user.llm || project.llm ? { ...user.llm, ...project.llm } : undefined;
+    projectUsesActorOwnedLlm || (!user.llm && !project.llm)
+      ? undefined
+      : { ...user.llm, ...project.llm };
+  const actorLlmMergeMode =
+    project.schema_version === "settings.json/v3" ? "replace" : "overlay";
   const defaultExecution = defaultReviewExecution();
   const userExecution = user.review?.execution;
   const projectExecution = project.review?.execution;
@@ -736,16 +926,19 @@ function mergeSettings(
           defaultExecution.teamlead,
           userExecution?.teamlead,
           projectExecution?.teamlead,
+          actorLlmMergeMode,
         ),
         lens: mergeReviewActorSettings(
           defaultExecution.lens,
           userExecution?.lens,
           projectExecution?.lens,
+          actorLlmMergeMode,
         ),
         synthesize: mergeReviewActorSettings(
           defaultExecution.synthesize,
           userExecution?.synthesize,
           projectExecution?.synthesize,
+          actorLlmMergeMode,
         ),
         deliberation:
           projectExecution?.deliberation ??

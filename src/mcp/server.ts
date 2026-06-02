@@ -594,10 +594,22 @@ tools; the runtime owns artifacts and validation. Two product paths exist:
 ## Prerequisite: configure a provider
 
 \`review\` and \`reconstruct\` execute real LLM work and FAIL LOUD if no provider is
-configured. Set \`llm.default\` in \`{projectRoot}/.onto/settings.json\` or
-\`~/.onto/settings.json\`, e.g. Codex OAuth:
+configured. For review, set full actor \`llm\` blocks in
+\`{projectRoot}/.onto/settings.json\` or \`~/.onto/settings.json\`, e.g. Codex OAuth:
 
-    { "schema_version": "settings.json/v2", "llm": { "default": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } } }
+    {
+      # settings.json accepts # comments.
+      "schema_version": "settings.json/v3",
+      "review": {
+        "execution": {
+          "actors": {
+            "teamlead": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
+            "lens": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
+            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "xhigh" } }
+          }
+        }
+      }
+    }
 
 Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
 that API; local+lmstudio -> local endpoint. Review execution may be pinned with

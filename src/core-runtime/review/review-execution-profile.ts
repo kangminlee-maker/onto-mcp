@@ -9,6 +9,8 @@ import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
 import {
   normalizeLlmModelSwitcher,
   type LlmAuthMode,
+  type LlmModelSwitcherConfig,
+  type NormalizedLlmSelection,
   type LlmProviderName,
 } from "../llm/model-switcher.js";
 
@@ -55,6 +57,8 @@ export interface ResolveReviewExecutionProfileArgs {
   codexAvailable?: boolean;
 }
 
+type ReviewActorName = "teamlead" | "lens" | "synthesize";
+
 function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
   const execution = settings.review?.execution;
@@ -90,6 +94,96 @@ function actorLlm(
   };
 }
 
+function actorLlmEntries(
+  execution: ResolvedReviewExecutionSettings,
+  inherited: OntoSettings["llm"],
+): Array<{ actor: ReviewActorName; llm: ReviewLlmRef }> {
+  return [
+    { actor: "teamlead", llm: actorLlm(execution.teamlead.llm, inherited) },
+    { actor: "lens", llm: actorLlm(execution.lens.llm, inherited) },
+    { actor: "synthesize", llm: actorLlm(execution.synthesize.llm, inherited) },
+  ];
+}
+
+function actorRouteSelections(
+  execution: ResolvedReviewExecutionSettings,
+  inherited: OntoSettings["llm"],
+): Array<{
+  actor: ReviewActorName;
+  selection: NormalizedLlmSelection | null;
+}> {
+  return actorLlmEntries(execution, inherited).map((entry) => ({
+    actor: entry.actor,
+    selection:
+      entry.llm === "inherit" ? null : normalizeLlmModelSwitcher(entry.llm),
+  }));
+}
+
+function commonActorRouteSelection(
+  selections: Array<{
+    actor: ReviewActorName;
+    selection: NormalizedLlmSelection | null;
+  }>,
+):
+  | { type: "none" }
+  | { type: "common"; selection: NormalizedLlmSelection }
+  | { type: "mixed"; reason: string } {
+  const configured = selections.filter(
+    (entry): entry is { actor: ReviewActorName; selection: NormalizedLlmSelection } =>
+      entry.selection !== null,
+  );
+  if (configured.length === 0) return { type: "none" };
+  const first = configured[0]!.selection;
+  const mixed = configured.find(
+    (entry) =>
+      entry.selection.provider !== first.provider ||
+      entry.selection.auth !== first.auth,
+  );
+  if (mixed) {
+    return {
+      type: "mixed",
+      reason:
+        "Actor LLM settings resolve to different executor routes. Keep actor auth/provider on one route for now.",
+    };
+  }
+  return { type: "common", selection: first };
+}
+
+function commonField<T>(
+  values: T[],
+): T | undefined {
+  if (values.length === 0) return undefined;
+  const [first, ...rest] = values;
+  return rest.every((value) => value === first) ? first : undefined;
+}
+
+function commonActorLlmConfig(
+  entries: Array<{ actor: ReviewActorName; llm: ReviewLlmRef }>,
+): LlmModelSwitcherConfig | undefined {
+  const configs = entries
+    .map((entry) => (entry.llm === "inherit" ? null : entry.llm))
+    .filter((config): config is LlmModelSwitcherConfig => config !== null);
+  const provider = commonField(configs.map((config) => config.provider));
+  if (!provider) return undefined;
+  const auth = commonField(configs.map((config) => config.auth));
+  return {
+    provider,
+    ...(auth ? { auth } : {}),
+    ...(commonField(configs.map((config) => config.model)) ? {
+      model: commonField(configs.map((config) => config.model)),
+    } : {}),
+    ...(commonField(configs.map((config) => config.effort)) ? {
+      effort: commonField(configs.map((config) => config.effort)),
+    } : {}),
+    ...(commonField(configs.map((config) => config.service_tier)) ? {
+      service_tier: commonField(configs.map((config) => config.service_tier)),
+    } : {}),
+    ...(commonField(configs.map((config) => config.base_url)) ? {
+      base_url: commonField(configs.map((config) => config.base_url)),
+    } : {}),
+  };
+}
+
 function hostFromEnv(env: NodeJS.ProcessEnv): ReviewExecutionHost | null {
   const value = env.ONTO_HOST_RUNTIME?.trim().toLowerCase();
   if (
@@ -116,7 +210,11 @@ function buildProfile(args: {
   const teamleadLlm = actorLlm(execution.teamlead.llm, inherited);
   const lensLlm = actorLlm(execution.lens.llm, inherited);
   const synthesizeLlm = actorLlm(execution.synthesize.llm, inherited);
-  const normalized = normalizeLlmModelSwitcher(inherited);
+  const commonActorLlm = commonActorLlmConfig(
+    actorLlmEntries(execution, inherited),
+  );
+  const profileLlm = inherited ?? commonActorLlm;
+  const normalized = normalizeLlmModelSwitcher(profileLlm);
   return {
     mode: execution.mode,
     teamlead: {
@@ -134,8 +232,8 @@ function buildProfile(args: {
     deliberation: execution.deliberation,
     worker_executor: args.workerExecutor,
     host: args.host,
-    ...(inherited?.provider ? { provider: inherited.provider } : {}),
-    ...(inherited?.auth ? { auth: inherited.auth } : {}),
+    ...(profileLlm?.provider ? { provider: profileLlm.provider } : {}),
+    ...(profileLlm?.auth ? { auth: profileLlm.auth } : {}),
     ...(normalized?.model_id ? { model: normalized.model_id } : {}),
     ...(normalized?.reasoning_effort ? { effort: normalized.reasoning_effort } : {}),
     ...(normalized?.service_tier ? { service_tier: normalized.service_tier } : {}),
@@ -174,8 +272,17 @@ export function resolveReviewExecutionProfile(
   const codexAvailable =
     args.codexAvailable ?? detectCodexBinaryAvailable();
   const envHost = hostFromEnv(env);
-  const selection = normalizeLlmModelSwitcher(args.settings.llm);
   const execution = settingsExecution(args.settings);
+  const actorRoute = commonActorRouteSelection(
+    actorRouteSelections(execution, args.settings.llm),
+  );
+  const rootSelection = normalizeLlmModelSwitcher(args.settings.llm);
+  const selection =
+    actorRoute.type === "common" ? actorRoute.selection : rootSelection;
+
+  if (actorRoute.type === "mixed") {
+    return noHost(trace, actorRoute.reason);
+  }
 
   if (env.ONTO_HOST_RUNTIME?.trim().toLowerCase() === "claude") {
     return noHost(
@@ -198,6 +305,12 @@ export function resolveReviewExecutionProfile(
   }
 
   if (execution.executor === "codex") {
+    if (selection && selection.provider !== "codex") {
+      return noHost(
+        trace,
+        "review.execution.executor=codex requires every configured actor llm to use OpenAI OAuth.",
+      );
+    }
     if (!codexAvailable) {
       return noHost(
         trace,
@@ -220,7 +333,7 @@ export function resolveReviewExecutionProfile(
     if (!selection || selection.provider === "codex") {
       return noHost(
         trace,
-        "review.execution.executor=direct_call requires llm.default to select an API/local provider.",
+        "review.execution.executor=direct_call requires every actor llm to select an API/local provider.",
       );
     }
     log("direct-call selected by review.execution.executor=direct_call");
@@ -237,7 +350,7 @@ export function resolveReviewExecutionProfile(
 
   if (selection && selection.auth !== "oauth") {
     log(
-      `direct-call selected by llm.default.auth=${selection.auth} llm.default.provider=${selection.provider}`,
+      `direct-call selected by actor auth=${selection.auth} provider=${selection.provider}`,
     );
     return {
       type: "resolved",
@@ -304,7 +417,7 @@ export function resolveReviewExecutionProfile(
     if (!codexAvailable) {
       return noHost(
         trace,
-        "llm.default.auth=oauth with llm.default.provider=openai requires an available Codex worker.",
+        "OpenAI OAuth actor settings require an available Codex worker.",
       );
     }
     log("codex worker selected by host-bound OpenAI OAuth settings");

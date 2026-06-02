@@ -3,9 +3,9 @@
  *
  * Canonical provider resolution:
  *   1. Caller-explicit: callLlm(..., { provider }) — one provider only.
- *   2. `llm.default.auth=oauth + llm.default.provider=openai` — Codex worker.
- *   3. `llm.default.auth=api_key` — OpenAI / Anthropic / Grok API key from env.
- *   4. `llm.default.auth=local + llm.default.provider=lmstudio` — local OpenAI-style endpoint.
+ *   2. Actor/root `auth=oauth + provider=openai` — Codex worker.
+ *   3. Actor/root `auth=api_key` — OpenAI / Anthropic / Grok API key from env.
+ *   4. Actor/root `auth=local + provider=lmstudio` — local OpenAI-style endpoint.
  *
  *   Priority 0 (special): ONTO_LLM_MOCK=1 → in-process mock (test only)
  *
@@ -293,7 +293,7 @@ function explicitProviderMissingCredentialError(
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),
     `명시적 provider override를 사용하려면 ${envVar}를 export하세요.`,
-    "또는 .onto/settings.json 의 llm block 을 현재 credential에 맞게 수정하세요.",
+    "또는 .onto/settings.json 의 actor/root llm 설정을 현재 credential에 맞게 수정하세요.",
   ].join("\n");
 }
 
@@ -324,7 +324,7 @@ function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio
     [
       `provider=${provider} 경로는 model 지정이 필요합니다. 하드코딩된 기본 모델은 제거되었습니다.`,
       "다음 중 한 가지로 설정하세요:",
-      "  1. .onto/settings.json 의 `llm.model: <model-id>`",
+      "  1. .onto/settings.json 의 actor/root `llm.model: <model-id>`",
       "  3. 호출부에서 LlmCallConfig.model_id 인자 전달 (런타임 override)",
       "(codex provider는 model 미지정 시 codex CLI가 자체 기본값을 사용하므로 이 메시지의 대상이 아닙니다.)",
     ].join("\n"),
@@ -583,7 +583,7 @@ async function callCodexCli(
           "",
           `지정된 모델 "${requested}"이 현재 ChatGPT 계정의 codex allowlist에 없습니다.`,
           "다음 중 한 가지로 해결하세요:",
-          "  1. .onto/settings.json 의 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
+          "  1. .onto/settings.json 의 actor/root llm.model 값을 현재 계정에서 허용되는 모델로 변경",
           "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인",
           "  3. `codex login` 으로 API-key 모드로 전환 (per-token 과금, 더 넓은 모델 범위)",
         ].join("\n"),

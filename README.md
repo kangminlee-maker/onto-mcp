@@ -205,7 +205,7 @@ Minimal reconstruct MCP call shape:
 
 `semanticAuthorRealization` and `confirmationProviderRealization` default to
 `direct_call`. Configure `.onto/settings.json` or user `~/.onto/settings.json`
-with an `llm.default` provider/model before running. Test-only mock helpers are not
+with provider/model settings before running. Test-only mock helpers are not
 product completion evidence.
 
 For MCP clients, prefer the `llmPresentation.openingBrief` and
@@ -225,29 +225,24 @@ fail-loud behavior, and removes temporary fixtures unless
 
 ## Settings
 
-Runtime settings live in JSON:
+Runtime settings live in `settings.json`. The file keeps a JSON shape, and
+onto-mcp also accepts `#` comments for user-facing explanations.
 
 | Path | Role |
 |---|---|
 | `{project}/.onto/settings.json` | project-local settings |
 | `~/.onto/settings.json` | user defaults |
 
-Project settings override user defaults for scalar keys.
+Project settings override user defaults for scalar keys. In
+`settings.json/v3`, actor `llm` blocks are complete model settings; they do not
+inherit from a root `llm.default`.
 
 Minimal Codex OAuth profile:
 
-```json
+```jsonc
 {
-  "schema_version": "settings.json/v2",
-  "llm": {
-    "default": {
-      "auth": "oauth",
-      "provider": "openai",
-      "model": "gpt-5.5",
-      "effort": "medium",
-      "service_tier": "fast"
-    }
-  },
+  # v3 puts model settings inside each actor.
+  "schema_version": "settings.json/v3",
   "review": {
     "mode": "full",
     "execution": {
@@ -255,15 +250,33 @@ Minimal Codex OAuth profile:
       "topology": "main-workers",
       "actors": {
         "teamlead": {
-          "seat": "main"
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
         },
         "lens": {
-          "seat": "worker"
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
         },
         "synthesize": {
           "seat": "worker",
           "llm": {
-            "effort": "xhigh"
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
           }
         }
       },

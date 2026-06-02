@@ -16,6 +16,21 @@ function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2), "utf8");
 }
 
+function writeText(filePath: string, value: string): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, value, "utf8");
+}
+
+function fullOauthLlm(effort: string): Record<string, string> {
+  return {
+    auth: "oauth",
+    provider: "openai",
+    model: "gpt-5.5",
+    effort,
+    service_tier: "fast",
+  };
+}
+
 describe("resolveSettingsChain", () => {
   beforeEach(() => {
     scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-settings-"));
@@ -120,6 +135,134 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.synthesize?.llm).toEqual({
       effort: "xhigh",
     });
+  });
+
+  it("parses commented v3 settings with actor-owned full llm blocks", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeText(
+      projectSettingsPath(projectRoot),
+      `# Project-local onto settings.
+{
+  # v3 keeps model settings inside each actor.
+  "schema_version": "settings.json/v3",
+  "review": {
+    # Use the cheaper review mode for this fixture.
+    "mode": "core-axis",
+    "execution": {
+      # Let runtime choose Codex vs direct-call.
+      "executor": "auto",
+      "topology": "main-workers",
+      "actors": {
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        }
+      }
+    }
+  }
+}
+`,
+    );
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.schema_version).toBe("settings.json/v3");
+    expect(settings.llm).toBeUndefined();
+    expect(settings.review_mode).toBe("core-axis");
+    expect(settings.review?.execution?.teamlead?.llm).toEqual(
+      fullOauthLlm("medium"),
+    );
+    expect(settings.review?.execution?.lens?.llm).toEqual(fullOauthLlm("medium"));
+    expect(settings.review?.execution?.synthesize?.llm).toEqual(
+      fullOauthLlm("xhigh"),
+    );
+  });
+
+  it("replaces v3 actor llm blocks instead of overlaying them", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          actors: {
+            synthesize: {
+              seat: "worker",
+              llm: fullOauthLlm("xhigh"),
+            },
+          },
+        },
+      },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          actors: {
+            synthesize: {
+              llm: {
+                auth: "api_key",
+                provider: "anthropic",
+                model: "claude-sonnet-4-6",
+                effort: "high",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.llm).toBeUndefined();
+    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
+    expect(settings.review?.execution?.synthesize?.llm).toEqual({
+      auth: "api_key",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      effort: "high",
+    });
+  });
+
+  it("rejects root llm in v3 settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "gpt-5.5",
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Invalid onto settings",
+    );
   });
 
   it("keeps user execution settings when project v2 only changes review mode", async () => {
@@ -283,7 +426,7 @@ describe("resolveSettingsChain", () => {
     );
   });
 
-  it("requires actor llm partials to inherit from llm.default", async () => {
+  it("requires legacy actor llm partials to inherit from a legacy root llm", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
       schema_version: "settings.json/v2",
@@ -302,7 +445,7 @@ describe("resolveSettingsChain", () => {
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "review.execution.actors.synthesize.llm must provide provider/auth fields or inherit from llm.default",
+      "review.execution.actors.synthesize.llm must provide provider/auth fields or use a legacy inherited llm setting",
     );
   });
 

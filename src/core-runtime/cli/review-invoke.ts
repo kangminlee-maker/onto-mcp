@@ -938,8 +938,8 @@ function buildNoHostDetectedError(): Error {
       "현재 설정과 실행 환경에서 사용 가능한 worker 경로를 찾지 못했습니다.",
       "",
       "다음 중 한 가지로 해결하세요:",
-      "  1. `.onto/settings.json` 에 llm.default: { auth: api_key, provider, model } 설정",
-      "  2. local 실행은 llm.default.auth=local + llm.default.provider=lmstudio 로 설정",
+      "  1. `.onto/settings.json` 의 review.execution.actors.*.llm 에 auth/provider/model 설정",
+      "  2. local 실행은 각 actor llm 에 auth=local + provider=lmstudio 로 설정",
       "  3. OpenAI OAuth는 Codex worker가 필요하므로 codex 설치와 로그인을 확인",
       "  4. 테스트 실행은 --executor-realization mock 사용",
     ].join("\n"),
@@ -1116,7 +1116,7 @@ export async function ensureProviderRouteReadyForDispatch(args: {
           humanMessage:
             "Review Codex worker route cannot dispatch because an actor selects a non-Codex provider route.",
           requiredUserAction:
-            "Use root/actor OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
+            "Use actor OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
           retrySafety: "safe_after_input_change",
           artifactTrust: "manifest_artifacts_trusted",
           dispatchState: "dispatch_blocked",
@@ -1155,7 +1155,7 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         humanMessage:
           "Review direct-call route cannot dispatch because an actor does not resolve to an API/local provider.",
         requiredUserAction:
-          "Set .onto/settings.json llm to api_key/local provider settings, or use the Codex OAuth worker route.",
+          "Set each review.execution.actors.*.llm to api_key/local provider settings, or use the Codex OAuth worker route.",
         retrySafety: "safe_after_input_change",
         artifactTrust: "manifest_artifacts_trusted",
         dispatchState: "dispatch_blocked",
@@ -1182,7 +1182,7 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         humanMessage:
           "Review direct-call route cannot dispatch because an actor model is missing.",
         requiredUserAction:
-          "Set llm.model in .onto/settings.json or in the actor-specific review.execution.*.llm block.",
+          "Set model in the actor-specific review.execution.actors.*.llm block.",
         retrySafety: "safe_after_input_change",
         artifactTrust: "manifest_artifacts_trusted",
         dispatchState: "dispatch_blocked",

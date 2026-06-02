@@ -1,32 +1,36 @@
 {
-  "schema_version": "settings.json/v2",
   "llm": {
-    "default": {
-      "auth": "oauth",
-      "provider": "openai",
-      "model": "gpt-5.5",
-      "effort": "medium",
-      "service_tier": "fast"
-    }
+    "auth": "oauth",
+    "provider": "openai",
+    "model": "gpt-5.5",
+    "effort": "medium",
+    "service_tier": "fast"
   },
+  "review_mode": "full",
+  "domains": [],
+  "excluded_names": [
+    ".git",
+    "node_modules",
+    ".onto"
+  ],
+  "max_listing_depth": 10,
+  "max_listing_entries": 5000,
+  "max_embed_lines": 300,
   "review": {
-    "mode": "full",
-    "domains": [],
     "execution": {
-      "executor": "auto",
-      "topology": "main-workers",
-      "actors": {
-        "teamlead": {
-          "seat": "main"
-        },
-        "lens": {
-          "seat": "worker"
-        },
-        "synthesize": {
-          "seat": "worker",
-          "llm": {
-            "effort": "xhigh"
-          }
+      "mode": "main-workers",
+      "teamlead": {
+        "seat": "main",
+        "llm": "inherit"
+      },
+      "lens": {
+        "seat": "worker",
+        "llm": "inherit"
+      },
+      "synthesize": {
+        "seat": "worker",
+        "llm": {
+          "effort": "xhigh"
         }
       },
       "deliberation": "controlled-lens-deliberation"
