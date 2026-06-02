@@ -2849,6 +2849,9 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     );
   const finalRequestionStatus =
     args.maturationConvergenceLedgerValidation.final_requestion_pass_status;
+  const closedRows = args.actionabilityMatrix.rows.filter((row) =>
+    row.member_readiness === "closed"
+  );
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
@@ -2863,6 +2866,9 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   } else if (frontierRows.length > 0) {
     decisionState = "blocked";
     rationale = "Material rows remain frontier-required, but no validated next source or authority response can advance them.";
+  } else if (limitationRows.length > 0 && closedRows.length === 0) {
+    decisionState = "blocked";
+    rationale = "Material rows remain limitation-backed and no closed row can support a bounded actionable claim.";
   } else if (limitationRows.length > 0) {
     decisionState = "actionable_limited";
     rationale = "No material frontier remains, but named limitations constrain the actionability claim.";
@@ -2892,16 +2898,16 @@ export function buildMaturationContinuationDecisionArtifact(args: {
       args.maturationConvergenceLedgerValidationRef,
     decision_state: decisionState,
     state_rationale: rationale,
-    blocking_row_refs: blockingRowRefs,
+    blocking_row_refs: decisionState === "blocked" && blockingRowRefs.length === 0
+      ? limitationRows.map((row) => row.matrix_row_id)
+      : blockingRowRefs,
     next_frontier_refs: [...new Set(nextFrontierRefs)],
     authority_request_refs: authorityRequestRefs,
     authority_response_refs: args.maturationAuthorityResponse.responses.map((response) =>
       response.authority_response_id
     ),
     claim_scope: {
-      included_row_refs: args.actionabilityMatrix.rows
-        .filter((row) => row.member_readiness === "closed")
-        .map((row) => row.matrix_row_id),
+      included_row_refs: closedRows.map((row) => row.matrix_row_id),
       excluded_row_refs: args.actionabilityMatrix.rows
         .filter((row) => row.member_readiness !== "closed")
         .map((row) => row.matrix_row_id),
@@ -3053,6 +3059,16 @@ export function validateMaturationContinuationDecision(args: {
       code: "conflicting_state",
       message: "ask_user requires at least one authority request",
       subjectId: "ask_user",
+    }));
+  }
+  if (
+    decision.decision_state === "actionable_limited" &&
+    decision.claim_scope.included_row_refs.length === 0
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message: "actionable_limited requires at least one included row ref",
+      subjectId: "actionable_limited",
     }));
   }
   if (
@@ -3298,6 +3314,16 @@ export function validateActionableOntology(args: {
       message: "actionable_ready projection requires final re-question convergence",
       subjectId:
         args.maturationConvergenceLedgerValidation.final_requestion_pass_status,
+    }));
+  }
+  if (
+    artifact.actionability_claim === "actionable_limited" &&
+    artifact.claim_scope.included_row_refs.length === 0
+  ) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message: "actionable_limited projection requires at least one included row ref",
+      subjectId: artifact.actionability_claim,
     }));
   }
   if (

@@ -35,6 +35,9 @@ import type { ReconstructConfirmationProvider } from "./run.js";
 import {
   ontologySeedClaimProjections,
 } from "./seed-claim-projections.js";
+import {
+  loadReconstructContractRegistry,
+} from "./contract-registry.js";
 import type { LlmCallResult } from "../llm/llm-caller.js";
 
 const tmpRoots: string[] = [];
@@ -226,6 +229,300 @@ function ontologyHandoffFixture(args: {
 }
 
 describe("runReconstruct", () => {
+  it("repairs source purpose contradiction status mismatches with focused authorship", async () => {
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "session-purpose-repair",
+      created_at: "2026-06-02T00:00:00.000Z",
+      observations: [
+        {
+          observation_id: "obs-purpose",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/purpose.ts",
+          location: "/tmp/purpose.ts",
+          summary: "purpose source",
+          structural_data: { content_excerpt: "export const purpose = true;" },
+        },
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    let repairPayload: Record<string, any> | null = null;
+    const llmCall = (systemPrompt: string, userPrompt: string): Promise<LlmCallResult> => {
+      let text: string;
+      if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+        text = JSON.stringify({
+          purpose_candidates: [
+            {
+              purpose_candidate_id: "purpose-primary",
+              statement: "Explain the primary source-declared purpose.",
+              rank: "primary",
+              purpose_source_status: "explicit_source_declared",
+              evidence_kind_refs: ["P1"],
+              supporting_evidence_observation_ids: ["obs-purpose"],
+              contradicting_source_refs: ["/tmp/deferred-scope.ts"],
+              adequacy_frame: {
+                frame_id: "frame-primary",
+                frame_kind: "operational_ontology_seed",
+                frame_status: "source_declared",
+                adequacy_claim: "The seed should model the primary purpose.",
+                material_kind_requirements: {
+                  target_material_kind: "code",
+                  required_facets: ["purpose"],
+                  optional_facets: [],
+                  rationale: "The fixture is code material.",
+                },
+                required_elements: [
+                  {
+                    element_id: "purpose-element-primary",
+                    element_kind: "concept",
+                    material_facet_kind: "purpose",
+                    description: "Primary purpose element.",
+                    actionability_surface_refs: ["static_surface"],
+                    maturity_dimension_refs: ["intent", "evidence"],
+                    member_scope_refs: ["observation:obs-purpose"],
+                    member_target_material_kind: "code",
+                    member_source_refs: ["/tmp/purpose.ts"],
+                    cross_material_ref_refs: ["/tmp/purpose.ts"],
+                    supporting_evidence_observation_ids: ["obs-purpose"],
+                    expected_seed_ref_families: ["conceptual_frame.concepts"],
+                    closure_expectation: "model_or_limit",
+                  },
+                ],
+              },
+              ranking_rationale: "Primary purpose is directly declared.",
+              limitation_refs: [],
+            },
+          ],
+          selection: {
+            primary_purpose_candidate_id: "purpose-primary",
+            selection_basis: "Fixture selects the primary purpose.",
+            confirmation_policy_hint: "No confirmation needed.",
+            unresolved_reason: null,
+          },
+        });
+      } else if (systemPrompt.includes("Repair source-purpose-candidates.yaml contradiction semantics only")) {
+        repairPayload = JSON.parse(userPrompt) as Record<string, any>;
+        text = JSON.stringify({
+          candidate_updates: [
+            {
+              purpose_candidate_id: "purpose-primary",
+              purpose_source_status: "explicit_source_declared",
+              adequacy_frame_status: "source_declared",
+              contradicting_source_refs: [],
+              limitation_refs: ["deferred-scope:/tmp/deferred-scope.ts"],
+              ranking_rationale:
+                "Deferred scope is preserved as a limitation, not as a contradiction to the primary purpose.",
+            },
+          ],
+        });
+      } else {
+        throw new Error(`unexpected prompt: ${systemPrompt.slice(0, 80)}`);
+      }
+      return Promise.resolve({
+        text,
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "fake-live-model",
+        effective_base_url: "test://fake-live",
+        declared_billing_mode: "local",
+      });
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({ llmCall });
+    const artifact = await author.writeSourcePurposeCandidates({
+      sessionId: "session-purpose-repair",
+      intent: "Create source purpose candidates.",
+      targetMaterialProfile: {
+        schema_version: "1",
+        session_id: "session-purpose-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        target_refs: ["/tmp/purpose.ts"],
+        target_material_kind: "code",
+        target_material_kind_candidates: ["code"],
+        support_status: "supported",
+        unsupported_reason: null,
+        selected_source_profiles: [],
+        detection: {
+          owner: "runtime_heuristic",
+          confidence: 1,
+          confidence_basis: "fixture",
+          per_ref: [
+            {
+              ref: "/tmp/purpose.ts",
+              exists: true,
+              kind: "code",
+              confidence: 1,
+              confidence_basis: "fixture",
+            },
+          ],
+        },
+      },
+      sourceObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceObservationDirective: {
+        schema_version: "1",
+        session_id: "session-purpose-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        selected_observations: [
+          {
+            observation_id: "obs-purpose",
+            target_material_kind: "code",
+            source_ref: "/tmp/purpose.ts",
+            location: "/tmp/purpose.ts",
+            selection_rationale: "purpose evidence",
+          },
+        ],
+        open_questions: [],
+      },
+      lensJudgmentIndex: {} as any,
+      explorationSynthesis: {} as any,
+      sourceFrontierValidation: {} as any,
+    });
+
+    expect(repairPayload?.repair_targets).toEqual([
+      expect.objectContaining({
+        purpose_candidate_id: "purpose-primary",
+        contradicting_source_refs: ["/tmp/deferred-scope.ts"],
+      }),
+    ]);
+    expect(artifact.purpose_candidates[0]?.purpose_source_status)
+      .toBe("explicit_source_declared");
+    expect(artifact.purpose_candidates[0]?.contradicting_source_refs).toEqual([]);
+    expect(artifact.purpose_candidates[0]?.limitation_refs)
+      .toEqual(["deferred-scope:/tmp/deferred-scope.ts"]);
+  });
+
+  it("repairs candidate inventory coverage gaps with focused authorship", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(
+        ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+      ),
+    });
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "session-coverage-repair",
+      created_at: "2026-06-02T00:00:00.000Z",
+      observations: [
+        {
+          observation_id: "obs-covered",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/covered.ts",
+          location: "/tmp/covered.ts",
+          summary: "covered source",
+          structural_data: { content_excerpt: "export const covered = true;" },
+        },
+        {
+          observation_id: "obs-missing",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/missing.ts",
+          location: "/tmp/missing.ts",
+          summary: "missing coverage source",
+          structural_data: { content_excerpt: "export const missing = true;" },
+        },
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    let repairPayload: Record<string, any> | null = null;
+    const llmCall = (systemPrompt: string, userPrompt: string): Promise<LlmCallResult> => {
+      let text: string;
+      if (systemPrompt.includes("Author candidate-inventory.yaml")) {
+        text = JSON.stringify({
+          candidates: [
+            {
+              candidate_id: "candidate-covered",
+              candidate_kind: "object",
+              name: "Covered Candidate",
+              description: "The first observation is covered by the initial authoring.",
+              salience: "high",
+              evidence_observation_ids: ["obs-covered"],
+            },
+          ],
+        });
+      } else if (systemPrompt.includes("Repair candidate-inventory.yaml coverage only")) {
+        repairPayload = JSON.parse(userPrompt) as Record<string, any>;
+        text = JSON.stringify({
+          additional_candidates: [
+            {
+              candidate_id: "candidate-coverage-obs-missing",
+              candidate_kind: "other",
+              name: "Missing Observation Coverage",
+              description:
+                "Preserve the missing observation as low-salience evidence coverage for disposition.",
+              salience: "low",
+              evidence_observation_ids: ["obs-missing"],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`unexpected prompt: ${systemPrompt.slice(0, 80)}`);
+      }
+      return Promise.resolve({
+        text,
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "fake-live-model",
+        effective_base_url: "test://fake-live",
+        declared_billing_mode: "local",
+      });
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({ llmCall });
+    const inventory = await author.writeCandidateInventory({
+      sessionId: "session-coverage-repair",
+      intent: "Create a coverage-complete candidate inventory.",
+      sourcePurposeCandidates: {} as any,
+      sourcePurposeCandidatesValidation: {} as any,
+      purposeConfirmationValidation: {} as any,
+      materialAdmissionLedger: {
+        schema_version: "1",
+        session_id: "session-coverage-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        admission_rows: [],
+      } as any,
+      materialAdmissionLedgerRef: "material-admission-ledger.yaml",
+      sourceObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceObservationDirective: {
+        schema_version: "1",
+        session_id: "session-coverage-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        selected_observations: sourceObservations.observations.map((observation) => ({
+          observation_id: observation.observation_id,
+          target_material_kind: observation.target_material_kind,
+          source_ref: observation.source_ref,
+          location: observation.location,
+          selection_rationale: "required for coverage repair test",
+        })),
+        open_questions: [],
+      },
+      lensJudgmentIndex: {} as any,
+      explorationSynthesis: {} as any,
+      sourceFrontierValidation: {} as any,
+      contractRegistry: registry,
+    });
+
+    expect(repairPayload?.missing_coverage_observation_ids).toEqual(["obs-missing"]);
+    expect(inventory.candidates.map((candidate) => candidate.candidate_id))
+      .toEqual(["candidate-covered", "candidate-coverage-obs-missing"]);
+    expect(
+      inventory.candidates.flatMap((candidate) =>
+        candidate.evidence_refs.map((evidence) => evidence.observation_id)
+      ),
+    ).toEqual(["obs-covered", "obs-missing"]);
+  });
+
   it("compacts lens judgment payloads before exploration synthesis", async () => {
     let capturedPayload: Record<string, any> | null = null;
     const author = createDirectCallReconstructDirectiveAuthor({
@@ -1235,7 +1532,10 @@ describe("runReconstruct", () => {
           title: "Fixture Service Actionable Seed",
           target_refs: [firstSourceRef],
           generated_at: "2026-05-29T00:00:00.000Z",
-          authoring_profile: "fixture-live-author",
+          authoring_profile: {
+            profile_id: "fixture-live-author",
+            mode: "object-returned-by-host-llm",
+          },
         },
         purpose: {
           reconstruct_intent: input.intent ?? "Create a live reconstruct Seed from the code target.",
@@ -2234,6 +2534,20 @@ describe("runReconstruct", () => {
       }>;
       observed_source_refs?: string[];
     }> = [];
+    const finalOutputSystemPrompts: string[] = [];
+    const finalOutputPayloads: Array<{
+      claim_projection_summary?: {
+        strongest_claim_level?: string;
+        projection_rows?: Array<{
+          actionability_claim?: string;
+        }>;
+      };
+      maturation_summary?: {
+        continuation_decision?: string;
+        included_row_count?: number;
+        actionable_ontology_ref?: string | null;
+      };
+    }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
     > = [];
@@ -2248,6 +2562,10 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         ontologySeedSystemPrompts.push(systemPrompt);
         ontologySeedPayloads.push(JSON.parse(userPrompt));
+      }
+      if (systemPrompt.includes("writing the final reconstruct result")) {
+        finalOutputSystemPrompts.push(systemPrompt);
+        finalOutputPayloads.push(JSON.parse(userPrompt));
       }
       if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
         const input = JSON.parse(userPrompt) as {
@@ -2307,6 +2625,11 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Runtime Artifact Truth Footer");
     expect(result.finalOutputText).toContain(result.reconstructRecordPath);
     expect(result.finalOutputText).not.toContain("mock");
+    const liveOntologySeed = await readYaml<ReconstructOntologySeedArtifact>(
+      result.reconstructRunManifest.artifact_refs.ontology_seed!,
+    );
+    expect(liveOntologySeed.seed_identity.authoring_profile)
+      .toBe("direct-call-reconstruct-directive-author");
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -2338,6 +2661,8 @@ describe("runReconstruct", () => {
     expect(ontologySeedSystemPrompts[0]).toContain("OntologySeed");
     expect(ontologySeedSystemPrompts[0])
       .toContain("compact but schema-valid first-pass seed kernel");
+    expect(ontologySeedSystemPrompts[0])
+      .toContain("seed_identity.authoring_profile must be the string");
     expect(ontologySeedSystemPrompts[0])
       .toContain("Every limitation_refs value anywhere in the seed must resolve");
     expect(ontologySeedSystemPrompts[0])
@@ -2383,6 +2708,24 @@ describe("runReconstruct", () => {
       "For represented_as_actor_role obligations",
     );
     expect(ontologySeedSystemPrompts[0]).not.toContain("top_level_concepts");
+    expect(finalOutputSystemPrompts[0])
+      .toContain("Include a short Claim Projection section");
+    expect(finalOutputSystemPrompts[0])
+      .toContain("Include a short Maturation Decision section");
+    expect(finalOutputPayloads[0]?.claim_projection_summary?.strongest_claim_level)
+      .toBeDefined();
+    expect(finalOutputPayloads[0]?.claim_projection_summary?.projection_rows)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          actionability_claim: expect.any(String),
+        }),
+      ]));
+    expect(finalOutputPayloads[0]?.maturation_summary?.continuation_decision)
+      .toEqual(expect.any(String));
+    expect(finalOutputPayloads[0]?.maturation_summary?.included_row_count)
+      .toEqual(expect.any(Number));
+    expect(finalOutputPayloads[0]?.maturation_summary)
+      .toHaveProperty("actionable_ontology_ref");
     expect(result.metrics.answerability_summary).toMatchObject({
       supported_question_count: 11,
       supported_action_count: 1,

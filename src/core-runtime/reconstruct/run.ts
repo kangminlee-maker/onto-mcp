@@ -8,6 +8,8 @@ import type {
   ReconstructCandidateDispositionArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructCandidateInventoryArtifact,
+  ReconstructClaimProjectionArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructClaimRealizationMapArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
   ReconstructClaimRealizationStance,
@@ -524,6 +526,8 @@ export interface ReconstructFinalOutputAuthorInput {
   stopDecision: ReconstructStopDecisionArtifact;
   preHandoffRunManifestValidation: ReconstructRunManifestValidationArtifact;
   handoffDecisionValidation: ReconstructHandoffDecisionValidationArtifact;
+  claimProjection: ReconstructClaimProjectionArtifact;
+  claimProjectionValidation: ReconstructClaimProjectionValidationArtifact;
   maturationBaseline: ReconstructMaturationBaselineArtifact;
   maturationBaselineValidation: ReconstructMaturationBaselineValidationArtifact;
   actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
@@ -2314,6 +2318,28 @@ function recordValue(value: unknown, fieldName: string): Record<string, unknown>
   return value as Record<string, unknown>;
 }
 
+function normalizeOntologySeedRuntimeMetadata(
+  value: unknown,
+  authorId: string,
+): ReconstructOntologySeedArtifact {
+  const seed = recordValue(value, "ontology_seed");
+  const seedIdentity = seed.seed_identity;
+  if (
+    seedIdentity === null ||
+    typeof seedIdentity !== "object" ||
+    Array.isArray(seedIdentity)
+  ) {
+    return seed as unknown as ReconstructOntologySeedArtifact;
+  }
+  return {
+    ...seed,
+    seed_identity: {
+      ...seedIdentity,
+      authoring_profile: authorId,
+    },
+  } as unknown as ReconstructOntologySeedArtifact;
+}
+
 function enumString<T extends string>(
   value: unknown,
   allowed: readonly T[],
@@ -2589,6 +2615,18 @@ function candidateKindIds(registry: ReconstructContractRegistry): string[] {
   return registry.candidate_kind_registry.map((record) => record.candidate_kind_id);
 }
 
+function sourcePurposeContradictionRepairCandidateIds(
+  artifact: ReconstructSourcePurposeCandidatesArtifact,
+): string[] {
+  return artifact.purpose_candidates
+    .filter((candidate) =>
+      candidate.contradicting_source_refs.length > 0 &&
+      candidate.purpose_source_status !== "limitation_backed" &&
+      candidate.purpose_source_status !== "unresolved"
+    )
+    .map((candidate) => candidate.purpose_candidate_id);
+}
+
 function candidateDispositionIds(registry: ReconstructContractRegistry): string[] {
   return registry.candidate_disposition_registry.map((record) => record.disposition_id);
 }
@@ -2703,6 +2741,17 @@ function candidateInventoryObservationIds(
       ),
     ),
   ];
+}
+
+function missingCandidateInventoryCoverageObservationIds(args: {
+  candidateInventory: ReconstructCandidateInventoryArtifact;
+  requiredCoverageObservationIds: string[];
+}): string[] {
+  const coveredObservationIds = new Set(
+    candidateInventoryObservationIds(args.candidateInventory),
+  );
+  return args.requiredCoverageObservationIds
+    .filter((observationId) => !coveredObservationIds.has(observationId));
 }
 
 function observedSourceRefsForObservationIds(
@@ -4233,6 +4282,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use purpose_source_status exactly; never use source_purpose_status or inference_status.",
           "P1 means the purpose is directly declared by the source. P2 means repeated source structure implies the same purpose. P3 means code/data workflow implies it. P4 means user-facing or operational language implies it. P5 means weak contextual hint only.",
           "A primary purpose that is not explicit_source_declared must cite at least two evidence_kind_refs and one must be P2, P3, or P4.",
+          "Use contradicting_source_refs only for source refs that falsify or materially conflict with the candidate statement. Deferred scope, secondary-purpose evidence, roadmap evidence, or non-goal boundaries are limitations or secondary/rejected candidates, not contradictions for an otherwise source-declared primary purpose.",
+          "If a candidate has any contradicting_source_refs, its purpose_source_status must be limitation_backed or unresolved unless the contradiction is resolved by removing those refs and recording the boundary in limitation_refs.",
           "Every required element must map to actionability_surface_refs including one or more of static_surface, kinetic_surface, dynamic_surface, and maturity_dimension_refs such as structure, relation, intent, principle, context, evidence, external.",
           "Each candidate shape: {\"purpose_candidate_id\":\"purpose-...\",\"statement\":\"...\",\"rank\":\"primary|secondary|candidate|rejected\",\"purpose_source_status\":\"explicit_source_declared|convergent_inferred|limitation_backed|unresolved\",\"evidence_kind_refs\":[\"P1|P2|P3|P4|P5\"],\"supporting_evidence_observation_ids\":[\"...\"],\"contradicting_source_refs\":[\"...\"],\"adequacy_frame\":{\"frame_id\":\"...\",\"frame_kind\":\"...\",\"frame_status\":\"source_declared|evidence_inferred|limitation_backed|unresolved\",\"adequacy_claim\":\"...\",\"material_kind_requirements\":{\"target_material_kind\":\"...\",\"required_facets\":[\"...\"],\"optional_facets\":[\"...\"],\"rationale\":\"...\"},\"required_elements\":[{\"element_id\":\"...\",\"element_kind\":\"...\",\"material_facet_kind\":\"...\",\"description\":\"...\",\"actionability_surface_refs\":[\"static_surface|kinetic_surface|dynamic_surface\"],\"maturity_dimension_refs\":[\"structure|relation|intent|principle|context|evidence|external\"],\"member_scope_refs\":[\"...\"],\"member_target_material_kind\":\"code|spreadsheet|document|database|mixed|unknown\", \"member_source_refs\":[\"...\"],\"cross_material_ref_refs\":[\"...\"],\"supporting_evidence_observation_ids\":[\"...\"],\"expected_seed_ref_families\":[\"semantic_layer.object_types|dynamic_layer.actor_types|kinetic_layer.action_types|dynamic_layer.permission_policies|data_binding_layer.source_bindings|handoff_limitations\"],\"closure_expectation\":\"model_or_limit|frontier_required\"}]},\"ranking_rationale\":\"...\",\"limitation_refs\":[\"...\"]}.",
           "For mixed targets, every required element that is not limitation-backed must carry member lineage: non-empty member_scope_refs, member_target_material_kind, member_source_refs, and cross_material_ref_refs. Use the supporting evidence source_ref values as member_source_refs and cross_material_ref_refs when no narrower lineage exists.",
@@ -4268,7 +4319,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         })
       );
       const selection = recordValue(raw.selection, "selection");
-      return {
+      let sourcePurposeCandidates: ReconstructSourcePurposeCandidatesArtifact = {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
@@ -4294,6 +4345,116 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           author_id: authorId,
         },
       };
+      const contradictionRepairCandidateIds =
+        sourcePurposeContradictionRepairCandidateIds(sourcePurposeCandidates);
+      if (contradictionRepairCandidateIds.length > 0) {
+        const repairTargets = sourcePurposeCandidates.purpose_candidates
+          .filter((candidate) =>
+            contradictionRepairCandidateIds.includes(candidate.purpose_candidate_id)
+          )
+          .map((candidate) => ({
+            purpose_candidate_id: candidate.purpose_candidate_id,
+            rank: candidate.rank,
+            statement: candidate.statement,
+            purpose_source_status: candidate.purpose_source_status,
+            contradicting_source_refs: candidate.contradicting_source_refs,
+            limitation_refs: candidate.limitation_refs,
+            adequacy_frame_status: candidate.adequacy_frame.frame_status,
+            ranking_rationale: candidate.ranking_rationale,
+          }));
+        const rawRepair = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "SourcePurposeContradictionRepair",
+          maxTokens: Math.min(2600, 800 + contradictionRepairCandidateIds.length * 500),
+          systemPrompt: [
+            baseSystem,
+            "Repair source-purpose-candidates.yaml contradiction semantics only. Return updates, not the full artifact.",
+            "For each repair target, decide whether contradicting_source_refs are true contradictions or deferred/secondary/non-goal boundaries.",
+            "If they are true contradictions, set purpose_source_status to limitation_backed or unresolved and set adequacy_frame_status consistently to limitation_backed or unresolved.",
+            "If they are deferred scope, roadmap evidence, secondary-purpose evidence, or non-goal boundaries, clear contradicting_source_refs and preserve the boundary in limitation_refs.",
+            "Do not change candidate ids, statements, rank, supporting evidence, required elements, or selection.",
+            "Each update shape: {\"purpose_candidate_id\":\"...\",\"purpose_source_status\":\"explicit_source_declared|convergent_inferred|limitation_backed|unresolved\",\"adequacy_frame_status\":\"source_declared|evidence_inferred|limitation_backed|unresolved\",\"contradicting_source_refs\":[\"...\"],\"limitation_refs\":[\"...\"],\"ranking_rationale\":\"...\"}.",
+            "JSON shape: {\"candidate_updates\":[update]}",
+          ].join("\n"),
+          userPayload: {
+            session_id: input.sessionId,
+            intent: input.intent,
+            repair_reason:
+              "contradicting_source_refs require limitation_backed/unresolved status unless the refs are not true contradictions",
+            repair_targets: repairTargets,
+            source_observations_ref: input.sourceObservationsRef,
+          },
+        });
+        const updates = records(rawRepair.candidate_updates, "candidate_updates");
+        const updatesById = new Map(updates.map((update, index) => {
+          const updatePath = `candidate_updates[${index}]`;
+          const purposeCandidateId = stringValue(
+            update.purpose_candidate_id,
+            `${updatePath}.purpose_candidate_id`,
+          );
+          return [purposeCandidateId, {
+            purpose_source_status: enumString(
+              update.purpose_source_status,
+              [
+                "explicit_source_declared",
+                "convergent_inferred",
+                "limitation_backed",
+                "unresolved",
+              ] as const,
+              `${updatePath}.purpose_source_status`,
+            ),
+            adequacy_frame_status: enumString(
+              update.adequacy_frame_status,
+              [
+                "source_declared",
+                "evidence_inferred",
+                "limitation_backed",
+                "unresolved",
+              ] as const,
+              `${updatePath}.adequacy_frame_status`,
+            ),
+            contradicting_source_refs: stringArray(
+              update.contradicting_source_refs ?? [],
+              `${updatePath}.contradicting_source_refs`,
+            ),
+            limitation_refs: stringArray(
+              update.limitation_refs ?? [],
+              `${updatePath}.limitation_refs`,
+            ),
+            ranking_rationale: stringValue(
+              update.ranking_rationale,
+              `${updatePath}.ranking_rationale`,
+            ),
+          }] as const;
+        }));
+        sourcePurposeCandidates = {
+          ...sourcePurposeCandidates,
+          purpose_candidates: sourcePurposeCandidates.purpose_candidates.map((candidate) => {
+            const update = updatesById.get(candidate.purpose_candidate_id);
+            if (!update) return candidate;
+            return {
+              ...candidate,
+              purpose_source_status: update.purpose_source_status,
+              contradicting_source_refs: update.contradicting_source_refs,
+              limitation_refs: update.limitation_refs,
+              ranking_rationale: update.ranking_rationale,
+              adequacy_frame: {
+                ...candidate.adequacy_frame,
+                frame_status: update.adequacy_frame_status,
+              },
+            };
+          }),
+        };
+        const remainingContradictionRepairCandidateIds =
+          sourcePurposeContradictionRepairCandidateIds(sourcePurposeCandidates);
+        if (remainingContradictionRepairCandidateIds.length > 0) {
+          throw new Error(
+            `source-purpose contradiction repair did not resolve candidate status: ${remainingContradictionRepairCandidateIds.join(",")}`,
+          );
+        }
+      }
+      return sourcePurposeCandidates;
     },
 
     async writeCandidateInventory(input) {
@@ -4333,7 +4494,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           source_frontier_validation: input.sourceFrontierValidation,
         },
       });
-      return {
+      let candidateInventory: ReconstructCandidateInventoryArtifact = {
         schema_version: "1",
         session_id: input.sessionId,
         created_at: isoNow(),
@@ -4351,6 +4512,70 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           author_id: authorId,
         },
       };
+      const missingCoverageObservationIds =
+        missingCandidateInventoryCoverageObservationIds({
+          candidateInventory,
+          requiredCoverageObservationIds,
+        });
+      if (missingCoverageObservationIds.length > 0) {
+        const rawRepair = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "CandidateInventoryCoverageRepair",
+          maxTokens: Math.min(3200, 600 + missingCoverageObservationIds.length * 360),
+          systemPrompt: [
+            baseSystem,
+            "Repair candidate-inventory.yaml coverage only. Return additional candidates, not the full inventory.",
+            "Every missing_coverage_observation_ids value must appear in at least one additional candidate evidence_observation_ids array.",
+            "Use candidate_kind other and salience low unless the missing observation clearly requires a more specific allowed kind.",
+            "Coverage repair candidates must preserve evidence for disposition without asserting seed promotion. Describe the observation as validation, boundary, limitation, or evidence coverage when no higher-salience semantic candidate is justified.",
+            `Allowed candidate_kind values: ${candidateKindIds(input.contractRegistry).join(", ")}.`,
+            "Each additional candidate shape: {\"candidate_id\":\"candidate-...\",\"candidate_kind\":\"...\",\"name\":\"...\",\"description\":\"...\",\"salience\":\"high|medium|low\",\"evidence_observation_ids\":[\"...\"]}.",
+            "JSON shape: {\"additional_candidates\":[candidate]}",
+          ].join("\n"),
+          userPayload: {
+            session_id: input.sessionId,
+            intent: input.intent,
+            missing_coverage_observation_ids: missingCoverageObservationIds,
+            missing_observations: observationPromptPayload(input.sourceObservations, {
+              observationIds: missingCoverageObservationIds,
+              contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            }),
+            existing_candidate_inventory:
+              compactCandidateInventoryForPrompt(candidateInventory),
+            source_observations_ref: input.sourceObservationsRef,
+            material_admission_ledger_ref: input.materialAdmissionLedgerRef,
+          },
+        });
+        const additionalCandidates = records(
+          rawRepair.additional_candidates,
+          "additional_candidates",
+        ).map((candidate, index) =>
+          candidateInventoryItemFromLlm({
+            raw: candidate,
+            index,
+            sourceObservations: input.sourceObservations,
+          })
+        );
+        candidateInventory = {
+          ...candidateInventory,
+          candidates: [
+            ...candidateInventory.candidates,
+            ...additionalCandidates,
+          ],
+        };
+        const remainingMissingCoverageObservationIds =
+          missingCandidateInventoryCoverageObservationIds({
+            candidateInventory,
+            requiredCoverageObservationIds,
+          });
+        if (remainingMissingCoverageObservationIds.length > 0) {
+          throw new Error(
+            `candidate-inventory coverage repair did not cover required observations: ${remainingMissingCoverageObservationIds.join(",")}`,
+          );
+        }
+      }
+      return candidateInventory;
     },
 
     async writeCandidateDisposition(input) {
@@ -4432,6 +4657,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Keep record arrays bounded unless a candidate_target_ref_obligation requires more: concepts <= 12, associations <= 12, object_types <= 10, properties <= 5 per object, link_types <= 8, value_types <= 8, constraints <= 8, actor_types <= 8, actor_roles <= 8, permission_policies <= 10, action_types <= 8, workflows <= 5, source_bindings <= 12, read_models <= 8, unsupported_question_candidates <= 12, handoff_limitations <= 16.",
           "For evidence_refs, copy only the strongest one or two evidence objects needed to support the row. Do not duplicate every available evidence object across every row.",
           "Use source-purpose-candidates.yaml and purpose-confirmation-validation.yaml as the purpose authority. ontology-seed.yaml.purpose is only a bounded projection of the selected validated purpose candidate and confirmation result.",
+          `seed_identity.authoring_profile must be the string "${authorId}". Do not return an object for authoring_profile; runtime treats this as author metadata, not ontology meaning.`,
           "Use candidate-disposition.yaml as the disposition authority. Do not duplicate the full disposition ledger in ontology-seed.yaml.",
           "Use material-admission-ledger.yaml as the material admission authority. For every purpose_adequacy_frame.required_elements item copied into ontology-seed.yaml, preserve its element_id and seed_ref_refs/limitation_refs so the admission row can be proven consumed.",
           `validation_layer.coverage_axes allowed values: ${coverageAxisIds(input.contractRegistry).join(", ")}.`,
@@ -4507,7 +4733,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           }),
         },
       });
-      return raw;
+      return normalizeOntologySeedRuntimeMetadata(raw, authorId);
     },
 
     async writeClaimRealizationMap(input) {
@@ -5980,8 +6206,10 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
           "OntologySeed is the primary and only active seed authority. It is not action-ready by itself.",
           "Include execution profile, completion scope, skipped/deferred stages, confirmed seed content, seed answerability buckets, CQ assessment, material failures as maturation frontier, revision proposals, and artifact truth.",
+          "Include a short Claim Projection section using claim_projection_summary. State strongest_claim_level, decision_state_counts, and actionability_claim_counts plainly. If the strongest claim is blocked or actionability_claim is none, say that no ActionableOntology is claimed or emitted.",
+          "Include a short Maturation Decision section using maturation_summary. State continuation_decision, validation status, blocking row count, included row count, excluded row count, and whether actionable ontology refs are present.",
           "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
-          "Do not restate claim projection levels from prompt input. Name only the canonical claim-projection artifact refs; runtime publishes their final contents after run-control finalization.",
+          "Do not invent or upgrade claim projection levels. The canonical claim-projection artifact remains the truth authority; prose may summarize its already-published validated contents.",
         ].join("\n"),
         JSON.stringify({
           session_id: input.sessionId,
@@ -6093,12 +6321,29 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
                 input.preHandoffRunManifestValidation.skipped_step_count,
             },
           handoff_decision_validation: input.handoffDecisionValidation,
-          claim_projection_publication: {
+          claim_projection_summary: {
             claim_projection_ref: input.artifactRefs.claim_projection,
             claim_projection_validation_ref:
               input.artifactRefs.claim_projection_validation,
+            validation_status:
+              input.claimProjectionValidation.validation_status,
+            strongest_claim_level:
+              input.claimProjectionValidation.strongest_claim_level,
+            decision_state_counts:
+              input.claimProjectionValidation.decision_state_counts,
+            projection_rows: input.claimProjection.projection_rows.map((row) => ({
+              projection_surface: row.projection_surface,
+              claim_level: row.claim_level,
+              decision_state: row.decision_state,
+              actionability_claim: row.actionability_claim,
+              machine_status: row.machine_status,
+              included_row_count: row.included_row_refs.length,
+              excluded_row_count: row.excluded_row_refs.length,
+              limitation_ref_count: row.limitation_refs.length,
+              required_validation_refs: row.required_validation_refs,
+            })),
             authority_note:
-              "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose must not restate pre-publication claim levels.",
+              "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose may summarize this validated artifact but must not upgrade it.",
           },
           maturation_summary: {
             baseline_rows: input.maturationBaseline.baseline_rows.length,
@@ -6119,6 +6364,17 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               input.maturationContinuationDecision.decision_state,
             continuation_validation:
               input.maturationContinuationDecisionValidation.validation_status,
+            blocking_row_count:
+              input.maturationContinuationDecision.blocking_row_refs.length,
+            included_row_count:
+              input.maturationContinuationDecision.claim_scope.included_row_refs.length,
+            excluded_row_count:
+              input.maturationContinuationDecision.claim_scope.excluded_row_refs.length,
+            actionable_ontology_ref: input.artifactRefs.actionable_ontology,
+            actionable_ontology_validation_ref:
+              input.artifactRefs.actionable_ontology_validation,
+            state_rationale:
+              input.maturationContinuationDecision.state_rationale,
           },
           artifact_refs: input.artifactRefs,
           reconstruct_record_path: input.reconstructRecordPath,
@@ -9654,7 +9910,6 @@ export async function runReconstruct(
     artifactRef: claimProjectionValidationPath,
     validation: claimProjectionValidation,
   });
-  void claimProjection;
   const interimRecord = await assembleReconstructRecord({
     sessionRoot,
     artifactRefs,
@@ -9686,6 +9941,8 @@ export async function runReconstruct(
       stopDecision,
       preHandoffRunManifestValidation,
       handoffDecisionValidation,
+      claimProjection,
+      claimProjectionValidation,
       maturationBaseline,
       maturationBaselineValidation,
       actionabilityMatrix,
