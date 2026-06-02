@@ -41,22 +41,34 @@ runtime helpers, and a bounded integral runner. Code is the first substantially
 wired runtime profile. Spreadsheet, document, and database profiles are
 contract-active but runtime-planned until their adapters are implemented; mixed
 targets are partial-composite only. The current runner classifies target
-material, expands supported directory targets into per-member source
-observations, writes the initial source frontier, runs reconstruct lens
+material, writes and validates `reconstruct-run-control.yaml` before semantic
+artifacts are trusted, admits the first run-control owner with atomic create
+semantics, writes and validates `registry-verification-evidence.yaml`
+against the current reconstruct contract registry, expands supported directory targets into per-member source
+observations, writes and validates `source-safety-ledger.yaml` before LLM prompt
+materialization, writes the initial source frontier, runs reconstruct lens
 judgments and exploration synthesis through a configured LLM provider, validates
 available evidence refs, authors and validates source-purpose authority,
-confirms inferred purpose when required, computes deterministic metrics, and
-writes `reconstruct-run-manifest.yaml`. After seed handoff validation it also
+confirms inferred purpose when required, writes and validates
+`material-admission-ledger.yaml` so purpose-critical admission rows are consumed
+by candidate, seed, and maturation artifacts or closed as limitations, computes
+deterministic metrics, and writes `reconstruct-run-manifest.yaml`. After seed
+handoff validation it also
 projects the first-pass maturation surface: `maturation-baseline.yaml`,
 `actionability-matrix.yaml`, `maturation-question-frontier.yaml`,
 `maturation-closure-frontier.yaml`, `maturation-authority-response.yaml`,
 `answer-support-ledger.yaml`, `maturation-answer-claims.yaml`,
 `ontology-expansion.yaml`, and `maturation-continuation-decision.yaml` with
-runtime validations. It emits `final-output.md` and the primary
-`reconstruct-record.yaml` only through the validated handoff path after
-`handoff-decision-validation.yaml` and
-`reconstruct-run-manifest.pre-handoff-validation.yaml` pass; otherwise terminal
-projection must be blocked or limitation-backed. The final
+runtime validations. It writes pre-publication `claim-projection.yaml` and
+`claim-projection-validation.yaml` after handoff and maturation continuation
+authorities pass, using an immutable
+`reconstruct-run-control.pre-publication-validation.yaml` checkpoint and
+validated `target-material-profile-validation.yaml` for material-kind support,
+then emits `final-output.md` through the validated handoff path; final output
+cites claim-projection authority refs without restating pre-publication claim
+values. The final `reconstruct-record.yaml` is assembled
+after `claim-projection-validation.yaml` and final-output provenance validation
+pass; otherwise terminal projection must be blocked or limitation-backed. The final
 `reconstruct-run-manifest.post-publication-validation.yaml` is a post-publication audit for the
 complete manifest after final output and record refs exist. The
 current public run path defaults to
@@ -325,21 +337,36 @@ artifact and gate catalog authority is
 
 | Artifact | Owner | Purpose |
 |---|---|---|
+| `reconstruct-run-control.yaml` | runtime | atomic session owner admission, request fingerprint, idempotency hash, attempt/lock state, and observed file-hash write transactions |
+| `reconstruct-run-control-validation.yaml` | runtime | validation that the current atomically admitted attempt owns the session root and has no conflicting request, lock, or committed transaction hash gap |
+| `reconstruct-run-control.pre-publication-validation.yaml` | runtime | immutable run-control checkpoint consumed by pre-publication claim projection before final write publication rewrites the final validation path |
+| `reconstruct-run-bootstrap-diagnostic.yaml` | runtime | pre-trust diagnostic for duplicate-conflict or other run-control failure before semantic artifacts are consumed |
+| `registry-verification-evidence.yaml` | runtime | current registry hash and active artifact, gate, validator, predicate, and source-profile subject evidence |
+| `registry-verification-evidence-validation.yaml` | runtime | validation that registry evidence matches the current registry file and every active gate has validator and predicate closure |
 | `target-material-profile.yaml` | runtime | detected `target_material_kind`, support status, and selected source profiles |
 | `target-material-profile-validation.yaml` | runtime | material profile gate status and selected-profile closure |
 | `source-inventory.yaml` | runtime | material-specific inventory units and scan boundary |
 | `source-observations.yaml` | runtime | structural observations with stable evidence ids and source content fingerprints |
+| `source-safety-ledger.yaml` | runtime | six-axis source safety rows keyed by observation plus intended consumption, with derived prompt/evidence/output/replay/material-claim visibility; public-output and material-claim rows default to authority-gap states unless explicitly authorized for that consumption |
+| `source-safety-ledger-validation.yaml` | runtime | validation that every observation has scoped consumption rows and that canonical axes, derived visibility, and redaction proof details are consistent |
 | `source-observation-directive.yaml` | host LLM author | selected observations for evidence use |
 | `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
-| `*.reuse-provenance.yaml` | runtime | sidecar proof that same-session resume reuses authored YAML only when invocation, source, governing snapshot, and artifact hash match |
+| `*.reuse-provenance.yaml` | runtime | reserved sidecar proof for a future promoted resume protocol; current run-control duplicate handling does not allow same-session semantic re-entry |
 | `rounds/<round-id>/lens-judgments/*.yaml` | host LLM author | reconstruct lens judgments over trusted observations |
 | `rounds/<round-id>/exploration-synthesis.yaml` | host LLM author | integrated gaps and next-source needs |
 | `rounds/<round-id>/source-frontier.yaml` | host LLM author | requested next source refs or no-next-frontier rationale |
 | `rounds/<round-id>/source-frontier-validation.yaml` | runtime | frontier validation plus explicit dependency proof on `target-material-profile-validation.yaml` |
+| `rounds/<round-id>/source-observation-delta.yaml` | runtime | per-round lineage for newly observed frontier refs before the expanded source observations are reused, including batch and triggering-frontier validation identity |
+| `rounds/<round-id>/source-observation-delta-validation.yaml` | runtime | validation that delta rows match accepted frontier refs, observed source refs, material kind, observation hashes, batch identity, and frontier-validation identity |
+| `rounds/<round-id>/source-observation-reentry-validation.yaml` | runtime | validation that delta observations passed lineage and source-safety gates before prompt/context re-entry and answer-support consumption |
+| `source-observation-lineage-index.yaml` | runtime | session-level index of every round delta, delta validation, re-entry validation, frontier kind, and added observation id consumed by answer-support validation |
+| `source-observation-lineage-index-validation.yaml` | runtime | validation that the session lineage index matches valid round delta validations, re-entry validations, frontier kinds, and observed source ids before downstream semantic use |
 | `source-purpose-candidates.yaml` | host LLM author | ranked source-derived purpose candidates with P1-P5 evidence strength, selected purpose frame, and static/kinetic/dynamic required elements |
 | `source-purpose-candidates-validation.yaml` | runtime | source-purpose evidence, selected primary, mixed lineage, contradiction, and confirmation-required validation |
 | `purpose-confirmation.yaml` | host/user mediated | confirmation record for inferred or limitation-backed selected purpose; `not_required` for directly source-declared purpose |
 | `purpose-confirmation-validation.yaml` | runtime | purpose confirmation gate that blocks seed readiness when confirmation is pending, rejected, unavailable, or requires rerun |
+| `material-admission-ledger.yaml` | runtime | admission rows for purpose-critical adequacy elements, with a separate phase reserved for literal source-backed material values |
+| `material-admission-ledger-validation.yaml` | runtime | validation that admitted/required/supporting admission rows are consumed downstream or explicitly closed, and rejected/deferred rows cannot silently affect actionability |
 | `candidate-inventory.yaml` | host LLM author | salient object, actor, action, workflow, permission, data source, constraint, and concept candidates |
 | `candidate-disposition.yaml` | host LLM author | one disposition for every salient candidate, including planned target seed refs for promoted candidates |
 | `candidate-disposition-validation.yaml` | runtime | inventory/disposition closure and projection validation |
@@ -360,8 +387,8 @@ artifact and gate catalog authority is
 | `reconstruct-metrics.yaml` | runtime | deterministic counts, answerability bucket counts, unresolved/deferred counts, and pass rate |
 | `stop-decision.yaml` | host LLM author | proposed stop/continue/ask-user decision; not the readiness authority |
 | `handoff-decision-validation.yaml` | runtime | canonical seed iteration readiness projection from runtime gates plus `stop-decision.yaml` consistency before final output and record projection |
-| `maturation-baseline.yaml` | runtime | immutable M1 projection from validated source-purpose frame, seed refs, CQ assessment, limitations, and handoff validation |
-| `maturation-baseline-validation.yaml` | runtime | baseline row closure against purpose elements, surfaces, dimensions, mixed lineage, and upstream validations |
+| `maturation-baseline.yaml` | runtime | immutable M1 projection from validated source-purpose frame, seed refs, CQ assessment, limitations, and the validated seeding reconstruct record |
+| `maturation-baseline-validation.yaml` | runtime | baseline row closure against purpose elements, surfaces, dimensions, mixed lineage, upstream validations, and source seeding record ref/hash |
 | `actionability-matrix.yaml` | runtime | M1 current projection of static/kinetic/dynamic rows as closed, limitation-backed, or frontier-required |
 | `actionability-matrix-validation.yaml` | runtime | matrix derivation and material frontier-required row validation |
 | `maturation-question-frontier.yaml` | host LLM author | M2 concrete questions for material frontier-required rows |
@@ -371,14 +398,20 @@ artifact and gate catalog authority is
 | `maturation-authority-response.yaml` | runtime | explicit projection of authority responses or deferred authority absence for closure-frontier requests |
 | `maturation-authority-response-validation.yaml` | runtime | authority request/ref/status/scope validation before support ledgers consume responses |
 | `answer-support-ledger.yaml` | host LLM author | M3 positive support clusters for answer claims, backed by direct authority, runtime proof, user confirmation, authority response, or convergent source evidence |
-| `answer-support-ledger-validation.yaml` | runtime | support-mode, evidence closure, independence, contradiction, and deferred-authority validation |
+| `answer-support-ledger-validation.yaml` | runtime | support-mode, source-observation lineage, source-safety proof sufficiency/replay, evidence closure, independence, contradiction, and deferred-authority validation |
 | `maturation-answer-claims.yaml` | host LLM author | M3 answers to frontier questions derived only from validated positive support clusters |
 | `maturation-answer-claims-validation.yaml` | runtime | question/support/surface/dimension/purpose ref closure and partial-answer limitation validation |
 | `ontology-expansion.yaml` | host LLM author | M4 overlay additions, refinements, deferrals, or rejections without rewriting `ontology-seed.yaml` |
 | `ontology-expansion-validation.yaml` | runtime | answer-claim ref closure, evidence carry-forward, concept economy, and seed rewrite guard validation |
-| `maturation-continuation-decision.yaml` | runtime | M4 continuation projection: `continue`, `ask_user`, `blocked`, `actionable_limited`, or `actionable_ready` |
-| `maturation-continuation-decision-validation.yaml` | runtime | continuation-state validation against matrix, frontier, support, authority response, and expansion validation |
-| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, seed validity, and maturation limitations |
+| `maturation-convergence-ledger.yaml` | runtime | M4 closure ledger for material questions, answer/expansion closure, deferred authority, blocked rows, and remaining frontier |
+| `maturation-convergence-ledger-validation.yaml` | runtime | closure-row validation that blocker/high questions, answer claims, expansions, and remaining frontier refs are not hidden before continuation |
+| `maturation-continuation-decision.yaml` | runtime | M4 continuation projection: `continue`, `ask_user`, `blocked`, `actionable_limited`, or `actionable_ready`; `actionable_ready` is withheld until final re-question convergence is proven |
+| `maturation-continuation-decision-validation.yaml` | runtime | continuation-state validation against matrix, frontier, support, authority response, expansion, and convergence-ledger validation |
+| `actionable-ontology.yaml` | runtime | optional final matured ontology projection when continuation reaches `actionable_limited` or `actionable_ready` without inventing new semantic content |
+| `actionable-ontology-validation.yaml` | runtime | actionability-claim, claim-scope, row coverage, limitation, final re-question, and proof-boundary validation |
+| `claim-projection.yaml` | runtime | pre-publication public/status/result/API/MCP claim boundary and final-output claim authority refs derived from handoff, pre-publication run-control, registry verification, source safety, material admission, target-material profile validation, and maturation continuation validation |
+| `claim-projection-validation.yaml` | runtime | projection surface, claim-level, decision-state, actionability-claim, governance-scope, material-kind/member support lineage, capability-specific UX status, and current upstream validation-ref closure |
+| `final-output.md` | host LLM author + runtime footer | user-facing result grounded in artifacts, seed validity, claim projection, and maturation limitations |
 | `reconstruct-run-manifest.yaml` | runtime | step refs, `performed_by` provenance, execution profile, requested domain ids, and purpose adequacy scope |
 | `reconstruct-run-manifest.post-publication-validation.yaml` | runtime | post-publication registry hash, active contract hash, source profile migration, validator, reference-standard, pattern-catalog URI/snapshot, version, and migration snapshot consistency after final output and record refs exist |
 | `reconstruct-record.yaml` | runtime | primary structured reconstruct artifact |
@@ -388,8 +421,12 @@ authoring calls may receive compact prompt projections, such as selected
 observations with shortened text excerpts, while validation still checks all
 generated evidence refs against the full artifact truth.
 Terminal projection uses `handoff-decision-validation.yaml.readiness_projection`
-as the seed iteration readiness authority and requires both validated handoff and a validated
-pre-handoff run-manifest snapshot. The final
+as the seed iteration readiness authority and requires atomically admitted valid run-control, valid registry verification,
+validated handoff, and a validated pre-handoff run-manifest snapshot. Run-control write transactions currently record
+post-write `observed_file_hash` evidence; they do not claim every writer used
+atomic rename. Public claim surfaces use
+`claim-projection-validation.yaml`, so seed handoff readiness and actionable
+ontology readiness remain separate claims. The final
 `reconstruct-run-manifest.post-publication-validation.yaml` is the post-publication audit for the
 complete manifest after `final-output.md` and `reconstruct-record.yaml` refs are
 known; it is not a prerequisite for the pre-handoff seed iteration readiness projection. The
@@ -402,14 +439,11 @@ runtime until their validator surfaces are implemented:
 
 | planned artifact | planned authority |
 |---|---|
-| `rounds/<round-id>/source-observation-delta.yaml` / `rounds/<round-id>/source-observation-delta-validation.yaml` | multi-round observation lineage before newly observed frontier evidence is used |
-| `rounds/<round-id>/source-observation-reentry-validation.yaml` | post-use re-entry validation for frontier-triggered observations cited downstream |
 | `query-proofs.yaml` / `query-proofs-validation.yaml` | executable query/API proof rows when queryability or implementation access is claimed |
 | `visualization-proofs.yaml` / `visualization-proofs-validation.yaml` | visualization surface proof rows when static or overview visualization is claimed |
 | `graph-exploration-proofs.yaml` / `graph-exploration-proofs-validation.yaml` | graph navigation/exploration proof rows when traversal or large-graph exploration is claimed |
 | `required-when-evaluation.yaml` / `required-when-evaluation-validation.yaml` | standalone audited conditional-gate applicability trace; the current terminal handoff projection embeds predicate input/result details in `handoff-decision-validation.yaml.gate_projection[]` |
 | `ontology-handoff mapping proof` | per-axis ontology handoff mapping gate once that validator is implemented |
-| `actionable-ontology.yaml` / `actionable-ontology-validation.yaml` | final matured ontology projection once continuation reaches a ready or limited actionability state |
 
 The active seed target is defined by
 `.onto/processes/reconstruct/operational-ontology-seed-contract.md`.

@@ -174,9 +174,10 @@ disposition ledger.
 ## 8. Exploration Lineage Boundary
 
 Repeated exploration is round-scoped. The current active runtime validates the
-requested source frontier before use. Multi-round observation delta and re-entry
-validation are planned authority seats until their validators are implemented
-and promoted in `reconstruct-contract-registry.yaml`.
+requested source frontier before use. Round-scoped observation delta,
+delta-validation, re-entry validation, the session lineage index, and lineage
+index validation are active authority seats in
+`reconstruct-contract-registry.yaml`.
 
 When `rounds/<round-id>/source-frontier.yaml` requests additional source refs,
 runtime writes `rounds/<round-id>/source-observation-delta.yaml` after
@@ -188,27 +189,31 @@ observation. That delta must record:
 - observed source refs
 - created or updated observation ids
 - validation ref for the frontier that authorized the observation
+- `frontier_kind`
+- `triggering_frontier_validation_ref`
 
 Each new observation record in `source-observations.yaml` must carry the same
-`observation_batch_id` and `round_id`. Later directives, lens judgments,
-exploration synthesis, candidate inventory, and seed artifacts must reference
-the relevant observation ids. A run cannot finalize candidate inventory from
-frontier-triggered evidence until that evidence has re-entered directive,
-lens judgment, and synthesis.
+`observation_batch_id` and `round_id`. Later semantic artifacts that cite
+frontier-triggered evidence must reference the relevant observation ids. Active
+runtime validation proves prompt/context re-entry before the evidence is shown
+to an LLM again, and answer-support validation proves consumption when the
+evidence supports maturation answers. Broader downstream artifact-specific
+consumption scanning remains planned until the relevant predicate evaluator is
+promoted.
 
-`source-observation-delta.yaml` is lineage evidence, not gate truth. When the
-planned multi-round validators are promoted, runtime writes
-`rounds/<round-id>/source-observation-delta-validation.yaml` as the pass/fail
-authority for `round_lineage_gate`. That validation artifact must check that
-the delta cites an accepted frontier validation, every created or updated
-observation exists, and round and batch ids match before downstream semantic
-use.
+`source-observation-delta.yaml` is lineage evidence, not gate truth. Runtime
+writes `rounds/<round-id>/source-observation-delta-validation.yaml` as the
+pass/fail authority for `round_lineage_gate`. That validation artifact must
+check that the delta cites an accepted frontier validation, every created or
+updated observation exists, source refs and hashes match, and round, batch, and
+triggering frontier validation ids match before downstream semantic use.
 
 `source_frontier_gate` must validate duplicate status against
 `source-observations.yaml` as well as inventory bounds.
-The planned `observation_reentry_gate` must declare the downstream re-entry
-authorities it checks, including lens judgments, exploration synthesis,
-candidate inventory/disposition, and seed validation artifacts.
+`observation_reentry_gate` declares the prompt/context re-entry authorities it
+checks. Answer-support consumption of newly observed delta observations is closed
+by `answer-support-ledger-validation.yaml`; broader downstream artifact scanners
+remain planned until their runtime evaluator is promoted.
 
 ## 9. Validation Boundary
 
@@ -222,9 +227,9 @@ not duplicate the active gate catalog; prose here explains boundary intent only.
 Planned gates are kept in
 `reconstruct-contract-registry.yaml#planned_validation_gate_catalog` and do not
 block current handoff until promoted. That planned set includes
-`round_lineage_gate`, `observation_reentry_gate`,
 `ontology_handoff_mapping_gate`, query proof, visualization proof, graph
-exploration proof, and explicit required-when-evaluation gates.
+exploration proof, and explicit required-when-evaluation gates. Round lineage
+and observation re-entry gates are active gates.
 
 Non-terminal gate failures must be visible in `reconstruct-record.yaml`, status
 reads, and final output when `handoff_gate` passes and terminal projection is

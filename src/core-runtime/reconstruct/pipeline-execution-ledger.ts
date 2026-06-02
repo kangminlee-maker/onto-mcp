@@ -39,11 +39,39 @@ export interface BuildReconstructPipelineExecutionLedgerParams {
 
 const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
   {
+    unitId: "run_control",
+    unitKind: "run_control",
+    owner: "runtime",
+    artifactKey: "reconstruct_run_control",
+    upstreamUnitIds: [],
+  },
+  {
+    unitId: "run_control_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "reconstruct_run_control_validation",
+    upstreamUnitIds: ["run_control"],
+  },
+  {
+    unitId: "registry_verification",
+    unitKind: "registry_verification",
+    owner: "runtime",
+    artifactKey: "registry_verification_evidence",
+    upstreamUnitIds: ["run_control_validation"],
+  },
+  {
+    unitId: "registry_verification_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "registry_verification_evidence_validation",
+    upstreamUnitIds: ["registry_verification"],
+  },
+  {
     unitId: "target_material_profile",
     unitKind: "material_profile",
     owner: "runtime",
     artifactKey: "target_material_profile",
-    upstreamUnitIds: [],
+    upstreamUnitIds: ["registry_verification_validation"],
   },
   {
     unitId: "target_material_profile_validation",
@@ -74,11 +102,25 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["initial_source_frontier"],
   },
   {
+    unitId: "source_safety",
+    unitKind: "source_safety",
+    owner: "runtime",
+    artifactKey: "source_safety_ledger",
+    upstreamUnitIds: ["source_observation"],
+  },
+  {
+    unitId: "source_safety_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "source_safety_ledger_validation",
+    upstreamUnitIds: ["source_safety", "source_observation"],
+  },
+  {
     unitId: "observation_directive",
     unitKind: "semantic_directive",
     owner: "host_llm",
     artifactKey: "source_observation_directive",
-    upstreamUnitIds: ["source_observation"],
+    upstreamUnitIds: ["source_safety_validation"],
   },
   {
     unitId: "observation_directive_validation",
@@ -121,18 +163,68 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     ],
   },
   {
+    unitId: "source_observation_delta",
+    unitKind: "source_observation_delta",
+    owner: "runtime",
+    artifactKey: "source_observation_delta",
+    upstreamUnitIds: ["source_frontier_validation", "source_observation"],
+  },
+  {
+    unitId: "source_observation_delta_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "source_observation_delta_validation",
+    upstreamUnitIds: ["source_observation_delta", "source_frontier_validation"],
+  },
+  {
+    unitId: "source_observation_reentry_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "source_observation_reentry_validation",
+    upstreamUnitIds: [
+      "source_observation_delta_validation",
+      "source_safety_validation",
+    ],
+  },
+  {
+    unitId: "source_observation_lineage_index",
+    unitKind: "source_observation_lineage_index",
+    owner: "runtime",
+    artifactKey: "source_observation_lineage_index",
+    upstreamUnitIds: ["source_frontier_validation"],
+  },
+  {
+    unitId: "source_observation_lineage_index_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "source_observation_lineage_index_validation",
+    upstreamUnitIds: [
+      "source_observation_lineage_index",
+      "source_observation",
+      "source_observation_delta_validation",
+      "source_observation_reentry_validation",
+    ],
+  },
+  {
     unitId: "source_purpose_candidates",
     unitKind: "semantic_source_purpose",
     owner: "host_llm",
     artifactKey: "source_purpose_candidates",
-    upstreamUnitIds: ["source_frontier_validation"],
+    upstreamUnitIds: [
+      "source_frontier_validation",
+      "source_observation_lineage_index_validation",
+    ],
   },
   {
     unitId: "source_purpose_candidates_validation",
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "source_purpose_candidates_validation",
-    upstreamUnitIds: ["source_purpose_candidates", "source_observation"],
+    upstreamUnitIds: [
+      "source_purpose_candidates",
+      "source_observation",
+      "source_observation_lineage_index_validation",
+    ],
   },
   {
     unitId: "purpose_confirmation",
@@ -152,11 +244,21 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     ],
   },
   {
+    unitId: "material_admission",
+    unitKind: "material_admission",
+    owner: "runtime",
+    artifactKey: "material_admission_ledger",
+    upstreamUnitIds: [
+      "source_purpose_candidates_validation",
+      "purpose_confirmation_validation",
+    ],
+  },
+  {
     unitId: "candidate_inventory",
     unitKind: "semantic_candidate_inventory",
     owner: "host_llm",
     artifactKey: "candidate_inventory",
-    upstreamUnitIds: ["purpose_confirmation_validation"],
+    upstreamUnitIds: ["purpose_confirmation_validation", "material_admission"],
   },
   {
     unitId: "candidate_disposition",
@@ -181,21 +283,33 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     unitKind: "semantic_ontology_seed",
     owner: "host_llm",
     artifactKey: "ontology_seed",
-    upstreamUnitIds: ["candidate_disposition_validation"],
+    upstreamUnitIds: ["candidate_disposition_validation", "material_admission"],
   },
   {
     unitId: "ontology_seed_validation",
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "ontology_seed_validation",
-    upstreamUnitIds: ["ontology_seed"],
+    upstreamUnitIds: ["ontology_seed", "candidate_disposition_validation"],
+  },
+  {
+    unitId: "material_admission_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "material_admission_ledger_validation",
+    upstreamUnitIds: [
+      "material_admission",
+      "candidate_inventory",
+      "candidate_disposition_validation",
+      "ontology_seed_validation",
+    ],
   },
   {
     unitId: "claim_realization",
     unitKind: "semantic_map",
     owner: "host_llm",
     artifactKey: "claim_realization_map",
-    upstreamUnitIds: ["ontology_seed_validation"],
+    upstreamUnitIds: ["ontology_seed_validation", "material_admission_validation"],
   },
   {
     unitId: "claim_realization_validation",
@@ -432,6 +546,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
       "maturation_question_frontier_validation",
       "maturation_closure_frontier_validation",
       "maturation_authority_response_validation",
+      "source_observation_lineage_index_validation",
     ],
   },
   {
@@ -439,7 +554,11 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "answer_support_ledger_validation",
-    upstreamUnitIds: ["answer_support_ledger"],
+    upstreamUnitIds: [
+      "answer_support_ledger",
+      "source_observation_lineage_index_validation",
+      "source_safety_validation",
+    ],
   },
   {
     unitId: "maturation_answer_claims",
@@ -470,6 +589,26 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["ontology_expansion", "maturation_answer_claims_validation"],
   },
   {
+    unitId: "maturation_convergence_ledger",
+    unitKind: "maturation_convergence_ledger",
+    owner: "runtime",
+    artifactKey: "maturation_convergence_ledger",
+    upstreamUnitIds: [
+      "maturation_question_frontier_validation",
+      "actionability_matrix_validation",
+      "answer_support_ledger_validation",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ],
+  },
+  {
+    unitId: "maturation_convergence_ledger_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "maturation_convergence_ledger_validation",
+    upstreamUnitIds: ["maturation_convergence_ledger"],
+  },
+  {
     unitId: "maturation_continuation_decision",
     unitKind: "runtime_projection",
     owner: "runtime",
@@ -480,6 +619,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
       "answer_support_ledger_validation",
       "maturation_authority_response_validation",
       "ontology_expansion_validation",
+      "maturation_convergence_ledger_validation",
     ],
   },
   {
@@ -490,25 +630,81 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["maturation_continuation_decision"],
   },
   {
+    unitId: "actionable_ontology",
+    unitKind: "runtime_projection",
+    owner: "runtime",
+    artifactKey: "actionable_ontology",
+    upstreamUnitIds: [
+      "actionability_matrix_validation",
+      "ontology_expansion_validation",
+      "maturation_continuation_decision_validation",
+      "maturation_convergence_ledger_validation",
+    ],
+  },
+  {
+    unitId: "actionable_ontology_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "actionable_ontology_validation",
+    upstreamUnitIds: ["actionable_ontology"],
+  },
+  {
+    unitId: "run_control_pre_publication_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "reconstruct_run_control_pre_publication_validation",
+    upstreamUnitIds: [
+      "run_control_validation",
+      "maturation_continuation_decision_validation",
+    ],
+  },
+  {
+    unitId: "claim_projection",
+    unitKind: "runtime_projection",
+    owner: "runtime",
+    artifactKey: "claim_projection",
+    upstreamUnitIds: [
+      "handoff_decision_validation",
+      "run_control_pre_publication_validation",
+      "registry_verification_validation",
+      "source_safety_validation",
+      "material_admission_validation",
+      "maturation_continuation_decision_validation",
+    ],
+  },
+  {
+    unitId: "claim_projection_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "claim_projection_validation",
+    upstreamUnitIds: ["claim_projection"],
+  },
+  {
     unitId: "final_output",
     unitKind: "final_output",
     owner: "host_llm",
     artifactKey: "final_output",
-    upstreamUnitIds: ["maturation_continuation_decision_validation"],
+    upstreamUnitIds: [
+      "maturation_continuation_decision_validation",
+      "claim_projection_validation",
+    ],
   },
   {
     unitId: "final_output_provenance_validation",
     unitKind: "runtime_validation",
     owner: "runtime",
     artifactKey: "final_output_provenance_validation",
-    upstreamUnitIds: ["final_output"],
+    upstreamUnitIds: ["final_output", "claim_projection_validation"],
   },
   {
     unitId: "record_assembly",
     unitKind: "record_assembly",
     owner: "runtime",
     artifactKey: "reconstruct_record",
-    upstreamUnitIds: ["final_output_provenance_validation"],
+    upstreamUnitIds: [
+      "claim_projection_validation",
+      "final_output_provenance_validation",
+    ],
   },
   {
     unitId: "post_publication_run_manifest_validation",
@@ -537,7 +733,10 @@ const VALIDATION_GATE_BY_AUTHORED_UNIT = new Map<ReconstructStageId, Reconstruct
   ["answer_support_ledger", "answer_support_ledger_validation"],
   ["maturation_answer_claims", "maturation_answer_claims_validation"],
   ["ontology_expansion", "ontology_expansion_validation"],
+  ["maturation_convergence_ledger", "maturation_convergence_ledger_validation"],
+  ["actionable_ontology", "actionable_ontology_validation"],
   ["final_output", "final_output_provenance_validation"],
+  ["claim_projection", "claim_projection_validation"],
 ]);
 
 const PRESENCE_INPUTS_BY_RUNTIME_VALIDATION = new Map<
@@ -545,13 +744,30 @@ const PRESENCE_INPUTS_BY_RUNTIME_VALIDATION = new Map<
   readonly ReconstructStageId[]
 >([
   ["target_material_profile_validation", ["target_material_profile"]],
+  ["run_control_validation", ["run_control"]],
+  ["registry_verification_validation", ["registry_verification"]],
+  ["source_safety_validation", ["source_safety", "source_observation"]],
   ["observation_directive_validation", ["observation_directive"]],
   ["source_frontier_validation", ["source_frontier", "source_inventory"]],
+  ["source_observation_delta_validation", ["source_observation_delta"]],
+  [
+    "source_observation_reentry_validation",
+    ["source_observation_delta_validation", "source_safety_validation"],
+  ],
   [
     "candidate_disposition_validation",
     ["candidate_inventory", "candidate_disposition", "source_observation"],
   ],
-  ["ontology_seed_validation", ["ontology_seed"]],
+  ["ontology_seed_validation", ["ontology_seed", "candidate_disposition_validation"]],
+  [
+    "material_admission_validation",
+    [
+      "material_admission",
+      "candidate_inventory",
+      "candidate_disposition_validation",
+      "ontology_seed_validation",
+    ],
+  ],
   ["claim_realization_validation", ["claim_realization"]],
   ["seed_confirmation_validation", ["seed_confirmation"]],
   ["competency_questions_validation", ["competency_questions"]],
@@ -571,9 +787,15 @@ const PRESENCE_INPUTS_BY_RUNTIME_VALIDATION = new Map<
   ["maturation_answer_claims_validation", ["maturation_answer_claims"]],
   ["ontology_expansion_validation", ["ontology_expansion"]],
   [
+    "maturation_convergence_ledger_validation",
+    ["maturation_convergence_ledger"],
+  ],
+  [
     "maturation_continuation_decision_validation",
     ["maturation_continuation_decision"],
   ],
+  ["actionable_ontology_validation", ["actionable_ontology"]],
+  ["claim_projection_validation", ["claim_projection"]],
   ["final_output_provenance_validation", ["final_output"]],
 ]);
 
@@ -626,15 +848,80 @@ function artifactRefForKey(args: {
   return args.record.artifact_refs[args.key] ?? null;
 }
 
-function downstreamMap(): Map<ReconstructStageId, ReconstructStageId[]> {
+function downstreamMap(
+  upstreamUnitIdsByUnitId: Map<ReconstructStageId, ReconstructStageId[]>,
+): Map<ReconstructStageId, ReconstructStageId[]> {
   const map = new Map<ReconstructStageId, ReconstructStageId[]>();
   for (const spec of RECONSTRUCT_LEDGER_STAGE_SPECS) map.set(spec.unitId, []);
   for (const spec of RECONSTRUCT_LEDGER_STAGE_SPECS) {
-    for (const upstreamUnitId of spec.upstreamUnitIds) {
+    for (const upstreamUnitId of upstreamUnitIdsByUnitId.get(spec.unitId) ?? []) {
       map.set(upstreamUnitId, [...(map.get(upstreamUnitId) ?? []), spec.unitId]);
     }
   }
   return map;
+}
+
+async function sourceObservationDeltaFrontierKind(
+  outputRefs: readonly string[],
+): Promise<"source_frontier" | "maturation_closure_frontier" | null> {
+  const outputRef = outputRefs[0];
+  if (!outputRef) return null;
+  try {
+    const parsed = parseYaml(await fs.readFile(outputRef, "utf8")) as {
+      frontier_kind?: unknown;
+    } | null;
+    return parsed?.frontier_kind === "source_frontier" ||
+        parsed?.frontier_kind === "maturation_closure_frontier"
+      ? parsed.frontier_kind
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolvedUpstreamUnitIds(args: {
+  spec: ReconstructLedgerStageSpec;
+  sourceDeltaFrontierKind: "source_frontier" | "maturation_closure_frontier" | null;
+  sourceObservationReentryPresent: boolean;
+}): ReconstructStageId[] {
+  const frontierValidationUnitId =
+    args.sourceDeltaFrontierKind === "maturation_closure_frontier"
+      ? "maturation_closure_frontier_validation"
+      : "source_frontier_validation";
+  if (args.spec.unitId === "source_observation_delta") {
+    return [frontierValidationUnitId, "source_observation"];
+  }
+  if (args.spec.unitId === "source_observation_delta_validation") {
+    return ["source_observation_delta", frontierValidationUnitId];
+  }
+  if (
+    args.sourceObservationReentryPresent &&
+    args.spec.unitId === "source_observation_lineage_index"
+  ) {
+    return [
+      ...args.spec.upstreamUnitIds,
+      "source_observation_reentry_validation",
+    ];
+  }
+  if (args.spec.unitId === "source_observation_lineage_index_validation") {
+    if (!args.sourceObservationReentryPresent) {
+      return ["source_observation_lineage_index", "source_observation"];
+    }
+    return args.spec.upstreamUnitIds;
+  }
+  if (
+    args.sourceObservationReentryPresent &&
+    (
+      args.spec.unitId === "answer_support_ledger" ||
+      args.spec.unitId === "answer_support_ledger_validation"
+    )
+  ) {
+    return [
+      ...args.spec.upstreamUnitIds,
+      "source_observation_reentry_validation",
+    ];
+  }
+  return args.spec.upstreamUnitIds;
 }
 
 function manifestStatus(
@@ -698,7 +985,6 @@ function trustForReconstructUnit(args: {
 export async function buildReconstructPipelineExecutionLedger(
   params: BuildReconstructPipelineExecutionLedgerParams,
 ): Promise<PipelineExecutionLedger> {
-  const downstreamUnitIds = downstreamMap();
   const manifestStepByUnitId = new Map(
     (params.reconstructRunManifest?.steps ?? []).map((step) => [step.step_id, step]),
   );
@@ -714,6 +1000,23 @@ export async function buildReconstructPipelineExecutionLedger(
       ]),
     ]),
   );
+  const sourceDeltaFrontierKind = await sourceObservationDeltaFrontierKind(
+    artifactRefsByUnitId.get("source_observation_delta") ?? [],
+  );
+  const sourceObservationReentryPresent =
+    (artifactRefsByUnitId.get("source_observation_reentry_validation") ?? [])
+      .length > 0;
+  const upstreamUnitIdsByUnitId = new Map<ReconstructStageId, ReconstructStageId[]>(
+    RECONSTRUCT_LEDGER_STAGE_SPECS.map((spec) => [
+      spec.unitId,
+      resolvedUpstreamUnitIds({
+        spec,
+        sourceDeltaFrontierKind,
+        sourceObservationReentryPresent,
+      }),
+    ]),
+  );
+  const downstreamUnitIds = downstreamMap(upstreamUnitIdsByUnitId);
   const outputHashesByUnitId = new Map<ReconstructStageId, Record<string, string | null>>();
   const validationStatusesByUnitId = new Map<
     ReconstructStageId,
@@ -737,12 +1040,14 @@ export async function buildReconstructPipelineExecutionLedger(
     const nextTrustedUnitIds = new Set<ReconstructStageId>();
     const nextUnits: PipelineExecutionLedgerUnitEntry[] = [];
     for (const spec of RECONSTRUCT_LEDGER_STAGE_SPECS) {
+      const upstreamUnitIds = upstreamUnitIdsByUnitId.get(spec.unitId) ??
+        spec.upstreamUnitIds;
       const outputRefs = artifactRefsByUnitId.get(spec.unitId) ?? [];
       const outputHashes = outputHashesByUnitId.get(spec.unitId) ?? {};
       const outputPresent =
         outputRefs.length > 0 &&
         outputRefs.every((outputRef) => outputHashes[outputRef] !== null);
-      const upstreamTrusted = spec.upstreamUnitIds.every((unitId) => {
+      const upstreamTrusted = upstreamUnitIds.every((unitId) => {
         if (
           spec.unitKind === "runtime_validation" &&
           isPresenceInput({
@@ -777,7 +1082,7 @@ export async function buildReconstructPipelineExecutionLedger(
         owner: spec.owner,
         producedArtifactRefs: outputRefs,
         consumedArtifactRefs: normalizeLedgerRefs([
-          ...spec.upstreamUnitIds.flatMap((unitId) =>
+          ...upstreamUnitIds.flatMap((unitId) =>
             artifactRefsByUnitId.get(unitId) ?? [],
           ),
         ]),
@@ -788,7 +1093,7 @@ export async function buildReconstructPipelineExecutionLedger(
         trustReason: trust.trustReason,
         attemptCount: manifestStep ? 1 : 0,
         lastFailureMessage: null,
-        upstreamUnitIds: spec.upstreamUnitIds,
+        upstreamUnitIds,
         downstreamUnitIds: downstreamUnitIds.get(spec.unitId) ?? [],
       };
       nextUnits.push(entry);

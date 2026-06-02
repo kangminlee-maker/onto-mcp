@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -218,6 +219,7 @@ function finalOutputProvenanceValidation(
     final_output_ref: "/tmp/final-output.md",
     validation_status: status,
     required_fragments: ["ontology-seed.yaml"],
+    forbidden_fragments: [],
     section_bindings: [
       {
         section_id: "artifact_truth",
@@ -451,6 +453,10 @@ describe("assembleReconstructRecord", () => {
       path.join(sessionRoot, "source-observation-directive-validation.yaml"),
       sourceObservationValidation(sessionId),
     );
+    const sourceObservationLineageIndexValidationPath = await writeYaml(
+      path.join(sessionRoot, "source-observation-lineage-index-validation.yaml"),
+      genericValidation(sessionId),
+    );
     const ontologySeedValidationPath = await writeYaml(
       path.join(sessionRoot, "ontology-seed-validation.yaml"),
       ontologySeedValidation(sessionId),
@@ -465,6 +471,8 @@ describe("assembleReconstructRecord", () => {
         initial_source_frontier: initialSourceFrontierPath,
         source_observations: sourceObservationsPath,
         source_observation_directive_validation: sourceObservationValidationPath,
+        source_observation_lineage_index_validation:
+          sourceObservationLineageIndexValidationPath,
         ontology_seed_validation: ontologySeedValidationPath,
       },
     });
@@ -484,6 +492,34 @@ describe("assembleReconstructRecord", () => {
     expect(record.runtime_boundary.semantic_generation).toBe("not_performed");
     expect(written.artifact_refs.target_material_profile)
       .toBe(path.resolve(targetMaterialProfilePath));
+    expect(written.artifact_refs.source_observation_lineage_index_validation)
+      .toBe(path.resolve(sourceObservationLineageIndexValidationPath));
+    const targetProfileIntegrity = written.artifact_integrity.find((entry) =>
+      entry.artifact_key === "target_material_profile"
+    );
+    const targetProfileValidationIntegrity = written.artifact_integrity.find(
+      (entry) => entry.artifact_key === "target_material_profile_validation",
+    );
+    expect(targetProfileIntegrity).toMatchObject({
+      artifact_ref: path.resolve(targetMaterialProfilePath),
+      exists: true,
+      validation_status: null,
+    });
+    expect(targetProfileIntegrity?.sha256).toBe(
+      crypto.createHash("sha256")
+        .update(await fs.readFile(targetMaterialProfilePath))
+        .digest("hex"),
+    );
+    expect(targetProfileValidationIntegrity).toMatchObject({
+      artifact_ref: path.resolve(targetMaterialProfileValidationPath),
+      exists: true,
+      validation_status: "valid",
+    });
+    expect(written.artifact_integrity.some((entry) =>
+      entry.artifact_key === "source_observation_lineage_index_validation" &&
+      entry.artifact_ref === path.resolve(sourceObservationLineageIndexValidationPath) &&
+      entry.validation_status === "valid"
+    )).toBe(true);
     expect(written.missing_artifacts).toEqual([]);
   });
 

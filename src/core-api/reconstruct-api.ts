@@ -5,6 +5,8 @@ import { parse as parseYaml } from "yaml";
 import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
+  ReconstructClaimProjectionArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
@@ -126,6 +128,8 @@ export interface ReconstructSessionStatus {
   sessionRoot: string;
   status: ReconstructRecordArtifact["record_stage"];
   artifactRefs: ReconstructRecordArtifactRefs;
+  claimProjection: ReconstructClaimProjectionArtifact | null;
+  claimProjectionValidation: ReconstructClaimProjectionValidationArtifact | null;
   progress: ReconstructRunProgressProjection;
   pipelineExecutionLedger?: PipelineExecutionLedger;
   reconstructRecord: ReconstructRecordArtifact;
@@ -689,6 +693,14 @@ export function createOntoReconstructCoreApi(
         await readYamlArtifactIfPresent<ReconstructMetricsArtifact>(
           reconstructRecord.artifact_refs.reconstruct_metrics,
         );
+      const claimProjection =
+        await readYamlArtifactIfPresent<ReconstructClaimProjectionArtifact>(
+          reconstructRecord.artifact_refs.claim_projection,
+        );
+      const claimProjectionValidation =
+        await readYamlArtifactIfPresent<ReconstructClaimProjectionValidationArtifact>(
+          reconstructRecord.artifact_refs.claim_projection_validation,
+        );
       const reconstructRecordRef = path.join(
         resolvedSessionRoot,
         "reconstruct-record.yaml",
@@ -707,6 +719,8 @@ export function createOntoReconstructCoreApi(
         sessionRoot: resolvedSessionRoot,
         status: reconstructRecord.record_stage,
         artifactRefs: reconstructRecord.artifact_refs,
+        claimProjection,
+        claimProjectionValidation,
         progress: deriveReconstructProgress({
           record: reconstructRecord,
           runManifest: reconstructRunManifest,

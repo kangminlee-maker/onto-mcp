@@ -2054,6 +2054,7 @@ function markdownSectionText(markdown: string, heading: string): string | null {
 export function validateFinalOutputProvenance(args: {
   finalOutputText: string;
   requiredFragments?: string[];
+  forbiddenFragments?: string[];
   sectionBindings?: ReconstructFinalOutputProvenanceSectionBindingInput[];
 }): ReconstructPostSeedValidationViolation[] {
   const violations: ReconstructPostSeedValidationViolation[] = [];
@@ -2062,6 +2063,16 @@ export function validateFinalOutputProvenance(args: {
       violations.push(violation({
         code: "final_output_provenance_missing",
         message: `final output does not cite required artifact or id: ${fragment}`,
+        subjectId: fragment,
+      }));
+    }
+  }
+  for (const fragment of args.forbiddenFragments ?? []) {
+    if (args.finalOutputText.includes(fragment)) {
+      violations.push(violation({
+        code: "final_output_claim_restatement_forbidden",
+        message:
+          `final output restates a public claim value outside claim-projection authority: ${fragment}`,
         subjectId: fragment,
       }));
     }

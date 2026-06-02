@@ -28,11 +28,24 @@ afterEach(async () => {
 
 function emptyRefs(): ReconstructRecordArtifactRefs {
   return {
+    reconstruct_run_control: null,
+    reconstruct_run_control_validation: null,
+    reconstruct_run_control_pre_publication_validation: null,
+    reconstruct_run_bootstrap_diagnostic: null,
+    registry_verification_evidence: null,
+    registry_verification_evidence_validation: null,
     target_material_profile: null,
     target_material_profile_validation: null,
     source_inventory: null,
     initial_source_frontier: null,
     source_observations: null,
+    source_observation_delta: null,
+    source_observation_delta_validation: null,
+    source_observation_reentry_validation: null,
+    source_observation_lineage_index: null,
+    source_observation_lineage_index_validation: null,
+    source_safety_ledger: null,
+    source_safety_ledger_validation: null,
     source_observation_directive: null,
     source_observation_directive_validation: null,
     lens_judgment_index: null,
@@ -43,6 +56,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     source_purpose_candidates_validation: null,
     purpose_confirmation: null,
     purpose_confirmation_validation: null,
+    material_admission_ledger: null,
+    material_admission_ledger_validation: null,
     candidate_inventory: null,
     candidate_disposition: null,
     candidate_disposition_validation: null,
@@ -71,6 +86,22 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     actionability_matrix_validation: null,
     maturation_question_frontier: null,
     maturation_question_frontier_validation: null,
+    maturation_closure_frontier: null,
+    maturation_closure_frontier_validation: null,
+    maturation_authority_response: null,
+    maturation_authority_response_validation: null,
+    answer_support_ledger: null,
+    answer_support_ledger_validation: null,
+    maturation_answer_claims: null,
+    maturation_answer_claims_validation: null,
+    ontology_expansion: null,
+    ontology_expansion_validation: null,
+    maturation_convergence_ledger: null,
+    maturation_convergence_ledger_validation: null,
+    maturation_continuation_decision: null,
+    maturation_continuation_decision_validation: null,
+    claim_projection: null,
+    claim_projection_validation: null,
     final_output: null,
     final_output_provenance_validation: null,
     reconstruct_run_manifest: null,
@@ -95,6 +126,7 @@ function record(
       ...emptyRefs(),
       ...refs,
     },
+    artifact_integrity: [],
     validation_summary: {
       target_material_profile_status: "not_available",
       source_observation_directive_status: "not_available",
@@ -176,6 +208,78 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "candidate_disposition",
       "source_observation",
     ]));
+    expect(
+      ledger.units.find((unit) =>
+        unit.unitId === "run_control_pre_publication_validation"
+      )?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "run_control_validation",
+      "maturation_continuation_decision_validation",
+    ]));
+    const claimProjectionUpstreams = ledger.units.find((unit) =>
+      unit.unitId === "claim_projection"
+    )?.upstreamUnitIds ?? [];
+    expect(claimProjectionUpstreams).toEqual(expect.arrayContaining([
+      "run_control_pre_publication_validation",
+      "handoff_decision_validation",
+    ]));
+    expect(claimProjectionUpstreams).not.toContain("run_control_validation");
+    expect(
+      ledger.units.find((unit) => unit.unitId === "source_observation_lineage_index")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining(["source_frontier_validation"]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "source_purpose_candidates")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "source_frontier_validation",
+      "source_observation_lineage_index_validation",
+    ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "source_purpose_candidates_validation")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "source_purpose_candidates",
+      "source_observation",
+      "source_observation_lineage_index_validation",
+    ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "answer_support_ledger_validation")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "answer_support_ledger",
+      "source_observation_lineage_index_validation",
+      "source_safety_validation",
+    ]));
+  });
+
+  it("records re-entry as a conditional lineage upstream when frontier deltas exist", async () => {
+    const root = await tempSessionRoot();
+    const refs = emptyRefs();
+    refs.source_observation_reentry_validation = await writeArtifact(
+      path.join(root, "source-observation-reentry-validation.yaml"),
+    );
+    refs.source_observation_lineage_index = await writeArtifact(
+      path.join(root, "source-observation-lineage-index.yaml"),
+    );
+
+    const ledger = await buildReconstructPipelineExecutionLedger({
+      sessionRoot: root,
+      reconstructRecord: record(root, refs),
+    });
+
+    expect(
+      ledger.units.find((unit) => unit.unitId === "source_observation_lineage_index")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining(["source_observation_reentry_validation"]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "answer_support_ledger")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining(["source_observation_reentry_validation"]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "answer_support_ledger_validation")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining(["source_observation_reentry_validation"]));
   });
 
   it("trusts runtime preparation stages when their outputs exist", async () => {
@@ -235,6 +339,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceObservations = await writeArtifact(
       path.join(root, "source-observations.yaml"),
     );
+    const sourceSafetyLedger = await writeArtifact(
+      path.join(root, "source-safety-ledger.yaml"),
+    );
+    const sourceSafetyLedgerValidation = await writeArtifact(
+      path.join(root, "source-safety-ledger-validation.yaml"),
+    );
     const sourceObservationDirective = await writeArtifact(
       path.join(root, "source-observation-directive.yaml"),
     );
@@ -247,6 +357,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_inventory: sourceInventory,
         initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
+        source_safety_ledger: sourceSafetyLedger,
+        source_safety_ledger_validation: sourceSafetyLedgerValidation,
         source_observation_directive: sourceObservationDirective,
       }),
     });
@@ -267,6 +379,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_inventory: sourceInventory,
         initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
+        source_safety_ledger: sourceSafetyLedger,
+        source_safety_ledger_validation: sourceSafetyLedgerValidation,
         source_observation_directive: sourceObservationDirective,
         source_observation_directive_validation:
           sourceObservationDirectiveValidation,
@@ -300,6 +414,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     );
     const sourceObservations = await writeArtifact(
       path.join(root, "source-observations.yaml"),
+    );
+    const sourceSafetyLedger = await writeArtifact(
+      path.join(root, "source-safety-ledger.yaml"),
+    );
+    const sourceSafetyLedgerValidation = await writeArtifact(
+      path.join(root, "source-safety-ledger-validation.yaml"),
     );
     const sourceObservationDirective = await writeArtifact(
       path.join(root, "source-observation-directive.yaml"),
@@ -350,6 +470,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceObservations = await writeArtifact(
       path.join(root, "source-observations.yaml"),
     );
+    const sourceSafetyLedger = await writeArtifact(
+      path.join(root, "source-safety-ledger.yaml"),
+    );
+    const sourceSafetyLedgerValidation = await writeArtifact(
+      path.join(root, "source-safety-ledger-validation.yaml"),
+    );
     const sourceObservationDirective = await writeArtifact(
       path.join(root, "source-observation-directive.yaml"),
     );
@@ -368,6 +494,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceFrontierValidation = await writeArtifact(
       path.join(root, "rounds/round1/source-frontier-validation.yaml"),
     );
+    const sourceObservationLineageIndex = await writeArtifact(
+      path.join(root, "source-observation-lineage-index.yaml"),
+    );
+    const sourceObservationLineageIndexValidation = await writeArtifact(
+      path.join(root, "source-observation-lineage-index-validation.yaml"),
+    );
     const candidateInventory = await writeArtifact(
       path.join(root, "candidate-inventory.yaml"),
     );
@@ -383,6 +515,9 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const purposeConfirmationValidation = await writeArtifact(
       path.join(root, "purpose-confirmation-validation.yaml"),
     );
+    const materialAdmissionLedger = await writeArtifact(
+      path.join(root, "material-admission-ledger.yaml"),
+    );
     const candidateDisposition = await writeArtifact(
       path.join(root, "candidate-disposition.yaml"),
     );
@@ -395,6 +530,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_inventory: sourceInventory,
         initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
+        source_safety_ledger: sourceSafetyLedger,
+        source_safety_ledger_validation: sourceSafetyLedgerValidation,
         source_observation_directive: sourceObservationDirective,
         source_observation_directive_validation:
           sourceObservationDirectiveValidation,
@@ -402,10 +539,14 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         exploration_synthesis: explorationSynthesis,
         source_frontier: sourceFrontier,
         source_frontier_validation: sourceFrontierValidation,
+        source_observation_lineage_index: sourceObservationLineageIndex,
+        source_observation_lineage_index_validation:
+          sourceObservationLineageIndexValidation,
         source_purpose_candidates: sourcePurposeCandidates,
         source_purpose_candidates_validation: sourcePurposeCandidatesValidation,
         purpose_confirmation: purposeConfirmation,
         purpose_confirmation_validation: purposeConfirmationValidation,
+        material_admission_ledger: materialAdmissionLedger,
         candidate_inventory: candidateInventory,
         candidate_disposition: candidateDisposition,
       }),
@@ -432,6 +573,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_inventory: sourceInventory,
         initial_source_frontier: initialSourceFrontier,
         source_observations: sourceObservations,
+        source_safety_ledger: sourceSafetyLedger,
+        source_safety_ledger_validation: sourceSafetyLedgerValidation,
         source_observation_directive: sourceObservationDirective,
         source_observation_directive_validation:
           sourceObservationDirectiveValidation,
@@ -439,10 +582,14 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         exploration_synthesis: explorationSynthesis,
         source_frontier: sourceFrontier,
         source_frontier_validation: sourceFrontierValidation,
+        source_observation_lineage_index: sourceObservationLineageIndex,
+        source_observation_lineage_index_validation:
+          sourceObservationLineageIndexValidation,
         source_purpose_candidates: sourcePurposeCandidates,
         source_purpose_candidates_validation: sourcePurposeCandidatesValidation,
         purpose_confirmation: purposeConfirmation,
         purpose_confirmation_validation: purposeConfirmationValidation,
+        material_admission_ledger: materialAdmissionLedger,
         candidate_inventory: candidateInventory,
         candidate_disposition: candidateDisposition,
         candidate_disposition_validation: candidateDispositionValidation,
@@ -462,7 +609,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     expect(
       afterValidation.units.find((unit) => unit.unitId === "claim_realization")
         ?.status,
-    ).toBe("missing");
+    ).toBe("not_reached");
   });
 
   it("blocks failure classification until competency question assessment validation exists", async () => {
@@ -480,6 +627,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_observation_lineage_index",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",
@@ -533,6 +681,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_observation_lineage_index",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",
@@ -584,6 +733,7 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_observation_lineage_index",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",

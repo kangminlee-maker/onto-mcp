@@ -866,6 +866,24 @@ ontology_handoff_facet_contract:
       local_role: graph_exploration_interface_modeling_concern_applicability
 
 artifact_authorities:
+  reconstruct_run_control:
+    authority_ref: reconstruct-run-control.yaml
+    validation_ref: reconstruct-run-control-validation.yaml
+  reconstruct_run_control_validation:
+    authority_ref: reconstruct-run-control-validation.yaml
+    validation_ref: null
+  reconstruct_run_control_pre_publication_validation:
+    authority_ref: reconstruct-run-control.pre-publication-validation.yaml
+    validation_ref: null
+  reconstruct_run_bootstrap_diagnostic:
+    authority_ref: reconstruct-run-bootstrap-diagnostic.yaml
+    validation_ref: null
+  registry_verification_evidence:
+    authority_ref: registry-verification-evidence.yaml
+    validation_ref: registry-verification-evidence-validation.yaml
+  registry_verification_evidence_validation:
+    authority_ref: registry-verification-evidence-validation.yaml
+    validation_ref: null
   target_material_profile:
     authority_ref: target-material-profile.yaml
     validation_ref: target-material-profile-validation.yaml
@@ -879,9 +897,16 @@ artifact_authorities:
     authority_ref: source-inventory.yaml
     validation_ref: null
     projection_policy: refs_hashes_material_kinds_and_support_statuses
-  source_evidence:
+  source_observations:
     authority_ref: source-observations.yaml
     validation_ref: source-observation-directive-validation.yaml
+  source_safety_ledger:
+    authority_ref: source-safety-ledger.yaml
+    validation_ref: source-safety-ledger-validation.yaml
+    projection_policy: six_axis_source_safety_and_derived_visibility_by_observation_id_and_intended_consumption
+  source_safety_ledger_validation:
+    authority_ref: source-safety-ledger-validation.yaml
+    validation_ref: null
   source_observation_directive:
     authority_ref: source-observation-directive.yaml
     validation_ref: source-observation-directive-validation.yaml
@@ -894,6 +919,24 @@ artifact_authorities:
   source_frontier_validation:
     authority_ref: rounds/<round-id>/source-frontier-validation.yaml
     validation_ref: null
+  source_observation_delta:
+    authority_ref: rounds/<round-id>/source-observation-delta.yaml
+    validation_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    projection_policy: canonical_per_round_observation_delta_for_source_frontier_and_maturation_closure_frontier
+    lineage_identity_rule: source_observation_delta.frontier_kind, frontier_validation_ref, observation_batch_id, and triggering_frontier_validation_ref distinguish seeding source-frontier observations from maturation closure-frontier observations and bind each observed source row to the frontier validation that produced it.
+  source_observation_delta_validation:
+    authority_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    validation_ref: null
+  source_observation_reentry_validation:
+    authority_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+    validation_ref: null
+  source_observation_lineage_index:
+    authority_ref: source-observation-lineage-index.yaml
+    validation_ref: source-observation-lineage-index-validation.yaml
+    projection_policy: session_level_index_of_round_delta_validation_reentry_refs_frontier_kind_and_added_observation_ids
+  source_observation_lineage_index_validation:
+    authority_ref: source-observation-lineage-index-validation.yaml
+    validation_ref: null
   source_purpose_candidates:
     authority_ref: source-purpose-candidates.yaml
     validation_ref: source-purpose-candidates-validation.yaml
@@ -905,6 +948,13 @@ artifact_authorities:
     validation_ref: purpose-confirmation-validation.yaml
   purpose_confirmation_validation:
     authority_ref: purpose-confirmation-validation.yaml
+    validation_ref: null
+  material_admission_ledger:
+    authority_ref: material-admission-ledger.yaml
+    validation_ref: material-admission-ledger-validation.yaml
+    projection_policy: phase_scoped_material_admission_and_downstream_consumption
+  material_admission_ledger_validation:
+    authority_ref: material-admission-ledger-validation.yaml
     validation_ref: null
   lens_judgments:
     authority_ref: rounds/<round-id>/lens-judgments/*.yaml
@@ -982,11 +1032,11 @@ artifact_authorities:
   final_output:
     authority_ref: final-output.md
     validation_ref: final-output-provenance-validation.yaml
-    projection_policy: human_readable_projection_of_validated_authorities
+    projection_policy: human_readable_projection_that_cites_validated_authorities_without_independent_public_claim_restatement
   final_output_provenance_validation:
     authority_ref: final-output-provenance-validation.yaml
     validation_ref: null
-    projection_policy: structured_section_bindings_between_final_output_and_terminal_artifact_authorities
+    projection_policy: structured_section_bindings_required_fragments_forbidden_claim_restatement_fragments_and_terminal_artifact_authorities
   reconstruct_run_manifest:
     authority_ref: reconstruct-run-manifest.yaml
     validation_ref: reconstruct-run-manifest.post-publication-validation.yaml
@@ -1005,7 +1055,7 @@ artifact_authorities:
   reconstruct_record:
     authority_ref: reconstruct-record.yaml
     validation_ref: handoff-decision-validation.yaml
-    projection_policy: refs_hashes_statuses_and_bounded_summaries_emitted_after_handoff_validation_passes
+    projection_policy: refs_hashes_artifact_integrity_statuses_and_bounded_summaries_emitted_after_handoff_validation_passes
   maturation_baseline:
     authority_ref: maturation-baseline.yaml
     validation_ref: maturation-baseline-validation.yaml
@@ -1054,11 +1104,30 @@ artifact_authorities:
   ontology_expansion_validation:
     authority_ref: ontology-expansion-validation.yaml
     validation_ref: null
+  maturation_convergence_ledger:
+    authority_ref: maturation-convergence-ledger.yaml
+    validation_ref: maturation-convergence-ledger-validation.yaml
+  maturation_convergence_ledger_validation:
+    authority_ref: maturation-convergence-ledger-validation.yaml
+    validation_ref: null
   maturation_continuation_decision:
     authority_ref: maturation-continuation-decision.yaml
     validation_ref: maturation-continuation-decision-validation.yaml
   maturation_continuation_decision_validation:
     authority_ref: maturation-continuation-decision-validation.yaml
+    validation_ref: null
+  actionable_ontology:
+    authority_ref: actionable-ontology.yaml
+    validation_ref: actionable-ontology-validation.yaml
+  actionable_ontology_validation:
+    authority_ref: actionable-ontology-validation.yaml
+    validation_ref: null
+  claim_projection:
+    authority_ref: claim-projection.yaml
+    validation_ref: claim-projection-validation.yaml
+    projection_policy: strongest_honest_claim_for_public_and_downstream_surfaces
+  claim_projection_validation:
+    authority_ref: claim-projection-validation.yaml
     validation_ref: null
 
 planned_artifact_authorities:
@@ -1086,32 +1155,10 @@ planned_artifact_authorities:
     authority_ref: maturation-promotion-readiness-validation.yaml
     validation_ref: null
     activation_condition: maturation_gate_promotion_readiness_runtime_is_implemented
-  actionable_ontology:
-    authority_ref: actionable-ontology.yaml
-    validation_ref: actionable-ontology-validation.yaml
-    activation_condition: actionable_ontology_runtime_is_implemented
-  actionable_ontology_validation:
-    authority_ref: actionable-ontology-validation.yaml
-    validation_ref: null
-    activation_condition: actionable_ontology_runtime_is_implemented
-  observation_lineage:
-    authority_ref: rounds/<round-id>/source-observation-delta.yaml
-    validation_ref: rounds/<round-id>/source-observation-delta-validation.yaml
-    activation_condition: multi_round_frontier_observation_runtime_is_implemented
-    projection_policy: canonical_per_round_observation_delta_for_source_frontier_and_maturation_closure_frontier
-    lineage_identity_rule: source_observation_delta.frontier_kind and source_observation_delta.frontier_validation_ref distinguish seeding source-frontier observations from maturation closure-frontier observations.
-  observation_lineage_validation:
-    authority_ref: rounds/<round-id>/source-observation-delta-validation.yaml
-    validation_ref: null
-    activation_condition: multi_round_frontier_observation_runtime_is_implemented
   ontology_handoff_mapping_validation:
     authority_ref: ontology-handoff-mapping-validation.yaml
     validation_ref: null
     activation_condition: per_axis_ontology_handoff_mapping_validator_is_implemented
-  observation_reentry_validation:
-    authority_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
-    validation_ref: null
-    activation_condition: downstream_reentry_validation_runtime_is_implemented
   query_proofs:
     authority_ref: query-proofs.yaml
     validation_ref: query-proofs-validation.yaml
@@ -1146,20 +1193,41 @@ planned_artifact_authorities:
     activation_condition: registry_predicate_evaluator_runtime_is_implemented
 
 validation_gate_catalog:
+  - gate_id: reconstruct_run_control_gate
+    validation_artifact_ref: reconstruct-run-control-validation.yaml
+    required_when: always
+  - gate_id: registry_verification_evidence_gate
+    validation_artifact_ref: registry-verification-evidence-validation.yaml
+    required_when: always
   - gate_id: material_profile_gate
     validation_artifact_ref: target-material-profile-validation.yaml
     required_when: always
   - gate_id: source_frontier_gate
     validation_artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
     required_when: source_frontier_exists
-  - gate_id: source_evidence_gate
+  - gate_id: round_lineage_gate
+    validation_artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+    required_when: frontier_observation_occurs
+  - gate_id: observation_reentry_gate
+    validation_artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+    required_when: frontier_observation_occurs
+  - gate_id: source_observation_lineage_index_gate
+    validation_artifact_ref: source-observation-lineage-index-validation.yaml
+    required_when: source_observation_lineage_index_exists
+  - gate_id: source_observation_directive_gate
     validation_artifact_ref: source-observation-directive-validation.yaml
+    required_when: source_observations_exist
+  - gate_id: source_safety_gate
+    validation_artifact_ref: source-safety-ledger-validation.yaml
     required_when: source_observations_exist
   - gate_id: source_purpose_candidates_gate
     validation_artifact_ref: source-purpose-candidates-validation.yaml
     required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: purpose_confirmation_gate
     validation_artifact_ref: purpose-confirmation-validation.yaml
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
+  - gate_id: material_admission_gate
+    validation_artifact_ref: material-admission-ledger-validation.yaml
     required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: candidate_disposition_gate
     validation_artifact_ref: candidate-disposition-validation.yaml
@@ -1216,9 +1284,18 @@ validation_gate_catalog:
   - gate_id: ontology_expansion_gate
     validation_artifact_ref: ontology-expansion-validation.yaml
     required_when: ontology_expansion_exists
+  - gate_id: maturation_convergence_ledger_gate
+    validation_artifact_ref: maturation-convergence-ledger-validation.yaml
+    required_when: maturation_convergence_ledger_exists
   - gate_id: maturation_continuation_decision_gate
     validation_artifact_ref: maturation-continuation-decision-validation.yaml
     required_when: maturation_continuation_decision_exists
+  - gate_id: actionable_ontology_gate
+    validation_artifact_ref: actionable-ontology-validation.yaml
+    required_when: actionable_ontology_exists
+  - gate_id: claim_projection_gate
+    validation_artifact_ref: claim-projection-validation.yaml
+    required_when: claim_projection_exists
 
 planned_validation_gate_catalog:
   - gate_id: maturation_promotion_request_gate
@@ -1238,23 +1315,6 @@ planned_validation_gate_catalog:
     activation_prerequisites:
       - maturation_promotion_request_validation_is_valid
       - maturation_runtime_capability_profile_valid
-  - gate_id: actionable_ontology_gate
-    validation_artifact_ref: actionable-ontology-validation.yaml
-    required_when: actionable_ontology_exists
-    activation_condition: actionable_ontology_runtime_is_implemented
-    activation_prerequisites:
-      - maturation_continuation_decision_runtime_is_implemented
-      - maturation_continuation_decision_validation_is_valid
-      - actionability_matrix_validation_is_valid
-      - maturation_promotion_readiness_valid
-  - gate_id: round_lineage_gate
-    validation_artifact_ref: rounds/<round-id>/source-observation-delta-validation.yaml
-    required_when: frontier_observation_occurs
-    activation_condition: multi_round_frontier_observation_runtime_is_implemented
-  - gate_id: observation_reentry_gate
-    validation_artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
-    required_when: frontier_observation_used_downstream
-    activation_condition: downstream_reentry_validation_runtime_is_implemented
   - gate_id: ontology_handoff_mapping_gate
     validation_artifact_ref: ontology-handoff-mapping-validation.yaml
     required_when: ontology_handoff_claim_exists
@@ -1279,7 +1339,7 @@ planned_validation_gate_catalog:
 required_when_predicate_family_catalog:
   - predicate_family_id: frontier_observation_use_by_downstream_artifact
     parameter_names: [gate_instance_scope, downstream_artifact_ref, downstream_validation_ref]
-    concept_rule: Generated instances all mean that a validated frontier-triggered observation delta is actually cited by a specific downstream artifact before re-entry validation consumes that artifact or its validation.
+    concept_rule: Generated instances all mean that a validated frontier-triggered observation delta is actually cited by a specific downstream artifact. In the active runtime this family is planning metadata except for answer-support consumption, which is validated by answer-support-ledger-validation after prompt/context re-entry passes.
     instance_naming_rule: <downstream_artifact_key>_uses_frontier_observation
     concept_economy_rule: Add a new generated instance only when a new downstream artifact can cite frontier observation ids; do not invent a new predicate concept for each artifact family.
 
@@ -1306,6 +1366,11 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind in ['source_frontier', 'maturation_closure_frontier']"
     unknown_projection: blocked
     explanation_template: "A source-frontier or maturation-closure-frontier observation delta exists and requires lineage validation before downstream semantic use."
+  - predicate_id: source_observation_lineage_index_exists
+    input_authority_refs: [source-observation-lineage-index.yaml]
+    truth_expression: "artifact_exists(source-observation-lineage-index.yaml)"
+    unknown_projection: blocked
+    explanation_template: "A session-level source observation lineage index exists and must be validated before downstream semantic use."
   - predicate_id: source_frontier_observation_delta
     gate_instance_scope: per_round
     input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
@@ -1587,6 +1652,11 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(ontology-expansion.yaml)"
     unknown_projection: not_applicable
     explanation_template: "An ontology expansion exists and requires expansion validation."
+  - predicate_id: maturation_convergence_ledger_exists
+    input_authority_refs: [maturation-convergence-ledger.yaml]
+    truth_expression: "artifact_file_exists(maturation-convergence-ledger.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A maturation convergence ledger exists and requires closure validation before continuation is projected."
   - predicate_id: actionable_ontology_exists
     input_authority_refs: [actionable-ontology.yaml]
     truth_expression: "artifact_exists(actionable-ontology.yaml)"
@@ -1636,7 +1706,7 @@ required_when_predicate_catalog:
     explanation_template: "A downstream graph exploration claim exists and requires graph-exploration proof validation."
   - predicate_id: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
     gate_instance_scope: global_with_concrete_gate_instance_inputs
-    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, source-purpose-candidates-validation.yaml, purpose-confirmation-validation.yaml, maturation-promotion-request-validation.yaml, maturation-runtime-capability-profile-validation.yaml, maturation-promotion-readiness-validation.yaml, maturation-baseline-validation.yaml, actionability-matrix-validation.yaml, maturation-question-frontier-validation.yaml, maturation-closure-frontier-validation.yaml, answer-support-ledger-validation.yaml, maturation-authority-response-validation.yaml, maturation-answer-claims-validation.yaml, ontology-expansion-validation.yaml, maturation-continuation-decision-validation.yaml, actionable-ontology-validation.yaml, ontology-handoff-mapping-validation.yaml, rounds/*/source-observation-delta-validation.yaml, rounds/*/source-observation-reentry-validation.yaml, query-proofs-validation.yaml, visualization-proofs-validation.yaml, graph-exploration-proofs-validation.yaml, required-when-evaluation-validation.yaml, reconstruct-metrics.yaml]
+    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, source-purpose-candidates-validation.yaml, purpose-confirmation-validation.yaml, maturation-promotion-request-validation.yaml, maturation-runtime-capability-profile-validation.yaml, maturation-promotion-readiness-validation.yaml, maturation-baseline-validation.yaml, actionability-matrix-validation.yaml, maturation-question-frontier-validation.yaml, maturation-closure-frontier-validation.yaml, answer-support-ledger-validation.yaml, maturation-authority-response-validation.yaml, maturation-answer-claims-validation.yaml, ontology-expansion-validation.yaml, maturation-convergence-ledger-validation.yaml, maturation-continuation-decision-validation.yaml, actionable-ontology-validation.yaml, ontology-handoff-mapping-validation.yaml, rounds/*/source-observation-delta-validation.yaml, rounds/*/source-observation-reentry-validation.yaml, query-proofs-validation.yaml, visualization-proofs-validation.yaml, graph-exploration-proofs-validation.yaml, required-when-evaluation-validation.yaml, reconstruct-metrics.yaml]
     dynamic_input_authority_rule: Consume every validation_artifact_ref from validation_gate_catalog and planned_validation_gate_catalog whose required_when predicate evaluates true for the concrete gate instance; hand-maintained lists are non-authoritative cache hints only.
     truth_expression: "any_required_applicable_validation_artifact_missing_or_failed or runtime_halted == true or reconstruct_metrics.unresolved_question_count > 0"
     unknown_projection: blocked
@@ -1651,6 +1721,11 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(stop-decision.yaml)"
     unknown_projection: blocked
     explanation_template: "A stop decision exists and requires terminal handoff validation before final output and record projection."
+  - predicate_id: claim_projection_exists
+    input_authority_refs: [claim-projection.yaml]
+    truth_expression: "artifact_exists(claim-projection.yaml)"
+    unknown_projection: not_applicable
+    explanation_template: "A claim projection exists and requires validation before public status, result, MCP, API, handoff, or material-kind support surfaces reuse its claim values; final-output may cite only the canonical refs before validation."
 readiness_projection:
   runtime_authority: reconstruct_runtime_readiness_projection_v1
   authority_rule: This registry declares allowed readiness values and semantic mapping labels; the executable precedence and status folding rule is owned by the runtime readinessProjection implementation until a registry-owned readiness-policy evaluator is promoted.
@@ -1760,6 +1835,35 @@ readiness_projection:
   conflict_rule: When supporting artifacts project different canonical values, choose the first value in strictness_order_high_to_low that appears among contributing artifacts; lower list index is stricter and wins. Cite every contributing artifact.
 
 validator_records:
+  - validator_id: reconstruct-run-control-validator
+    gate_ids: [reconstruct_run_control_gate]
+    validator_version: 1
+    input_authority_refs:
+      - reconstruct-run-control.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_session_root_request_fingerprint_target_signature_runtime_version_and_idempotency_are_replayable
+      - reject_conflicting_request_fingerprints_before_semantic_artifacts_are_consumed
+      - validate_current_attempt_and_session_root_lock_ownership
+      - validate_committed_write_transactions_have_artifact_refs_and_hashes
+      - preserve_post_write_hash_observation_without_claiming_atomic_commit_when_writer_did_not_prove_atomic_rename
+    output_ref: reconstruct-run-control-validation.yaml
+  - validator_id: registry-verification-evidence-validator
+    gate_ids: [registry_verification_evidence_gate]
+    validator_version: 1
+    input_authority_refs:
+      - registry-verification-evidence.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_registry_snapshot_hash_is_recorded
+      - validate_registry_snapshot_hash_matches_current_registry_file
+      - validate_active_registry_subject_lists_match_current_registry_catalogs
+      - validate_active_artifact_gate_validator_predicate_and_source_profile_ids_are_unique
+      - validate_every_active_gate_has_a_validator_record
+      - validate_every_validator_gate_ref_resolves_to_an_active_gate
+      - validate_every_active_gate_required_when_predicate_resolves
+      - require_evidence_row_for_each_current_registry_subject_id
+    output_ref: registry-verification-evidence-validation.yaml
   - validator_id: target-material-profile-validator
     gate_ids: [material_profile_gate]
     validator_version: 1
@@ -1782,11 +1886,80 @@ validator_records:
       - target-material-profile-validation.yaml
       - reconstruct-contract-registry.yaml
     output_ref: rounds/<round-id>/source-frontier-validation.yaml
+  - validator_id: source-observation-delta-validator
+    gate_ids: [round_lineage_gate]
+    validator_version: 1
+    input_authority_refs:
+      - rounds/<round-id>/source-observation-delta.yaml
+      - rounds/<round-id>/source-frontier.yaml
+      - rounds/<round-id>/source-frontier-validation.yaml
+      - maturation-closure-frontier.yaml
+      - maturation-closure-frontier-validation.yaml
+      - source-observations.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_rule: "Use source-frontier refs when source_observation_delta.frontier_kind == source_frontier; use maturation-closure-frontier refs when source_observation_delta.frontier_kind == maturation_closure_frontier."
+    validation_obligations:
+      - validate_delta_frontier_kind_is_supported
+      - validate_delta_rows_match_accepted_frontier_refs
+      - validate_delta_observation_refs_exist_in_source_observations
+      - validate_delta_source_ref_material_kind_and_observation_hash_match_observed_content
+      - validate_delta_rows_preserve_observation_batch_id_and_triggering_frontier_validation_ref
+    output_ref: rounds/<round-id>/source-observation-delta-validation.yaml
+  - validator_id: source-observation-reentry-validator
+    gate_ids: [observation_reentry_gate]
+    validator_version: 1
+    input_authority_refs:
+      - rounds/<round-id>/source-observation-delta.yaml
+      - rounds/<round-id>/source-observation-delta-validation.yaml
+      - source-observations.yaml
+      - source-safety-ledger.yaml
+      - source-safety-ledger-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_delta_validation_passed_before_prompt_reentry
+      - validate_source_safety_validation_passed_before_prompt_reentry
+      - validate_each_delta_observation_exists_in_source_observations
+      - validate_each_delta_observation_has_exact_prompt_context_source_safety_row
+    output_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
+  - validator_id: source-observation-lineage-index-validator
+    gate_ids: [source_observation_lineage_index_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-observation-lineage-index.yaml
+      - source-observations.yaml
+      - rounds/<round-id>/source-observation-delta.yaml
+      - rounds/<round-id>/source-observation-delta-validation.yaml
+      - rounds/<round-id>/source-observation-reentry-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_unique_session_level_lineage_row_ids
+      - validate_each_lineage_row_delta_ref_is_readable_and_session_matching
+      - require_each_lineage_row_delta_validation_to_be_valid
+      - require_each_lineage_row_reentry_validation_to_be_valid
+      - validate_lineage_added_observation_ids_match_delta_added_observation_ids
+      - validate_each_lineage_added_observation_exists_in_source_observations
+      - validate_each_lineage_added_observation_was_reentered_by_its_validation
+    output_ref: source-observation-lineage-index-validation.yaml
   - validator_id: source-observation-directive-validator
-    gate_ids: [source_evidence_gate]
+    gate_ids: [source_observation_directive_gate]
     validator_version: 1
     input_authority_refs: [source-observation-directive.yaml, source-observations.yaml, reconstruct-contract-registry.yaml]
     output_ref: source-observation-directive-validation.yaml
+  - validator_id: source-safety-ledger-validator
+    gate_ids: [source_safety_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-safety-ledger.yaml
+      - source-observations.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_exactly_six_canonical_source_safety_axes
+      - validate_every_observation_has_source_safety_rows_for_each_intended_consumption
+      - validate_visibility_tier_is_derived_not_independent_authority
+      - fail_when_nested_redaction_evidence_contradicts_top_level_axis_state
+      - validate_source_safety_subject_refs_against_observed_source_refs
+      - preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
+    output_ref: source-safety-ledger-validation.yaml
   - validator_id: source-purpose-candidates-validator
     gate_ids: [source_purpose_candidates_gate]
     validator_version: 1
@@ -1821,6 +1994,31 @@ validator_records:
       - block_seed_readiness_when_confirmation_is_pending_rejected_unavailable_or_evidence_check_pending
       - require_revised_confirmation_to_preserve_source_conflict_or_trigger_purpose_discovery_rerun
     output_ref: purpose-confirmation-validation.yaml
+  - validator_id: material-admission-ledger-validator
+    gate_ids: [material_admission_gate]
+    validator_version: 1
+    input_authority_refs:
+      - material-admission-ledger.yaml
+      - source-purpose-candidates-validation.yaml
+      - candidate-inventory.yaml
+      - candidate-disposition-validation.yaml
+      - ontology-seed.yaml
+      - ontology-seed-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: maturation-baseline-validation.yaml
+        activation_condition: maturation_baseline_exists
+        consumed_for:
+          - validate_maturation_baseline_consumes_admitted_material_rows
+    validation_obligations:
+      - validate_admission_row_uniqueness
+      - validate_phase_scoped_input_kind_disposition_and_snapshot_refs
+      - validate_source_refs_against_observed_source_refs
+      - validate_purpose_element_refs_against_selected_purpose_frame
+      - require_admitted_required_or_supporting_rows_to_have_candidate_seed_maturation_limitation_blocked_or_out_of_scope_consumer
+      - prevent_diagnostic_or_trace_only_rows_from_silently_affecting_actionability
+      - require_rejected_ambiguous_rows_to_preserve_replayable_evidence_or_limitation
+    output_ref: material-admission-ledger-validation.yaml
   - validator_id: candidate-disposition-validator
     gate_ids: [candidate_disposition_gate]
     validator_version: 1
@@ -2071,7 +2269,7 @@ validator_records:
         consumed_for:
           - validate_failure_trigger_against_promoted_planned_validation_authorities
       - artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
-        required_when: frontier_observation_used_downstream
+        required_when: frontier_observation_occurs
         consumed_for:
           - validate_failure_trigger_against_promoted_planned_validation_authorities
       - artifact_ref: query-proofs-validation.yaml
@@ -2126,6 +2324,7 @@ validator_records:
       - validate_baseline_rows_trace_to_seed_refs_limitations_or_validated_assessment_gaps
       - validate_mixed_baseline_rows_preserve_member_material_and_cross_material_lineage
       - preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
+      - require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
     output_ref: maturation-baseline-validation.yaml
   - validator_id: actionability-matrix-validator
     gate_ids: [actionability_matrix_gate]
@@ -2192,7 +2391,7 @@ validator_records:
       - validate_authority_identity_and_snapshot_refs_are_recorded
       - validate_authority_response_status_and_scope
       - preserve_unavailable_or_rejected_authority_as_blocked_or_limitation_state
-      - reject_authority_response_that_claims_source_evidence_without_source_observation_refs
+      - reject_authority_response_that_claims_source_support_without_source_observation_refs
     output_ref: maturation-authority-response-validation.yaml
   - validator_id: answer-support-ledger-validator
     gate_ids: [answer_support_gate]
@@ -2201,6 +2400,10 @@ validator_records:
       - answer-support-ledger.yaml
       - maturation-question-frontier-validation.yaml
       - source-observations.yaml
+      - source-observation-lineage-index.yaml
+      - source-observation-lineage-index-validation.yaml
+      - source-safety-ledger.yaml
+      - source-safety-ledger-validation.yaml
       - reconstruct-contract-registry.yaml
     conditional_input_authority_refs:
       - artifact_ref: purpose-confirmation-validation.yaml
@@ -2217,6 +2420,9 @@ validator_records:
       - validate_user_confirmation_support_mode
       - validate_external_or_runtime_authority_support_mode
       - require_two_independent_evidence_refs_for_convergent_source_evidence_unless_direct_authority
+      - require_frontier_triggered_evidence_to_resolve_to_valid_lineage_index_validation
+      - require_frontier_triggered_evidence_to_resolve_to_valid_reentry_validation
+      - require_observation_specific_evidence_support_source_safety_row_with_claim_sufficiency_and_replay
       - require_contradictions_to_be_recorded_and_bounded
     output_ref: answer-support-ledger-validation.yaml
   - validator_id: maturation-answer-claims-validator
@@ -2248,6 +2454,26 @@ validator_records:
       - require_concept_economy_rationale_when_surface_increases
       - prevent_in_place_seed_authority_rewrite
     output_ref: ontology-expansion-validation.yaml
+  - validator_id: maturation-convergence-ledger-validator
+    gate_ids: [maturation_convergence_ledger_gate]
+    validator_version: 1
+    input_authority_refs:
+      - maturation-convergence-ledger.yaml
+      - maturation-question-frontier-validation.yaml
+      - answer-support-ledger-validation.yaml
+      - maturation-answer-claims-validation.yaml
+      - ontology-expansion-validation.yaml
+      - rounds/<round-id>/source-observation-delta-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_prior_maturation_validations_are_valid
+      - require_every_blocker_or_high_question_to_have_answer_expansion_blocked_or_frontier_closure
+      - reject_trace_audit_or_authority_request_rows_as_positive_semantic_support
+      - validate_closure_source_observation_delta_refs_match_source_observation_delta_validation
+      - validate_each_source_observation_delta_row_has_convergence_closure_disposition
+      - preserve_remaining_frontier_refs_without_ready_projection
+      - reject_actionable_ready_until_final_requestion_convergence_is_proven
+    output_ref: maturation-convergence-ledger-validation.yaml
   - validator_id: maturation-continuation-decision-validator
     gate_ids: [maturation_continuation_decision_gate]
     validator_version: 1
@@ -2259,13 +2485,74 @@ validator_records:
       - answer-support-ledger-validation.yaml
       - maturation-authority-response-validation.yaml
       - ontology-expansion-validation.yaml
+      - maturation-convergence-ledger-validation.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
       - validate_continuation_state_against_validated_actionability_matrix_and_frontier_state
       - reject_actionable_ready_when_material_blocker_or_high_row_remains_unclosed
       - validate_continue_ask_user_or_blocked_state_against_available_next_authority
       - validate_limitation_refs_and_row_scope_for_actionable_limited_state
+      - reject_actionable_ready_until_final_requestion_convergence_is_proven
     output_ref: maturation-continuation-decision-validation.yaml
+  - validator_id: actionable-ontology-validator
+    gate_ids: [actionable_ontology_gate]
+    validator_version: 1
+    input_authority_refs:
+      - actionable-ontology.yaml
+      - ontology-seed-validation.yaml
+      - actionability-matrix-validation.yaml
+      - ontology-expansion-validation.yaml
+      - maturation-continuation-decision-validation.yaml
+      - maturation-convergence-ledger-validation.yaml
+      - reconstruct-contract-registry.yaml
+    conditional_input_authority_refs:
+      - artifact_ref: query-proofs-validation.yaml
+        required_when: downstream_query_or_access_claim_exists
+        consumed_for:
+          - validate_actionable_runtime_or_query_claims_have_validated_proof_refs
+      - artifact_ref: visualization-proofs-validation.yaml
+        required_when: downstream_visualization_claim_exists
+        consumed_for:
+          - validate_actionable_visualization_claims_have_validated_proof_refs
+      - artifact_ref: graph-exploration-proofs-validation.yaml
+        required_when: downstream_graph_exploration_claim_exists
+        consumed_for:
+          - validate_actionable_graph_exploration_claims_have_validated_proof_refs
+    validation_obligations:
+      - validate_actionability_claim_against_maturation_continuation_decision
+      - require_every_projected_row_to_trace_to_seed_expansion_or_limitation
+      - require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded
+      - validate_actionable_limited_claim_scope_rows
+      - validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
+      - reject_actionable_ready_when_material_blocker_or_high_question_remains
+      - reject_actionable_ready_until_final_requestion_convergence_is_proven
+    output_ref: actionable-ontology-validation.yaml
+  - validator_id: claim-projection-validator
+    gate_ids: [claim_projection_gate]
+    validator_version: 1
+    input_authority_refs:
+      - claim-projection.yaml
+      - target-material-profile.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-run-control.pre-publication-validation.yaml
+      - registry-verification-evidence-validation.yaml
+      - source-safety-ledger-validation.yaml
+      - material-admission-ledger-validation.yaml
+      - handoff-decision-validation.yaml
+      - maturation-continuation-decision.yaml
+      - maturation-continuation-decision-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_all_public_and_downstream_projection_surfaces_are_present
+      - validate_claim_level_decision_state_and_actionability_claim_alignment
+      - validate_broader_operated_system_release_health_and_incident_governance_are_bounded
+      - require_blocked_projection_to_have_limitation_or_recovery_refs
+      - require_each_projection_row_to_cite_runtime_validation_authorities
+      - validate_material_kind_support_row_uses_capability_claim_not_actionability_claim
+      - validate_member_capability_rows_preserve_target_ref_profile_snapshot_definition_hash_source_refs_validation_ref_readiness_effect_and_next_action
+      - validate_material_kind_support_profile_supported_requires_valid_target_material_profile_validation
+      - reject_unwired_material_kind_support_levels_above_profile_supported
+    output_ref: claim-projection-validation.yaml
   - validator_id: handoff-decision-validator
     gate_ids: [handoff_gate]
     validator_version: 1
@@ -2351,7 +2638,7 @@ validator_records:
         consumed_for:
           - validate_terminal_projection_for_requested_or_promoted_planned_gates
       - artifact_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
-        required_when: frontier_observation_used_downstream
+        required_when: frontier_observation_occurs
         consumed_for:
           - validate_terminal_projection_for_requested_or_promoted_planned_gates
       - artifact_ref: ontology-handoff-mapping-validation.yaml
@@ -2451,40 +2738,6 @@ planned_validator_records:
       - reject_maturation_execution_when_seed_authority_is_not_ready_limited_or_validated_for_maturation
       - emit_per_gate_promotion_decision_with_missing_authority_refs
     output_ref: maturation-promotion-readiness-validation.yaml
-  - validator_id: actionable-ontology-validator
-    gate_ids: [actionable_ontology_gate]
-    validator_version: 1
-    input_authority_refs:
-      - actionable-ontology.yaml
-      - actionability-matrix-validation.yaml
-      - maturation-continuation-decision-validation.yaml
-      - ontology-seed-validation.yaml
-      - reconstruct-contract-registry.yaml
-    conditional_input_authority_refs:
-      - artifact_ref: ontology-expansion-validation.yaml
-        required_when: ontology_expansion_exists
-        consumed_for:
-          - require_every_projected_ontology_row_to_trace_to_seed_expansion_or_limitation
-      - artifact_ref: query-proofs-validation.yaml
-        required_when: downstream_query_or_access_claim_exists
-        consumed_for:
-          - validate_actionable_runtime_or_query_claims_have_validated_proof_refs
-      - artifact_ref: visualization-proofs-validation.yaml
-        required_when: downstream_visualization_claim_exists
-        consumed_for:
-          - validate_actionable_visualization_claims_have_validated_proof_refs
-      - artifact_ref: graph-exploration-proofs-validation.yaml
-        required_when: downstream_graph_exploration_claim_exists
-        consumed_for:
-          - validate_actionable_graph_exploration_claims_have_validated_proof_refs
-    validation_obligations:
-      - validate_actionability_claim_against_maturation_continuation_decision
-      - require_every_projected_ontology_row_to_trace_to_seed_expansion_or_limitation
-      - require_static_kinetic_dynamic_surfaces_to_be_closed_or_limitation_excluded
-      - validate_actionable_limited_claim_scope_rows
-      - validate_applicable_proof_authorities_before_projecting_runtime_query_visualization_or_graph_claims
-      - reject_actionable_ready_when_material_blocker_or_high_question_remains
-    output_ref: actionable-ontology-validation.yaml
   - validator_id: ontology-handoff-mapping-validator
     gate_ids: [ontology_handoff_mapping_gate]
     validator_version: 1
@@ -2497,137 +2750,6 @@ planned_validator_records:
       - validate_ready_handoff_mappings_have_substantive_content_or_limitation_refs
       - validate_handoff_mapping_claims_against_seed_refs_and_limitations
     output_ref: ontology-handoff-mapping-validation.yaml
-  - validator_id: source-observation-delta-validator
-    gate_ids: [round_lineage_gate]
-    validator_version: 1
-    input_authority_refs:
-      - rounds/<round-id>/source-observation-delta.yaml
-      - source-observations.yaml
-      - reconstruct-contract-registry.yaml
-    conditional_input_authority_refs:
-      - artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
-        required_when: source_frontier_observation_delta
-        consumed_for:
-          - validate_delta_frontier_validation_ref_matches_frontier_kind
-      - artifact_ref: maturation-closure-frontier-validation.yaml
-        required_when: maturation_closure_frontier_observation_delta
-        consumed_for:
-          - validate_delta_frontier_validation_ref_matches_frontier_kind
-          - validate_maturation_delta_question_refs_against_maturation_closure_frontier_validation
-    validation_obligations:
-      - validate_delta_frontier_kind_is_source_frontier_or_maturation_closure_frontier
-      - validate_delta_frontier_validation_ref_matches_frontier_kind
-      - validate_delta_observation_refs_are_newly_observed_for_round
-      - validate_maturation_delta_question_refs_against_maturation_closure_frontier_validation
-    output_ref: rounds/<round-id>/source-observation-delta-validation.yaml
-  - validator_id: source-observation-reentry-validator
-    gate_ids: [observation_reentry_gate]
-    validator_version: 1
-    input_authority_refs:
-      - rounds/<round-id>/source-observation-delta.yaml
-      - rounds/<round-id>/source-observation-delta-validation.yaml
-      - source-observations.yaml
-      - reconstruct-contract-registry.yaml
-    conditional_input_authority_refs:
-      - artifact_ref: rounds/<round-id>/source-frontier-validation.yaml
-        required_when: source_frontier_observation_delta
-        consumed_for:
-          - validate_source_frontier_delta_authorization_before_reentry
-      - artifact_ref: maturation-closure-frontier-validation.yaml
-        required_when: maturation_closure_frontier_observation_delta
-        consumed_for:
-          - validate_maturation_closure_delta_authorization_before_reentry
-      - artifact_ref: rounds/<round-id>/lens-judgments/*.yaml
-        required_when: lens_judgments_use_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: rounds/<round-id>/exploration-synthesis.yaml
-        required_when: exploration_synthesis_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: source-purpose-candidates.yaml
-        required_when: source_purpose_candidates_use_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: source-purpose-candidates-validation.yaml
-        required_when: source_purpose_candidates_use_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: candidate-inventory.yaml
-        required_when: candidate_inventory_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: candidate-disposition.yaml
-        required_when: candidate_disposition_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: candidate-disposition-validation.yaml
-        required_when: candidate_disposition_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: ontology-seed.yaml
-        required_when: ontology_seed_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: ontology-seed-validation.yaml
-        required_when: ontology_seed_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: answer-support-ledger.yaml
-        required_when: answer_support_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: answer-support-ledger-validation.yaml
-        required_when: answer_support_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: maturation-answer-claims.yaml
-        required_when: maturation_answer_claims_use_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: maturation-answer-claims-validation.yaml
-        required_when: maturation_answer_claims_use_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: ontology-expansion.yaml
-        required_when: ontology_expansion_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_refs_to_delta_observation_ids
-      - artifact_ref: ontology-expansion-validation.yaml
-        required_when: ontology_expansion_uses_frontier_observation
-        consumed_for:
-          - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - artifact_ref: actionability-matrix.yaml
-        required_when: actionability_matrix_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - artifact_ref: actionability-matrix-validation.yaml
-        required_when: actionability_matrix_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - artifact_ref: maturation-continuation-decision.yaml
-        required_when: maturation_continuation_decision_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - artifact_ref: maturation-continuation-decision-validation.yaml
-        required_when: maturation_continuation_decision_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - artifact_ref: actionable-ontology.yaml
-        required_when: actionable_ontology_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - artifact_ref: actionable-ontology-validation.yaml
-        required_when: actionable_ontology_uses_frontier_observation
-        consumed_for:
-          - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-    validation_obligations:
-      - validate_reentry_authorization_matches_delta_frontier_kind
-      - validate_downstream_refs_to_delta_observation_ids
-      - validate_downstream_artifact_passed_applicable_validation_before_reentry
-      - validate_later_projection_consumes_only_reentry_validated_intermediate_authorities
-      - emit_downstream_use_index_for_frontier_observations
-    output_ref: rounds/<round-id>/source-observation-reentry-validation.yaml
   - validator_id: query-proof-validator
     gate_ids: [query_proof_gate]
     validator_version: 1

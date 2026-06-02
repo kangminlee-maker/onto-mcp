@@ -404,7 +404,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional explicit same-session resume mode. fresh fails before rewriting authored semantic artifacts; reuse_existing_authored_artifacts reuses existing authored YAML artifacts and reruns downstream runtime validation gates.",
+        "Optional authored-artifact reuse guard. Current run-control still rejects same-session duplicate starts; reuse_existing_authored_artifacts is reserved for a future promoted resume protocol and does not bypass duplicate_same_request.",
     },
     semanticAuthorRealization: {
       type: "string",
