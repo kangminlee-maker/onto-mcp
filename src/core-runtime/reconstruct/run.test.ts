@@ -4,6 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type {
+  ReconstructActionabilityMatrixArtifact,
+  ReconstructMaturationContinuationDecisionArtifact,
   ReconstructOntologySeedValidationArtifact,
   ReconstructOntologySeedArtifact,
   ReconstructCandidateDispositionValidationArtifact,
@@ -2199,6 +2201,10 @@ describe("runReconstruct", () => {
       .toContain("maturation-baseline.yaml");
     expect(record.artifact_refs.maturation_baseline_validation)
       .toContain("maturation-baseline-validation.yaml");
+    expect(record.artifact_refs.baseline_actionability_matrix)
+      .toContain("baseline-actionability-matrix.yaml");
+    expect(record.artifact_refs.baseline_actionability_matrix_validation)
+      .toContain("baseline-actionability-matrix-validation.yaml");
     expect(record.artifact_refs.actionability_matrix)
       .toContain("actionability-matrix.yaml");
     expect(record.artifact_refs.actionability_matrix_validation)
@@ -2314,8 +2320,8 @@ describe("runReconstruct", () => {
       "handoff_decision_validation",
       "maturation_baseline",
       "maturation_baseline_validation",
-      "actionability_matrix",
-      "actionability_matrix_validation",
+      "baseline_actionability_matrix",
+      "baseline_actionability_matrix_validation",
       "maturation_question_frontier",
       "maturation_question_frontier_validation",
       "maturation_closure_frontier",
@@ -2328,6 +2334,8 @@ describe("runReconstruct", () => {
       "maturation_answer_claims_validation",
       "ontology_expansion",
       "ontology_expansion_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
       "maturation_convergence_ledger",
       "maturation_convergence_ledger_validation",
       "maturation_continuation_decision",
@@ -3043,8 +3051,10 @@ describe("runReconstruct", () => {
       async writeMaturationQuestionFrontier(input: Parameters<
         typeof baseDirectiveAuthor.writeMaturationQuestionFrontier
       >[0]) {
-        const row = input.actionabilityMatrix.rows[0];
-        if (!row) {
+        const rows = input.actionabilityMatrix.rows.filter((row) =>
+          row.member_readiness === "frontier_required"
+        );
+        if (rows.length === 0) {
           throw new Error("fixture expected at least one actionability matrix row");
         }
         return {
@@ -3056,10 +3066,12 @@ describe("runReconstruct", () => {
           actionability_matrix_ref: input.actionabilityMatrixRef,
           actionability_matrix_validation_ref:
             input.actionabilityMatrixValidationRef,
-          questions: [{
-            question_id: "maturation-question-needs-note",
+          questions: rows.map((row, index) => ({
+            question_id: index === 0
+              ? "maturation-question-needs-note"
+              : `maturation-question-frontier-${index + 1}`,
             question: "What maturation evidence is present in the note?",
-            materiality: "high" as const,
+            materiality: row.materiality,
             materiality_ref: row.materiality_ref,
             actionability_surface_refs: [row.actionability_surface_ref],
             maturity_dimension_refs: [row.maturity_dimension_ref],
@@ -3080,7 +3092,112 @@ describe("runReconstruct", () => {
             },
             closure_frontier_hint_refs: [`source:${docPath}`],
             limitation_refs: [],
-          }],
+          })),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeAnswerSupportLedger(input: Parameters<
+        typeof baseDirectiveAuthor.writeAnswerSupportLedger
+      >[0]) {
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          round_id: input.roundId,
+          evidence_clusters: input.maturationQuestionFrontier.questions.map((
+            question,
+            index,
+          ) => ({
+            evidence_cluster_id: `cluster-maturation-${index + 1}`,
+            question_refs: [question.question_id],
+            support_mode: "user_confirmation" as const,
+            proposed_answer_summary:
+              "The declared purpose confirmation supports the material answer.",
+            evidence_refs: [],
+            proof_refs: [],
+            user_confirmation_refs: ["purpose-confirmation-validation.yaml"],
+            authority_response_refs: [],
+            independence_basis:
+              "The fixture uses validated purpose confirmation as the direct user authority.",
+            contradiction_refs: [],
+            limitation_refs: [],
+          })),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeMaturationAnswerClaims(input: Parameters<
+        typeof baseDirectiveAuthor.writeMaturationAnswerClaims
+      >[0]) {
+        const clustersByQuestionId = new Map(
+          input.answerSupportLedger.evidence_clusters.flatMap((cluster) =>
+            cluster.question_refs.map((questionRef) => [questionRef, cluster])
+          ),
+        );
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          round_id: input.roundId,
+          answer_claims: input.maturationQuestionFrontier.questions.map((
+            question,
+            index,
+          ) => {
+            const cluster = clustersByQuestionId.get(question.question_id);
+            if (!cluster) {
+              throw new Error("fixture expected answer support cluster");
+            }
+            return {
+              answer_claim_id: `answer-claim-maturation-${index + 1}`,
+              question_id: question.question_id,
+              answer:
+                "The confirmed declared purpose answers this material question.",
+              answer_status: "answered" as const,
+              support_mode: "user_confirmation" as const,
+              evidence_cluster_refs: [cluster.evidence_cluster_id],
+              supporting_evidence_refs: cluster.evidence_refs,
+              target_surface_refs: question.actionability_surface_refs,
+              target_dimension_refs: question.maturity_dimension_refs,
+              purpose_element_refs: question.purpose_element_refs,
+              limitation_refs: [],
+            };
+          }),
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+      async writeOntologyExpansion(input: Parameters<
+        typeof baseDirectiveAuthor.writeOntologyExpansion
+      >[0]) {
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          answer_claims_ref: input.answerClaimsRef,
+          source_seed_ref: input.ontologySeedRef,
+          expansions: input.answerClaims.answer_claims.map((claim, index) => ({
+            expansion_id: `expansion-maturation-${index + 1}`,
+            operation: "add" as const,
+            target_surface_refs: claim.target_surface_refs,
+            target_dimension_refs: claim.target_dimension_refs,
+            target_seed_or_ontology_refs: claim.purpose_element_refs.map((ref) =>
+              `purpose-element:${ref}`
+            ),
+            purpose_element_refs: claim.purpose_element_refs,
+            answer_claim_refs: [claim.answer_claim_id],
+            evidence_refs: claim.supporting_evidence_refs,
+            concept_economy_effect: "preserves_surface" as const,
+            rationale:
+              "Validated answer support promotes this material row into the ontology expansion overlay.",
+            limitation_refs: [],
+          })),
           directive_author: {
             owner: "host_llm" as const,
             author_id: "fixture-directive-author",
@@ -3146,6 +3263,31 @@ describe("runReconstruct", () => {
     expect(sourceObservationReentryValidation.validation_status).toBe("valid");
     expect(sourceObservationReentryValidation.reentered_observation_ids)
       .toEqual(sourceObservationDelta.added_observation_ids);
+    const actionabilityMatrix =
+      await readYaml<ReconstructActionabilityMatrixArtifact>(
+        result.reconstructRunManifest.artifact_refs.actionability_matrix!,
+      );
+    const continuationDecision =
+      await readYaml<ReconstructMaturationContinuationDecisionArtifact>(
+        result.reconstructRunManifest.artifact_refs.maturation_continuation_decision!,
+      );
+    expect(actionabilityMatrix.rows.every((row) =>
+      row.maturity_level === "L4_validated_for_purpose" &&
+      row.member_readiness === "closed"
+    )).toBe(true);
+    const supportingRefBasenames = actionabilityMatrix.rows
+      .flatMap((row) => row.supporting_refs)
+      .map((ref) => path.basename(ref));
+    expect(supportingRefBasenames)
+      .toEqual(expect.arrayContaining([
+        "maturation-answer-claims-validation.yaml",
+        "ontology-expansion-validation.yaml",
+        "answer-claim-maturation-1",
+        "expansion-maturation-1",
+      ]));
+    expect(continuationDecision.decision_state).toBe("actionable_limited");
+    expect(continuationDecision.claim_scope.included_row_refs.sort())
+      .toEqual(actionabilityMatrix.rows.map((row) => row.matrix_row_id).sort());
   });
 
   it("treats already-observed source frontier refs as terminal convergence", async () => {

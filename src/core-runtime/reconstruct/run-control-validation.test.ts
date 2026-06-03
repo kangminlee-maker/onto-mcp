@@ -91,6 +91,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     handoff_decision_validation: null,
     maturation_baseline: null,
     maturation_baseline_validation: null,
+    baseline_actionability_matrix: null,
+    baseline_actionability_matrix_validation: null,
     actionability_matrix: null,
     actionability_matrix_validation: null,
     maturation_question_frontier: null,

@@ -13,6 +13,7 @@ import type {
   ReconstructMaturationClosureFrontierValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
+  ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructOntologyExpansionArtifact,
@@ -616,13 +617,95 @@ function emptyMaturationAnswerClaims(): ReconstructMaturationAnswerClaimsArtifac
   };
 }
 
-function emptyOntologyExpansion(): ReconstructOntologyExpansionArtifact {
+function answerClaimsForRow(
+  row: ReconstructActionabilityMatrixArtifact["rows"][number],
+): ReconstructMaturationAnswerClaimsArtifact {
   return {
     schema_version: "1",
     session_id: "session-1",
     created_at: now,
     round_id: "maturation-round-1",
+    answer_claims: [
+      {
+        answer_claim_id: "answer-claim-feature-object",
+        question_id: "mq-feature-object",
+        answer: "The source evidence closes the feature object for this purpose.",
+        answer_status: "answered",
+        support_mode: "direct_authority",
+        evidence_cluster_refs: ["cluster-feature-object"],
+        supporting_evidence_refs: [evidence],
+        target_surface_refs: [row.actionability_surface_ref],
+        target_dimension_refs: [row.maturity_dimension_ref],
+        purpose_element_refs: [row.purpose_element_ref],
+        limitation_refs: [],
+      },
+    ],
+    directive_author: {
+      owner: "host_llm",
+      author_id: "test-author",
+    },
+  };
+}
+
+function answerClaimsValidation(
+  answerClaimCount = 1,
+): ReconstructMaturationAnswerClaimsValidationArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    maturation_answer_claims_ref: "maturation-answer-claims.yaml",
+    answer_support_ledger_validation_ref: "answer-support-ledger-validation.yaml",
+    maturation_question_frontier_validation_ref:
+      "maturation-question-frontier-validation.yaml",
+    validation_status: "valid",
+    answer_claim_count: answerClaimCount,
+    answered_question_count: answerClaimCount,
+    validation_results: ["maturation_answer_claims_valid"],
+    violations: [],
+  };
+}
+
+function emptyOntologyExpansion(): ReconstructOntologyExpansionArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    answer_claims_ref: "maturation-answer-claims.yaml",
+    source_seed_ref: "ontology-seed.yaml",
     expansions: [],
+    directive_author: {
+      owner: "host_llm",
+      author_id: "test-author",
+    },
+  };
+}
+
+function ontologyExpansionForRow(
+  row: ReconstructActionabilityMatrixArtifact["rows"][number],
+): ReconstructOntologyExpansionArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    answer_claims_ref: "maturation-answer-claims.yaml",
+    source_seed_ref: "ontology-seed.yaml",
+    expansions: [
+      {
+        expansion_id: "expansion-feature-object",
+        operation: "add",
+        target_surface_refs: [row.actionability_surface_ref],
+        target_dimension_refs: [row.maturity_dimension_ref],
+        target_seed_or_ontology_refs: row.baseline_row_refs,
+        purpose_element_refs: [row.purpose_element_ref],
+        answer_claim_refs: ["answer-claim-feature-object"],
+        evidence_refs: [evidence],
+        concept_economy_effect: "preserves_surface",
+        rationale:
+          "The validated answer claim adds the missing semantic support for this row.",
+        limitation_refs: [],
+      },
+    ],
     directive_author: {
       owner: "host_llm",
       author_id: "test-author",
@@ -647,6 +730,21 @@ function emptyOntologyExpansionValidation(): ReconstructOntologyExpansionValidat
     },
     validation_results: ["ontology_expansion_valid"],
     violations: [],
+  };
+}
+
+function ontologyExpansionValidation(
+  expansionCount = 1,
+): ReconstructOntologyExpansionValidationArtifact {
+  return {
+    ...emptyOntologyExpansionValidation(),
+    expansion_count: expansionCount,
+    operation_counts: {
+      add: expansionCount,
+      refine: 0,
+      defer: 0,
+      reject: 0,
+    },
   };
 }
 
@@ -766,6 +864,121 @@ describe("maturation validation", () => {
 
     expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
     expect(matrixValidation.frontier_required_row_count).toBe(1);
+    expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
+    const maturationBaseline = baseline([]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const initialMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+
+    expect(matrix.rows[0]?.maturity_level).toBe("L3_evidenced");
+    expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
+    expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("raises material rows to L4 closed only from validated answer claims and ontology expansion", () => {
+    const maturationBaseline = baseline([]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const initialMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+
+    expect(matrix.rows[0]?.maturity_level).toBe("L4_validated_for_purpose");
+    expect(matrix.rows[0]?.member_readiness).toBe("closed");
+    expect(matrix.rows[0]?.supporting_refs).toEqual(
+      expect.arrayContaining([
+        "maturation-answer-claims-validation.yaml",
+        "ontology-expansion-validation.yaml",
+        "answer-claim-feature-object",
+        "expansion-feature-object",
+      ]),
+    );
     expect(matrixValidation.validation_status).toBe("valid");
   });
 

@@ -416,8 +416,8 @@ artifact and gate catalog authority is
 | `handoff-decision-validation.yaml` | runtime | canonical seed iteration readiness projection from runtime gates plus `stop-decision.yaml` consistency before final output and record projection |
 | `maturation-baseline.yaml` | runtime | immutable M1 projection from validated source-purpose frame, seed refs, CQ assessment, limitations, and the validated seeding reconstruct record |
 | `maturation-baseline-validation.yaml` | runtime | baseline row closure against purpose elements, surfaces, dimensions, mixed lineage, upstream validations, and source seeding record ref/hash |
-| `actionability-matrix.yaml` | runtime | M1 current projection of static/kinetic/dynamic rows as closed, limitation-backed, or frontier-required |
-| `actionability-matrix-validation.yaml` | runtime | matrix derivation and material frontier-required row validation |
+| `baseline-actionability-matrix.yaml` | runtime | immutable baseline-derived matrix consumed by M2 question frontier authoring |
+| `baseline-actionability-matrix-validation.yaml` | runtime | baseline matrix derivation and frontier-required row validation before question authoring |
 | `maturation-question-frontier.yaml` | host LLM author | M2 concrete questions for material frontier-required rows |
 | `maturation-question-frontier-validation.yaml` | runtime | question id, ref, materiality, surface/dimension, authority need, and material coverage validation |
 | `maturation-closure-frontier.yaml` | host LLM author | M3 next-source or authority requests for material unanswered maturation questions |
@@ -430,6 +430,8 @@ artifact and gate catalog authority is
 | `maturation-answer-claims-validation.yaml` | runtime | question/support/surface/dimension/purpose ref closure and partial-answer limitation validation |
 | `ontology-expansion.yaml` | host LLM author | M4 overlay additions, refinements, deferrals, or rejections without rewriting `ontology-seed.yaml` |
 | `ontology-expansion-validation.yaml` | runtime | answer-claim ref closure, evidence carry-forward, concept economy, and seed rewrite guard validation |
+| `actionability-matrix.yaml` | runtime | current projection recomputed after validated answer claims and ontology expansion |
+| `actionability-matrix-validation.yaml` | runtime | matrix derivation, maturity upgrade, supporting-ref, and material frontier-required row validation |
 | `maturation-convergence-ledger.yaml` | runtime | M4 closure ledger for material questions, answer/expansion closure, deferred authority, blocked rows, and remaining frontier |
 | `maturation-convergence-ledger-validation.yaml` | runtime | closure-row validation that blocker/high questions, answer claims, expansions, and remaining frontier refs are not hidden before continuation |
 | `maturation-continuation-decision.yaml` | runtime | M4 continuation projection: `continue`, `ask_user`, `blocked`, `actionable_limited`, or `actionable_ready`; `actionable_ready` is withheld until final re-question convergence is proven |

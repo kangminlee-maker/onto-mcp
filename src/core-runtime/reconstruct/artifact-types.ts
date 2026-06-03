@@ -1268,8 +1268,8 @@ export const RECONSTRUCT_STAGE_IDS = [
   "handoff_decision_validation",
   "maturation_baseline",
   "maturation_baseline_validation",
-  "actionability_matrix",
-  "actionability_matrix_validation",
+  "baseline_actionability_matrix",
+  "baseline_actionability_matrix_validation",
   "maturation_question_frontier",
   "maturation_question_frontier_validation",
   "maturation_closure_frontier",
@@ -1282,6 +1282,8 @@ export const RECONSTRUCT_STAGE_IDS = [
   "maturation_answer_claims_validation",
   "ontology_expansion",
   "ontology_expansion_validation",
+  "actionability_matrix",
+  "actionability_matrix_validation",
   "maturation_convergence_ledger",
   "maturation_convergence_ledger_validation",
   "maturation_continuation_decision",
@@ -1671,6 +1673,8 @@ export interface ReconstructActionabilityMatrixValidationArtifact {
   created_at: string;
   actionability_matrix_ref: string | null;
   maturation_baseline_validation_ref: string | null;
+  maturation_answer_claims_validation_ref?: string | null;
+  ontology_expansion_validation_ref?: string | null;
   validation_status: "valid" | "invalid";
   matrix_row_count: number;
   frontier_required_row_count: number;
@@ -2823,6 +2827,8 @@ export interface ReconstructRecordArtifactRefs {
   handoff_decision_validation: string | null;
   maturation_baseline: string | null;
   maturation_baseline_validation: string | null;
+  baseline_actionability_matrix: string | null;
+  baseline_actionability_matrix_validation: string | null;
   actionability_matrix: string | null;
   actionability_matrix_validation: string | null;
   maturation_question_frontier: string | null;

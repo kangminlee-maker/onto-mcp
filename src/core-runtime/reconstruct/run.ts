@@ -1292,6 +1292,10 @@ function artifactRefsWithDefaults(args: {
     maturation_baseline: args.refs.maturation_baseline ?? null,
     maturation_baseline_validation:
       args.refs.maturation_baseline_validation ?? null,
+    baseline_actionability_matrix:
+      args.refs.baseline_actionability_matrix ?? null,
+    baseline_actionability_matrix_validation:
+      args.refs.baseline_actionability_matrix_validation ?? null,
     actionability_matrix: args.refs.actionability_matrix ?? null,
     actionability_matrix_validation:
       args.refs.actionability_matrix_validation ?? null,
@@ -1418,6 +1422,8 @@ function createRunManifest(args: {
       handoff_decision_validation: null,
       maturation_baseline: null,
       maturation_baseline_validation: null,
+      baseline_actionability_matrix: null,
+      baseline_actionability_matrix_validation: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -1527,8 +1533,8 @@ function createRunManifest(args: {
           ? [
             "maturation_baseline",
             "maturation_baseline_validation",
-            "actionability_matrix",
-            "actionability_matrix_validation",
+            "baseline_actionability_matrix",
+            "baseline_actionability_matrix_validation",
             "maturation_question_frontier",
             "maturation_question_frontier_validation",
             "maturation_closure_frontier",
@@ -1541,6 +1547,8 @@ function createRunManifest(args: {
             "maturation_answer_claims_validation",
             "ontology_expansion",
             "ontology_expansion_validation",
+            "actionability_matrix",
+            "actionability_matrix_validation",
             "maturation_convergence_ledger",
             "maturation_convergence_ledger_validation",
             "maturation_continuation_decision",
@@ -1870,26 +1878,26 @@ function createRunManifest(args: {
           "Pre-handoff manifest validation must not certify future maturation baseline validation.",
         ),
       args.terminalArtifactsCompleted
-        ? completedStep("actionability_matrix", "runtime", runtimePerformer(), [
-          args.artifactRefs.actionability_matrix,
+        ? completedStep("baseline_actionability_matrix", "runtime", runtimePerformer(), [
+          args.artifactRefs.baseline_actionability_matrix,
         ].filter((ref): ref is string => ref !== null))
         : skippedStep(
-          "actionability_matrix",
+          "baseline_actionability_matrix",
           "runtime",
           runtimePerformer(),
-          "actionability-matrix.yaml is emitted after maturation baseline validation.",
-          "Pre-handoff manifest validation must not certify future actionability matrix.",
+          "baseline-actionability-matrix.yaml is emitted after maturation baseline validation.",
+          "Pre-handoff manifest validation must not certify future baseline actionability matrix.",
         ),
       args.terminalArtifactsCompleted
-        ? completedStep("actionability_matrix_validation", "runtime", runtimePerformer(), [
-          args.artifactRefs.actionability_matrix_validation,
+        ? completedStep("baseline_actionability_matrix_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.baseline_actionability_matrix_validation,
         ].filter((ref): ref is string => ref !== null))
         : skippedStep(
-          "actionability_matrix_validation",
+          "baseline_actionability_matrix_validation",
           "runtime",
           runtimePerformer(),
-          "actionability-matrix-validation.yaml is emitted after actionability matrix.",
-          "Pre-handoff manifest validation must not certify future actionability matrix validation.",
+          "baseline-actionability-matrix-validation.yaml is emitted after baseline actionability matrix.",
+          "Pre-handoff manifest validation must not certify future baseline actionability matrix validation.",
         ),
       args.terminalArtifactsCompleted
         ? completedStep(
@@ -1903,7 +1911,7 @@ function createRunManifest(args: {
           "maturation_question_frontier",
           "host_llm",
           directiveAuthorPerformer(args.directiveAuthor),
-          "maturation-question-frontier.yaml is emitted after actionability matrix validation.",
+          "maturation-question-frontier.yaml is emitted after baseline actionability matrix validation.",
           "Pre-handoff manifest validation must not certify future maturation question frontier.",
         ),
       args.terminalArtifactsCompleted
@@ -2044,6 +2052,28 @@ function createRunManifest(args: {
           "Pre-handoff manifest validation must not certify future ontology expansion validation.",
         ),
       args.terminalArtifactsCompleted
+        ? completedStep("actionability_matrix", "runtime", runtimePerformer(), [
+          args.artifactRefs.actionability_matrix,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "actionability_matrix",
+          "runtime",
+          runtimePerformer(),
+          "actionability-matrix.yaml is emitted after validated answer claims and ontology expansion.",
+          "Pre-handoff manifest validation must not certify future actionability matrix.",
+        ),
+      args.terminalArtifactsCompleted
+        ? completedStep("actionability_matrix_validation", "runtime", runtimePerformer(), [
+          args.artifactRefs.actionability_matrix_validation,
+        ].filter((ref): ref is string => ref !== null))
+        : skippedStep(
+          "actionability_matrix_validation",
+          "runtime",
+          runtimePerformer(),
+          "actionability-matrix-validation.yaml is emitted after current actionability matrix recomputation.",
+          "Pre-handoff manifest validation must not certify future actionability matrix validation.",
+        ),
+      args.terminalArtifactsCompleted
         ? completedStep("maturation_convergence_ledger", "runtime", runtimePerformer(), [
           args.artifactRefs.maturation_convergence_ledger,
         ].filter((ref): ref is string => ref !== null))
@@ -2051,7 +2081,7 @@ function createRunManifest(args: {
           "maturation_convergence_ledger",
           "runtime",
           runtimePerformer(),
-          "maturation-convergence-ledger.yaml is emitted after ontology expansion validation.",
+          "maturation-convergence-ledger.yaml is emitted after current actionability matrix validation.",
           "Pre-handoff manifest validation must not certify future convergence ledger.",
         ),
       args.terminalArtifactsCompleted
@@ -2073,7 +2103,7 @@ function createRunManifest(args: {
           "maturation_continuation_decision",
           "runtime",
           runtimePerformer(),
-          "maturation-continuation-decision.yaml is emitted after ontology expansion validation.",
+          "maturation-continuation-decision.yaml is emitted after convergence ledger validation.",
           "Pre-handoff manifest validation must not certify future maturation continuation decision.",
         ),
       args.terminalArtifactsCompleted
@@ -7811,6 +7841,8 @@ function appendFinalOutputArtifactTruthSection(
     handoffDecisionValidationPath: string;
     maturationBaselinePath: string;
     maturationBaselineValidationPath: string;
+    baselineActionabilityMatrixPath: string;
+    baselineActionabilityMatrixValidationPath: string;
     actionabilityMatrixPath: string;
     actionabilityMatrixValidationPath: string;
     maturationQuestionFrontierPath: string;
@@ -7870,6 +7902,8 @@ function appendFinalOutputArtifactTruthSection(
     `- Handoff decision validation: ${args.handoffDecisionValidationPath}`,
     `- Maturation baseline: ${args.maturationBaselinePath}`,
     `- Maturation baseline validation: ${args.maturationBaselineValidationPath}`,
+    `- Baseline actionability matrix: ${args.baselineActionabilityMatrixPath}`,
+    `- Baseline actionability matrix validation: ${args.baselineActionabilityMatrixValidationPath}`,
     `- Actionability matrix: ${args.actionabilityMatrixPath}`,
     `- Actionability matrix validation: ${args.actionabilityMatrixValidationPath}`,
     `- Maturation question frontier: ${args.maturationQuestionFrontierPath}`,
@@ -8006,6 +8040,8 @@ function finalOutputProvenanceSectionBindings(args: {
   handoffDecisionValidationPath: string;
   maturationBaselinePath: string;
   maturationBaselineValidationPath: string;
+  baselineActionabilityMatrixPath: string;
+  baselineActionabilityMatrixValidationPath: string;
   actionabilityMatrixPath: string;
   actionabilityMatrixValidationPath: string;
   maturationQuestionFrontierPath: string;
@@ -8084,6 +8120,8 @@ function finalOutputProvenanceSectionBindings(args: {
         args.handoffDecisionValidationPath,
         args.maturationBaselinePath,
         args.maturationBaselineValidationPath,
+        args.baselineActionabilityMatrixPath,
+        args.baselineActionabilityMatrixValidationPath,
         args.actionabilityMatrixPath,
         args.actionabilityMatrixValidationPath,
         args.maturationQuestionFrontierPath,
@@ -9131,6 +9169,14 @@ export async function runReconstruct(
     sessionRoot,
     "maturation-baseline-validation.yaml",
   );
+  const baselineActionabilityMatrixPath = path.join(
+    sessionRoot,
+    "baseline-actionability-matrix.yaml",
+  );
+  const baselineActionabilityMatrixValidationPath = path.join(
+    sessionRoot,
+    "baseline-actionability-matrix-validation.yaml",
+  );
   const actionabilityMatrixPath = path.join(sessionRoot, "actionability-matrix.yaml");
   const actionabilityMatrixValidationPath = path.join(
     sessionRoot,
@@ -9275,6 +9321,9 @@ export async function runReconstruct(
       handoff_decision_validation: handoffDecisionValidationPath,
       maturation_baseline: maturationBaselinePath,
       maturation_baseline_validation: maturationBaselineValidationPath,
+      baseline_actionability_matrix: baselineActionabilityMatrixPath,
+      baseline_actionability_matrix_validation:
+        baselineActionabilityMatrixValidationPath,
       actionability_matrix: actionabilityMatrixPath,
       actionability_matrix_validation: actionabilityMatrixValidationPath,
       maturation_question_frontier: maturationQuestionFrontierPath,
@@ -9384,6 +9433,8 @@ export async function runReconstruct(
       post_publication_run_manifest_validation: null,
       maturation_baseline: null,
       maturation_baseline_validation: null,
+      baseline_actionability_matrix: null,
+      baseline_actionability_matrix_validation: null,
       actionability_matrix: null,
       actionability_matrix_validation: null,
       maturation_question_frontier: null,
@@ -9470,22 +9521,22 @@ export async function runReconstruct(
     artifactRef: materialAdmissionLedgerValidationPath,
     validation: materialAdmissionLedgerValidation,
   });
-  const actionabilityMatrix = await writeActionabilityMatrixArtifact({
+  let actionabilityMatrix = await writeActionabilityMatrixArtifact({
     sessionId,
     maturationBaselinePath,
     maturationBaselineValidationPath,
-    outputPath: actionabilityMatrixPath,
+    outputPath: baselineActionabilityMatrixPath,
   });
-  const actionabilityMatrixValidation =
+  let actionabilityMatrixValidation =
     await writeActionabilityMatrixValidationArtifact({
-      actionabilityMatrixPath,
+      actionabilityMatrixPath: baselineActionabilityMatrixPath,
       maturationBaselinePath,
       maturationBaselineValidationPath,
-      outputPath: actionabilityMatrixValidationPath,
+      outputPath: baselineActionabilityMatrixValidationPath,
     });
   assertRuntimeValidationValid({
-    artifactName: "actionability-matrix",
-    artifactRef: actionabilityMatrixValidationPath,
+    artifactName: "baseline-actionability-matrix",
+    artifactRef: baselineActionabilityMatrixValidationPath,
     validation: actionabilityMatrixValidation,
   });
   const maturationQuestionFrontier = await writeAuthoredYamlDocument(
@@ -9498,9 +9549,10 @@ export async function runReconstruct(
       maturationBaselineValidation,
       maturationBaselineValidationRef: maturationBaselineValidationPath,
       actionabilityMatrix,
-      actionabilityMatrixRef: actionabilityMatrixPath,
+      actionabilityMatrixRef: baselineActionabilityMatrixPath,
       actionabilityMatrixValidation,
-      actionabilityMatrixValidationRef: actionabilityMatrixValidationPath,
+      actionabilityMatrixValidationRef:
+        baselineActionabilityMatrixValidationPath,
     }),
   );
   const maturationQuestionFrontierValidation =
@@ -9508,8 +9560,9 @@ export async function runReconstruct(
       maturationQuestionFrontierPath,
       maturationBaselinePath,
       maturationBaselineValidationPath,
-      actionabilityMatrixPath,
-      actionabilityMatrixValidationPath,
+      actionabilityMatrixPath: baselineActionabilityMatrixPath,
+      actionabilityMatrixValidationPath:
+        baselineActionabilityMatrixValidationPath,
       outputPath: maturationQuestionFrontierValidationPath,
     });
   assertRuntimeValidationValid({
@@ -9755,6 +9808,32 @@ export async function runReconstruct(
     artifactName: "ontology-expansion",
     artifactRef: ontologyExpansionValidationPath,
     validation: ontologyExpansionValidation,
+  });
+  actionabilityMatrix = await writeActionabilityMatrixArtifact({
+    sessionId,
+    maturationBaselinePath,
+    maturationBaselineValidationPath,
+    maturationAnswerClaimsPath,
+    maturationAnswerClaimsValidationPath,
+    ontologyExpansionPath,
+    ontologyExpansionValidationPath,
+    outputPath: actionabilityMatrixPath,
+  });
+  actionabilityMatrixValidation =
+    await writeActionabilityMatrixValidationArtifact({
+      actionabilityMatrixPath,
+      maturationBaselinePath,
+      maturationBaselineValidationPath,
+      maturationAnswerClaimsPath,
+      maturationAnswerClaimsValidationPath,
+      ontologyExpansionPath,
+      ontologyExpansionValidationPath,
+      outputPath: actionabilityMatrixValidationPath,
+    });
+  assertRuntimeValidationValid({
+    artifactName: "actionability-matrix",
+    artifactRef: actionabilityMatrixValidationPath,
+    validation: actionabilityMatrixValidation,
   });
   await writeMaturationConvergenceLedgerArtifact({
     sessionId,
@@ -10017,6 +10096,8 @@ export async function runReconstruct(
     handoffDecisionValidationPath,
     maturationBaselinePath,
     maturationBaselineValidationPath,
+    baselineActionabilityMatrixPath,
+    baselineActionabilityMatrixValidationPath,
     actionabilityMatrixPath,
     actionabilityMatrixValidationPath,
     maturationQuestionFrontierPath,
@@ -10091,6 +10172,8 @@ export async function runReconstruct(
     handoffDecisionValidationPath,
     maturationBaselinePath,
     maturationBaselineValidationPath,
+    baselineActionabilityMatrixPath,
+    baselineActionabilityMatrixValidationPath,
     actionabilityMatrixPath,
     actionabilityMatrixValidationPath,
     maturationQuestionFrontierPath,
@@ -10157,6 +10240,8 @@ export async function runReconstruct(
       handoffDecisionValidationPath,
       maturationBaselinePath,
       maturationBaselineValidationPath,
+      baselineActionabilityMatrixPath,
+      baselineActionabilityMatrixValidationPath,
       actionabilityMatrixPath,
       actionabilityMatrixValidationPath,
       maturationQuestionFrontierPath,

@@ -473,25 +473,28 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     upstreamUnitIds: ["maturation_baseline", "handoff_decision_validation"],
   },
   {
-    unitId: "actionability_matrix",
+    unitId: "baseline_actionability_matrix",
     unitKind: "runtime_projection",
     owner: "runtime",
-    artifactKey: "actionability_matrix",
+    artifactKey: "baseline_actionability_matrix",
     upstreamUnitIds: ["maturation_baseline_validation"],
   },
   {
-    unitId: "actionability_matrix_validation",
+    unitId: "baseline_actionability_matrix_validation",
     unitKind: "runtime_validation",
     owner: "runtime",
-    artifactKey: "actionability_matrix_validation",
-    upstreamUnitIds: ["actionability_matrix", "maturation_baseline_validation"],
+    artifactKey: "baseline_actionability_matrix_validation",
+    upstreamUnitIds: [
+      "baseline_actionability_matrix",
+      "maturation_baseline_validation",
+    ],
   },
   {
     unitId: "maturation_question_frontier",
     unitKind: "semantic_questions",
     owner: "host_llm",
     artifactKey: "maturation_question_frontier",
-    upstreamUnitIds: ["actionability_matrix_validation"],
+    upstreamUnitIds: ["baseline_actionability_matrix_validation"],
   },
   {
     unitId: "maturation_question_frontier_validation",
@@ -500,7 +503,7 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     artifactKey: "maturation_question_frontier_validation",
     upstreamUnitIds: [
       "maturation_question_frontier",
-      "actionability_matrix_validation",
+      "baseline_actionability_matrix_validation",
     ],
   },
   {
@@ -587,6 +590,29 @@ const RECONSTRUCT_LEDGER_STAGE_SPECS: readonly ReconstructLedgerStageSpec[] = [
     owner: "runtime",
     artifactKey: "ontology_expansion_validation",
     upstreamUnitIds: ["ontology_expansion", "maturation_answer_claims_validation"],
+  },
+  {
+    unitId: "actionability_matrix",
+    unitKind: "runtime_projection",
+    owner: "runtime",
+    artifactKey: "actionability_matrix",
+    upstreamUnitIds: [
+      "baseline_actionability_matrix_validation",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ],
+  },
+  {
+    unitId: "actionability_matrix_validation",
+    unitKind: "runtime_validation",
+    owner: "runtime",
+    artifactKey: "actionability_matrix_validation",
+    upstreamUnitIds: [
+      "actionability_matrix",
+      "maturation_baseline_validation",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ],
   },
   {
     unitId: "maturation_convergence_ledger",
@@ -776,6 +802,10 @@ const PRESENCE_INPUTS_BY_RUNTIME_VALIDATION = new Map<
   ["revision_proposal_validation", ["revision_proposal"]],
   ["handoff_decision_validation", ["stop_decision"]],
   ["maturation_baseline_validation", ["maturation_baseline"]],
+  [
+    "baseline_actionability_matrix_validation",
+    ["baseline_actionability_matrix"],
+  ],
   ["actionability_matrix_validation", ["actionability_matrix"]],
   ["maturation_question_frontier_validation", ["maturation_question_frontier"]],
   ["maturation_closure_frontier_validation", ["maturation_closure_frontier"]],

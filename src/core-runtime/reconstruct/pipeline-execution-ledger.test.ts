@@ -82,6 +82,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     handoff_decision_validation: null,
     maturation_baseline: null,
     maturation_baseline_validation: null,
+    baseline_actionability_matrix: null,
+    baseline_actionability_matrix_validation: null,
     actionability_matrix: null,
     actionability_matrix_validation: null,
     maturation_question_frontier: null,
@@ -100,6 +102,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     maturation_convergence_ledger_validation: null,
     maturation_continuation_decision: null,
     maturation_continuation_decision_validation: null,
+    actionable_ontology: null,
+    actionable_ontology_validation: null,
     claim_projection: null,
     claim_projection_validation: null,
     final_output: null,
@@ -250,6 +254,26 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "answer_support_ledger",
       "source_observation_lineage_index_validation",
       "source_safety_validation",
+    ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "maturation_question_frontier")
+        ?.upstreamUnitIds,
+    ).toEqual(["baseline_actionability_matrix_validation"]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "actionability_matrix")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "baseline_actionability_matrix_validation",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "actionability_matrix_validation")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "actionability_matrix",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
     ]));
   });
 
@@ -761,10 +785,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "handoff_decision_validation",
       "maturation_baseline",
       "maturation_baseline_validation",
-      "actionability_matrix",
-      "actionability_matrix_validation",
+      "baseline_actionability_matrix",
+      "baseline_actionability_matrix_validation",
       "maturation_question_frontier",
       "maturation_question_frontier_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
       "final_output",
     ];
     for (const key of presentKeys) {

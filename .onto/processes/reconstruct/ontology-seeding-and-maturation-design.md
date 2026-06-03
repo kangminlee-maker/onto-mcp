@@ -1694,6 +1694,16 @@ rows:
 explicitly limitation-backed without making an actionability claim for that
 limited area.
 
+The active first-pass runtime keeps two matrix artifacts so artifact refs stay
+truthful. `baseline-actionability-matrix.yaml` is the immutable
+baseline-derived M1 matrix consumed by `maturation-question-frontier.yaml`.
+After validated answer claims and ontology expansion exist, runtime writes the
+current projection to `actionability-matrix.yaml`. `maturation-baseline.yaml`
+remains the immutable start state; continuation and claim projection consume the
+recomputed current matrix. The runtime must not raise a blocker/high row to
+`closed` unless the row is `L4_validated_for_purpose` or limitation-backed
+outside the claim scope.
+
 Runtime computes maturity levels with these minimum rules:
 
 | Level | Minimum runtime evidence |
@@ -3061,9 +3071,10 @@ Implementation file map:
 
 Current implementation has promoted seeding source-purpose authority and the
 registry-backed first-pass maturation authorities that existed before this
-source-delta and convergence-ledger refinement: baseline, actionability matrix,
-question frontier, closure frontier, answer support, answer claims, ontology
-expansion, and continuation decision. Multi-round source-observation delta and
+source-delta and convergence-ledger refinement: baseline, baseline
+actionability matrix, question frontier, closure frontier, answer support,
+answer claims, ontology expansion, current actionability matrix, convergence,
+and continuation decision. Multi-round source-observation delta and
 source-observation re-entry validation are also active for frontier-triggered
 observations before they re-enter prompt/context semantic authoring or
 answer-support consumption. The
@@ -3260,6 +3271,10 @@ Expected result:
 - maturation begins from validated seed artifacts and does not rerun seeding
 - `maturation-baseline.yaml` records the immutable starting matrix and
   `maturation-baseline-validation.yaml` proves its derivation
+- `baseline-actionability-matrix.yaml` records the immutable baseline-derived
+  matrix consumed by question frontier authoring, and
+  `baseline-actionability-matrix-validation.yaml` proves the zero-delta
+  derivation before M2 starts
 - `maturation-source-delta.yaml` records whether the consumed source authority is
   unchanged, changed, unavailable, or incomparable for the current maturation
   round; `maturation-source-delta-validation.yaml` proves the classification and
@@ -3425,10 +3440,11 @@ produce:
    and their validations when planned maturation gates are promoted or maturation
    execution is requested,
 3. `maturation-baseline.yaml` and validation,
-4. `maturation-source-delta.yaml` and validation when the source authority must
+4. `baseline-actionability-matrix.yaml` and validation before question frontier
+   authoring,
+5. `maturation-source-delta.yaml` and validation when the source authority must
    be proven unchanged, unavailable, comparison-unavailable, or changed, plus
    source-impact judgment validation when a changed fact can affect actionability,
-5. `actionability-matrix.yaml` and validation,
 6. `maturation-question-frontier.yaml` and validation,
 7. `maturation-closure-frontier.yaml` and validation when additional evidence is
    needed,
@@ -3437,13 +3453,15 @@ produce:
    runtime-capability, external-system, or domain-standard authority is needed,
 10. `maturation-answer-claims.yaml` and validation,
 11. `ontology-expansion.yaml` and validation,
-12. `maturation-convergence-ledger.yaml` and validation,
-13. `maturation-continuation-decision.yaml` and validation,
-14. final re-question convergence evidence recorded inside the convergence
+12. `actionability-matrix.yaml` and validation after validated answer claims and
+   ontology expansion,
+13. `maturation-convergence-ledger.yaml` and validation,
+14. `maturation-continuation-decision.yaml` and validation,
+15. final re-question convergence evidence recorded inside the convergence
    ledger and consumed by continuation-decision validation, and
-15. `claim-projection.yaml` plus validation for every public or downstream
+16. `claim-projection.yaml` plus validation for every public or downstream
    maturation/actionability claim,
-16. source-delta impact judgment validation when source freshness can affect a
+17. source-delta impact judgment validation when source freshness can affect a
    material row, and
-17. `actionable-ontology.yaml` plus validation when readiness is
+18. `actionable-ontology.yaml` plus validation when readiness is
    `actionable_limited` or `actionable_ready`.

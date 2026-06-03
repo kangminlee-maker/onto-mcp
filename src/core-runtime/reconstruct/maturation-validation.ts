@@ -322,8 +322,55 @@ function needsFrontier(row: ReconstructMaturationBaselineRow): boolean {
   ) && (
     row.maturity_level === "L0_missing" ||
     row.maturity_level === "L1_identified" ||
-    row.maturity_level === "L2_modeled"
+    row.maturity_level === "L2_modeled" ||
+    row.maturity_level === "L3_evidenced"
   ) && row.limitation_refs.length === 0;
+}
+
+function isMaterialMaturationRow(args: {
+  materiality: ReconstructMaturationMateriality;
+}): boolean {
+  return args.materiality === "blocker" || args.materiality === "high";
+}
+
+function matrixRowNeedsFrontier(
+  row: Pick<
+    ReconstructActionabilityMatrixArtifact["rows"][number],
+    "materiality" | "maturity_level" | "limitation_refs"
+  >,
+): boolean {
+  return isMaterialMaturationRow(row) &&
+    row.maturity_level !== "L4_validated_for_purpose" &&
+    row.limitation_refs.length === 0;
+}
+
+function maturityLevelRank(level: ReconstructMaturityLevel): number {
+  return MATURITY_LEVELS.indexOf(level);
+}
+
+function higherMaturityLevel(
+  current: ReconstructMaturityLevel,
+  next: ReconstructMaturityLevel,
+): ReconstructMaturityLevel {
+  return maturityLevelRank(next) > maturityLevelRank(current) ? next : current;
+}
+
+function answerClaimMatchesBaselineRow(
+  claim: ReconstructMaturationAnswerClaimsArtifact["answer_claims"][number],
+  row: ReconstructMaturationBaselineRow,
+): boolean {
+  return claim.purpose_element_refs.includes(row.purpose_element_ref) &&
+    claim.target_surface_refs.includes(row.actionability_surface_ref) &&
+    claim.target_dimension_refs.includes(row.maturity_dimension_ref);
+}
+
+function expansionMatchesBaselineRow(
+  expansion: ReconstructOntologyExpansionArtifact["expansions"][number],
+  row: ReconstructMaturationBaselineRow,
+): boolean {
+  return expansion.purpose_element_refs.includes(row.purpose_element_ref) &&
+    expansion.target_surface_refs.includes(row.actionability_surface_ref) &&
+    expansion.target_dimension_refs.includes(row.maturity_dimension_ref);
 }
 
 function supportingValidationRefs(args: {
@@ -676,7 +723,19 @@ export function buildActionabilityMatrixArtifact(args: {
   maturationBaseline: ReconstructMaturationBaselineArtifact;
   maturationBaselineRef: string;
   maturationBaselineValidationRef: string;
+  maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
+  maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
+  maturationAnswerClaimsValidationRef?: string | null;
+  ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
+  ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
+  ontologyExpansionValidationRef?: string | null;
 }): ReconstructActionabilityMatrixArtifact {
+  const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
+    ? args.maturationAnswerClaims?.answer_claims ?? []
+    : [];
+  const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
+    ? args.ontologyExpansion?.expansions ?? []
+    : [];
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -684,8 +743,62 @@ export function buildActionabilityMatrixArtifact(args: {
     maturation_baseline_ref: args.maturationBaselineRef,
     maturation_baseline_validation_ref: args.maturationBaselineValidationRef,
     rows: args.maturationBaseline.baseline_rows.map((row) => {
-      const frontierRequired = needsFrontier(row);
-      const memberReadiness = row.limitation_refs.length > 0
+      const matchingAnswerClaims = answerClaims.filter((claim) =>
+        answerClaimMatchesBaselineRow(claim, row)
+      );
+      const matchingExpansions = expansions.filter((expansion) =>
+        expansionMatchesBaselineRow(expansion, row)
+      );
+      const positiveAnswerClaims = matchingAnswerClaims.filter((claim) =>
+        claim.answer_status === "answered" &&
+        claim.limitation_refs.length === 0
+      );
+      const positiveExpansions = matchingExpansions.filter((expansion) =>
+        (expansion.operation === "add" || expansion.operation === "refine") &&
+        expansion.limitation_refs.length === 0
+      );
+      let maturityLevel = row.maturity_level;
+      const supportingRefs = [
+        ...row.supporting_seed_refs,
+        ...row.supporting_validation_refs,
+        ...row.supporting_evidence_refs.map((ref) => ref.observation_id),
+      ];
+      const limitationRefs = [...row.limitation_refs];
+      if (matchingAnswerClaims.length > 0 && args.maturationAnswerClaimsValidationRef) {
+        supportingRefs.push(args.maturationAnswerClaimsValidationRef);
+      }
+      if (matchingExpansions.length > 0 && args.ontologyExpansionValidationRef) {
+        supportingRefs.push(args.ontologyExpansionValidationRef);
+      }
+      for (const claim of matchingAnswerClaims) {
+        supportingRefs.push(claim.answer_claim_id, ...claim.evidence_cluster_refs);
+        for (const ref of claim.supporting_evidence_refs) {
+          supportingRefs.push(ref.observation_id);
+        }
+        limitationRefs.push(...claim.limitation_refs);
+      }
+      for (const expansion of matchingExpansions) {
+        supportingRefs.push(expansion.expansion_id, ...expansion.answer_claim_refs);
+        for (const ref of expansion.evidence_refs) {
+          supportingRefs.push(ref.observation_id);
+        }
+        limitationRefs.push(...expansion.limitation_refs);
+      }
+      if (positiveAnswerClaims.length > 0) {
+        maturityLevel = higherMaturityLevel(maturityLevel, "L3_evidenced");
+      }
+      if (positiveAnswerClaims.length > 0 && positiveExpansions.length > 0) {
+        maturityLevel = higherMaturityLevel(
+          maturityLevel,
+          "L4_validated_for_purpose",
+        );
+      }
+      const frontierRequired = matrixRowNeedsFrontier({
+        materiality: row.materiality,
+        maturity_level: maturityLevel,
+        limitation_refs: limitationRefs,
+      });
+      const memberReadiness = limitationRefs.length > 0
         ? "limitation_backed" as const
         : frontierRequired
         ? "frontier_required" as const
@@ -705,14 +818,10 @@ export function buildActionabilityMatrixArtifact(args: {
         cross_material_ref_refs: row.cross_material_ref_refs,
         competency_question_refs: row.competency_question_refs,
         competency_assessment_refs: row.competency_assessment_refs,
-        maturity_level: row.maturity_level,
-        supporting_refs: [
-          ...row.supporting_seed_refs,
-          ...row.supporting_validation_refs,
-          ...row.supporting_evidence_refs.map((ref) => ref.observation_id),
-        ],
+        maturity_level: maturityLevel,
+        supporting_refs: [...new Set(supportingRefs)],
         blocking_question_refs: [],
-        limitation_refs: row.limitation_refs,
+        limitation_refs: [...new Set(limitationRefs)],
         next_action: frontierRequired
           ? "Create a maturation frontier question for this row."
           : memberReadiness === "limitation_backed"
@@ -730,12 +839,24 @@ export function validateActionabilityMatrix(args: {
   maturationBaselineValidation:
     ReconstructMaturationBaselineValidationArtifact;
   maturationBaselineValidationRef?: string | null;
+  maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
+  maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
+  maturationAnswerClaimsValidationRef?: string | null;
+  ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
+  ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
+  ontologyExpansionValidationRef?: string | null;
 }): ReconstructActionabilityMatrixValidationArtifact {
   const matrix = args.actionabilityMatrix;
   const violations: ReconstructMaturationValidationViolation[] = [];
   const baselineRows = new Map(
     args.maturationBaseline.baseline_rows.map((row) => [row.baseline_row_id, row]),
   );
+  const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
+    ? args.maturationAnswerClaims?.answer_claims ?? []
+    : [];
+  const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
+    ? args.ontologyExpansion?.expansions ?? []
+    : [];
   const seen = new Set<string>();
   if (matrix.session_id !== args.maturationBaseline.session_id) {
     violations.push(violation({
@@ -770,20 +891,95 @@ export function validateActionabilityMatrix(args: {
       }));
       continue;
     }
-    if (
-      baselineRow.materiality !== row.materiality ||
-      baselineRow.maturity_level !== row.maturity_level
-    ) {
+    if (baselineRow.materiality !== row.materiality) {
       violations.push(violation({
         code: "conflicting_state",
-        message: "matrix row must preserve baseline materiality and maturity level",
+        message: "matrix row must preserve baseline materiality",
         subjectId: row.matrix_row_id,
       }));
     }
-    if (needsFrontier(baselineRow) && row.member_readiness !== "frontier_required") {
+    if (
+      maturityLevelRank(row.maturity_level) <
+        maturityLevelRank(baselineRow.maturity_level)
+    ) {
       violations.push(violation({
         code: "conflicting_state",
-        message: "blocker/high L0-L2 rows must remain frontier_required",
+        message: "matrix row cannot reduce baseline maturity level",
+        subjectId: row.matrix_row_id,
+      }));
+    }
+    const matchingAnswerClaims = answerClaims.filter((claim) =>
+      answerClaimMatchesBaselineRow(claim, baselineRow) &&
+      claim.answer_status === "answered" &&
+      claim.limitation_refs.length === 0
+    );
+    const matchingExpansions = expansions.filter((expansion) =>
+      expansionMatchesBaselineRow(expansion, baselineRow) &&
+      (expansion.operation === "add" || expansion.operation === "refine") &&
+      expansion.limitation_refs.length === 0
+    );
+    if (row.maturity_level !== baselineRow.maturity_level) {
+      const claimsCanRaiseToL3 = matchingAnswerClaims.length > 0;
+      const claimsCanRaiseToL4 =
+        matchingAnswerClaims.length > 0 && matchingExpansions.length > 0;
+      if (
+        row.maturity_level === "L3_evidenced" &&
+        !claimsCanRaiseToL3
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix row cannot claim L3 without a validated matching answer claim",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        row.maturity_level === "L4_validated_for_purpose" &&
+        baselineRow.maturity_level !== "L4_validated_for_purpose" &&
+        !claimsCanRaiseToL4
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix row cannot claim L4 without validated matching answer claim and ontology expansion refs",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        matchingAnswerClaims.length > 0 &&
+        args.maturationAnswerClaimsValidationRef &&
+        !row.supporting_refs.includes(args.maturationAnswerClaimsValidationRef)
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix maturity upgrade must cite maturation-answer-claims-validation.yaml",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        matchingExpansions.length > 0 &&
+        args.ontologyExpansionValidationRef &&
+        !row.supporting_refs.includes(args.ontologyExpansionValidationRef)
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix maturity upgrade must cite ontology-expansion-validation.yaml",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+    }
+    const expectedReadiness = row.limitation_refs.length > 0
+      ? "limitation_backed" as const
+      : matrixRowNeedsFrontier(row)
+      ? "frontier_required" as const
+      : "closed" as const;
+    if (row.member_readiness !== expectedReadiness) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "matrix member_readiness must follow material L4, frontier, or limitation state",
         subjectId: row.matrix_row_id,
       }));
     }
@@ -795,6 +991,10 @@ export function validateActionabilityMatrix(args: {
     actionability_matrix_ref: args.actionabilityMatrixRef ?? null,
     maturation_baseline_validation_ref:
       args.maturationBaselineValidationRef ?? null,
+    maturation_answer_claims_validation_ref:
+      args.maturationAnswerClaimsValidationRef ?? null,
+    ontology_expansion_validation_ref:
+      args.ontologyExpansionValidationRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
     matrix_row_count: matrix.rows.length,
     frontier_required_row_count: matrix.rows.filter((row) =>
@@ -2855,12 +3055,7 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
-  if (
-    args.maturationClosureFrontierValidation.accepted_source_request_ids.length > 0
-  ) {
-    decisionState = "continue";
-    rationale = "Validated source requests can still advance material maturation questions.";
-  } else if (authorityRequestRefs.length > 0 && unresolvedAuthorityResponses.length > 0) {
+  if (authorityRequestRefs.length > 0 && unresolvedAuthorityResponses.length > 0) {
     decisionState = "ask_user";
     rationale = "Material maturation questions require user or external authority before claims can be closed.";
   } else if (frontierRows.length > 0) {
@@ -2881,7 +3076,6 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     rationale = "All material rows are closed for the declared purpose.";
   }
   const nextFrontierRefs = [
-    ...args.maturationClosureFrontierValidation.accepted_source_request_ids,
     ...args.maturationQuestionFrontier.questions
       .filter((question) =>
         question.current_answer_status !== "answerable" &&
@@ -3022,8 +3216,6 @@ export function validateMaturationContinuationDecision(args: {
       }));
     }
   }
-  const hasAcceptedSourceRequest =
-    args.maturationClosureFrontierValidation.accepted_source_request_ids.length > 0;
   const hasAuthorityNeed = decision.authority_request_refs.length > 0;
   if (decision.decision_state === "actionable_ready" && materialOpenRows.length > 0) {
     violations.push(violation({
@@ -3046,11 +3238,11 @@ export function validateMaturationContinuationDecision(args: {
   }
   if (
     decision.decision_state === "continue" &&
-    !hasAcceptedSourceRequest
+    decision.next_frontier_refs.length === 0
   ) {
     violations.push(violation({
       code: "conflicting_state",
-      message: "continue requires at least one accepted source request",
+      message: "continue requires at least one unresolved next frontier ref",
       subjectId: "continue",
     }));
   }
@@ -3729,17 +3921,55 @@ export async function writeActionabilityMatrixArtifact(args: {
   sessionId: string;
   maturationBaselinePath: string;
   maturationBaselineValidationPath: string;
+  maturationAnswerClaimsPath?: string | null;
+  maturationAnswerClaimsValidationPath?: string | null;
+  ontologyExpansionPath?: string | null;
+  ontologyExpansionValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixArtifact> {
   const maturationBaseline =
     await readYamlDocument<ReconstructMaturationBaselineArtifact>(
       args.maturationBaselinePath,
     );
+  const [
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+  ] = await Promise.all([
+    args.maturationAnswerClaimsPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
+        args.maturationAnswerClaimsPath,
+      )
+      : Promise.resolve(null),
+    args.maturationAnswerClaimsValidationPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsValidationArtifact>(
+        args.maturationAnswerClaimsValidationPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionPath
+      ? readYamlDocument<ReconstructOntologyExpansionArtifact>(
+        args.ontologyExpansionPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionValidationPath
+      ? readYamlDocument<ReconstructOntologyExpansionValidationArtifact>(
+        args.ontologyExpansionValidationPath,
+      )
+      : Promise.resolve(null),
+  ]);
   const artifact = buildActionabilityMatrixArtifact({
     sessionId: args.sessionId,
     maturationBaseline,
     maturationBaselineRef: args.maturationBaselinePath,
     maturationBaselineValidationRef: args.maturationBaselineValidationPath,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    maturationAnswerClaimsValidationRef:
+      args.maturationAnswerClaimsValidationPath ?? null,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+    ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
@@ -3749,12 +3979,20 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
   actionabilityMatrixPath: string;
   maturationBaselinePath: string;
   maturationBaselineValidationPath: string;
+  maturationAnswerClaimsPath?: string | null;
+  maturationAnswerClaimsValidationPath?: string | null;
+  ontologyExpansionPath?: string | null;
+  ontologyExpansionValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixValidationArtifact> {
   const [
     actionabilityMatrix,
     maturationBaseline,
     maturationBaselineValidation,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    ontologyExpansion,
+    ontologyExpansionValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructActionabilityMatrixArtifact>(
       args.actionabilityMatrixPath,
@@ -3765,6 +4003,26 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     readYamlDocument<ReconstructMaturationBaselineValidationArtifact>(
       args.maturationBaselineValidationPath,
     ),
+    args.maturationAnswerClaimsPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
+        args.maturationAnswerClaimsPath,
+      )
+      : Promise.resolve(null),
+    args.maturationAnswerClaimsValidationPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsValidationArtifact>(
+        args.maturationAnswerClaimsValidationPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionPath
+      ? readYamlDocument<ReconstructOntologyExpansionArtifact>(
+        args.ontologyExpansionPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionValidationPath
+      ? readYamlDocument<ReconstructOntologyExpansionValidationArtifact>(
+        args.ontologyExpansionValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const validation = validateActionabilityMatrix({
     actionabilityMatrix,
@@ -3772,6 +4030,13 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     maturationBaseline,
     maturationBaselineValidation,
     maturationBaselineValidationRef: args.maturationBaselineValidationPath,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    maturationAnswerClaimsValidationRef:
+      args.maturationAnswerClaimsValidationPath ?? null,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+    ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
