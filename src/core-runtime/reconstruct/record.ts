@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -5,12 +6,14 @@ import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructClaimRealizationMapValidationArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructCompetencyQuestionAssessmentArtifact,
   ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
   ReconstructRecordStage,
   ReconstructRecordValidationStatusProjection,
+  ReconstructRegistryVerificationEvidenceValidationArtifact,
   ReconstructCompetencyQuestionsArtifact,
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructFailureClassificationArtifact,
@@ -20,6 +23,7 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructRevisionProposalArtifact,
   ReconstructRevisionProposalValidationArtifact,
+  ReconstructRunControlValidationArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
@@ -35,11 +39,24 @@ export interface AssembleReconstructRecordParams {
 }
 
 const RECORD_ARTIFACT_KEYS = [
+  "reconstruct_run_control",
+  "reconstruct_run_control_validation",
+  "reconstruct_run_control_pre_publication_validation",
+  "reconstruct_run_bootstrap_diagnostic",
+  "registry_verification_evidence",
+  "registry_verification_evidence_validation",
   "target_material_profile",
   "target_material_profile_validation",
   "source_inventory",
   "initial_source_frontier",
   "source_observations",
+  "source_observation_delta",
+  "source_observation_delta_validation",
+  "source_observation_reentry_validation",
+  "source_observation_lineage_index",
+  "source_observation_lineage_index_validation",
+  "source_safety_ledger",
+  "source_safety_ledger_validation",
   "source_observation_directive",
   "source_observation_directive_validation",
   "lens_judgment_index",
@@ -50,6 +67,8 @@ const RECORD_ARTIFACT_KEYS = [
   "source_purpose_candidates_validation",
   "purpose_confirmation",
   "purpose_confirmation_validation",
+  "material_admission_ledger",
+  "material_admission_ledger_validation",
   "candidate_inventory",
   "candidate_disposition",
   "candidate_disposition_validation",
@@ -88,8 +107,14 @@ const RECORD_ARTIFACT_KEYS = [
   "maturation_answer_claims_validation",
   "ontology_expansion",
   "ontology_expansion_validation",
+  "maturation_convergence_ledger",
+  "maturation_convergence_ledger_validation",
   "maturation_continuation_decision",
   "maturation_continuation_decision_validation",
+  "actionable_ontology",
+  "actionable_ontology_validation",
+  "claim_projection",
+  "claim_projection_validation",
   "final_output",
   "final_output_provenance_validation",
   "reconstruct_run_manifest",
@@ -111,6 +136,10 @@ function isPreparationRequiredKey(
 
 function isoNow(): string {
   return new Date().toISOString();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizeRefs(
@@ -139,6 +168,64 @@ async function readYamlIfPresent<T>(ref: string | null): Promise<T | null> {
   return parseYaml(await fs.readFile(ref, "utf8")) as T;
 }
 
+function validationStatusFromUnknown(
+  value: unknown,
+): ReconstructRecordValidationStatusProjection | null {
+  if (!isRecord(value)) return null;
+  const status = value.validation_status;
+  if (
+    status === "valid" ||
+    status === "invalid" ||
+    status === "not_applicable" ||
+    status === "not_available"
+  ) {
+    return status;
+  }
+  return null;
+}
+
+async function artifactIntegrityEntry(
+  artifactRefs: ReconstructRecordArtifactRefs,
+  key: keyof ReconstructRecordArtifactRefs,
+): Promise<ReconstructRecordArtifact["artifact_integrity"][number]> {
+  const ref = artifactRefs[key];
+  if (!ref) {
+    return {
+      artifact_key: key,
+      artifact_ref: null,
+      exists: false,
+      sha256: null,
+      validation_status: null,
+    };
+  }
+  try {
+    const content = await fs.readFile(ref);
+    let validationStatus: ReconstructRecordValidationStatusProjection | null = null;
+    try {
+      validationStatus = validationStatusFromUnknown(
+        parseYaml(content.toString("utf8")),
+      );
+    } catch {
+      validationStatus = null;
+    }
+    return {
+      artifact_key: key,
+      artifact_ref: ref,
+      exists: true,
+      sha256: crypto.createHash("sha256").update(content).digest("hex"),
+      validation_status: validationStatus,
+    };
+  } catch {
+    return {
+      artifact_key: key,
+      artifact_ref: ref,
+      exists: false,
+      sha256: null,
+      validation_status: null,
+    };
+  }
+}
+
 function projectValidationStatus(
   artifact:
     | ReconstructTargetMaterialProfileValidationArtifact
@@ -151,8 +238,11 @@ function projectValidationStatus(
     | ReconstructCompetencyQuestionAssessmentValidationArtifact
     | ReconstructFailureClassificationValidationArtifact
     | ReconstructRevisionProposalValidationArtifact
+    | ReconstructRunControlValidationArtifact
+    | ReconstructRegistryVerificationEvidenceValidationArtifact
     | ReconstructRunManifestValidationArtifact
     | ReconstructHandoffDecisionValidationArtifact
+    | ReconstructClaimProjectionValidationArtifact
     | ReconstructFinalOutputProvenanceValidationArtifact
     | null,
 ): ReconstructRecordValidationStatusProjection {
@@ -322,6 +412,9 @@ export async function assembleReconstructRecord(
   const artifactRefs = normalizeRefs(params.artifactRefs);
   const presenceEntries = await Promise.all(
     RECORD_ARTIFACT_KEYS.map(async (key) => [key, await exists(artifactRefs[key])] as const),
+  );
+  const artifactIntegrity = await Promise.all(
+    RECORD_ARTIFACT_KEYS.map((key) => artifactIntegrityEntry(artifactRefs, key)),
   );
   const missingArtifacts = presenceEntries
     .filter(([key, isPresent]) =>
@@ -495,6 +588,7 @@ export async function assembleReconstructRecord(
     target_material_kind: targetMaterialProfile?.target_material_kind ?? null,
     support_status: targetMaterialProfile?.support_status ?? null,
     artifact_refs: artifactRefs,
+    artifact_integrity: artifactIntegrity,
     validation_summary: {
       target_material_profile_status: targetMaterialProfileStatus,
       source_observation_directive_status: sourceObservationDirectiveStatus,
@@ -561,10 +655,21 @@ export async function assembleReconstructRecord(
       semantic_generation: "not_performed",
       runtime_owned_gates: [
         "target_material_profiling",
+        "reconstruct_run_control",
+        "reconstruct_run_control_validation",
+        "registry_verification_evidence",
+        "registry_verification_evidence_validation",
         "target_material_profile_validation",
         "source_inventory",
         "initial_source_frontier",
         "source_observation",
+        "source_observation_delta",
+        "source_observation_delta_validation",
+        "source_observation_reentry_validation",
+        "source_safety_ledger",
+        "source_safety_ledger_validation",
+        "material_admission_ledger",
+        "material_admission_ledger_validation",
         "source_frontier_validation",
         "source_observation_directive_validation",
         "candidate_disposition_validation",
@@ -589,8 +694,14 @@ export async function assembleReconstructRecord(
         "answer_support_ledger_validation",
         "maturation_answer_claims_validation",
         "ontology_expansion_validation",
+        "maturation_convergence_ledger",
+        "maturation_convergence_ledger_validation",
         "maturation_continuation_decision",
         "maturation_continuation_decision_validation",
+        "actionable_ontology",
+        "actionable_ontology_validation",
+        "claim_projection",
+        "claim_projection_validation",
         "reconstruct_metrics",
         "record_assembly",
         "run_manifest_assembly",

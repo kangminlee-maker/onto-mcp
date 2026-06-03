@@ -101,6 +101,61 @@ describe("createOntoReconstructCoreApi", () => {
     expect(prepared.reconstructRecord.target_material_kind).toBe("spreadsheet");
   });
 
+  it("fails loudly before reconstruct direct-call when v3 semantic author llm is missing", async () => {
+    const projectRoot = await tempProjectRoot();
+    const previousHome = process.env.HOME;
+    const isolatedHome = path.join(projectRoot, "home");
+    await fs.mkdir(path.join(projectRoot, ".onto"), { recursive: true });
+    await fs.mkdir(isolatedHome, { recursive: true });
+    await fs.writeFile(
+      path.join(projectRoot, ".onto", "settings.json"),
+      JSON.stringify({
+        schema_version: "settings.json/v3",
+        review: {
+          execution: {
+            actors: {
+              teamlead: {
+                seat: "main",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.5",
+                  effort: "medium",
+                  service_tier: "fast",
+                },
+              },
+            },
+          },
+        },
+      }, null, 2),
+      "utf8",
+    );
+
+    process.env.HOME = isolatedHome;
+    try {
+      const api = createOntoReconstructCoreApi({
+        ontoHome: path.resolve("."),
+      });
+
+      await expect(api.runReconstruct({
+        projectRoot,
+        targetRefs: ["src/feature.ts"],
+        sessionRoot: ".onto/reconstruct/missing-reconstruct-actor",
+        intent: "reconstruct",
+        semanticAuthorRealization: "direct_call",
+        confirmationProviderRealization: "mock",
+      })).rejects.toThrow(
+        "reconstruct.execution.actors.semantic_author.llm is required",
+      );
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = previousHome;
+      }
+    }
+  });
+
   it("validates LLM-owned directives and reassembles the reconstruct record", async () => {
     const projectRoot = await tempProjectRoot();
     const api = createOntoReconstructCoreApi({

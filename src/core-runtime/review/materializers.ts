@@ -838,7 +838,7 @@ export async function bootstrapInvocationBindingArtifacts(
         hostRuntime: params.hostRuntime,
         sourceSettingsRefs: [
           "review.execution.actors.teamlead.llm",
-          "llm.default",
+          ...(ontoConfig.llm ? ["llm.default"] : []),
         ],
       }),
       buildActorInvocationProfile({
@@ -848,7 +848,10 @@ export async function bootstrapInvocationBindingArtifacts(
         inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: ["review.execution.actors.lens.llm", "llm.default"],
+        sourceSettingsRefs: [
+          "review.execution.actors.lens.llm",
+          ...(ontoConfig.llm ? ["llm.default"] : []),
+        ],
       }),
       buildActorInvocationProfile({
         actorKind: "synthesize",
@@ -859,7 +862,7 @@ export async function bootstrapInvocationBindingArtifacts(
         hostRuntime: params.hostRuntime,
         sourceSettingsRefs: [
           "review.execution.actors.synthesize.llm",
-          "llm.default",
+          ...(ontoConfig.llm ? ["llm.default"] : []),
         ],
       }),
     ],

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -11,11 +12,14 @@ import type {
   ReconstructCompetencyQuestionsValidationArtifact,
   ReconstructFailureClassificationValidationArtifact,
   ReconstructHandoffDecisionValidationArtifact,
+  ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructPostSeedValidationViolation,
   ReconstructReadinessProjection,
   ReconstructRecordValidationStatusProjection,
+  ReconstructRegistryVerificationEvidenceValidationArtifact,
   ReconstructRevisionProposalValidationArtifact,
+  ReconstructRunControlValidationArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructSelectedSourceProfileRef,
@@ -25,6 +29,8 @@ import type {
   ReconstructSourceObservationsArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
+  ReconstructSourceObservationLineageIndexValidationArtifact,
+  ReconstructSourceSafetyLedgerValidationArtifact,
   ReconstructStageId,
   ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
@@ -266,11 +272,21 @@ function readinessProjection(args: {
 }
 
 function validationArtifactStatuses(args: {
+  runControlValidation?:
+    ReconstructRunControlValidationArtifact | null | undefined;
+  registryVerificationEvidenceValidation?:
+    ReconstructRegistryVerificationEvidenceValidationArtifact | null | undefined;
   manifestValidation: ReconstructRunManifestValidationArtifact | null | undefined;
   targetMaterialProfileValidation:
     ReconstructTargetMaterialProfileValidationArtifact | null | undefined;
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact | null | undefined;
+  sourceObservationLineageIndexValidation?:
+    ReconstructSourceObservationLineageIndexValidationArtifact | null | undefined;
+  sourceSafetyLedgerValidation?:
+    ReconstructSourceSafetyLedgerValidationArtifact | null | undefined;
+  materialAdmissionLedgerValidation?:
+    ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
   sourcePurposeCandidatesValidation?:
     ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
@@ -292,10 +308,30 @@ function validationArtifactStatuses(args: {
   revisionProposalValidation: ReconstructRevisionProposalValidationArtifact | null | undefined;
 }): Map<string, ReconstructRecordValidationStatusProjection> {
   return new Map([
+    [
+      "reconstruct-run-control-validation.yaml",
+      statusOf(args.runControlValidation),
+    ],
+    [
+      "registry-verification-evidence-validation.yaml",
+      statusOf(args.registryVerificationEvidenceValidation),
+    ],
     ["target-material-profile-validation.yaml", statusOf(args.targetMaterialProfileValidation)],
     [
       "source-observation-directive-validation.yaml",
       statusOf(args.sourceObservationDirectiveValidation),
+    ],
+    [
+      "source-observation-lineage-index-validation.yaml",
+      statusOf(args.sourceObservationLineageIndexValidation),
+    ],
+    [
+      "source-safety-ledger-validation.yaml",
+      statusOf(args.sourceSafetyLedgerValidation),
+    ],
+    [
+      "material-admission-ledger-validation.yaml",
+      statusOf(args.materialAdmissionLedgerValidation),
     ],
     ["source-frontier-validation.yaml", statusOf(args.sourceFrontierValidation)],
     [
@@ -466,6 +502,16 @@ function artifactExists(
   return concreteInputRefs(inputIndex, authorityRef, roundId).length > 0;
 }
 
+function artifactFileExists(
+  inputIndex: PredicateInputIndex,
+  authorityRef: string,
+  roundId?: string | null,
+): boolean {
+  return concreteInputRefs(inputIndex, authorityRef, roundId).some((ref) =>
+    existsSync(ref)
+  );
+}
+
 function roundIdFromRef(ref: string): string | null {
   return ref.match(/(?:^|[/\\])rounds[/\\]([^/\\]+)(?:[/\\]|$)/)?.[1] ?? null;
 }
@@ -522,8 +568,11 @@ function isSupportedPredicateTruthExpression(
   return isSupportedPredicateEvaluator(predicate) && (
     expression === "true" ||
     /^artifact_exists\([^)]+\)$/.test(expression) ||
+    /^artifact_file_exists\([^)]+\)$/.test(expression) ||
     expression ===
       "artifact_exists(source-observations.yaml) and source_observations.records_count > 0" ||
+    expression ===
+      "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind in ['source_frontier', 'maturation_closure_frontier']" ||
     expression === "competency_questions_validation.validation_status == valid" ||
     expression ===
       "seed_validity_projection_requested or seed_iteration_readiness_projection_requested" ||
@@ -552,9 +601,17 @@ function evaluatePredicateTruthExpression(args: {
 }): boolean | null {
   const expression = args.predicate.truth_expression;
   const artifactExistsMatch = expression.match(/^artifact_exists\(([^)]+)\)$/);
+  const artifactFileExistsMatch = expression.match(/^artifact_file_exists\(([^)]+)\)$/);
   if (expression === "true") return true;
   if (artifactExistsMatch) {
     return artifactExists(args.inputIndex, artifactExistsMatch[1] ?? "", args.roundId);
+  }
+  if (artifactFileExistsMatch) {
+    return artifactFileExists(
+      args.inputIndex,
+      artifactFileExistsMatch[1] ?? "",
+      args.roundId,
+    );
   }
   if (
     expression ===
@@ -565,6 +622,16 @@ function evaluatePredicateTruthExpression(args: {
     }
     const count = args.facts.sourceObservationCount ?? args.metrics.source_observation_count;
     return count > 0;
+  }
+  if (
+    expression ===
+      "artifact_exists(rounds/<round-id>/source-observation-delta.yaml) and source_observation_delta.frontier_kind in ['source_frontier', 'maturation_closure_frontier']"
+  ) {
+    return artifactExists(
+      args.inputIndex,
+      "rounds/<round-id>/source-observation-delta.yaml",
+      args.roundId,
+    );
   }
   if (expression === "competency_questions_validation.validation_status == valid") {
     return validationIsValid(
@@ -887,10 +954,20 @@ export function validateHandoffDecision(args: {
     ReconstructRecordValidationStatusProjection
   >;
   metrics: ReconstructMetricsArtifact;
+  runControlValidation?:
+    ReconstructRunControlValidationArtifact | null | undefined;
+  registryVerificationEvidenceValidation?:
+    ReconstructRegistryVerificationEvidenceValidationArtifact | null | undefined;
   targetMaterialProfileValidation:
     ReconstructTargetMaterialProfileValidationArtifact | null | undefined;
   sourceObservationDirectiveValidation:
     ReconstructSourceObservationDirectiveValidationArtifact | null | undefined;
+  sourceObservationLineageIndexValidation?:
+    ReconstructSourceObservationLineageIndexValidationArtifact | null | undefined;
+  sourceSafetyLedgerValidation?:
+    ReconstructSourceSafetyLedgerValidationArtifact | null | undefined;
+  materialAdmissionLedgerValidation?:
+    ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
   sourcePurposeCandidatesValidation?:
     ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
@@ -1051,8 +1128,13 @@ export async function writeHandoffDecisionValidationArtifact(args: {
   stopDecisionPath: string;
   manifestValidationPath: string;
   metricsPath: string;
+  runControlValidationPath?: string | null;
+  registryVerificationEvidenceValidationPath?: string | null;
   targetMaterialProfileValidationPath: string;
   sourceObservationDirectiveValidationPath: string;
+  sourceObservationLineageIndexValidationPath?: string | null;
+  sourceSafetyLedgerValidationPath?: string | null;
+  materialAdmissionLedgerValidationPath?: string | null;
   sourceFrontierValidationPath: string;
   sourcePurposeCandidatesValidationPath?: string | null;
   purposeConfirmationValidationPath?: string | null;
@@ -1084,8 +1166,13 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     manifestValidation.reconstruct_run_manifest_ref,
   );
   const [
+    runControlValidation,
+    registryVerificationEvidenceValidation,
     targetMaterialProfileValidation,
     sourceObservationDirectiveValidation,
+    sourceObservationLineageIndexValidation,
+    sourceSafetyLedgerValidation,
+    materialAdmissionLedgerValidation,
     sourceFrontierValidation,
     sourcePurposeCandidatesValidation,
     purposeConfirmationValidation,
@@ -1100,12 +1187,37 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     failureClassificationValidation,
     revisionProposalValidation,
   ] = await Promise.all([
+    args.runControlValidationPath
+      ? readYamlDocumentIfPresent<ReconstructRunControlValidationArtifact>(
+        args.runControlValidationPath,
+      )
+      : Promise.resolve(null),
+    args.registryVerificationEvidenceValidationPath
+      ? readYamlDocumentIfPresent<ReconstructRegistryVerificationEvidenceValidationArtifact>(
+        args.registryVerificationEvidenceValidationPath,
+      )
+      : Promise.resolve(null),
     readYamlDocumentIfPresent<ReconstructTargetMaterialProfileValidationArtifact>(
       args.targetMaterialProfileValidationPath,
     ),
     readYamlDocumentIfPresent<ReconstructSourceObservationDirectiveValidationArtifact>(
       args.sourceObservationDirectiveValidationPath,
     ),
+    args.sourceObservationLineageIndexValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourceObservationLineageIndexValidationArtifact>(
+        args.sourceObservationLineageIndexValidationPath,
+      )
+      : Promise.resolve(null),
+    args.sourceSafetyLedgerValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourceSafetyLedgerValidationArtifact>(
+        args.sourceSafetyLedgerValidationPath,
+      )
+      : Promise.resolve(null),
+    args.materialAdmissionLedgerValidationPath
+      ? readYamlDocumentIfPresent<ReconstructMaterialAdmissionLedgerValidationArtifact>(
+        args.materialAdmissionLedgerValidationPath,
+      )
+      : Promise.resolve(null),
     readYamlDocumentIfPresent<ReconstructSourceFrontierValidationArtifact>(
       args.sourceFrontierValidationPath,
     ),
@@ -1158,6 +1270,14 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     await readValidationStatusMapFromRefs(
       [
         ...manifestRefsByBasename(manifest, "source-frontier-validation.yaml"),
+        ...manifestRefsByBasename(
+          manifest,
+          "source-observation-delta-validation.yaml",
+        ),
+        ...manifestRefsByBasename(
+          manifest,
+          "source-observation-reentry-validation.yaml",
+        ),
       ],
     );
   const validation = validateHandoffDecision({
@@ -1169,9 +1289,20 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     ontologySeed,
     competencyQuestionAssessment,
     predicateInputRefs: [
+      runControlValidation ? args.runControlValidationPath : null,
+      registryVerificationEvidenceValidation
+        ? args.registryVerificationEvidenceValidationPath
+        : null,
       targetMaterialProfileValidation ? args.targetMaterialProfileValidationPath : null,
       sourceObservationDirectiveValidation
         ? args.sourceObservationDirectiveValidationPath
+        : null,
+      sourceObservationLineageIndexValidation
+        ? args.sourceObservationLineageIndexValidationPath
+        : null,
+      sourceSafetyLedgerValidation ? args.sourceSafetyLedgerValidationPath : null,
+      materialAdmissionLedgerValidation
+        ? args.materialAdmissionLedgerValidationPath
         : null,
       sourceFrontierValidation ? args.sourceFrontierValidationPath : null,
       sourcePurposeCandidatesValidation
@@ -1197,12 +1328,30 @@ export async function writeHandoffDecisionValidationArtifact(args: {
         manifest?.steps?.some((step) => step.status === "failed") ?? null,
     },
     validationArtifactRefs: {
+      "reconstruct-run-control-validation.yaml": runControlValidation
+        ? args.runControlValidationPath
+        : null,
+      "registry-verification-evidence-validation.yaml":
+        registryVerificationEvidenceValidation
+          ? args.registryVerificationEvidenceValidationPath
+          : null,
       "target-material-profile-validation.yaml": targetMaterialProfileValidation
         ? args.targetMaterialProfileValidationPath
         : null,
       "source-observation-directive-validation.yaml":
         sourceObservationDirectiveValidation
           ? args.sourceObservationDirectiveValidationPath
+          : null,
+      "source-observation-lineage-index-validation.yaml":
+        sourceObservationLineageIndexValidation
+          ? args.sourceObservationLineageIndexValidationPath
+          : null,
+      "source-safety-ledger-validation.yaml": sourceSafetyLedgerValidation
+        ? args.sourceSafetyLedgerValidationPath
+        : null,
+      "material-admission-ledger-validation.yaml":
+        materialAdmissionLedgerValidation
+          ? args.materialAdmissionLedgerValidationPath
           : null,
       "source-frontier-validation.yaml": sourceFrontierValidation
         ? args.sourceFrontierValidationPath
@@ -1243,8 +1392,13 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     },
     extraValidationArtifactStatusesByRef,
     metrics,
+    runControlValidation,
+    registryVerificationEvidenceValidation,
     targetMaterialProfileValidation,
     sourceObservationDirectiveValidation,
+    sourceObservationLineageIndexValidation,
+    sourceSafetyLedgerValidation,
+    materialAdmissionLedgerValidation,
     sourceFrontierValidation,
     sourcePurposeCandidatesValidation,
     purposeConfirmationValidation,

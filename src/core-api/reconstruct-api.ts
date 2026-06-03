@@ -5,6 +5,8 @@ import { parse as parseYaml } from "yaml";
 import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructCandidateDispositionValidationArtifact,
+  ReconstructClaimProjectionArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructMetricsArtifact,
   ReconstructRecordArtifact,
   ReconstructRecordArtifactRefs,
@@ -34,6 +36,7 @@ import {
 } from "../core-runtime/reconstruct/run.js";
 import {
   resolveSettingsChain,
+  resolveReconstructActorLlmSettings,
 } from "../core-runtime/discovery/settings-chain.js";
 import {
   resolveOntoHome,
@@ -126,6 +129,8 @@ export interface ReconstructSessionStatus {
   sessionRoot: string;
   status: ReconstructRecordArtifact["record_stage"];
   artifactRefs: ReconstructRecordArtifactRefs;
+  claimProjection: ReconstructClaimProjectionArtifact | null;
+  claimProjectionValidation: ReconstructClaimProjectionValidationArtifact | null;
   progress: ReconstructRunProgressProjection;
   pipelineExecutionLedger?: PipelineExecutionLedger;
   reconstructRecord: ReconstructRecordArtifact;
@@ -532,21 +537,45 @@ export function createOntoReconstructCoreApi(
         resolveFromBase(projectRoot, targetRef)
       );
       const settings = await resolveSettingsChain(ontoHome ?? projectRoot, projectRoot);
-      const llmConfig = resolveLlmProviderConfig({ config: settings });
       const semanticAuthorRealization = request.semanticAuthorRealization ?? "direct_call";
       const confirmationProviderRealization =
         request.confirmationProviderRealization ?? "direct_call";
       if (request.domain) {
         assertReconstructDomainId(request.domain, "reconstruct domain");
       }
+      const semanticAuthorLlmConfig = semanticAuthorRealization === "mock"
+        ? {}
+        : resolveLlmProviderConfig({
+          config: {
+            llm: resolveReconstructActorLlmSettings(
+              settings,
+              "semantic_author",
+            ),
+          },
+        });
+      const confirmationProviderLlmConfig =
+        confirmationProviderRealization === "mock"
+          ? {}
+          : resolveLlmProviderConfig({
+            config: {
+              llm: resolveReconstructActorLlmSettings(
+                settings,
+                "confirmation_provider",
+              ),
+            },
+          });
       const directiveAuthor =
         semanticAuthorRealization === "mock"
           ? createMockReconstructDirectiveAuthor()
-          : createDirectCallReconstructDirectiveAuthor({ llmConfig });
+          : createDirectCallReconstructDirectiveAuthor({
+            llmConfig: semanticAuthorLlmConfig,
+          });
       const confirmationProvider =
         confirmationProviderRealization === "mock"
           ? createAutoAcceptReconstructConfirmationProvider()
-          : createDirectCallReconstructConfirmationProvider({ llmConfig });
+          : createDirectCallReconstructConfirmationProvider({
+            llmConfig: confirmationProviderLlmConfig,
+          });
       appendRuntimeStatusEventSync({
         pipeline: "reconstruct",
         sessionRoot,
@@ -590,7 +619,6 @@ export function createOntoReconstructCoreApi(
             confirmationProviderRealization,
             directiveAuthor,
             confirmationProvider,
-            llmConfig,
             filesystemAllowedRoots:
               request.filesystemAllowedRoots?.map((root) => resolveFromBase(projectRoot, root)) ??
               [projectRoot],
@@ -689,6 +717,14 @@ export function createOntoReconstructCoreApi(
         await readYamlArtifactIfPresent<ReconstructMetricsArtifact>(
           reconstructRecord.artifact_refs.reconstruct_metrics,
         );
+      const claimProjection =
+        await readYamlArtifactIfPresent<ReconstructClaimProjectionArtifact>(
+          reconstructRecord.artifact_refs.claim_projection,
+        );
+      const claimProjectionValidation =
+        await readYamlArtifactIfPresent<ReconstructClaimProjectionValidationArtifact>(
+          reconstructRecord.artifact_refs.claim_projection_validation,
+        );
       const reconstructRecordRef = path.join(
         resolvedSessionRoot,
         "reconstruct-record.yaml",
@@ -707,6 +743,8 @@ export function createOntoReconstructCoreApi(
         sessionRoot: resolvedSessionRoot,
         status: reconstructRecord.record_stage,
         artifactRefs: reconstructRecord.artifact_refs,
+        claimProjection,
+        claimProjectionValidation,
         progress: deriveReconstructProgress({
           record: reconstructRecord,
           runManifest: reconstructRunManifest,

@@ -404,7 +404,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional explicit same-session resume mode. fresh fails before rewriting authored semantic artifacts; reuse_existing_authored_artifacts reuses existing authored YAML artifacts and reruns downstream runtime validation gates.",
+        "Optional authored-artifact reuse guard. Current run-control still rejects same-session duplicate starts; reuse_existing_authored_artifacts is reserved for a future promoted resume protocol and does not bypass duplicate_same_request.",
     },
     semanticAuthorRealization: {
       type: "string",
@@ -594,10 +594,22 @@ tools; the runtime owns artifacts and validation. Two product paths exist:
 ## Prerequisite: configure a provider
 
 \`review\` and \`reconstruct\` execute real LLM work and FAIL LOUD if no provider is
-configured. Set \`llm.default\` in \`{projectRoot}/.onto/settings.json\` or
-\`~/.onto/settings.json\`, e.g. Codex OAuth:
+configured. For review, set full actor \`llm\` blocks in
+\`{projectRoot}/.onto/settings.json\` or \`~/.onto/settings.json\`, e.g. Codex OAuth:
 
-    { "schema_version": "settings.json/v2", "llm": { "default": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } } }
+    {
+      # settings.json accepts # comments.
+      "schema_version": "settings.json/v3",
+      "review": {
+        "execution": {
+          "actors": {
+            "teamlead": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
+            "lens": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
+            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "xhigh" } }
+          }
+        }
+      }
+    }
 
 Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
 that API; local+lmstudio -> local endpoint. Review execution may be pinned with

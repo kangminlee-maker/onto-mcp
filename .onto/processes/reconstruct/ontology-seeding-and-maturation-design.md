@@ -24,7 +24,7 @@ that contains:
 - which material-specific structure is required for the target purpose
 - which rules, constraints, responsibilities, or policies govern that structure
 - which source data or source records back, read, write, or prove the seed
-- which external competency-question artifact tests the seed
+- which separate competency-question artifact tests the seed
 - which limitations must be carried into the next step
 
 The seed is complete enough when it can be handed to `Ontology Maturation`
@@ -105,6 +105,25 @@ element required by the source-derived `PurposeAdequacyFrame`.
 | `ActionabilitySurface` | static, kinetic, and dynamic coverage surface used to judge whether the ontology can support decision and action | registry-owned coverage axis, host LLM authored in questions |
 | `MaturationQuestionFrontier` | unanswered questions generated from the current ontology | host LLM authored, runtime validated |
 | `AnswerSupport` | direct authority, runtime proof, user confirmation, or convergent source evidence that can support a maturation answer claim | host LLM authored, runtime validated |
+| `AnswerSupportLedger` | per-round support clusters that prove which questions can produce positive answer claims | host LLM authored with runtime refs, runtime validated |
+| `MaturationAuthorityResponse` | user, runtime, external-system, or domain-standard answer to a closure-frontier authority request | user/runtime/external authority captured by runtime |
+| `MaturationAnswerClaim` | positively supported answer to a maturation frontier question | host LLM authored, runtime validated |
+| `OntologyExpansion` | validated semantic overlay that adds, refines, defers, or rejects ontology content without rewriting the seed | host LLM authored, runtime validated |
+| `ActionabilityMatrix` | current runtime projection of static, kinetic, and dynamic maturity by purpose element and dimension | runtime |
+| `MaturationSourceDelta` | source freshness comparison between consumed seed authority and current source authority | target design only until registry promotion |
+| `RoundSourceObservationDelta` | per-round lineage record for newly observed source records from a validated frontier | active registry |
+| `MaturationConvergenceLedger` | append-only closure ledger for material questions, source-delta rows, trace/audit rows, and remaining frontier | runtime |
+| `MaturationContinuationDecision` | runtime continuation or terminal state derived from validated matrix and applicable frontier/support authorities | runtime |
+| `ReconstructRunControl` | first durable runtime-control authority for atomically admitted session ownership, idempotency fingerprint, active-attempt lock ownership, duplicate-start diagnostics, and observed file-hash write checkpoints | runtime |
+| `ClaimProjectionAuthority` | deterministic strongest-honest-claim projection consumed by status/result/API/MCP surfaces and cited as the final-output claim authority without restating pre-publication claim values | runtime |
+| `MaterialAdmissionAuthority` | runtime-assembled admission authority for purpose-critical adequacy elements, with a separate phase for literal source-backed material values | runtime |
+| `MaterialValueDisposition` | admission and closure decision for source-backed values that may affect actionability | host LLM authored, runtime validated |
+| `DomainCompetencyAdmission` | run-manifest admission of domain competency questions into required, supporting, or diagnostic maturity coverage | runtime |
+| `SourceSafetyAuthority` | validator-consumed lifecycle, authorization, privacy, redaction, proof-sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material defaults | runtime |
+| `MutableVocabularyAuthority` | replayable identity, snapshot, mapping, alias, supersession, and migration state for external terms, standards, provider/framework terms, and profile-owned facets | planned until registry promotion |
+| `SourceDeltaFact` | runtime-observed source freshness fact before semantic actionability interpretation | runtime |
+| `SourceDeltaImpactJudgment` | source-delta impact interpretation against purpose, surfaces, and dimensions | host LLM authored, runtime validated |
+| `TraceAuditOnlyClosure` | shared closure disposition for provenance/freshness/audit evidence that must not create ontology meaning by itself | shared closure concept |
 | `TargetMaterialKind` | source handling axis | shared contract |
 | `SourceProfileDefinition` | material-specific observation guide | reconstruct contract |
 | `SelectedSourceProfile` | runtime selection recorded after material classification | runtime |
@@ -156,6 +175,13 @@ Evolving boundary:
 - A facet is promoted into a shared/global registry only when repeated
   real-source runs show that it is stable across material kinds or when public
   validation behavior depends on it.
+- Profile-owned facet strings are labels, not replay identity. A run artifact that
+  depends on a profile-owned facet must preserve the selected profile id,
+  profile snapshot or definition hash, and the facet label used at that time.
+- Before a profile-owned facet is renamed, split, merged, deprecated, or promoted,
+  the profile or registry migration record must provide a stable local facet id,
+  aliases, supersession mapping, migration refs, and the version or snapshot where
+  the change became valid.
 - A new material kind, root candidate kind, readiness value, artifact field, or
   validation gate requires contract, registry, validator, and migration updates
   together.
@@ -639,7 +665,7 @@ count as product completion.
 The seeding revision is complete when a fresh real-source run proves:
 
 1. source purpose candidates are ranked, evidence-backed, and validation-closed;
-2. inferred purpose confirmation is external to the seed and blocks readiness
+2. inferred purpose confirmation is separate from the seed and blocks readiness
    when absent;
 3. every purpose adequacy required element declares actionability surface,
    maturity dimension, and closure status;
@@ -657,6 +683,28 @@ The seeding revision is complete when a fresh real-source run proves:
 limited seed that is explicitly usable for the next iteration. Maturation does
 not rerun seeding. It consumes the seed, its validation artifacts, limitations,
 competency-question assessment, and source observations.
+
+Maturation adopts prior long-running ontology authoring practices only when they
+serve the reconstruct goal: an actionable ontology whose meaning and context can
+be explained from evidence. A practice is not accepted merely because it helped a
+past session. It is accepted when it improves one of these properties:
+
+- purpose-bound question generation;
+- evidence-backed answer support;
+- explicit non-semantic closure for findings that do not change actionability;
+- artifact-level replay of why a question was answered, deferred, rejected, or
+  closed as trace/audit only;
+- source-delta awareness without expanding ontology meaning when the source
+  change does not affect the declared purpose; or
+- user-facing explanation of static, kinetic, and dynamic actionability.
+
+The operating rule for maturation is:
+
+```text
+Do not keep adding meaning. Keep asking purpose-bound questions until every
+material answer is evidence-backed, authority-backed, limitation-backed, or
+explicitly outside the actionability claim.
+```
 
 Maturation input authority:
 
@@ -705,70 +753,117 @@ answerability, readiness, and actionability.
 1. Build the maturity baseline from seed refs, required purpose elements,
    actionability surfaces, seven maturity dimensions, CQ assessment, and
    limitations.
-2. Generate a `MaturationQuestionFrontier` from unanswered, partially answered,
+2. Establish source authority state for the maturation round. When the source
+   snapshot, document version, workbook version, database schema snapshot, or
+   mixed-member source set changed since the consumed seed/run manifest,
+   runtime records source-delta facts first. Semantic actionability impact is
+   judged only after those facts validate.
+3. Generate a `MaturationQuestionFrontier` from unanswered, partially answered,
    deferred, contradicted, or limitation-backed seed questions.
-3. Classify each question by materiality, actionability surface, maturity
+4. Classify each question by materiality, actionability surface, maturity
    dimension, purpose element, and expected answer kind.
-4. Answer questions already answerable from the current ontology and evidence.
-5. For unanswered material questions, author a `MaturationClosureFrontier` that
+5. Answer questions already answerable from the current ontology and evidence.
+6. For unanswered material questions, author a `MaturationClosureFrontier` that
    names the next source refs or the missing user/external authority.
-6. Runtime observes approved source refs and records round lineage.
-7. Build a `AnswerSupportLedger` from direct authority, runtime proof,
+7. Runtime observes approved source refs and records round lineage.
+8. Build a `AnswerSupportLedger` from direct authority, runtime proof,
    user confirmation, or repeated source signals that imply the same answer.
-8. Author `MaturationAnswerClaims` only from convergent evidence or explicit
+9. Author `MaturationAnswerClaims` only from convergent evidence or explicit
    authority.
-9. Author `OntologyExpansion` rows that add, refine, defer, or reject ontology
-   content.
-10. Validate expansion against seed refs, evidence refs, source lineage,
+10. Author `OntologyExpansion` rows only for semantic changes that add, refine,
+    defer, or reject ontology content.
+11. Validate expansion against seed refs, evidence refs, source lineage,
     surface coverage, and concept economy.
-11. Update `ActionabilityMatrix` and remaining frontier.
-12. Repeat until convergence or an explicit blocked/deferred state.
+12. Update `ActionabilityMatrix` from validated baseline, answer claims,
+    ontology expansion, limitations, and trace/audit-only support.
+13. Close every material question and source-delta row in the convergence ledger
+    with an explicit disposition: answered-and-expanded,
+    answered-without-semantic-change, trace/audit only, deferred authority,
+    rejected non-material, blocked, or out of scope.
+14. Validate the convergence ledger and continuation decision.
+15. Repeat until convergence or an explicit blocked/deferred state.
 ```
 
 #### Maturation Artifact Plan
 
-| Artifact | Owner | Role |
-|---|---|---|
-| `maturation-baseline.yaml` | runtime | L0-L4 matrix from seed, CQs, limitations, and handoff validation |
-| `maturation-baseline-validation.yaml` | runtime | proves baseline rows derive from validated seed, purpose, CQ/proof, and handoff authorities |
-| `maturation-promotion-request.yaml` | runtime | durable request authority for maturation execution or planned gate promotion |
-| `maturation-promotion-request-validation.yaml` | runtime | proves request id, trigger refs, requested gates, and replay authority before promotion-readiness evaluation |
-| `maturation-runtime-capability-profile.yaml` | runtime | records runtime-observed writer, validator, predicate, and activation capability for planned maturation gates |
-| `maturation-promotion-readiness.yaml` | runtime | per-gate promotion decision before planned maturation gates become executable |
-| `maturation-question-frontier.yaml` | host LLM author | unanswered or weakly answered questions to mature |
-| `maturation-question-frontier-validation.yaml` | runtime | question refs, materiality, surface, dimension, and seed-link validation |
-| `maturation-closure-frontier.yaml` | host LLM author | next source refs or missing authority needed for material questions |
-| `maturation-closure-frontier-validation.yaml` | runtime | frontier duplication, support, and boundary validation |
-| `maturation-authority-response.yaml` | user/runtime/external authority captured by runtime | responses to non-source authority requests from the closure frontier |
-| `maturation-authority-response-validation.yaml` | runtime | proves authority response scope, status, and refs before answer support or continuation decisions consume it |
-| `rounds/<round-id>/source-observation-delta.yaml` | runtime | canonical per-round source delta for `source_frontier` or `maturation_closure_frontier`, distinguished by `frontier_kind` and `frontier_validation_ref` |
-| `answer-support-ledger.yaml` | host LLM author + runtime refs | evidence clusters that support answer claims |
-| `answer-support-ledger-validation.yaml` | runtime | evidence closure, independence, contradiction, and authority checks |
-| `maturation-answer-claims.yaml` | host LLM author | source-backed answers to frontier questions |
-| `maturation-answer-claims-validation.yaml` | runtime | answer claim refs, evidence, and limitation closure |
-| `ontology-expansion.yaml` | host LLM author | ontology additions/refinements/deferred/rejected changes |
-| `ontology-expansion-validation.yaml` | runtime | concept economy, ref closure, surface coverage, and regression guards |
-| `actionability-matrix.yaml` | runtime | static/kinetic/dynamic by 7D and purpose element, with L0-L4 levels |
-| `actionability-matrix-validation.yaml` | runtime | proves matrix rows derive from validated baseline plus validated maturation deltas |
-| `maturation-continuation-decision.yaml` | runtime | continue, ask user, blocked, actionable limited, or actionable ready |
-| `maturation-continuation-decision-validation.yaml` | runtime | proves the continuation or terminal actionability state derives from the validated actionability matrix and any applicable frontier/support authorities |
-| `actionable-ontology.yaml` | host LLM author | matured ontology projection when ready or limited |
-| `actionable-ontology-validation.yaml` | runtime | final actionability, evidence, query/proof, and limitation validation |
+The table below is the target artifact plan. The executable authority graph is
+still the registry. A row that is not present in
+`reconstruct-contract-registry.yaml` is planned design until it is promoted with
+an artifact authority, validation authority, gate, validator record,
+`required_when` predicate, and activation condition. At the time of this design,
+round-scoped `rounds/<round-id>/source-observation-delta.yaml`,
+`rounds/<round-id>/source-observation-delta-validation.yaml`,
+`rounds/<round-id>/source-observation-reentry-validation.yaml`,
+`maturation-convergence-ledger.yaml`, and
+`maturation-convergence-ledger-validation.yaml` are active runtime artifacts for
+frontier-observation re-entry and first-pass closure projection.
+`maturation-source-delta.yaml`, `maturation-source-delta-validation.yaml`,
+`maturation-source-impact-judgment.yaml`, and
+`maturation-source-impact-judgment-validation.yaml` remain target-design-only
+artifacts not yet present in either active or planned registry catalogs.
+
+Registry status claims in this prose are a design mirror, not the authority.
+Runtime runs record the current registry snapshot in
+`registry-verification-evidence.yaml` and validate it in
+`registry-verification-evidence-validation.yaml`. This prose intentionally does
+not carry a hard-coded registry hash; if this prose and the registry differ, the
+registry wins for executable behavior and this document must be updated before it
+is used as an implementation contract.
+
+| Artifact | Registry status | Owner | Role |
+|---|---|---|---|
+| `maturation-baseline.yaml` | active registry | runtime | L0-L4 matrix from seed, CQs, limitations, and the validated seeding reconstruct record |
+| `maturation-baseline-validation.yaml` | active registry | runtime | proves baseline rows derive from validated seed, purpose, CQ/proof, handoff authorities, and the source seeding record ref/hash |
+| `maturation-promotion-request.yaml` | planned registry | runtime | durable request authority for maturation execution or planned gate promotion |
+| `maturation-promotion-request-validation.yaml` | planned registry | runtime | proves request id, trigger refs, requested gates, and replay authority before promotion-readiness evaluation |
+| `maturation-runtime-capability-profile.yaml` | planned registry | runtime | records runtime-observed writer, validator, predicate, and activation capability for planned maturation gates |
+| `maturation-promotion-readiness.yaml` | planned registry | runtime | per-gate promotion decision before planned maturation gates become executable |
+| `maturation-source-delta.yaml` | target design only | runtime | records no-delta, changed-source, unavailable-source, or mixed-member source authority differences for the maturation round |
+| `maturation-source-delta-validation.yaml` | target design only | runtime | proves source-delta refs, hashes/versions, member lineage, comparison basis, and no-delta/changed/unavailable/comparison-unavailable factual states |
+| `maturation-source-impact-judgment.yaml` | target design only | host LLM author | interprets validated source-delta facts against purpose, surfaces, and dimensions |
+| `maturation-source-impact-judgment-validation.yaml` | target design only | runtime | proves impact judgments cite validated source-delta facts and do not turn runtime facts into unsupported ontology meaning |
+| `maturation-question-frontier.yaml` | active registry | host LLM author | unanswered or weakly answered questions to mature |
+| `maturation-question-frontier-validation.yaml` | active registry | runtime | question refs, materiality, surface, dimension, and seed-link validation |
+| `maturation-closure-frontier.yaml` | active registry | host LLM author | next source refs or missing authority needed for material questions |
+| `maturation-closure-frontier-validation.yaml` | active registry | runtime | frontier duplication, support, and boundary validation |
+| `maturation-authority-response.yaml` | active registry | user/runtime/external authority captured by runtime | responses to non-source authority requests from the closure frontier |
+| `maturation-authority-response-validation.yaml` | active registry | runtime | proves authority response scope, status, and refs before answer support or continuation decisions consume it |
+| `rounds/<round-id>/source-observation-delta.yaml` | active registry | runtime | canonical per-round observation-lineage delta for newly observed source records from `source_frontier` or `maturation_closure_frontier`, distinguished by `frontier_kind`, `frontier_validation_ref`, `observation_batch_id`, and `triggering_frontier_validation_ref` |
+| `rounds/<round-id>/source-observation-delta-validation.yaml` | active registry | runtime | proves delta rows match accepted frontier refs, observed source refs, material kind, observation hashes, observation batch identity, and frontier-validation identity |
+| `rounds/<round-id>/source-observation-reentry-validation.yaml` | active registry | runtime | proves delta observations pass lineage and source-safety validation before prompt/context re-entry and answer-support consumption |
+| `answer-support-ledger.yaml` | active registry | host LLM author + runtime refs | evidence clusters that support answer claims |
+| `answer-support-ledger-validation.yaml` | active registry | runtime | evidence closure, independence, contradiction, and authority checks |
+| `maturation-answer-claims.yaml` | active registry | host LLM author | source-backed answers to frontier questions |
+| `maturation-answer-claims-validation.yaml` | active registry | runtime | answer claim refs, evidence, and limitation closure |
+| `ontology-expansion.yaml` | active registry | host LLM author | ontology additions/refinements/deferred/rejected changes |
+| `ontology-expansion-validation.yaml` | active registry | runtime | concept economy, ref closure, surface coverage, and regression guards |
+| `actionability-matrix.yaml` | active registry | runtime | static/kinetic/dynamic by 7D and purpose element, with L0-L4 levels |
+| `actionability-matrix-validation.yaml` | active registry | runtime | proves matrix rows derive from validated baseline and active maturation artifacts; promoted source-delta/source-impact authorities are consumed when activated |
+| `maturation-convergence-ledger.yaml` | active registry | runtime | append-only round ledger of material question closure, trace/audit-only closure, round source-observation delta refs, and remaining frontier |
+| `maturation-convergence-ledger-validation.yaml` | active registry | runtime | proves every blocker/high question is closed, carried forward, or blocked with refs before continuation is projected |
+| `maturation-continuation-decision.yaml` | active registry | runtime | continue, ask user, blocked, actionable limited, or actionable ready |
+| `maturation-continuation-decision-validation.yaml` | active registry | runtime | proves the continuation or terminal actionability state derives from the validated actionability matrix and any applicable frontier/support authorities |
+| `actionable-ontology.yaml` | active registry | runtime | optional matured ontology projection when continuation reaches ready or limited, without inventing new semantic content |
+| `actionable-ontology-validation.yaml` | active registry | runtime | actionability claim, row coverage, limitation, final re-question, and proof-boundary validation |
 
 #### Maturation Authority Graph
 
-Maturation artifacts follow one authority direction:
+After each artifact in the path is promoted into the registry, maturation
+artifacts follow one target authority direction:
 
 ```text
 validated seed + selected validated purpose frame + CQ assessment + proof validations
 -> durable promotion request + runtime capability profile + promotion readiness validation when maturation gates are promoted
 -> immutable maturation-baseline.yaml
 -> maturation-baseline-validation.yaml
+-> source-delta validation when the source authority has changed or must be
+   proven unchanged
 -> question/closure frontier
 -> answer support and answer claims
 -> ontology expansion overlay
 -> current actionability-matrix.yaml
 -> actionability-matrix-validation.yaml
+-> convergence ledger
 -> maturation-continuation-decision.yaml
 -> maturation-continuation-decision-validation.yaml
 -> optional actionable-ontology.yaml projection
@@ -807,6 +902,164 @@ session. It must consume artifact refs and hashes from `reconstruct-record.yaml`
 instead of reparsing the target from scratch. New source observation is allowed
 only through a validated maturation closure frontier.
 
+If maturation is resumed after time has passed, runtime must not assume the
+source authority is unchanged. It writes a source-delta artifact when the host
+or source profile can compare the consumed seed/run-manifest snapshot with the
+current source authority. For code this may be repository commit or file hash
+changes. For spreadsheets this may be workbook version, sheet/range hash, named
+range, formula, or decision-cell changes. For documents and meeting records this
+may be document version, section hash, decision/action-item changes, or metadata
+changes. For databases this may be schema, view, grant, or sampled authority
+snapshot changes. For mixed targets, every delta row preserves member lineage.
+
+No-delta is also evidence. A no-delta result can close a freshness concern and
+support a convergence claim, but it cannot by itself create ontology meaning.
+A changed-source result must receive a validated source-impact judgment before
+the LLM authors new semantic content from it.
+
+#### Delta Boundary And Freshness Fail-Close
+
+Maturation uses two different delta concepts. They must not be wired as aliases:
+
+| Delta artifact | Owns | Does not own | Registry status | Primary consumers |
+|---|---|---|---|---|
+| `maturation-source-delta.yaml` | runtime factual freshness comparison between the consumed seed/run-manifest source authority and the current source authority; no-delta, changed-source, unavailable-source, and comparison-unavailable state | newly observed source-record lineage, frontier authorization, prompt/context re-entry proof, answer-support consumption proof, or semantic actionability-impact judgment | target design only until promoted with artifact, gate, validator, predicate, and activation condition | source-impact judgment, question-frontier validation, actionability matrix, convergence ledger, continuation decision, final re-question pass after promotion |
+| `maturation-source-impact-judgment.yaml` | authored interpretation of validated source-delta facts against source-derived purpose, purpose elements, actionability surfaces, and maturity dimensions | source comparison facts, source snapshot authority, or observation lineage | target design only until promoted with artifact, gate, validator, predicate, and activation condition | question-frontier validation, answer support, matrix, convergence ledger, continuation decision |
+| `rounds/<round-id>/source-observation-delta.yaml` | per-round lineage for newly observed source records created from `source_frontier` or `maturation_closure_frontier`; `frontier_kind`; `frontier_validation_ref`; observation batch identity | source freshness comparison against the consumed seed snapshot, no-delta authority, source-impact judgment, or actionability-impact interpretation of source changes | active registry as observation lineage; re-entry validation active for prompt/context reuse and answer-support consumption | broader downstream scanners remain planned until runtime evaluator support is promoted |
+
+Current required behavior before `maturation-source-delta.yaml` promotion:
+
+- runtime may expose only registry-backed maturation artifacts;
+- a resumed run that cannot prove freshness through a promoted source-delta
+  authority must project an explicit limitation, `blocked`, or `ask_user` when
+  freshness can affect blocker/high rows;
+- unpromoted source-delta prose must not be used as evidence for no-delta,
+  source freshness closure, or actionable readiness; and
+- the question frontier may still expose questions from the validated baseline,
+  but it must not claim that those questions are fresh against a changed source.
+
+After source-delta promotion, freshness-sensitive downstream validation is
+fail-close:
+
+- if source comparison is required and `maturation-source-delta-validation.yaml`
+  is missing or invalid, question-frontier validation, matrix validation,
+  convergence validation, and continuation validation must project `blocked` or a
+  limitation-backed exclusion;
+- `source_unavailable` and `comparison_unavailable` are authority-gap states, not
+  no-delta states;
+- `semantic_action_delta` or `may_change_actionability` may appear only in
+  `maturation-source-impact-judgment.yaml`; once validated, those rows must become
+  frontier questions, answer-support inputs, explicit limitations, or blocked
+  rows before terminal actionability can be projected; and
+- `trace_audit_delta` rows may close provenance or freshness work, but cannot
+  raise a material row to L4 without separate positive answer support.
+
+#### Maturation Source Delta Fact Recording
+
+Source-delta fact recording is runtime-owned. It generalizes the source freshness
+loop used in long-running code-backed ontology work without making code
+repositories the only model. A source-delta fact row answers: "Did the source
+authority change, become unavailable, or become incomparable against the source
+snapshot consumed by this maturation session?"
+
+Target implementable `maturation-source-delta.yaml` shape after registry
+promotion:
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+round_id:
+baseline_source_snapshot_ref:
+current_source_snapshot_ref:
+source_delta_status: no_delta | delta_detected | source_unavailable | comparison_unavailable
+delta_rows:
+  - delta_id:
+    member_scope_refs: []
+    member_target_material_kind:
+    member_source_refs: []
+    cross_material_ref_refs: []
+    changed_source_refs: []
+    factual_delta_kind: content_changed | metadata_changed | member_set_changed | source_unavailable | comparison_unavailable | no_observed_change
+    comparison_basis: hash | version | timestamp | schema_snapshot | profile_snapshot | sampled_authority | unavailable
+    rationale:
+    supporting_refs: []
+    limitation_refs: []
+```
+
+Naming containment:
+
+- `MaturationSourceDelta` names the artifact family
+  `maturation-source-delta.yaml` and its validation artifact.
+- `SourceDeltaFact` names one factual row inside that artifact.
+- Public fields, validators, and APIs should use `source_delta_fact` for row ids
+  and `maturation_source_delta_ref` for the artifact ref.
+- `MaturationSourceDelta` and `SourceDeltaFact` are not aliases; one is the
+  container, the other is the row-level fact.
+- Semantic impact fields never live on `SourceDeltaFact`; they live only in
+  `SourceDeltaImpactJudgment` rows.
+
+Impact judgments are authored only after `maturation-source-delta-validation.yaml`
+passes:
+
+```yaml
+maturation-source-impact-judgment.yaml:
+  schema_version: "1"
+  session_id:
+  created_at:
+  round_id:
+  source_delta_validation_ref: maturation-source-delta-validation.yaml
+  impact_rows:
+    - impact_id:
+      source_delta_row_refs: []
+      delta_kind: semantic_action_delta | evidence_strength_delta | trace_audit_delta | authority_gap_delta | out_of_scope_delta
+      actionability_impact: changes_actionability | may_change_actionability | no_actionability_change | unknown
+      affected_purpose_element_refs: []
+      affected_surface_refs: []
+      affected_dimension_refs: []
+      expected_closure: generate_question | update_evidence_support | trace_audit_only | ask_authority | blocked | out_of_scope
+      rationale:
+      supporting_refs: []
+      limitation_refs: []
+```
+
+Impact kinds are intentionally about actionability impact, not implementation
+shape:
+
+| Delta kind | Meaning | Allowed effect |
+|---|---|---|
+| `semantic_action_delta` | the source changed a purpose-critical object, actor, action, state, permission, policy, data binding, obligation, or external boundary | may generate frontier questions, answer claims, expansion, or matrix changes |
+| `evidence_strength_delta` | the source gives stronger or weaker evidence for existing ontology meaning without changing the meaning itself | may change support refs, maturity level, or limitations, but not add/refine semantic content by itself |
+| `trace_audit_delta` | the source changed in a way that is relevant for provenance, freshness, or audit only | may close a ledger row as trace/audit only, but must not create answer claims or expansion |
+| `authority_gap_delta` | required source comparison or authority is unavailable or incomparable | may block, ask authority, or create limitation-backed frontier |
+| `out_of_scope_delta` | the changed source is outside the selected purpose adequacy frame and actionability claim | may be recorded in the convergence ledger only |
+
+`maturation-source-delta-validation.yaml` must prove:
+
+- source snapshot refs, hashes, versions, or material-profile authority refs
+  resolve against the consumed run manifest and current source authority;
+- every changed source ref belongs to the target inventory or a validated mixed
+  member source boundary;
+- every mixed delta row preserves member material kind, member source refs, and
+  cross-material refs or cites a limitation;
+- `no_delta` can support freshness closure only when the comparison authority is
+  valid for the material kind; and
+- `comparison_unavailable` cannot be treated as no-delta.
+
+`maturation-source-impact-judgment-validation.yaml` must prove:
+
+- every impact row cites a valid source-delta validation row;
+- impact rows cite purpose elements, surfaces, and dimensions when they can affect
+  actionability;
+- `semantic_action_delta` and `may_change_actionability` rows become frontier
+  questions, answer-support inputs, or explicit blocker/limitation rows;
+- `evidence_strength_delta` rows may update support and maturity levels only
+  through validated evidence refs;
+- `trace_audit_delta` rows reference `TraceAuditOnlyClosure` and cannot create
+  answer claims, ontology-expansion rows, or new concepts; and
+- runtime facts cannot be converted into semantic meaning without a validated
+  impact judgment.
+
 Common validation artifact shape for maturation validators:
 
 ```yaml
@@ -826,19 +1079,116 @@ violations:
     evidence_ref:
 ```
 
-The first maturation implementation should be delivered in four slices:
+The first maturation implementation should be delivered in four slices. Rows
+that mention source-delta or convergence-ledger artifacts describe target slice
+outputs; those artifacts become active runtime outputs only after their registry
+rows, gates, validators, and `required_when` predicates are promoted.
 
-| Slice | Active output | Runtime/LLM ownership | Done when |
+| Slice | Target output | Runtime/LLM ownership | Done when |
 |---|---|---|---|
-| M1 baseline | `maturation-baseline.yaml`, `maturation-baseline-validation.yaml`, initial `actionability-matrix.yaml`, and `actionability-matrix-validation.yaml` | runtime projection from seed validation, selected validated purpose frame, CQ/proof assessment, and limitations | every purpose element x actionability surface x maturity dimension row has L0-L4 level, supporting refs, blockers, and next action; baseline is immutable, matrix is derived, and both have validation proof |
+| M1 baseline/source state | `maturation-baseline.yaml`, `maturation-baseline-validation.yaml`, `maturation-source-delta.yaml` when applicable, `maturation-source-impact-judgment.yaml` when a changed source can affect actionability, initial `actionability-matrix.yaml`, and validations | runtime projection from seed validation, selected validated purpose frame, source authority comparison, CQ/proof assessment, and limitations; host-authored impact judgment only after source-delta facts validate | every purpose element x actionability surface x maturity dimension row has L0-L4 level, supporting refs, blockers, and next action; baseline is immutable, source facts are recorded, required impact judgments are validated, matrix is derived, and all have validation proof |
 | M2 question frontier | `maturation-question-frontier.yaml` and validation | host LLM authors questions; runtime validates refs/materiality/surface/dimension | every blocker/high L0-L2 row has a frontier question or limitation/user-authority row |
 | M3 support and claims | `maturation-closure-frontier.yaml`, observation delta, `answer-support-ledger.yaml`, `maturation-answer-claims.yaml`, validations | host LLM requests/claims; runtime validates closure frontier, observation lineage, and answer support closure | no answer claim exists without direct authority, runtime proof, user confirmation, or convergent source evidence |
-| M4 expansion/continuation | `ontology-expansion.yaml`, `maturation-continuation-decision.yaml`, `maturation-continuation-decision-validation.yaml`, optional `actionable-ontology.yaml` | host LLM authors expansion; runtime validates matrix/continuation/final projection | continuation decision is `continue`, `ask_user`, `blocked`, `actionable_limited`, or `actionable_ready` from validated matrix and frontier state |
+| M4 expansion/closure/continuation | `ontology-expansion.yaml`, `maturation-convergence-ledger.yaml`, `maturation-continuation-decision.yaml`, `maturation-continuation-decision-validation.yaml`, optional `actionable-ontology.yaml` | host LLM authors semantic expansion; runtime validates closure disposition, matrix, continuation, final re-question evidence, and final projection | continuation decision is `continue`, `ask_user`, `blocked`, `actionable_limited`, or `actionable_ready` from validated matrix, frontier state, active convergence ledger, and promoted source-delta authorities when activated |
 
-M1 and M2 are the minimum useful maturation surface. They let a seed expose its
-next questions without claiming an actionable ontology. M3 and M4 are required
-before the runtime may claim maturation can extend the ontology and project an
-`ActionableOntology`.
+For the target maturation surface, M1 and M2 are the minimum useful slice. They
+let a seed expose its next questions without claiming an actionable ontology.
+If a row in M1 or M2 names an unpromoted planned artifact, the current runtime
+may expose only the registry-backed subset and must not claim that the refined
+slice is complete. M3 and M4 are required before the runtime may claim maturation
+can extend the ontology and project an `ActionableOntology`.
+
+#### Claim-Level Taxonomy
+
+Runtime and MCP/API surfaces must state the strongest claim they can honestly
+make. The claim level is separate from process completion.
+
+| Claim level | May claim | Must not claim | Required authority |
+|---|---|---|---|
+| `seed_candidate` | a seed draft or partial seed exists | seed validity, maturation readiness, or actionability | authored seed artifact plus visible validation state or failure state |
+| `seed_valid_for_maturation` | the first valid kernel can enter maturation, or can enter with named limitations | actionable ontology, complete 7D maturity, or answered decision/action support | seed validation, purpose authority, confirmation when required, CQ assessment, and handoff validation |
+| `maturation_minimum_executable` | M1/M2 can expose baseline, actionability matrix, and question frontier for the next iteration | answer claims, ontology expansion, convergence, or actionable projection | baseline, matrix, question-frontier artifacts and validations |
+| `maturation_in_progress` | some questions have validated support, claims, or expansion overlays | terminal readiness or global convergence | applicable M3 artifacts and validations for only the rows being claimed |
+| `actionable_limited` | the ontology supports a bounded claim scope with named exclusions | readiness for excluded blocker/high rows or unvalidated runtime/query/API behavior | validated matrix, continuation decision, limitation refs, active convergence ledger, and promoted source-delta authorities when active |
+| `actionable_ready` | every material static, kinetic, and dynamic row is L4 or outside the declared claim, and re-question closure finds no new blocker/high question | unresolved blocker/high gaps, stale source freshness, or unproven downstream access paths | validated matrix, active convergence ledger, final re-question pass, continuation validation, and proof authorities for claimed access surfaces |
+| `blocked` | required source, user, runtime, external-system, or domain-standard authority is unavailable | limited or ready actionability | failed or missing applicable validation, authority-gap refs, and visible next action |
+
+`continue` and `ask_user` are continuation states, not actionability claims. A
+run may complete its current process step while still projecting
+`maturation_minimum_executable`, `continue`, `ask_user`, or `blocked`.
+
+`claim-projection.yaml` is the pre-publication authority for the strongest
+honest public claim that final output and public result surfaces may cite:
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+source_authority_refs: []
+projection_rows:
+  - projection_id:
+    projection_surface: status | result | final_output | mcp | api | handoff | material_kind_support
+    claim_level: not_applicable | seed_candidate | seed_valid_for_maturation | maturation_minimum_executable | maturation_in_progress | actionable_limited | actionable_ready | blocked
+    decision_state: continue | ask_user | blocked | actionable_limited | actionable_ready | not_applicable
+    actionability_claim: none | limited | ready
+    material_kind_capability_refs: []
+    governance_scope:
+      reconstruct_run_level: included | not_claimed
+      operated_system_release_health: out_of_scope | planned_later | delegated_authority_ref
+      rollback_quota_incident_governance: out_of_scope | planned_later | delegated_authority_ref
+    member_capability_rows:
+      - member_id:
+        target_ref:
+        target_material_kind:
+        selected_source_profile_id:
+        selected_source_profile_ref:
+        selected_source_profile_definition_sha256:
+        member_source_refs: []
+        validation_ref:
+        support_claim: unsupported | profile_supported | fixture_validated | golden_source_validated | real_source_validated | release_supported
+        readiness_effect: supported | limited | blocked
+        next_action:
+        limitation_refs: []
+    included_row_refs: []
+    excluded_row_refs: []
+    required_validation_refs: []
+    registry_evidence_refs: []
+    display_label:
+    machine_status:
+    timestamp:
+      value:
+      timezone:
+      source_ref:
+    locale_context:
+      locale:
+      value_format_refs: []
+    limitation_refs: []
+```
+
+`claim-projection-validation.yaml` must prove that every status/result/API/MCP,
+handoff, and material-kind support claim consumes one pre-publication projection row, and that
+final-output claim sections cite the canonical projection refs without
+restating pre-publication claim values; `claim_level` is not inferred from prose;
+`decision_state` is separate from
+`actionability_claim`; material-kind/member limits are visible with target ref,
+selected profile snapshot, profile definition hash, member source refs,
+validation ref, readiness effect, and next action; bounded UX fields
+and governance scope are present for public surfaces; broader operated-system
+governance is marked `out_of_scope`, `planned_later`, or delegated to an
+authority ref before public surfaces can mention it; and any current/executable
+claim has registry, gate, validator, or test evidence refs, or is marked pending
+verification.
+
+The claim projection consumes an immutable
+`reconstruct-run-control.pre-publication-validation.yaml` checkpoint, not the
+mutable final `reconstruct-run-control-validation.yaml` path that is rewritten
+after final artifact publication. `material_kind_support` rows cite
+`target-material-profile-validation.yaml`; the runtime may currently publish only
+`unsupported` or `profile_supported` member support claims unless stronger
+fixture/golden/real/release evidence gates are wired. Mixed-target projection
+must not collapse member support into an aggregate status; every member row is
+the public claim surface for what that member can support and what action
+remains.
 
 #### Maturation Question Frontier
 
@@ -1125,6 +1475,101 @@ valid evidence cluster, proof, or user confirmation. An answer may be
 `partially_answered` only when the answered portion has positive support and the
 remaining gap is represented as a limitation or frontier question.
 
+#### Maturation Closure Dispositions
+
+Not every inspected issue should become ontology meaning. Maturation therefore
+separates answer claims and ontology expansion from question closure. A question
+closure disposition records what happened to a material question or source delta
+after evidence and authority were checked.
+
+This is a concept-economy boundary. `trace_audit_only` is not added as an
+`ontology-expansion.yaml` operation because it does not add, refine, defer, or
+reject ontology content. It is a closure result that belongs in the convergence
+ledger. This keeps runtime evidence and provenance useful without inflating the
+ontology.
+
+Allowed closure dispositions:
+
+| Disposition | Meaning | Actionability effect |
+|---|---|---|
+| `answered_and_expanded` | positive support produced a semantic add/refine/defer/reject overlay | may change matrix rows and actionable ontology projection |
+| `answered_no_semantic_change` | positive support confirms the current ontology answer without needing semantic change | may raise evidence or validation level |
+| `trace_audit_only` | source/evidence was inspected but does not change material actionability | may update provenance or freshness only |
+| `deferred_user_decision` | the next authority is a user/product decision | projects `ask_user` or a limitation-backed exclusion |
+| `deferred_external_authority` | the next authority is an external system, standard, or runtime capability | projects `ask_user`, `blocked`, or limitation-backed exclusion depending on availability |
+| `rejected_non_material` | the candidate/question is real but outside the source-derived purpose adequacy frame | cannot block the actionability claim |
+| `blocked_unavailable` | required source, proof, runtime capability, or authority is unavailable | blocks or limits actionability according to materiality |
+| `out_of_scope` | the question belongs outside the declared claim scope | visible exclusion; cannot silently erase prior material rows |
+
+Current active `maturation-convergence-ledger.yaml` shape:
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+rounds:
+  - round_id:
+    source_observation_delta_validation_ref:
+    question_frontier_validation_ref:
+    actionability_matrix_validation_ref:
+    final_requestion_pass:
+      pass_id:
+      input_authority_refs: []
+      generated_question_refs: []
+      new_material_question_refs: []
+      closed_as_non_material_refs: []
+      pass_status: not_run | no_new_material_question | material_question_found
+      rationale:
+    closure_rows:
+      - closure_id:
+        question_refs: []
+        source_observation_delta_validation_refs: []
+        closure_disposition: answered_and_expanded | answered_no_semantic_change | trace_audit_only | deferred_user_decision | deferred_external_authority | rejected_non_material | blocked_unavailable | out_of_scope
+        materiality: blocker | high | medium | low | info
+        actionability_surface_refs: []
+        maturity_dimension_refs: []
+        purpose_element_refs: []
+        affected_matrix_row_refs: []
+        supporting_refs: []
+        answer_claim_refs: []
+        expansion_refs: []
+        limitation_refs: []
+        next_action:
+    source_observation_closure_rows:
+      - source_observation_closure_id:
+        observation_id:
+        delta_row_id:
+        source_ref:
+        source_observation_delta_validation_ref:
+        question_refs: []
+        evidence_cluster_refs: []
+        answer_claim_refs: []
+        expansion_refs: []
+        closure_disposition: answered_and_expanded | answered_no_semantic_change | trace_audit_only | deferred_user_decision | deferred_external_authority | rejected_non_material | blocked_unavailable | out_of_scope
+        limitation_refs: []
+    remaining_frontier_refs: []
+```
+
+Current `maturation-convergence-ledger-validation.yaml` must prove:
+
+- every blocker/high question in the validated frontier is either closed, carried
+  forward, or blocked with refs;
+- every `answered_and_expanded` row cites a valid answer claim and expansion;
+- every `answered_no_semantic_change` row cites a valid answer claim or validated
+  answer-support evidence cluster;
+- `trace_audit_only` rows do not cite expansions and do not close blocker/high
+  rows whose material answer is still unsupported;
+- deferred and blocked rows cite support, limitations, or a next action;
+- every ontology expansion appears in exactly one convergence ledger row for the
+  round, and any round source-observation delta refs match the round
+  `source_observation_delta_validation_ref`;
+- every consumed source-observation delta row appears in exactly one
+  `source_observation_closure_rows[]` row with a disposition; and
+- remaining frontier refs resolve to validated frontier questions. The active
+  first-pass ledger records `final_requestion_pass.pass_status: not_run`; final
+  re-question closure becomes a stronger terminal projection gate when
+  actionable ontology projection is implemented.
+
 #### Ontology Expansion Rules
 
 `ontology-expansion.yaml` may add or refine ontology content only through
@@ -1148,6 +1593,9 @@ expansions:
 Expansion must prefer reuse or refinement before adding a new concept. A new
 concept is allowed only when it changes identity, lifecycle, validation,
 authority, user-visible action, failure handling, or material decision behavior.
+Trace/audit-only and evidence-only checks must not be encoded as no-op
+expansions. After convergence-ledger promotion, they close through
+`maturation-convergence-ledger.yaml`.
 
 `ontology-expansion-validation.yaml` must enforce:
 
@@ -1158,59 +1606,61 @@ authority, user-visible action, failure handling, or material decision behavior.
   rationale that explains why reuse/refinement is insufficient;
 - `operation: defer` or `reject` carries limitation refs or answered question
   refs;
+- no expansion exists only to record freshness, provenance, or implementation
+  trace when the convergence ledger can close it as trace/audit only;
 - no expansion rewrites seed authority in place. The expansion is an overlay
   until the final `actionable-ontology.yaml` projection is validated.
 
-Implementable `actionable-ontology.yaml` projection shape:
+Active `actionable-ontology.yaml` projection shape:
 
 ```yaml
 schema_version: "1"
 session_id:
 created_at:
-source_seed_ref: ontology-seed.yaml
-applied_expansion_refs: []
-declared_purpose:
+ontology_seed_ref: ontology-seed.yaml
+ontology_seed_validation_ref: ontology-seed-validation.yaml
+ontology_expansion_ref: ontology-expansion.yaml
+ontology_expansion_validation_ref: ontology-expansion-validation.yaml
+actionability_matrix_ref: actionability-matrix.yaml
+actionability_matrix_validation_ref: actionability-matrix-validation.yaml
+maturation_continuation_decision_ref: maturation-continuation-decision.yaml
+maturation_continuation_decision_validation_ref: maturation-continuation-decision-validation.yaml
 actionability_claim: actionable_ready | actionable_limited
+final_requestion_pass_status: not_run | no_new_material_question | material_question_found
 claim_scope:
-  included_matrix_row_refs: []
-  excluded_matrix_row_refs: []
+  included_row_refs: []
+  excluded_row_refs: []
   limitation_refs: []
-ontology:
-  structure: []
-  relations: []
-  intent: []
-  principles: []
-  context: []
-  evidence: []
-  external: []
-action_surfaces:
-  static_surface:
-    status:
+  rationale:
+downstream_claims:
+  query_access: not_claimed
+  visualization: not_claimed
+  graph_exploration: not_claimed
+projected_rows:
+  - projection_row_id:
+    matrix_row_ref:
+    claim_scope: included | excluded
+    actionability_surface_ref:
+    maturity_dimension_ref:
+    purpose_element_ref:
+    materiality: blocker | high | medium | low | info
+    maturity_level: L0_missing | L1_identified | L2_modeled | L3_evidenced | L4_validated_for_purpose
+    member_readiness: closed | limitation_backed | frontier_required | out_of_scope
+    seed_ref_refs: []
+    expansion_refs: []
+    evidence_refs: []
     supporting_refs: []
     limitation_refs: []
-  kinetic_surface:
-    status:
-    supporting_refs: []
-    limitation_refs: []
-  dynamic_surface:
-    status:
-    supporting_refs: []
-    limitation_refs: []
-remaining_frontier_refs: []
-limitation_refs: []
-ontology_handoff_refs: []
-query_proof_refs: []
-visualization_proof_refs: []
-graph_exploration_proof_refs: []
+    rationale:
 ```
 
 This projection is user-facing and downstream-facing. Its validation must prove
-that every included ontology row traces back to the seed, a validated expansion,
-or an explicit limitation. It must not become a new uncontrolled semantic source.
-When ontology-domain completeness, external alignment, executable queryability,
-visualization, or graph exploration is claimed, validation must resolve those
-claims through the registry-owned handoff axes and the proof authority contracts
-defined in `operational-ontology-seed-contract.md`.
+that every projected row traces back to seed refs, validated expansion refs, or
+explicit limitation refs. It must not become a new uncontrolled semantic source.
+The active projection does not claim query, visualization, or graph-exploration
+runtime proof; those proof claims remain controlled by the registry-owned proof
+authority contracts and are required only when a downstream proof surface is
+claimed.
 
 #### Actionability Matrix
 
@@ -1275,7 +1725,94 @@ continuation state of `continue`, `ask_user`, or `blocked`.
 - blocker/high rows cannot be projected as action-ready unless they are
   `L4_validated_for_purpose` or limitation-backed outside the actionability
   claim;
+- rows closed by `trace_audit_only` remain visible as provenance/freshness
+  support but do not raise a material row to L4 unless another validation or
+  proof authority supports the answer; and
 - recomputation inputs are recorded so continuation decisions can be audited.
+
+#### Material Value Authority
+
+Long-running ontology work repeatedly surfaced policy-like values: time windows,
+thresholds, lock durations, default values, formula thresholds, decision dates,
+limits, and retry counts. These values can change actionability, but copying
+them into prose makes the ontology stale. Maturation should therefore treat
+material values as source-backed authority rows rather than incidental text.
+
+This is material-kind-specific:
+
+| Material kind | Value authority examples |
+|---|---|
+| `code` | policy constants, feature flags, timeout/retry/TTL values, permission limits, state thresholds |
+| `spreadsheet` | input assumptions, formula constants, decision-cell thresholds, named-range defaults |
+| `document` | criteria, dates, obligation terms, explicit scope limits, approval requirements |
+| `database` | constraints, defaults, retention windows, derived view definitions, grants |
+| `mixed` | per-member values plus cross-material mapping or contradiction rows |
+
+Material values should be represented as constraints, dynamic boundaries, data
+bindings, answer-support evidence, or maturation limitations according to their
+role. They should not be embedded only in `rationale` or final prose. If a value
+does not change any answer for the source-derived purpose, it is closed as
+trace/audit only. If it changes a permission, state, action availability,
+calculation, obligation, or trusted output, it becomes a material row in the
+actionability matrix.
+
+Material value and domain competency admission share one replayable authority
+path. The path may be a standalone artifact or embedded canonical rows, but
+runtime validators must consume the same row shape:
+
+| Input | Admit when | Disposition values | Required refs |
+|---|---|---|---|
+| source-backed material value | the value can change permission, state, action availability, calculation, obligation, trusted output, evidence trust, or a dynamic boundary for the source-derived purpose | `admitted_material`, `trace_audit_only`, `out_of_scope`, `deferred_authority`, `rejected_ambiguous` | source refs, purpose element refs, actionability surface refs, maturity dimension refs, materiality ref, and value authority refs |
+| domain competency question | the run manifest admits the domain competency snapshot and the question is required, supporting, or diagnostic for the declared purpose | `required_blocking`, `supporting_material`, `diagnostic_only`, `deferred_product_decision`, `out_of_scope` | competency id, domain snapshot ref, admission policy ref, purpose element refs, materiality ref, assessment ref, and limitation refs when unresolved |
+
+Admission consequences:
+
+- `admitted_material`, `required_blocking`, and `supporting_material` inputs must
+  appear in a baseline row, frontier question, answer-support row, actionability
+  matrix row, convergence closure row, or explicit limitation.
+- `trace_audit_only` and `diagnostic_only` inputs remain visible for provenance
+  and audit, but must not create ontology expansion or raise a material row to L4
+  by themselves.
+- `deferred_authority` and `deferred_product_decision` inputs must become
+  `ask_user`, blocked, or limitation-backed exclusions when they affect
+  blocker/high rows.
+- `rejected_ambiguous` inputs require contradiction or ambiguity refs so the run
+  can be replayed without silently discarding source evidence.
+
+Canonical admission row shape:
+
+```yaml
+material-admission-ledger.yaml:
+  schema_version: "1"
+  session_id:
+  created_at:
+  admission_rows:
+    - admission_id:
+      admission_phase: pre_seed_purpose_element | pre_seed_material_value | post_cq_domain_competency | maturation_reassessment
+      input_kind: purpose_adequacy_element | material_value | domain_competency_question
+      input_ref:
+      source_refs: []
+      purpose_element_snapshot_ref:
+      value_snapshot_ref:
+      competency_snapshot_ref:
+      admission_policy_ref:
+      disposition: admitted_material | trace_audit_only | out_of_scope | deferred_authority | rejected_ambiguous | required_blocking | supporting_material | diagnostic_only | deferred_product_decision
+      materiality: blocker | high | medium | low | info
+      purpose_element_refs: []
+      actionability_surface_refs: []
+      maturity_dimension_refs: []
+      downstream_authority_refs: []
+      supersedes_admission_refs: []
+      limitation_refs: []
+      rationale:
+```
+
+`material-admission-ledger-validation.yaml` must prove row uniqueness, source and
+snapshot refs, allowed dispositions by `input_kind` and `admission_phase`,
+downstream closure for every admitted or required row, phase-appropriate
+prerequisites, and no silent loss of diagnostic/deferred/out-of-scope rows.
+Existing artifacts may embed this row shape only if their validators expose the
+embedded rows as the same authority for replay and final claim projection.
 
 #### Maturation Continuation And Handoff States
 
@@ -1290,7 +1827,9 @@ Maturation should project one of these states:
 | `actionable_ready` | static, kinetic, and dynamic surfaces are validated for the declared purpose; operational runtime proof is required only for rows that claim runtime/query/API behavior |
 
 The runtime presents the state, evidence, limitations, and remaining frontier in
-a form that lets the user choose the next action.
+a form that lets the user choose the next action. After source-delta and
+convergence-ledger authorities are promoted into the registry, the continuation
+decision shape also carries their validation refs.
 
 Implementable `maturation-continuation-decision.yaml` shape:
 
@@ -1299,6 +1838,10 @@ schema_version: "1"
 session_id:
 created_at:
 actionability_matrix_validation_ref: actionability-matrix-validation.yaml
+# required after convergence-ledger promotion
+convergence_ledger_validation_ref: maturation-convergence-ledger-validation.yaml
+# populated after source-delta promotion
+source_delta_validation_refs: []
 decision_state: continue | ask_user | blocked | actionable_limited | actionable_ready
 state_rationale:
 blocking_row_refs: []
@@ -1319,6 +1862,14 @@ high material rows. Required domain competency failures must remain in
 `blocking_row_refs[]`, `next_frontier_refs[]`, or `limitation_refs[]` until a
 validated answer, authority response, or limitation-backed exclusion closes
 them.
+
+For the target M4 surface, after the convergence-ledger authority is promoted or
+requested as an applicable planned gate, continuation-decision validation must
+consume the validated convergence ledger. The matrix says what is mature; the
+ledger says why each material question or delta is closed, carried forward,
+blocked, deferred, or outside the claim. A terminal state may not rely on a
+matrix row that lacks a corresponding ledger closure when a validated frontier
+question or source delta created that row.
 
 ## 6. Source-Derived Purpose Strategy
 
@@ -1463,7 +2014,8 @@ change seed validity for the declared purpose.
 
 Each repeated observation must be traceable. Runtime records an
 `observation_batch_id`, `round_id`, `frontier_kind`, `frontier_validation_ref`,
-and `triggering_frontier_ref` on new observation records, and writes the
+`triggering_frontier_validation_ref`, and `triggering_frontier_ref` on new
+observation records and delta rows, and writes the
 canonical round-scoped `rounds/<round-id>/source-observation-delta.yaml`
 artifact before new evidence can enter the next directive, lens judgment,
 synthesis, maturation answer, ontology expansion, or candidate finalization
@@ -1475,21 +2027,22 @@ The delta artifact is lineage evidence, not gate truth. Runtime must also write
 `rounds/<round-id>/source-observation-delta-validation.yaml` to prove the
 pre-use lineage check passed or failed. Frontier validation authorizes what may
 be observed; delta validation proves what was actually observed and how it is
-tied to the round/frontier before downstream semantic use.
+tied to the round/frontier before downstream semantic use. A delta row is
+invalid when its observation lacks the same `round_id`,
+`observation_batch_id`, and `triggering_frontier_validation_ref` that the
+accepted frontier produced.
 
 `source_frontier_gate` must validate duplicate status against current
 `source-observations.yaml`, not only against the source inventory. The
-`observation_reentry_gate` is the only gate that validates downstream re-entry
-from declared authority refs: lens judgments, exploration synthesis,
-candidate inventory/disposition, seed validation artifacts, and maturation
-downstream artifacts such as `answer-support-ledger.yaml`,
-`maturation-answer-claims.yaml`, and `ontology-expansion.yaml` when those
-artifacts can cite frontier-triggered observation ids. The validator must
-consume the same downstream artifact authorities, or their validation artifacts,
-that make the relevant generated
-`frontier_observation_use_by_downstream_artifact` predicate instance true. The
-aggregate `frontier_observation_used_downstream` predicate is derived from those
-generated instances and must not maintain a separate artifact list.
+`observation_reentry_gate` validates prompt/context re-entry for delta
+observations, and `answer-support-ledger-validation.yaml` validates answer-support
+consumption when evidence refs cite newly observed delta observations. Broader
+downstream artifact consumption scanning remains planned until a runtime evaluator
+can generate and validate the relevant
+`frontier_observation_use_by_downstream_artifact` predicate instances. Active
+runtime/public claims must therefore describe source-observation re-entry as
+prompt/context and answer-support bounded, not as full downstream-consumption
+safety.
 
 Round-scoped artifacts are append-only. A later round may supersede a prior
 question, evidence cluster, answer claim, or expansion only by writing a new row
@@ -1740,10 +2293,12 @@ not support, runtime treats that gate as unknown and fails the handoff closed
 until the evaluator is implemented. Unsupported active predicates must not
 silently project `not_applicable`.
 Terminal `handoff-decision-validation.yaml` is produced by `handoff_gate`.
-`final-output.md` and `reconstruct-record.yaml` are emitted only after
-`handoff-decision-validation.yaml` passes; they are projections from the
-validated seed iteration readiness result, not inputs to the terminal readiness
-validator.
+`final-output.md` is emitted only after `handoff-decision-validation.yaml`
+passes; it projects the validated seed iteration readiness result and cites the
+canonical claim-projection refs without restating claim values. The final
+`reconstruct-record.yaml` is assembled after claim projection validation closes
+the public claim authority. Neither artifact is an input to the terminal
+readiness validator.
 `final-output-provenance-validation.yaml` validates the post-handoff user-facing
 projection. It is not a readiness gate for `handoff-decision-validation.yaml`.
 
@@ -1827,7 +2382,10 @@ convergence conditions hold:
 | Policy and permission closure | Sensitive actions and sensitive data have actor, role, permission, and exception treatment or an explicit non-actionable limitation |
 | Data authority closure | Read sources, write targets, provenance, derived projections, and source gaps are distinguishable and closed for the declared purpose |
 | External boundary closure | External systems, standards, integrations, and alignment requirements are either modeled, limitation-backed, or declared out of scope |
+| Source-delta and impact closure | Current source authority is proven unchanged, unavailable, or changed through validated source-delta facts; every changed row that may affect actionability has a validated source-impact judgment as semantic, evidence-strength, trace/audit, authority-gap, or out-of-scope with a closure |
+| Closure disposition coverage | Every material frontier question and source-delta row has a convergence-ledger disposition |
 | Frontier exhaustion by materiality | Remaining frontier questions are non-material, explicitly deferred, or cannot be advanced without new source/user authority |
+| Re-question convergence | Regenerating questions from the current actionability matrix, admitted competency questions, and remaining limitations produces no new blocker/high question that can change the source-derived purpose adequacy frame |
 | Static/kinetic/dynamic actionability | Static structure, kinetic behavior, and dynamic condition boundaries are each answerable from ontology refs and evidence refs, or limitation-backed without claiming actionability |
 
 Maturation should continue when a frontier question can still change any
@@ -1837,10 +2395,32 @@ data binding, evidence trust, or external dependency. Maturation should not
 continue merely to add explanatory detail that cannot change the declared
 decision/action/record outcome.
 
+The final re-question pass is not a second full source scan. It regenerates
+questions from the validated actionability matrix, convergence ledger,
+competency-question assessment, source-delta validation, and limitations. If the
+pass finds a new blocker/high question that can be advanced by available source,
+runtime, user, external, or domain-standard authority, maturation projects
+`continue` or `ask_user`. If it finds only non-material detail, trace/audit-only
+freshness concerns, or out-of-scope questions, those rows are closed in the
+convergence ledger.
+
+This gives maturation two separate stop signals:
+
+| Stop signal | Meaning |
+|---|---|
+| Matrix closure | every material static/kinetic/dynamic x seven-dimension row is L4 or limitation-backed outside the claim |
+| Re-question closure | a fresh frontier generated from the current artifacts yields no new material question that can change the actionability claim |
+
+Both are required before `actionable_ready`; `actionable_limited` may exclude
+named rows only when the convergence ledger explains the limitation and the
+excluded rows do not undermine the included claim scope.
+
 ## 11. Artifact Plan
 
-The complete target artifact list is registry-owned at
-`reconstruct-contract-registry.yaml#artifact_authorities`. This plan groups the
+The executable artifact list is registry-owned at
+`reconstruct-contract-registry.yaml#artifact_authorities` and
+`#planned_artifact_authorities`. This design also names target artifacts that are
+not executable until they are promoted into that registry set. This plan groups
 artifact families as preparation/observation, round exploration,
 candidate/disposition, seed/validation, competency questions and assessment,
 confirmation, conditional proof authorities, failure/revision, metrics,
@@ -1857,19 +2437,460 @@ realization row per seed claim and closes realization evidence refs against
 `reconstruct-contract-registry.yaml` is the active runtime authority graph.
 `reconstruct-record.yaml` is the run authority and artifact index; it contains
 refs, hashes, validation statuses, and bounded projections only.
+`reconstruct-run-control.yaml` is the first runtime-control authority for
+session ownership, idempotency fingerprinting, attempt lineage, active-attempt
+lock leases, duplicate-start diagnostics, and observed file-hash write
+transactions. Initial ownership admission must be atomic: if another run creates
+the run-control artifact first, the later run follows the duplicate or explicit
+resume path instead of constructing a second accepted owner. Run-control must be
+valid before runtime or public surfaces trust any later artifact in the session
+root. Retry/resume and partial-write recovery require
+separate explicit promotion before they can be trusted as active behavior.
+`maturation-convergence-ledger.yaml` is an active first-pass closure authority
+consumed by continuation-decision validation. `maturation-source-delta.yaml`
+remains a target maturation authority and is not runtime-consumable until its
+registry rows, gates, validators, and `required_when` predicates are promoted.
+
+### Cross-Cutting Authority Artifacts
+
+The following target authorities close behavior that spans seeding, maturation,
+status/result projection, replay, and MCP/API/final-output surfaces. They are not
+runtime-consumable until promoted into `reconstruct-contract-registry.yaml` with
+artifact authorities, validation authorities, gates, validators, predicates, and
+activation conditions.
+
+| Artifact | Owner | Role |
+|---|---|---|
+| `reconstruct-run-control.yaml` | runtime | atomically admitted session ownership, request fingerprint, lock lease, attempt lineage, idempotency, duplicate-start diagnostics, and observed file-hash write checkpoints |
+| `reconstruct-run-control-validation.yaml` | runtime | proves the active run atomically owns the session root and may consume or write artifacts before any semantic or public projection |
+| `reconstruct-run-control.pre-publication-validation.yaml` | runtime | immutable run-control checkpoint consumed by pre-publication claim projection before final output and final write publication mutate the final validation path |
+| `reconstruct-run-bootstrap-diagnostic.yaml` | runtime | pre-trust diagnostic envelope used only when run-control validation fails before claim projection can be trusted |
+| `claim-projection.yaml` | runtime | pre-publication strongest-honest-claim projection for status, result, MCP/API, handoff, material-kind support, and the final-output claim authority refs |
+| `claim-projection-validation.yaml` | runtime | proves claim level, decision state, actionability claim, material-kind/member support, bounded UX fields, target-material profile validation, and pre-publication run-control/registry/validation evidence closure |
+| `material-admission-ledger.yaml` | runtime | canonical admission/disposition rows for purpose-critical adequacy elements, and later source-backed material values when that phase is promoted |
+| `material-admission-ledger-validation.yaml` | runtime | proves admitted, deferred, rejected, and out-of-scope admission rows are replayable and closed downstream |
+| `source-safety-ledger.yaml` | runtime | lifecycle, authorization, privacy, redaction, proof sufficiency, and replay state for observed source records, keyed by exact observation safety row id with derived visibility policy and conservative public/material claim defaults |
+| `source-safety-ledger-validation.yaml` | runtime | proves unsafe, retired, redacted, disposed, invalidated, unauthorized, privacy-sensitive, or proof-insufficient source refs fail closed or become limitations |
+| `source-observation-lineage-index.yaml` | runtime | session-level index of every round-scoped source-observation delta, delta validation, re-entry validation, frontier kind, and added observation id consumed by answer-support validation |
+| `source-observation-lineage-index-validation.yaml` | runtime | proves the session lineage index matches valid per-round delta validations, re-entry validations, frontier kinds, and source observation ids before semantic downstream consumption |
+| `vocabulary-authority-ledger.yaml` | planned | identity, snapshot, mapping, applicability, alias, supersession, and migration rows for mutable vocabulary |
+| `vocabulary-authority-ledger-validation.yaml` | planned | proves mutable vocabulary refs remain replayable and fail closed when identity or migration cannot be resolved after registry promotion |
+| `registry-verification-evidence.yaml` | runtime | exact registry, gate, validator, source-profile, test, and implementation evidence for present-tense current/executable claims |
+| `registry-verification-evidence-validation.yaml` | runtime | proves prose current-status claims are verified, or marks them `pending_verification` and prevents runtime consumption |
+
+#### Runtime Control Authority
+
+`reconstruct-run-control.yaml` is the first durable artifact for a reconstruct
+session root. No seed, maturation, status, result, MCP/API, final-output, or
+handoff artifact may be trusted unless the current attempt has valid run-control
+ownership. Validated resume handoff from an earlier attempt is a future promoted
+protocol, not an active same-session duplicate bypass.
+
+```yaml
+schema_version: "1"
+session_id:
+session_root:
+created_at:
+runtime_version:
+request_rows:
+  - request_id:
+    idempotency_key_hash:
+    request_fingerprint:
+    target_signature_ref:
+    requested_stage: seeding | maturation | handoff | resume | retry
+    duplicate_policy: return_existing | continue_existing | reject_conflict | create_new_session
+    request_status: accepted | duplicate_same_request | duplicate_conflict | rejected_conflict
+attempt_rows:
+  - attempt_id:
+    parent_attempt_id:
+    attempt_kind: initial | retry | resume | continuation | recovery
+    trigger_ref:
+    started_at:
+    completed_at:
+    attempt_status: running | completed | failed | halted | recovered | abandoned
+    recovery_from_refs: []
+lock_rows:
+  - lock_id:
+    lock_scope: session_root | artifact_path | promotion_request | source_snapshot | registry_promotion
+    owner_attempt_id:
+    lease_started_at:
+    lease_expires_at:
+    lock_token_hash:
+    conflict_policy: fail_loud | optimistic_compare_and_swap | recover_expired_lease
+    lock_status: held | released | expired | stolen_invalid | conflict_blocked
+write_transactions:
+  - transaction_id:
+    owner_attempt_id:
+    artifact_ref:
+    temp_ref:
+    expected_prior_hash:
+    committed_hash:
+    commit_method: atomic_rename | compare_and_swap | append_only | observed_file_hash
+    transaction_status: prepared | committed | rolled_back | quarantined | failed
+    recovery_ref:
+resume_rows:
+  - resume_id:
+    resume_token_hash:
+    source_attempt_id:
+    checkpoint_refs: []
+    trusted_artifact_refs: []
+    stale_artifact_refs: []
+    required_revalidation_refs: []
+    resume_decision: resume_allowed | retry_required | blocked_conflict | blocked_stale | blocked_partial_write
+```
+
+`reconstruct-run-control-validation.yaml` must prove:
+
+- `session_root`, `request_fingerprint`, target signature, runtime version, and
+  idempotency key are replayable;
+- two concurrent attempts cannot both own the same `session_root`,
+  `artifact_path`, source snapshot, or promotion request unless an explicit
+  append-only or compare-and-swap policy allows it;
+- duplicate requests with the same fingerprint fail loud with
+  `reconstruct-run-bootstrap-diagnostic.yaml` and `safe_recovery_action:
+  return_existing` until an explicit result/status return surface is promoted;
+- duplicate requests with conflicting fingerprints fail loud before semantic
+  artifacts are written;
+- every artifact write is recorded as a transaction and either committed through
+  an atomic write method or truthfully marked as `observed_file_hash`; partial
+  files are quarantined, rolled back, or recovered before downstream validators
+  consume them;
+- retry and resume attempts are not active trust claims until a promoted retry
+  or resume surface proves source, registry, profile, and write-transaction
+  recovery without overwriting trusted artifacts from a previous attempt.
+
+Runtime-control validation is a prerequisite for all later validation gates. If
+it is absent or invalid, the only allowed public projection is a
+`claim-projection.yaml` row with `claim_level: blocked`,
+`decision_state: blocked`, and a recovery action that names the conflicting,
+partial, stale, or missing run-control authority.
+
+Exception: when run-control validation fails before `claim-projection.yaml` can
+itself be trusted, runtime may emit `reconstruct-run-bootstrap-diagnostic.yaml`.
+This diagnostic is operational only and must not carry seed validity, maturation
+readiness, actionability, material-kind support, or semantic ontology claims.
+
+```yaml
+reconstruct-run-bootstrap-diagnostic.yaml:
+  schema_version: "1"
+  emitted_at:
+  attempted_session_root:
+  request_fingerprint:
+  idempotency_key_hash:
+  failure_kind: lock_conflict | duplicate_conflict | partial_write_detected | stale_resume | invalid_request | missing_run_control
+  conflicting_refs: []
+  partial_refs: []
+  safe_recovery_action: return_existing | retry_with_new_session | resume_after_recovery | manual_cleanup_required | ask_user
+  diagnostic_source: runtime_control_bootstrap
+```
+
+This bootstrap diagnostic may be returned by status/result APIs, but it is not a
+replacement for `claim-projection.yaml`. Once a valid run-control authority
+exists, all public surfaces must return to the normal claim-projection path.
+
+#### Cross-Cutting Authority Activation Order
+
+The cross-cutting authorities must be activated in this order when their
+`required_when` condition is true. Later authorities cannot consume earlier ones
+through prose shortcuts.
+
+| Order | Authority | Required when | First consumers | Fail-close behavior |
+|---|---|---|---|---|
+| 0 | `reconstruct-run-control-validation.yaml` | any seeding, maturation, retry, resume, status, result, or public projection writes/reads session artifacts | every writer, validator, status/result reader, final-output writer, record assembler | block or return existing trusted run before semantic artifacts are consumed |
+| 1 | `registry-verification-evidence-validation.yaml` | prose or public surface claims `active`, `promoted`, `current`, `implemented`, `executable`, `ready`, or material-kind support | claim projection, final-output provenance, MCP/API/status/result, prompt packet materialization | mark `pending_verification` and prevent runtime/public consumption |
+| 2 | `source-safety-ledger-validation.yaml` | an observed source record enters context assembly, a prompt packet, source observation re-entry, evidence support, or source-backed claim | prompt-packet materialization/context assembly, source observation re-entry, source-backed evidence support | exclude, redact, limit, or block according to lifecycle, authorization, privacy, redaction, proof sufficiency, replay, and observation-specific derived prompt visibility policy |
+| 3 | `material-admission-ledger-validation.yaml` | source-backed values can affect actionability, evidence trust, dynamic boundaries, permissions, obligations, calculations, or public claims | candidate disposition, seed validation, maturation baseline, question frontier, matrix, convergence ledger | every admitted/required source-backed row must be consumed downstream or surfaced as limitation/blocked/out-of-scope |
+| planned | `vocabulary-authority-ledger-validation.yaml` | mutable profile facets, domain terms, provider/framework terms, external standards, or reference patterns need active runtime vocabulary proof | source profile selection, seed rows, maturation rows, external boundary rows, claim projection | planned authority; current runtime must not claim this validation has active coverage |
+| 5 | `claim-projection-validation.yaml` | any status/result/MCP/API/handoff surface reports success, readiness, actionability, `blocked`, `ask_user`, or material-kind support; final-output claim sections may only cite canonical refs until this closes | all public and downstream result surfaces | surfaces may not infer claim level or next action from distributed artifacts |
+
+This order is a runtime dependency order, not a user-visible workflow. A single
+implementation stage may write multiple authority artifacts together, but
+validators still consume them in the order above.
+
+#### Material Admission Authority
+
+`MaterialAdmissionAuthority` is the runtime-assembled authority for
+purpose-critical adequacy elements derived from the validated purpose adequacy
+frame. It keeps those required elements distinct from literal source-backed
+material values, which use the separate `pre_seed_material_value` phase only
+when that value-specific producer and consumer path is promoted. Domain
+competency admission is currently carried by the governing snapshot,
+competency-question generation, and competency assessment path; domain competency
+rows in `material-admission-ledger.yaml` are planned until that producer and
+consumer path is promoted.
+
+Material admission is phase-scoped so early seed construction does not require
+artifacts that exist only after seed validation or competency assessment:
+
+| Admission phase | May admit | Required before | Must not require |
+|---|---|---|---|
+| `pre_seed_purpose_element` | purpose adequacy required elements derived from source purpose | candidate disposition and seed validation when those elements affect seed claims | competency-question assessment or maturation baseline |
+| `pre_seed_material_value` | literal source-backed material values discovered from source observation | candidate disposition and seed validation when those values affect seed claims | competency-question assessment or maturation baseline |
+| `post_cq_domain_competency` | admitted domain competency questions and assessment results | handoff readiness, maturation baseline, question frontier, actionability matrix, and claim projection when domain CQs affect the claim | rewriting already validated seed rows |
+| `maturation_reassessment` | values or domain questions whose materiality changes after source delta, authority response, or maturation answer support | convergence ledger, continuation decision, and actionable ontology projection | retroactive mutation of earlier phase rows without supersession refs |
+
+The active runtime writes `pre_seed_purpose_element` rows. Later phases are
+reserved for registry promotion and must not be presented as active admission
+coverage before their producer and consumer validators exist.
+
+| Consumer | Required material-admission consumption |
+|---|---|
+| candidate disposition | every admitted purpose-critical row or required/supporting domain competency has a candidate, limitation, or out-of-scope row |
+| seed validation | every seed claim that depends on an admitted row cites its admission id |
+| maturation baseline | admitted blocker/high rows create or update baseline rows with materiality and next action |
+| question frontier | unsupported admitted blocker/high rows become frontier questions or authority requests |
+| actionability matrix | matrix rows preserve admission materiality and cannot downgrade blocker/high without validated closure |
+| convergence ledger | every admitted row is closed as answered, trace/audit-only, deferred, blocked, rejected, or out-of-scope |
+| claim projection | included, excluded, blocked, and ask-user rows cite admission ids or validated non-applicability |
+
+`material-admission-ledger-validation.yaml` must fail when an admitted or
+required row has no downstream consumer, when a diagnostic row silently affects
+actionability, or when a rejected/out-of-scope row lacks replayable evidence.
+
+#### Source Safety Authority
+
+`source-safety-ledger.yaml` is the runtime authority that turns each observed
+source record's exact safety row identity into validator-consumed state. Safety
+row identity is scoped by both observation and intended consumption:
+`source_safety:<observation_id>:<intended_consumption>`.
+
+Canonical source safety has exactly six independent validation axes:
+
+1. `lifecycle_state`
+2. `authorization_state`
+3. `privacy_state`
+4. `redaction_state`
+5. `proof_sufficiency_state`
+6. `replay_state`
+
+`visibility_tier` is not a seventh axis. It is a deterministic sink/output policy
+derived from the six canonical axes and the intended consumption
+(`prompt_context`, `evidence_support`, `public_output`, `replay`, or
+`material_claim`). Validators must preserve both the failing canonical axis and
+the derived visibility tier when they limit or block consumption. One valid
+prompt-context row never substitutes for evidence-support, public-output,
+replay, or material-claim authority.
+
+Generated source-safety rows are conservative for outward or material
+consumption. Runtime read scope can authorize internal `prompt_context`,
+`evidence_support`, and replay checks, but `public_output` and `material_claim`
+rows must remain authority-gap rows (`authorization_state: unknown`,
+`proof_sufficiency_state: insufficient_for_claim`, derived `no_prompt_use`, and
+a limitation ref) unless the observed source explicitly authorizes that exact
+intended consumption.
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+safety_rows:
+  - safety_row_id:
+    subject_ref:
+    subject_kind: source_ref
+    lifecycle_state: active | retired | disposed | invalidated | stale | missing
+    authorization_state: authorized | unauthorized | unknown | not_required
+    privacy_state: non_sensitive | privacy_sensitive | unknown
+    redaction_state: none | redacted | required | insufficient
+    proof_sufficiency_state: sufficient_for_claim | insufficient_for_claim | trace_only | unavailable
+    replay_state: replay_allowed | replay_with_redaction | no_replay_use | unknown
+    visibility_tier: consumption_allowed | internal_only | redacted_output_only | no_prompt_use | no_replay_use
+    visibility_derivation:
+      intended_consumption: prompt_context | evidence_support | public_output | replay | material_claim
+      derived_from_axes:
+        - lifecycle_state
+        - authorization_state
+        - privacy_state
+        - redaction_state
+        - proof_sufficiency_state
+        - replay_state
+      derivation_rule_ref:
+    authorization_scope_ref:
+    redaction_evidence:
+      raw_value_available: true | false
+      allowed_proof_forms: [raw_value | hash | bounded_summary | source_ref_only | unavailable]
+      redaction_rule_ref:
+    tombstone:
+      tombstone_ref:
+      reason:
+      retired_at:
+      downstream_refs: []
+    limitation_refs: []
+```
+
+The first consumer is prompt-packet materialization/context assembly. Raw source
+excerpts, document sections, spreadsheet cells, database comments, or other
+observed source values must not enter LLM-facing context until a source-safety
+row exists and validates for prompt use. If a row derives `no_prompt_use`, the
+observation is excluded from prompt payloads; redacted rows may include only
+allowed hash, bounded summary, or source-ref-only proof forms and must carry the
+limitation forward.
+
+`source-safety-ledger-validation.yaml` must be consumed by prompt-packet
+materialization/context assembly and source-observation re-entry before observed
+source rows re-enter semantic authoring. A validator must fail closed when a
+source-backed claim requires an observed source ref whose lifecycle,
+authorization, privacy, redaction, proof-sufficiency, or replay axis does not
+support the intended consumption, whose scoped safety row is missing, or whose
+derived `visibility_tier` prohibits that sink.
+
+Answer-support validation consumes `source-observation-lineage-index.yaml`,
+`source-observation-lineage-index-validation.yaml`, and
+`source-safety-ledger-validation.yaml`. A source evidence ref introduced by a
+frontier delta must resolve to the exact validated lineage row that introduced it
+and to a lineage-index validation artifact that validates the same lineage index
+ref and source-observations ref consumed by answer support. It must also resolve
+to a valid re-entry validation. The same evidence ref must also have an
+observation-specific `evidence_support` source-safety row that is sufficient for
+claim support and replay; prompt visibility alone is not material evidence
+authority.
+
+Source safety validation has six independent axes. A row can pass one axis and
+fail another; validators must preserve the specific failing axis in limitations,
+blocked rows, and public recovery text.
+
+| Axis | Required proof | Fails closed when |
+|---|---|---|
+| lifecycle | active snapshot or tombstone lineage | subject is retired, disposed, invalidated, stale, or missing for a material claim |
+| authorization | authorization scope or user/runtime authority | the run is not allowed to inspect, prompt, replay, or display the subject |
+| privacy | sensitivity classification and allowed disclosure basis | sensitive data would be exposed without an allowed disclosure basis |
+| redaction | redaction status and proof form | raw value is unavailable and bounded summary/hash is insufficient for the claim |
+| proof sufficiency | proof form matches claim level | trace-only proof is used to raise semantic or actionability level |
+| replay | replay eligibility and allowed proof form | future replay would require a raw value or authority snapshot that is not replayable |
+
+Derived visibility projection:
+
+| Derived `visibility_tier` | Projection rule |
+|---|---|
+| `no_prompt_use` | any canonical axis blocks `prompt_context` consumption, or the only allowed form is unavailable for prompt materialization |
+| `no_replay_use` | `replay_state` is `no_replay_use` or `unknown` for a replay-required material claim |
+| `redacted_output_only` | the subject may be surfaced only through an allowed redacted, hashed, bounded-summary, or source-ref-only form |
+| `internal_only` | the subject may support internal validation or evidence closure but must not appear in public output |
+| `consumption_allowed` | all six canonical axes support the row's `intended_consumption`; public disclosure is allowed only when `intended_consumption` is `public_output` |
+
+Top-level axis state fields are canonical. Nested detail fields such as
+`redaction_evidence` are supporting proof only; they must not introduce a second
+authority path for redaction or proof sufficiency. Validation must fail when a
+supporting detail contradicts its top-level canonical state.
+
+#### Mutable Vocabulary Authority
+
+External standards, provider/framework terms, and profile-owned facets can affect
+ontology claims only through `vocabulary-authority-ledger.yaml` after that
+authority is promoted. Until then, reconstruct must not project public or
+blocker/high claims that depend on unresolved mutable vocabulary proof as if the
+runtime had validated vocabulary identity.
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+vocabulary_rows:
+  - vocabulary_row_id:
+    vocabulary_kind: source_profile_facet | external_standard | provider_term | framework_term | domain_term | reference_pattern
+    vocabulary_subject_id:
+    authority_id:
+    authority_label:
+    authority_version:
+    authority_snapshot_ref:
+    definition_hash:
+    applicability: applicable | not_applicable | deferred | superseded | unknown
+    canonical_term:
+    alias_terms: []
+    maps_to_refs: []
+    affected_authority_refs: []
+    supersedes_refs: []
+    superseded_by_refs: []
+    deprecation_refs: []
+    split_from_refs: []
+    split_into_refs: []
+    merged_from_refs: []
+    merged_into_refs: []
+    promotion_refs: []
+    migration_refs: []
+    fail_close_when_unresolved: true | false
+    limitation_refs: []
+```
+
+When promoted, `vocabulary-authority-ledger-validation.yaml` must prove that
+every mutable term used by a seed, maturity row, external boundary, reference
+standard, profile facet, provider/framework category, or final claim resolves to
+an admitted vocabulary row. Unknown, duplicate, or unmigrated vocabulary identity
+fails closed when it can affect a blocker/high row or a public claim.
+
+Stable vocabulary identity is the tuple
+`vocabulary_kind + vocabulary_subject_id + authority_id + authority_version +
+authority_snapshot_ref + definition_hash`. `canonical_term`, aliases,
+supersession, deprecation, split/merge, promotion, and migration metadata are
+versioned properties of that identity, not the identity anchor itself. Public or
+blocker/high claims that use a mutable display term must cite the stable
+vocabulary row or project `blocked`/limitation until the mapping is validated.
+
+#### Registry Verification Evidence
+
+Current, promoted, active, implemented, and executable status claims require
+`registry-verification-evidence.yaml`:
+
+```yaml
+schema_version: "1"
+session_id:
+created_at:
+registry_ref:
+registry_sha256:
+active_artifact_authority_ids: []
+active_validation_gate_ids: []
+active_validator_ids: []
+required_when_predicate_ids: []
+source_profile_ids: []
+evidence_rows:
+  - evidence_id:
+    evidence_kind: registry_snapshot | artifact_authority_row | validation_gate_row | validator_row | predicate_row | source_profile_row
+    subject_id:
+    evidence_ref:
+    evidence_status: verified | pending_verification | invalid
+    evidence_hash:
+```
+
+`registry-verification-evidence-validation.yaml` must prove that any
+present-tense runtime status consumed by `claim-projection.yaml` has verified
+current-registry evidence. It must compare `registry_sha256` to the current
+registry file, compare active artifact/gate/validator/predicate/source-profile
+subject lists to `reconstruct-contract-registry.yaml`, prove every active gate
+has a validator record, prove every validator gate ref resolves to an active
+gate, prove every active gate `required_when` predicate resolves, and require a
+kind-specific verified evidence row for each current registry subject.
+`pending_verification` or `invalid` rows may appear in design prose, but runtime,
+MCP, API, status, result, and final-output surfaces must not consume them as
+executable truth.
+
+Claim projection is the only public-surface gate for success, readiness,
+actionability, `blocked`, and `ask_user`. Status/result/MCP/API/final-output
+writers may read underlying validation artifacts for diagnostics, but the label,
+machine status, next required authority, excluded scope, material-kind support,
+and recovery action must come from a validated `claim-projection.yaml` row.
 
 ## 12. Runtime Validation Plan
 
-Runtime validation should be deterministic and fail loud.
+Runtime validation should be deterministic and fail loud. The list below is the
+target validation catalog for this recomposition. A responsibility tied to a
+planned artifact or planned gate becomes an active runtime responsibility only
+when that artifact or gate is registry-backed, requested/promoted through the
+planned registry catalogs, or explicitly named by the current implementation
+stage.
 
 Validation responsibilities:
 
+- reconstruct run-control validation for session ownership, idempotency
+  fingerprinting, active locks, duplicate-start diagnostics, observed file-hash
+  write checkpoints, and conflict handling
 - schema parse and required field checks
 - allowed enum checks
 - id uniqueness
 - cross-reference closure
 - evidence-ref closure
 - material-kind/source-ref alignment
+- maturation source-delta fact recording and no-delta authority validation
+- maturation source-impact judgment validation before any actionability-impact
+  claim is consumed
 - pre-use round lineage, frontier-to-observation closure, and post-use
   observation re-entry closure
 - seed layer closure
@@ -1882,6 +2903,21 @@ Validation responsibilities:
 - ontology-facing mapping or limitation coverage
 - competency-question coverage and assessment trace
 - failure classification and revision proposal bounds
+- maturation convergence-ledger closure for every blocker/high question and
+  source-delta row
+- final re-question pass validation before actionable-ready projection
+- claim-projection validation for every public or downstream claim surface
+- material-admission validation for purpose-critical adequacy elements, with
+  source-backed material values only after their phase is promoted
+- source-safety validation before prompt-packet materialization/context assembly
+  and for lifecycle, authorization, privacy, redaction, proof sufficiency, replay
+  eligibility, and derived visibility projection
+- planned mutable-vocabulary validation for external/profile/provider/framework
+  terms after registry promotion
+- registry-verification evidence validation for current/executable status claims
+- cross-cutting authority activation-order validation before any public or
+  downstream surface consumes readiness, actionability, material-kind support,
+  blocked, or ask-user claims
 - stop-decision and handoff-validation consistency
 - registry-selected artifact, gate, profile, lens judgment, and readiness
   projection consistency
@@ -1891,6 +2927,39 @@ Validation responsibilities:
 
 Runtime may calculate metrics from artifacts, but metrics are not semantic truth.
 
+### Source Safety And Artifact Lifecycle
+
+Source material, authority responses, code comments, document text, spreadsheet
+cells, database comments, and user-provided target content are data, not
+instruction authority. Prompt packets must label those excerpts as untrusted
+source evidence and keep system/developer/runtime contract instructions separate.
+
+Safety and lifecycle rules:
+
+- source text cannot override active reconstruct contracts, registry predicates,
+  validators, tool policies, or user-confirmed run scope;
+- prompt packets include only the minimum source excerpts needed for the current
+  stage and preserve refs so omitted context can be audited;
+- secrets, credentials, personal data, and sensitive business values are redacted
+  from user-facing prose unless the user explicitly authorizes disclosure for the
+  run; artifact truth may preserve hashes, refs, labels, or bounded summaries
+  instead of raw sensitive text;
+- authority responses record identity, scope, timestamp/version, and replay
+  eligibility, and unavailable or rejected authority responses remain visible as
+  limitations or blocked rows;
+- stale source snapshots, stale profile snapshots, and unresolved migration refs
+  cannot be treated as current authority;
+- retirement, disposal, or redaction of an artifact must leave an audit-visible
+  tombstone with artifact ref, hash when available, lifecycle state, reason, and
+  downstream refs that can no longer be trusted; and
+- replay must fail closed when a required source ref, redacted value, retired
+  artifact, or authority snapshot is needed to prove a material claim.
+
+These prose rules are implementation guidance only until
+`source-safety-ledger.yaml` and `source-safety-ledger-validation.yaml` are
+promoted. After promotion, validators consume the ledger rather than re-reading
+this prose.
+
 ## 13. Prompt Plan
 
 Prompt packets should give the host LLM:
@@ -1898,6 +2967,8 @@ Prompt packets should give the host LLM:
 - reconstruct intent, target refs, and source-derived purpose evidence
 - material profile
 - compact source observations
+- source-delta and no-delta validation artifacts when the run is resumed or the
+  source authority changed
 - full artifact ref locations
 - active seed contract
 - required output schema for the current stage
@@ -1905,6 +2976,8 @@ Prompt packets should give the host LLM:
 - selected registry snapshot, source profile ids, and reconstruct lens ids
 - validator ids, validator versions, and prior validation failure artifacts when
   retrying
+- convergence ledger and actionability matrix rows from prior maturation rounds
+  when continuing
 
 Prompt packets must not include development history. If the model needs to know
 why a previous attempt failed, it should receive the validation artifact, not
@@ -1940,11 +3013,29 @@ metadata. Example:
 - unresolved actor or permission gaps
 - actions found without writeback evidence
 - source areas that changed the frontier
+- source-delta fact state, including no-delta, changed source, unavailable
+  source, comparison-unavailable, and member-set changes
+- validated source-impact judgment, including semantic-action delta,
+  evidence-strength delta, trace/audit-only delta, and authority gap
+- material questions closed without semantic change
 - validation gates that passed or failed
 
 No separate HTML UI is required. CLI/MCP hosts should receive progress through
 LLM-presentable status text, status polling, and native progress notifications
 where supported.
+
+User-facing status and result surfaces should be machine-readable as well as
+readable text. They must not rely on color alone, must include explicit timezone
+and source for timestamps, and must preserve locale-sensitive values such as
+currency, dates, decimal separators, and units with enough source context for
+replay. Public UI accessibility is outside this implementation slice, but CLI and
+MCP projections still need these bounded output guarantees.
+
+After `claim-projection.yaml` promotion, bounded UX fields in the claim
+projection row are the output contract for CLI, MCP, API, status, result, and
+handoff surfaces. `final-output-provenance-validation.yaml` must verify that
+human-readable text cites the canonical claim-projection refs and does not
+invent claim labels before the runtime projection is published.
 
 ## 15. Implementation Sequence
 
@@ -1969,10 +3060,19 @@ Implementation file map:
 | active docs and user-facing guide | this document, `operational-ontology-seed-contract.md`, `README.md`, `IMPLEMENTATION_MAP.html` |
 
 Current implementation has promoted seeding source-purpose authority and the
-first-pass maturation surface M1-M4. Multi-round source-observation delta,
-source-observation re-entry validation, proof authorities, and final
-`actionable-ontology.yaml` projection remain planned until their runtime gates
-and validators are real behavior.
+registry-backed first-pass maturation authorities that existed before this
+source-delta and convergence-ledger refinement: baseline, actionability matrix,
+question frontier, closure frontier, answer support, answer claims, ontology
+expansion, and continuation decision. Multi-round source-observation delta and
+source-observation re-entry validation are also active for frontier-triggered
+observations before they re-enter prompt/context semantic authoring or
+answer-support consumption. The
+maturation source-delta authority, final re-question pass generation, and proof
+authorities remain planned until their registry rows, runtime gates, and
+validators are real behavior. The optional `actionable-ontology.yaml`
+projection is active for `actionable_limited` or `actionable_ready` continuation
+states and is validated as a runtime projection of existing seed, expansion,
+matrix, convergence, and continuation authorities.
 
 Required test path for each implementation slice:
 
@@ -1984,6 +3084,38 @@ Required test path for each implementation slice:
 6. for release or merge, run one real-source reconstruct E2E and verify the first
    invalid gate fails loud or the seed/maturation artifacts pass with named
    limitations.
+
+Material-kind support claims require material-specific evidence:
+
+| Support claim | Meaning | Minimum verification |
+|---|---|---|
+| `unsupported` | runtime recognizes the material kind but cannot run it | fail-loud unsupported or clarify halt |
+| `profile_supported` | a source profile can be selected and validated | profile parser and material-profile validation tests |
+| `fixture_validated` | deterministic fixtures prove structural observation and validation | fixture tests for source observations, purpose adequacy, and failure cases |
+| `golden_source_validated` | a curated non-trivial target proves expected semantic artifacts | golden-source run with checked artifact refs and limitations |
+| `real_source_validated` | an external real target proves the path under realistic source noise | real-source E2E with artifacts, validation results, and first-failure visibility |
+| `release_supported` | the material kind can be claimed in user-facing docs/API | golden or real-source validation plus fail-loud unsupported/mixed-member behavior |
+
+A code repository E2E proves `code` support only. Spreadsheet, document,
+database, meeting-record, and mixed support each need their own support claim and
+evidence. `mixed` can be release-supported only when every member kind has a
+verified path or a limitation-backed unsupported member state.
+
+Current public projection is constrained to `unsupported` and
+`profile_supported`. `fixture_validated`, `golden_source_validated`,
+`real_source_validated`, and `release_supported` remain taxonomy states until
+their material-specific evidence artifacts and validators are wired.
+
+Per-kind release evidence requirements:
+
+| Material kind | Release-supported only when |
+|---|---|
+| `code` | real or golden repository run proves file/module/service observation, purpose inference or confirmation, actor/object/action/data-binding extraction, dependency and external-boundary mapping, validation failure visibility, and artifact refs |
+| `document` | real or golden document run proves section/heading/decision/action-item observation, purpose extraction or inference, citation-preserving evidence refs, source-safety/redaction handling, and limitation output for ambiguous prose |
+| `spreadsheet` | real or golden workbook run proves sheet/range/named-range/formula/decision-cell observation, source values and derived outputs are distinguished, formula or calculation evidence is replayable, and stale workbook or hidden-sheet gaps fail loud |
+| `database` | real or golden database/schema snapshot proves table/view/key/grant/default/derived-view observation, sampled evidence boundaries are explicit, permission and retention constraints are represented, and unavailable credentials or schema drift block/limit claims |
+| `meeting_record` | real or golden meeting artifact proves participants, decisions, action owners, due dates, open questions, and unresolved policy decisions are extracted as purpose-relevant evidence without inventing workflow paths |
+| `mixed` | every member kind has its own validated support claim, cross-member refs preserve lineage, unsupported members are limitation-backed, and no member's evidence is used as a substitute for another kind |
 
 ### Stage 0. Registry And Projection Substrate
 
@@ -2068,9 +3200,12 @@ Expected result:
 - validation phases are split into seed-shape, question coverage, question
   assessment, confirmation, and seed iteration readiness validation
 - active source-frontier validation records dependency proof on
-  `target-material-profile-validation.yaml`; source-observation deltas,
-  admission lineage, and post-use re-entry validation remain planned gates until
-  their validators are promoted in the registry
+  `target-material-profile-validation.yaml`; source-observation delta validation
+  and source-observation re-entry validation are active gates for
+  frontier-triggered observations, and `source-observation-lineage-index.yaml`
+  plus `source-observation-lineage-index-validation.yaml` preserve and validate
+  every round delta/re-entry ref before answer-support validation consumes newly
+  observed evidence
 - target material profile facts and material profile gate status are separated
   into `target-material-profile.yaml` and `target-material-profile-validation.yaml`
 - source frontier validation is represented by `source_frontier_gate`
@@ -2087,8 +3222,9 @@ Expected result:
   it must not require downstream competency-question ids before
   `competency-questions.yaml` is authored
 - source-frontier validation owns duplicate/inventory/upstream material-profile
-  checks; planned round-lineage and observation-reentry validators own pre-use
-  lineage and downstream re-entry checks after promotion
+  checks; active round-lineage and observation-reentry validators own pre-use
+  lineage and safety-gated prompt/context re-entry plus answer-support
+  consumption checks
 - failure classification and revision proposal validators run when required
   applicable validation artifacts are missing, gates fail, or halt conditions
   occur
@@ -2124,6 +3260,10 @@ Expected result:
 - maturation begins from validated seed artifacts and does not rerun seeding
 - `maturation-baseline.yaml` records the immutable starting matrix and
   `maturation-baseline-validation.yaml` proves its derivation
+- `maturation-source-delta.yaml` records whether the consumed source authority is
+  unchanged, changed, unavailable, or incomparable for the current maturation
+  round; `maturation-source-delta-validation.yaml` proves the classification and
+  member lineage after the artifact is promoted into the registry
 - `actionability-matrix.yaml` records the current derived projection and
   `actionability-matrix-validation.yaml` proves recomputation from validated
   baseline plus validated maturation deltas
@@ -2139,13 +3279,27 @@ Expected result:
   authority that answer support and continuation logic consume
 - `maturation-answer-claims.yaml` and `ontology-expansion.yaml` author bounded
   semantic changes from validated evidence only
+- `ontology-expansion.yaml` does not contain trace/audit-only or evidence-only
+  no-op operations; after convergence-ledger promotion, those close through
+  `maturation-convergence-ledger.yaml`
 - `actionability-matrix.yaml` records L0-L4 levels for static, kinetic, and
   dynamic surfaces across the seven dimensions, including
   `aggregate_readiness_effect` for mixed-member and aggregate rows
+- `maturation-convergence-ledger.yaml` records every material question and
+  round source-observation delta ref as answered-and-expanded,
+  answered-without-semantic-change,
+  trace/audit-only, deferred, blocked, rejected non-material, or out of scope;
+  its active validation proves blocker/high rows are not hidden before
+  continuation is projected
 - `maturation-continuation-decision.yaml` projects `continue`, `ask_user`, `blocked`,
   `actionable_limited`, or `actionable_ready`
-- `maturation-continuation-decision-validation.yaml` proves the projection follows the
-  validated matrix and any applicable frontier/evidence authorities
+- `maturation-continuation-decision-validation.yaml` proves the projection
+  follows the validated matrix, active convergence ledger, and any applicable
+  frontier/evidence authorities; promoted source-delta authorities are consumed
+  when activated
+- final re-question pass is recorded inside the convergence ledger as `not_run`
+  in the current first-pass implementation; it becomes required before
+  `actionable_ready` is claimed by final actionable ontology projection
 - `actionable-ontology.yaml` is emitted only when final actionability validation
   passes or a bounded limited projection is explicit
 
@@ -2171,52 +3325,125 @@ Expected result:
 - review over the produced seed can evaluate seed adequacy and maturation
   frontier without needing development history
 - failures are visible at the first invalid gate
+- material-kind support is reported with the highest proven support claim for
+  each kind, not inferred from a different material kind's E2E.
+
+### Stage 8. Operations And Runtime Governance
+
+Expected result:
+
+- reconstruct run-control records request fingerprint, idempotency key, lock
+  lease, attempt lineage, duplicate-start diagnostics, and observed file-hash
+  transactions before later artifacts are trusted
+- run-control failures before claim projection emit only
+  `reconstruct-run-bootstrap-diagnostic.yaml` with operational recovery data, not
+  seed validity, maturation readiness, material-kind support, or actionability
+- reconstruct run manifests record provider route, model, execution profile,
+  runtime version, registry snapshot, source profile snapshots, and validator
+  versions without secrets
+- duplicate requests with matching fingerprints fail loud with a return-existing
+  diagnostic until an explicit result/status return surface is promoted;
+  duplicate requests with conflicting fingerprints fail loud before semantic
+  artifacts are written
+- partial artifact writes are rolled back, quarantined, or recovered through a
+  recorded write transaction before downstream validators consume the path
+- failed or halted runs classify provider outage, tool failure, validation
+  failure, source access failure, source drift, unsupported predicate, and
+  authority-unavailable incidents separately
+- retry is allowed only from recorded validation failure, revision proposal, or
+  explicit user/runtime authority; retry must not hide the first failed gate
+- status/result APIs expose diagnostic artifact refs, halt reason, recovery
+  option, and next safe action
+- drift checks compare active registry/profile/validator snapshots against the
+  run manifest before resumed maturation consumes old artifacts
+- operational incidents do not create ontology meaning; they close through
+  failure classification, revision proposal, limitations, or blocked state.
+
+Broader operated-system governance that is outside a reconstruct run is delegated
+to a future operations authority document. Until that document exists and is
+linked from the registry, this recomposition may claim only run-level governance,
+not release health, rollback, quota, resource-exhaustion, or post-incident
+program completeness.
 
 ## 16. Completion Definition For This Recomposition
 
 The recomposition is implemented when a fresh reconstruct run against a real
 target produces:
 
-1. material-aware source observations,
-2. source-purpose candidates, purpose candidate validation, and purpose
+1. `reconstruct-run-control.yaml` and validation proving session ownership,
+   idempotency fingerprinting, active-attempt lock ownership, duplicate-start
+   diagnostics, and observed file-hash write checkpoints, or a bootstrap
+   diagnostic when run-control validation fails before trust can be established,
+2. material-aware source observations,
+3. source-purpose candidates, purpose candidate validation, and purpose
    confirmation validation when required,
-3. candidate inventory and disposition with purpose-element and actionability
+4. candidate inventory and disposition with purpose-element and actionability
    surface mapping,
-4. `ontology-seed.yaml` using the active seed contract,
-5. source-derived purpose and purpose adequacy evidence closure,
-6. user confirmation for inferred purpose when direct source purpose is absent,
-7. deterministic validation artifacts for every gate,
-8. canonical candidate-disposition, competency-question, assessment, and
+5. `ontology-seed.yaml` using the active seed contract,
+6. source-derived purpose and purpose adequacy evidence closure,
+7. user confirmation for inferred purpose when direct source purpose is absent,
+8. deterministic validation artifacts for every gate,
+9. canonical candidate-disposition, competency-question, assessment, and
    handoff-validation authorities, including diagnostic or claim-based P3
    competency-question disposition when ontology domain competency admission is present,
-9. active source-frontier dependency validation, plus promoted pre-use lineage
-   and post-use re-entry validation when multi-round validators become active,
-10. registry ref/hash plus active contract ref/hash, source profile migration,
+10. phase-scoped material admission rows and validation for pre-seed purpose
+    elements, literal material-value rows, post-CQ domain competency rows, and
+    maturation reassessment rows when each phase is applicable,
+11. active source-frontier dependency validation, round source-observation
+   delta/re-entry validation, and a validated session lineage index that
+   preserves each newly observed source before answer-support consumption,
+12. registry ref/hash plus active contract ref/hash, source profile migration,
    lens judgment, concrete gate-instance, validator, reference-standard,
    pattern-catalog URI/snapshot, and readiness-projection snapshots,
-11. separate process-completion and seed-validity reporting,
-12. final output that explains `OntologySeed` content, source-derived purpose,
-   purpose adequacy frame, seed iteration readiness, maturation frontier, and
-   limitations, and
-13. a reconstruct record whose artifact refs are the source of truth.
+13. separate process-completion and seed-validity reporting,
+14. final output that explains `OntologySeed` content, source-derived purpose,
+    purpose adequacy frame, seed iteration readiness, maturation frontier, and
+    limitations, and
+15. a reconstruct record whose artifact refs are the source of truth,
+16. claim projection rows and validation for status/result/MCP/API surfaces when
+    those surfaces claim readiness, actionability, or material-kind support,
+    citing `target-material-profile-validation.yaml` and the immutable
+    pre-publication run-control checkpoint, and final-output claim sections that
+    cite the canonical refs without restating pre-publication claim values,
+17. source-safety authority rows and validations when observed source lifecycle,
+    redaction, privacy, or authorization affects prompt/context use, plus planned
+    mutable-vocabulary authority rows after registry promotion when external
+    standards, provider/framework terms, or profile-owned facets affect a
+    material claim,
+    and
+18. registry-verification evidence for any present-tense active, promoted,
+    current, implemented, or executable claim.
 
-The full maturation stage is implemented when a fresh run can continue from that
-seed and produce:
+The full maturation stage is implemented when the required target artifacts are
+promoted into the registry and a fresh run can continue from that seed and
+produce:
 
-1. `maturation-runtime-capability-profile.yaml`,
+1. valid reconstruct run-control ownership or resume authorization for the
+   maturation attempt,
+2. `maturation-runtime-capability-profile.yaml`,
    `maturation-promotion-request.yaml`, `maturation-promotion-readiness.yaml`,
    and their validations when planned maturation gates are promoted or maturation
    execution is requested,
-2. `maturation-baseline.yaml` and validation,
-3. `actionability-matrix.yaml` and validation,
-4. `maturation-question-frontier.yaml` and validation,
-5. `maturation-closure-frontier.yaml` and validation when additional evidence is
+3. `maturation-baseline.yaml` and validation,
+4. `maturation-source-delta.yaml` and validation when the source authority must
+   be proven unchanged, unavailable, comparison-unavailable, or changed, plus
+   source-impact judgment validation when a changed fact can affect actionability,
+5. `actionability-matrix.yaml` and validation,
+6. `maturation-question-frontier.yaml` and validation,
+7. `maturation-closure-frontier.yaml` and validation when additional evidence is
    needed,
-6. `answer-support-ledger.yaml` and validation,
-7. `maturation-authority-response.yaml` and validation when user,
+8. `answer-support-ledger.yaml` and validation,
+9. `maturation-authority-response.yaml` and validation when user,
    runtime-capability, external-system, or domain-standard authority is needed,
-8. `maturation-answer-claims.yaml` and validation,
-9. `ontology-expansion.yaml` and validation,
-10. `maturation-continuation-decision.yaml` and validation, and
-11. `actionable-ontology.yaml` plus validation when readiness is
+10. `maturation-answer-claims.yaml` and validation,
+11. `ontology-expansion.yaml` and validation,
+12. `maturation-convergence-ledger.yaml` and validation,
+13. `maturation-continuation-decision.yaml` and validation,
+14. final re-question convergence evidence recorded inside the convergence
+   ledger and consumed by continuation-decision validation, and
+15. `claim-projection.yaml` plus validation for every public or downstream
+   maturation/actionability claim,
+16. source-delta impact judgment validation when source freshness can affect a
+   material row, and
+17. `actionable-ontology.yaml` plus validation when readiness is
    `actionable_limited` or `actionable_ready`.

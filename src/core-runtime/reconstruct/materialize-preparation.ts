@@ -206,6 +206,11 @@ async function textStats(ref: string): Promise<{
 
 export async function buildReconstructSourceObservation(
   detection: TargetMaterialRefDetection,
+  lineage?: {
+    roundId?: string | null;
+    observationBatchId?: string | null;
+    triggeringFrontierValidationRef?: string | null;
+  },
 ): Promise<ReconstructSourceObservation | null> {
   if (!detection.exists || !isConcreteTargetMaterialKind(detection.kind)) {
     return null;
@@ -225,6 +230,11 @@ export async function buildReconstructSourceObservation(
       sourceRef: detection.ref,
       location,
     }),
+    round_id: lineage?.roundId ?? "initial_source_frontier",
+    observation_batch_id:
+      lineage?.observationBatchId ?? "source-observation-batch:initial",
+    triggering_frontier_validation_ref:
+      lineage?.triggeringFrontierValidationRef ?? null,
     target_material_kind: detection.kind,
     adapter_id: `minimal-${detection.kind}-structure-observer`,
     source_ref: detection.ref,

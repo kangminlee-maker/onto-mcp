@@ -7,6 +7,7 @@ import type {
   ReconstructOntologySeedValidationArtifact,
   ReconstructOntologySeedArtifact,
   ReconstructCandidateDispositionValidationArtifact,
+  ReconstructClaimProjectionValidationArtifact,
   ReconstructCompetencyQuestionsArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructRecordArtifact,
@@ -15,6 +16,10 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructRegistryVerificationEvidenceValidationArtifact,
+  ReconstructSourceObservationDeltaArtifact,
+  ReconstructSourceObservationDeltaValidationArtifact,
+  ReconstructSourceObservationReentryValidationArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationsArtifact,
   ReconstructStopDecisionArtifact,
@@ -30,6 +35,9 @@ import type { ReconstructConfirmationProvider } from "./run.js";
 import {
   ontologySeedClaimProjections,
 } from "./seed-claim-projections.js";
+import {
+  loadReconstructContractRegistry,
+} from "./contract-registry.js";
 import type { LlmCallResult } from "../llm/llm-caller.js";
 
 const tmpRoots: string[] = [];
@@ -221,6 +229,300 @@ function ontologyHandoffFixture(args: {
 }
 
 describe("runReconstruct", () => {
+  it("repairs source purpose contradiction status mismatches with focused authorship", async () => {
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "session-purpose-repair",
+      created_at: "2026-06-02T00:00:00.000Z",
+      observations: [
+        {
+          observation_id: "obs-purpose",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/purpose.ts",
+          location: "/tmp/purpose.ts",
+          summary: "purpose source",
+          structural_data: { content_excerpt: "export const purpose = true;" },
+        },
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    let repairPayload: Record<string, any> | null = null;
+    const llmCall = (systemPrompt: string, userPrompt: string): Promise<LlmCallResult> => {
+      let text: string;
+      if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+        text = JSON.stringify({
+          purpose_candidates: [
+            {
+              purpose_candidate_id: "purpose-primary",
+              statement: "Explain the primary source-declared purpose.",
+              rank: "primary",
+              purpose_source_status: "explicit_source_declared",
+              evidence_kind_refs: ["P1"],
+              supporting_evidence_observation_ids: ["obs-purpose"],
+              contradicting_source_refs: ["/tmp/deferred-scope.ts"],
+              adequacy_frame: {
+                frame_id: "frame-primary",
+                frame_kind: "operational_ontology_seed",
+                frame_status: "source_declared",
+                adequacy_claim: "The seed should model the primary purpose.",
+                material_kind_requirements: {
+                  target_material_kind: "code",
+                  required_facets: ["purpose"],
+                  optional_facets: [],
+                  rationale: "The fixture is code material.",
+                },
+                required_elements: [
+                  {
+                    element_id: "purpose-element-primary",
+                    element_kind: "concept",
+                    material_facet_kind: "purpose",
+                    description: "Primary purpose element.",
+                    actionability_surface_refs: ["static_surface"],
+                    maturity_dimension_refs: ["intent", "evidence"],
+                    member_scope_refs: ["observation:obs-purpose"],
+                    member_target_material_kind: "code",
+                    member_source_refs: ["/tmp/purpose.ts"],
+                    cross_material_ref_refs: ["/tmp/purpose.ts"],
+                    supporting_evidence_observation_ids: ["obs-purpose"],
+                    expected_seed_ref_families: ["conceptual_frame.concepts"],
+                    closure_expectation: "model_or_limit",
+                  },
+                ],
+              },
+              ranking_rationale: "Primary purpose is directly declared.",
+              limitation_refs: [],
+            },
+          ],
+          selection: {
+            primary_purpose_candidate_id: "purpose-primary",
+            selection_basis: "Fixture selects the primary purpose.",
+            confirmation_policy_hint: "No confirmation needed.",
+            unresolved_reason: null,
+          },
+        });
+      } else if (systemPrompt.includes("Repair source-purpose-candidates.yaml contradiction semantics only")) {
+        repairPayload = JSON.parse(userPrompt) as Record<string, any>;
+        text = JSON.stringify({
+          candidate_updates: [
+            {
+              purpose_candidate_id: "purpose-primary",
+              purpose_source_status: "explicit_source_declared",
+              adequacy_frame_status: "source_declared",
+              contradicting_source_refs: [],
+              limitation_refs: ["deferred-scope:/tmp/deferred-scope.ts"],
+              ranking_rationale:
+                "Deferred scope is preserved as a limitation, not as a contradiction to the primary purpose.",
+            },
+          ],
+        });
+      } else {
+        throw new Error(`unexpected prompt: ${systemPrompt.slice(0, 80)}`);
+      }
+      return Promise.resolve({
+        text,
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "fake-live-model",
+        effective_base_url: "test://fake-live",
+        declared_billing_mode: "local",
+      });
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({ llmCall });
+    const artifact = await author.writeSourcePurposeCandidates({
+      sessionId: "session-purpose-repair",
+      intent: "Create source purpose candidates.",
+      targetMaterialProfile: {
+        schema_version: "1",
+        session_id: "session-purpose-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        target_refs: ["/tmp/purpose.ts"],
+        target_material_kind: "code",
+        target_material_kind_candidates: ["code"],
+        support_status: "supported",
+        unsupported_reason: null,
+        selected_source_profiles: [],
+        detection: {
+          owner: "runtime_heuristic",
+          confidence: 1,
+          confidence_basis: "fixture",
+          per_ref: [
+            {
+              ref: "/tmp/purpose.ts",
+              exists: true,
+              kind: "code",
+              confidence: 1,
+              confidence_basis: "fixture",
+            },
+          ],
+        },
+      },
+      sourceObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceObservationDirective: {
+        schema_version: "1",
+        session_id: "session-purpose-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        selected_observations: [
+          {
+            observation_id: "obs-purpose",
+            target_material_kind: "code",
+            source_ref: "/tmp/purpose.ts",
+            location: "/tmp/purpose.ts",
+            selection_rationale: "purpose evidence",
+          },
+        ],
+        open_questions: [],
+      },
+      lensJudgmentIndex: {} as any,
+      explorationSynthesis: {} as any,
+      sourceFrontierValidation: {} as any,
+    });
+
+    expect(repairPayload?.repair_targets).toEqual([
+      expect.objectContaining({
+        purpose_candidate_id: "purpose-primary",
+        contradicting_source_refs: ["/tmp/deferred-scope.ts"],
+      }),
+    ]);
+    expect(artifact.purpose_candidates[0]?.purpose_source_status)
+      .toBe("explicit_source_declared");
+    expect(artifact.purpose_candidates[0]?.contradicting_source_refs).toEqual([]);
+    expect(artifact.purpose_candidates[0]?.limitation_refs)
+      .toEqual(["deferred-scope:/tmp/deferred-scope.ts"]);
+  });
+
+  it("repairs candidate inventory coverage gaps with focused authorship", async () => {
+    const registry = await loadReconstructContractRegistry({
+      registryPath: path.resolve(
+        ".onto/processes/reconstruct/reconstruct-contract-registry.yaml",
+      ),
+    });
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "session-coverage-repair",
+      created_at: "2026-06-02T00:00:00.000Z",
+      observations: [
+        {
+          observation_id: "obs-covered",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/covered.ts",
+          location: "/tmp/covered.ts",
+          summary: "covered source",
+          structural_data: { content_excerpt: "export const covered = true;" },
+        },
+        {
+          observation_id: "obs-missing",
+          round_id: "round-1",
+          observation_batch_id: "batch-1",
+          triggering_frontier_validation_ref: null,
+          target_material_kind: "code",
+          adapter_id: "minimal-code-structure-observer",
+          source_ref: "/tmp/missing.ts",
+          location: "/tmp/missing.ts",
+          summary: "missing coverage source",
+          structural_data: { content_excerpt: "export const missing = true;" },
+        },
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    let repairPayload: Record<string, any> | null = null;
+    const llmCall = (systemPrompt: string, userPrompt: string): Promise<LlmCallResult> => {
+      let text: string;
+      if (systemPrompt.includes("Author candidate-inventory.yaml")) {
+        text = JSON.stringify({
+          candidates: [
+            {
+              candidate_id: "candidate-covered",
+              candidate_kind: "object",
+              name: "Covered Candidate",
+              description: "The first observation is covered by the initial authoring.",
+              salience: "high",
+              evidence_observation_ids: ["obs-covered"],
+            },
+          ],
+        });
+      } else if (systemPrompt.includes("Repair candidate-inventory.yaml coverage only")) {
+        repairPayload = JSON.parse(userPrompt) as Record<string, any>;
+        text = JSON.stringify({
+          additional_candidates: [
+            {
+              candidate_id: "candidate-coverage-obs-missing",
+              candidate_kind: "other",
+              name: "Missing Observation Coverage",
+              description:
+                "Preserve the missing observation as low-salience evidence coverage for disposition.",
+              salience: "low",
+              evidence_observation_ids: ["obs-missing"],
+            },
+          ],
+        });
+      } else {
+        throw new Error(`unexpected prompt: ${systemPrompt.slice(0, 80)}`);
+      }
+      return Promise.resolve({
+        text,
+        input_tokens: 1,
+        output_tokens: 1,
+        model_id: "fake-live-model",
+        effective_base_url: "test://fake-live",
+        declared_billing_mode: "local",
+      });
+    };
+    const author = createDirectCallReconstructDirectiveAuthor({ llmCall });
+    const inventory = await author.writeCandidateInventory({
+      sessionId: "session-coverage-repair",
+      intent: "Create a coverage-complete candidate inventory.",
+      sourcePurposeCandidates: {} as any,
+      sourcePurposeCandidatesValidation: {} as any,
+      purposeConfirmationValidation: {} as any,
+      materialAdmissionLedger: {
+        schema_version: "1",
+        session_id: "session-coverage-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        admission_rows: [],
+      } as any,
+      materialAdmissionLedgerRef: "material-admission-ledger.yaml",
+      sourceObservations,
+      sourceObservationsRef: "source-observations.yaml",
+      sourceObservationDirective: {
+        schema_version: "1",
+        session_id: "session-coverage-repair",
+        created_at: "2026-06-02T00:00:00.000Z",
+        selected_observations: sourceObservations.observations.map((observation) => ({
+          observation_id: observation.observation_id,
+          target_material_kind: observation.target_material_kind,
+          source_ref: observation.source_ref,
+          location: observation.location,
+          selection_rationale: "required for coverage repair test",
+        })),
+        open_questions: [],
+      },
+      lensJudgmentIndex: {} as any,
+      explorationSynthesis: {} as any,
+      sourceFrontierValidation: {} as any,
+      contractRegistry: registry,
+    });
+
+    expect(repairPayload?.missing_coverage_observation_ids).toEqual(["obs-missing"]);
+    expect(inventory.candidates.map((candidate) => candidate.candidate_id))
+      .toEqual(["candidate-covered", "candidate-coverage-obs-missing"]);
+    expect(
+      inventory.candidates.flatMap((candidate) =>
+        candidate.evidence_refs.map((evidence) => evidence.observation_id)
+      ),
+    ).toEqual(["obs-covered", "obs-missing"]);
+  });
+
   it("compacts lens judgment payloads before exploration synthesis", async () => {
     let capturedPayload: Record<string, any> | null = null;
     const author = createDirectCallReconstructDirectiveAuthor({
@@ -1230,7 +1532,10 @@ describe("runReconstruct", () => {
           title: "Fixture Service Actionable Seed",
           target_refs: [firstSourceRef],
           generated_at: "2026-05-29T00:00:00.000Z",
-          authoring_profile: "fixture-live-author",
+          authoring_profile: {
+            profile_id: "fixture-live-author",
+            mode: "object-returned-by-host-llm",
+          },
         },
         purpose: {
           reconstruct_intent: input.intent ?? "Create a live reconstruct Seed from the code target.",
@@ -1733,6 +2038,14 @@ describe("runReconstruct", () => {
       await readYaml<ReconstructHandoffDecisionValidationArtifact>(
         record.artifact_refs.handoff_decision_validation!,
       );
+    const claimProjectionValidation =
+      await readYaml<ReconstructClaimProjectionValidationArtifact>(
+        record.artifact_refs.claim_projection_validation!,
+      );
+    const registryVerificationEvidenceValidation =
+      await readYaml<ReconstructRegistryVerificationEvidenceValidationArtifact>(
+        record.artifact_refs.registry_verification_evidence_validation!,
+      );
     const preHandoffManifest = await readYaml<ReconstructRunManifestArtifact>(
       path.join(sessionRoot, "reconstruct-run-manifest.pre-handoff.yaml"),
     );
@@ -1746,6 +2059,16 @@ describe("runReconstruct", () => {
       );
 
     expect(record.artifact_refs.final_output).toBe(result.finalOutputPath);
+    expect(record.artifact_refs.reconstruct_run_control)
+      .toContain("reconstruct-run-control.yaml");
+    expect(record.artifact_refs.reconstruct_run_control_validation)
+      .toContain("reconstruct-run-control-validation.yaml");
+    expect(record.artifact_refs.reconstruct_run_bootstrap_diagnostic)
+      .toBeNull();
+    expect(record.artifact_refs.registry_verification_evidence)
+      .toContain("registry-verification-evidence.yaml");
+    expect(record.artifact_refs.registry_verification_evidence_validation)
+      .toContain("registry-verification-evidence-validation.yaml");
     expect(record.artifact_refs.reconstruct_run_manifest)
       .toBe(result.reconstructRunManifestPath);
     expect(record.artifact_refs.pre_handoff_run_manifest_validation)
@@ -1754,6 +2077,10 @@ describe("runReconstruct", () => {
       .toContain("reconstruct-run-manifest.post-publication-validation.yaml");
     expect(record.artifact_refs.handoff_decision_validation)
       .toContain("handoff-decision-validation.yaml");
+    expect(record.artifact_refs.claim_projection)
+      .toContain("claim-projection.yaml");
+    expect(record.artifact_refs.claim_projection_validation)
+      .toContain("claim-projection-validation.yaml");
     expect(record.artifact_refs.final_output_provenance_validation)
       .toContain("final-output-provenance-validation.yaml");
     expect(record.validation_summary).toMatchObject({
@@ -1780,16 +2107,79 @@ describe("runReconstruct", () => {
     expect(handoffDecisionValidation.pre_handoff_run_manifest_validation_ref)
       .toContain("reconstruct-run-manifest.pre-handoff-validation.yaml");
     expect(handoffDecisionValidation.readiness_projection).toBe("ready");
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "reconstruct_run_control_gate"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      validation_artifact_ref: "reconstruct-run-control-validation.yaml",
+    });
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "registry_verification_evidence_gate"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      validation_artifact_ref: "registry-verification-evidence-validation.yaml",
+    });
     expect(handoffDecisionValidation.gate_projection.some((gate) =>
       gate.validation_artifact_ref === "final-output-provenance-validation.yaml"
     )).toBe(false);
     expect(handoffDecisionValidation.gate_projection.some((gate) =>
       gate.validation_artifact_ref === "reconstruct-run-manifest.pre-handoff-validation.yaml"
     )).toBe(true);
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "source_safety_gate"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      validation_artifact_ref: "source-safety-ledger-validation.yaml",
+    });
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "material_admission_gate"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      validation_artifact_ref: "material-admission-ledger-validation.yaml",
+    });
     expect(handoffDecisionValidation.gate_projection.some((gate) =>
       gate.validation_artifact_ref === "reconstruct-run-manifest.post-publication-validation.yaml"
     )).toBe(false);
-    expect(result.finalOutputText).toContain("Handoff readiness: ready");
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "claim_projection_gate"
+    )).toMatchObject({
+      applicability: "not_applicable",
+      validation_status: "not_applicable",
+      validation_artifact_ref: "claim-projection-validation.yaml",
+    });
+    expect(claimProjectionValidation.validation_status).toBe("valid");
+    expect(claimProjectionValidation.strongest_claim_level)
+      .toBe("blocked");
+    expect(registryVerificationEvidenceValidation.validation_status)
+      .toBe("valid");
+    expect(registryVerificationEvidenceValidation.validation_gate_count)
+      .toBeGreaterThan(0);
+    expect(result.finalOutputText).not.toContain("Handoff readiness:");
+    expect(result.finalOutputText).toContain("reconstruct-run-control.yaml");
+    expect(result.finalOutputText).toContain("reconstruct-run-control-validation.yaml");
+    expect(result.finalOutputText).toContain("registry-verification-evidence.yaml");
+    expect(result.finalOutputText)
+      .toContain("registry-verification-evidence-validation.yaml");
+    expect(result.finalOutputText).toContain("Claim Projection");
+    expect(result.finalOutputText)
+      .toContain("Public claim truth is owned by the claim projection artifact");
+    expect(result.finalOutputText).toContain("Strongest claim level: blocked");
+    expect(result.finalOutputText).toContain("Decision states:");
+    expect(result.finalOutputText).toContain("Actionability claims:");
+    expect(result.finalOutputText)
+      .toContain("No ActionableOntology artifact is claimed or emitted");
+    expect(result.finalOutputText).not.toContain("Claim level:");
+    expect(result.finalOutputText).not.toContain("Actionability claim:");
+    expect(result.finalOutputText).toContain("source-safety-ledger.yaml");
+    expect(result.finalOutputText).toContain("source-safety-ledger-validation.yaml");
+    expect(result.finalOutputText).toContain("material-admission-ledger.yaml");
+    expect(result.finalOutputText).toContain("material-admission-ledger-validation.yaml");
+    expect(result.finalOutputText).toContain("claim-projection.yaml");
+    expect(result.finalOutputText).toContain("claim-projection-validation.yaml");
     await expect(
       fs.stat(path.join(sessionRoot, "reconstruct-record.pre-publication.yaml")),
     ).resolves.toBeTruthy();
@@ -1817,6 +2207,12 @@ describe("runReconstruct", () => {
       .toContain("maturation-question-frontier.yaml");
     expect(record.artifact_refs.maturation_question_frontier_validation)
       .toContain("maturation-question-frontier-validation.yaml");
+    expect(record.artifact_refs.maturation_convergence_ledger)
+      .toContain("maturation-convergence-ledger.yaml");
+    expect(record.artifact_refs.maturation_convergence_ledger_validation)
+      .toContain("maturation-convergence-ledger-validation.yaml");
+    expect(record.artifact_refs.actionable_ontology).toBeNull();
+    expect(record.artifact_refs.actionable_ontology_validation).toBeNull();
     expect(record.validation_summary.failure_count).toBe(0);
     expect(record.validation_summary.revision_proposal_count).toBe(0);
     expect(manifest.runtime_boundary).toMatchObject({
@@ -1860,28 +2256,46 @@ describe("runReconstruct", () => {
     expect(manifest.steps.find((step) =>
       step.step_id === "maturation_question_frontier_validation"
     )).toMatchObject({ status: "completed" });
+    expect(manifest.steps.find((step) => step.step_id === "actionable_ontology"))
+      .toMatchObject({ status: "skipped" });
+    expect(manifest.steps.find((step) =>
+      step.step_id === "actionable_ontology_validation"
+    )).toMatchObject({ status: "skipped" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
+      "run_control",
+      "run_control_validation",
+      "registry_verification",
+      "registry_verification_validation",
       "target_material_profile",
       "target_material_profile_validation",
       "source_inventory",
       "initial_source_frontier",
       "source_observation",
+      "source_safety",
+      "source_safety_validation",
       "observation_directive",
       "observation_directive_validation",
       "lens_judgment",
       "exploration_synthesis",
       "source_frontier",
       "source_frontier_validation",
+      "source_observation_delta",
+      "source_observation_delta_validation",
+      "source_observation_reentry_validation",
+      "source_observation_lineage_index",
+      "source_observation_lineage_index_validation",
       "source_purpose_candidates",
       "source_purpose_candidates_validation",
       "purpose_confirmation",
       "purpose_confirmation_validation",
+      "material_admission",
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
       "ontology_seed",
       "ontology_seed_validation",
+      "material_admission_validation",
       "claim_realization",
       "claim_realization_validation",
       "seed_confirmation",
@@ -1914,8 +2328,15 @@ describe("runReconstruct", () => {
       "maturation_answer_claims_validation",
       "ontology_expansion",
       "ontology_expansion_validation",
+      "maturation_convergence_ledger",
+      "maturation_convergence_ledger_validation",
       "maturation_continuation_decision",
       "maturation_continuation_decision_validation",
+      "actionable_ontology",
+      "actionable_ontology_validation",
+      "run_control_pre_publication_validation",
+      "claim_projection",
+      "claim_projection_validation",
       "final_output",
       "final_output_provenance_validation",
       "record_assembly",
@@ -2118,6 +2539,20 @@ describe("runReconstruct", () => {
       }>;
       observed_source_refs?: string[];
     }> = [];
+    const finalOutputSystemPrompts: string[] = [];
+    const finalOutputPayloads: Array<{
+      claim_projection_summary?: {
+        strongest_claim_level?: string;
+        projection_rows?: Array<{
+          actionability_claim?: string;
+        }>;
+      };
+      maturation_summary?: {
+        continuation_decision?: string;
+        included_row_count?: number;
+        actionable_ontology_ref?: string | null;
+      };
+    }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
     > = [];
@@ -2133,6 +2568,10 @@ describe("runReconstruct", () => {
         ontologySeedSystemPrompts.push(systemPrompt);
         ontologySeedPayloads.push(JSON.parse(userPrompt));
       }
+      if (systemPrompt.includes("writing the final reconstruct result")) {
+        finalOutputSystemPrompts.push(systemPrompt);
+        finalOutputPayloads.push(JSON.parse(userPrompt));
+      }
       if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
         const input = JSON.parse(userPrompt) as {
           claim_summaries?: Array<{ claim_id: string; claim_kind: string }>;
@@ -2141,7 +2580,6 @@ describe("runReconstruct", () => {
       }
       return fakeLiveLlm(systemPrompt, userPrompt);
     };
-
     const result = await runReconstruct({
       projectRoot,
       targetRefs: [longSourcePath, path.join(projectRoot, "src", "feature.ts")],
@@ -2192,6 +2630,11 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Runtime Artifact Truth Footer");
     expect(result.finalOutputText).toContain(result.reconstructRecordPath);
     expect(result.finalOutputText).not.toContain("mock");
+    const liveOntologySeed = await readYaml<ReconstructOntologySeedArtifact>(
+      result.reconstructRunManifest.artifact_refs.ontology_seed!,
+    );
+    expect(liveOntologySeed.seed_identity.authoring_profile)
+      .toBe("direct-call-reconstruct-directive-author");
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -2223,6 +2666,8 @@ describe("runReconstruct", () => {
     expect(ontologySeedSystemPrompts[0]).toContain("OntologySeed");
     expect(ontologySeedSystemPrompts[0])
       .toContain("compact but schema-valid first-pass seed kernel");
+    expect(ontologySeedSystemPrompts[0])
+      .toContain("seed_identity.authoring_profile must be the string");
     expect(ontologySeedSystemPrompts[0])
       .toContain("Every limitation_refs value anywhere in the seed must resolve");
     expect(ontologySeedSystemPrompts[0])
@@ -2268,6 +2713,24 @@ describe("runReconstruct", () => {
       "For represented_as_actor_role obligations",
     );
     expect(ontologySeedSystemPrompts[0]).not.toContain("top_level_concepts");
+    expect(finalOutputSystemPrompts[0])
+      .toContain("Include a short Claim Projection section");
+    expect(finalOutputSystemPrompts[0])
+      .toContain("Include a short Maturation Decision section");
+    expect(finalOutputPayloads[0]?.claim_projection_summary?.strongest_claim_level)
+      .toBeDefined();
+    expect(finalOutputPayloads[0]?.claim_projection_summary?.projection_rows)
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          actionability_claim: expect.any(String),
+        }),
+      ]));
+    expect(finalOutputPayloads[0]?.maturation_summary?.continuation_decision)
+      .toEqual(expect.any(String));
+    expect(finalOutputPayloads[0]?.maturation_summary?.included_row_count)
+      .toEqual(expect.any(Number));
+    expect(finalOutputPayloads[0]?.maturation_summary)
+      .toHaveProperty("actionable_ontology_ref");
     expect(result.metrics.answerability_summary).toMatchObject({
       supported_question_count: 11,
       supported_action_count: 1,
@@ -2372,7 +2835,6 @@ describe("runReconstruct", () => {
       }
       return fakeLiveLlm(systemPrompt, userPrompt);
     };
-
     const result = await runReconstruct({
       projectRoot,
       targetRefs: [projectRoot],
@@ -2394,9 +2856,27 @@ describe("runReconstruct", () => {
     expect(sourceFrontierCalls).toBe(2);
     expect(result.reconstructRunManifest.artifact_refs.source_frontier_validation)
       .toContain(path.join("rounds", "round-2", "source-frontier-validation.yaml"));
+    expect(result.reconstructRunManifest.artifact_refs.source_observation_delta)
+      .toContain(path.join("rounds", "round-1", "source-observation-delta.yaml"));
+    expect(result.reconstructRunManifest.artifact_refs.source_observation_delta_validation)
+      .toContain(path.join("rounds", "round-1", "source-observation-delta-validation.yaml"));
+    expect(result.reconstructRunManifest.artifact_refs.source_observation_reentry_validation)
+      .toContain(path.join("rounds", "round-1", "source-observation-reentry-validation.yaml"));
     const sourceObservations =
       await readYaml<ReconstructSourceObservationsArtifact>(
         path.join(sessionRoot, "source-observations.yaml"),
+      );
+    const sourceObservationDelta =
+      await readYaml<ReconstructSourceObservationDeltaArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_delta!,
+      );
+    const sourceObservationDeltaValidation =
+      await readYaml<ReconstructSourceObservationDeltaValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_delta_validation!,
+      );
+    const sourceObservationReentryValidation =
+      await readYaml<ReconstructSourceObservationReentryValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_reentry_validation!,
       );
     expect(sourceObservations.observations).toEqual(
       expect.arrayContaining([
@@ -2406,6 +2886,22 @@ describe("runReconstruct", () => {
         }),
       ]),
     );
+    expect(sourceObservationDelta).toMatchObject({
+      frontier_kind: "source_frontier",
+      round_id: "round-1",
+      accepted_frontier_ref_ids: ["frontier_1"],
+    });
+    expect(sourceObservationDelta.delta_rows).toEqual([
+      expect.objectContaining({
+        source_ref: docPath,
+        target_material_kind: "document",
+        lineage_status: "added",
+      }),
+    ]);
+    expect(sourceObservationDeltaValidation.validation_status).toBe("valid");
+    expect(sourceObservationReentryValidation.validation_status).toBe("valid");
+    expect(sourceObservationReentryValidation.reentered_observation_ids)
+      .toEqual(sourceObservationDelta.added_observation_ids);
     expect(sourceObservations.skipped_refs).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -2425,9 +2921,231 @@ describe("runReconstruct", () => {
       await readYaml<ReconstructSourceFrontierValidationArtifact>(
         result.reconstructRunManifest.artifact_refs.source_frontier_validation,
       );
+    const record = await readYaml<ReconstructRecordArtifact>(
+      result.reconstructRecordPath,
+    );
+    const handoffDecisionValidation =
+      await readYaml<ReconstructHandoffDecisionValidationArtifact>(
+        record.artifact_refs.handoff_decision_validation!,
+      );
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "round_lineage_gate" && gate.round_id === "round-1"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      concrete_validation_artifact_ref:
+        result.reconstructRunManifest.artifact_refs.source_observation_delta_validation,
+    });
+    expect(handoffDecisionValidation.gate_projection.find((gate) =>
+      gate.gate_id === "observation_reentry_gate" && gate.round_id === "round-1"
+    )).toMatchObject({
+      applicability: "applicable",
+      validation_status: "valid",
+      concrete_validation_artifact_ref:
+        result.reconstructRunManifest.artifact_refs.source_observation_reentry_validation,
+    });
     expect(terminalFrontierValidation.round_id).toBe("round-2");
     expect(terminalFrontierValidation.accepted_frontier_ref_ids).toEqual([]);
     expect(terminalFrontierValidation.no_next_frontier_accepted).toBe(true);
+  });
+
+  it("observes accepted maturation closure source requests before downstream maturation artifacts", async () => {
+    const projectRoot = await tempProjectRoot();
+    const docPath = path.join(projectRoot, "maturation-note.md");
+    await fs.writeFile(
+      docPath,
+      "# Maturation Note\n\nAdditional source evidence for maturation closure.\n",
+      "utf8",
+    );
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "maturation-closure-source-run",
+    );
+    let closureFrontierCalls = 0;
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Author source-frontier.yaml")) {
+        return Promise.resolve({
+          text: JSON.stringify({
+            frontier_refs: [],
+            no_next_frontier_rationale:
+              "Exploration has no next frontier; maturation will request source evidence.",
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Author maturation-closure-frontier.yaml")) {
+        closureFrontierCalls += 1;
+        const input = JSON.parse(userPrompt) as {
+          material_questions?: Array<{ question_id: string }>;
+        };
+        const questionId = input.material_questions?.[0]?.question_id ??
+          "maturation-question-1";
+        return Promise.resolve({
+          text: JSON.stringify({
+            source_requests: [{
+              source_request_id: "source-request-maturation-note",
+              question_refs: [questionId],
+              member_scope_refs: [],
+              member_source_refs: [],
+              cross_material_ref_refs: [],
+              requested_source_ref: docPath,
+              requested_location: docPath,
+              target_material_kind: "document",
+              expected_evidence_kind: "maturation source evidence",
+              reason: "Need the maturation note to close the material question.",
+            }],
+            authority_requests: [],
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Assess every competency question")) {
+        const input = JSON.parse(userPrompt) as {
+          competency_questions: {
+            questions: Array<{ question_id: string }>;
+          };
+        };
+        return Promise.resolve({
+          text: JSON.stringify({
+            assessments: input.competency_questions.questions.map((question) => ({
+              question_id: question.question_id,
+              answer_status: "unsupported",
+              answer_summary: "The fixture leaves this question for maturation.",
+              missing_source_or_confirmation:
+                "Additional maturation note source is required.",
+              ambiguity_notes: [],
+              rationale:
+                "This test intentionally opens a maturation closure source request.",
+            })),
+          }),
+        } satisfies LlmCallResult);
+      }
+      if (systemPrompt.includes("Decide whether the current reconstructed result")) {
+        const input = JSON.parse(userPrompt) as {
+          allowed_decisions?: string[];
+        };
+        return Promise.resolve({
+          text: JSON.stringify({
+            decision: input.allowed_decisions?.[0] ?? "continue",
+            rationale:
+              "The fixture follows the runtime-provided allowed decision boundary.",
+            next_actions: [],
+          }),
+        } satisfies LlmCallResult);
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+    const baseDirectiveAuthor = createDirectCallReconstructDirectiveAuthor({
+      llmCall,
+    });
+    const directiveAuthor = {
+      ...baseDirectiveAuthor,
+      async writeMaturationQuestionFrontier(input: Parameters<
+        typeof baseDirectiveAuthor.writeMaturationQuestionFrontier
+      >[0]) {
+        const row = input.actionabilityMatrix.rows[0];
+        if (!row) {
+          throw new Error("fixture expected at least one actionability matrix row");
+        }
+        return {
+          schema_version: "1" as const,
+          session_id: input.sessionId,
+          created_at: "2026-06-02T00:00:00.000Z",
+          maturation_baseline_ref: input.maturationBaselineRef,
+          maturation_baseline_validation_ref: input.maturationBaselineValidationRef,
+          actionability_matrix_ref: input.actionabilityMatrixRef,
+          actionability_matrix_validation_ref:
+            input.actionabilityMatrixValidationRef,
+          questions: [{
+            question_id: "maturation-question-needs-note",
+            question: "What maturation evidence is present in the note?",
+            materiality: "high" as const,
+            materiality_ref: row.materiality_ref,
+            actionability_surface_refs: [row.actionability_surface_ref],
+            maturity_dimension_refs: [row.maturity_dimension_ref],
+            purpose_element_refs: [row.purpose_element_ref],
+            baseline_row_refs: row.baseline_row_refs,
+            competency_question_refs: row.competency_question_refs,
+            competency_assessment_refs: row.competency_assessment_refs,
+            domain_competency_trace_refs: [],
+            seed_ref_refs: row.supporting_refs.filter((ref) => !ref.endsWith(".yaml")),
+            current_answer_status: "unsupported" as const,
+            expected_answer_kind: "explanation" as const,
+            evidence_needed: "Read the maturation note source.",
+            authority_need: {
+              authority_kind: "none" as const,
+              authority_scope: null,
+              blocking_if_unavailable: false,
+              expected_response_kind: "unavailable_reason" as const,
+            },
+            closure_frontier_hint_refs: [`source:${docPath}`],
+            limitation_refs: [],
+          }],
+          directive_author: {
+            owner: "host_llm" as const,
+            author_id: "fixture-directive-author",
+          },
+        };
+      },
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [projectRoot],
+      intent:
+        "Create a live reconstruct Seed that follows maturation closure source requests.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor,
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(closureFrontierCalls).toBe(1);
+    expect(result.reconstructRunManifest.artifact_refs.source_observation_delta)
+      .toContain(path.join(
+        "rounds",
+        "maturation-round-1",
+        "source-observation-delta.yaml",
+      ));
+    const sourceObservations =
+      await readYaml<ReconstructSourceObservationsArtifact>(
+        path.join(sessionRoot, "source-observations.yaml"),
+      );
+    const sourceObservationDelta =
+      await readYaml<ReconstructSourceObservationDeltaArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_delta!,
+      );
+    const sourceObservationDeltaValidation =
+      await readYaml<ReconstructSourceObservationDeltaValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_delta_validation!,
+      );
+    const sourceObservationReentryValidation =
+      await readYaml<ReconstructSourceObservationReentryValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_observation_reentry_validation!,
+      );
+    expect(sourceObservations.observations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source_ref: docPath,
+          target_material_kind: "document",
+        }),
+      ]),
+    );
+    expect(sourceObservationDelta).toMatchObject({
+      frontier_kind: "maturation_closure_frontier",
+      round_id: "maturation-round-1",
+      accepted_frontier_ref_ids: ["source-request-maturation-note"],
+    });
+    expect(sourceObservationDeltaValidation.validation_status).toBe("valid");
+    expect(sourceObservationReentryValidation.validation_status).toBe("valid");
+    expect(sourceObservationReentryValidation.reentered_observation_ids)
+      .toEqual(sourceObservationDelta.added_observation_ids);
   });
 
   it("treats already-observed source frontier refs as terminal convergence", async () => {
@@ -2645,11 +3363,11 @@ describe("runReconstruct", () => {
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: retryLlmCall,
       }),
-    })).rejects.toThrow(/already exists.*explicit resume or supersession/);
+    })).rejects.toThrow(/already exists.*read the existing result\/status/);
 
     expect(retryPrompts).toHaveLength(0);
 
-    const resumeResult = await runReconstruct({
+    await expect(runReconstruct({
       projectRoot,
       targetRefs: [targetRef],
       intent: "Create a live reconstruct Seed with retry.",
@@ -2665,17 +3383,11 @@ describe("runReconstruct", () => {
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: retryLlmCall,
       }),
-    });
-    expect(resumeResult.status).toBe("completed");
-    expect(retryPrompts.some((prompt) =>
-      prompt.includes("Convert exploration synthesis into a concrete source frontier")
-    )).toBe(false);
-    expect(retryPrompts.some((prompt) =>
-      prompt.includes("Author ontology-seed.yaml")
-    )).toBe(true);
+    })).rejects.toThrow(/already exists.*read the existing result\/status/);
+    expect(retryPrompts).toHaveLength(0);
   });
 
-  it("rejects explicit resume when the current source snapshot changed", async () => {
+  it("rejects explicit same-session resume before stale source provenance can be reused", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
       projectRoot,
@@ -2736,7 +3448,7 @@ describe("runReconstruct", () => {
           return fakeLiveLlm(systemPrompt, userPrompt);
         },
       }),
-    })).rejects.toThrow(/resume provenance mismatch/);
+    })).rejects.toThrow(/already exists.*read the existing result\/status/);
     expect(resumePrompts).toHaveLength(0);
   });
 

@@ -2,6 +2,9 @@ import type { TargetMaterialKind } from "../target-material-kind.js";
 
 export interface ReconstructSourceObservation {
   observation_id: string;
+  round_id?: string | null;
+  observation_batch_id?: string | null;
+  triggering_frontier_validation_ref?: string | null;
   target_material_kind: Exclude<TargetMaterialKind, "mixed" | "unknown">;
   adapter_id: string;
   source_ref: string;
@@ -56,6 +59,20 @@ export function validateSourceObservationBoundary(
 
   if (!observation.observation_id.trim()) {
     violations.push("observation_id is required");
+  }
+  if (
+    "round_id" in observation &&
+    typeof observation.round_id === "string" &&
+    !observation.round_id.trim()
+  ) {
+    violations.push("round_id must not be blank when present");
+  }
+  if (
+    "observation_batch_id" in observation &&
+    typeof observation.observation_batch_id === "string" &&
+    !observation.observation_batch_id.trim()
+  ) {
+    violations.push("observation_batch_id must not be blank when present");
   }
   if (!observation.adapter_id.trim()) {
     violations.push("adapter_id is required");

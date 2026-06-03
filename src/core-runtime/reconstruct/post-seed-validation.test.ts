@@ -1136,6 +1136,12 @@ describe("post-seed reconstruct validation", () => {
       finalOutputText: "See ontology-seed.yaml and proposal-1.",
       requiredFragments: ["ontology-seed.yaml", "proposal-1"],
     });
+    const finalClaimRestatementViolations = validateFinalOutputProvenance({
+      finalOutputText:
+        "See claim-projection.yaml.\n\n- Handoff readiness: ready\n",
+      requiredFragments: ["claim-projection.yaml"],
+      forbiddenFragments: ["Handoff readiness:"],
+    });
 
     expect(assessmentValidation.validation_status).toBe("valid");
     expect(invalidAssessment.validation_status).toBe("invalid");
@@ -1155,5 +1161,11 @@ describe("post-seed reconstruct validation", () => {
     expect(failureValidation.validation_status).toBe("valid");
     expect(revisionValidation.validation_status).toBe("valid");
     expect(finalViolations).toEqual([]);
+    expect(finalClaimRestatementViolations).toContainEqual(
+      expect.objectContaining({
+        code: "final_output_claim_restatement_forbidden",
+        subject_id: "Handoff readiness:",
+      }),
+    );
   });
 });
