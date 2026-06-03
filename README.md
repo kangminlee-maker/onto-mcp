@@ -247,7 +247,10 @@ onto-mcp also accepts `#` comments for user-facing explanations.
 
 Project settings override user defaults for scalar keys. In
 `settings.json/v3`, actor `llm` blocks are complete model settings; they do not
-inherit from a root `llm.default`.
+inherit from a root `llm.default`. Reconstruct direct-call execution uses
+`reconstruct.execution.actors.semantic_author.llm` and
+`reconstruct.execution.actors.confirmation_provider.llm`; v3 does not expose a
+root reconstruct LLM fallback.
 
 Minimal Codex OAuth profile:
 
@@ -293,6 +296,30 @@ Minimal Codex OAuth profile:
         }
       },
       "deliberation": "controlled-lens-deliberation"
+    }
+  },
+  "reconstruct": {
+    "execution": {
+      "actors": {
+        "semantic_author": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "high",
+            "service_tier": "fast"
+          }
+        },
+        "confirmation_provider": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        }
+      }
     }
   }
 }

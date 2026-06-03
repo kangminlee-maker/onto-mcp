@@ -2167,6 +2167,11 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Claim Projection");
     expect(result.finalOutputText)
       .toContain("Public claim truth is owned by the claim projection artifact");
+    expect(result.finalOutputText).toContain("Strongest claim level: blocked");
+    expect(result.finalOutputText).toContain("Decision states:");
+    expect(result.finalOutputText).toContain("Actionability claims:");
+    expect(result.finalOutputText)
+      .toContain("No ActionableOntology artifact is claimed or emitted");
     expect(result.finalOutputText).not.toContain("Claim level:");
     expect(result.finalOutputText).not.toContain("Actionability claim:");
     expect(result.finalOutputText).toContain("source-safety-ledger.yaml");

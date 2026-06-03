@@ -248,6 +248,35 @@ describe("reconstruct run-control validation", () => {
     expect(persisted.write_transactions.length).toBeGreaterThan(0);
   });
 
+  it("records zero-byte artifacts as committed write transactions", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const artifactPath = path.join(root, "empty-artifact.yaml");
+    await fs.writeFile(artifactPath, "", "utf8");
+
+    const finalized = await finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: {
+        ...emptyRefs(),
+        target_material_profile: artifactPath,
+      },
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    const transaction = finalized.runControl.write_transactions.find((row) =>
+      row.artifact_ref === artifactPath
+    );
+    expect(transaction).toMatchObject({
+      transaction_status: "committed",
+      commit_method: "observed_file_hash",
+    });
+    expect(transaction?.committed_hash).toHaveLength(64);
+    expect(finalized.validation.validation_status).toBe("valid");
+  });
+
   it("rejects committed transactions without a hash", () => {
     const root = "/tmp/session";
     const validation = validateReconstructRunControl({

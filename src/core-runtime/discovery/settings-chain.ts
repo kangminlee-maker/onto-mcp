@@ -255,6 +255,12 @@ const V3ReviewActorSettingsSchema = z
   })
   .strict();
 
+const V3ReconstructActorSettingsSchema = z
+  .object({
+    llm: FullLlmSettingsSchema,
+  })
+  .strict();
+
 const V3ReviewExecutionSettingsSchema = z
   .object({
     topology: ReviewExecutionModeSchema.optional(),
@@ -330,10 +336,28 @@ const V3ReviewSettingsSchema = z
   })
   .strict();
 
+const V3ReconstructSettingsSchema = z
+  .object({
+    execution: z
+      .object({
+        actors: z
+          .object({
+            semantic_author: V3ReconstructActorSettingsSchema.optional(),
+            confirmation_provider: V3ReconstructActorSettingsSchema.optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+
 const V3SettingsSchema = z
   .object({
     schema_version: z.literal("settings.json/v3"),
     review: V3ReviewSettingsSchema.optional(),
+    reconstruct: V3ReconstructSettingsSchema.optional(),
   })
   .strict();
 
@@ -345,6 +369,29 @@ const NormalizedSettingsSchema = z
       .optional(),
     llm: LlmSettingsSchema.optional(),
     review: ReviewSettingsSchema.optional(),
+    reconstruct: z
+      .object({
+        execution: z
+          .object({
+            actors: z
+              .object({
+                semantic_author: z
+                  .object({ llm: FullLlmSettingsSchema })
+                  .strict()
+                  .optional(),
+                confirmation_provider: z
+                  .object({ llm: FullLlmSettingsSchema })
+                  .strict()
+                  .optional(),
+              })
+              .strict()
+              .optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     review_mode: z.enum(["core-axis", "full"]).optional(),
     domains: z.array(z.string().min(1)).optional(),
     excluded_names: z.array(z.string().min(1)).optional(),
@@ -428,10 +475,24 @@ export interface ReviewSettings {
   execution?: ReviewExecutionSettings;
 }
 
+export interface ReconstructActorSettings {
+  llm: LlmModelSwitcherConfig;
+}
+
+export interface ReconstructSettings {
+  execution?: {
+    actors?: {
+      semantic_author?: ReconstructActorSettings;
+      confirmation_provider?: ReconstructActorSettings;
+    };
+  };
+}
+
 export interface OntoSettings {
   schema_version?: "settings.json/v1" | "settings.json/v2" | "settings.json/v3";
   llm?: LlmModelSwitcherConfig;
   review?: ReviewSettings;
+  reconstruct?: ReconstructSettings;
   review_mode?: "core-axis" | "full";
   domains?: string[];
   excluded_names?: string[];
@@ -441,6 +502,23 @@ export interface OntoSettings {
 }
 
 export type OntoConfig = OntoSettings;
+export type ReconstructLlmActorName =
+  | "semantic_author"
+  | "confirmation_provider";
+
+export function resolveReconstructActorLlmSettings(
+  settings: OntoSettings,
+  actorName: ReconstructLlmActorName,
+): LlmModelSwitcherConfig {
+  const actor = settings.reconstruct?.execution?.actors?.[actorName];
+  if (!actor) {
+    throw new Error(
+      `reconstruct.execution.actors.${actorName}.llm is required for reconstruct direct_call execution. settings.json/v3 does not expose or inherit a root llm path.`,
+    );
+  }
+  normalizeLlmModelSwitcher(actor.llm);
+  return actor.llm;
+}
 
 export const SETTINGS_FILENAME = "settings.json";
 export const RETIRED_CONFIG_FILENAMES = [
@@ -703,6 +781,35 @@ function v3ActorSettings(
   };
 }
 
+function v3ReconstructActorSettings(
+  actor: z.infer<typeof V3ReconstructActorSettingsSchema>,
+): ReconstructActorSettings {
+  return { llm: actor.llm };
+}
+
+function v3ReconstructSettings(
+  reconstruct: z.infer<typeof V3ReconstructSettingsSchema> | undefined,
+): ReconstructSettings | undefined {
+  const actors = reconstruct?.execution?.actors;
+  if (!actors) return undefined;
+  const normalizedActors: NonNullable<
+    NonNullable<ReconstructSettings["execution"]>["actors"]
+  > = {};
+  if (actors.semantic_author) {
+    normalizedActors.semantic_author = v3ReconstructActorSettings(
+      actors.semantic_author,
+    );
+  }
+  if (actors.confirmation_provider) {
+    normalizedActors.confirmation_provider = v3ReconstructActorSettings(
+      actors.confirmation_provider,
+    );
+  }
+  return Object.keys(normalizedActors).length > 0
+    ? { execution: { actors: normalizedActors } }
+    : undefined;
+}
+
 function normalizeV3Settings(settings: V3Settings): OntoSettings {
   const execution = settings.review?.execution;
   const mode = settings.review?.mode;
@@ -741,9 +848,11 @@ function normalizeV3Settings(settings: V3Settings): OntoSettings {
     if (domains !== undefined) review.domains = domains;
     if (context) review.context = context;
   }
+  const reconstruct = v3ReconstructSettings(settings.reconstruct);
   return {
     schema_version: "settings.json/v3",
     ...(review ? { review } : {}),
+    ...(reconstruct ? { reconstruct } : {}),
     ...(mode !== undefined ? { review_mode: mode } : {}),
     ...(domains !== undefined ? { domains } : {}),
     ...(context?.excluded_names !== undefined
@@ -865,6 +974,44 @@ function mergeReviewContextSettings(
   return definedReviewContext(merged);
 }
 
+function mergeReconstructActorSettings(
+  userActor: ReconstructActorSettings | undefined,
+  projectActor: ReconstructActorSettings | undefined,
+  llmMergeMode: "overlay" | "replace",
+): ReconstructActorSettings | undefined {
+  if (llmMergeMode === "replace") return projectActor ?? userActor;
+  if (!userActor && !projectActor) return undefined;
+  return {
+    llm: {
+      ...(userActor?.llm ?? {}),
+      ...(projectActor?.llm ?? {}),
+    },
+  };
+}
+
+function mergeReconstructSettings(
+  user: ReconstructSettings | undefined,
+  project: ReconstructSettings | undefined,
+  llmMergeMode: "overlay" | "replace",
+): ReconstructSettings | undefined {
+  const semanticAuthor = mergeReconstructActorSettings(
+    user?.execution?.actors?.semantic_author,
+    project?.execution?.actors?.semantic_author,
+    llmMergeMode,
+  );
+  const confirmationProvider = mergeReconstructActorSettings(
+    user?.execution?.actors?.confirmation_provider,
+    project?.execution?.actors?.confirmation_provider,
+    llmMergeMode,
+  );
+  const actors: NonNullable<
+    NonNullable<ReconstructSettings["execution"]>["actors"]
+  > = {};
+  if (semanticAuthor) actors.semantic_author = semanticAuthor;
+  if (confirmationProvider) actors.confirmation_provider = confirmationProvider;
+  return Object.keys(actors).length > 0 ? { execution: { actors } } : undefined;
+}
+
 function contextFromSettings(settings: OntoSettings): ReviewContextSettings | undefined {
   return definedReviewContext({
     excluded_names: settings.review?.context?.excluded_names ?? settings.excluded_names,
@@ -909,6 +1056,11 @@ function mergeSettings(
       : { ...user.llm, ...project.llm };
   const actorLlmMergeMode =
     project.schema_version === "settings.json/v3" ? "replace" : "overlay";
+  const reconstruct = mergeReconstructSettings(
+    user.reconstruct,
+    project.reconstruct,
+    actorLlmMergeMode,
+  );
   const defaultExecution = defaultReviewExecution();
   const userExecution = user.review?.execution;
   const projectExecution = project.review?.execution;
@@ -975,14 +1127,27 @@ function mergeSettings(
       }
     : undefined;
 
+  const {
+    llm: _userLlm,
+    review: _userReview,
+    reconstruct: _userReconstruct,
+    ...userRest
+  } = user;
+  const {
+    llm: _projectLlm,
+    review: _projectReview,
+    reconstruct: _projectReconstruct,
+    ...projectRest
+  } = project;
   const merged: OntoSettings = {
-    ...user,
-    ...project,
+    ...userRest,
+    ...projectRest,
     ...((project.schema_version ?? user.schema_version) !== undefined
       ? { schema_version: project.schema_version ?? user.schema_version }
       : {}),
     ...(llm ? { llm } : {}),
     ...(review ? { review } : {}),
+    ...(reconstruct ? { reconstruct } : {}),
     ...(mode !== undefined ? { review_mode: mode } : {}),
     ...(domains !== undefined ? { domains } : {}),
     ...(context?.excluded_names !== undefined

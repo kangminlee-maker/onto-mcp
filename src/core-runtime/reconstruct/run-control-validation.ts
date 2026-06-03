@@ -477,7 +477,7 @@ async function appendWriteTransactions(args: {
   );
   for (const artifactRef of args.refs) {
     const hash = await sha256File(artifactRef);
-    if (!hash) continue;
+    if (hash === null) continue;
     const transactionId = idFor("write", `${args.attemptId}:${artifactRef}`);
     if (existingTransactionIds.has(transactionId)) continue;
     args.runControl.write_transactions.push({

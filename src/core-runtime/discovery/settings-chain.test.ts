@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   projectSettingsPath,
+  resolveReconstructActorLlmSettings,
   resolveSettingsChain,
   userSettingsPath,
 } from "./settings-chain.js";
@@ -185,6 +186,30 @@ describe("resolveSettingsChain", () => {
         }
       }
     }
+  },
+  "reconstruct": {
+    "execution": {
+      "actors": {
+        "semantic_author": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "high",
+            "service_tier": "fast"
+          }
+        },
+        "confirmation_provider": {
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        }
+      }
+    }
   }
 }
 `,
@@ -202,6 +227,82 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.synthesize?.llm).toEqual(
       fullOauthLlm("xhigh"),
     );
+    expect(settings.reconstruct?.execution?.actors?.semantic_author?.llm)
+      .toEqual(fullOauthLlm("high"));
+    expect(settings.reconstruct?.execution?.actors?.confirmation_provider?.llm)
+      .toEqual(fullOauthLlm("medium"));
+  });
+
+  it("resolves reconstruct v3 actor llm settings without using a root llm", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      reconstruct: {
+        execution: {
+          actors: {
+            semantic_author: { llm: fullOauthLlm("high") },
+            confirmation_provider: { llm: fullOauthLlm("medium") },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.llm).toBeUndefined();
+    expect(resolveReconstructActorLlmSettings(settings, "semantic_author"))
+      .toEqual(fullOauthLlm("high"));
+    expect(resolveReconstructActorLlmSettings(settings, "confirmation_provider"))
+      .toEqual(fullOauthLlm("medium"));
+  });
+
+  it("drops legacy root llm when project settings select v3 actor-owned llm", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(userSettingsPath(), {
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "legacy-root-model",
+        effort: "low",
+      },
+    });
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      reconstruct: {
+        execution: {
+          actors: {
+            semantic_author: { llm: fullOauthLlm("high") },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.schema_version).toBe("settings.json/v3");
+    expect(settings.llm).toBeUndefined();
+    expect(resolveReconstructActorLlmSettings(settings, "semantic_author"))
+      .toEqual(fullOauthLlm("high"));
+  });
+
+  it("fails loudly when reconstruct direct-call asks for missing v3 actor llm settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          actors: {
+            teamlead: { seat: "main", llm: fullOauthLlm("medium") },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.llm).toBeUndefined();
+    expect(() => resolveReconstructActorLlmSettings(settings, "semantic_author"))
+      .toThrow("reconstruct.execution.actors.semantic_author.llm is required");
   });
 
   it("replaces v3 actor llm blocks instead of overlaying them", async () => {

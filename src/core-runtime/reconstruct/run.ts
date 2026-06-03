@@ -570,7 +570,6 @@ export interface RunReconstructParams {
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
-  llmConfig?: Partial<LlmCallConfig>;
 }
 
 interface AuthoredArtifactCompatibility {
@@ -7738,14 +7737,36 @@ function appendFinalOutputClaimProjectionSection(
   args: {
     claimProjectionPath: string;
     claimProjectionValidationPath: string;
+    claimProjection: ReconstructClaimProjectionArtifact;
+    claimProjectionValidation: ReconstructClaimProjectionValidationArtifact;
   },
 ): string {
   const heading = "## Claim Projection";
+  const actionabilityClaimCounts = args.claimProjection.projection_rows.reduce(
+    (counts, row) => {
+      counts[row.actionability_claim] =
+        (counts[row.actionability_claim] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>,
+  );
+  const hasActionableClaim = args.claimProjection.projection_rows.some((row) =>
+    row.actionability_claim === "limited" || row.actionability_claim === "ready"
+  );
   const content = [
     heading,
     "",
     `- Claim projection: ${args.claimProjectionPath}`,
     `- Claim projection validation: ${args.claimProjectionValidationPath}`,
+    `- Strongest claim level: ${args.claimProjectionValidation.strongest_claim_level}`,
+    `- Decision states: ${JSON.stringify(args.claimProjectionValidation.decision_state_counts)}`,
+    `- Actionability claims: ${JSON.stringify(actionabilityClaimCounts)}`,
+    `- Projection rows: ${args.claimProjection.projection_rows.length}`,
+    ...(hasActionableClaim
+      ? []
+      : [
+        "- No ActionableOntology artifact is claimed or emitted by this projection.",
+      ]),
     "- Public claim truth is owned by the claim projection artifact, not by this prose section.",
     "- The canonical claim projection is generated from the immutable pre-publication run-control checkpoint.",
     "",
@@ -10102,6 +10123,8 @@ export async function runReconstruct(
     {
       claimProjectionPath,
       claimProjectionValidationPath,
+      claimProjection,
+      claimProjectionValidation,
     },
   );
   const finalOutputWithArtifactTruth = appendFinalOutputArtifactTruthSection(

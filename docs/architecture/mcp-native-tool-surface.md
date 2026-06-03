@@ -214,12 +214,15 @@ host LLM and user-mediated flow.
 
 ## Provider And Route Selection
 
-In `settings.json/v3`, each review actor owns a complete
-`review.execution.actors.*.llm` block. There is no root `llm.default` and no
-actor inheritance in the canonical settings shape. Review execution route
-selection belongs to `review.execution.executor`: `auto` derives the route from
-the actor LLM selections, auth mode, host availability, and execution topology,
-while `codex`, `direct_call`, and `mock` pin the executor.
+In `settings.json/v3`, each actor owns a complete LLM block. Review actors use
+`review.execution.actors.*.llm`; reconstruct direct-call actors use
+`reconstruct.execution.actors.semantic_author.llm` and
+`reconstruct.execution.actors.confirmation_provider.llm`. There is no root
+`llm.default`, no root reconstruct LLM fallback, and no actor inheritance in the
+canonical settings shape. Review execution route selection belongs to
+`review.execution.executor`: `auto` derives the route from the actor LLM
+selections, auth mode, host availability, and execution topology, while
+`codex`, `direct_call`, and `mock` pin the executor.
 Route-derived fields such as executor, resolved provider, and auth mode are reported
 for observability. The TS route projection helper is an internal derivation
 point; MCP and CLI entrypoints accept the parent execution profile inputs, then
