@@ -24,7 +24,7 @@ import {
   readSingleOptionValueFromArgv,
 } from "./review-artifact-utils.js";
 
-export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ReviewExecutorRealization = "codex" | "claude" | "mock" | "ts_inline_http";
 
 export interface ReviewInvocationRequest {
   projectRoot: string;

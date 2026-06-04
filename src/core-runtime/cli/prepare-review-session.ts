@@ -74,6 +74,7 @@ function normalizeHostRuntime(
     return hostRuntimeValue;
   }
   if (
+    hostRuntimeValue === "claude" ||
     hostRuntimeValue === "standalone" ||
     hostRuntimeValue === "anthropic" ||
     hostRuntimeValue === "openai" ||
@@ -133,7 +134,7 @@ function resolveExecutionRealization(
   if (hasOptionFlag(argv, "codex")) {
     return "worker";
   }
-  if (hostRuntime === "codex") return "worker";
+  if (hostRuntime === "codex" || hostRuntime === "claude") return "worker";
   return "direct-call";
 }
 

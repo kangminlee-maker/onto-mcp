@@ -85,7 +85,7 @@ import type {
   ReviewWorkerExecutor,
 } from "../core-runtime/review/review-execution-profile.js";
 
-export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ReviewExecutorRealization = "codex" | "claude" | "mock" | "ts_inline_http";
 
 export interface PrepareReviewRequest {
   projectRoot: string;
@@ -105,7 +105,7 @@ export interface PrepareReviewRequest {
    * Debug/testing escape hatch. Normal MCP callers should let project config
    * choose the provider so the tool remains model/host independent.
    */
-  executorRealization?: "codex" | "mock" | "ts_inline_http";
+  executorRealization?: "codex" | "claude" | "mock" | "ts_inline_http";
 }
 
 export interface PreparedReview {
@@ -2443,6 +2443,7 @@ function workerExecutorToRealization(
 ): ReviewExecutorRealization | null {
   if (workerExecutor === "mock") return "mock";
   if (workerExecutor === "codex") return "codex";
+  if (workerExecutor === "claude") return "claude";
   if (workerExecutor === "direct_call") return "ts_inline_http";
   return null;
 }
@@ -2452,6 +2453,7 @@ function workerExecutorFromRealization(
 ): ReviewWorkerExecutor {
   if (realization === "mock") return "mock";
   if (realization === "codex") return "codex";
+  if (realization === "claude") return "claude";
   return "direct_call";
 }
 
@@ -2461,6 +2463,7 @@ function reviewExecutionHostFromRuntime(
 ): ReviewExecutionHost {
   if (workerExecutor === "mock") return "standalone";
   if (workerExecutor === "codex") return "codex";
+  if (workerExecutor === "claude") return "claude";
   if (
     hostRuntime === "openai" ||
     hostRuntime === "anthropic" ||
