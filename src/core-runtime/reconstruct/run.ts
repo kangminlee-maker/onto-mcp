@@ -627,6 +627,8 @@ interface AuthoredArtifactCompatibility {
   session_id: string;
   intent_sha256: string;
   target_refs_sha256: string;
+  competency_question_assessment_projection_contract_version: string;
+  competency_question_assessment_projection_contract_sha256: string;
   target_material_profile_sha256: string;
   target_material_profile_validation_sha256: string | null;
   source_inventory_sha256: string;
@@ -695,6 +697,79 @@ function stableJson(value: unknown): string {
 
 function sha256Text(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
+  "competency_question_assessment_compact_projection:v2";
+const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
+const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
+
+function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
+  return {
+    projection_kind: "competency_question_assessment_compact_projection",
+    projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    semantic_authority:
+      "host_llm_assesses_answer_status_and_explanation_fields",
+    prompt_char_limit: COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
+    question_projection:
+      "full question text is included without truncation; runtime keeps the full artifact authority",
+    evidence_projection:
+      "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
+    validation_projection:
+      "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
+    claim_realization_projection:
+      "claim_id, stance, evidence observation ids, evidence source basenames, and compact rationale are prompt-visible",
+    runtime_derivations: [
+      "required_seed_refs",
+      "linked_claim_ids",
+      "evidence_refs",
+      "downstream_effect",
+    ],
+    batching_policy: {
+      mode: "deterministic_prompt_budget",
+      order: "canonical_competency_question_order",
+      build_budget_reserve_chars:
+        COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
+      single_question_overflow: "fail_loud_before_dispatch",
+    },
+    fail_loud_policy:
+      "runtime fails before provider dispatch when any final batch exceeds prompt_char_limit",
+  };
+}
+
+function competencyQuestionAssessmentProjectionContractSha256(): string {
+  return sha256Text(stableJson(competencyQuestionAssessmentProjectionContract()));
+}
+
+function competencyQuestionAssessmentPromptPolicy(): Record<string, unknown> {
+  const projectionContract = competencyQuestionAssessmentProjectionContract();
+  return {
+    ...projectionContract,
+    projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    projection_contract_sha256:
+      competencyQuestionAssessmentProjectionContractSha256(),
+    projection_contract: projectionContract,
+  };
+}
+
+function assertPromptPayloadCharLimit(args: {
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  charLimit: number;
+}): void {
+  const totalChars = promptPayloadCharCount(args.systemPrompt, args.userPayload);
+  if (totalChars > args.charLimit) {
+    throw new Error(
+      `${args.artifactName} compact prompt exceeds deterministic prompt budget: ${totalChars} > ${args.charLimit}. Split or reduce the runtime projection before dispatch.`,
+    );
+  }
+}
+
+function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): number {
+  return systemPrompt.length + JSON.stringify(userPayload, null, 2).length;
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -937,6 +1012,10 @@ function authoredArtifactCompatibility(args: {
     session_id: args.sessionId,
     intent_sha256: sha256Text(args.intent),
     target_refs_sha256: sha256Text(stableJson(args.targetRefs.map((ref) => path.resolve(ref)).sort())),
+    competency_question_assessment_projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    competency_question_assessment_projection_contract_sha256:
+      competencyQuestionAssessmentProjectionContractSha256(),
     target_material_profile_sha256: sha256Text(stableJson({
       target_refs: args.targetMaterialProfile.target_refs.map((ref) => path.resolve(ref)).sort(),
       target_material_kind: args.targetMaterialProfile.target_material_kind,
@@ -1108,6 +1187,39 @@ function compactStatement(statement: string): string {
 
 function sourceBasename(sourceRef: string): string {
   return path.basename(sourceRef) || sourceRef;
+}
+
+function evidenceSourceBasenamesFromEvidenceRefs(
+  refs: ReconstructEvidenceRef[],
+): string[] {
+  return [...new Set(refs.map((ref) => sourceBasename(ref.source_ref)))];
+}
+
+function compactPromptSlice<T, U>(args: {
+  items: T[];
+  limit: number;
+  itemId: (item: T) => string;
+  mapItem: (item: T) => U;
+}): {
+  total_count: number;
+  included_count: number;
+  omitted_count: number;
+  projection_limit: number;
+  partial_projection: boolean;
+  omitted_id_samples: string[];
+  items: U[];
+} {
+  const included = args.items.slice(0, args.limit);
+  const omitted = args.items.slice(args.limit);
+  return {
+    total_count: args.items.length,
+    included_count: included.length,
+    omitted_count: omitted.length,
+    projection_limit: args.limit,
+    partial_projection: omitted.length > 0,
+    omitted_id_samples: omitted.slice(0, 8).map(args.itemId),
+    items: included.map(args.mapItem),
+  };
 }
 
 function claimRealizationTargets(
@@ -3540,6 +3652,571 @@ function compactTargetMaterialProfileForPrompt(
       runtime_implementation_status: sourceProfile.runtime_implementation_status,
       support_summary: sourceProfile.support_summary,
     })),
+  };
+}
+
+function compactCompetencyQuestionsForAssessmentPrompt(
+  competencyQuestions: ReconstructCompetencyQuestionsArtifact,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"] =
+    competencyQuestions.questions,
+): unknown {
+  return {
+    schema_version: competencyQuestions.schema_version,
+    session_id: competencyQuestions.session_id,
+    seed_confirmation_ref: competencyQuestions.seed_confirmation_ref,
+    ontology_seed_ref: competencyQuestions.ontology_seed_ref ?? null,
+    artifact_question_count: competencyQuestions.questions.length,
+    question_count: questions.length,
+    questions: questions.map((question) => ({
+      question_id: question.question_id,
+      question: question.question,
+      linked_claim_ids: question.linked_claim_ids,
+      seed_ref_refs: question.seed_ref_refs,
+      limitation_refs: question.limitation_refs,
+      coverage_axis_refs: question.coverage_axis_refs,
+      ontology_handoff_axis_refs: question.ontology_handoff_axis_refs,
+      domain_competency_trace_refs: question.domain_competency_trace_refs,
+      domain_competency_semantic_assessments:
+        question.domain_competency_semantic_assessments.map((assessment) => ({
+          competency_id: assessment.competency_id,
+          source_anchor: assessment.source_anchor,
+          applicability_verdict: assessment.applicability_verdict,
+          semantic_alignment: assessment.semantic_alignment,
+          evidence_observation_ids:
+            evidenceObservationIdsFromEvidenceRefs(assessment.evidence_refs),
+          evidence_source_basenames:
+            evidenceSourceBasenamesFromEvidenceRefs(assessment.evidence_refs),
+          rationale: compactStatement(assessment.rationale),
+        })),
+      coverage_disposition: question.coverage_disposition,
+      expected_answer_kind: question.expected_answer_kind,
+      handoff_relevance: question.handoff_relevance,
+      lifecycle_status: question.lifecycle_status,
+      rationale: compactStatement(question.rationale),
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(question.evidence_refs),
+      evidence_source_basenames:
+        evidenceSourceBasenamesFromEvidenceRefs(question.evidence_refs),
+    })),
+    open_questions: competencyQuestions.open_questions.map(compactStatement),
+  };
+}
+
+function compactCompetencyQuestionsValidationForAssessmentPrompt(
+  validation: ReconstructCompetencyQuestionsValidationArtifact,
+): unknown {
+  return {
+    schema_version: validation.schema_version,
+    session_id: validation.session_id,
+    competency_questions_ref: validation.competency_questions_ref,
+    reconstruct_run_manifest_ref: validation.reconstruct_run_manifest_ref ?? null,
+    seed_confirmation_validation_ref:
+      validation.seed_confirmation_validation_ref,
+    ontology_seed_ref: validation.ontology_seed_ref ?? null,
+    ontology_seed_validation_ref: validation.ontology_seed_validation_ref ?? null,
+    source_observations_ref: validation.source_observations_ref,
+    admitted_domain_competency_refs:
+      validation.admitted_domain_competency_refs ?? [],
+    admitted_domain_competency_source_refs:
+      validation.admitted_domain_competency_source_refs ?? [],
+    required_admitted_competency_ids:
+      validation.required_admitted_competency_ids ?? [],
+    validation_status: validation.validation_status,
+    competency_question_count: validation.competency_question_count,
+    required_evidence_scope_projection_count:
+      validation.required_evidence_scope_projection.length,
+    validation_results: validation.validation_results,
+    violation_count: validation.violations.length,
+    prompt_visible_violations: validation.validation_status === "invalid"
+      ? validation.violations.slice(0, 20).map((violation) => ({
+        code: violation.code,
+        subject_id: violation.subject_id,
+        message: compactStatement(violation.message),
+      }))
+      : [],
+  };
+}
+
+function compactClaimRealizationMapForAssessmentPrompt(
+  claimRealizationMap: ReconstructClaimRealizationMapArtifact,
+): unknown {
+  return {
+    schema_version: claimRealizationMap.schema_version,
+    session_id: claimRealizationMap.session_id,
+    ontology_seed_ref: claimRealizationMap.ontology_seed_ref,
+    claim_realization_count: claimRealizationMap.claim_realizations.length,
+    claim_realizations: claimRealizationMap.claim_realizations.map((realization) => ({
+      claim_id: realization.claim_id,
+      stance: realization.stance,
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(realization.evidence_refs),
+      evidence_source_basenames:
+        evidenceSourceBasenamesFromEvidenceRefs(realization.evidence_refs),
+      rationale: compactStatement(realization.rationale),
+    })),
+  };
+}
+
+function competencyQuestionAssessmentUserPayload(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"],
+  batch?: {
+    batch_index: number;
+    batch_count: number;
+  },
+): Record<string, unknown> {
+  return {
+    competency_questions_ref: input.competencyQuestionsRef,
+    competency_questions_validation_ref:
+      input.competencyQuestionsValidationRef,
+    ...(batch
+      ? {
+        competency_question_assessment_batch: {
+          mode: "deterministic_prompt_budget",
+          batch_index: batch.batch_index,
+          batch_count: batch.batch_count,
+          full_question_count: input.competencyQuestions.questions.length,
+          batch_question_count: questions.length,
+        },
+      }
+      : {}),
+    competency_question_prompt_policy:
+      competencyQuestionAssessmentPromptPolicy(),
+    competency_questions:
+      compactCompetencyQuestionsForAssessmentPrompt(
+        input.competencyQuestions,
+        questions,
+      ),
+    competency_questions_validation:
+      compactCompetencyQuestionsValidationForAssessmentPrompt(
+        input.competencyQuestionsValidation,
+      ),
+    claim_realization_map:
+      compactClaimRealizationMapForAssessmentPrompt(
+        input.claimRealizationMap,
+      ),
+  };
+}
+
+function competencyQuestionAssessmentPromptBatches(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  systemPrompt: string,
+): ReconstructCompetencyQuestionsArtifact["questions"][] {
+  const batches: ReconstructCompetencyQuestionsArtifact["questions"][] = [];
+  let current: ReconstructCompetencyQuestionsArtifact["questions"] = [];
+  const batchBuildBudget =
+    COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT -
+    COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;
+  for (const question of input.competencyQuestions.questions) {
+    const candidate = [...current, question];
+    const candidatePayload = competencyQuestionAssessmentUserPayload(
+      input,
+      candidate,
+      { batch_index: 9999, batch_count: 9999 },
+    );
+    if (
+      candidate.length === 1 ||
+      promptPayloadCharCount(systemPrompt, candidatePayload) <= batchBuildBudget
+    ) {
+      current = candidate;
+      continue;
+    }
+    batches.push(current);
+    current = [question];
+  }
+  if (current.length > 0) {
+    batches.push(current);
+  }
+  return batches;
+}
+
+function compactFinalOutputPromptPayload(
+  input: ReconstructFinalOutputAuthorInput,
+): unknown {
+  const seedClaims = ontologyClaims(input.ontologySeed);
+  const unresolvedAssessments = input.competencyQuestionAssessment.assessments
+    .filter((assessment) =>
+      assessment.answer_status !== "answerable" &&
+      assessment.answer_status !== "not_applicable"
+    );
+  const materialFailures = input.failureClassification.failures
+    .filter((failure) => failure.materiality === "material");
+  const candidateProjection = compactPromptSlice({
+    items: input.candidateInventory.candidates,
+    limit: 40,
+    itemId: (candidate) => candidate.candidate_id,
+    mapItem: (candidate) => ({
+      candidate_id: candidate.candidate_id,
+      candidate_kind: candidate.candidate_kind,
+      name: candidate.name,
+      salience: candidate.salience,
+    }),
+  });
+  const seedClaimProjection = compactPromptSlice({
+    items: seedClaims,
+    limit: 80,
+    itemId: (claim) => claim.claim_id,
+    mapItem: (claim) => ({
+      claim_id: claim.claim_id,
+      projection_source: claim.projection_source,
+      name: claim.name,
+      statement: compactStatement(claim.statement),
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(claim.evidence_refs),
+    }),
+  });
+  const competencyQuestionProjection = compactPromptSlice({
+    items: input.competencyQuestions.questions,
+    limit: 80,
+    itemId: (question) => question.question_id,
+    mapItem: (question) => ({
+      question_id: question.question_id,
+      question: compactStatement(question.question),
+      linked_claim_ids: question.linked_claim_ids,
+      limitation_refs: question.limitation_refs,
+      domain_competency_trace_refs: question.domain_competency_trace_refs,
+      coverage_disposition: question.coverage_disposition,
+      handoff_relevance: question.handoff_relevance,
+    }),
+  });
+  const unresolvedAssessmentProjection = compactPromptSlice({
+    items: unresolvedAssessments,
+    limit: 60,
+    itemId: (assessment) => assessment.question_id,
+    mapItem: (assessment) => ({
+      question_id: assessment.question_id,
+      answer_status: assessment.answer_status,
+      downstream_effect: assessment.downstream_effect,
+      linked_claim_ids: assessment.linked_claim_ids,
+      missing_source_or_confirmation:
+        assessment.missing_source_or_confirmation,
+      answer_summary: compactStatement(assessment.answer_summary),
+    }),
+  });
+  const materialFailureProjection = compactPromptSlice({
+    items: materialFailures,
+    limit: 60,
+    itemId: (failure) => failure.failure_id,
+    mapItem: (failure) => ({
+      failure_id: failure.failure_id,
+      failure_kind: failure.failure_kind,
+      question_id: failure.question_id,
+      claim_id: failure.claim_id,
+      recommended_action: failure.recommended_action,
+      rationale: compactStatement(failure.rationale),
+    }),
+  });
+  const revisionProposalProjection = compactPromptSlice({
+    items: input.revisionProposal.proposals,
+    limit: 60,
+    itemId: (proposal) => proposal.proposal_id,
+    mapItem: (proposal) => ({
+      proposal_id: proposal.proposal_id,
+      target_type: proposal.target_type,
+      target_id: proposal.target_id,
+      action: proposal.action,
+      expected_effect: compactStatement(proposal.expected_effect),
+      rationale: compactStatement(proposal.rationale),
+    }),
+  });
+  const actionabilityClaimCounts = input.claimProjection.projection_rows.reduce(
+    (counts, row) => {
+      counts[row.actionability_claim] =
+        (counts[row.actionability_claim] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>,
+  );
+  return {
+    session_id: input.sessionId,
+    intent: input.intent,
+    final_output_prompt_policy: {
+      projection_kind: "final_output_compact_summary_projection",
+      partial_projection_policy:
+        "When any *_partial_projection field is true, prose must say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
+      deterministic_runtime_append_sections: [
+        "seed_answerability",
+        "claim_projection",
+        "artifact_truth",
+        "provenance_footer",
+        "provenance_bindings",
+      ],
+      semantic_authority:
+        "host_llm_writes_user_facing_summary_without_upgrading_runtime_claims",
+    },
+    execution_profile: input.reconstructRunManifest.execution_profile,
+    execution_summary: {
+      record_stage_at_authoring: input.record.record_stage,
+      completed_step_count: input.reconstructRunManifest.steps.filter((step) =>
+        step.status === "completed"
+      ).length,
+      skipped_step_ids: input.reconstructRunManifest.steps
+        .filter((step) => step.status === "skipped")
+        .map((step) => step.step_id),
+    },
+    target_material_profile:
+      compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+    candidate_inventory_summary: {
+      candidate_count: candidateProjection.total_count,
+      candidate_projection_limit: candidateProjection.projection_limit,
+      candidate_included_count: candidateProjection.included_count,
+      candidate_omitted_count: candidateProjection.omitted_count,
+      candidate_partial_projection: candidateProjection.partial_projection,
+      omitted_candidate_id_samples: candidateProjection.omitted_id_samples,
+      candidates: candidateProjection.items,
+    },
+    candidate_disposition_summary: {
+      disposition_count: input.candidateDisposition.dispositions.length,
+      validation_status: input.candidateDispositionValidation.validation_status,
+      promoted_count: input.candidateDisposition.dispositions.filter((disposition) =>
+        disposition.disposition_id === "promoted_to_seed_layer"
+      ).length,
+      deferred_count: input.candidateDisposition.dispositions.filter((disposition) =>
+        disposition.disposition_id === "deferred_to_maturation" ||
+        disposition.disposition_id === "deferred_by_source_gap"
+      ).length,
+    },
+    ontology_seed_summary: {
+      summary_lines: ontologySeedSummaryLines(input.ontologySeed),
+      validation_status: input.ontologySeedValidation.validation_status,
+      seed_ref_count: input.ontologySeedValidation.seed_ref_count,
+      evidence_ref_count: input.ontologySeedValidation.evidence_ref_count,
+      limitation_count: input.ontologySeedValidation.limitation_count,
+      claim_count: seedClaimProjection.total_count,
+      claim_projection_limit: seedClaimProjection.projection_limit,
+      claim_included_count: seedClaimProjection.included_count,
+      claim_omitted_count: seedClaimProjection.omitted_count,
+      claim_partial_projection: seedClaimProjection.partial_projection,
+      omitted_claim_id_samples: seedClaimProjection.omitted_id_samples,
+      claims: seedClaimProjection.items,
+    },
+    claim_realization_summary: {
+      validation_status: input.claimRealizationMapValidation.validation_status,
+      stance_counts: input.claimRealizationMapValidation.stance_counts,
+      realized_claim_count:
+        input.claimRealizationMapValidation.realized_claim_count,
+    },
+    seed_confirmation_summary: {
+      confirmation_status: input.seedConfirmation.confirmation_status,
+      accepted_claim_count:
+        input.seedConfirmationValidation.accepted_claim_ids.length,
+      rejected_claim_count:
+        input.seedConfirmationValidation.rejected_claim_ids.length,
+      partial_claim_count:
+        input.seedConfirmationValidation.partial_claim_ids.length,
+      deferred_claim_count:
+        input.seedConfirmationValidation.deferred_claim_ids.length,
+      cq_eligible_claim_count:
+        input.seedConfirmationValidation.cq_eligible_claim_ids.length,
+    },
+    competency_question_summary: {
+      question_count: competencyQuestionProjection.total_count,
+      question_projection_limit: competencyQuestionProjection.projection_limit,
+      question_included_count: competencyQuestionProjection.included_count,
+      question_omitted_count: competencyQuestionProjection.omitted_count,
+      question_partial_projection:
+        competencyQuestionProjection.partial_projection,
+      omitted_question_id_samples:
+        competencyQuestionProjection.omitted_id_samples,
+      validation_status: input.competencyQuestionsValidation.validation_status,
+      required_domain_competency_ids:
+        input.competencyQuestionsValidation.required_admitted_competency_ids,
+      questions: competencyQuestionProjection.items,
+    },
+    competency_question_assessment_summary: {
+      validation_status:
+        input.competencyQuestionAssessmentValidation.validation_status,
+      answer_status_counts:
+        input.competencyQuestionAssessmentValidation.answer_status_counts,
+      assessment_count: input.competencyQuestionAssessment.assessments.length,
+      unresolved_assessment_count: unresolvedAssessmentProjection.total_count,
+      unresolved_assessment_projection_limit:
+        unresolvedAssessmentProjection.projection_limit,
+      unresolved_assessment_included_count:
+        unresolvedAssessmentProjection.included_count,
+      unresolved_assessment_omitted_count:
+        unresolvedAssessmentProjection.omitted_count,
+      unresolved_assessment_partial_projection:
+        unresolvedAssessmentProjection.partial_projection,
+      omitted_unresolved_assessment_id_samples:
+        unresolvedAssessmentProjection.omitted_id_samples,
+      unresolved_assessments: unresolvedAssessmentProjection.items,
+    },
+    failure_classification_summary: {
+      validation_status:
+        input.failureClassificationValidation.validation_status,
+      failure_count: input.failureClassificationValidation.failure_count,
+      material_failure_count:
+        input.failureClassificationValidation.material_failure_count,
+      failure_kind_counts:
+        input.failureClassificationValidation.failure_kind_counts,
+      material_failure_projection_limit:
+        materialFailureProjection.projection_limit,
+      material_failure_included_count: materialFailureProjection.included_count,
+      material_failure_omitted_count: materialFailureProjection.omitted_count,
+      material_failure_partial_projection:
+        materialFailureProjection.partial_projection,
+      omitted_material_failure_id_samples:
+        materialFailureProjection.omitted_id_samples,
+      material_failures: materialFailureProjection.items,
+    },
+    revision_proposal_summary: {
+      validation_status: input.revisionProposalValidation.validation_status,
+      proposal_count: revisionProposalProjection.total_count,
+      proposal_projection_limit: revisionProposalProjection.projection_limit,
+      proposal_included_count: revisionProposalProjection.included_count,
+      proposal_omitted_count: revisionProposalProjection.omitted_count,
+      proposal_partial_projection:
+        revisionProposalProjection.partial_projection,
+      omitted_proposal_id_samples:
+        revisionProposalProjection.omitted_id_samples,
+      proposals: revisionProposalProjection.items,
+    },
+    metrics_summary: {
+      source_observation_count: input.metrics.source_observation_count,
+      selected_observation_count: input.metrics.selected_observation_count,
+      semantic_claim_count: input.metrics.semantic_claim_count,
+      evidence_ref_count: input.metrics.evidence_ref_count,
+      competency_question_count: input.metrics.competency_question_count,
+      competency_question_assessment_count:
+        input.metrics.competency_question_assessment_count,
+      unresolved_question_count: input.metrics.unresolved_question_count,
+      deferred_count: input.metrics.deferred_count,
+      answerability_summary: input.metrics.answerability_summary,
+      validation_status: input.metrics.validation_status,
+    },
+    stop_decision: {
+      decision: input.stopDecision.decision,
+      rationale: compactStatement(input.stopDecision.rationale),
+      next_actions: input.stopDecision.next_actions.map(compactStatement),
+    },
+    pre_handoff_run_manifest_validation: {
+      validation_status:
+        input.preHandoffRunManifestValidation.validation_status,
+      completed_step_count:
+        input.preHandoffRunManifestValidation.completed_step_count,
+      skipped_step_count:
+        input.preHandoffRunManifestValidation.skipped_step_count,
+    },
+    handoff_decision_summary: {
+      validation_status: input.handoffDecisionValidation.validation_status,
+      readiness_projection: input.handoffDecisionValidation.readiness_projection,
+      readiness_projection_source:
+        input.handoffDecisionValidation.readiness_projection_source,
+      gate_projection_count:
+        input.handoffDecisionValidation.gate_projection.length,
+      gate_projection_status_counts:
+        input.handoffDecisionValidation.gate_projection.reduce(
+          (counts, gate) => ({
+            ...counts,
+            [gate.validation_status]:
+              (counts[gate.validation_status] ?? 0) + 1,
+          }),
+          {} as Record<string, number>,
+        ),
+      non_valid_or_inapplicable_gate_projection:
+        input.handoffDecisionValidation.gate_projection
+          .filter((gate) =>
+            gate.validation_status !== "valid" ||
+            gate.applicability !== "applicable"
+          )
+          .map((gate) => ({
+            gate_id: gate.gate_id,
+            applicability: gate.applicability,
+            validation_status: gate.validation_status,
+          })),
+    },
+    claim_projection_summary: {
+      claim_projection_ref: input.artifactRefs.claim_projection,
+      claim_projection_validation_ref:
+        input.artifactRefs.claim_projection_validation,
+      validation_status:
+        input.claimProjectionValidation.validation_status,
+      strongest_claim_level:
+        input.claimProjectionValidation.strongest_claim_level,
+      decision_state_counts:
+        input.claimProjectionValidation.decision_state_counts,
+      actionability_claim_counts: actionabilityClaimCounts,
+      projection_rows: input.claimProjection.projection_rows.map((row) => ({
+        projection_surface: row.projection_surface,
+        claim_level: row.claim_level,
+        decision_state: row.decision_state,
+        actionability_claim: row.actionability_claim,
+        machine_status: row.machine_status,
+        included_row_count: row.included_row_refs.length,
+        excluded_row_count: row.excluded_row_refs.length,
+        limitation_ref_count: row.limitation_refs.length,
+        required_validation_ref_count: row.required_validation_refs.length,
+      })),
+      authority_note:
+        "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose may summarize this validated artifact but must not upgrade it.",
+    },
+    maturation_summary: {
+      baseline_rows: input.maturationBaseline.baseline_rows.length,
+      baseline_validation:
+        input.maturationBaselineValidation.validation_status,
+      matrix_rows: input.actionabilityMatrix.rows.length,
+      matrix_validation: input.actionabilityMatrixValidation.validation_status,
+      frontier_questions:
+        input.maturationQuestionFrontier.questions.length,
+      frontier_validation:
+        input.maturationQuestionFrontierValidation.validation_status,
+      closure_source_requests:
+        input.maturationClosureFrontier.source_requests.length,
+      closure_authority_requests:
+        input.maturationClosureFrontier.authority_requests.length,
+      closure_validation:
+        input.maturationClosureFrontierValidation.validation_status,
+      evidence_clusters:
+        input.answerSupportLedger.evidence_clusters.length,
+      answer_support_validation:
+        input.answerSupportLedgerValidation.validation_status,
+      answer_claims:
+        input.maturationAnswerClaims.answer_claims.length,
+      answer_claims_validation:
+        input.maturationAnswerClaimsValidation.validation_status,
+      ontology_expansions:
+        input.ontologyExpansion.expansions.length,
+      ontology_expansion_validation:
+        input.ontologyExpansionValidation.validation_status,
+      continuation_decision:
+        input.maturationContinuationDecision.decision_state,
+      continuation_validation:
+        input.maturationContinuationDecisionValidation.validation_status,
+      blocking_row_count:
+        input.maturationContinuationDecision.blocking_row_refs.length,
+      included_row_count:
+        input.maturationContinuationDecision.claim_scope.included_row_refs.length,
+      excluded_row_count:
+        input.maturationContinuationDecision.claim_scope.excluded_row_refs.length,
+      actionable_ontology_ref: input.artifactRefs.actionable_ontology,
+      actionable_ontology_validation_ref:
+        input.artifactRefs.actionable_ontology_validation,
+      state_rationale:
+        compactStatement(input.maturationContinuationDecision.state_rationale),
+    },
+    artifact_refs: {
+      ontology_seed: input.artifactRefs.ontology_seed,
+      ontology_seed_validation: input.artifactRefs.ontology_seed_validation,
+      claim_realization_map: input.artifactRefs.claim_realization_map,
+      seed_confirmation_validation:
+        input.artifactRefs.seed_confirmation_validation,
+      competency_question_assessment:
+        input.artifactRefs.competency_question_assessment,
+      failure_classification: input.artifactRefs.failure_classification,
+      revision_proposal: input.artifactRefs.revision_proposal,
+      handoff_decision_validation:
+        input.artifactRefs.handoff_decision_validation,
+      maturation_continuation_decision:
+        input.artifactRefs.maturation_continuation_decision,
+      maturation_continuation_decision_validation:
+        input.artifactRefs.maturation_continuation_decision_validation,
+      claim_projection: input.artifactRefs.claim_projection,
+      claim_projection_validation:
+        input.artifactRefs.claim_projection_validation,
+    },
+    reconstruct_record_path: input.reconstructRecordPath,
+    reconstruct_run_manifest_path: input.reconstructRunManifestPath,
   };
 }
 
@@ -7186,24 +7863,71 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeCompetencyQuestionAssessment(input) {
-      const raw = await callJsonAuthor({
-        llmCall,
-        llmConfig,
-        artifactName: "CompetencyQuestionAssessment",
-        maxTokens: 3200,
-        systemPrompt: [
-          baseSystem,
-          `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
-          "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
-          "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
-        ].join("\n"),
-        userPayload: {
-          competency_questions_ref: input.competencyQuestionsRef,
-          competency_questions: input.competencyQuestions,
-          competency_questions_validation: input.competencyQuestionsValidation,
-          claim_realization_map: input.claimRealizationMap,
-        },
-      });
+      const systemPrompt = [
+        baseSystem,
+        `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
+        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, and runtime retains the full competency question artifact and validation authority.",
+        "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
+        "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
+      ].join("\n");
+      const userPayload = competencyQuestionAssessmentUserPayload(
+        input,
+        input.competencyQuestions.questions,
+      );
+      let raw: Record<string, unknown>;
+      if (
+        promptPayloadCharCount(systemPrompt, userPayload) <=
+          COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT
+      ) {
+        raw = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "CompetencyQuestionAssessment",
+          maxTokens: 3200,
+          systemPrompt,
+          userPayload,
+        });
+      } else {
+        const batches = competencyQuestionAssessmentPromptBatches(
+          input,
+          systemPrompt,
+        );
+        const assessments: Record<string, unknown>[] = [];
+        for (let index = 0; index < batches.length; index += 1) {
+          const batch = batches[index];
+          if (!batch) {
+            throw new Error(
+              `CompetencyQuestionAssessment batch ${index + 1} is missing after deterministic batching.`,
+            );
+          }
+          const batchPayload = competencyQuestionAssessmentUserPayload(
+            input,
+            batch,
+            {
+              batch_index: index + 1,
+              batch_count: batches.length,
+            },
+          );
+          assertPromptPayloadCharLimit({
+            artifactName: `CompetencyQuestionAssessment batch ${index + 1}`,
+            systemPrompt,
+            userPayload: batchPayload,
+            charLimit: COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
+          });
+          const batchRaw = await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            artifactName: `CompetencyQuestionAssessment batch ${index + 1}`,
+            maxTokens: 3200,
+            systemPrompt,
+            userPayload: batchPayload,
+          });
+          assessments.push(
+            ...records(batchRaw.assessments, "assessments"),
+          );
+        }
+        raw = { assessments };
+      }
       const questionById = new Map(input.competencyQuestions.questions.map((question) => [
         question.question_id,
         question,
@@ -8050,7 +8774,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeFinalOutput(input) {
-      const seedClaims = ontologyClaims(input.ontologySeed);
       const result = await llmCall(
         [
           "You are writing the final reconstruct result for the user.",
@@ -8058,184 +8781,13 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
           "OntologySeed is the primary and only active seed authority. It is not action-ready by itself.",
           "Include execution profile, completion scope, skipped/deferred stages, confirmed seed content, seed answerability buckets, CQ assessment, material failures as maturation frontier, revision proposals, and artifact truth.",
+          "If a summary field marks *_partial_projection true, explicitly say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
           "Include a short Claim Projection section using claim_projection_summary. State strongest_claim_level, decision_state_counts, and actionability_claim_counts plainly. If the strongest claim is blocked or actionability_claim is none, say that no ActionableOntology is claimed or emitted.",
           "Include a short Maturation Decision section using maturation_summary. State continuation_decision, validation status, blocking row count, included row count, excluded row count, and whether actionable ontology refs are present.",
           "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
           "Do not invent or upgrade claim projection levels. The canonical claim-projection artifact remains the truth authority; prose may summarize its already-published validated contents.",
         ].join("\n"),
-        JSON.stringify({
-          session_id: input.sessionId,
-          intent: input.intent,
-          target_material_profile:
-            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
-          candidate_inventory_summary: {
-            candidate_count: input.candidateInventory.candidates.length,
-            candidates: input.candidateInventory.candidates.slice(0, 80).map((candidate) => ({
-              candidate_id: candidate.candidate_id,
-              candidate_kind: candidate.candidate_kind,
-              name: candidate.name,
-              salience: candidate.salience,
-            })),
-          },
-          candidate_disposition_summary: {
-            disposition_count: input.candidateDisposition.dispositions.length,
-            validation_status: input.candidateDispositionValidation.validation_status,
-            promoted_count: input.candidateDisposition.dispositions.filter((disposition) =>
-              disposition.disposition_id === "promoted_to_seed_layer"
-            ).length,
-          },
-          ontology_seed_summary: {
-            summary_lines: ontologySeedSummaryLines(input.ontologySeed),
-            validation_status: input.ontologySeedValidation.validation_status,
-            seed_ref_count: input.ontologySeedValidation.seed_ref_count,
-            evidence_ref_count: input.ontologySeedValidation.evidence_ref_count,
-            limitation_count: input.ontologySeedValidation.limitation_count,
-            claim_count: seedClaims.length,
-            claims: claimRealizationTargets(seedClaims).slice(0, 180),
-          },
-          claim_realization_summary: {
-            validation_status: input.claimRealizationMapValidation.validation_status,
-            stance_counts:
-              input.claimRealizationMapValidation.stance_counts,
-            realized_claim_count:
-              input.claimRealizationMapValidation.realized_claim_count,
-          },
-          seed_confirmation_summary: {
-            confirmation_status: input.seedConfirmation.confirmation_status,
-            accepted_claim_count:
-              input.seedConfirmationValidation.accepted_claim_ids.length,
-            rejected_claim_count:
-              input.seedConfirmationValidation.rejected_claim_ids.length,
-            partial_claim_count:
-              input.seedConfirmationValidation.partial_claim_ids.length,
-            deferred_claim_count:
-              input.seedConfirmationValidation.deferred_claim_ids.length,
-            cq_eligible_claim_count:
-              input.seedConfirmationValidation.cq_eligible_claim_ids.length,
-          },
-          competency_question_summary: {
-            question_count: input.competencyQuestions.questions.length,
-            validation_status: input.competencyQuestionsValidation.validation_status,
-            required_domain_competency_ids:
-              input.competencyQuestionsValidation.required_admitted_competency_ids,
-            questions: input.competencyQuestions.questions.map((question) => ({
-              question_id: question.question_id,
-              question: question.question,
-              linked_claim_ids: question.linked_claim_ids,
-              limitation_refs: question.limitation_refs,
-              domain_competency_trace_refs: question.domain_competency_trace_refs,
-              coverage_disposition: question.coverage_disposition,
-              handoff_relevance: question.handoff_relevance,
-            })),
-          },
-          competency_question_assessment_summary: {
-            validation_status:
-              input.competencyQuestionAssessmentValidation.validation_status,
-            answer_status_counts:
-              input.competencyQuestionAssessmentValidation.answer_status_counts,
-            assessments: input.competencyQuestionAssessment.assessments.map((assessment) => ({
-              question_id: assessment.question_id,
-              answer_status: assessment.answer_status,
-              downstream_effect: assessment.downstream_effect,
-              linked_claim_ids: assessment.linked_claim_ids,
-              missing_source_or_confirmation:
-                assessment.missing_source_or_confirmation,
-              evidence_observation_ids:
-                evidenceObservationIdsFromEvidenceRefs(assessment.evidence_refs),
-              answer_summary: assessment.answer_summary,
-            })),
-          },
-          failure_classification_summary: {
-            validation_status:
-              input.failureClassificationValidation.validation_status,
-            failure_count:
-              input.failureClassificationValidation.failure_count,
-            material_failure_count:
-              input.failureClassificationValidation.material_failure_count,
-            failure_kind_counts:
-              input.failureClassificationValidation.failure_kind_counts,
-            failures: input.failureClassification.failures,
-          },
-          revision_proposal_summary: {
-            validation_status: input.revisionProposalValidation.validation_status,
-            proposal_count: input.revisionProposal.proposals.length,
-            proposals: input.revisionProposal.proposals,
-          },
-          metrics: input.metrics,
-          stop_decision: input.stopDecision,
-          pre_handoff_run_manifest_validation:
-            {
-              validation_status:
-                input.preHandoffRunManifestValidation.validation_status,
-              completed_step_count:
-                input.preHandoffRunManifestValidation.completed_step_count,
-              skipped_step_count:
-                input.preHandoffRunManifestValidation.skipped_step_count,
-            },
-          handoff_decision_validation: input.handoffDecisionValidation,
-          claim_projection_summary: {
-            claim_projection_ref: input.artifactRefs.claim_projection,
-            claim_projection_validation_ref:
-              input.artifactRefs.claim_projection_validation,
-            validation_status:
-              input.claimProjectionValidation.validation_status,
-            strongest_claim_level:
-              input.claimProjectionValidation.strongest_claim_level,
-            decision_state_counts:
-              input.claimProjectionValidation.decision_state_counts,
-            projection_rows: input.claimProjection.projection_rows.map((row) => ({
-              projection_surface: row.projection_surface,
-              claim_level: row.claim_level,
-              decision_state: row.decision_state,
-              actionability_claim: row.actionability_claim,
-              machine_status: row.machine_status,
-              included_row_count: row.included_row_refs.length,
-              excluded_row_count: row.excluded_row_refs.length,
-              limitation_ref_count: row.limitation_refs.length,
-              required_validation_refs: row.required_validation_refs,
-            })),
-            authority_note:
-              "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose may summarize this validated artifact but must not upgrade it.",
-          },
-          maturation_summary: {
-            baseline_rows: input.maturationBaseline.baseline_rows.length,
-            matrix_rows: input.actionabilityMatrix.rows.length,
-            frontier_questions:
-              input.maturationQuestionFrontier.questions.length,
-            closure_source_requests:
-              input.maturationClosureFrontier.source_requests.length,
-            closure_authority_requests:
-              input.maturationClosureFrontier.authority_requests.length,
-            evidence_clusters:
-              input.answerSupportLedger.evidence_clusters.length,
-            answer_claims:
-              input.maturationAnswerClaims.answer_claims.length,
-            ontology_expansions:
-              input.ontologyExpansion.expansions.length,
-            continuation_decision:
-              input.maturationContinuationDecision.decision_state,
-            continuation_validation:
-              input.maturationContinuationDecisionValidation.validation_status,
-            blocking_row_count:
-              input.maturationContinuationDecision.blocking_row_refs.length,
-            included_row_count:
-              input.maturationContinuationDecision.claim_scope.included_row_refs.length,
-            excluded_row_count:
-              input.maturationContinuationDecision.claim_scope.excluded_row_refs.length,
-            actionable_ontology_ref: input.artifactRefs.actionable_ontology,
-            actionable_ontology_validation_ref:
-              input.artifactRefs.actionable_ontology_validation,
-            state_rationale:
-              input.maturationContinuationDecision.state_rationale,
-          },
-          artifact_refs: input.artifactRefs,
-          reconstruct_record_path: input.reconstructRecordPath,
-          reconstruct_run_manifest_path: input.reconstructRunManifestPath,
-          execution_profile: input.reconstructRunManifest.execution_profile,
-          skipped_steps: input.reconstructRunManifest.steps.filter((step) =>
-            step.status === "skipped"
-          ),
-        }, null, 2),
+        JSON.stringify(compactFinalOutputPromptPayload(input), null, 2),
         { ...llmConfig, max_tokens: 4200 },
       );
       return result.text;
