@@ -33,6 +33,7 @@ Rules:
 - Do not change the required output structure from the packet.
 - If the packet asks you to preserve disagreement or uncertainty, preserve it explicitly.
 - If you cannot complete the task within the declared boundary, preserve that limitation explicitly as insufficient access or insufficient evidence within boundary instead of broadening the search.
+- CRITICAL output format: your entire response must be ONLY the required file content. The very first character of your response must be the first character of that content (for YAML, the first key or "---"; for markdown, the first "#"). Do NOT begin with any sentence such as "I have...", "Based on...", "Writing...", or "Here is...", and do NOT add any status, preface, narration, or closing remark.
 
 Authoritative prompt packet follows:
 

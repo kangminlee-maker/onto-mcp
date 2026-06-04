@@ -28,6 +28,10 @@ import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
 } from "../observability/runtime-stream-observation.js";
+import {
+  stripWrappingCodeFence,
+  stripLeadingNarrationBeforeYaml,
+} from "./strip-wrapping-code-fence.js";
 
 export interface WorkerRunContext {
   projectRoot: string;
@@ -183,6 +187,14 @@ export async function runCliWorkerUnit(
   } catch (err) {
     preserveRunningLog();
     throw err;
+  }
+  // Normalize common model output-wrapping before persisting so every
+  // downstream reader sees a clean artifact. Fence-stripping is safe for any
+  // unit; the YAML narration strip is gated to YAML-output (issue_artifact)
+  // units, whose strict parse breaks on a conversational preamble.
+  outputText = stripWrappingCodeFence(outputText);
+  if (ctx.unitKind === "issue_artifact") {
+    outputText = stripLeadingNarrationBeforeYaml(outputText);
   }
   if (outputText.length === 0) {
     preserveRunningLog();

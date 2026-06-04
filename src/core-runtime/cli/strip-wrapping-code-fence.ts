@@ -54,3 +54,37 @@ export function stripWrappingCodeFence(text: string): string {
   const inner = afterOpen.slice(0, closeMatch.index);
   return inner.trim();
 }
+
+// A YAML document/structural start at column 0: the `---` document marker, a
+// top-level mapping key (a single token with NO spaces, so prose ending in a
+// colon like "Writing the YAML now:" does NOT match), or an opening yaml fence.
+const YAML_STRUCTURAL_START_RE =
+  /^(?:---[ \t]*$|[A-Za-z0-9_-]+:(?:[ \t]|$)|```(?:ya?ml)?[ \t]*$)/;
+
+/**
+ * Strip a leading conversational narration that some models (observed on
+ * Claude Opus 4.8 as the issue-artifact worker, 2026-06-04) emit before the
+ * required YAML, e.g.
+ *
+ *     I have sufficient grounding from the finding-ledger and lens outputs.
+ *     Writing the YAML now:
+ *
+ *     relations:
+ *       - relation_id: r1
+ *
+ * which breaks strict YAML parsing of the artifact. Only intended for
+ * YAML-output units (issue artifacts): it removes everything before the first
+ * column-0 YAML-structural line, then re-strips a wrapping fence the narration
+ * may have preceded. If the text already begins structurally (no narration), it
+ * is returned unchanged so clean output is never altered. NOT safe for markdown
+ * units (whose body may legitimately contain a column-0 `key:` line), so the
+ * caller must gate this on the unit kind.
+ */
+export function stripLeadingNarrationBeforeYaml(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const startIdx = lines.findIndex(
+    (line) => line.trim() !== "" && YAML_STRUCTURAL_START_RE.test(line),
+  );
+  if (startIdx <= 0) return text.trim();
+  return stripWrappingCodeFence(lines.slice(startIdx).join("\n").trim());
+}

@@ -1,5 +1,42 @@
 import { describe, it, expect } from "vitest";
-import { stripWrappingCodeFence } from "./strip-wrapping-code-fence.js";
+import {
+  stripWrappingCodeFence,
+  stripLeadingNarrationBeforeYaml,
+} from "./strip-wrapping-code-fence.js";
+
+describe("stripLeadingNarrationBeforeYaml", () => {
+  it("strips a conversational preamble (incl. a line ending in a colon) before YAML", () => {
+    const raw =
+      "I have sufficient grounding from the finding-ledger and lens outputs.\nWriting the YAML now:\n\nrelations:\n  - relation_id: r1\n";
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("relations:\n  - relation_id: r1");
+  });
+
+  it("strips a preamble before a fenced yaml block and unwraps it", () => {
+    const raw = "Here is the result:\n\n```yaml\nrelations: []\n```";
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("relations: []");
+  });
+
+  it("strips a preamble before a --- document marker", () => {
+    const raw = "Based on the ledger, here it is.\n\n---\nrelations: []\n";
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("---\nrelations: []");
+  });
+
+  it("leaves clean YAML starting with a key unchanged", () => {
+    const raw = "relations:\n  - relation_id: r1\n";
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("relations:\n  - relation_id: r1");
+  });
+
+  it("leaves clean YAML starting with --- unchanged", () => {
+    const raw = "---\nrelations: []";
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("---\nrelations: []");
+  });
+
+  it("does not treat an indented (nested) key as the document start", () => {
+    const raw = "narration line one\n  nested_key: value\nrelations: []";
+    // first column-0 structural line is `relations:`; the indented key is not it
+    expect(stripLeadingNarrationBeforeYaml(raw)).toBe("relations: []");
+  });
+});
 
 describe("stripWrappingCodeFence", () => {
   it("strips ```yaml wrapper observed on 30B synthesize output", () => {
