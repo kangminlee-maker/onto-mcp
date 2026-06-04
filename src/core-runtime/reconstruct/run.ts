@@ -3167,6 +3167,115 @@ function observedSourceRefsForObservationIds(
   return [...new Set(sourceRefs)].slice(0, ONTOLOGY_SEED_OBSERVATION_LIMIT);
 }
 
+function sourceRefsFromMaturationQuestionHints(
+  questionFrontier: ReconstructMaturationQuestionFrontierArtifact,
+): string[] {
+  return [
+    ...new Set(
+      questionFrontier.questions.flatMap((question) =>
+        question.closure_frontier_hint_refs.flatMap((hintRef) =>
+          hintRef.startsWith("source:") ? [hintRef.slice("source:".length)] : []
+        )
+      ).filter((sourceRef) => sourceRef.length > 0),
+    ),
+  ];
+}
+
+function categoryOrderedAnswerSupportSourceRefs(args: {
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+}): string[] {
+  return [
+    ...new Set([
+      ...sourceRefsFromMaturationQuestionHints(args.maturationQuestionFrontier),
+      ...args.maturationClosureFrontier.source_requests.map((request) =>
+        request.requested_source_ref
+      ),
+      ...args.maturationClosureFrontier.source_requests.flatMap((request) =>
+        request.member_source_refs
+      ),
+      ...args.maturationClosureFrontier.source_requests.flatMap((request) =>
+        request.cross_material_ref_refs
+      ),
+    ].filter((sourceRef) => sourceRef.length > 0)),
+  ];
+}
+
+interface MaturationAnswerSupportPromptCatalog {
+  prioritizedObservationIds: string[];
+  promptObservationIds: string[];
+  promptVisiblePrioritizedObservationIds: string[];
+  promptVisibleFallbackObservationIds: string[];
+  omittedPrioritizedObservationIds: string[];
+}
+
+function maturationAnswerSupportPromptCatalog(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+}): MaturationAnswerSupportPromptCatalog {
+  const observationsBySourceRef = new Map<
+    string,
+    ReconstructSourceObservationsArtifact["observations"]
+  >();
+  for (const observation of args.sourceObservations.observations) {
+    const observations = observationsBySourceRef.get(observation.source_ref) ??
+      [];
+    observations.push(observation);
+    observationsBySourceRef.set(observation.source_ref, observations);
+  }
+  const prioritizedObservationIds = [
+    ...new Set(
+      categoryOrderedAnswerSupportSourceRefs(args).flatMap((sourceRef) =>
+        (observationsBySourceRef.get(sourceRef) ?? []).map((observation) =>
+          observation.observation_id
+        )
+      ),
+    ),
+  ];
+  const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
+  const fallbackObservationIds = args.sourceObservations.observations
+    .filter((observation) =>
+      !prioritizedObservationIdSet.has(observation.observation_id)
+    )
+    .map((observation) => observation.observation_id);
+  const promptObservationIds = [
+    ...new Set([...prioritizedObservationIds, ...fallbackObservationIds]),
+  ].slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+  const promptObservationIdSet = new Set(promptObservationIds);
+  return {
+    prioritizedObservationIds,
+    promptObservationIds,
+    promptVisiblePrioritizedObservationIds: prioritizedObservationIds.filter((
+      observationId,
+    ) => promptObservationIdSet.has(observationId)),
+    promptVisibleFallbackObservationIds: fallbackObservationIds.filter((
+      observationId,
+    ) => promptObservationIdSet.has(observationId)),
+    omittedPrioritizedObservationIds: prioritizedObservationIds.filter((
+      observationId,
+    ) => !promptObservationIdSet.has(observationId)),
+  };
+}
+
+function assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(
+  catalog: MaturationAnswerSupportPromptCatalog,
+): void {
+  if (catalog.omittedPrioritizedObservationIds.length === 0) return;
+  const sample = catalog.omittedPrioritizedObservationIds.slice(0, 10).join(", ");
+  const suffix = catalog.omittedPrioritizedObservationIds.length > 10
+    ? ", ..."
+    : "";
+  throw new Error(
+    [
+      "AnswerSupportLedger prompt catalog overflow:",
+      `${catalog.prioritizedObservationIds.length} closure-prioritized observation ids exceed the prompt catalog limit ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}.`,
+      `Omitted prioritized observation ids: ${sample}${suffix}.`,
+      "Split the closure frontier or batch answer-support authoring before creating answer support.",
+    ].join(" "),
+  );
+}
+
 function compactCandidateInventoryForPrompt(
   candidateInventory: ReconstructCandidateInventoryArtifact,
 ): unknown {
@@ -4935,6 +5044,8 @@ const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
 const SOURCE_SCOUT_PROMPT_SIGNAL_LIMIT = 80;
 const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
+const ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT = 64;
+const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
@@ -4966,13 +5077,19 @@ function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
 ): unknown {
-  const allowedObservationIds = options.observationIds
-    ? new Set(options.observationIds)
-    : null;
-  return sourceObservations.observations
-    .filter((observation) =>
-      !allowedObservationIds || allowedObservationIds.has(observation.observation_id)
-    )
+  const observations = options.observationIds
+    ? (() => {
+      const observationsById = new Map(sourceObservations.observations.map((
+        observation,
+      ) => [observation.observation_id, observation]));
+      return [...new Set(options.observationIds)]
+        .map((observationId) => observationsById.get(observationId))
+        .filter((observation): observation is NonNullable<typeof observation> =>
+          observation !== undefined
+        );
+    })()
+    : sourceObservations.observations;
+  return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
         observation_id: observation.observation_id,
@@ -7609,6 +7726,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeAnswerSupportLedger(input) {
+      const promptCatalog = maturationAnswerSupportPromptCatalog({
+        sourceObservations: input.sourceObservations,
+        maturationQuestionFrontier: input.maturationQuestionFrontier,
+        maturationClosureFrontier: input.maturationClosureFrontier,
+      });
+      assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
+      const promptObservationIds = promptCatalog.promptObservationIds;
+      const promptObservationIdSet = new Set(promptObservationIds);
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -7619,6 +7744,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Author answer-support-ledger.yaml. Include evidence clusters only when the current evidence or explicit authority can positively support an answer.",
           "Do not create clusters for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
           "For convergent_source_evidence, cite at least two independent evidence_observation_ids unless the answer is direct_authority.",
+          "source_observations is a bounded candidate catalog for this maturation answer-support prompt, not the full source-observations artifact. If the bounded catalog or explicit authority does not support an answer, omit the cluster.",
+          "Every evidence_observation_ids value must come from prompt_visible_observation_ids. Prompt visibility is not source-safety or material validation; downstream validation remains authoritative.",
           "JSON shape: {\"evidence_clusters\":[{\"evidence_cluster_id\":\"...\",\"question_refs\":[\"...\"],\"support_mode\":\"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence\",\"proposed_answer_summary\":\"...\",\"evidence_observation_ids\":[\"...\"],\"proof_refs\":[\"...\"],\"user_confirmation_refs\":[\"...\"],\"authority_response_refs\":[\"...\"],\"independence_basis\":\"...\",\"contradiction_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
         ].join("\n"),
         userPayload: {
@@ -7632,8 +7759,29 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           authority_response: input.maturationAuthorityResponse,
           authority_response_validation:
             input.maturationAuthorityResponseValidation,
+          source_observation_prompt_policy: {
+            projection_kind: "maturation_answer_support_bounded_catalog",
+            selection_basis:
+              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with fallback observations; semantic answer support remains LLM-owned.",
+            source_observation_count: input.sourceObservations.observations.length,
+            prioritized_observation_count:
+              promptCatalog.prioritizedObservationIds.length,
+            prompt_observation_count: promptObservationIds.length,
+            prompt_visible_prioritized_observation_count:
+              promptCatalog.promptVisiblePrioritizedObservationIds.length,
+            prompt_visible_fallback_observation_count:
+              promptCatalog.promptVisibleFallbackObservationIds.length,
+            omitted_prioritized_observation_count:
+              promptCatalog.omittedPrioritizedObservationIds.length,
+            observation_limit: ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+            content_excerpt_char_limit:
+              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          },
+          prompt_visible_observation_ids: promptObservationIds,
           source_observations: observationPromptPayload(input.sourceObservations, {
-            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            observationIds: promptObservationIds,
+            contentExcerptCharLimit:
+              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
           }),
         },
       });
@@ -7667,14 +7815,25 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.proposed_answer_summary,
             `evidence_clusters[${index}].proposed_answer_summary`,
           ),
-          evidence_refs: evidenceRefsFromIds({
-            observationIds: stringArray(
+          evidence_refs: (() => {
+            const observationIds = stringArray(
               cluster.evidence_observation_ids ?? [],
               `evidence_clusters[${index}].evidence_observation_ids`,
-            ),
-            sourceObservations: input.sourceObservations,
-            fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
-          }),
+            );
+            const outOfPromptIds = observationIds.filter((observationId) =>
+              !promptObservationIdSet.has(observationId)
+            );
+            if (outOfPromptIds.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
+              );
+            }
+            return evidenceRefsFromIds({
+              observationIds,
+              sourceObservations: input.sourceObservations,
+              fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
+            });
+          })(),
           proof_refs: stringArray(
             cluster.proof_refs ?? [],
             `evidence_clusters[${index}].proof_refs`,

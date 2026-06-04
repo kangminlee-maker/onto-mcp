@@ -6,6 +6,8 @@ import { parse as parseYaml } from "yaml";
 import type {
   ReconstructActionabilityMatrixArtifact,
   ReconstructMaturationContinuationDecisionArtifact,
+  ReconstructMaturationClosureFrontierArtifact,
+  ReconstructMaturationQuestionFrontierArtifact,
   ReconstructOntologySeedValidationArtifact,
   ReconstructOntologySeedArtifact,
   ReconstructCandidateDispositionValidationArtifact,
@@ -2168,6 +2170,683 @@ describe("runReconstruct", () => {
       declared_billing_mode: "local",
     });
   }
+
+  function answerSupportPromptFixture(options: {
+    fallbackObservationCount?: number;
+    priorityObservations?: Array<{
+      observationId: string;
+      sourceRef: string;
+      targetMaterialKind?: ReconstructSourceObservationsArtifact["observations"][number]["target_material_kind"];
+    }>;
+    closureHintSourceRefs?: string[];
+    sourceRequest?: {
+      requestedSourceRef: string;
+      targetMaterialKind?: ReconstructMaturationClosureFrontierArtifact["source_requests"][number]["target_material_kind"];
+      memberSourceRefs?: string[];
+      crossMaterialRefRefs?: string[];
+    } | null;
+    sourceRequests?: Array<{
+      requestedSourceRef: string;
+      targetMaterialKind?: ReconstructMaturationClosureFrontierArtifact["source_requests"][number]["target_material_kind"];
+      memberSourceRefs?: string[];
+      crossMaterialRefRefs?: string[];
+    }>;
+  } = {}): {
+    sourceObservations: ReconstructSourceObservationsArtifact;
+    questionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+    closureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  } {
+    const neededSourceRef = "/fixture/needed-maturation-source.md";
+    const priorityObservations = options.priorityObservations ?? [{
+      observationId: "obs-needed",
+      sourceRef: neededSourceRef,
+      targetMaterialKind: "document" as const,
+    }];
+    const closureHintSourceRefs = options.closureHintSourceRefs ??
+      [neededSourceRef];
+    const sourceRequest = options.sourceRequest === undefined
+      ? {
+        requestedSourceRef: neededSourceRef,
+        targetMaterialKind: "document" as const,
+        memberSourceRefs: [],
+        crossMaterialRefRefs: [],
+      }
+      : options.sourceRequest;
+    const sourceRequests = options.sourceRequests ??
+      (sourceRequest ? [sourceRequest] : []);
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      observations: [
+        ...Array.from({ length: options.fallbackObservationCount ?? 69 }, (_, index) => ({
+          observation_id: `obs-${index + 1}`,
+          target_material_kind: "code" as const,
+          adapter_id: "fixture",
+          source_ref: `/fixture/source-${index + 1}.ts`,
+          location: `line ${index + 1}`,
+          summary: `Fixture source observation ${index + 1}`,
+          structural_data: {
+            content_excerpt: "x".repeat(1200),
+            symbol_name: `fixture_${index + 1}`,
+          },
+        })),
+        ...priorityObservations.map((observation) => ({
+          observation_id: observation.observationId,
+          target_material_kind: observation.targetMaterialKind ?? "document",
+          adapter_id: "fixture",
+          source_ref: observation.sourceRef,
+          location: `section ${observation.observationId}`,
+          summary: `Needed maturation source observation ${observation.observationId}`,
+          structural_data: {
+            content_excerpt: "needed ".repeat(220),
+            section: observation.observationId,
+          },
+        })),
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    const questionFrontier: ReconstructMaturationQuestionFrontierArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: sourceObservations.created_at,
+      maturation_baseline_ref: "maturation-baseline.yaml",
+      maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+      actionability_matrix_ref: "baseline-actionability-matrix.yaml",
+      actionability_matrix_validation_ref:
+        "baseline-actionability-matrix-validation.yaml",
+      questions: [{
+        question_id: "maturation-question-needed-source",
+        question: "What does the needed maturation source prove?",
+        materiality: "blocker",
+        materiality_ref: "matrix-row-needed",
+        actionability_surface_refs: ["dynamic_surface"],
+        maturity_dimension_refs: ["evidence"],
+        purpose_element_refs: ["purpose-needed"],
+        baseline_row_refs: ["baseline-needed"],
+        competency_question_refs: [],
+        competency_assessment_refs: [],
+        domain_competency_trace_refs: [],
+        seed_ref_refs: ["object-needed"],
+        current_answer_status: "unsupported",
+        expected_answer_kind: "explanation",
+        evidence_needed: "Needed maturation source evidence.",
+        authority_need: {
+          authority_kind: "none",
+          authority_scope: null,
+          blocking_if_unavailable: true,
+          expected_response_kind: "unavailable_reason",
+        },
+        closure_frontier_hint_refs: closureHintSourceRefs.map((sourceRef) =>
+          `source:${sourceRef}`
+        ),
+        limitation_refs: [],
+      }],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture-author",
+      },
+    };
+    const closureFrontier: ReconstructMaturationClosureFrontierArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: sourceObservations.created_at,
+      round_id: "maturation-round-1",
+      question_frontier_ref: "maturation-question-frontier.yaml",
+      source_requests: sourceRequests.map((request, index) => ({
+        source_request_id: index === 0
+          ? "source-request-needed"
+          : `source-request-needed-${index + 1}`,
+        question_refs: ["maturation-question-needed-source"],
+        member_scope_refs: [],
+        member_source_refs: request.memberSourceRefs ?? [],
+        cross_material_ref_refs: request.crossMaterialRefRefs ?? [],
+        requested_source_ref: request.requestedSourceRef,
+        requested_location: request.requestedSourceRef,
+        target_material_kind: request.targetMaterialKind ?? "document",
+        expected_evidence_kind: "needed maturation source",
+        reason: "The question needs this source.",
+      })),
+      authority_requests: [],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture-author",
+      },
+    };
+    return { sourceObservations, questionFrontier, closureFrontier };
+  }
+
+  function validQuestionFrontierValidation() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_question_frontier_ref: "maturation-question-frontier.yaml",
+      maturation_baseline_validation_ref:
+        "maturation-baseline-validation.yaml",
+      actionability_matrix_validation_ref:
+        "baseline-actionability-matrix-validation.yaml",
+      validation_status: "valid" as const,
+      question_count: 1,
+      material_frontier_question_count: 1,
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  function validClosureFrontierValidation(
+    closureFrontier?: ReconstructMaturationClosureFrontierArtifact,
+  ) {
+    const acceptedSourceRequestIds = closureFrontier?.source_requests.map((
+      sourceRequest,
+    ) => sourceRequest.source_request_id) ?? ["source-request-needed"];
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_closure_frontier_ref: "maturation-closure-frontier.yaml",
+      maturation_question_frontier_validation_ref:
+        "maturation-question-frontier-validation.yaml",
+      source_inventory_ref: "source-inventory.yaml",
+      source_observations_ref: "source-observations.yaml",
+      validation_status: "valid" as const,
+      source_request_count: acceptedSourceRequestIds.length,
+      authority_request_count: 0,
+      accepted_source_request_ids: acceptedSourceRequestIds,
+      rejected_source_requests: [],
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  function emptyAuthorityResponse() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      closure_frontier_ref: "maturation-closure-frontier.yaml",
+      responses: [],
+    };
+  }
+
+  function validAuthorityResponseValidation() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_authority_response_ref:
+        "maturation-authority-response.yaml",
+      maturation_closure_frontier_validation_ref:
+        "maturation-closure-frontier-validation.yaml",
+      validation_status: "valid" as const,
+      response_count: 0,
+      provided_response_count: 0,
+      unavailable_response_count: 0,
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  async function captureAnswerSupportPromptPayload(
+    fixture = answerSupportPromptFixture(),
+  ): Promise<Record<string, any>> {
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (_systemPrompt, userPrompt) => {
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return Promise.resolve({
+          text: JSON.stringify({ evidence_clusters: [] }),
+        });
+      },
+    });
+    await author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: fixture.questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: fixture.closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(fixture.closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations: fixture.sourceObservations,
+    });
+    expect(capturedPayload).not.toBeNull();
+    return capturedPayload as Record<string, any>;
+  }
+
+  it("bounds answer-support source observations to a closure-prioritized prompt-visible catalog", async () => {
+    const {
+      sourceObservations,
+      questionFrontier,
+      closureFrontier,
+    } = answerSupportPromptFixture();
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (systemPrompt, userPrompt) => {
+        expect(systemPrompt).toContain("Author answer-support-ledger.yaml");
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-needed",
+              question_refs: ["maturation-question-needed-source"],
+              support_mode: "direct_authority",
+              proposed_answer_summary:
+                "The bounded prompt catalog includes the needed source.",
+              evidence_observation_ids: ["obs-needed"],
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "The fixture cites the closure-requested source.",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        });
+      },
+    });
+
+    const result = await author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations,
+    });
+
+    expect(capturedPayload?.source_observation_prompt_policy)
+      .toMatchObject({
+        projection_kind: "maturation_answer_support_bounded_catalog",
+        source_observation_count: 70,
+        prioritized_observation_count: 1,
+        prompt_observation_count: 64,
+        prompt_visible_prioritized_observation_count: 1,
+        prompt_visible_fallback_observation_count: 63,
+        omitted_prioritized_observation_count: 0,
+        observation_limit: 64,
+        content_excerpt_char_limit: 500,
+      });
+    expect(capturedPayload?.prompt_visible_observation_ids[0]).toBe(
+      "obs-needed",
+    );
+    expect(capturedPayload?.source_observations).toHaveLength(64);
+    expect(capturedPayload?.source_observations[0]?.observation_id).toBe(
+      "obs-needed",
+    );
+    const promptSourceObservationIds = capturedPayload?.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+    expect(promptSourceObservationIds).toEqual(
+      capturedPayload?.prompt_visible_observation_ids,
+    );
+    expect(promptSourceObservationIds).toContain("obs-needed");
+    expect(JSON.stringify(capturedPayload?.source_observations))
+      .not.toContain("obs-69");
+    const neededObservation = capturedPayload?.source_observations.find((
+      observation: { observation_id: string },
+    ) => observation.observation_id === "obs-needed");
+    expect(neededObservation.structural_data.content_excerpt.length).toBe(500);
+    expect(result.evidence_clusters[0]?.evidence_refs[0]?.observation_id)
+      .toBe("obs-needed");
+  });
+
+  it.each([
+    {
+      caseName: "question hint refs",
+      fixture: () => {
+        const sourceRef = "/fixture/hint-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [sourceRef],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+          },
+        });
+      },
+    },
+    {
+      caseName: "requested_source_ref",
+      fixture: () => {
+        const sourceRef = "/fixture/requested-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: sourceRef,
+          },
+        });
+      },
+    },
+    {
+      caseName: "member_source_refs",
+      fixture: () => {
+        const sourceRef = "/fixture/member-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [sourceRef],
+          },
+        });
+      },
+    },
+    {
+      caseName: "cross_material_ref_refs",
+      fixture: () => {
+        const sourceRef = "/fixture/cross-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+            targetMaterialKind: "mixed",
+            crossMaterialRefRefs: [sourceRef],
+          },
+        });
+      },
+    },
+  ])("prioritizes answer-support source observations from $caseName", async (
+    testCase,
+  ) => {
+    const payload = await captureAnswerSupportPromptPayload(testCase.fixture());
+
+    expect(payload.prompt_visible_observation_ids[0]).toBe("obs-priority");
+    expect(payload.source_observations[0]?.observation_id).toBe("obs-priority");
+    expect(payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id)).toEqual(
+      payload.prompt_visible_observation_ids,
+    );
+    expect(payload.source_observation_prompt_policy)
+      .toMatchObject({
+        prioritized_observation_count: 1,
+        prompt_visible_prioritized_observation_count: 1,
+        omitted_prioritized_observation_count: 0,
+      });
+    expect(payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id)).toContain("obs-priority");
+  });
+
+  it("preserves full answer-support prompt catalog order across multiple priority categories before fallback rows", async () => {
+    const hintSourceRef = "/fixture/hint-priority.md";
+    const requestedSourceRef = "/fixture/requested-priority.md";
+    const memberSourceRef = "/fixture/member-priority.md";
+    const crossSourceRef = "/fixture/cross-priority.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        fallbackObservationCount: 3,
+        priorityObservations: [
+          {
+            observationId: "obs-cross-priority",
+            sourceRef: crossSourceRef,
+          },
+          {
+            observationId: "obs-member-priority",
+            sourceRef: memberSourceRef,
+          },
+          {
+            observationId: "obs-requested-priority",
+            sourceRef: requestedSourceRef,
+          },
+          {
+            observationId: "obs-hint-priority",
+            sourceRef: hintSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [hintSourceRef],
+        sourceRequest: {
+          requestedSourceRef,
+          targetMaterialKind: "mixed",
+          memberSourceRefs: [memberSourceRef],
+          crossMaterialRefRefs: [crossSourceRef],
+        },
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 4)).toEqual([
+      "obs-hint-priority",
+      "obs-requested-priority",
+      "obs-member-priority",
+      "obs-cross-priority",
+    ]);
+    expect(sourceObservationIds.slice(4)).toEqual(["obs-1", "obs-2", "obs-3"]);
+  });
+
+  it("preserves answer-support category order globally across multiple source requests", async () => {
+    const firstRequestedSourceRef = "/fixture/requested-first.md";
+    const secondRequestedSourceRef = "/fixture/requested-second.md";
+    const firstMemberSourceRef = "/fixture/member-first.md";
+    const secondMemberSourceRef = "/fixture/member-second.md";
+    const firstCrossSourceRef = "/fixture/cross-first.md";
+    const secondCrossSourceRef = "/fixture/cross-second.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        fallbackObservationCount: 2,
+        priorityObservations: [
+          {
+            observationId: "obs-cross-second",
+            sourceRef: secondCrossSourceRef,
+          },
+          {
+            observationId: "obs-member-first",
+            sourceRef: firstMemberSourceRef,
+          },
+          {
+            observationId: "obs-requested-second",
+            sourceRef: secondRequestedSourceRef,
+          },
+          {
+            observationId: "obs-cross-first",
+            sourceRef: firstCrossSourceRef,
+          },
+          {
+            observationId: "obs-requested-first",
+            sourceRef: firstRequestedSourceRef,
+          },
+          {
+            observationId: "obs-member-second",
+            sourceRef: secondMemberSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [],
+        sourceRequest: null,
+        sourceRequests: [
+          {
+            requestedSourceRef: firstRequestedSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [firstMemberSourceRef],
+            crossMaterialRefRefs: [firstCrossSourceRef],
+          },
+          {
+            requestedSourceRef: secondRequestedSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [secondMemberSourceRef],
+            crossMaterialRefRefs: [secondCrossSourceRef],
+          },
+        ],
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 6)).toEqual([
+      "obs-requested-first",
+      "obs-requested-second",
+      "obs-member-first",
+      "obs-member-second",
+      "obs-cross-first",
+      "obs-cross-second",
+    ]);
+    expect(sourceObservationIds.slice(6)).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("dedupes duplicate answer-support source refs at the earliest priority category", async () => {
+    const duplicateSourceRef = "/fixture/duplicate-priority.md";
+    const requestedSourceRef = "/fixture/requested-after-duplicate.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        fallbackObservationCount: 2,
+        priorityObservations: [
+          {
+            observationId: "obs-requested-after-duplicate",
+            sourceRef: requestedSourceRef,
+          },
+          {
+            observationId: "obs-duplicate-priority",
+            sourceRef: duplicateSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [duplicateSourceRef],
+        sourceRequest: null,
+        sourceRequests: [
+          {
+            requestedSourceRef: duplicateSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [duplicateSourceRef],
+            crossMaterialRefRefs: [duplicateSourceRef],
+          },
+          {
+            requestedSourceRef,
+            targetMaterialKind: "document",
+          },
+        ],
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 2)).toEqual([
+      "obs-duplicate-priority",
+      "obs-requested-after-duplicate",
+    ]);
+    expect(sourceObservationIds.filter((observationId: string) =>
+      observationId === "obs-duplicate-priority"
+    )).toHaveLength(1);
+    expect(sourceObservationIds.slice(2)).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("fails before answer-support authoring when closure-prioritized observations exceed the prompt catalog cap", async () => {
+    const highFanoutRef = "/fixture/high-fanout-requested-source.md";
+    const competingRef = "/fixture/competing-requested-source.md";
+    const fixture = answerSupportPromptFixture({
+      fallbackObservationCount: 0,
+      priorityObservations: [
+        ...Array.from({ length: 65 }, (_, index) => ({
+          observationId: `obs-priority-${index + 1}`,
+          sourceRef: highFanoutRef,
+        })),
+        {
+          observationId: "obs-competing",
+          sourceRef: competingRef,
+        },
+      ],
+      closureHintSourceRefs: [],
+      sourceRequest: {
+        requestedSourceRef: highFanoutRef,
+        targetMaterialKind: "mixed",
+        memberSourceRefs: [competingRef],
+      },
+    });
+    let llmCalled = false;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        llmCalled = true;
+        return Promise.resolve({
+          text: JSON.stringify({ evidence_clusters: [] }),
+        });
+      },
+    });
+
+    await expect(author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: fixture.questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: fixture.closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(fixture.closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations: fixture.sourceObservations,
+    })).rejects.toThrow(/prompt catalog overflow/);
+    expect(llmCalled).toBe(false);
+  });
+
+  it("rejects answer-support evidence ids outside the bounded prompt catalog", async () => {
+    const {
+      sourceObservations,
+      questionFrontier,
+      closureFrontier,
+    } = answerSupportPromptFixture();
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () =>
+        Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-outside-catalog",
+              question_refs: ["maturation-question-needed-source"],
+              support_mode: "direct_authority",
+              proposed_answer_summary:
+                "The fixture attempts to cite hidden prompt evidence.",
+              evidence_observation_ids: ["obs-69"],
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "Invalid hidden evidence citation.",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        }),
+    });
+
+    await expect(author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations,
+    })).rejects.toThrow(/outside the bounded prompt catalog/);
+  });
 
   it("runs the material-aware purpose adequacy path for the first code fixture", async () => {
     const projectRoot = await tempProjectRoot();
