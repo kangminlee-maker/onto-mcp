@@ -19,7 +19,21 @@
 
 ---
 
-## Phase 1 — onto subprocess: `executor=claude` (worker_claude), host 무관
+## Phase 1 — COMPLETE (2026-06-04)
+
+1.1–1.9 모두 완료. 커밋 `7a813a0`(1.1-1.2) · `11056f3`(1.3) · `0359e72`(1.4-1.5) · `dc21911`(1.6) · `7fe9d61`(1.7-1.8).
+
+**1.9 E2E 증거**: 실제 `claude -p`(haiku)로 `claude-review-unit-executor` 1유닛 실행 → envelope `realization=worker, host_runtime=claude`, output 파일 정확 생성, 성공 시 running-log 삭제 확인. PATH가 실바이너리(2.1.162) 적중, claude.ai Max 인증 통과.
+
+**검증 총괄**: typecheck green · 단위테스트(model-switcher/settings/callClaudeCli parser/adapter/runner/route/profile) · review+cli+core-api 296/296 · `test:review:invocation-runner`·`test:mcp:review` 회귀 0.
+
+**conformance 결정**: executor=claude는 실제 claude(비결정·토큰비용)라 deterministic conformance 하베스에 real-claude fixture를 넣지 않는다. 결정론적 커버리지는 route/profile/dispatch 단위테스트, 실호출 증명은 executor E2E가 담당.
+
+**미수행(선택)**: 풀 멀티-lens 실-claude 리뷰(round1→deliberation→synthesize→record)는 orchestration이 provider-무관(codex 검증됨)이라 worker-level 실 E2E + mock 풀파이프라인 conformance로 충분히 갈음. 필요 시 별도 실행.
+
+---
+
+## Phase 1 (상세) — onto subprocess: `executor=claude` (worker_claude), host 무관
 
 ### 1.1 model-switcher: claude provider (신규 5번째)
 - 파일: `llm/model-switcher.ts`
