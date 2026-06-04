@@ -678,12 +678,14 @@ async function callClaudeCli(
   systemPrompt: string,
   userPrompt: string,
   modelId?: string,
+  effort?: string,
   authMode: LlmAuthMode = "oauth",
 ): Promise<LlmCallResult> {
   const { spawn } = await import("node:child_process");
 
   const args: string[] = ["-p", "--output-format", "json"];
   if (modelId) args.push("--model", modelId);
+  if (effort) args.push("--effort", effort);
 
   const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
 
@@ -841,7 +843,7 @@ async function dispatchByPlan(
   }
   if (plan.provider_identity === "claude") {
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.claude;
-    return callClaudeCli(systemPrompt, userPrompt, modelId);
+    return callClaudeCli(systemPrompt, userPrompt, modelId, config.reasoning_effort);
   }
   if (plan.provider_identity === "anthropic") {
     const apiKey = readEnvApiKey(
@@ -942,6 +944,7 @@ export async function callLlm(
       systemPrompt,
       userPrompt,
       config.model_id ?? config.models_per_provider?.claude,
+      config.reasoning_effort,
     );
   }
 

@@ -17,6 +17,8 @@ import { parseClaudeResultEvent } from "../../llm/llm-caller.js";
 
 export interface ClaudeWorkerAdapterOptions {
   model?: string;
+  /** Effort level passed to `claude -p --effort` (e.g. "high"). */
+  effort?: string;
   /** Tool set the worker may use. Default read-only: "Read,Glob,Grep". */
   tools?: string;
   /** Permission mode for non-interactive runs. Default "bypassPermissions". */
@@ -42,6 +44,9 @@ export function createClaudeWorkerAdapter(
       }
       if (opts.model && opts.model.length > 0) {
         args.push("--model", opts.model);
+      }
+      if (opts.effort && opts.effort.length > 0) {
+        args.push("--effort", opts.effort);
       }
       return args;
     },

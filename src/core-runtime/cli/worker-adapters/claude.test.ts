@@ -25,14 +25,16 @@ describe("createClaudeWorkerAdapter — buildArgv", () => {
     expect(argv).not.toContain("--model");
   });
 
-  it("passes --model and custom tools / permission / add-dir when provided", () => {
+  it("passes --model / --effort and custom tools / permission / add-dir when provided", () => {
     const argv = createClaudeWorkerAdapter({
       model: "claude-opus-4-8",
+      effort: "high",
       tools: "Read",
       permissionMode: "dontAsk",
       addDirs: ["/lib", "/cfg"],
     }).buildArgv(ctx);
     expect(argv[argv.indexOf("--model") + 1]).toBe("claude-opus-4-8");
+    expect(argv[argv.indexOf("--effort") + 1]).toBe("high");
     expect(argv[argv.indexOf("--tools") + 1]).toBe("Read");
     expect(argv[argv.indexOf("--permission-mode") + 1]).toBe("dontAsk");
     expect(argv.filter((a) => a === "--add-dir").length).toBe(2);

@@ -30,6 +30,7 @@ export async function runClaudeReviewUnitExecutorCli(
       "packet-path": { type: "string" },
       "output-path": { type: "string" },
       model: { type: "string" },
+      effort: { type: "string" },
       tools: { type: "string" },
       "permission-mode": { type: "string" },
       "add-dir": { type: "string", multiple: true, default: [] },
@@ -56,7 +57,7 @@ export async function runClaudeReviewUnitExecutorCli(
       typeof values.model === "string" && values.model.length > 0
         ? values.model
         : "(claude default)"
-    } tools=${typeof values.tools === "string" && values.tools.length > 0 ? values.tools : "Read,Glob,Grep"}\n`,
+    } effort=${typeof values.effort === "string" && values.effort.length > 0 ? values.effort : "(default)"} tools=${typeof values.tools === "string" && values.tools.length > 0 ? values.tools : "Read,Glob,Grep"}\n`,
   );
 
   const packetText = await fs.readFile(packetPath, "utf8");
@@ -73,6 +74,9 @@ export async function runClaudeReviewUnitExecutorCli(
   const adapter = createClaudeWorkerAdapter({
     ...(typeof values.model === "string" && values.model.length > 0
       ? { model: values.model }
+      : {}),
+    ...(typeof values.effort === "string" && values.effort.length > 0
+      ? { effort: values.effort }
       : {}),
     ...(typeof values.tools === "string" && values.tools.length > 0
       ? { tools: values.tools }

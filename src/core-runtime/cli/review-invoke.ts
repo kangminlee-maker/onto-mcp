@@ -852,10 +852,16 @@ function appendExecutorModelArgs(
   if (typeof model === "string" && model.length > 0) {
     args.push("--model", model);
   }
-  if (!isClaude) {
-    const reasoningEffort =
-      readSingleOptionValueFromArgv(argv, "reasoning-effort") ??
-      llmSelection?.reasoning_effort;
+  const reasoningEffort =
+    readSingleOptionValueFromArgv(argv, "reasoning-effort") ??
+    llmSelection?.reasoning_effort;
+  if (isClaude) {
+    // claude exposes effort as `--effort` (codex uses `--reasoning-effort`);
+    // service_tier is codex-only and is not passed to claude.
+    if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
+      args.push("--effort", reasoningEffort);
+    }
+  } else {
     if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
       args.push("--reasoning-effort", reasoningEffort);
     }
