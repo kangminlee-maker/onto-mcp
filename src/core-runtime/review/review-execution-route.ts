@@ -9,7 +9,11 @@ import type {
   ReviewWorkerExecutor,
 } from "./review-execution-profile.js";
 
-type ReviewExecutionRouteHost = "codex" | "standalone";
+type ReviewExecutionRouteHost = "codex" | "claude" | "standalone";
+
+function assertNever(value: never, message: string): never {
+  throw new Error(`${message}: ${String(value)}`);
+}
 type ReviewExecutionRouteProvider = RuntimeLlmProvider | "mock";
 
 interface ReviewExecutionRouteProjection {
@@ -79,16 +83,34 @@ export function buildReviewExecutionRoute(
     };
   }
 
-  const resolvedProvider = directCallProviderForProfile(profile);
-  const artifactHostRuntime =
-    isDirectCallHost(profile.host) ? profile.host : resolvedProvider;
+  if (profile.worker_executor === "claude") {
+    return {
+      host: "claude",
+      executor: "claude",
+      resolved_provider: "claude",
+      auth_mode: profile.auth ?? "oauth",
+      execution_realization: "worker",
+      artifact_host_runtime: "claude",
+    };
+  }
 
-  return {
-    host: "standalone",
-    executor: "direct_call",
-    resolved_provider: resolvedProvider,
-    auth_mode: profile.auth ?? null,
-    execution_realization: "direct-call",
-    artifact_host_runtime: artifactHostRuntime as ReviewHostRuntime,
-  };
+  if (profile.worker_executor === "direct_call") {
+    const resolvedProvider = directCallProviderForProfile(profile);
+    const artifactHostRuntime =
+      isDirectCallHost(profile.host) ? profile.host : resolvedProvider;
+
+    return {
+      host: "standalone",
+      executor: "direct_call",
+      resolved_provider: resolvedProvider,
+      auth_mode: profile.auth ?? null,
+      execution_realization: "direct-call",
+      artifact_host_runtime: artifactHostRuntime as ReviewHostRuntime,
+    };
+  }
+
+  return assertNever(
+    profile.worker_executor,
+    "buildReviewExecutionRoute: unhandled worker_executor",
+  );
 }

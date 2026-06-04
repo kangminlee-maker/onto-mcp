@@ -9,6 +9,7 @@ export type ReviewExecutionRealization = "worker" | "direct-call";
 /**
  * Host runtime for review execution.
  * - "codex":      Codex host-bound worker path.
+ * - "claude":     Claude Code CLI worker path (`claude -p`).
  * - "anthropic":  Anthropic SDK direct call from TS process.
  * - "openai":     OpenAI SDK direct call.
  * - "grok":       xAI/Grok OpenAI-style API via TS process direct HTTP.
@@ -17,6 +18,7 @@ export type ReviewExecutionRealization = "worker" | "direct-call";
  */
 export type ReviewHostRuntime =
   | "codex"
+  | "claude"
   | "anthropic"
   | "openai"
   | "grok"

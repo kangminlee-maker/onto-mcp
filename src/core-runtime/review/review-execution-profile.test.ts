@@ -114,6 +114,35 @@ describe("resolveReviewExecutionProfile", () => {
     expect(result.profile.host).toBe("codex");
   });
 
+  it("honors explicit claude executor settings (worker+claude)", () => {
+    const execution = defaultReviewExecution();
+    const settings: OntoSettings = {
+      llm: {
+        auth: "oauth",
+        provider: "claude",
+        model: "claude-opus-4-8",
+      },
+      review: {
+        execution: {
+          ...execution,
+          executor: "claude",
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: false,
+      env: {},
+    });
+
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.profile.worker_executor).toBe("claude");
+    expect(result.profile.host).toBe("claude");
+  });
+
   it("auto-selects codex from v3 actor-owned OAuth settings", () => {
     const settings: OntoSettings = {
       schema_version: "settings.json/v3",

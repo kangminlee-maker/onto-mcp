@@ -14,7 +14,7 @@ import {
   type LlmProviderName,
 } from "../llm/model-switcher.js";
 
-export type ReviewWorkerExecutor = "codex" | "direct_call" | "mock";
+export type ReviewWorkerExecutor = "codex" | "claude" | "direct_call" | "mock";
 
 export type ReviewExecutionHost =
   | "codex"
@@ -325,6 +325,25 @@ export function resolveReviewExecutionProfile(
         settings: args.settings,
         workerExecutor: "codex",
         host: "codex",
+        trace,
+      }),
+    };
+  }
+
+  if (execution.executor === "claude") {
+    if (selection && selection.provider !== "claude") {
+      return noHost(
+        trace,
+        "review.execution.executor=claude requires every configured actor llm to use provider=claude (Claude CLI worker).",
+      );
+    }
+    log("claude worker selected by review.execution.executor=claude");
+    return {
+      type: "resolved",
+      profile: buildProfile({
+        settings: args.settings,
+        workerExecutor: "claude",
+        host: "claude",
         trace,
       }),
     };

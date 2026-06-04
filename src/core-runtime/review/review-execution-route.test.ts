@@ -42,6 +42,26 @@ describe("buildReviewExecutionRoute", () => {
     });
   });
 
+  it("maps the claude CLI worker to a worker route (not silently into direct_call)", () => {
+    expect(
+      buildReviewExecutionRoute(
+        profile({
+          worker_executor: "claude",
+          host: "claude",
+          auth: "oauth",
+          provider: "claude",
+        }),
+      ),
+    ).toMatchObject({
+      host: "claude",
+      executor: "claude",
+      resolved_provider: "claude",
+      auth_mode: "oauth",
+      execution_realization: "worker",
+      artifact_host_runtime: "claude",
+    });
+  });
+
   it("maps OpenAI API-key direct-call to resolved provider openai", () => {
     expect(
       buildReviewExecutionRoute(

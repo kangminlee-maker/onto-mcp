@@ -17,6 +17,7 @@ import {
 import type {
   PrepareOnlyResult,
   ReviewResultClassificationSummary,
+  ReviewHostRuntime,
 } from "../review/artifact-types.js";
 import { startReviewSession } from "./start-review-session.js";
 import { spawnWatcherPane } from "./spawn-watcher.js";
@@ -67,8 +68,9 @@ import { assessComplexity, selectLenses } from "./complexity-assessment.js";
  *                      runtime decoupling). Selected automatically when
  *                      OntoConfig.llm selects an API-key/local provider.
  *                      See `inline-http-review-unit-executor.ts`.
+ * - "claude":          Claude Code CLI worker (claude-review-unit-executor.ts).
  */
-export type ExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ExecutorRealization = "codex" | "claude" | "mock" | "ts_inline_http";
 type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 type ReviewMode = "core-axis" | "full";
 type BoundaryDecisionAction = "approve_external_boundary" | "rerun_target" | "cancel";
@@ -113,7 +115,7 @@ export interface ReviewInvokeRouteSummary {
   combined_entrypoint: "review_invocation";
   bounded_invoke_steps: string[];
   execution_realization: "worker" | "direct-call";
-  host_runtime: "codex" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  host_runtime: ReviewHostRuntime;
   review_execution_profile: {
     mode: ReviewExecutionProfile["mode"];
     teamlead_seat: ReviewExecutionProfile["teamlead"]["seat"];
@@ -247,6 +249,7 @@ function requireString(
 
 const EXECUTOR_SCRIPT_FILENAMES: Record<ExecutorRealization, string> = {
   codex: "codex-review-unit-executor",
+  claude: "claude-review-unit-executor",
   mock: "mock-review-unit-executor",
   ts_inline_http: "inline-http-review-unit-executor",
 };
@@ -340,6 +343,14 @@ function applyExecutorOverrideToProfile(
       worker_executor: "codex",
       host: "codex",
       trace: [...profile.trace, "worker executor overridden by --executor-realization=codex"],
+    };
+  }
+  if (explicitRealization === "claude") {
+    return {
+      ...profile,
+      worker_executor: "claude",
+      host: "claude",
+      trace: [...profile.trace, "worker executor overridden by --executor-realization=claude"],
     };
   }
   if (explicitRealization === "ts_inline_http") {
@@ -827,6 +838,13 @@ function appendExecutorModelArgs(
     config.args.some((arg) => arg.includes("mock-review-unit-executor"));
   if (isMock) return config;
 
+  // The claude executor accepts --model but NOT the codex-only flags
+  // (--reasoning-effort / --config-override service_tier); passing them would
+  // trip its strict parseArgs.
+  const isClaude =
+    config.bin.includes("claude-review-unit-executor") ||
+    config.args.some((arg) => arg.includes("claude-review-unit-executor"));
+
   const args = [...config.args];
   const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
   const llmSelection = normalizeLlmModelSwitcher(llmSettings);
@@ -834,14 +852,16 @@ function appendExecutorModelArgs(
   if (typeof model === "string" && model.length > 0) {
     args.push("--model", model);
   }
-  const reasoningEffort =
-    readSingleOptionValueFromArgv(argv, "reasoning-effort") ??
-    llmSelection?.reasoning_effort;
-  if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
-    args.push("--reasoning-effort", reasoningEffort);
-  }
-  if (llmSelection?.service_tier) {
-    args.push("--config-override", `service_tier="${llmSelection.service_tier}"`);
+  if (!isClaude) {
+    const reasoningEffort =
+      readSingleOptionValueFromArgv(argv, "reasoning-effort") ??
+      llmSelection?.reasoning_effort;
+    if (typeof reasoningEffort === "string" && reasoningEffort.length > 0) {
+      args.push("--reasoning-effort", reasoningEffort);
+    }
+    if (llmSelection?.service_tier) {
+      args.push("--config-override", `service_tier="${llmSelection.service_tier}"`);
+    }
   }
   return { bin: config.bin, args };
 }
@@ -881,7 +901,7 @@ function appendDirectCallLlmArgs(
 
 export interface ResolvedExecutionProfile {
   execution_realization: "worker" | "direct-call";
-  host_runtime: "codex" | "standalone" | "anthropic" | "openai" | "grok" | "lmstudio";
+  host_runtime: ReviewHostRuntime;
   review_execution_profile: ReviewExecutionProfile;
 }
 
@@ -979,7 +999,12 @@ export function resolveExecutorConfig(
     (optionPrefixLabel.length > 0
       ? readSingleOptionValueFromArgv(argv, "executor-realization")
       : undefined);
-  if (explicitRealization === "codex" || explicitRealization === "mock" || explicitRealization === "ts_inline_http") {
+  if (
+    explicitRealization === "codex" ||
+    explicitRealization === "claude" ||
+    explicitRealization === "mock" ||
+    explicitRealization === "ts_inline_http"
+  ) {
     return appendExecutorModelArgs(
       buildExecutorConfigFromRealization(explicitRealization, ontoHome),
       argv,
@@ -993,7 +1018,7 @@ export function resolveExecutorConfig(
   ) {
     throw new Error(
       `Unsupported --${optionPrefixLabel}executor-realization: ${explicitRealization}. ` +
-        "Supported values: codex, mock, ts_inline_http.",
+        "Supported values: codex, claude, mock, ts_inline_http.",
     );
   }
 
@@ -1011,6 +1036,14 @@ export function resolveExecutorConfig(
   if (profile?.worker_executor === "codex") {
     return appendExecutorModelArgs(
       buildExecutorConfigFromRealization("codex", ontoHome),
+      argv,
+      ontoConfig,
+      actorLlmRef,
+    );
+  }
+  if (profile?.worker_executor === "claude") {
+    return appendExecutorModelArgs(
+      buildExecutorConfigFromRealization("claude", ontoHome),
       argv,
       ontoConfig,
       actorLlmRef,
