@@ -14,6 +14,7 @@ import type {
   ReconstructHandoffDecisionValidationArtifact,
   ReconstructMaterialAdmissionLedgerValidationArtifact,
   ReconstructMetricsArtifact,
+  ReconstructPostMaturationGateProjectionValidationArtifact,
   ReconstructPostSeedValidationViolation,
   ReconstructReadinessProjection,
   ReconstructRecordValidationStatusProjection,
@@ -22,6 +23,7 @@ import type {
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSelectedSourceProfileRef,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructSourcePurposeCandidatesValidationArtifact,
@@ -31,6 +33,7 @@ import type {
   ReconstructSourceObservationDirectiveValidationArtifact,
   ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceSafetyLedgerValidationArtifact,
+  ReconstructSourceScoutPackValidationArtifact,
   ReconstructStageId,
   ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
@@ -285,8 +288,16 @@ function validationArtifactStatuses(args: {
     ReconstructSourceObservationLineageIndexValidationArtifact | null | undefined;
   sourceSafetyLedgerValidation?:
     ReconstructSourceSafetyLedgerValidationArtifact | null | undefined;
+  sourceScoutPackValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  sourceScoutPackPreSeedValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  sourceScoutPackPostMaturationValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
   materialAdmissionLedgerValidation?:
     ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
+  seedAuthoringReadinessValidation?:
+    ReconstructSeedAuthoringReadinessValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
   sourcePurposeCandidatesValidation?:
     ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
@@ -330,8 +341,24 @@ function validationArtifactStatuses(args: {
       statusOf(args.sourceSafetyLedgerValidation),
     ],
     [
+      "source-scout-pack-validation.yaml",
+      statusOf(args.sourceScoutPackValidation),
+    ],
+    [
+      "source-scout-pack-validation.pre-seed.yaml",
+      statusOf(args.sourceScoutPackPreSeedValidation),
+    ],
+    [
+      "source-scout-pack-validation.post-maturation.yaml",
+      statusOf(args.sourceScoutPackPostMaturationValidation),
+    ],
+    [
       "material-admission-ledger-validation.yaml",
       statusOf(args.materialAdmissionLedgerValidation),
+    ],
+    [
+      "seed-authoring-readiness-validation.yaml",
+      statusOf(args.seedAuthoringReadinessValidation),
     ],
     ["source-frontier-validation.yaml", statusOf(args.sourceFrontierValidation)],
     [
@@ -370,6 +397,189 @@ function validationArtifactStatuses(args: {
       statusOf(args.manifestValidation),
     ],
   ]);
+}
+
+function siblingArtifactRef(ref: string, siblingBasename: string): string {
+  const dir = path.dirname(ref);
+  return path.normalize(dir === "." ? siblingBasename : path.join(dir, siblingBasename));
+}
+
+function normalizedRef(ref: string): string {
+  return path.normalize(ref);
+}
+
+function postMaturationScoutGateProjection(args: {
+  contractRegistry: ReconstructContractRegistry;
+  sourceScoutPackPostMaturationRef: string | null | undefined;
+  sourceScoutPackPostMaturationValidationRef: string | null | undefined;
+  sourceScoutPackPostMaturationValidation:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+}): {
+  gateProjection: ReconstructPostMaturationGateProjectionValidationArtifact["gate_projection"];
+  violations: ReconstructPostSeedValidationViolation[];
+} {
+  const gate = args.contractRegistry.validation_gate_catalog.find((candidate) =>
+    candidate.gate_id === "source_scout_pack_post_maturation_gate"
+  );
+  const sourceScoutPackRef = args.sourceScoutPackPostMaturationRef ?? null;
+  const sourceScoutPackValidationRef =
+    args.sourceScoutPackPostMaturationValidationRef ?? null;
+  const validationStatus = statusOf(args.sourceScoutPackPostMaturationValidation);
+  const validationSourceRef =
+    args.sourceScoutPackPostMaturationValidation?.source_scout_pack_ref ?? null;
+  const expectedSourceScoutPackRef = sourceScoutPackValidationRef
+    ? siblingArtifactRef(
+      sourceScoutPackValidationRef,
+      "source-scout-pack.post-maturation.yaml",
+    )
+    : null;
+  const violations: ReconstructPostSeedValidationViolation[] = [];
+
+  if (!gate) {
+    violations.push(violation({
+      code: "unknown_id",
+      message:
+        "post-maturation gate projection requires source_scout_pack_post_maturation_gate in the reconstruct contract registry",
+      subjectId: "source_scout_pack_post_maturation_gate",
+    }));
+  }
+  if (!sourceScoutPackRef) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "post-maturation gate projection requires source-scout-pack.post-maturation.yaml",
+      subjectId: "source_scout_pack_post_maturation",
+    }));
+  } else if (
+    path.basename(sourceScoutPackRef) !== "source-scout-pack.post-maturation.yaml"
+  ) {
+    violations.push(violation({
+      code: "source_ref_mismatch",
+      message:
+        "post-maturation gate projection source ref must be source-scout-pack.post-maturation.yaml",
+      subjectId: "source_scout_pack_post_maturation",
+    }));
+  } else if (
+    expectedSourceScoutPackRef &&
+    normalizedRef(sourceScoutPackRef) !== expectedSourceScoutPackRef
+  ) {
+    violations.push(violation({
+      code: "source_ref_mismatch",
+      message:
+        "post-maturation gate projection source ref must be the concrete sibling of source-scout-pack-validation.post-maturation.yaml",
+      subjectId: "source_scout_pack_post_maturation",
+    }));
+  }
+  if (!sourceScoutPackValidationRef) {
+    violations.push(violation({
+      code: "handoff_required_validation_missing",
+      message:
+        "post-maturation gate projection requires source-scout-pack-validation.post-maturation.yaml",
+      subjectId: "source_scout_pack_post_maturation_gate",
+    }));
+  } else if (
+    path.basename(sourceScoutPackValidationRef) !==
+      "source-scout-pack-validation.post-maturation.yaml"
+  ) {
+    violations.push(violation({
+      code: "source_ref_mismatch",
+      message:
+        "post-maturation gate projection validation ref must be source-scout-pack-validation.post-maturation.yaml",
+      subjectId: "source_scout_pack_validation_post_maturation",
+    }));
+  }
+  if (validationStatus === "not_available") {
+    violations.push(violation({
+      code: "handoff_required_validation_missing",
+      message:
+        "post-maturation gate projection requires a readable post-maturation SourceScoutPack validation artifact",
+      subjectId: "source_scout_pack_post_maturation_gate",
+    }));
+  } else if (validationStatus === "invalid") {
+    violations.push(violation({
+      code: "handoff_required_validation_invalid",
+      message:
+        "post-maturation gate projection requires source-scout-pack-validation.post-maturation.yaml to be valid",
+      subjectId: "source_scout_pack_post_maturation_gate",
+    }));
+  }
+  if (args.sourceScoutPackPostMaturationValidation && !validationSourceRef) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "post-maturation SourceScoutPack validation must record source_scout_pack_ref",
+      subjectId: "source_scout_pack_validation_post_maturation",
+    }));
+  } else if (
+    sourceScoutPackRef &&
+    validationSourceRef &&
+    expectedSourceScoutPackRef &&
+    normalizedRef(validationSourceRef) !== expectedSourceScoutPackRef
+  ) {
+    violations.push(violation({
+      code: "source_ref_mismatch",
+      message:
+        "post-maturation SourceScoutPack validation must validate the post-maturation SourceScoutPack snapshot",
+      subjectId: "source_scout_pack_validation_post_maturation",
+    }));
+  }
+
+  return {
+    gateProjection: [{
+      gate_id: "source_scout_pack_post_maturation_gate",
+      validation_artifact_ref:
+        gate?.validation_artifact_ref ??
+          "source-scout-pack-validation.post-maturation.yaml",
+      concrete_validation_artifact_ref: sourceScoutPackValidationRef,
+      required_when:
+        gate?.required_when ?? "source_scout_pack_post_maturation_snapshot_exists",
+      predicate_input_authority_refs: ["source-scout-pack.post-maturation.yaml"],
+      predicate_concrete_input_refs: sourceScoutPackRef ? [sourceScoutPackRef] : [],
+      predicate_truth_expression:
+        "artifact_exists(source-scout-pack.post-maturation.yaml)",
+      predicate_result: Boolean(sourceScoutPackRef),
+      unknown_projection: "blocked",
+      explanation:
+        "Post-maturation SourceScoutPack snapshot exists and must have snapshot-scoped validation before audit, replay, final-output, or record consumption.",
+      applicability: sourceScoutPackRef ? "applicable" : "unknown",
+      validation_status: validationStatus,
+    }],
+    violations,
+  };
+}
+
+export function validatePostMaturationGateProjection(args: {
+  sessionId: string;
+  contractRegistry: ReconstructContractRegistry;
+  sourceScoutPackPostMaturationRef: string | null | undefined;
+  sourceScoutPackPostMaturationValidationRef: string | null | undefined;
+  sourceScoutPackPostMaturationValidation:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+}): ReconstructPostMaturationGateProjectionValidationArtifact {
+  const { gateProjection, violations } = postMaturationScoutGateProjection({
+    contractRegistry: args.contractRegistry,
+    sourceScoutPackPostMaturationRef: args.sourceScoutPackPostMaturationRef,
+    sourceScoutPackPostMaturationValidationRef:
+      args.sourceScoutPackPostMaturationValidationRef,
+    sourceScoutPackPostMaturationValidation:
+      args.sourceScoutPackPostMaturationValidation,
+  });
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    projection_scope: "post_maturation_source_scout_gate",
+    source_scout_pack_post_maturation_ref:
+      args.sourceScoutPackPostMaturationRef ?? null,
+    source_scout_pack_validation_post_maturation_ref:
+      args.sourceScoutPackPostMaturationValidationRef ?? null,
+    validation_status: violations.length === 0 ? "valid" : "invalid",
+    gate_projection: gateProjection,
+    validation_results: violations.length === 0
+      ? ["post_maturation_gate_projection_valid"]
+      : ["post_maturation_gate_projection_invalid"],
+    violations,
+  };
 }
 
 function addValidationStatusByRef(args: {
@@ -966,8 +1176,16 @@ export function validateHandoffDecision(args: {
     ReconstructSourceObservationLineageIndexValidationArtifact | null | undefined;
   sourceSafetyLedgerValidation?:
     ReconstructSourceSafetyLedgerValidationArtifact | null | undefined;
+  sourceScoutPackValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  sourceScoutPackPreSeedValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
+  sourceScoutPackPostMaturationValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null | undefined;
   materialAdmissionLedgerValidation?:
     ReconstructMaterialAdmissionLedgerValidationArtifact | null | undefined;
+  seedAuthoringReadinessValidation?:
+    ReconstructSeedAuthoringReadinessValidationArtifact | null | undefined;
   sourceFrontierValidation: ReconstructSourceFrontierValidationArtifact | null | undefined;
   sourcePurposeCandidatesValidation?:
     ReconstructSourcePurposeCandidatesValidationArtifact | null | undefined;
@@ -1124,6 +1342,33 @@ export async function writeReconstructRunManifestValidationArtifact(args: {
   return validation;
 }
 
+export async function writePostMaturationGateProjectionValidationArtifact(args: {
+  sessionId: string;
+  sourceScoutPackPostMaturationPath: string;
+  sourceScoutPackPostMaturationValidationPath: string;
+  registryPath: string;
+  outputPath: string;
+}): Promise<ReconstructPostMaturationGateProjectionValidationArtifact> {
+  const [contractRegistry, sourceScoutPackPostMaturationValidation] =
+    await Promise.all([
+      loadReconstructContractRegistry({ registryPath: args.registryPath }),
+      readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
+        args.sourceScoutPackPostMaturationValidationPath,
+      ),
+    ]);
+  const validation = validatePostMaturationGateProjection({
+    sessionId: args.sessionId,
+    contractRegistry,
+    sourceScoutPackPostMaturationRef:
+      args.sourceScoutPackPostMaturationPath,
+    sourceScoutPackPostMaturationValidationRef:
+      args.sourceScoutPackPostMaturationValidationPath,
+    sourceScoutPackPostMaturationValidation,
+  });
+  await writeYamlDocument(args.outputPath, validation);
+  return validation;
+}
+
 export async function writeHandoffDecisionValidationArtifact(args: {
   stopDecisionPath: string;
   manifestValidationPath: string;
@@ -1134,7 +1379,11 @@ export async function writeHandoffDecisionValidationArtifact(args: {
   sourceObservationDirectiveValidationPath: string;
   sourceObservationLineageIndexValidationPath?: string | null;
   sourceSafetyLedgerValidationPath?: string | null;
+  sourceScoutPackValidationPath?: string | null;
+  sourceScoutPackPreSeedValidationPath?: string | null;
+  sourceScoutPackPostMaturationValidationPath?: string | null;
   materialAdmissionLedgerValidationPath?: string | null;
+  seedAuthoringReadinessValidationPath?: string | null;
   sourceFrontierValidationPath: string;
   sourcePurposeCandidatesValidationPath?: string | null;
   purposeConfirmationValidationPath?: string | null;
@@ -1172,7 +1421,11 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     sourceObservationDirectiveValidation,
     sourceObservationLineageIndexValidation,
     sourceSafetyLedgerValidation,
+    sourceScoutPackValidation,
+    sourceScoutPackPreSeedValidation,
+    sourceScoutPackPostMaturationValidation,
     materialAdmissionLedgerValidation,
+    seedAuthoringReadinessValidation,
     sourceFrontierValidation,
     sourcePurposeCandidatesValidation,
     purposeConfirmationValidation,
@@ -1213,9 +1466,29 @@ export async function writeHandoffDecisionValidationArtifact(args: {
         args.sourceSafetyLedgerValidationPath,
       )
       : Promise.resolve(null),
+    args.sourceScoutPackValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
+        args.sourceScoutPackValidationPath,
+      )
+      : Promise.resolve(null),
+    args.sourceScoutPackPreSeedValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
+        args.sourceScoutPackPreSeedValidationPath,
+      )
+      : Promise.resolve(null),
+    args.sourceScoutPackPostMaturationValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSourceScoutPackValidationArtifact>(
+        args.sourceScoutPackPostMaturationValidationPath,
+      )
+      : Promise.resolve(null),
     args.materialAdmissionLedgerValidationPath
       ? readYamlDocumentIfPresent<ReconstructMaterialAdmissionLedgerValidationArtifact>(
         args.materialAdmissionLedgerValidationPath,
+      )
+      : Promise.resolve(null),
+    args.seedAuthoringReadinessValidationPath
+      ? readYamlDocumentIfPresent<ReconstructSeedAuthoringReadinessValidationArtifact>(
+        args.seedAuthoringReadinessValidationPath,
       )
       : Promise.resolve(null),
     readYamlDocumentIfPresent<ReconstructSourceFrontierValidationArtifact>(
@@ -1301,8 +1574,18 @@ export async function writeHandoffDecisionValidationArtifact(args: {
         ? args.sourceObservationLineageIndexValidationPath
         : null,
       sourceSafetyLedgerValidation ? args.sourceSafetyLedgerValidationPath : null,
+      sourceScoutPackValidation ? args.sourceScoutPackValidationPath : null,
+      sourceScoutPackPreSeedValidation
+        ? args.sourceScoutPackPreSeedValidationPath
+        : null,
+      sourceScoutPackPostMaturationValidation
+        ? args.sourceScoutPackPostMaturationValidationPath
+        : null,
       materialAdmissionLedgerValidation
         ? args.materialAdmissionLedgerValidationPath
+        : null,
+      seedAuthoringReadinessValidation
+        ? args.seedAuthoringReadinessValidationPath
         : null,
       sourceFrontierValidation ? args.sourceFrontierValidationPath : null,
       sourcePurposeCandidatesValidation
@@ -1349,9 +1632,24 @@ export async function writeHandoffDecisionValidationArtifact(args: {
       "source-safety-ledger-validation.yaml": sourceSafetyLedgerValidation
         ? args.sourceSafetyLedgerValidationPath
         : null,
+      "source-scout-pack-validation.yaml": sourceScoutPackValidation
+        ? args.sourceScoutPackValidationPath
+        : null,
+      "source-scout-pack-validation.pre-seed.yaml":
+        sourceScoutPackPreSeedValidation
+          ? args.sourceScoutPackPreSeedValidationPath
+          : null,
+      "source-scout-pack-validation.post-maturation.yaml":
+        sourceScoutPackPostMaturationValidation
+          ? args.sourceScoutPackPostMaturationValidationPath
+          : null,
       "material-admission-ledger-validation.yaml":
         materialAdmissionLedgerValidation
           ? args.materialAdmissionLedgerValidationPath
+          : null,
+      "seed-authoring-readiness-validation.yaml":
+        seedAuthoringReadinessValidation
+          ? args.seedAuthoringReadinessValidationPath
           : null,
       "source-frontier-validation.yaml": sourceFrontierValidation
         ? args.sourceFrontierValidationPath
@@ -1398,7 +1696,11 @@ export async function writeHandoffDecisionValidationArtifact(args: {
     sourceObservationDirectiveValidation,
     sourceObservationLineageIndexValidation,
     sourceSafetyLedgerValidation,
+    sourceScoutPackValidation,
+    sourceScoutPackPreSeedValidation,
+    sourceScoutPackPostMaturationValidation,
     materialAdmissionLedgerValidation,
+    seedAuthoringReadinessValidation,
     sourceFrontierValidation,
     sourcePurposeCandidatesValidation,
     purposeConfirmationValidation,

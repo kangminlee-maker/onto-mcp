@@ -216,20 +216,21 @@ complete.
 12. Repeat observation with round lineage if frontier is valid and useful
 13. Build candidate inventory
 14. Record candidate disposition
-15. Author OntologySeed
-16. Validate seed-shape gates
-17. Author claim-realization map
-18. Validate claim-realization map
-19. Confirm seed claims or record limitations
-20. Validate seed confirmation and derive CQ eligibility
-21. Author competency questions
-22. Validate competency-question coverage
-23. Assess competency questions
-24. Validate competency-question assessment
-25. Classify failures and propose bounded revision
-26. Emit metrics and stop decision
-27. Validate seed iteration readiness from runtime gates and stop decision
-28. Emit final output and reconstruct record
+15. Validate seed authoring readiness from selected-purpose closure rows
+16. Author OntologySeed
+17. Validate seed-shape gates
+18. Author claim-realization map
+19. Validate claim-realization map
+20. Confirm seed claims or record limitations
+21. Validate seed confirmation and derive CQ eligibility
+22. Author competency questions
+23. Validate competency-question coverage
+24. Assess competency questions
+25. Validate competency-question assessment
+26. Classify failures and propose bounded revision
+27. Emit metrics and stop decision
+28. Validate seed iteration readiness from runtime gates and stop decision
+29. Emit final output and reconstruct record
 ```
 
 Each step either writes an artifact or records why it cannot proceed.
@@ -2311,6 +2312,12 @@ the public claim authority. Neither artifact is an input to the terminal
 readiness validator.
 `final-output-provenance-validation.yaml` validates the post-handoff user-facing
 projection. It is not a readiness gate for `handoff-decision-validation.yaml`.
+Post-maturation snapshot gates that become applicable after pre-handoff seed
+readiness use a distinct later terminal-equivalent authority:
+`post-maturation-gate-projection-validation.yaml`. It is written only after the
+post-maturation SourceScoutPack snapshot and its snapshot-scoped validation
+exist, and final-output provenance plus the reconstruct record consume it before
+claiming post-maturation artifact truth.
 
 The canonical seed iteration readiness projection must distinguish:
 
@@ -2546,7 +2553,7 @@ resume_rows:
     trusted_artifact_refs: []
     stale_artifact_refs: []
     required_revalidation_refs: []
-    resume_decision: resume_allowed | retry_required | blocked_conflict | blocked_stale | blocked_partial_write
+    resume_decision: resume_pending_provenance | resume_allowed | retry_required | blocked_conflict | blocked_stale | blocked_partial_write
 ```
 
 `reconstruct-run-control-validation.yaml` must prove:
@@ -2567,7 +2574,10 @@ resume_rows:
   consume them;
 - retry and resume attempts are not active trust claims until a promoted retry
   or resume surface proves source, registry, profile, and write-transaction
-  recovery without overwriting trusted artifacts from a previous attempt.
+  recovery without overwriting trusted artifacts from a previous attempt;
+- `finalizeReconstructRunControl()` and run-control validation require a valid
+  `reconstruct-run-manifest.post-publication-validation.yaml` before durable
+  attempt completion or `resume_allowed` promotion can be recorded.
 
 Runtime-control validation is a prerequisite for all later validation gates. If
 it is absent or invalid, the only allowed public projection is a
@@ -2979,6 +2989,9 @@ Prompt packets should give the host LLM:
 - compact source observations
 - source-delta and no-delta validation artifacts when the run is resumed or the
   source authority changed
+- compact selected-purpose projection for seed authoring; the full
+  `source-purpose-candidates.yaml` artifact remains authority and is referenced
+  by path/hash rather than duplicated in the prompt payload
 - full artifact ref locations
 - active seed contract
 - required output schema for the current stage
@@ -3062,6 +3075,7 @@ Implementation file map:
 | seeding runtime sequence and prompts | `src/core-runtime/reconstruct/run.ts` |
 | source-purpose candidate validation | `src/core-runtime/reconstruct/purpose-authority-validation.ts` plus tests |
 | purpose confirmation validation | `src/core-runtime/reconstruct/purpose-authority-validation.ts` plus tests |
+| pre-seed authoring readiness validation | `src/core-runtime/reconstruct/seed-authoring-readiness-validation.ts` plus tests |
 | maturation M1-M4 projection validation | `src/core-runtime/reconstruct/maturation-validation.ts` plus tests |
 | candidate surface/facet validation | existing candidate-disposition validation path and tests |
 | seed surface closure validation | `src/core-runtime/reconstruct/ontology-seed-validation.ts` and tests |
@@ -3069,21 +3083,90 @@ Implementation file map:
 | MCP/API projection | `src/core-api/reconstruct-api.ts`, `src/mcp/server.ts` |
 | active docs and user-facing guide | this document, `operational-ontology-seed-contract.md`, `README.md`, `IMPLEMENTATION_MAP.html` |
 
-Current implementation has promoted seeding source-purpose authority and the
-registry-backed first-pass maturation authorities that existed before this
-source-delta and convergence-ledger refinement: baseline, baseline
-actionability matrix, question frontier, closure frontier, answer support,
-answer claims, ontology expansion, current actionability matrix, convergence,
-and continuation decision. Multi-round source-observation delta and
-source-observation re-entry validation are also active for frontier-triggered
-observations before they re-enter prompt/context semantic authoring or
-answer-support consumption. The
-maturation source-delta authority, final re-question pass generation, and proof
-authorities remain planned until their registry rows, runtime gates, and
-validators are real behavior. The optional `actionable-ontology.yaml`
+Current implementation has promoted seeding source-purpose authority,
+pre-seed authoring readiness, compact selected-purpose prompt projection, direct
+compact source-scout prompt projection for source-observation directive,
+source-purpose, and candidate-inventory authoring, and the registry-backed
+first-pass maturation authorities: baseline, baseline actionability matrix,
+question frontier, closure frontier, answer support, answer claims, ontology
+expansion, current actionability matrix, maturation source-delta, convergence,
+continuation decision, and explicit proof-authority boundaries. Multi-round
+source-observation delta and source-observation re-entry validation are active
+for frontier-triggered observations before they re-enter prompt/context semantic
+authoring or answer-support consumption. The optional `actionable-ontology.yaml`
 projection is active for `actionable_limited` or `actionable_ready` continuation
 states and is validated as a runtime projection of existing seed, expansion,
-matrix, convergence, and continuation authorities.
+matrix, convergence, continuation, and proof boundary authorities.
+Promoted same-request resume is active for authored artifacts only when reuse
+provenance compatibility matches the current request, source/profile/domain
+snapshot, source-safety/scout/lineage validation, and seed-authoring readiness
+validation once those upstream authorities exist. Run-control resume rows record
+the compatibility policy and check refs; semantic quality remains revalidated by
+the downstream artifact validators.
+`seed-authoring-readiness-validation.yaml` now also records
+`deterministic_gate_scope: pre_seed_closure_only` and fails when the readiness
+artifact omits the required boundary notes that keep deterministic closure
+separate from semantic ontology adequacy. It also validates
+`max_round_exhaustion_interpretation` so `max_round_exhausted` is not collapsed
+into one generic state: a selected-purpose closure can remain
+`sufficient_for_claim_scope`, while an exhausted open frontier projects
+`insufficient_for_claim_scope` plus `exhausted_with_open_frontier`.
+Ontology-domain category rows remain diagnostic unless the selected purpose
+actually has a closure row for that category. They can expose modeling gaps, but
+they must not block seed authoring just because a domain profile contains a
+category that the selected source purpose did not require.
+The first source frontier now has an actor-action-state scout policy: for
+`round-1`, valid `SourceScoutPack` actor/action/state coverage gaps are sent as
+inventory-only exploration candidates, and runtime may add up to three
+unobserved code/document refs when the author returns an empty frontier. This
+policy chooses exploration priority only; it does not create purpose elements or
+ontology claims.
+`source-scout-pack.yaml` remains a latest-current scout projection alias.
+Pre-seed source-purpose, candidate-inventory, SeedAuthoringReadiness, and seed
+reuse provenance consume immutable `source-scout-pack.pre-seed.yaml` and
+`source-scout-pack-validation.pre-seed.yaml` snapshots. After maturation source
+lineage refresh, runtime emits `source-scout-pack.post-maturation.yaml` and
+`source-scout-pack-validation.post-maturation.yaml` so later audit surfaces can
+distinguish the exact consumed snapshot from the latest-current alias.
+The contract registry treats those validation snapshots as snapshot-scoped
+active gate outputs, and the SeedAuthoringReadiness validator consumes the
+pre-seed validation snapshot as its concrete source scout authority. Runtime
+identity checks compare the validation artifact to its concrete sibling snapshot
+ref, not only to `source-scout-pack.pre-seed.yaml` by basename, so copied
+same-basename snapshots from another session do not satisfy the pre-seed
+authority boundary.
+Because the post-maturation snapshot is emitted after pre-handoff readiness,
+`handoff-decision-validation.yaml` projects its gate as `not_applicable` during
+the seed handoff. Runtime closes the later lifecycle boundary with
+`post-maturation-gate-projection-validation.yaml`, which evaluates
+`source_scout_pack_post_maturation_gate` from the post-maturation snapshot refs
+before final-output and record consumption. That projection also requires the
+post-maturation validation artifact and SourceScoutPack snapshot to be concrete
+same-session siblings, not only phase-compatible basenames.
+Prompt payloads now compact `exploration-synthesis.yaml` before source-frontier,
+source-purpose, and candidate-inventory authoring. The projection preserves gap
+ids, lens ids, descriptions, requested source refs, and evidence observation ids,
+while omitting full `evidence_refs` objects to reduce prompt size without
+changing artifact authority.
+Mixed targets currently record `member_scoped_composite` scout scope as a
+phase-1 limitation with no signal rows. This preserves member-scope truth
+without claiming aggregate scout-enabled closure before a member-scoped scout
+contract is promoted.
+Seed authoring now has a focused repair loop: when the first
+`ontology-seed.yaml` fails validation, runtime preserves the invalid seed and
+validation sidecars as `ontology-seed-repair-1.input*.yaml`, asks the seed author
+to revise only the validation-derived repair sections, rewrites
+`ontology-seed.yaml`, and requires the repaired seed validation to pass before
+downstream maturation consumes it.
+Provider timeout recovery is staged and bounded. Source-purpose timeout retries
+with a smaller LLM prompt that keeps the same `SourcePurposeCandidates` output
+contract. Seed timeout first retries a smaller `OntologySeedMinimalKernel`
+prompt; if that also times out, the run fails closed because runtime must not
+author semantic ontology seed content. Claim realization and competency-question
+authoring receive compact seed summaries and allowed-claim projections, and
+competency-question timeout recovery may project deterministic coverage
+questions from allowed claims and domain competency rows so downstream
+validators can prove coverage or preserve limitations.
 
 Required test path for each implementation slice:
 
@@ -3187,6 +3270,8 @@ Expected result:
 - seed authoring receives source-profile facet guidance and maps purpose
   adequacy required elements, candidates, and seed content to
   `static_surface`, `kinetic_surface`, and `dynamic_surface`
+- seed authoring receives a compact `source_purpose_projection` for the selected
+  validated purpose candidate, not the full ranked purpose-candidate artifact
 - prompt flow requests user confirmation before treating an inferred purpose as
   the seed purpose
 - question prompts request `competency-questions.yaml` only after seed-shape
@@ -3459,9 +3544,13 @@ produce:
 14. `maturation-continuation-decision.yaml` and validation,
 15. final re-question convergence evidence recorded inside the convergence
    ledger and consumed by continuation-decision validation, and
-16. `claim-projection.yaml` plus validation for every public or downstream
+16. `query-proofs.yaml`, `visualization-proofs.yaml`,
+   `graph-exploration-proofs.yaml`, and their validations as explicit proof
+   authority boundaries before any query, visualization, or graph exploration
+   capability is claimed,
+17. `claim-projection.yaml` plus validation for every public or downstream
    maturation/actionability claim,
-17. source-delta impact judgment validation when source freshness can affect a
+18. source-delta impact judgment validation when source freshness can affect a
    material row, and
-18. `actionable-ontology.yaml` plus validation when readiness is
+19. `actionable-ontology.yaml` plus validation when readiness is
    `actionable_limited` or `actionable_ready`.

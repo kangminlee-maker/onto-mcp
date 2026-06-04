@@ -77,6 +77,31 @@ material kind is introduced. Useful meeting-record cues include agenda,
 participants, decisions, action items, owners, due dates, rationale, and
 unresolved topics.
 
+## Actor-Action-State Scout Guidance
+
+The source scout pass is profile-local and non-semantic. It may index document
+phrases that suggest actor/action/state exploration priority, but it must not
+promote those phrases into ontology claims, document authority claims, or
+selected purpose required elements.
+
+Recommended document scout axes:
+
+- `actor`: audience, owner, approver, team, stakeholder, customer, operator,
+  participant, user, reader
+- `action`: procedure, decision, approval, report, request, obligation, action
+  item, acceptance criterion, review
+- `state`: status, phase, risk, lifecycle, timeline, unresolved, open,
+  resolved, pending, complete
+- `guard`: policy, condition, exception, rule, prohibition, review criterion,
+  escalation, constraint
+- `object`: subject, resource, deliverable, report, system, data asset,
+  artifact, document
+
+The scout may also record declared-purpose, source-claim, instruction,
+provenance, and limitation cues when they are visible in headings, lists,
+tables, references, definitions, or bounded excerpts. Prompt-visible rows
+require validated source-safety permission for prompt-context use.
+
 ## Purpose Adequacy Facet Guidance
 
 Common document facets include:

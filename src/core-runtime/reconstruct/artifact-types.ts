@@ -123,6 +123,7 @@ export type ReconstructRunControlTransactionStatus =
 
 export type ReconstructRunControlResumeDecision =
   | "resume_allowed"
+  | "resume_pending_provenance"
   | "retry_required"
   | "blocked_conflict"
   | "blocked_stale"
@@ -180,6 +181,8 @@ export interface ReconstructRunControlResumeRow {
   resume_id: string;
   resume_token_hash: string;
   source_attempt_id: string;
+  compatibility_policy?: "authored_artifact_provenance:v1";
+  compatibility_check_refs?: string[];
   checkpoint_refs: string[];
   trusted_artifact_refs: string[];
   stale_artifact_refs: string[];
@@ -214,7 +217,10 @@ export interface ReconstructRunControlValidationViolation {
     | "conflicting_lock"
     | "invalid_transaction"
     | "transaction_hash_missing"
-    | "expected_transaction_missing";
+    | "terminal_validation_missing"
+    | "terminal_validation_invalid"
+    | "expected_transaction_missing"
+    | "invalid_resume";
   message: string;
   subject_id: string | null;
 }
@@ -661,6 +667,173 @@ export interface ReconstructSourceSafetyLedgerValidationArtifact {
   violations: ReconstructSourceSafetyValidationViolation[];
 }
 
+export type ReconstructSourceScoutSignalAxis =
+  | "actor"
+  | "action"
+  | "state"
+  | "guard"
+  | "object"
+  | "declared_purpose"
+  | "source_claim"
+  | "instruction_cue"
+  | "provenance_cue"
+  | "limitation";
+
+export type ReconstructSourceScoutSignalBasis =
+  | "path"
+  | "basename"
+  | "heading"
+  | "symbol"
+  | "excerpt"
+  | "schema"
+  | "test"
+  | "api"
+  | "config";
+
+export type ReconstructSourceScoutPromptVisibilityState =
+  | "prompt_visible"
+  | "redacted"
+  | "blocked";
+
+export type ReconstructSourceScoutIntendedConsumption =
+  | "scout_prompt_input"
+  | "evidence_support"
+  | "replay"
+  | "public_projection";
+
+export type ReconstructSourceScoutCoverageAxis =
+  | ReconstructSourceScoutSignalAxis
+  | "profile_local";
+
+export type ReconstructSourceScoutCoverageStatus =
+  | "present"
+  | "missing"
+  | "limitation_cue"
+  | "blocked_by_safety";
+
+export type ReconstructSourceScoutScopeState =
+  | "supported_single_member_code_or_document"
+  | "unsupported_material_scope"
+  | "member_scoped_composite";
+
+export interface ReconstructSourceScoutSignalRow {
+  signal_row_id: string;
+  observation_id: string;
+  source_ref: string;
+  target_material_kind: TargetMaterialKind;
+  signal_axis: ReconstructSourceScoutSignalAxis;
+  signal_basis: ReconstructSourceScoutSignalBasis;
+  matched_text: string | null;
+  matched_text_sha256: string | null;
+  evidence_locator: string;
+  profile_ref: string | null;
+  source_observation_ref: string | null;
+  source_observation_content_sha256: string | null;
+  source_safety_row_id: string | null;
+  source_safety_ledger_ref: string | null;
+  source_safety_ledger_validation_ref: string | null;
+  prompt_visibility_state: ReconstructSourceScoutPromptVisibilityState;
+  intended_consumption: ReconstructSourceScoutIntendedConsumption;
+  redaction_summary: string | null;
+  limitation_refs: string[];
+}
+
+export interface ReconstructSourceScoutCoverageSlot {
+  coverage_slot_id: string;
+  coverage_axis: ReconstructSourceScoutCoverageAxis;
+  target_material_kind: TargetMaterialKind | null;
+  status: ReconstructSourceScoutCoverageStatus;
+  signal_row_refs: string[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructSourceScoutPackArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  scout_focus: "actor_action_state";
+  scout_scope: {
+    scope_state: ReconstructSourceScoutScopeState;
+    target_material_kind: TargetMaterialKind;
+    target_ref_count: number;
+    selected_source_profile_refs: string[];
+    limitation_refs: string[];
+  };
+  source_observations_ref: string | null;
+  source_safety_ledger_ref: string | null;
+  source_safety_ledger_validation_ref: string | null;
+  target_material_profile_ref: string | null;
+  target_material_profile_validation_ref: string | null;
+  source_observation_lineage_index_validation_ref: string | null;
+  input_snapshot_hashes: {
+    source_observations_sha256: string | null;
+    source_safety_ledger_sha256: string | null;
+    source_safety_ledger_validation_sha256: string | null;
+    target_material_profile_validation_sha256: string | null;
+    source_observation_lineage_index_validation_sha256: string | null;
+  };
+  signal_rows: ReconstructSourceScoutSignalRow[];
+  profile_scout_coverage_slots: ReconstructSourceScoutCoverageSlot[];
+  omitted_signal_summary: Array<{
+    observation_id: string;
+    source_ref: string;
+    reason: "no_profile_local_signal" | "blocked_by_source_safety";
+    source_safety_row_id: string | null;
+    visibility_tier: ReconstructSourceSafetyVisibilityTier | null;
+  }>;
+  boundary_notes: string[];
+}
+
+export interface ReconstructSourceScoutPackValidationViolation {
+  code:
+    | "schema_shape_invalid"
+    | "session_id_mismatch"
+    | "source_observations_hash_mismatch"
+    | "source_safety_hash_mismatch"
+    | "target_material_profile_validation_hash_mismatch"
+    | "source_observation_lineage_index_validation_ref_mismatch"
+    | "source_observation_lineage_index_validation_hash_mismatch"
+    | "source_safety_validation_invalid"
+    | "target_material_profile_validation_invalid"
+    | "unsupported_scope_overclaimed"
+    | "selected_purpose_authority_leak"
+    | "invalid_signal_axis"
+    | "invalid_signal_basis"
+    | "invalid_prompt_visibility_state"
+    | "signal_observation_missing"
+    | "signal_safety_row_missing"
+    | "prompt_visible_signal_without_valid_safety"
+    | "prompt_visible_signal_without_consumption_allowed_tier"
+    | "coverage_slot_signal_missing"
+    | "duplicate_id";
+  message: string;
+  subject_id: string | null;
+}
+
+export interface ReconstructSourceScoutPackValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_scout_pack_ref: string | null;
+  source_observations_ref: string | null;
+  source_observations_sha256: string | null;
+  source_safety_ledger_ref: string | null;
+  source_safety_ledger_sha256: string | null;
+  source_safety_ledger_validation_ref: string | null;
+  source_safety_ledger_validation_sha256: string | null;
+  target_material_profile_validation_ref: string | null;
+  target_material_profile_validation_sha256: string | null;
+  source_observation_lineage_index_validation_ref: string | null;
+  source_observation_lineage_index_validation_sha256: string | null;
+  scout_scope: ReconstructSourceScoutPackArtifact["scout_scope"];
+  validation_status: "valid" | "invalid";
+  signal_row_count: number;
+  prompt_visible_signal_count: number;
+  coverage_slot_count: number;
+  validation_results: string[];
+  violations: ReconstructSourceScoutPackValidationViolation[];
+}
+
 export interface ReconstructSourceObservationDirectiveSelection {
   observation_id: string;
   target_material_kind: TargetMaterialKind;
@@ -973,6 +1146,183 @@ export interface ReconstructMaterialAdmissionLedgerValidationArtifact {
   violations: ReconstructMaterialAdmissionValidationViolation[];
 }
 
+export type ReconstructSeedAuthoringReadinessClassification =
+  | "seed_ready"
+  | "limited_seed_possible"
+  | "frontier_required"
+  | "purpose_confirmation_required"
+  | "blocked_no_authority"
+  | "blocked_validation_gap";
+
+export type ReconstructSeedAuthoringFrontierAvailability =
+  | "none"
+  | "concrete_frontier_available"
+  | "no_concrete_frontier"
+  | "unknown";
+
+export type ReconstructSeedAuthoringSourceSufficiencyState =
+  | "sufficient_for_claim_scope"
+  | "insufficient_for_claim_scope"
+  | "unknown_until_frontier"
+  | "not_evaluated_due_non_source_blocker"
+  | "not_evaluated_due_validation_gap";
+
+export type ReconstructSeedAuthoringExplorationBudgetState =
+  | "within_budget"
+  | "max_round_exhausted";
+
+export type ReconstructSeedAuthoringMaxRoundExhaustionInterpretation =
+  | "not_exhausted"
+  | "exhausted_after_sufficient_selected_scope"
+  | "exhausted_with_open_frontier"
+  | "exhausted_with_non_source_blocker"
+  | "exhausted_not_evaluated_due_validation_gap";
+
+export type ReconstructSeedAuthoringLimitationClosureState =
+  | "none"
+  | "limitation_backed"
+  | "limitation_required"
+  | "invalid_limitation";
+
+export type ReconstructSeedAuthoringClosureAxis =
+  | "purpose"
+  | "actor"
+  | "action"
+  | "object_data"
+  | "state_transition"
+  | "guard_policy"
+  | "static_core"
+  | "profile_local";
+
+export type ReconstructSeedAuthoringClosureState =
+  | "evidence_backed"
+  | "limitation_backed"
+  | "frontier_backed"
+  | "missing"
+  | "unsupported"
+  | "blocked_by_validation_gap";
+
+export interface ReconstructSeedAuthoringReadinessInputAuthorityRefs {
+  target_material_profile_validation_ref: string | null;
+  source_scout_pack_validation_ref: string | null;
+  source_observation_directive_validation_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  purpose_confirmation_validation_ref: string | null;
+  material_admission_ledger_ref: string | null;
+  candidate_disposition_validation_ref: string | null;
+  source_frontier_validation_refs: string[];
+  source_observation_delta_validation_refs: string[];
+  source_observation_reentry_validation_refs: string[];
+  source_observation_lineage_index_validation_ref: string | null;
+}
+
+export interface ReconstructSeedAuthoringClosureRow {
+  closure_row_id: string;
+  required_element_ref: string;
+  material_admission_row_ref: string | null;
+  closure_axis: ReconstructSeedAuthoringClosureAxis;
+  claim_scope: string;
+  closure_state: ReconstructSeedAuthoringClosureState;
+  evidence_refs: ReconstructEvidenceRef[];
+  limitation_refs: string[];
+  frontier_refs: string[];
+  validated_upstream_refs: string[];
+  member_scope_refs: string[];
+  source_safety_refs: string[];
+  llm_authority_refs: string[];
+}
+
+export interface ReconstructSeedAuthoringDomainRequiredCategoryRow {
+  category_id: string;
+  category_name: string;
+  category_source_ref: string;
+  category_closure_state:
+    | "included"
+    | "evidence_backed"
+    | "limitation_backed"
+    | "frontier_backed"
+    | "missing"
+    | "blocked_by_validation_gap";
+  purpose_required_element_refs: string[];
+  closure_row_refs: string[];
+  limitation_refs: string[];
+  frontier_refs: string[];
+}
+
+export interface ReconstructSeedAuthoringReadinessArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  taxonomy_version: "seed_authoring_readiness:v1";
+  enum_owner: "reconstruct-contract-registry.yaml#seed_authoring_readiness_taxonomy";
+  selected_purpose_candidate_ref: string | null;
+  purpose_adequacy_frame_ref: string | null;
+  input_authority_refs: ReconstructSeedAuthoringReadinessInputAuthorityRefs;
+  scope_support_ref: string | null;
+  readiness_classification: ReconstructSeedAuthoringReadinessClassification;
+  missing_requirement_categories: string[];
+  frontier_availability: ReconstructSeedAuthoringFrontierAvailability;
+  source_sufficiency_state: ReconstructSeedAuthoringSourceSufficiencyState;
+  exploration_budget_state: ReconstructSeedAuthoringExplorationBudgetState;
+  max_round_exhaustion_interpretation:
+    ReconstructSeedAuthoringMaxRoundExhaustionInterpretation;
+  limitation_closure_state: ReconstructSeedAuthoringLimitationClosureState;
+  closure_rows: ReconstructSeedAuthoringClosureRow[];
+  ontology_domain_required_category_rows:
+    ReconstructSeedAuthoringDomainRequiredCategoryRow[];
+  boundary_notes: string[];
+}
+
+export interface ReconstructSeedAuthoringReadinessValidationViolation {
+  code:
+    | "schema_shape_invalid"
+    | "session_id_mismatch"
+    | "input_validation_missing"
+    | "input_validation_invalid"
+    | "selected_purpose_missing"
+    | "purpose_confirmation_blocks_seed"
+    | "source_scout_scope_unsupported"
+    | "closure_row_missing"
+    | "closure_row_dangling_required_element"
+    | "closure_row_dangling_material_admission"
+    | "closure_row_invalid_state"
+    | "missing_requirement_category_not_reported"
+    | "ontology_domain_category_missing"
+    | "semantic_authority_boundary_missing"
+    | "source_scout_pre_seed_identity_mismatch"
+    | "max_round_exhaustion_interpretation_mismatch"
+    | "source_sufficiency_state_mismatch"
+    | "readiness_classification_mismatch";
+  message: string;
+  subject_id: string | null;
+}
+
+export interface ReconstructSeedAuthoringReadinessValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  seed_authoring_readiness_ref: string | null;
+  source_purpose_candidates_validation_ref: string | null;
+  purpose_confirmation_validation_ref: string | null;
+  source_scout_pack_validation_ref: string | null;
+  material_admission_ledger_ref: string | null;
+  candidate_disposition_validation_ref: string | null;
+  deterministic_gate_scope: "pre_seed_closure_only";
+  semantic_authority_boundary_status: "preserved" | "violated";
+  validation_status: "valid" | "invalid";
+  readiness_classification:
+    ReconstructSeedAuthoringReadinessClassification | null;
+  source_sufficiency_state:
+    ReconstructSeedAuthoringSourceSufficiencyState | null;
+  exploration_budget_state:
+    ReconstructSeedAuthoringExplorationBudgetState | null;
+  max_round_exhaustion_interpretation:
+    ReconstructSeedAuthoringMaxRoundExhaustionInterpretation | null;
+  closure_row_count: number;
+  validation_results: string[];
+  violations: ReconstructSeedAuthoringReadinessValidationViolation[];
+}
+
 export interface ReconstructCandidateInventoryCandidate {
   candidate_id: string;
   candidate_kind: string;
@@ -1228,6 +1578,13 @@ export const RECONSTRUCT_STAGE_IDS = [
   "source_observation",
   "source_safety",
   "source_safety_validation",
+  "source_scout_pack",
+  "source_scout_pack_validation",
+  "source_scout_pack_pre_seed",
+  "source_scout_pack_validation_pre_seed",
+  "source_scout_pack_post_maturation",
+  "source_scout_pack_validation_post_maturation",
+  "post_maturation_gate_projection_validation",
   "observation_directive",
   "observation_directive_validation",
   "lens_judgment",
@@ -1247,6 +1604,8 @@ export const RECONSTRUCT_STAGE_IDS = [
   "candidate_inventory",
   "candidate_disposition",
   "candidate_disposition_validation",
+  "seed_authoring_readiness",
+  "seed_authoring_readiness_validation",
   "ontology_seed",
   "ontology_seed_validation",
   "material_admission_validation",
@@ -1284,10 +1643,18 @@ export const RECONSTRUCT_STAGE_IDS = [
   "ontology_expansion_validation",
   "actionability_matrix",
   "actionability_matrix_validation",
+  "maturation_source_delta",
+  "maturation_source_delta_validation",
   "maturation_convergence_ledger",
   "maturation_convergence_ledger_validation",
   "maturation_continuation_decision",
   "maturation_continuation_decision_validation",
+  "query_proofs",
+  "query_proofs_validation",
+  "visualization_proofs",
+  "visualization_proofs_validation",
+  "graph_exploration_proofs",
+  "graph_exploration_proofs_validation",
   "actionable_ontology",
   "actionable_ontology_validation",
   "run_control_pre_publication_validation",
@@ -2059,6 +2426,7 @@ export interface ReconstructMaturationConvergenceSourceObservationClosureRow {
 export interface ReconstructMaturationConvergenceRound {
   round_id: string;
   source_observation_delta_validation_ref: string | null;
+  maturation_source_delta_validation_ref: string | null;
   question_frontier_validation_ref: string | null;
   actionability_matrix_validation_ref: string | null;
   final_requestion_pass: ReconstructMaturationFinalRequestionPass;
@@ -2080,6 +2448,7 @@ export interface ReconstructMaturationConvergenceLedgerValidationArtifact {
   session_id: string;
   created_at: string;
   maturation_convergence_ledger_ref: string | null;
+  maturation_source_delta_validation_ref: string | null;
   maturation_question_frontier_validation_ref: string | null;
   actionability_matrix_validation_ref: string | null;
   answer_support_ledger_validation_ref: string | null;
@@ -2090,6 +2459,50 @@ export interface ReconstructMaturationConvergenceLedgerValidationArtifact {
   remaining_frontier_count: number;
   final_requestion_pass_status:
     ReconstructMaturationFinalRequestionPass["pass_status"];
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export type ReconstructMaturationSourceDeltaImpactState =
+  | "no_delta"
+  | "delta_no_actionability_impact"
+  | "delta_affects_actionability";
+
+export interface ReconstructMaturationSourceDeltaImpactRow {
+  impact_row_id: string;
+  delta_row_id: string;
+  observation_id: string;
+  source_ref: string;
+  target_material_kind: TargetMaterialKind;
+  affected_matrix_row_refs: string[];
+  impact_state: "affects_actionability" | "no_matching_actionability_row";
+  rationale: string;
+}
+
+export interface ReconstructMaturationSourceDeltaArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  source_observation_delta_ref: string | null;
+  source_observation_delta_validation_ref: string | null;
+  actionability_matrix_ref: string | null;
+  actionability_matrix_validation_ref: string | null;
+  impact_state: ReconstructMaturationSourceDeltaImpactState;
+  delta_row_count: number;
+  impacted_matrix_row_refs: string[];
+  impact_rows: ReconstructMaturationSourceDeltaImpactRow[];
+}
+
+export interface ReconstructMaturationSourceDeltaValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  maturation_source_delta_ref: string | null;
+  source_observation_delta_validation_ref: string | null;
+  actionability_matrix_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  impact_state: ReconstructMaturationSourceDeltaImpactState;
+  impacted_matrix_row_count: number;
   validation_results: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
@@ -2207,6 +2620,58 @@ export interface ReconstructActionableOntologyValidationArtifact {
   projected_row_count: number;
   included_row_count: number;
   excluded_row_count: number;
+  validation_results: string[];
+  violations: ReconstructMaturationValidationViolation[];
+}
+
+export type ReconstructProofAuthoritySurface =
+  | "query_access"
+  | "visualization"
+  | "graph_exploration";
+
+export type ReconstructProofAuthorityClaimState =
+  | "not_claimed"
+  | "proof_required"
+  | "claimed_with_runtime_proof";
+
+export interface ReconstructProofAuthorityRow {
+  proof_id: string;
+  proof_kind:
+    | "query_execution"
+    | "visual_render"
+    | "graph_traversal"
+    | "not_claimed_boundary";
+  target_refs: string[];
+  supporting_refs: string[];
+  limitation_refs: string[];
+  proof_summary: string;
+}
+
+export interface ReconstructProofAuthorityArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  proof_surface: ReconstructProofAuthoritySurface;
+  actionability_matrix_validation_ref: string | null;
+  maturation_continuation_decision_validation_ref: string | null;
+  actionable_ontology_validation_ref: string | null;
+  claim_state: ReconstructProofAuthorityClaimState;
+  proof_rows: ReconstructProofAuthorityRow[];
+  limitation_refs: string[];
+}
+
+export interface ReconstructProofAuthorityValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  proof_authority_ref: string | null;
+  proof_surface: ReconstructProofAuthoritySurface;
+  actionability_matrix_validation_ref: string | null;
+  maturation_continuation_decision_validation_ref: string | null;
+  actionable_ontology_validation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  claim_state: ReconstructProofAuthorityClaimState;
+  proof_row_count: number;
   validation_results: string[];
   violations: ReconstructMaturationValidationViolation[];
 }
@@ -2724,6 +3189,19 @@ export interface ReconstructHandoffDecisionValidationArtifact {
   violations: ReconstructPostSeedValidationViolation[];
 }
 
+export interface ReconstructPostMaturationGateProjectionValidationArtifact {
+  schema_version: "1";
+  session_id: string;
+  created_at: string;
+  projection_scope: "post_maturation_source_scout_gate";
+  source_scout_pack_post_maturation_ref: string | null;
+  source_scout_pack_validation_post_maturation_ref: string | null;
+  validation_status: "valid" | "invalid";
+  gate_projection: ReconstructHandoffDecisionValidationArtifact["gate_projection"];
+  validation_results: string[];
+  violations: ReconstructPostSeedValidationViolation[];
+}
+
 export interface ReconstructFinalOutputProvenanceValidationArtifact {
   schema_version: "1";
   session_id: string;
@@ -2791,6 +3269,13 @@ export interface ReconstructRecordArtifactRefs {
   source_observation_lineage_index_validation: string | null;
   source_safety_ledger: string | null;
   source_safety_ledger_validation: string | null;
+  source_scout_pack: string | null;
+  source_scout_pack_validation: string | null;
+  source_scout_pack_pre_seed: string | null;
+  source_scout_pack_validation_pre_seed: string | null;
+  source_scout_pack_post_maturation: string | null;
+  source_scout_pack_validation_post_maturation: string | null;
+  post_maturation_gate_projection_validation: string | null;
   source_observation_directive: string | null;
   source_observation_directive_validation: string | null;
   lens_judgment_index: string | null;
@@ -2806,6 +3291,8 @@ export interface ReconstructRecordArtifactRefs {
   candidate_inventory: string | null;
   candidate_disposition: string | null;
   candidate_disposition_validation: string | null;
+  seed_authoring_readiness: string | null;
+  seed_authoring_readiness_validation: string | null;
   ontology_seed: string | null;
   ontology_seed_validation: string | null;
   claim_realization_map: string | null;
@@ -2843,10 +3330,18 @@ export interface ReconstructRecordArtifactRefs {
   maturation_answer_claims_validation: string | null;
   ontology_expansion: string | null;
   ontology_expansion_validation: string | null;
+  maturation_source_delta: string | null;
+  maturation_source_delta_validation: string | null;
   maturation_convergence_ledger: string | null;
   maturation_convergence_ledger_validation: string | null;
   maturation_continuation_decision: string | null;
   maturation_continuation_decision_validation: string | null;
+  query_proofs: string | null;
+  query_proofs_validation: string | null;
+  visualization_proofs: string | null;
+  visualization_proofs_validation: string | null;
+  graph_exploration_proofs: string | null;
+  graph_exploration_proofs_validation: string | null;
   actionable_ontology: string | null;
   actionable_ontology_validation: string | null;
   claim_projection: string | null;
@@ -2878,6 +3373,7 @@ export interface ReconstructRecordArtifact {
     target_material_profile_status: ReconstructRecordValidationStatusProjection;
     source_observation_directive_status: ReconstructRecordValidationStatusProjection;
     candidate_disposition_status: ReconstructRecordValidationStatusProjection;
+    seed_authoring_readiness_status: ReconstructRecordValidationStatusProjection;
     ontology_seed_status: ReconstructRecordValidationStatusProjection;
     claim_realization_status: ReconstructRecordValidationStatusProjection;
     seed_confirmation_status: ReconstructSeedConfirmationStatus | "not_available";

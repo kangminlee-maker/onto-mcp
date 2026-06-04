@@ -42,4 +42,17 @@ describe("reconstruct source profiles", () => {
     expect(profile?.runtime_implementation_status).toBe("planned");
     expect(profile?.support_summary).toContain("runtime_implementation_status=planned");
   });
+
+  it("resolves the document source profile as a partially wired observer", async () => {
+    const profile = await resolveReconstructSourceProfile({
+      profilesRoot,
+      targetMaterialKind: "document",
+    });
+
+    expect(profile?.title).toBe("Source Profile: Document");
+    expect(profile?.profile_id).toBe("document-source-profile");
+    expect(profile?.runtime_implementation_status).toBe("partially_wired");
+    expect(profile?.support_summary)
+      .toContain("runtime_implementation_status=partially_wired");
+  });
 });

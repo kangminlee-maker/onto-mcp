@@ -19,11 +19,16 @@ import type {
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
   ReconstructRegistryVerificationEvidenceValidationArtifact,
+  ReconstructPostMaturationGateProjectionValidationArtifact,
+  ReconstructSeedAuthoringReadinessArtifact,
   ReconstructSourceObservationDeltaArtifact,
   ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
   ReconstructSourceFrontierValidationArtifact,
   ReconstructSourceObservationsArtifact,
+  ReconstructSourcePurposeCandidatesValidationArtifact,
+  ReconstructSourceScoutPackArtifact,
+  ReconstructSourceScoutPackValidationArtifact,
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
@@ -1302,6 +1307,183 @@ describe("runReconstruct", () => {
     );
   });
 
+  it("applies actor-action-state scout candidates to the first source frontier", async () => {
+    let sourceFrontierPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (_systemPrompt, userPrompt) => {
+        sourceFrontierPayload = JSON.parse(userPrompt);
+        return Promise.resolve({
+          text: JSON.stringify({
+            frontier_refs: [],
+            no_next_frontier_rationale:
+              "The model did not request additional source.",
+          }),
+        } satisfies LlmCallResult);
+      },
+    });
+    const scoutScope = {
+      scope_state: "supported_single_member_code_or_document" as const,
+      target_material_kind: "document" as const,
+      target_ref_count: 1,
+      selected_source_profile_refs: ["document-source-profile"],
+      limitation_refs: [],
+    };
+    const sourceScoutPack: ReconstructSourceScoutPackArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-06-04T00:00:00.000Z",
+      scout_focus: "actor_action_state",
+      scout_scope: scoutScope,
+      source_observations_ref: "source-observations.yaml",
+      source_safety_ledger_ref: "source-safety-ledger.yaml",
+      source_safety_ledger_validation_ref: "source-safety-ledger-validation.yaml",
+      target_material_profile_ref: "target-material-profile.yaml",
+      target_material_profile_validation_ref:
+        "target-material-profile-validation.yaml",
+      source_observation_lineage_index_validation_ref: null,
+      input_snapshot_hashes: {
+        source_observations_sha256: null,
+        source_safety_ledger_sha256: null,
+        source_safety_ledger_validation_sha256: null,
+        target_material_profile_validation_sha256: null,
+      },
+      signal_rows: [],
+      profile_scout_coverage_slots: ["actor", "action", "state"].map((axis) => ({
+        coverage_slot_id: `source_scout_coverage:${axis}`,
+        coverage_axis: axis as "actor" | "action" | "state",
+        target_material_kind: "document" as const,
+        status: "missing" as const,
+        signal_row_refs: [],
+        limitation_refs: [`source_scout_${axis}_signal_missing`],
+      })),
+      omitted_signal_summary: [],
+      boundary_notes: [
+        "SourceScoutPack is a deterministic profile-local scout index; it is not a semantic ontology authority.",
+        "No selected-purpose required element refs are admitted before source-purpose selection and SeedAuthoringReadiness.",
+      ],
+    };
+    const sourceScoutPackValidation: ReconstructSourceScoutPackValidationArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      created_at: "2026-06-04T00:00:00.000Z",
+      source_scout_pack_ref: "source-scout-pack.yaml",
+      source_observations_ref: "source-observations.yaml",
+      source_observations_sha256: null,
+      source_safety_ledger_ref: "source-safety-ledger.yaml",
+      source_safety_ledger_sha256: null,
+      source_safety_ledger_validation_ref: "source-safety-ledger-validation.yaml",
+      source_safety_ledger_validation_sha256: null,
+      target_material_profile_validation_ref:
+        "target-material-profile-validation.yaml",
+      target_material_profile_validation_sha256: null,
+      scout_scope: scoutScope,
+      validation_status: "valid",
+      signal_row_count: 0,
+      prompt_visible_signal_count: 0,
+      coverage_slot_count: 3,
+      validation_results: ["source_scout_pack_valid"],
+      violations: [],
+    };
+
+    const result = await author.writeSourceFrontier({
+      sessionId: "session-1",
+      intent: "Create a bounded reconstruct Seed.",
+      roundId: "round-1",
+      maxExplorationRounds: 5,
+      isFinalExplorationRound: false,
+      sourceScoutPack,
+      sourceScoutPackValidation,
+      sourceScoutPackRef: "source-scout-pack.yaml",
+      sourceScoutPackValidationRef: "source-scout-pack-validation.yaml",
+      explorationSynthesisRef: "rounds/round-1/exploration-synthesis.yaml",
+      explorationSynthesis: {
+        schema_version: "1",
+        session_id: "session-1",
+        round_id: "round-1",
+        created_at: "2026-06-04T00:00:00.000Z",
+        lens_judgment_index_ref: "rounds/round-1/lens-judgment-index.yaml",
+        accepted_gaps: [{
+          gap_id: "gap-actor-action-state",
+          lens_id: "behavior",
+          description: "Actor/action/state evidence needs a follow-up source.",
+          evidence_refs: [{
+            observation_id: "obs-observed",
+            target_material_kind: "document",
+            source_ref: "docs/observed.md",
+            location: "docs/observed.md:1",
+          }],
+        }],
+        requested_source_refs: [],
+        no_next_frontier_rationale:
+          "No lens-selected frontier, defer to scout if needed.",
+        directive_author: {
+          owner: "host_llm",
+          author_id: "fixture-author",
+        },
+      },
+      sourceInventory: {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: "2026-06-04T00:00:00.000Z",
+        inventory_units: [
+          {
+            ref: "docs/observed.md",
+            exists: true,
+            target_material_kind: "document",
+            inventory_unit: "section_heading_or_document_unit",
+            profile_ref: "document-source-profile",
+            scan_status: "planned",
+            skip_reason: null,
+          },
+          {
+            ref: "docs/actions.md",
+            exists: true,
+            target_material_kind: "document",
+            inventory_unit: "section_heading_or_document_unit",
+            profile_ref: "document-source-profile",
+            scan_status: "planned",
+            skip_reason: null,
+          },
+        ],
+        scan_boundary: {
+          filesystem_allowed_roots: [],
+          source: "binding",
+        },
+      },
+      sourceObservations: {
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: "2026-06-04T00:00:00.000Z",
+        observations: [{
+          observation_id: "obs-observed",
+          source_ref: "docs/observed.md",
+        }] as any,
+        skipped_refs: [],
+        validation_results: [],
+      },
+    });
+
+    expect(sourceFrontierPayload?.first_frontier_policy?.candidates)
+      .toEqual([
+        expect.objectContaining({
+          source_ref: "docs/actions.md",
+          coverage_gap_axes: ["actor", "action", "state"],
+        }),
+      ]);
+    expect(JSON.stringify(sourceFrontierPayload?.exploration_synthesis))
+      .not.toContain("evidence_refs");
+    expect(JSON.stringify(sourceFrontierPayload?.exploration_synthesis))
+      .toContain("evidence_observation_ids");
+    expect(result.frontier_refs).toEqual([
+      expect.objectContaining({
+        frontier_ref_id: "frontier_scout_1",
+        source_ref: "docs/actions.md",
+        priority: "high",
+      }),
+    ]);
+    expect(result.no_next_frontier_rationale).toBeNull();
+  });
+
   function fakeLiveLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
     const input = JSON.parse(userPrompt) as Record<string, any>;
     const observations = (input.source_observations ?? []) as Array<{
@@ -1834,9 +2016,10 @@ describe("runReconstruct", () => {
         notes: ["Fixture host confirmation accepts all evidence-backed claims."],
       });
     } else if (systemPrompt.includes("Classify every Seed claim")) {
-      const claims = ontologySeedClaimProjections(
-        input.ontology_seed as ReconstructOntologySeedArtifact,
-      );
+      const claims = input.allowed_claims ??
+        ontologySeedClaimProjections(
+          input.ontology_seed as ReconstructOntologySeedArtifact,
+        );
       text = JSON.stringify({
         claim_realizations: claims.map((claim: { claim_id: string }) => ({
           claim_id: claim.claim_id,
@@ -1943,10 +2126,12 @@ describe("runReconstruct", () => {
     } else if (systemPrompt.includes("Propose bounded ontology actions")) {
       text = JSON.stringify({ proposals: [] });
     } else if (systemPrompt.includes("Decide whether the current reconstructed result")) {
+      const allowedDecision = (input.allowed_decisions as string[] | undefined)?.[0] ??
+        "stop";
       text = JSON.stringify({
-        decision: "stop",
-        rationale: "The fixture has no unresolved questions.",
-        next_actions: [],
+        decision: allowedDecision,
+        rationale: "The fixture follows the runtime-provided allowed decision boundary.",
+        next_actions: allowedDecision === "stop" ? [] : ["Continue maturation."],
       });
     } else if (systemPrompt.includes("Author maturation-closure-frontier.yaml")) {
       text = JSON.stringify({
@@ -2079,6 +2264,8 @@ describe("runReconstruct", () => {
       .toContain("reconstruct-run-manifest.post-publication-validation.yaml");
     expect(record.artifact_refs.handoff_decision_validation)
       .toContain("handoff-decision-validation.yaml");
+    expect(record.artifact_refs.post_maturation_gate_projection_validation)
+      .toContain("post-maturation-gate-projection-validation.yaml");
     expect(record.artifact_refs.claim_projection)
       .toContain("claim-projection.yaml");
     expect(record.artifact_refs.claim_projection_validation)
@@ -2191,6 +2378,10 @@ describe("runReconstruct", () => {
       .toContain("target-material-profile-validation.yaml");
     expect(record.artifact_refs.candidate_disposition_validation)
       .toContain("candidate-disposition-validation.yaml");
+    expect(record.artifact_refs.seed_authoring_readiness)
+      .toContain("seed-authoring-readiness.yaml");
+    expect(record.artifact_refs.seed_authoring_readiness_validation)
+      .toContain("seed-authoring-readiness-validation.yaml");
     expect(candidateDispositionValidation.source_observations_ref)
       .toBe(path.resolve(sessionRoot, "source-observations.yaml"));
     expect(record.artifact_refs.ontology_seed)
@@ -2209,6 +2400,10 @@ describe("runReconstruct", () => {
       .toContain("actionability-matrix.yaml");
     expect(record.artifact_refs.actionability_matrix_validation)
       .toContain("actionability-matrix-validation.yaml");
+    expect(record.artifact_refs.maturation_source_delta)
+      .toContain("maturation-source-delta.yaml");
+    expect(record.artifact_refs.maturation_source_delta_validation)
+      .toContain("maturation-source-delta-validation.yaml");
     expect(record.artifact_refs.maturation_question_frontier)
       .toContain("maturation-question-frontier.yaml");
     expect(record.artifact_refs.maturation_question_frontier_validation)
@@ -2217,6 +2412,18 @@ describe("runReconstruct", () => {
       .toContain("maturation-convergence-ledger.yaml");
     expect(record.artifact_refs.maturation_convergence_ledger_validation)
       .toContain("maturation-convergence-ledger-validation.yaml");
+    expect(record.artifact_refs.query_proofs)
+      .toContain("query-proofs.yaml");
+    expect(record.artifact_refs.query_proofs_validation)
+      .toContain("query-proofs-validation.yaml");
+    expect(record.artifact_refs.visualization_proofs)
+      .toContain("visualization-proofs.yaml");
+    expect(record.artifact_refs.visualization_proofs_validation)
+      .toContain("visualization-proofs-validation.yaml");
+    expect(record.artifact_refs.graph_exploration_proofs)
+      .toContain("graph-exploration-proofs.yaml");
+    expect(record.artifact_refs.graph_exploration_proofs_validation)
+      .toContain("graph-exploration-proofs-validation.yaml");
     expect(record.artifact_refs.actionable_ontology).toBeNull();
     expect(record.artifact_refs.actionable_ontology_validation).toBeNull();
     expect(record.validation_summary.failure_count).toBe(0);
@@ -2280,6 +2487,10 @@ describe("runReconstruct", () => {
       "source_observation",
       "source_safety",
       "source_safety_validation",
+      "source_scout_pack",
+      "source_scout_pack_validation",
+      "source_scout_pack_pre_seed",
+      "source_scout_pack_validation_pre_seed",
       "observation_directive",
       "observation_directive_validation",
       "lens_judgment",
@@ -2299,6 +2510,8 @@ describe("runReconstruct", () => {
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
+      "seed_authoring_readiness",
+      "seed_authoring_readiness_validation",
       "ontology_seed",
       "ontology_seed_validation",
       "material_admission_validation",
@@ -2320,6 +2533,9 @@ describe("runReconstruct", () => {
       "handoff_decision_validation",
       "maturation_baseline",
       "maturation_baseline_validation",
+      "source_scout_pack_post_maturation",
+      "source_scout_pack_validation_post_maturation",
+      "post_maturation_gate_projection_validation",
       "baseline_actionability_matrix",
       "baseline_actionability_matrix_validation",
       "maturation_question_frontier",
@@ -2336,10 +2552,18 @@ describe("runReconstruct", () => {
       "ontology_expansion_validation",
       "actionability_matrix",
       "actionability_matrix_validation",
+      "maturation_source_delta",
+      "maturation_source_delta_validation",
       "maturation_convergence_ledger",
       "maturation_convergence_ledger_validation",
       "maturation_continuation_decision",
       "maturation_continuation_decision_validation",
+      "query_proofs",
+      "query_proofs_validation",
+      "visualization_proofs",
+      "visualization_proofs_validation",
+      "graph_exploration_proofs",
+      "graph_exploration_proofs_validation",
       "actionable_ontology",
       "actionable_ontology_validation",
       "run_control_pre_publication_validation",
@@ -2531,12 +2755,47 @@ describe("runReconstruct", () => {
     );
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "direct-run");
     const sourcePurposeSystemPrompts: string[] = [];
+    const sourcePurposePayloads: Array<{
+      source_scout_pack?: {
+        source_scout_pack_ref?: string | null;
+        source_scout_pack_validation_ref?: string | null;
+        validation_status?: string;
+        emitted_signal_count?: number;
+        prompt_visible_signals?: Array<{
+          observation_id?: string;
+          signal_axis?: string;
+        }>;
+      } | null;
+    }> = [];
+    const candidateInventoryPayloads: Array<{
+      source_scout_pack?: {
+        source_scout_pack_ref?: string | null;
+        source_scout_pack_validation_ref?: string | null;
+        validation_status?: string;
+        emitted_signal_count?: number;
+        prompt_visible_signals?: Array<{
+          observation_id?: string;
+          signal_axis?: string;
+        }>;
+      } | null;
+    }> = [];
     const candidateDispositionSystemPrompts: string[] = [];
     const candidateDispositionPayloads: Array<{
       candidate_inventory?: unknown;
     }> = [];
     const ontologySeedSystemPrompts: string[] = [];
     const ontologySeedPayloads: Array<{
+      source_purpose_candidates?: unknown;
+      source_purpose_projection?: {
+        selected_purpose_candidate?: {
+          adequacy_frame?: {
+            required_elements?: Array<{
+              supporting_evidence?: unknown;
+              supporting_evidence_refs?: unknown;
+            }>;
+          };
+        } | null;
+      };
       source_observations?: Array<{
         observation_id: string;
         source_ref?: string;
@@ -2567,6 +2826,10 @@ describe("runReconstruct", () => {
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
         sourcePurposeSystemPrompts.push(systemPrompt);
+        sourcePurposePayloads.push(JSON.parse(userPrompt));
+      }
+      if (systemPrompt.includes("Author candidate-inventory.yaml")) {
+        candidateInventoryPayloads.push(JSON.parse(userPrompt));
       }
       if (systemPrompt.includes("Author candidate-disposition.yaml")) {
         candidateDispositionSystemPrompts.push(systemPrompt);
@@ -2641,8 +2904,153 @@ describe("runReconstruct", () => {
     const liveOntologySeed = await readYaml<ReconstructOntologySeedArtifact>(
       result.reconstructRunManifest.artifact_refs.ontology_seed!,
     );
+    const sourcePurposeReuseProvenance = await readYaml<{
+      compatibility?: {
+        source_scout_pack_sha256?: string | null;
+        source_observation_lineage_index_validation_sha256?: string | null;
+        seed_authoring_readiness_validation_sha256?: string | null;
+      };
+    }>(path.join(sessionRoot, "source-purpose-candidates.yaml.reuse-provenance.yaml"));
+    const ontologySeedReuseProvenance = await readYaml<{
+      compatibility?: {
+        source_scout_pack_sha256?: string | null;
+        source_observation_lineage_index_validation_sha256?: string | null;
+        seed_authoring_readiness_validation_sha256?: string | null;
+        seed_authoring_readiness_taxonomy_version?: string | null;
+      };
+    }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    const liveSourceScoutPack = await readYaml<ReconstructSourceScoutPackArtifact>(
+      result.reconstructRunManifest.artifact_refs.source_scout_pack!,
+    );
+    const liveSourceScoutPackValidation =
+      await readYaml<ReconstructSourceScoutPackValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_scout_pack_validation!,
+      );
+    const preSeedSourceScoutPack =
+      await readYaml<ReconstructSourceScoutPackArtifact>(
+        result.reconstructRunManifest.artifact_refs.source_scout_pack_pre_seed!,
+      );
+    const preSeedSourceScoutPackValidation =
+      await readYaml<ReconstructSourceScoutPackValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .source_scout_pack_validation_pre_seed!,
+      );
+    const postMaturationSourceScoutPack =
+      await readYaml<ReconstructSourceScoutPackArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .source_scout_pack_post_maturation!,
+      );
+    const postMaturationSourceScoutPackValidation =
+      await readYaml<ReconstructSourceScoutPackValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .source_scout_pack_validation_post_maturation!,
+      );
+    const postMaturationGateProjectionValidation =
+      await readYaml<ReconstructPostMaturationGateProjectionValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs
+          .post_maturation_gate_projection_validation!,
+      );
+    const seedAuthoringReadiness =
+      await readYaml<ReconstructSeedAuthoringReadinessArtifact>(
+        result.reconstructRunManifest.artifact_refs.seed_authoring_readiness!,
+      );
+    const lineageValidationRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs
+        .source_observation_lineage_index_validation!,
+    );
+    const preSeedScoutPackRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs.source_scout_pack_pre_seed!,
+    );
+    const preSeedScoutPackValidationRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs
+        .source_scout_pack_validation_pre_seed!,
+    );
+    const postMaturationScoutPackRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs
+        .source_scout_pack_post_maturation!,
+    );
+    const postMaturationScoutPackValidationRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs
+        .source_scout_pack_validation_post_maturation!,
+    );
+    const postMaturationGateProjectionValidationRef = path.resolve(
+      result.reconstructRunManifest.artifact_refs
+        .post_maturation_gate_projection_validation!,
+    );
     expect(liveOntologySeed.seed_identity.authoring_profile)
       .toBe("direct-call-reconstruct-directive-author");
+    expect(liveSourceScoutPack.source_observation_lineage_index_validation_ref)
+      .toBe(lineageValidationRef);
+    expect(
+      liveSourceScoutPack.input_snapshot_hashes
+        .source_observation_lineage_index_validation_sha256,
+    ).toHaveLength(64);
+    expect(liveSourceScoutPackValidation.source_observation_lineage_index_validation_ref)
+      .toBe(lineageValidationRef);
+    expect(
+      liveSourceScoutPackValidation
+        .source_observation_lineage_index_validation_sha256,
+    ).toBe(
+      liveSourceScoutPack.input_snapshot_hashes
+        .source_observation_lineage_index_validation_sha256,
+    );
+    expect(preSeedSourceScoutPack.source_observation_lineage_index_validation_ref)
+      .toBe(lineageValidationRef);
+    expect(preSeedSourceScoutPackValidation.source_scout_pack_ref)
+      .toBe(preSeedScoutPackRef);
+    expect(preSeedSourceScoutPackValidation.source_observation_lineage_index_validation_ref)
+      .toBe(lineageValidationRef);
+    expect(postMaturationSourceScoutPack.source_observation_lineage_index_validation_ref)
+      .toBe(lineageValidationRef);
+    expect(postMaturationSourceScoutPackValidation.source_scout_pack_ref)
+      .toBe(postMaturationScoutPackRef);
+    expect(postMaturationGateProjectionValidation.validation_status)
+      .toBe("valid");
+    expect(postMaturationGateProjectionValidation.gate_projection)
+      .toContainEqual(expect.objectContaining({
+        gate_id: "source_scout_pack_post_maturation_gate",
+        concrete_validation_artifact_ref:
+          postMaturationScoutPackValidationRef,
+        applicability: "applicable",
+        validation_status: "valid",
+      }));
+    expect(
+      postMaturationSourceScoutPackValidation
+        .source_observation_lineage_index_validation_sha256,
+    ).toBe(
+      postMaturationSourceScoutPack.input_snapshot_hashes
+        .source_observation_lineage_index_validation_sha256,
+    );
+    expect(seedAuthoringReadiness.input_authority_refs.source_scout_pack_validation_ref)
+      .toBe(preSeedScoutPackValidationRef);
+    expect(result.finalOutputText).toContain(preSeedScoutPackRef);
+    expect(result.finalOutputText).toContain(postMaturationScoutPackValidationRef);
+    expect(result.finalOutputText)
+      .toContain(postMaturationGateProjectionValidationRef);
+    expect(sourcePurposeReuseProvenance.compatibility?.source_scout_pack_sha256)
+      .toHaveLength(64);
+    expect(
+      sourcePurposeReuseProvenance.compatibility
+        ?.source_observation_lineage_index_validation_sha256,
+    ).toHaveLength(64);
+    expect(
+      sourcePurposeReuseProvenance.compatibility
+        ?.seed_authoring_readiness_validation_sha256,
+    ).toBeNull();
+    expect(ontologySeedReuseProvenance.compatibility?.source_scout_pack_sha256)
+      .toHaveLength(64);
+    expect(
+      ontologySeedReuseProvenance.compatibility
+        ?.source_observation_lineage_index_validation_sha256,
+    ).toHaveLength(64);
+    expect(
+      ontologySeedReuseProvenance.compatibility
+        ?.seed_authoring_readiness_validation_sha256,
+    ).toHaveLength(64);
+    expect(
+      ontologySeedReuseProvenance.compatibility
+        ?.seed_authoring_readiness_taxonomy_version,
+    ).toBe("seed_authoring_readiness:v1");
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -2664,6 +3072,36 @@ describe("runReconstruct", () => {
     );
     expect(sourcePurposeSystemPrompts[0])
       .toContain("For mixed targets, every required element");
+    expect(sourcePurposeSystemPrompts[0])
+      .toContain("source_scout_pack");
+    expect(sourcePurposePayloads[0]?.source_scout_pack)
+      .toHaveProperty("prompt_visible_signals");
+    expect(sourcePurposePayloads[0]?.source_scout_pack?.source_scout_pack_ref)
+      .toBe(preSeedScoutPackRef);
+    expect(
+      sourcePurposePayloads[0]?.source_scout_pack
+        ?.source_scout_pack_validation_ref,
+    ).toBe(preSeedScoutPackValidationRef);
+    expect(sourcePurposePayloads[0]?.source_scout_pack?.validation_status)
+      .toBe("valid");
+    expect(sourcePurposePayloads[0]?.source_scout_pack?.emitted_signal_count)
+      .toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(sourcePurposePayloads[0]?.source_scout_pack))
+      .not.toContain("required_element");
+    expect(candidateInventoryPayloads[0]?.source_scout_pack)
+      .toHaveProperty("prompt_visible_signals");
+    expect(candidateInventoryPayloads[0]?.source_scout_pack?.source_scout_pack_ref)
+      .toBe(preSeedScoutPackRef);
+    expect(
+      candidateInventoryPayloads[0]?.source_scout_pack
+        ?.source_scout_pack_validation_ref,
+    ).toBe(preSeedScoutPackValidationRef);
+    expect(candidateInventoryPayloads[0]?.source_scout_pack?.validation_status)
+      .toBe("valid");
+    expect(candidateInventoryPayloads[0]?.source_scout_pack?.emitted_signal_count)
+      .toBeGreaterThanOrEqual(0);
+    expect(JSON.stringify(candidateInventoryPayloads[0]?.source_scout_pack))
+      .not.toContain("required_element");
     expect(candidateDispositionSystemPrompts[0])
       .toContain("first valid operational kernel");
     expect(candidateDispositionSystemPrompts[0]).toContain("deferred_to_maturation");
@@ -2706,6 +3144,13 @@ describe("runReconstruct", () => {
           target_seed_ref: "object-fixture-service",
         }),
       ]));
+    expect(ontologySeedPayloads[0]?.source_purpose_candidates).toBeUndefined();
+    expect(ontologySeedPayloads[0]?.source_purpose_projection)
+      .toHaveProperty("selected_purpose_candidate");
+    expect(JSON.stringify(ontologySeedPayloads[0]?.source_purpose_projection))
+      .not.toContain("supporting_evidence_refs");
+    expect(JSON.stringify(ontologySeedPayloads[0]?.source_purpose_projection))
+      .toContain("supporting_evidence");
     expect(JSON.stringify(ontologySeedPayloads[0]?.candidate_inventory))
       .not.toContain("evidence_refs");
     expect(JSON.stringify(ontologySeedPayloads[0]?.candidate_disposition))
@@ -2747,22 +3192,316 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Ontology seed projected claims");
   });
 
+  it("repairs an invalid ontology seed with focused validation context", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "seed-repair-run",
+    );
+    let ontologySeedCallCount = 0;
+    const repairPayloads: Array<{
+      repair_attempt?: {
+        repair_sections?: string[];
+        previous_ontology_seed_validation?: {
+          validation_status?: string;
+        };
+      } | null;
+    }> = [];
+    const llmCall = async (
+      systemPrompt: string,
+      userPrompt: string,
+    ): Promise<LlmCallResult> => {
+      if (systemPrompt.includes("Repair ontology-seed.yaml")) {
+        repairPayloads.push(JSON.parse(userPrompt));
+      }
+      if (systemPrompt.includes("Author ontology-seed.yaml")) {
+        ontologySeedCallCount += 1;
+        const result = await fakeLiveLlm(systemPrompt, userPrompt);
+        if (ontologySeedCallCount === 1) {
+          const seed = JSON.parse(result.text) as Record<string, any>;
+          seed.kinetic_layer = {
+            ...(seed.kinetic_layer ?? {}),
+            action_types: [],
+          };
+          return {
+            ...result,
+            text: JSON.stringify(seed),
+          };
+        }
+        return result;
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a reconstruct Seed that needs focused seed repair.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+    const ontologySeedValidation =
+      await readYaml<ReconstructOntologySeedValidationArtifact>(
+        path.join(sessionRoot, "ontology-seed-validation.yaml"),
+      );
+
+    expect(result.status).toBe("completed");
+    expect(ontologySeedCallCount).toBe(2);
+    expect(repairPayloads).toHaveLength(1);
+    expect(repairPayloads[0]?.repair_attempt?.repair_sections)
+      .toContain("kinetic_layer");
+    expect(
+      repairPayloads[0]?.repair_attempt?.previous_ontology_seed_validation
+        ?.validation_status,
+    ).toBe("invalid");
+    await fs.access(path.join(sessionRoot, "ontology-seed-repair-1.input.yaml"));
+    await fs.access(path.join(
+      sessionRoot,
+      "ontology-seed-repair-1.input-validation.yaml",
+    ));
+    expect(ontologySeedValidation.validation_status).toBe("valid");
+  });
+
+  it("retries ontology seed authoring with a minimal kernel prompt after provider timeout", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "seed-timeout-retry-run",
+    );
+    let primarySeedTimedOut = false;
+    let fallbackSeedPromptSeen = false;
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (
+        systemPrompt.includes("Author ontology-seed.yaml as an OntologySeed") &&
+        !primarySeedTimedOut
+      ) {
+        primarySeedTimedOut = true;
+        return Promise.reject(
+          new Error("codex CLI call timed out after 120000ms"),
+        );
+      }
+      if (
+        systemPrompt.includes(
+          "smallest valid operational seed kernel after the full seed authoring call timed out",
+        )
+      ) {
+        fallbackSeedPromptSeen = true;
+        return fakeLiveLlm("Author ontology-seed.yaml", userPrompt);
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent: "Create a live reconstruct Seed that recovers from seed timeout.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(primarySeedTimedOut).toBe(true);
+    expect(fallbackSeedPromptSeen).toBe(true);
+    const ontologySeedValidation =
+      await readYaml<ReconstructOntologySeedValidationArtifact>(
+        result.reconstructRunManifest.artifact_refs.ontology_seed_validation!,
+      );
+    expect(ontologySeedValidation.validation_status).toBe("valid");
+  });
+
+  it("fails closed after primary and minimal seed timeouts", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "seed-double-timeout-recovery-run",
+    );
+    let primarySeedTimedOut = false;
+    let minimalSeedTimedOut = false;
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (
+        systemPrompt.includes("Author ontology-seed.yaml as an OntologySeed") &&
+        !primarySeedTimedOut
+      ) {
+        primarySeedTimedOut = true;
+        return Promise.reject(
+          new Error("codex CLI call timed out after 120000ms"),
+        );
+      }
+      if (
+        systemPrompt.includes(
+          "smallest valid operational seed kernel after the full seed authoring call timed out",
+        ) &&
+        !minimalSeedTimedOut
+      ) {
+        minimalSeedTimedOut = true;
+        return Promise.reject(
+          new Error("codex CLI call timed out after 120000ms"),
+        );
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent:
+        "Create a live reconstruct Seed that recovers after repeated seed timeout.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    })).rejects.toThrow(/deterministic seed timeout recovery is disabled/);
+
+    expect(primarySeedTimedOut).toBe(true);
+    expect(minimalSeedTimedOut).toBe(true);
+    await expect(fs.access(path.join(sessionRoot, "ontology-seed-validation.yaml")))
+      .rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("retries source-purpose authoring with a minimal kernel prompt after provider timeout", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "source-purpose-timeout-retry-run",
+    );
+    let primarySourcePurposeTimedOut = false;
+    let fallbackSourcePurposePromptSeen = false;
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (
+        systemPrompt.includes(
+          "Determine the target's source-derived purpose from observed source material",
+        ) &&
+        !primarySourcePurposeTimedOut
+      ) {
+        primarySourcePurposeTimedOut = true;
+        return Promise.reject(
+          new Error("codex CLI call timed out after 120000ms"),
+        );
+      }
+      if (
+        systemPrompt.includes(
+          "minimal source-purpose frame after the full source-purpose call timed out",
+        )
+      ) {
+        fallbackSourcePurposePromptSeen = true;
+        return fakeLiveLlm("Author source-purpose-candidates.yaml", userPrompt);
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent:
+        "Create a live reconstruct Seed that recovers from source-purpose timeout.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(primarySourcePurposeTimedOut).toBe(true);
+    expect(fallbackSourcePurposePromptSeen).toBe(true);
+    const sourcePurposeValidation =
+      await readYaml<ReconstructSourcePurposeCandidatesValidationArtifact>(
+        path.join(sessionRoot, "source-purpose-candidates-validation.yaml"),
+      );
+    expect(sourcePurposeValidation.validation_status).toBe("valid");
+  });
+
+  it("projects deterministic competency questions after provider timeout", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "competency-timeout-recovery-run",
+    );
+    let competencyQuestionsTimedOut = false;
+    const llmCall = (systemPrompt: string, userPrompt: string) => {
+      if (
+        systemPrompt.includes("Write competency questions") &&
+        !competencyQuestionsTimedOut
+      ) {
+        competencyQuestionsTimedOut = true;
+        return Promise.reject(
+          new Error("codex CLI call timed out after 120000ms"),
+        );
+      }
+      return fakeLiveLlm(systemPrompt, userPrompt);
+    };
+
+    const result = await runReconstruct({
+      projectRoot,
+      targetRefs: [path.join(projectRoot, "src", "feature.ts")],
+      intent:
+        "Create a live reconstruct Seed that recovers from CQ timeout.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall,
+      }),
+    });
+
+    expect(result.status).toBe("completed");
+    expect(competencyQuestionsTimedOut).toBe(true);
+    const competencyQuestionsValidation =
+      await readYaml<ReconstructCompetencyQuestionsValidationArtifact>(
+        path.join(sessionRoot, "competency-questions-validation.yaml"),
+      );
+    expect(competencyQuestionsValidation.validation_status).toBe("valid");
+  });
+
   it("observes accepted source frontier refs before downstream semantic authoring", async () => {
     const projectRoot = await tempProjectRoot();
-    await fs.rm(path.join(projectRoot, "schedule.csv"));
-    const docsRoot = path.join(projectRoot, "docs");
-    const docPath = path.join(docsRoot, "usage.md");
-    await fs.mkdir(docsRoot, { recursive: true });
-    await fs.writeFile(
-      docPath,
-      [
-        "# Usage Notes",
-        "",
-        "The dashboard user reviews AI usage, token consumption, and cost anomalies.",
-        "The service operator investigates unexpected model usage from the usage report.",
-      ].join("\n"),
-      "utf8",
-    );
+    const frontierSourcePath = path.join(projectRoot, "schedule.csv");
     const sessionRoot = path.join(
       projectRoot,
       ".onto",
@@ -2784,17 +3523,17 @@ describe("runReconstruct", () => {
             source_ref?: string;
           }>;
         };
-        const docObservation = input.source_observations?.find((observation) =>
-          observation.source_ref === docPath
+        const frontierObservation = input.source_observations?.find((observation) =>
+          observation.source_ref === frontierSourcePath
         );
-        if (docObservation) {
+        if (frontierObservation) {
           return Promise.resolve({
             text: JSON.stringify({
               selected_observations: [
                 {
-                  observation_id: docObservation.observation_id,
+                  observation_id: frontierObservation.observation_id,
                   selection_rationale:
-                    "The accepted frontier document should reach downstream authoring.",
+                    "The accepted frontier spreadsheet should reach downstream authoring.",
                 },
               ],
               open_questions: [],
@@ -2809,9 +3548,9 @@ describe("runReconstruct", () => {
             text: JSON.stringify({
               frontier_refs: [
                 {
-                  source_ref: docPath,
+                  source_ref: frontierSourcePath,
                   rationale:
-                    "The document names dashboard users and operator-facing usage-review intent.",
+                    "The spreadsheet captures usage-review schedule data needed for downstream authoring.",
                   priority: "high",
                 },
                 {
@@ -2889,8 +3628,8 @@ describe("runReconstruct", () => {
     expect(sourceObservations.observations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source_ref: docPath,
-          target_material_kind: "document",
+          source_ref: frontierSourcePath,
+          target_material_kind: "spreadsheet",
         }),
       ]),
     );
@@ -2900,12 +3639,12 @@ describe("runReconstruct", () => {
       accepted_frontier_ref_ids: ["frontier_1"],
     });
     expect(sourceObservationDelta.delta_rows).toEqual([
-      expect.objectContaining({
-        source_ref: docPath,
-        target_material_kind: "document",
-        lineage_status: "added",
-      }),
-    ]);
+        expect.objectContaining({
+          source_ref: frontierSourcePath,
+          target_material_kind: "spreadsheet",
+          lineage_status: "added",
+        }),
+      ]);
     expect(sourceObservationDeltaValidation.validation_status).toBe("valid");
     expect(sourceObservationReentryValidation.validation_status).toBe("valid");
     expect(sourceObservationReentryValidation.reentered_observation_ids)
@@ -2913,15 +3652,15 @@ describe("runReconstruct", () => {
     expect(sourceObservations.skipped_refs).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          ref: docPath,
+          ref: frontierSourcePath,
         }),
       ]),
     );
     expect(candidateInventoryPayloads[0]?.source_observations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          source_ref: docPath,
-          target_material_kind: "document",
+          source_ref: frontierSourcePath,
+          target_material_kind: "spreadsheet",
         }),
       ]),
     );
@@ -2960,6 +3699,7 @@ describe("runReconstruct", () => {
   it("observes accepted maturation closure source requests before downstream maturation artifacts", async () => {
     const projectRoot = await tempProjectRoot();
     const docPath = path.join(projectRoot, "maturation-note.md");
+    const frontierSourcePath = path.join(projectRoot, "schedule.csv");
     await fs.writeFile(
       docPath,
       "# Maturation Note\n\nAdditional source evidence for maturation closure.\n",
@@ -2997,11 +3737,11 @@ describe("runReconstruct", () => {
               member_scope_refs: [],
               member_source_refs: [],
               cross_material_ref_refs: [],
-              requested_source_ref: docPath,
-              requested_location: docPath,
-              target_material_kind: "document",
+              requested_source_ref: frontierSourcePath,
+              requested_location: frontierSourcePath,
+              target_material_kind: "spreadsheet",
               expected_evidence_kind: "maturation source evidence",
-              reason: "Need the maturation note to close the material question.",
+              reason: "Need the maturation spreadsheet to close the material question.",
             }],
             authority_requests: [],
           }),
@@ -3090,7 +3830,7 @@ describe("runReconstruct", () => {
               blocking_if_unavailable: false,
               expected_response_kind: "unavailable_reason" as const,
             },
-            closure_frontier_hint_refs: [`source:${docPath}`],
+            closure_frontier_hint_refs: [`source:${frontierSourcePath}`],
             limitation_refs: [],
           })),
           directive_author: {
@@ -3252,6 +3992,10 @@ describe("runReconstruct", () => {
           source_ref: docPath,
           target_material_kind: "document",
         }),
+        expect.objectContaining({
+          source_ref: frontierSourcePath,
+          target_material_kind: "spreadsheet",
+        }),
       ]),
     );
     expect(sourceObservationDelta).toMatchObject({
@@ -3285,7 +4029,7 @@ describe("runReconstruct", () => {
         "answer-claim-maturation-1",
         "expansion-maturation-1",
       ]));
-    expect(continuationDecision.decision_state).toBe("actionable_limited");
+    expect(continuationDecision.decision_state).toBe("actionable_ready");
     expect(continuationDecision.claim_scope.included_row_refs.sort())
       .toEqual(actionabilityMatrix.rows.map((row) => row.matrix_row_id).sort());
   });
@@ -3438,7 +4182,7 @@ describe("runReconstruct", () => {
     );
   });
 
-  it("fails loud instead of overwriting authored semantic artifacts in an existing session root", async () => {
+  it("fails loud instead of reusing provenance-mismatched authored semantic artifacts", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(
       projectRoot,
@@ -3509,6 +4253,7 @@ describe("runReconstruct", () => {
 
     expect(retryPrompts).toHaveLength(0);
 
+    const resumePrompts: string[] = [];
     await expect(runReconstruct({
       projectRoot,
       targetRefs: [targetRef],
@@ -3520,13 +4265,19 @@ describe("runReconstruct", () => {
       semanticAuthorRealization: "direct_call",
       confirmationProviderRealization: "direct_call",
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
-        llmCall: retryLlmCall,
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return fakeLiveLlm(systemPrompt, userPrompt);
+        },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
-        llmCall: retryLlmCall,
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return fakeLiveLlm(systemPrompt, userPrompt);
+        },
       }),
-    })).rejects.toThrow(/already exists.*read the existing result\/status/);
-    expect(retryPrompts).toHaveLength(0);
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
   });
 
   it("rejects explicit same-session resume before stale source provenance can be reused", async () => {
@@ -3590,7 +4341,7 @@ describe("runReconstruct", () => {
           return fakeLiveLlm(systemPrompt, userPrompt);
         },
       }),
-    })).rejects.toThrow(/already exists.*read the existing result\/status/);
+    })).rejects.toThrow(/resume provenance mismatch/);
     expect(resumePrompts).toHaveLength(0);
   });
 
@@ -3698,6 +4449,13 @@ describe("runReconstruct", () => {
     const sourceObservations = await readYaml<ReconstructSourceObservationsArtifact>(
       path.join(sessionRoot, "source-observations.yaml"),
     );
+    const sourceScoutPack = await readYaml<ReconstructSourceScoutPackArtifact>(
+      path.join(sessionRoot, "source-scout-pack.yaml"),
+    );
+    const sourceScoutPackValidation =
+      await readYaml<ReconstructSourceScoutPackValidationArtifact>(
+        path.join(sessionRoot, "source-scout-pack-validation.yaml"),
+      );
     const preHandoffManifestValidation =
       await readYaml<ReconstructRunManifestValidationArtifact>(
         path.join(sessionRoot, "reconstruct-run-manifest.pre-handoff-validation.yaml"),
@@ -3716,6 +4474,12 @@ describe("runReconstruct", () => {
     expect(handoffDecisionValidation.readiness_projection).toBe("not_ready");
     expect(handoffDecisionValidation.violations).toEqual([]);
     expect(sourceObservations.observations).toHaveLength(1);
+    expect(sourceScoutPack.scout_scope.scope_state).toBe("member_scoped_composite");
+    expect(sourceScoutPack.signal_rows).toHaveLength(0);
+    expect(sourceScoutPack.scout_scope.limitation_refs)
+      .toContain("source_scout_phase1_composite_member_scope_not_prompt_claimed");
+    expect(sourceScoutPackValidation.validation_status).toBe("valid");
+    expect(sourceScoutPackValidation.prompt_visible_signal_count).toBe(0);
     expect(sourceObservations.skipped_refs).toEqual([
       expect.objectContaining({
         target_material_kind: "spreadsheet",
