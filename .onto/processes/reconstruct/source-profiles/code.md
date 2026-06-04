@@ -73,6 +73,31 @@ status field definition -- src/payment.ts:14
   state models
 - configuration that declares target users, deployment mode, or runtime role
 
+## Actor-Action-State Scout Guidance
+
+The source scout pass is profile-local and non-semantic. It may index code
+tokens that suggest actor/action/state exploration priority, but it must not
+promote those tokens into ontology claims, source authority claims, or selected
+purpose required elements.
+
+Recommended code scout axes:
+
+- `actor`: user, admin, member, team, organization, role, principal,
+  account, client, provider, worker, scheduler
+- `action`: create, update, delete, approve, reject, ingest, sync, classify,
+  render, route, command, query, mutation, publish, submit
+- `state`: status, state, phase, retry, queue, event, lifecycle, failed,
+  complete, pending, blocked
+- `guard`: auth, permission, validate, policy, allowlist, rate, visibility,
+  error, guard
+- `object`: schema, model, DTO, payload, binding, entity, record, table,
+  artifact, resource
+
+The scout may also record declared-purpose, source-claim, instruction,
+provenance, and limitation cues when they are visible in filenames, paths,
+symbols, config, tests, API/schema files, or bounded excerpts. Prompt-visible
+rows require validated source-safety permission for prompt-context use.
+
 ## Purpose Adequacy Facet Guidance
 
 Common code facets include:

@@ -6,8 +6,10 @@ import type {
   ReconstructMetricsArtifact,
   ReconstructRunManifestArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
+  ReconstructSourceScoutPackValidationArtifact,
   ReconstructStopDecisionArtifact,
   ReconstructTargetMaterialProfileValidationArtifact,
 } from "./artifact-types.js";
@@ -17,6 +19,7 @@ import {
 } from "./contract-registry.js";
 import {
   validateHandoffDecision,
+  validatePostMaturationGateProjection,
   validateReconstructRunManifest,
 } from "./terminal-validation.js";
 
@@ -122,6 +125,38 @@ function manifest(sourceFrontierRef: string | null): ReconstructRunManifestArtif
   } as ReconstructRunManifestArtifact;
 }
 
+function sourceScoutPackValidation(
+  sourceScoutPackRef: string,
+): ReconstructSourceScoutPackValidationArtifact {
+  return validArtifact<ReconstructSourceScoutPackValidationArtifact>({
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    source_scout_pack_ref: sourceScoutPackRef,
+    source_observations_ref: "/tmp/source-observations.yaml",
+    source_observations_sha256: null,
+    source_safety_ledger_ref: null,
+    source_safety_ledger_sha256: null,
+    source_safety_ledger_validation_ref: null,
+    source_safety_ledger_validation_sha256: null,
+    target_material_profile_validation_ref: null,
+    target_material_profile_validation_sha256: null,
+    source_observation_lineage_index_validation_ref: null,
+    source_observation_lineage_index_validation_sha256: null,
+    scout_scope: {
+      scope_state: "supported_single_member_code_or_document",
+      target_material_kind: "code",
+      support_status: "supported",
+      limitation_reason: null,
+    },
+    signal_row_count: 0,
+    prompt_visible_signal_count: 0,
+    coverage_slot_count: 0,
+    validation_results: ["valid"],
+    violations: [],
+  });
+}
+
 function multiRoundManifest(): ReconstructRunManifestArtifact {
   return {
     artifact_refs: {
@@ -146,6 +181,11 @@ async function validateFixture(args: {
   ontologySeed?: ReconstructOntologySeedArtifact | null;
   competencyQuestionAssessment?: ReconstructCompetencyQuestionAssessmentArtifact | null;
   sourceFrontierValidation?: { validation_status: "valid" | "invalid" } | null;
+  sourceScoutPackValidation?: ReconstructSourceScoutPackValidationArtifact | null;
+  sourceScoutPackPreSeedValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null;
+  sourceScoutPackPostMaturationValidation?:
+    ReconstructSourceScoutPackValidationArtifact | null;
   validationArtifactRefs?: Record<string, string | null | undefined>;
   contractRegistry?: ReconstructContractRegistry;
 }) {
@@ -205,7 +245,28 @@ async function validateFixture(args: {
         violations: [],
       }),
     sourceFrontierValidation: args.sourceFrontierValidation ?? null,
+    sourceScoutPackValidation: args.sourceScoutPackValidation ?? null,
+    sourceScoutPackPreSeedValidation:
+      args.sourceScoutPackPreSeedValidation ?? null,
+    sourceScoutPackPostMaturationValidation:
+      args.sourceScoutPackPostMaturationValidation ?? null,
     candidateDispositionValidation: null,
+    seedAuthoringReadinessValidation:
+      validArtifact<ReconstructSeedAuthoringReadinessValidationArtifact>({
+        schema_version: "1",
+        session_id: "session-1",
+        created_at: now,
+        seed_authoring_readiness_ref: "/tmp/seed-authoring-readiness.yaml",
+        source_purpose_candidates_validation_ref: null,
+        purpose_confirmation_validation_ref: null,
+        source_scout_pack_validation_ref: null,
+        material_admission_ledger_ref: null,
+        candidate_disposition_validation_ref: null,
+        readiness_classification: "seed_ready",
+        closure_row_count: 0,
+        validation_results: ["valid"],
+        violations: [],
+      }),
     ontologySeedValidation: null,
     claimRealizationMapValidation: null,
     competencyQuestionsValidation: null,
@@ -262,6 +323,128 @@ describe("terminal reconstruct validation", () => {
     expect(result.violations.some((violation) =>
       violation.subject_id === "ontology_seed_gate"
     )).toBe(true);
+  });
+
+  it("projects pre-seed SourceScoutPack snapshot validation as its own gate authority", async () => {
+    const preSeedPackRef = "/tmp/source-scout-pack.pre-seed.yaml";
+    const preSeedValidationRef =
+      "/tmp/source-scout-pack-validation.pre-seed.yaml";
+    const result = await validateFixture({
+      manifest: {
+        ...manifest(null),
+        artifact_refs: {
+          ...manifest(null).artifact_refs,
+          source_scout_pack_pre_seed: preSeedPackRef,
+          source_scout_pack_validation_pre_seed: preSeedValidationRef,
+        },
+      } as ReconstructRunManifestArtifact,
+      sourceScoutPackPreSeedValidation:
+        sourceScoutPackValidation(preSeedPackRef),
+    });
+
+    const preSeedGate = result.gate_projection.find((gate) =>
+      gate.gate_id === "source_scout_pack_pre_seed_gate"
+    );
+
+    expect(preSeedGate?.applicability).toBe("applicable");
+    expect(preSeedGate?.concrete_validation_artifact_ref)
+      .toBe(preSeedValidationRef);
+    expect(preSeedGate?.validation_status).toBe("valid");
+  });
+
+  it("projects post-maturation SourceScoutPack snapshot validation as its own gate authority", async () => {
+    const postMaturationPackRef = "/tmp/source-scout-pack.post-maturation.yaml";
+    const postMaturationValidationRef =
+      "/tmp/source-scout-pack-validation.post-maturation.yaml";
+    const result = await validateFixture({
+      manifest: {
+        ...manifest(null),
+        artifact_refs: {
+          ...manifest(null).artifact_refs,
+          source_scout_pack_post_maturation: postMaturationPackRef,
+          source_scout_pack_validation_post_maturation:
+            postMaturationValidationRef,
+        },
+      } as ReconstructRunManifestArtifact,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+
+    const postMaturationGate = result.gate_projection.find((gate) =>
+      gate.gate_id === "source_scout_pack_post_maturation_gate"
+    );
+
+    expect(postMaturationGate?.applicability).toBe("applicable");
+    expect(postMaturationGate?.concrete_validation_artifact_ref)
+      .toBe(postMaturationValidationRef);
+    expect(postMaturationGate?.validation_status).toBe("valid");
+  });
+
+  it("validates post-maturation gate projection as a later terminal-equivalent authority", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const postMaturationPackRef = "/tmp/source-scout-pack.post-maturation.yaml";
+    const postMaturationValidationRef =
+      "/tmp/source-scout-pack-validation.post-maturation.yaml";
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: postMaturationPackRef,
+      sourceScoutPackPostMaturationValidationRef: postMaturationValidationRef,
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(postMaturationPackRef),
+    });
+
+    expect(result.validation_status).toBe("valid");
+    expect(result.projection_scope).toBe("post_maturation_source_scout_gate");
+    expect(result.source_scout_pack_post_maturation_ref)
+      .toBe(postMaturationPackRef);
+    expect(result.source_scout_pack_validation_post_maturation_ref)
+      .toBe(postMaturationValidationRef);
+    expect(result.gate_projection).toEqual([
+      expect.objectContaining({
+        gate_id: "source_scout_pack_post_maturation_gate",
+        applicability: "applicable",
+        concrete_validation_artifact_ref: postMaturationValidationRef,
+        validation_status: "valid",
+      }),
+    ]);
+  });
+
+  it("rejects latest-current aliases in post-maturation gate projection", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef: "/tmp/source-scout-pack.yaml",
+      sourceScoutPackPostMaturationValidationRef:
+        "/tmp/source-scout-pack-validation.yaml",
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation("/tmp/source-scout-pack.yaml"),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.map((violation) => violation.code))
+      .toContain("source_ref_mismatch");
+  });
+
+  it("rejects same-basename post-maturation snapshots from another session", async () => {
+    const contractRegistry = await loadReconstructContractRegistry({ registryPath });
+    const result = validatePostMaturationGateProjection({
+      sessionId: "session-1",
+      contractRegistry,
+      sourceScoutPackPostMaturationRef:
+        "/tmp/session-b/source-scout-pack.post-maturation.yaml",
+      sourceScoutPackPostMaturationValidationRef:
+        "/tmp/session-a/source-scout-pack-validation.post-maturation.yaml",
+      sourceScoutPackPostMaturationValidation:
+        sourceScoutPackValidation(
+          "/tmp/session-b/source-scout-pack.post-maturation.yaml",
+        ),
+    });
+
+    expect(result.validation_status).toBe("invalid");
+    expect(result.violations.map((violation) => violation.code))
+      .toContain("source_ref_mismatch");
   });
 
   it("folds ontology seed iteration readiness into terminal readiness", async () => {
@@ -512,6 +695,22 @@ describe("terminal reconstruct validation", () => {
         }),
       sourceFrontierValidation: null,
       candidateDispositionValidation: null,
+      seedAuthoringReadinessValidation:
+        validArtifact<ReconstructSeedAuthoringReadinessValidationArtifact>({
+          schema_version: "1",
+          session_id: "session-1",
+          created_at: now,
+          seed_authoring_readiness_ref: "/tmp/seed-authoring-readiness.yaml",
+          source_purpose_candidates_validation_ref: null,
+          purpose_confirmation_validation_ref: null,
+          source_scout_pack_validation_ref: null,
+          material_admission_ledger_ref: null,
+          candidate_disposition_validation_ref: null,
+          readiness_classification: "seed_ready",
+          closure_row_count: 0,
+          validation_results: ["valid"],
+          violations: [],
+        }),
       ontologySeedValidation: null,
       claimRealizationMapValidation: null,
       competencyQuestionsValidation: null,

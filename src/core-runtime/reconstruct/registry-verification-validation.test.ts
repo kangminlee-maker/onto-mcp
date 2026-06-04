@@ -40,6 +40,69 @@ describe("registry verification evidence validation", () => {
     expect(validation.validator_count).toBeGreaterThan(0);
   });
 
+  it("binds SourceScoutPack snapshot validators to consumed snapshot authority refs", async () => {
+    const { contractRegistry } = await registryFixture();
+    const gatesById = new Map(
+      contractRegistry.validation_gate_catalog.map((gate) => [
+        gate.gate_id,
+        gate,
+      ]),
+    );
+    const validatorsById = new Map(
+      contractRegistry.validator_records.map((validator) => [
+        validator.validator_id,
+        validator,
+      ]),
+    );
+    const artifactAuthorities = contractRegistry.artifact_authorities;
+
+    expect(gatesById.get("source_scout_pack_gate"))
+      ?.toMatchObject({
+        validation_artifact_ref: "source-scout-pack-validation.yaml",
+      });
+    expect(gatesById.get("source_scout_pack_pre_seed_gate"))
+      ?.toMatchObject({
+        validation_artifact_ref: "source-scout-pack-validation.pre-seed.yaml",
+      });
+    expect(gatesById.get("source_scout_pack_post_maturation_gate"))
+      ?.toMatchObject({
+        validation_artifact_ref:
+          "source-scout-pack-validation.post-maturation.yaml",
+      });
+
+    expect(validatorsById.get("source-scout-pack-pre-seed-validator"))
+      ?.toMatchObject({
+        gate_ids: ["source_scout_pack_pre_seed_gate"],
+        output_ref: "source-scout-pack-validation.pre-seed.yaml",
+      });
+    expect(validatorsById.get("source-scout-pack-pre-seed-validator")
+      ?.input_authority_refs)
+      .toContain("source-scout-pack.pre-seed.yaml");
+    expect(validatorsById.get("source-scout-pack-post-maturation-validator"))
+      ?.toMatchObject({
+        gate_ids: ["source_scout_pack_post_maturation_gate"],
+        output_ref: "source-scout-pack-validation.post-maturation.yaml",
+      });
+    expect(validatorsById.get("source-scout-pack-post-maturation-validator")
+      ?.input_authority_refs)
+      .toContain("source-scout-pack.post-maturation.yaml");
+    expect(artifactAuthorities.post_maturation_gate_projection_validation)
+      ?.toMatchObject({
+        authority_ref: "post-maturation-gate-projection-validation.yaml",
+        validation_ref: null,
+      });
+
+    const seedReadinessInputs =
+      validatorsById.get("seed-authoring-readiness-validator")
+        ?.input_authority_refs ?? [];
+    expect(seedReadinessInputs).toContain(
+      "source-scout-pack-validation.pre-seed.yaml",
+    );
+    expect(seedReadinessInputs).not.toContain(
+      "source-scout-pack-validation.yaml",
+    );
+  });
+
   it("rejects stale registry hashes", async () => {
     const { contractRegistry, evidence } = await registryFixture();
 

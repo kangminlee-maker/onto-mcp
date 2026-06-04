@@ -404,7 +404,7 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional authored-artifact reuse guard. Current run-control still rejects same-session duplicate starts; reuse_existing_authored_artifacts is reserved for a future promoted resume protocol and does not bypass duplicate_same_request.",
+        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove compatibility.",
     },
     semanticAuthorRealization: {
       type: "string",

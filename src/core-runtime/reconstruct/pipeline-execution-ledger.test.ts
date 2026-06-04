@@ -46,6 +46,12 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     source_observation_lineage_index_validation: null,
     source_safety_ledger: null,
     source_safety_ledger_validation: null,
+    source_scout_pack: null,
+    source_scout_pack_validation: null,
+    source_scout_pack_pre_seed: null,
+    source_scout_pack_validation_pre_seed: null,
+    source_scout_pack_post_maturation: null,
+    source_scout_pack_validation_post_maturation: null,
     source_observation_directive: null,
     source_observation_directive_validation: null,
     lens_judgment_index: null,
@@ -61,6 +67,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     candidate_inventory: null,
     candidate_disposition: null,
     candidate_disposition_validation: null,
+    seed_authoring_readiness: null,
+    seed_authoring_readiness_validation: null,
     ontology_seed: null,
     ontology_seed_validation: null,
     claim_realization_map: null,
@@ -82,6 +90,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     handoff_decision_validation: null,
     maturation_baseline: null,
     maturation_baseline_validation: null,
+    baseline_actionability_matrix: null,
+    baseline_actionability_matrix_validation: null,
     actionability_matrix: null,
     actionability_matrix_validation: null,
     maturation_question_frontier: null,
@@ -96,10 +106,20 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     maturation_answer_claims_validation: null,
     ontology_expansion: null,
     ontology_expansion_validation: null,
+    maturation_source_delta: null,
+    maturation_source_delta_validation: null,
     maturation_convergence_ledger: null,
     maturation_convergence_ledger_validation: null,
     maturation_continuation_decision: null,
     maturation_continuation_decision_validation: null,
+    query_proofs: null,
+    query_proofs_validation: null,
+    visualization_proofs: null,
+    visualization_proofs_validation: null,
+    graph_exploration_proofs: null,
+    graph_exploration_proofs_validation: null,
+    actionable_ontology: null,
+    actionable_ontology_validation: null,
     claim_projection: null,
     claim_projection_validation: null,
     final_output: null,
@@ -251,6 +271,26 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "source_observation_lineage_index_validation",
       "source_safety_validation",
     ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "maturation_question_frontier")
+        ?.upstreamUnitIds,
+    ).toEqual(["baseline_actionability_matrix_validation"]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "actionability_matrix")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "baseline_actionability_matrix_validation",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ]));
+    expect(
+      ledger.units.find((unit) => unit.unitId === "actionability_matrix_validation")
+        ?.upstreamUnitIds,
+    ).toEqual(expect.arrayContaining([
+      "actionability_matrix",
+      "maturation_answer_claims_validation",
+      "ontology_expansion_validation",
+    ]));
   });
 
   it("records re-entry as a conditional lineage upstream when frontier deltas exist", async () => {
@@ -345,6 +385,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const sourceSafetyLedgerValidation = await writeArtifact(
       path.join(root, "source-safety-ledger-validation.yaml"),
     );
+    const sourceScoutPack = await writeArtifact(
+      path.join(root, "source-scout-pack.yaml"),
+    );
+    const sourceScoutPackValidation = await writeArtifact(
+      path.join(root, "source-scout-pack-validation.yaml"),
+    );
     const sourceObservationDirective = await writeArtifact(
       path.join(root, "source-observation-directive.yaml"),
     );
@@ -359,6 +405,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_observations: sourceObservations,
         source_safety_ledger: sourceSafetyLedger,
         source_safety_ledger_validation: sourceSafetyLedgerValidation,
+        source_scout_pack: sourceScoutPack,
+        source_scout_pack_validation: sourceScoutPackValidation,
         source_observation_directive: sourceObservationDirective,
       }),
     });
@@ -381,6 +429,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         source_observations: sourceObservations,
         source_safety_ledger: sourceSafetyLedger,
         source_safety_ledger_validation: sourceSafetyLedgerValidation,
+        source_scout_pack: sourceScoutPack,
+        source_scout_pack_validation: sourceScoutPackValidation,
         source_observation_directive: sourceObservationDirective,
         source_observation_directive_validation:
           sourceObservationDirectiveValidation,
@@ -560,6 +610,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
     const candidateDispositionValidation = await writeArtifact(
       path.join(root, "candidate-disposition-validation.yaml"),
     );
+    const seedAuthoringReadiness = await writeArtifact(
+      path.join(root, "seed-authoring-readiness.yaml"),
+    );
+    const seedAuthoringReadinessValidation = await writeArtifact(
+      path.join(root, "seed-authoring-readiness-validation.yaml"),
+    );
     const ontologySeed = await writeArtifact(path.join(root, "ontology-seed.yaml"));
     const ontologySeedValidation = await writeArtifact(
       path.join(root, "ontology-seed-validation.yaml"),
@@ -593,6 +649,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
         candidate_inventory: candidateInventory,
         candidate_disposition: candidateDisposition,
         candidate_disposition_validation: candidateDispositionValidation,
+        seed_authoring_readiness: seedAuthoringReadiness,
+        seed_authoring_readiness_validation: seedAuthoringReadinessValidation,
         ontology_seed: ontologySeed,
         ontology_seed_validation: ontologySeedValidation,
       }),
@@ -635,6 +693,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
+      "seed_authoring_readiness",
+      "seed_authoring_readiness_validation",
       "ontology_seed",
       "ontology_seed_validation",
       "claim_realization_map",
@@ -689,6 +749,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
+      "seed_authoring_readiness",
+      "seed_authoring_readiness_validation",
       "ontology_seed",
       "ontology_seed_validation",
       "claim_realization_map",
@@ -741,6 +803,8 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "candidate_inventory",
       "candidate_disposition",
       "candidate_disposition_validation",
+      "seed_authoring_readiness",
+      "seed_authoring_readiness_validation",
       "ontology_seed",
       "ontology_seed_validation",
       "claim_realization_map",
@@ -761,10 +825,12 @@ describe("buildReconstructPipelineExecutionLedger", () => {
       "handoff_decision_validation",
       "maturation_baseline",
       "maturation_baseline_validation",
-      "actionability_matrix",
-      "actionability_matrix_validation",
+      "baseline_actionability_matrix",
+      "baseline_actionability_matrix_validation",
       "maturation_question_frontier",
       "maturation_question_frontier_validation",
+      "actionability_matrix",
+      "actionability_matrix_validation",
       "final_output",
     ];
     for (const key of presentKeys) {

@@ -69,6 +69,55 @@ async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null>
   }
 }
 
+const RESUME_COMPATIBILITY_FILENAMES = new Set([
+  "reconstruct-run-control-validation.yaml",
+  "target-material-profile-validation.yaml",
+  "source-safety-ledger-validation.yaml",
+  "source-scout-pack-validation.yaml",
+  "source-observation-lineage-index-validation.yaml",
+  "seed-authoring-readiness-validation.yaml",
+]);
+
+const TERMINAL_VALIDATION_FILENAME =
+  "reconstruct-run-manifest.post-publication-validation.yaml";
+
+async function readValidationStatusIfPresent(
+  filePath: string | null | undefined,
+): Promise<string | null> {
+  if (!filePath) return null;
+  const artifact = await readYamlDocumentIfPresent<Record<string, unknown>>(filePath);
+  const status = artifact?.validation_status;
+  return typeof status === "string" ? status : null;
+}
+
+async function collectResumeCompatibilityRefs(sessionRoot: string): Promise<string[]> {
+  const refs: string[] = [];
+  async function visit(dirPath: string): Promise<void> {
+    let entries: Array<import("node:fs").Dirent>;
+    try {
+      entries = await fs.readdir(dirPath, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        await visit(entryPath);
+        continue;
+      }
+      if (
+        RESUME_COMPATIBILITY_FILENAMES.has(entry.name) ||
+        entry.name.endsWith(".reuse-provenance.yaml")
+      ) {
+        refs.push(entryPath);
+      }
+    }
+  }
+  await visit(sessionRoot);
+  return [...new Set(refs.map((ref) => path.resolve(ref)))].sort();
+}
+
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map((item) => stableJson(item)).join(",")}]`;
@@ -130,12 +179,45 @@ function violation(args: {
   };
 }
 
+function requiresTerminalValidationTrust(
+  runControl: ReconstructRunControlArtifact,
+): boolean {
+  return runControl.attempt_rows.some((row) =>
+    row.attempt_status === "completed"
+  ) || runControl.resume_rows.some((row) =>
+    row.resume_decision === "resume_allowed"
+  );
+}
+
+function inferTerminalValidationRef(args: {
+  runControl: ReconstructRunControlArtifact;
+  runControlPath: string | null;
+  explicitRef?: string | null;
+}): string | null {
+  if (args.explicitRef !== undefined) {
+    return args.explicitRef ? path.resolve(args.explicitRef) : null;
+  }
+  const committedTerminalRef = [...args.runControl.write_transactions]
+    .reverse()
+    .find((row) =>
+      row.transaction_status === "committed" &&
+      path.basename(row.artifact_ref) === TERMINAL_VALIDATION_FILENAME
+    )?.artifact_ref;
+  if (committedTerminalRef) return path.resolve(committedTerminalRef);
+  if (!requiresTerminalValidationTrust(args.runControl) || !args.runControlPath) {
+    return null;
+  }
+  return path.resolve(path.dirname(args.runControlPath), TERMINAL_VALIDATION_FILENAME);
+}
+
 export function validateReconstructRunControl(args: {
   runControl: ReconstructRunControlArtifact;
   runControlRef?: string | null;
   expectedSessionId?: string | null;
   expectedSessionRoot?: string | null;
   expectedCommittedArtifactRefs?: string[];
+  terminalValidationRef?: string | null;
+  terminalValidationStatus?: string | null;
 }): ReconstructRunControlValidationArtifact {
   const violations: ReconstructRunControlValidationViolation[] = [];
   if (args.runControl.schema_version !== "1") {
@@ -239,6 +321,61 @@ export function validateReconstructRunControl(args: {
       }));
     }
   }
+  const attemptIds = new Set(
+    args.runControl.attempt_rows.map((row) => row.attempt_id),
+  );
+  for (const row of args.runControl.resume_rows) {
+    if (!attemptIds.has(row.source_attempt_id)) {
+      violations.push(violation({
+        code: "invalid_resume",
+        message: "resume row source_attempt_id must resolve to an attempt row",
+        subjectId: row.resume_id,
+      }));
+    }
+    if (
+      (row.resume_decision === "resume_allowed" ||
+        row.resume_decision === "resume_pending_provenance") &&
+      row.checkpoint_refs.length === 0
+    ) {
+      violations.push(violation({
+        code: "invalid_resume",
+        message: "resume rows must record checkpoint refs before reuse is allowed",
+        subjectId: row.resume_id,
+      }));
+    }
+    if (
+      row.resume_decision === "resume_allowed" ||
+      row.resume_decision === "resume_pending_provenance"
+    ) {
+      if (row.compatibility_policy !== "authored_artifact_provenance:v1") {
+        violations.push(violation({
+          code: "invalid_resume",
+          message: "resume rows must record the authored artifact compatibility policy",
+          subjectId: row.resume_id,
+        }));
+      }
+      if ((row.compatibility_check_refs ?? []).length === 0) {
+        violations.push(violation({
+          code: "invalid_resume",
+          message: "resume rows must record compatibility check refs",
+          subjectId: row.resume_id,
+        }));
+      }
+      const checkpointRefs = new Set(row.checkpoint_refs.map((ref) =>
+        path.resolve(ref)
+      ));
+      for (const checkRef of row.compatibility_check_refs ?? []) {
+        if (!checkpointRefs.has(path.resolve(checkRef))) {
+          violations.push(violation({
+            code: "invalid_resume",
+            message:
+              "resume compatibility check refs must be included in checkpoint refs",
+            subjectId: checkRef,
+          }));
+        }
+      }
+    }
+  }
   const committedRefs = new Set(
     args.runControl.write_transactions
       .filter((row) =>
@@ -248,6 +385,35 @@ export function validateReconstructRunControl(args: {
       )
       .map((row) => path.resolve(row.artifact_ref)),
   );
+  if (requiresTerminalValidationTrust(args.runControl)) {
+    const terminalValidationRef = args.terminalValidationRef ?? null;
+    if (!terminalValidationRef) {
+      violations.push(violation({
+        code: "terminal_validation_missing",
+        message:
+          "completed attempts and resume_allowed rows require post-publication terminal validation authority",
+      }));
+    } else {
+      if (args.terminalValidationStatus !== "valid") {
+        violations.push(violation({
+          code: args.terminalValidationStatus === null
+            ? "terminal_validation_missing"
+            : "terminal_validation_invalid",
+          message:
+            "post-publication terminal validation must exist and have validation_status=valid before completion or resume_allowed",
+          subjectId: terminalValidationRef,
+        }));
+      }
+      if (!committedRefs.has(path.resolve(terminalValidationRef))) {
+        violations.push(violation({
+          code: "expected_transaction_missing",
+          message:
+            "run-control validation is missing a committed hash transaction for the post-publication terminal validation artifact",
+          subjectId: terminalValidationRef,
+        }));
+      }
+    }
+  }
   for (const expectedRef of args.expectedCommittedArtifactRefs ?? []) {
     if (!committedRefs.has(path.resolve(expectedRef))) {
       violations.push(violation({
@@ -282,10 +448,20 @@ export async function writeReconstructRunControlValidationArtifact(args: {
   expectedSessionId?: string | null;
   expectedSessionRoot?: string | null;
   expectedCommittedArtifactRefs?: string[];
+  terminalValidationRef?: string | null;
 }): Promise<ReconstructRunControlValidationArtifact> {
   const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
     args.runControlPath,
   );
+  const terminalValidationRef = inferTerminalValidationRef({
+    runControl,
+    runControlPath: args.runControlPath,
+    ...(args.terminalValidationRef !== undefined
+      ? { explicitRef: args.terminalValidationRef }
+      : {}),
+  });
+  const terminalValidationStatus =
+    await readValidationStatusIfPresent(terminalValidationRef);
   const validation = validateReconstructRunControl({
     runControl,
     runControlRef: args.runControlPath,
@@ -298,6 +474,8 @@ export async function writeReconstructRunControlValidationArtifact(args: {
     ...(args.expectedCommittedArtifactRefs !== undefined
       ? { expectedCommittedArtifactRefs: args.expectedCommittedArtifactRefs }
       : {}),
+    terminalValidationRef,
+    terminalValidationStatus,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
@@ -341,6 +519,7 @@ export async function initializeReconstructRunControl(args: {
   semanticAuthorRealization: string;
   confirmationProviderRealization: string;
   runtimeVersion: string;
+  resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
   outputPath: string;
   validationOutputPath: string;
   bootstrapDiagnosticPath: string;
@@ -381,6 +560,103 @@ export async function initializeReconstructRunControl(args: {
       throw new Error(
         `reconstruct run-control conflict at ${args.outputPath}; retry with a new session root or explicit recovery`,
       );
+    }
+    if (args.resumeMode === "reuse_existing_authored_artifacts") {
+      const completedAttempt = existing.attempt_rows.find((row) =>
+        row.attempt_status === "completed"
+      );
+      if (!completedAttempt) {
+        const now = isoNow();
+        const sourceAttempt = [...existing.attempt_rows].reverse()[0] ?? null;
+        const resumeId = idFor("resume", `${requestFingerprint}:${now}`);
+        const attemptId = idFor("attempt", `${resumeId}:attempt`);
+        const trustedArtifactRefs = existing.write_transactions
+          .filter((row) =>
+            row.transaction_status === "committed" &&
+            row.committed_hash !== null
+          )
+          .map((row) => row.artifact_ref)
+          .sort();
+        const compatibilityCheckRefs =
+          await collectResumeCompatibilityRefs(args.sessionRoot);
+        const checkpointRefs = [
+          args.outputPath,
+          args.validationOutputPath,
+          ...compatibilityCheckRefs,
+          ...trustedArtifactRefs,
+        ];
+        existing.updated_at = now;
+        existing.resume_rows.push({
+          resume_id: resumeId,
+          resume_token_hash: sha256(`resume:${resumeId}:${requestFingerprint}`),
+          source_attempt_id: sourceAttempt?.attempt_id ?? attemptId,
+          compatibility_policy: "authored_artifact_provenance:v1",
+          compatibility_check_refs: compatibilityCheckRefs,
+          checkpoint_refs: [...new Set(checkpointRefs)].sort(),
+          trusted_artifact_refs: trustedArtifactRefs,
+          stale_artifact_refs: [],
+          required_revalidation_refs: [
+            args.validationOutputPath,
+            ...compatibilityCheckRefs,
+            ...trustedArtifactRefs,
+          ].sort(),
+          resume_decision: "resume_pending_provenance",
+        });
+        existing.attempt_rows = existing.attempt_rows.map((row) =>
+          row.attempt_status === "running"
+            ? {
+              ...row,
+              completed_at: row.completed_at ?? now,
+              attempt_status: "recovered",
+              recovery_from_refs: [
+                ...new Set([...row.recovery_from_refs, resumeId]),
+              ],
+            }
+            : row
+        );
+        existing.attempt_rows.push({
+          attempt_id: attemptId,
+          parent_attempt_id: sourceAttempt?.attempt_id ?? null,
+          attempt_kind: "resume",
+          trigger_ref: resumeId,
+          started_at: now,
+          completed_at: null,
+          attempt_status: "running",
+          recovery_from_refs: [
+            args.outputPath,
+            args.validationOutputPath,
+            ...trustedArtifactRefs,
+          ],
+        });
+        existing.lock_rows = existing.lock_rows.map((row) =>
+          row.lock_scope === "session_root" && row.lock_status === "held"
+            ? { ...row, lock_status: "released" }
+            : row
+        );
+        existing.lock_rows.push({
+          lock_id: idFor("lock", `${args.sessionRoot}:session_root:${attemptId}`),
+          lock_scope: "session_root",
+          owner_attempt_id: attemptId,
+          lease_started_at: now,
+          lease_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          lock_token_hash: sha256(`${attemptId}:${args.sessionRoot}`),
+          conflict_policy: "recover_expired_lease",
+          lock_status: "held",
+        });
+        await writeYamlDocument(args.outputPath, existing);
+        const validation = await writeReconstructRunControlValidationArtifact({
+          runControlPath: args.outputPath,
+          outputPath: args.validationOutputPath,
+          expectedSessionId: args.sessionId,
+          expectedSessionRoot: args.sessionRoot,
+        });
+        return {
+          runControl: existing,
+          validation,
+          requestFingerprint,
+          attemptId,
+        };
+      }
     }
     await writeReconstructRunBootstrapDiagnostic({
       outputPath: args.bootstrapDiagnosticPath,
@@ -454,6 +730,50 @@ export async function initializeReconstructRunControl(args: {
     expectedSessionRoot: args.sessionRoot,
   });
   return { runControl, validation, requestFingerprint, attemptId };
+}
+
+export async function markReconstructRunControlAttemptFailed(args: {
+  runControlPath: string;
+  validationOutputPath: string;
+  attemptId: string;
+  expectedSessionId: string;
+  expectedSessionRoot: string;
+}): Promise<{
+  runControl: ReconstructRunControlArtifact;
+  validation: ReconstructRunControlValidationArtifact;
+}> {
+  const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
+    args.runControlPath,
+  );
+  const failedAt = isoNow();
+  let changed = false;
+  runControl.updated_at = failedAt;
+  runControl.attempt_rows = runControl.attempt_rows.map((row) => {
+    if (row.attempt_id !== args.attemptId || row.attempt_status !== "running") {
+      return row;
+    }
+    changed = true;
+    return {
+      ...row,
+      completed_at: failedAt,
+      attempt_status: "failed",
+    };
+  });
+  if (changed) {
+    runControl.lock_rows = runControl.lock_rows.map((row) =>
+      row.owner_attempt_id === args.attemptId && row.lock_status === "held"
+        ? { ...row, lock_status: "released" }
+        : row
+    );
+    await writeYamlDocument(args.runControlPath, runControl);
+  }
+  const validation = await writeReconstructRunControlValidationArtifact({
+    runControlPath: args.runControlPath,
+    outputPath: args.validationOutputPath,
+    expectedSessionId: args.expectedSessionId,
+    expectedSessionRoot: args.expectedSessionRoot,
+  });
+  return { runControl, validation };
 }
 
 function artifactRefsForTransactions(
@@ -552,6 +872,7 @@ export async function finalizeReconstructRunControl(args: {
   validationOutputPath: string;
   attemptId: string;
   artifactRefs: ReconstructRecordArtifactRefs;
+  postPublicationRunManifestValidationPath: string;
   extraArtifactRefs?: Array<string | null | undefined>;
   expectedSessionId: string;
   expectedSessionRoot: string;
@@ -559,6 +880,18 @@ export async function finalizeReconstructRunControl(args: {
   runControl: ReconstructRunControlArtifact;
   validation: ReconstructRunControlValidationArtifact;
 }> {
+  const terminalValidationStatus = await readValidationStatusIfPresent(
+    args.postPublicationRunManifestValidationPath,
+  );
+  if (terminalValidationStatus !== "valid") {
+    throw new Error(
+      [
+        "reconstruct run-control cannot finalize without valid post-publication terminal validation.",
+        `terminal_validation_ref=${args.postPublicationRunManifestValidationPath}`,
+        `validation_status=${terminalValidationStatus ?? "missing"}`,
+      ].join(" "),
+    );
+  }
   const runControl = await readYamlDocument<ReconstructRunControlArtifact>(
     args.runControlPath,
   );
@@ -569,6 +902,17 @@ export async function finalizeReconstructRunControl(args: {
       ? { ...row, completed_at: completedAt, attempt_status: "completed" }
       : row
   );
+  const completedAttempt = runControl.attempt_rows.find((row) =>
+    row.attempt_id === args.attemptId
+  );
+  if (completedAttempt?.attempt_kind === "resume" && completedAttempt.trigger_ref) {
+    runControl.resume_rows = runControl.resume_rows.map((row) =>
+      row.resume_id === completedAttempt.trigger_ref &&
+          row.resume_decision === "resume_pending_provenance"
+        ? { ...row, resume_decision: "resume_allowed" }
+        : row
+    );
+  }
   runControl.lock_rows = runControl.lock_rows.map((row) =>
     row.owner_attempt_id === args.attemptId && row.lock_status === "held"
       ? { ...row, lock_status: "released" }
@@ -576,7 +920,10 @@ export async function finalizeReconstructRunControl(args: {
   );
   const refs = artifactRefsForTransactions(
     args.artifactRefs,
-    args.extraArtifactRefs ?? [],
+    [
+      ...(args.extraArtifactRefs ?? []),
+      args.postPublicationRunManifestValidationPath,
+    ],
   );
   await appendWriteTransactions({
     runControl,
@@ -589,6 +936,7 @@ export async function finalizeReconstructRunControl(args: {
     outputPath: args.validationOutputPath,
     expectedSessionId: args.expectedSessionId,
     expectedSessionRoot: args.expectedSessionRoot,
+    terminalValidationRef: args.postPublicationRunManifestValidationPath,
   });
   return { runControl, validation };
 }

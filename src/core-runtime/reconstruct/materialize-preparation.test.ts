@@ -104,6 +104,64 @@ describe("materializeReconstructPreparationArtifacts", () => {
     ]);
   });
 
+  it("observes markdown document targets with the document source profile", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "reconstruct", "session-doc");
+    const target = path.join(root, "README.md");
+    await fs.writeFile(
+      target,
+      [
+        "# Product Guide",
+        "",
+        "This guide explains the dashboard audience, ingestion policy, and review workflow.",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const refs = await materializeReconstructPreparationArtifacts({
+      sessionRoot,
+      targetRefs: [target],
+      profilesRoot,
+      filesystemAllowedRoots: [root],
+    });
+
+    const materialProfile =
+      await readYaml<ReconstructTargetMaterialProfileArtifact>(
+        refs.target_material_profile,
+      );
+    const inventory =
+      await readYaml<ReconstructSourceInventoryArtifact>(refs.source_inventory);
+    const observations =
+      await readYaml<ReconstructSourceObservationsArtifact>(
+        refs.source_observations,
+      );
+
+    expect(materialProfile.target_material_kind).toBe("document");
+    expect(materialProfile.support_status).toBe("partial");
+    expect(materialProfile.selected_source_profiles[0]).toEqual(
+      expect.objectContaining({
+        profile_id: "document-source-profile",
+        runtime_implementation_status: "partially_wired",
+      }),
+    );
+    expect(inventory.inventory_units[0]).toEqual(
+      expect.objectContaining({
+        target_material_kind: "document",
+        scan_status: "planned",
+      }),
+    );
+    expect(observations.observations[0]).toEqual(
+      expect.objectContaining({
+        target_material_kind: "document",
+        adapter_id: "minimal-document-structure-observer",
+        source_ref: target,
+      }),
+    );
+    expect(observations.observations[0]?.structural_data.content_excerpt)
+      .toContain("dashboard audience");
+  });
+
   it("uses the default source profile for inventory when another profile sorts first", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "reconstruct", "session-default-profile");

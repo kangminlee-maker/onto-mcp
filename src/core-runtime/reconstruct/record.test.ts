@@ -490,6 +490,19 @@ describe("assembleReconstructRecord", () => {
       evidence_ref_count: 3,
     });
     expect(record.runtime_boundary.semantic_generation).toBe("not_performed");
+    expect(record.runtime_boundary.runtime_owned_gates).toEqual(
+      expect.arrayContaining([
+        "source_observation_lineage_index",
+        "source_observation_lineage_index_validation",
+        "source_scout_pack",
+        "source_scout_pack_validation",
+        "source_scout_pack_pre_seed",
+        "source_scout_pack_validation_pre_seed",
+        "source_scout_pack_post_maturation",
+        "source_scout_pack_validation_post_maturation",
+        "post_maturation_gate_projection_validation",
+      ]),
+    );
     expect(written.artifact_refs.target_material_profile)
       .toBe(path.resolve(targetMaterialProfilePath));
     expect(written.artifact_refs.source_observation_lineage_index_validation)

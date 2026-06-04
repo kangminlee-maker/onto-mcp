@@ -13,6 +13,7 @@ import type {
   ReconstructMaturationClosureFrontierValidationArtifact,
   ReconstructMaturationConvergenceLedgerValidationArtifact,
   ReconstructMaturationAnswerClaimsArtifact,
+  ReconstructMaturationAnswerClaimsValidationArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructOntologyExpansionArtifact,
@@ -22,6 +23,7 @@ import type {
   ReconstructPurposeConfirmationValidationArtifact,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationDeltaArtifact,
+  ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationLineageIndexArtifact,
   ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceObservationReentryValidationArtifact,
@@ -37,6 +39,7 @@ import {
   buildMaturationBaselineArtifact,
   buildMaturationConvergenceLedgerArtifact,
   buildMaturationContinuationDecisionArtifact,
+  buildMaturationSourceDeltaArtifact,
   validateAnswerSupportLedger,
   validateActionabilityMatrix,
   validateActionableOntology,
@@ -47,6 +50,7 @@ import {
   validateMaturationConvergenceLedger,
   validateMaturationContinuationDecision,
   validateMaturationQuestionFrontier,
+  validateMaturationSourceDelta,
   validateOntologyExpansion,
 } from "./maturation-validation.js";
 import {
@@ -616,13 +620,95 @@ function emptyMaturationAnswerClaims(): ReconstructMaturationAnswerClaimsArtifac
   };
 }
 
-function emptyOntologyExpansion(): ReconstructOntologyExpansionArtifact {
+function answerClaimsForRow(
+  row: ReconstructActionabilityMatrixArtifact["rows"][number],
+): ReconstructMaturationAnswerClaimsArtifact {
   return {
     schema_version: "1",
     session_id: "session-1",
     created_at: now,
     round_id: "maturation-round-1",
+    answer_claims: [
+      {
+        answer_claim_id: "answer-claim-feature-object",
+        question_id: "mq-feature-object",
+        answer: "The source evidence closes the feature object for this purpose.",
+        answer_status: "answered",
+        support_mode: "direct_authority",
+        evidence_cluster_refs: ["cluster-feature-object"],
+        supporting_evidence_refs: [evidence],
+        target_surface_refs: [row.actionability_surface_ref],
+        target_dimension_refs: [row.maturity_dimension_ref],
+        purpose_element_refs: [row.purpose_element_ref],
+        limitation_refs: [],
+      },
+    ],
+    directive_author: {
+      owner: "host_llm",
+      author_id: "test-author",
+    },
+  };
+}
+
+function answerClaimsValidation(
+  answerClaimCount = 1,
+): ReconstructMaturationAnswerClaimsValidationArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    maturation_answer_claims_ref: "maturation-answer-claims.yaml",
+    answer_support_ledger_validation_ref: "answer-support-ledger-validation.yaml",
+    maturation_question_frontier_validation_ref:
+      "maturation-question-frontier-validation.yaml",
+    validation_status: "valid",
+    answer_claim_count: answerClaimCount,
+    answered_question_count: answerClaimCount,
+    validation_results: ["maturation_answer_claims_valid"],
+    violations: [],
+  };
+}
+
+function emptyOntologyExpansion(): ReconstructOntologyExpansionArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    answer_claims_ref: "maturation-answer-claims.yaml",
+    source_seed_ref: "ontology-seed.yaml",
     expansions: [],
+    directive_author: {
+      owner: "host_llm",
+      author_id: "test-author",
+    },
+  };
+}
+
+function ontologyExpansionForRow(
+  row: ReconstructActionabilityMatrixArtifact["rows"][number],
+): ReconstructOntologyExpansionArtifact {
+  return {
+    schema_version: "1",
+    session_id: "session-1",
+    created_at: now,
+    answer_claims_ref: "maturation-answer-claims.yaml",
+    source_seed_ref: "ontology-seed.yaml",
+    expansions: [
+      {
+        expansion_id: "expansion-feature-object",
+        operation: "add",
+        target_surface_refs: [row.actionability_surface_ref],
+        target_dimension_refs: [row.maturity_dimension_ref],
+        target_seed_or_ontology_refs: row.baseline_row_refs,
+        purpose_element_refs: [row.purpose_element_ref],
+        answer_claim_refs: ["answer-claim-feature-object"],
+        evidence_refs: [evidence],
+        concept_economy_effect: "preserves_surface",
+        rationale:
+          "The validated answer claim adds the missing semantic support for this row.",
+        limitation_refs: [],
+      },
+    ],
     directive_author: {
       owner: "host_llm",
       author_id: "test-author",
@@ -650,12 +736,29 @@ function emptyOntologyExpansionValidation(): ReconstructOntologyExpansionValidat
   };
 }
 
+function ontologyExpansionValidation(
+  expansionCount = 1,
+): ReconstructOntologyExpansionValidationArtifact {
+  return {
+    ...emptyOntologyExpansionValidation(),
+    expansion_count: expansionCount,
+    operation_counts: {
+      add: expansionCount,
+      refine: 0,
+      defer: 0,
+      reject: 0,
+    },
+  };
+}
+
 function emptyConvergenceLedgerValidation(): ReconstructMaturationConvergenceLedgerValidationArtifact {
   return {
     schema_version: "1",
     session_id: "session-1",
     created_at: now,
     maturation_convergence_ledger_ref: "maturation-convergence-ledger.yaml",
+    maturation_source_delta_validation_ref:
+      "maturation-source-delta-validation.yaml",
     maturation_question_frontier_validation_ref:
       "maturation-question-frontier-validation.yaml",
     actionability_matrix_validation_ref: "actionability-matrix-validation.yaml",
@@ -766,6 +869,121 @@ describe("maturation validation", () => {
 
     expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
     expect(matrixValidation.frontier_required_row_count).toBe(1);
+    expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("keeps material L3 answer-supported rows frontier-required until expansion validates them for purpose", () => {
+    const maturationBaseline = baseline([]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const initialMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: emptyOntologyExpansion(),
+      ontologyExpansionValidation: emptyOntologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+
+    expect(matrix.rows[0]?.maturity_level).toBe("L3_evidenced");
+    expect(matrix.rows[0]?.member_readiness).toBe("frontier_required");
+    expect(matrixValidation.validation_status).toBe("valid");
+  });
+
+  it("raises material rows to L4 closed only from validated answer claims and ontology expansion", () => {
+    const maturationBaseline = baseline([]);
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const initialMatrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const answerClaims = answerClaimsForRow(initialMatrix.rows[0]!);
+    const ontologyExpansion = ontologyExpansionForRow(initialMatrix.rows[0]!);
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+      maturationAnswerClaims: answerClaims,
+      maturationAnswerClaimsValidation: answerClaimsValidation(),
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion,
+      ontologyExpansionValidation: ontologyExpansionValidation(),
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+
+    expect(matrix.rows[0]?.maturity_level).toBe("L4_validated_for_purpose");
+    expect(matrix.rows[0]?.member_readiness).toBe("closed");
+    expect(matrix.rows[0]?.supporting_refs).toEqual(
+      expect.arrayContaining([
+        "maturation-answer-claims-validation.yaml",
+        "ontology-expansion-validation.yaml",
+        "answer-claim-feature-object",
+        "expansion-feature-object",
+      ]),
+    );
     expect(matrixValidation.validation_status).toBe("valid");
   });
 
@@ -1366,6 +1584,8 @@ describe("maturation validation", () => {
       sourceObservationDelta: sourceObservationDelta(["obs-code-1"]),
       sourceObservationDeltaValidationRef:
         "source-observation-delta-validation.yaml",
+      maturationSourceDeltaValidationRef:
+        "maturation-source-delta-validation.yaml",
       maturationQuestionFrontier: frontier,
       maturationQuestionFrontierValidationRef:
         "maturation-question-frontier-validation.yaml",
@@ -1395,6 +1615,8 @@ describe("maturation validation", () => {
       sourceObservationDeltaRef: "source-observation-delta.yaml",
       sourceObservationDeltaValidationRef:
         "source-observation-delta-validation.yaml",
+      maturationSourceDeltaValidationRef:
+        "maturation-source-delta-validation.yaml",
       maturationQuestionFrontier: frontier,
       maturationQuestionFrontierValidation: frontierValidation,
       maturationQuestionFrontierValidationRef:
@@ -1418,12 +1640,21 @@ describe("maturation validation", () => {
       .toContain("src/feature.ts");
     expect(ledger.rounds[0]?.closure_rows[0]?.closure_disposition)
       .toBe("blocked_unavailable");
+    expect(ledger.rounds[0]?.final_requestion_pass).toMatchObject({
+      generated_question_refs: ["mq-feature-object"],
+      new_material_question_refs: ["mq-feature-object"],
+      pass_status: "material_question_found",
+    });
     expect(ledger.rounds[0]?.source_observation_closure_rows[0])
       .toMatchObject({
         observation_id: "obs-code-1",
         delta_row_id: "delta-row-obs-code-1",
         closure_disposition: "trace_audit_only",
       });
+    expect(ledger.rounds[0]?.maturation_source_delta_validation_ref)
+      .toBe("maturation-source-delta-validation.yaml");
+    expect(validation.maturation_source_delta_validation_ref)
+      .toBe("maturation-source-delta-validation.yaml");
     expect(validation.validation_status).toBe("valid");
 
     const invalidSourceDeltaValidation = validateMaturationConvergenceLedger({
@@ -1763,6 +1994,98 @@ describe("maturation validation", () => {
       .toContain("conflicting_state");
   });
 
+  it("projects maturation source-delta impact against actionability matrix rows", () => {
+    const maturationBaseline = baseline();
+    const baselineValidation = validateMaturationBaseline({
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      sourcePurposeCandidates: sourcePurposeCandidates(),
+      sourcePurposeCandidatesValidation: validSourcePurposeValidation(),
+      purposeConfirmationValidation: validPurposeConfirmation(),
+      ontologySeedValidation: { validation_status: "valid" } as ReconstructOntologySeedValidationArtifact,
+      competencyQuestionAssessmentValidation: { validation_status: "valid" } as ReconstructCompetencyQuestionAssessmentValidationArtifact,
+      handoffDecisionValidation: { validation_status: "valid" } as ReconstructHandoffDecisionValidationArtifact,
+      sourceReconstructRecordSha256: sourceRecordSha,
+    });
+    const matrix = buildActionabilityMatrixArtifact({
+      sessionId: "session-1",
+      maturationBaseline,
+      maturationBaselineRef: "maturation-baseline.yaml",
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const matrixValidation = validateActionabilityMatrix({
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      maturationBaseline,
+      maturationBaselineValidation: baselineValidation,
+      maturationBaselineValidationRef: "maturation-baseline-validation.yaml",
+    });
+    const delta = sourceObservationDelta(["obs-code-1"]);
+    const deltaValidation: ReconstructSourceObservationDeltaValidationArtifact = {
+      schema_version: "1",
+      session_id: "session-1",
+      round_id: "maturation-round-1",
+      created_at: now,
+      source_observation_delta_ref: "source-observation-delta.yaml",
+      frontier_ref: "maturation-closure-frontier.yaml",
+      frontier_validation_ref: "maturation-closure-frontier-validation.yaml",
+      source_observations_ref: "source-observations.yaml",
+      validation_status: "valid",
+      accepted_frontier_ref_count: 1,
+      added_observation_count: 1,
+      validation_results: ["source_observation_delta_valid"],
+      violations: [],
+    };
+
+    const sourceDelta = buildMaturationSourceDeltaArtifact({
+      sessionId: "session-1",
+      sourceObservationDelta: delta,
+      sourceObservationDeltaRef: "source-observation-delta.yaml",
+      sourceObservationDeltaValidationRef:
+        "source-observation-delta-validation.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixRef: "actionability-matrix.yaml",
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+    });
+    const validation = validateMaturationSourceDelta({
+      maturationSourceDelta: sourceDelta,
+      maturationSourceDeltaRef: "maturation-source-delta.yaml",
+      sourceObservationDelta: delta,
+      sourceObservationDeltaValidation: deltaValidation,
+      sourceObservationDeltaValidationRef:
+        "source-observation-delta-validation.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+    });
+    const noImpactValidation = validateMaturationSourceDelta({
+      maturationSourceDelta: {
+        ...sourceDelta,
+        impact_state: "delta_no_actionability_impact",
+        impacted_matrix_row_refs: [],
+        impact_rows: sourceDelta.impact_rows.map((row) => ({
+          ...row,
+          impact_state: "no_matching_actionability_row",
+          affected_matrix_row_refs: [],
+        })),
+      },
+      sourceObservationDelta: delta,
+      sourceObservationDeltaValidation: deltaValidation,
+      sourceObservationDeltaValidationRef:
+        "source-observation-delta-validation.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+    });
+
+    expect(sourceDelta.impact_state).toBe("delta_affects_actionability");
+    expect(sourceDelta.impacted_matrix_row_refs.length).toBeGreaterThan(0);
+    expect(validation.validation_status).toBe("valid");
+    expect(noImpactValidation.validation_status).toBe("invalid");
+    expect(noImpactValidation.violations.map((violation) => violation.code))
+      .toContain("conflicting_state");
+  });
+
   it("requires final re-question convergence before actionable ready", () => {
     const maturationBaseline = baseline();
     const baselineValidation = validateMaturationBaseline({
@@ -1982,6 +2305,100 @@ describe("maturation validation", () => {
       maturationConvergenceLedgerValidationRef:
         "maturation-convergence-ledger-validation.yaml",
     });
+    const noQuestionAnswerSupportLedger = emptyAnswerSupportLedger();
+    const noQuestionAnswerSupportValidation = emptyAnswerSupportValidation();
+    const noQuestionAnswerClaims = emptyMaturationAnswerClaims();
+    const noQuestionAnswerClaimsValidation = validateMaturationAnswerClaims({
+      maturationAnswerClaims: noQuestionAnswerClaims,
+      maturationAnswerClaimsRef: "maturation-answer-claims.yaml",
+      answerSupportLedger: noQuestionAnswerSupportLedger,
+      answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+    });
+    const noQuestionOntologyExpansion = emptyOntologyExpansion();
+    const noQuestionOntologyExpansionValidation = validateOntologyExpansion({
+      ontologyExpansion: noQuestionOntologyExpansion,
+      ontologyExpansionRef: "ontology-expansion.yaml",
+      maturationAnswerClaims: noQuestionAnswerClaims,
+      maturationAnswerClaimsValidation: noQuestionAnswerClaimsValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+    });
+    const noQuestionConvergenceLedger = buildMaturationConvergenceLedgerArtifact({
+      sessionId: "session-1",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationClosureFrontier: closureFrontier,
+      answerSupportLedger: noQuestionAnswerSupportLedger,
+      maturationAnswerClaims: noQuestionAnswerClaims,
+      ontologyExpansion: noQuestionOntologyExpansion,
+    });
+    const noQuestionConvergenceValidation = validateMaturationConvergenceLedger({
+      maturationConvergenceLedger: noQuestionConvergenceLedger,
+      maturationConvergenceLedgerRef: "maturation-convergence-ledger.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      answerSupportLedger: noQuestionAnswerSupportLedger,
+      answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAnswerClaims: noQuestionAnswerClaims,
+      maturationAnswerClaimsValidation: noQuestionAnswerClaimsValidation,
+      maturationAnswerClaimsValidationRef:
+        "maturation-answer-claims-validation.yaml",
+      ontologyExpansion: noQuestionOntologyExpansion,
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+    });
+    const readyDecision = buildMaturationContinuationDecisionArtifact({
+      sessionId: "session-1",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+      maturationQuestionFrontier: frontier,
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation: closureValidation,
+      maturationAuthorityResponse: authorityResponse,
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+    });
+    const readyValidation = validateMaturationContinuationDecision({
+      maturationContinuationDecision: readyDecision,
+      maturationContinuationDecisionRef:
+        "maturation-continuation-decision.yaml",
+      actionabilityMatrix: matrix,
+      actionabilityMatrixValidation: matrixValidation,
+      actionabilityMatrixValidationRef: "actionability-matrix-validation.yaml",
+      maturationQuestionFrontierValidation: frontierValidation,
+      maturationQuestionFrontierValidationRef:
+        "maturation-question-frontier-validation.yaml",
+      maturationClosureFrontierValidation: closureValidation,
+      maturationClosureFrontierValidationRef:
+        "maturation-closure-frontier-validation.yaml",
+      answerSupportLedgerValidation: noQuestionAnswerSupportValidation,
+      answerSupportLedgerValidationRef: "answer-support-ledger-validation.yaml",
+      maturationAuthorityResponseValidation: authorityResponseValidation,
+      maturationAuthorityResponseValidationRef:
+        "maturation-authority-response-validation.yaml",
+      ontologyExpansionValidation: noQuestionOntologyExpansionValidation,
+      ontologyExpansionValidationRef: "ontology-expansion-validation.yaml",
+      maturationConvergenceLedgerValidation: noQuestionConvergenceValidation,
+      maturationConvergenceLedgerValidationRef:
+        "maturation-convergence-ledger-validation.yaml",
+    });
 
     expect(decision.decision_state).toBe("actionable_limited");
     expect(decision.limitation_refs)
@@ -1993,6 +2410,10 @@ describe("maturation validation", () => {
     expect(downstreamClaimValidation.validation_status).toBe("invalid");
     expect(downstreamClaimValidation.violations.map((violation) => violation.code))
       .toContain("invalid_enum");
+    expect(noQuestionConvergenceValidation.final_requestion_pass_status)
+      .toBe("no_new_material_question");
+    expect(readyDecision.decision_state).toBe("actionable_ready");
+    expect(readyValidation.validation_status).toBe("valid");
     expect(falseReadyValidation.validation_status).toBe("invalid");
     expect(falseReadyValidation.violations.map((violation) => violation.code))
       .toContain("conflicting_state");

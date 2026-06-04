@@ -34,6 +34,8 @@ import type {
   ReconstructMaturationMateriality,
   ReconstructMaturationQuestionFrontierArtifact,
   ReconstructMaturationQuestionFrontierValidationArtifact,
+  ReconstructMaturationSourceDeltaArtifact,
+  ReconstructMaturationSourceDeltaValidationArtifact,
   ReconstructMaturationValidationViolation,
   ReconstructMaturityLevel,
   ReconstructOntologyExpansionArtifact,
@@ -44,6 +46,7 @@ import type {
   ReconstructPurposeConfirmationValidationArtifact,
   ReconstructSourceInventoryArtifact,
   ReconstructSourceObservationDeltaArtifact,
+  ReconstructSourceObservationDeltaValidationArtifact,
   ReconstructSourceObservationLineageIndexArtifact,
   ReconstructSourceObservationLineageIndexValidationArtifact,
   ReconstructSourceObservationsArtifact,
@@ -211,6 +214,10 @@ function duplicateIds(values: string[]): string[] {
   return [...duplicates].sort();
 }
 
+function sameResolvedRef(left: string, right: string): boolean {
+  return path.resolve(left) === path.resolve(right);
+}
+
 function violation(args: {
   code: ReconstructMaturationValidationViolation["code"];
   message: string;
@@ -322,8 +329,55 @@ function needsFrontier(row: ReconstructMaturationBaselineRow): boolean {
   ) && (
     row.maturity_level === "L0_missing" ||
     row.maturity_level === "L1_identified" ||
-    row.maturity_level === "L2_modeled"
+    row.maturity_level === "L2_modeled" ||
+    row.maturity_level === "L3_evidenced"
   ) && row.limitation_refs.length === 0;
+}
+
+function isMaterialMaturationRow(args: {
+  materiality: ReconstructMaturationMateriality;
+}): boolean {
+  return args.materiality === "blocker" || args.materiality === "high";
+}
+
+function matrixRowNeedsFrontier(
+  row: Pick<
+    ReconstructActionabilityMatrixArtifact["rows"][number],
+    "materiality" | "maturity_level" | "limitation_refs"
+  >,
+): boolean {
+  return isMaterialMaturationRow(row) &&
+    row.maturity_level !== "L4_validated_for_purpose" &&
+    row.limitation_refs.length === 0;
+}
+
+function maturityLevelRank(level: ReconstructMaturityLevel): number {
+  return MATURITY_LEVELS.indexOf(level);
+}
+
+function higherMaturityLevel(
+  current: ReconstructMaturityLevel,
+  next: ReconstructMaturityLevel,
+): ReconstructMaturityLevel {
+  return maturityLevelRank(next) > maturityLevelRank(current) ? next : current;
+}
+
+function answerClaimMatchesBaselineRow(
+  claim: ReconstructMaturationAnswerClaimsArtifact["answer_claims"][number],
+  row: ReconstructMaturationBaselineRow,
+): boolean {
+  return claim.purpose_element_refs.includes(row.purpose_element_ref) &&
+    claim.target_surface_refs.includes(row.actionability_surface_ref) &&
+    claim.target_dimension_refs.includes(row.maturity_dimension_ref);
+}
+
+function expansionMatchesBaselineRow(
+  expansion: ReconstructOntologyExpansionArtifact["expansions"][number],
+  row: ReconstructMaturationBaselineRow,
+): boolean {
+  return expansion.purpose_element_refs.includes(row.purpose_element_ref) &&
+    expansion.target_surface_refs.includes(row.actionability_surface_ref) &&
+    expansion.target_dimension_refs.includes(row.maturity_dimension_ref);
 }
 
 function supportingValidationRefs(args: {
@@ -676,7 +730,19 @@ export function buildActionabilityMatrixArtifact(args: {
   maturationBaseline: ReconstructMaturationBaselineArtifact;
   maturationBaselineRef: string;
   maturationBaselineValidationRef: string;
+  maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
+  maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
+  maturationAnswerClaimsValidationRef?: string | null;
+  ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
+  ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
+  ontologyExpansionValidationRef?: string | null;
 }): ReconstructActionabilityMatrixArtifact {
+  const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
+    ? args.maturationAnswerClaims?.answer_claims ?? []
+    : [];
+  const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
+    ? args.ontologyExpansion?.expansions ?? []
+    : [];
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -684,8 +750,62 @@ export function buildActionabilityMatrixArtifact(args: {
     maturation_baseline_ref: args.maturationBaselineRef,
     maturation_baseline_validation_ref: args.maturationBaselineValidationRef,
     rows: args.maturationBaseline.baseline_rows.map((row) => {
-      const frontierRequired = needsFrontier(row);
-      const memberReadiness = row.limitation_refs.length > 0
+      const matchingAnswerClaims = answerClaims.filter((claim) =>
+        answerClaimMatchesBaselineRow(claim, row)
+      );
+      const matchingExpansions = expansions.filter((expansion) =>
+        expansionMatchesBaselineRow(expansion, row)
+      );
+      const positiveAnswerClaims = matchingAnswerClaims.filter((claim) =>
+        claim.answer_status === "answered" &&
+        claim.limitation_refs.length === 0
+      );
+      const positiveExpansions = matchingExpansions.filter((expansion) =>
+        (expansion.operation === "add" || expansion.operation === "refine") &&
+        expansion.limitation_refs.length === 0
+      );
+      let maturityLevel = row.maturity_level;
+      const supportingRefs = [
+        ...row.supporting_seed_refs,
+        ...row.supporting_validation_refs,
+        ...row.supporting_evidence_refs.map((ref) => ref.observation_id),
+      ];
+      const limitationRefs = [...row.limitation_refs];
+      if (matchingAnswerClaims.length > 0 && args.maturationAnswerClaimsValidationRef) {
+        supportingRefs.push(args.maturationAnswerClaimsValidationRef);
+      }
+      if (matchingExpansions.length > 0 && args.ontologyExpansionValidationRef) {
+        supportingRefs.push(args.ontologyExpansionValidationRef);
+      }
+      for (const claim of matchingAnswerClaims) {
+        supportingRefs.push(claim.answer_claim_id, ...claim.evidence_cluster_refs);
+        for (const ref of claim.supporting_evidence_refs) {
+          supportingRefs.push(ref.observation_id);
+        }
+        limitationRefs.push(...claim.limitation_refs);
+      }
+      for (const expansion of matchingExpansions) {
+        supportingRefs.push(expansion.expansion_id, ...expansion.answer_claim_refs);
+        for (const ref of expansion.evidence_refs) {
+          supportingRefs.push(ref.observation_id);
+        }
+        limitationRefs.push(...expansion.limitation_refs);
+      }
+      if (positiveAnswerClaims.length > 0) {
+        maturityLevel = higherMaturityLevel(maturityLevel, "L3_evidenced");
+      }
+      if (positiveAnswerClaims.length > 0 && positiveExpansions.length > 0) {
+        maturityLevel = higherMaturityLevel(
+          maturityLevel,
+          "L4_validated_for_purpose",
+        );
+      }
+      const frontierRequired = matrixRowNeedsFrontier({
+        materiality: row.materiality,
+        maturity_level: maturityLevel,
+        limitation_refs: limitationRefs,
+      });
+      const memberReadiness = limitationRefs.length > 0
         ? "limitation_backed" as const
         : frontierRequired
         ? "frontier_required" as const
@@ -705,14 +825,10 @@ export function buildActionabilityMatrixArtifact(args: {
         cross_material_ref_refs: row.cross_material_ref_refs,
         competency_question_refs: row.competency_question_refs,
         competency_assessment_refs: row.competency_assessment_refs,
-        maturity_level: row.maturity_level,
-        supporting_refs: [
-          ...row.supporting_seed_refs,
-          ...row.supporting_validation_refs,
-          ...row.supporting_evidence_refs.map((ref) => ref.observation_id),
-        ],
+        maturity_level: maturityLevel,
+        supporting_refs: [...new Set(supportingRefs)],
         blocking_question_refs: [],
-        limitation_refs: row.limitation_refs,
+        limitation_refs: [...new Set(limitationRefs)],
         next_action: frontierRequired
           ? "Create a maturation frontier question for this row."
           : memberReadiness === "limitation_backed"
@@ -730,12 +846,24 @@ export function validateActionabilityMatrix(args: {
   maturationBaselineValidation:
     ReconstructMaturationBaselineValidationArtifact;
   maturationBaselineValidationRef?: string | null;
+  maturationAnswerClaims?: ReconstructMaturationAnswerClaimsArtifact | null;
+  maturationAnswerClaimsValidation?: ReconstructMaturationAnswerClaimsValidationArtifact | null;
+  maturationAnswerClaimsValidationRef?: string | null;
+  ontologyExpansion?: ReconstructOntologyExpansionArtifact | null;
+  ontologyExpansionValidation?: ReconstructOntologyExpansionValidationArtifact | null;
+  ontologyExpansionValidationRef?: string | null;
 }): ReconstructActionabilityMatrixValidationArtifact {
   const matrix = args.actionabilityMatrix;
   const violations: ReconstructMaturationValidationViolation[] = [];
   const baselineRows = new Map(
     args.maturationBaseline.baseline_rows.map((row) => [row.baseline_row_id, row]),
   );
+  const answerClaims = args.maturationAnswerClaimsValidation?.validation_status === "valid"
+    ? args.maturationAnswerClaims?.answer_claims ?? []
+    : [];
+  const expansions = args.ontologyExpansionValidation?.validation_status === "valid"
+    ? args.ontologyExpansion?.expansions ?? []
+    : [];
   const seen = new Set<string>();
   if (matrix.session_id !== args.maturationBaseline.session_id) {
     violations.push(violation({
@@ -770,20 +898,95 @@ export function validateActionabilityMatrix(args: {
       }));
       continue;
     }
-    if (
-      baselineRow.materiality !== row.materiality ||
-      baselineRow.maturity_level !== row.maturity_level
-    ) {
+    if (baselineRow.materiality !== row.materiality) {
       violations.push(violation({
         code: "conflicting_state",
-        message: "matrix row must preserve baseline materiality and maturity level",
+        message: "matrix row must preserve baseline materiality",
         subjectId: row.matrix_row_id,
       }));
     }
-    if (needsFrontier(baselineRow) && row.member_readiness !== "frontier_required") {
+    if (
+      maturityLevelRank(row.maturity_level) <
+        maturityLevelRank(baselineRow.maturity_level)
+    ) {
       violations.push(violation({
         code: "conflicting_state",
-        message: "blocker/high L0-L2 rows must remain frontier_required",
+        message: "matrix row cannot reduce baseline maturity level",
+        subjectId: row.matrix_row_id,
+      }));
+    }
+    const matchingAnswerClaims = answerClaims.filter((claim) =>
+      answerClaimMatchesBaselineRow(claim, baselineRow) &&
+      claim.answer_status === "answered" &&
+      claim.limitation_refs.length === 0
+    );
+    const matchingExpansions = expansions.filter((expansion) =>
+      expansionMatchesBaselineRow(expansion, baselineRow) &&
+      (expansion.operation === "add" || expansion.operation === "refine") &&
+      expansion.limitation_refs.length === 0
+    );
+    if (row.maturity_level !== baselineRow.maturity_level) {
+      const claimsCanRaiseToL3 = matchingAnswerClaims.length > 0;
+      const claimsCanRaiseToL4 =
+        matchingAnswerClaims.length > 0 && matchingExpansions.length > 0;
+      if (
+        row.maturity_level === "L3_evidenced" &&
+        !claimsCanRaiseToL3
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix row cannot claim L3 without a validated matching answer claim",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        row.maturity_level === "L4_validated_for_purpose" &&
+        baselineRow.maturity_level !== "L4_validated_for_purpose" &&
+        !claimsCanRaiseToL4
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix row cannot claim L4 without validated matching answer claim and ontology expansion refs",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        matchingAnswerClaims.length > 0 &&
+        args.maturationAnswerClaimsValidationRef &&
+        !row.supporting_refs.includes(args.maturationAnswerClaimsValidationRef)
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix maturity upgrade must cite maturation-answer-claims-validation.yaml",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+      if (
+        matchingExpansions.length > 0 &&
+        args.ontologyExpansionValidationRef &&
+        !row.supporting_refs.includes(args.ontologyExpansionValidationRef)
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "matrix maturity upgrade must cite ontology-expansion-validation.yaml",
+          subjectId: row.matrix_row_id,
+        }));
+      }
+    }
+    const expectedReadiness = row.limitation_refs.length > 0
+      ? "limitation_backed" as const
+      : matrixRowNeedsFrontier(row)
+      ? "frontier_required" as const
+      : "closed" as const;
+    if (row.member_readiness !== expectedReadiness) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "matrix member_readiness must follow material L4, frontier, or limitation state",
         subjectId: row.matrix_row_id,
       }));
     }
@@ -795,6 +998,10 @@ export function validateActionabilityMatrix(args: {
     actionability_matrix_ref: args.actionabilityMatrixRef ?? null,
     maturation_baseline_validation_ref:
       args.maturationBaselineValidationRef ?? null,
+    maturation_answer_claims_validation_ref:
+      args.maturationAnswerClaimsValidationRef ?? null,
+    ontology_expansion_validation_ref:
+      args.ontologyExpansionValidationRef ?? null,
     validation_status: violations.length === 0 ? "valid" : "invalid",
     matrix_row_count: matrix.rows.length,
     frontier_required_row_count: matrix.rows.filter((row) =>
@@ -2241,6 +2448,7 @@ export function buildMaturationConvergenceLedgerArtifact(args: {
   roundId: string;
   sourceObservationDelta?: ReconstructSourceObservationDeltaArtifact | null;
   sourceObservationDeltaValidationRef?: string | null;
+  maturationSourceDeltaValidationRef?: string | null;
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationQuestionFrontierValidationRef: string;
   actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
@@ -2393,6 +2601,29 @@ export function buildMaturationConvergenceLedgerArtifact(args: {
       row.closure_disposition === "deferred_external_authority"
     )
     .flatMap((row) => row.question_refs);
+  const frontierQuestionById = new Map(
+    args.maturationQuestionFrontier.questions.map((question) => [
+      question.question_id,
+      question,
+    ]),
+  );
+  const finalRequestionMaterialRefs = sortedUnique(
+    remainingFrontierRefs.filter((questionRef) => {
+      const question = frontierQuestionById.get(questionRef);
+      return question?.materiality === "blocker" || question?.materiality === "high";
+    }),
+  );
+  const finalRequestionNonMaterialRefs = sortedUnique(
+    remainingFrontierRefs.filter((questionRef) => {
+      const question = frontierQuestionById.get(questionRef);
+      return question && question.materiality !== "blocker" &&
+        question.materiality !== "high";
+    }),
+  );
+  const finalRequestionStatus =
+    finalRequestionMaterialRefs.length > 0
+      ? "material_question_found" as const
+      : "no_new_material_question" as const;
   return {
     schema_version: "1",
     session_id: args.sessionId,
@@ -2401,6 +2632,8 @@ export function buildMaturationConvergenceLedgerArtifact(args: {
       round_id: args.roundId,
       source_observation_delta_validation_ref:
         args.sourceObservationDeltaValidationRef ?? null,
+      maturation_source_delta_validation_ref:
+        args.maturationSourceDeltaValidationRef ?? null,
       question_frontier_validation_ref:
         args.maturationQuestionFrontierValidationRef,
       actionability_matrix_validation_ref:
@@ -2411,12 +2644,13 @@ export function buildMaturationConvergenceLedgerArtifact(args: {
           args.maturationQuestionFrontierValidationRef,
           args.actionabilityMatrixValidationRef,
         ],
-        generated_question_refs: [],
-        new_material_question_refs: [],
-        closed_as_non_material_refs: [],
-        pass_status: "not_run",
-        rationale:
-          "Final re-question convergence is not run until actionable-ready or actionable-limited projection is requested.",
+        generated_question_refs: sortedUnique(remainingFrontierRefs),
+        new_material_question_refs: finalRequestionMaterialRefs,
+        closed_as_non_material_refs: finalRequestionNonMaterialRefs,
+        pass_status: finalRequestionStatus,
+        rationale: finalRequestionMaterialRefs.length > 0
+          ? "Runtime final re-question projection found remaining material maturation questions."
+          : "Runtime final re-question projection found no remaining material maturation question.",
       },
       closure_rows: closureRows,
       source_observation_closure_rows: sourceObservationClosureRows,
@@ -2431,6 +2665,7 @@ export function validateMaturationConvergenceLedger(args: {
   sourceObservationDelta?: ReconstructSourceObservationDeltaArtifact | null;
   sourceObservationDeltaRef?: string | null;
   sourceObservationDeltaValidationRef?: string | null;
+  maturationSourceDeltaValidationRef?: string | null;
   maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
   maturationQuestionFrontierValidation:
     ReconstructMaturationQuestionFrontierValidationArtifact;
@@ -2556,6 +2791,69 @@ export function validateMaturationConvergenceLedger(args: {
         }
       }
     }
+    const roundQuestionRefs = new Set(
+      args.maturationQuestionFrontier.questions.map((question) =>
+        question.question_id
+      ),
+    );
+    for (const questionRef of [
+      ...round.final_requestion_pass.generated_question_refs,
+      ...round.final_requestion_pass.new_material_question_refs,
+      ...round.final_requestion_pass.closed_as_non_material_refs,
+    ]) {
+      if (!roundQuestionRefs.has(questionRef)) {
+        violations.push(violation({
+          code: "unknown_id",
+          message:
+            "final re-question pass refs must resolve to maturation frontier questions",
+          subjectId: questionRef,
+        }));
+      }
+    }
+    const materialFinalQuestionRefs = round.final_requestion_pass
+      .generated_question_refs
+      .filter((questionRef) => {
+        const question = questionsById.get(questionRef);
+        return question?.materiality === "blocker" || question?.materiality === "high";
+      });
+    if (
+      round.final_requestion_pass.pass_status ===
+        "no_new_material_question" &&
+      round.final_requestion_pass.new_material_question_refs.length > 0
+    ) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "no_new_material_question final pass cannot list new material question refs",
+        subjectId: round.final_requestion_pass.pass_id,
+      }));
+    }
+    if (
+      round.final_requestion_pass.pass_status ===
+        "material_question_found" &&
+      round.final_requestion_pass.new_material_question_refs.length === 0
+    ) {
+      violations.push(violation({
+        code: "missing_required_ref",
+        message:
+          "material_question_found final pass must list at least one material question ref",
+        subjectId: round.final_requestion_pass.pass_id,
+      }));
+    }
+    for (const questionRef of materialFinalQuestionRefs) {
+      if (
+        !round.final_requestion_pass.new_material_question_refs.includes(
+          questionRef,
+        )
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "material generated final re-question refs must be listed as new material question refs",
+          subjectId: questionRef,
+        }));
+      }
+    }
     if (
       args.sourceObservationDeltaValidationRef &&
       round.source_observation_delta_validation_ref !==
@@ -2566,6 +2864,18 @@ export function validateMaturationConvergenceLedger(args: {
         message:
           "convergence round must cite the consumed source observation delta validation ref",
         subjectId: round.source_observation_delta_validation_ref,
+      }));
+    }
+    if (
+      args.maturationSourceDeltaValidationRef &&
+      round.maturation_source_delta_validation_ref !==
+        args.maturationSourceDeltaValidationRef
+    ) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "convergence round must cite the consumed maturation source delta validation ref",
+        subjectId: round.maturation_source_delta_validation_ref,
       }));
     }
     if (
@@ -2792,6 +3102,8 @@ export function validateMaturationConvergenceLedger(args: {
     created_at: isoNow(),
     maturation_convergence_ledger_ref:
       args.maturationConvergenceLedgerRef ?? null,
+    maturation_source_delta_validation_ref:
+      args.maturationSourceDeltaValidationRef ?? null,
     maturation_question_frontier_validation_ref:
       args.maturationQuestionFrontierValidationRef ?? null,
     actionability_matrix_validation_ref:
@@ -2811,6 +3123,343 @@ export function validateMaturationConvergenceLedger(args: {
       : ["maturation_convergence_ledger_invalid"],
     violations,
   };
+}
+
+export function buildMaturationSourceDeltaArtifact(args: {
+  sessionId: string;
+  sourceObservationDelta?: ReconstructSourceObservationDeltaArtifact | null;
+  sourceObservationDeltaRef?: string | null;
+  sourceObservationDeltaValidationRef?: string | null;
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
+  actionabilityMatrixRef: string;
+  actionabilityMatrixValidationRef: string;
+}): ReconstructMaturationSourceDeltaArtifact {
+  const matrixRows = args.actionabilityMatrix.rows;
+  const impactRows =
+    (args.sourceObservationDelta?.delta_rows ?? []).map((deltaRow) => {
+      const affectedMatrixRowRefs = matrixRows
+        .filter((row) =>
+          row.member_source_refs.some((ref) =>
+            sameResolvedRef(ref, deltaRow.source_ref)
+          ) ||
+          row.cross_material_ref_refs.some((ref) =>
+            sameResolvedRef(ref, deltaRow.source_ref)
+          ) ||
+          row.supporting_refs.includes(deltaRow.observation_id)
+        )
+        .map((row) => row.matrix_row_id)
+        .sort();
+      return {
+        impact_row_id: `maturation-source-delta:${slug(deltaRow.delta_row_id)}`,
+        delta_row_id: deltaRow.delta_row_id,
+        observation_id: deltaRow.observation_id,
+        source_ref: deltaRow.source_ref,
+        target_material_kind: deltaRow.target_material_kind,
+        affected_matrix_row_refs: affectedMatrixRowRefs,
+        impact_state: affectedMatrixRowRefs.length > 0
+          ? "affects_actionability" as const
+          : "no_matching_actionability_row" as const,
+        rationale: affectedMatrixRowRefs.length > 0
+          ? "Delta source intersects actionability matrix source or support refs."
+          : "Delta source has no direct source/support intersection with current actionability matrix rows.",
+      };
+    });
+  const impactedMatrixRowRefs = sortedUnique(
+    impactRows.flatMap((row) => row.affected_matrix_row_refs),
+  );
+  const impactState: ReconstructMaturationSourceDeltaArtifact["impact_state"] =
+    impactRows.length === 0
+      ? "no_delta"
+      : impactedMatrixRowRefs.length > 0
+      ? "delta_affects_actionability"
+      : "delta_no_actionability_impact";
+  return {
+    schema_version: "1",
+    session_id: args.sessionId,
+    created_at: isoNow(),
+    source_observation_delta_ref: args.sourceObservationDeltaRef ?? null,
+    source_observation_delta_validation_ref:
+      args.sourceObservationDeltaValidationRef ?? null,
+    actionability_matrix_ref: args.actionabilityMatrixRef,
+    actionability_matrix_validation_ref: args.actionabilityMatrixValidationRef,
+    impact_state: impactState,
+    delta_row_count: impactRows.length,
+    impacted_matrix_row_refs: impactedMatrixRowRefs,
+    impact_rows: impactRows,
+  };
+}
+
+export function validateMaturationSourceDelta(args: {
+  maturationSourceDelta: ReconstructMaturationSourceDeltaArtifact;
+  maturationSourceDeltaRef?: string | null;
+  sourceObservationDelta?: ReconstructSourceObservationDeltaArtifact | null;
+  sourceObservationDeltaValidation?: ReconstructSourceObservationDeltaValidationArtifact | null;
+  sourceObservationDeltaValidationRef?: string | null;
+  actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
+  actionabilityMatrixValidation: ReconstructActionabilityMatrixValidationArtifact;
+  actionabilityMatrixValidationRef?: string | null;
+}): ReconstructMaturationSourceDeltaValidationArtifact {
+  const artifact = args.maturationSourceDelta;
+  const violations: ReconstructMaturationValidationViolation[] = [];
+  const matrixRowIds = new Set(
+    args.actionabilityMatrix.rows.map((row) => row.matrix_row_id),
+  );
+  const deltaRowsById = new Map(
+    (args.sourceObservationDelta?.delta_rows ?? []).map((row) => [
+      row.delta_row_id,
+      row,
+    ]),
+  );
+  if (artifact.session_id !== args.actionabilityMatrix.session_id) {
+    violations.push(violation({
+      code: "session_id_mismatch",
+      message: "maturation source-delta session_id must match actionability matrix",
+      subjectId: artifact.session_id,
+    }));
+  }
+  if (args.actionabilityMatrixValidation.validation_status !== "valid") {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "maturation source-delta requires valid actionability matrix validation",
+      subjectId: args.actionabilityMatrixValidationRef ?? null,
+    }));
+  }
+  if (
+    args.sourceObservationDeltaValidation &&
+    args.sourceObservationDeltaValidation.validation_status !== "valid"
+  ) {
+    violations.push(violation({
+      code: "prior_validation_invalid",
+      message: "maturation source-delta requires valid source observation delta validation",
+      subjectId: args.sourceObservationDeltaValidationRef ?? null,
+    }));
+  }
+  if (
+    artifact.source_observation_delta_validation_ref !==
+      (args.sourceObservationDeltaValidationRef ?? null)
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "maturation source-delta must cite the consumed source observation delta validation ref",
+      subjectId: artifact.source_observation_delta_validation_ref,
+    }));
+  }
+  if (
+    args.actionabilityMatrixValidationRef &&
+    artifact.actionability_matrix_validation_ref !==
+      args.actionabilityMatrixValidationRef
+  ) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "maturation source-delta must cite the consumed actionability matrix validation ref",
+      subjectId: artifact.actionability_matrix_validation_ref,
+    }));
+  }
+  for (const duplicate of duplicateIds(
+    artifact.impact_rows.map((row) => row.impact_row_id),
+  )) {
+    violations.push(violation({
+      code: "duplicate_id",
+      message: `duplicate maturation source-delta impact row id ${duplicate}`,
+      subjectId: duplicate,
+    }));
+  }
+  for (const row of artifact.impact_rows) {
+    const deltaRow = deltaRowsById.get(row.delta_row_id);
+    if (!deltaRow) {
+      violations.push(violation({
+        code: "unknown_id",
+        message: "maturation source-delta impact row must resolve to source delta row",
+        subjectId: row.delta_row_id,
+      }));
+      continue;
+    }
+    if (
+      row.observation_id !== deltaRow.observation_id ||
+      !sameResolvedRef(row.source_ref, deltaRow.source_ref)
+    ) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "maturation source-delta impact row must preserve source delta observation and source ref",
+        subjectId: row.impact_row_id,
+      }));
+    }
+    for (const matrixRowRef of row.affected_matrix_row_refs) {
+      if (!matrixRowIds.has(matrixRowRef)) {
+        violations.push(violation({
+          code: "unknown_id",
+          message:
+            "maturation source-delta affected_matrix_row_refs must resolve to actionability matrix rows",
+          subjectId: matrixRowRef,
+        }));
+      }
+    }
+    const expectedAffectedMatrixRowRefs = args.actionabilityMatrix.rows
+      .filter((matrixRow) =>
+        matrixRow.member_source_refs.some((ref) =>
+          sameResolvedRef(ref, deltaRow.source_ref)
+        ) ||
+        matrixRow.cross_material_ref_refs.some((ref) =>
+          sameResolvedRef(ref, deltaRow.source_ref)
+        ) ||
+        matrixRow.supporting_refs.includes(deltaRow.observation_id)
+      )
+      .map((matrixRow) => matrixRow.matrix_row_id)
+      .sort();
+    if (
+      row.affected_matrix_row_refs.join("\0") !==
+        expectedAffectedMatrixRowRefs.join("\0")
+    ) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "maturation source-delta affected_matrix_row_refs must match source/actionability intersection",
+        subjectId: row.impact_row_id,
+      }));
+    }
+    if (
+      row.impact_state === "affects_actionability" &&
+      row.affected_matrix_row_refs.length === 0
+    ) {
+      violations.push(violation({
+        code: "missing_required_ref",
+        message:
+          "affects_actionability rows must list affected matrix row refs",
+        subjectId: row.impact_row_id,
+      }));
+    }
+    if (
+      row.impact_state === "no_matching_actionability_row" &&
+      row.affected_matrix_row_refs.length > 0
+    ) {
+      violations.push(violation({
+        code: "conflicting_state",
+        message:
+          "no_matching_actionability_row rows cannot list affected matrix row refs",
+        subjectId: row.impact_row_id,
+      }));
+    }
+  }
+  const impactedMatrixRowRefs = sortedUnique(
+    artifact.impact_rows.flatMap((row) => row.affected_matrix_row_refs),
+  );
+  const expectedImpactState:
+    ReconstructMaturationSourceDeltaArtifact["impact_state"] =
+      artifact.impact_rows.length === 0
+        ? "no_delta"
+        : impactedMatrixRowRefs.length > 0
+        ? "delta_affects_actionability"
+        : "delta_no_actionability_impact";
+  if (artifact.impact_state !== expectedImpactState) {
+    violations.push(violation({
+      code: "conflicting_state",
+      message:
+        "maturation source-delta impact_state must match impact row coverage",
+      subjectId: artifact.impact_state,
+    }));
+  }
+  return {
+    schema_version: "1",
+    session_id: artifact.session_id,
+    created_at: isoNow(),
+    maturation_source_delta_ref: args.maturationSourceDeltaRef ?? null,
+    source_observation_delta_validation_ref:
+      args.sourceObservationDeltaValidationRef ?? null,
+    actionability_matrix_validation_ref:
+      args.actionabilityMatrixValidationRef ?? null,
+    validation_status: violations.length === 0 ? "valid" : "invalid",
+    impact_state: artifact.impact_state,
+    impacted_matrix_row_count: impactedMatrixRowRefs.length,
+    validation_results: violations.length === 0
+      ? ["maturation_source_delta_valid"]
+      : ["maturation_source_delta_invalid"],
+    violations,
+  };
+}
+
+export async function writeMaturationSourceDeltaArtifact(args: {
+  sessionId: string;
+  sourceObservationDeltaPath?: string | null;
+  sourceObservationDeltaValidationPath?: string | null;
+  actionabilityMatrixPath: string;
+  actionabilityMatrixValidationPath: string;
+  outputPath: string;
+}): Promise<ReconstructMaturationSourceDeltaArtifact> {
+  const [sourceObservationDelta, actionabilityMatrix] = await Promise.all([
+    args.sourceObservationDeltaPath
+      ? readYamlDocument<ReconstructSourceObservationDeltaArtifact>(
+        args.sourceObservationDeltaPath,
+      )
+      : Promise.resolve(null),
+    readYamlDocument<ReconstructActionabilityMatrixArtifact>(
+      args.actionabilityMatrixPath,
+    ),
+  ]);
+  const artifact = buildMaturationSourceDeltaArtifact({
+    sessionId: args.sessionId,
+    sourceObservationDelta,
+    sourceObservationDeltaRef: args.sourceObservationDeltaPath ?? null,
+    sourceObservationDeltaValidationRef:
+      args.sourceObservationDeltaValidationPath ?? null,
+    actionabilityMatrix,
+    actionabilityMatrixRef: args.actionabilityMatrixPath,
+    actionabilityMatrixValidationRef: args.actionabilityMatrixValidationPath,
+  });
+  await writeYamlDocument(args.outputPath, artifact);
+  return artifact;
+}
+
+export async function writeMaturationSourceDeltaValidationArtifact(args: {
+  maturationSourceDeltaPath: string;
+  sourceObservationDeltaPath?: string | null;
+  sourceObservationDeltaValidationPath?: string | null;
+  actionabilityMatrixPath: string;
+  actionabilityMatrixValidationPath: string;
+  outputPath: string;
+}): Promise<ReconstructMaturationSourceDeltaValidationArtifact> {
+  const [
+    maturationSourceDelta,
+    sourceObservationDelta,
+    sourceObservationDeltaValidation,
+    actionabilityMatrix,
+    actionabilityMatrixValidation,
+  ] = await Promise.all([
+    readYamlDocument<ReconstructMaturationSourceDeltaArtifact>(
+      args.maturationSourceDeltaPath,
+    ),
+    args.sourceObservationDeltaPath
+      ? readYamlDocument<ReconstructSourceObservationDeltaArtifact>(
+        args.sourceObservationDeltaPath,
+      )
+      : Promise.resolve(null),
+    args.sourceObservationDeltaValidationPath
+      ? readYamlDocument<ReconstructSourceObservationDeltaValidationArtifact>(
+        args.sourceObservationDeltaValidationPath,
+      )
+      : Promise.resolve(null),
+    readYamlDocument<ReconstructActionabilityMatrixArtifact>(
+      args.actionabilityMatrixPath,
+    ),
+    readYamlDocument<ReconstructActionabilityMatrixValidationArtifact>(
+      args.actionabilityMatrixValidationPath,
+    ),
+  ]);
+  const validation = validateMaturationSourceDelta({
+    maturationSourceDelta,
+    maturationSourceDeltaRef: args.maturationSourceDeltaPath,
+    sourceObservationDelta,
+    sourceObservationDeltaValidation,
+    sourceObservationDeltaValidationRef:
+      args.sourceObservationDeltaValidationPath ?? null,
+    actionabilityMatrix,
+    actionabilityMatrixValidation,
+    actionabilityMatrixValidationRef: args.actionabilityMatrixValidationPath,
+  });
+  await writeYamlDocument(args.outputPath, validation);
+  return validation;
 }
 
 export function buildMaturationContinuationDecisionArtifact(args: {
@@ -2855,12 +3504,7 @@ export function buildMaturationContinuationDecisionArtifact(args: {
   let decisionState: ReconstructMaturationContinuationDecisionArtifact["decision_state"];
   let rationale: string;
   const convergenceLimitationRefs: string[] = [];
-  if (
-    args.maturationClosureFrontierValidation.accepted_source_request_ids.length > 0
-  ) {
-    decisionState = "continue";
-    rationale = "Validated source requests can still advance material maturation questions.";
-  } else if (authorityRequestRefs.length > 0 && unresolvedAuthorityResponses.length > 0) {
+  if (authorityRequestRefs.length > 0 && unresolvedAuthorityResponses.length > 0) {
     decisionState = "ask_user";
     rationale = "Material maturation questions require user or external authority before claims can be closed.";
   } else if (frontierRows.length > 0) {
@@ -2881,7 +3525,6 @@ export function buildMaturationContinuationDecisionArtifact(args: {
     rationale = "All material rows are closed for the declared purpose.";
   }
   const nextFrontierRefs = [
-    ...args.maturationClosureFrontierValidation.accepted_source_request_ids,
     ...args.maturationQuestionFrontier.questions
       .filter((question) =>
         question.current_answer_status !== "answerable" &&
@@ -3022,8 +3665,6 @@ export function validateMaturationContinuationDecision(args: {
       }));
     }
   }
-  const hasAcceptedSourceRequest =
-    args.maturationClosureFrontierValidation.accepted_source_request_ids.length > 0;
   const hasAuthorityNeed = decision.authority_request_refs.length > 0;
   if (decision.decision_state === "actionable_ready" && materialOpenRows.length > 0) {
     violations.push(violation({
@@ -3046,11 +3687,11 @@ export function validateMaturationContinuationDecision(args: {
   }
   if (
     decision.decision_state === "continue" &&
-    !hasAcceptedSourceRequest
+    decision.next_frontier_refs.length === 0
   ) {
     violations.push(violation({
       code: "conflicting_state",
-      message: "continue requires at least one accepted source request",
+      message: "continue requires at least one unresolved next frontier ref",
       subjectId: "continue",
     }));
   }
@@ -3729,17 +4370,55 @@ export async function writeActionabilityMatrixArtifact(args: {
   sessionId: string;
   maturationBaselinePath: string;
   maturationBaselineValidationPath: string;
+  maturationAnswerClaimsPath?: string | null;
+  maturationAnswerClaimsValidationPath?: string | null;
+  ontologyExpansionPath?: string | null;
+  ontologyExpansionValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixArtifact> {
   const maturationBaseline =
     await readYamlDocument<ReconstructMaturationBaselineArtifact>(
       args.maturationBaselinePath,
     );
+  const [
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+  ] = await Promise.all([
+    args.maturationAnswerClaimsPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
+        args.maturationAnswerClaimsPath,
+      )
+      : Promise.resolve(null),
+    args.maturationAnswerClaimsValidationPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsValidationArtifact>(
+        args.maturationAnswerClaimsValidationPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionPath
+      ? readYamlDocument<ReconstructOntologyExpansionArtifact>(
+        args.ontologyExpansionPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionValidationPath
+      ? readYamlDocument<ReconstructOntologyExpansionValidationArtifact>(
+        args.ontologyExpansionValidationPath,
+      )
+      : Promise.resolve(null),
+  ]);
   const artifact = buildActionabilityMatrixArtifact({
     sessionId: args.sessionId,
     maturationBaseline,
     maturationBaselineRef: args.maturationBaselinePath,
     maturationBaselineValidationRef: args.maturationBaselineValidationPath,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    maturationAnswerClaimsValidationRef:
+      args.maturationAnswerClaimsValidationPath ?? null,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+    ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, artifact);
   return artifact;
@@ -3749,12 +4428,20 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
   actionabilityMatrixPath: string;
   maturationBaselinePath: string;
   maturationBaselineValidationPath: string;
+  maturationAnswerClaimsPath?: string | null;
+  maturationAnswerClaimsValidationPath?: string | null;
+  ontologyExpansionPath?: string | null;
+  ontologyExpansionValidationPath?: string | null;
   outputPath: string;
 }): Promise<ReconstructActionabilityMatrixValidationArtifact> {
   const [
     actionabilityMatrix,
     maturationBaseline,
     maturationBaselineValidation,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    ontologyExpansion,
+    ontologyExpansionValidation,
   ] = await Promise.all([
     readYamlDocument<ReconstructActionabilityMatrixArtifact>(
       args.actionabilityMatrixPath,
@@ -3765,6 +4452,26 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     readYamlDocument<ReconstructMaturationBaselineValidationArtifact>(
       args.maturationBaselineValidationPath,
     ),
+    args.maturationAnswerClaimsPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsArtifact>(
+        args.maturationAnswerClaimsPath,
+      )
+      : Promise.resolve(null),
+    args.maturationAnswerClaimsValidationPath
+      ? readYamlDocument<ReconstructMaturationAnswerClaimsValidationArtifact>(
+        args.maturationAnswerClaimsValidationPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionPath
+      ? readYamlDocument<ReconstructOntologyExpansionArtifact>(
+        args.ontologyExpansionPath,
+      )
+      : Promise.resolve(null),
+    args.ontologyExpansionValidationPath
+      ? readYamlDocument<ReconstructOntologyExpansionValidationArtifact>(
+        args.ontologyExpansionValidationPath,
+      )
+      : Promise.resolve(null),
   ]);
   const validation = validateActionabilityMatrix({
     actionabilityMatrix,
@@ -3772,6 +4479,13 @@ export async function writeActionabilityMatrixValidationArtifact(args: {
     maturationBaseline,
     maturationBaselineValidation,
     maturationBaselineValidationRef: args.maturationBaselineValidationPath,
+    maturationAnswerClaims,
+    maturationAnswerClaimsValidation,
+    maturationAnswerClaimsValidationRef:
+      args.maturationAnswerClaimsValidationPath ?? null,
+    ontologyExpansion,
+    ontologyExpansionValidation,
+    ontologyExpansionValidationRef: args.ontologyExpansionValidationPath ?? null,
   });
   await writeYamlDocument(args.outputPath, validation);
   return validation;
@@ -4147,6 +4861,7 @@ export async function writeMaturationConvergenceLedgerArtifact(args: {
   roundId: string;
   sourceObservationDeltaPath?: string | null;
   sourceObservationDeltaValidationRef?: string | null;
+  maturationSourceDeltaValidationRef?: string | null;
   maturationQuestionFrontierPath: string;
   maturationQuestionFrontierValidationPath: string;
   actionabilityMatrixPath: string;
@@ -4196,6 +4911,8 @@ export async function writeMaturationConvergenceLedgerArtifact(args: {
     sourceObservationDelta,
     sourceObservationDeltaValidationRef:
       args.sourceObservationDeltaValidationRef ?? null,
+    maturationSourceDeltaValidationRef:
+      args.maturationSourceDeltaValidationRef ?? null,
     maturationQuestionFrontier,
     maturationQuestionFrontierValidationRef:
       args.maturationQuestionFrontierValidationPath,
@@ -4214,6 +4931,7 @@ export async function writeMaturationConvergenceLedgerValidationArtifact(args: {
   maturationConvergenceLedgerPath: string;
   sourceObservationDeltaPath?: string | null;
   sourceObservationDeltaValidationRef?: string | null;
+  maturationSourceDeltaValidationRef?: string | null;
   maturationQuestionFrontierPath: string;
   maturationQuestionFrontierValidationPath: string;
   actionabilityMatrixPath: string;
@@ -4286,6 +5004,8 @@ export async function writeMaturationConvergenceLedgerValidationArtifact(args: {
     sourceObservationDeltaRef: args.sourceObservationDeltaPath ?? null,
     sourceObservationDeltaValidationRef:
       args.sourceObservationDeltaValidationRef ?? null,
+    maturationSourceDeltaValidationRef:
+      args.maturationSourceDeltaValidationRef ?? null,
     maturationQuestionFrontier,
     maturationQuestionFrontierValidation,
     maturationQuestionFrontierValidationRef:

@@ -476,7 +476,7 @@ E23D_OUT=$(PATH="$E23D_ROOT/bin:$PATH" "${REVIEW_INVOKE[@]}" \
   --no-domain --review-mode core-axis --no-watch \
   --executor-realization codex 2>&1)
 E23D_EXIT=$?
-if [ $E23D_EXIT -ne 0 ] && echo "$E23D_OUT" | grep -q "Codex worker route cannot dispatch"; then
+if [ $E23D_EXIT -ne 0 ] && echo "$E23D_OUT" | grep -q "ReviewExecutionProfile"; then
   echo "  PASS  E23d: codex-actor-route-mismatch"
   PASS_COUNT=$((PASS_COUNT + 1))
 else
@@ -857,7 +857,7 @@ echo "=== E40: onto-help ==="
 E40_OUT=$(onto --help 2>&1)
 E40_EXIT=$?
 
-if [ $E40_EXIT -eq 0 ] && echo "$E40_OUT" | grep -q "Usage: onto mcp" && echo "$E40_OUT" | grep -q "onto_review"; then
+if [ $E40_EXIT -eq 0 ] && echo "$E40_OUT" | grep -q "Usage: onto <command>" && echo "$E40_OUT" | grep -q "onto_review"; then
   echo "  PASS  E40: onto-help"
   PASS_COUNT=$((PASS_COUNT + 1))
 else

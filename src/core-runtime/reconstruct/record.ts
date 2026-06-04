@@ -25,6 +25,7 @@ import type {
   ReconstructRevisionProposalValidationArtifact,
   ReconstructRunControlValidationArtifact,
   ReconstructRunManifestValidationArtifact,
+  ReconstructSeedAuthoringReadinessValidationArtifact,
   ReconstructSeedConfirmationArtifact,
   ReconstructSeedConfirmationValidationArtifact,
   ReconstructSourceObservationDirectiveValidationArtifact,
@@ -57,6 +58,13 @@ const RECORD_ARTIFACT_KEYS = [
   "source_observation_lineage_index_validation",
   "source_safety_ledger",
   "source_safety_ledger_validation",
+  "source_scout_pack",
+  "source_scout_pack_validation",
+  "source_scout_pack_pre_seed",
+  "source_scout_pack_validation_pre_seed",
+  "source_scout_pack_post_maturation",
+  "source_scout_pack_validation_post_maturation",
+  "post_maturation_gate_projection_validation",
   "source_observation_directive",
   "source_observation_directive_validation",
   "lens_judgment_index",
@@ -72,6 +80,8 @@ const RECORD_ARTIFACT_KEYS = [
   "candidate_inventory",
   "candidate_disposition",
   "candidate_disposition_validation",
+  "seed_authoring_readiness",
+  "seed_authoring_readiness_validation",
   "ontology_seed",
   "ontology_seed_validation",
   "claim_realization_map",
@@ -93,6 +103,8 @@ const RECORD_ARTIFACT_KEYS = [
   "handoff_decision_validation",
   "maturation_baseline",
   "maturation_baseline_validation",
+  "baseline_actionability_matrix",
+  "baseline_actionability_matrix_validation",
   "actionability_matrix",
   "actionability_matrix_validation",
   "maturation_question_frontier",
@@ -107,10 +119,18 @@ const RECORD_ARTIFACT_KEYS = [
   "maturation_answer_claims_validation",
   "ontology_expansion",
   "ontology_expansion_validation",
+  "maturation_source_delta",
+  "maturation_source_delta_validation",
   "maturation_convergence_ledger",
   "maturation_convergence_ledger_validation",
   "maturation_continuation_decision",
   "maturation_continuation_decision_validation",
+  "query_proofs",
+  "query_proofs_validation",
+  "visualization_proofs",
+  "visualization_proofs_validation",
+  "graph_exploration_proofs",
+  "graph_exploration_proofs_validation",
   "actionable_ontology",
   "actionable_ontology_validation",
   "claim_projection",
@@ -231,6 +251,7 @@ function projectValidationStatus(
     | ReconstructTargetMaterialProfileValidationArtifact
     | ReconstructSourceObservationDirectiveValidationArtifact
     | ReconstructCandidateDispositionValidationArtifact
+    | ReconstructSeedAuthoringReadinessValidationArtifact
     | ReconstructOntologySeedValidationArtifact
     | ReconstructClaimRealizationMapValidationArtifact
     | ReconstructSeedConfirmationValidationArtifact
@@ -440,6 +461,10 @@ export async function assembleReconstructRecord(
     await readYamlIfPresent<ReconstructCandidateDispositionValidationArtifact>(
       artifactRefs.candidate_disposition_validation,
     );
+  const seedAuthoringReadinessValidation =
+    await readYamlIfPresent<ReconstructSeedAuthoringReadinessValidationArtifact>(
+      artifactRefs.seed_authoring_readiness_validation,
+    );
   const ontologySeedValidation =
     await readYamlIfPresent<ReconstructOntologySeedValidationArtifact>(
       artifactRefs.ontology_seed_validation,
@@ -518,6 +543,9 @@ export async function assembleReconstructRecord(
   const candidateDispositionStatus = projectValidationStatus(
     candidateDispositionValidation,
   );
+  const seedAuthoringReadinessStatus = projectValidationStatus(
+    seedAuthoringReadinessValidation,
+  );
   const ontologySeedStatus = projectValidationStatus(ontologySeedValidation);
   const claimRealizationStatus = projectValidationStatus(
     claimRealizationMapValidation,
@@ -593,6 +621,7 @@ export async function assembleReconstructRecord(
       target_material_profile_status: targetMaterialProfileStatus,
       source_observation_directive_status: sourceObservationDirectiveStatus,
       candidate_disposition_status: candidateDispositionStatus,
+      seed_authoring_readiness_status: seedAuthoringReadinessStatus,
       ontology_seed_status: ontologySeedStatus,
       claim_realization_status: claimRealizationStatus,
       seed_confirmation_status:
@@ -666,13 +695,24 @@ export async function assembleReconstructRecord(
         "source_observation_delta",
         "source_observation_delta_validation",
         "source_observation_reentry_validation",
+        "source_observation_lineage_index",
+        "source_observation_lineage_index_validation",
         "source_safety_ledger",
         "source_safety_ledger_validation",
+        "source_scout_pack",
+        "source_scout_pack_validation",
+        "source_scout_pack_pre_seed",
+        "source_scout_pack_validation_pre_seed",
+        "source_scout_pack_post_maturation",
+        "source_scout_pack_validation_post_maturation",
+        "post_maturation_gate_projection_validation",
         "material_admission_ledger",
         "material_admission_ledger_validation",
         "source_frontier_validation",
         "source_observation_directive_validation",
         "candidate_disposition_validation",
+        "seed_authoring_readiness",
+        "seed_authoring_readiness_validation",
         "ontology_seed_validation",
         "claim_realization_validation",
         "seed_confirmation_validation",
@@ -686,6 +726,8 @@ export async function assembleReconstructRecord(
         "handoff_decision_validation",
         "maturation_baseline",
         "maturation_baseline_validation",
+        "baseline_actionability_matrix",
+        "baseline_actionability_matrix_validation",
         "actionability_matrix",
         "actionability_matrix_validation",
         "maturation_closure_frontier_validation",
@@ -694,10 +736,18 @@ export async function assembleReconstructRecord(
         "answer_support_ledger_validation",
         "maturation_answer_claims_validation",
         "ontology_expansion_validation",
+        "maturation_source_delta",
+        "maturation_source_delta_validation",
         "maturation_convergence_ledger",
         "maturation_convergence_ledger_validation",
         "maturation_continuation_decision",
         "maturation_continuation_decision_validation",
+        "query_proofs",
+        "query_proofs_validation",
+        "visualization_proofs",
+        "visualization_proofs_validation",
+        "graph_exploration_proofs",
+        "graph_exploration_proofs_validation",
         "actionable_ontology",
         "actionable_ontology_validation",
         "claim_projection",

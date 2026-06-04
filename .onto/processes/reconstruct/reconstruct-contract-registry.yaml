@@ -51,7 +51,7 @@ source_profile_records:
     target_material_kind: code
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/code.md
-    definition_sha256: d653edf326eaf6202f42659fc33051c559830ce2b51d304436185b9468d29523
+    definition_sha256: cb1bcdc5368af0d40c8f354ef33422a12945a707db5b15d8a643d3511605b57c
     contract_status: active
     runtime_implementation_status: partially_wired
     schema_version: 1
@@ -99,9 +99,9 @@ source_profile_records:
     target_material_kind: document
     is_default_for_kind: true
     definition_ref: .onto/processes/reconstruct/source-profiles/document.md
-    definition_sha256: 8848ccda2f9ffc1336af78f73133f38037e3dd96f9b4a0cbf10b7c568a21dcf9
+    definition_sha256: a98b2eb950eaa2f3ee7b07b6d77acc5d294c1ab13ef4d043ba825fdd67a6b4bb
     contract_status: active
-    runtime_implementation_status: planned
+    runtime_implementation_status: partially_wired
     schema_version: 1
     profile_version: 2
     migration_status: current
@@ -907,6 +907,38 @@ artifact_authorities:
   source_safety_ledger_validation:
     authority_ref: source-safety-ledger-validation.yaml
     validation_ref: null
+  source_scout_pack:
+    authority_ref: source-scout-pack.yaml
+    validation_ref: source-scout-pack-validation.yaml
+    projection_policy: latest_current_profile_local_actor_action_state_scout_projection_with_source_safety_and_snapshot_hash_refs
+  source_scout_pack_validation:
+    authority_ref: source-scout-pack-validation.yaml
+    validation_ref: null
+  source_scout_pack_pre_seed:
+    authority_ref: source-scout-pack.pre-seed.yaml
+    validation_ref: source-scout-pack-validation.pre-seed.yaml
+    projection_policy: immutable_pre_seed_consumed_snapshot_for_source_purpose_candidate_inventory_and_seed_readiness
+  source_scout_pack_validation_pre_seed:
+    authority_ref: source-scout-pack-validation.pre-seed.yaml
+    validation_ref: null
+  source_scout_pack_post_maturation:
+    authority_ref: source-scout-pack.post-maturation.yaml
+    validation_ref: source-scout-pack-validation.post-maturation.yaml
+    projection_policy: immutable_post_maturation_consumed_snapshot_after_maturation_lineage_refresh
+  source_scout_pack_validation_post_maturation:
+    authority_ref: source-scout-pack-validation.post-maturation.yaml
+    validation_ref: null
+  post_maturation_gate_projection_validation:
+    authority_ref: post-maturation-gate-projection-validation.yaml
+    validation_ref: null
+    projection_policy: later_terminal_equivalent_projection_of_post_maturation_snapshot_gates_before_final_output_and_record_consumption
+  seed_authoring_readiness:
+    authority_ref: seed-authoring-readiness.yaml
+    validation_ref: seed-authoring-readiness-validation.yaml
+    projection_policy: selected_purpose_pre_seed_actionability_closure_projection_without_semantic_adequacy_decision
+  seed_authoring_readiness_validation:
+    authority_ref: seed-authoring-readiness-validation.yaml
+    validation_ref: null
   source_observation_directive:
     authority_ref: source-observation-directive.yaml
     validation_ref: source-observation-directive-validation.yaml
@@ -1061,6 +1093,12 @@ artifact_authorities:
     validation_ref: maturation-baseline-validation.yaml
   maturation_baseline_validation:
     authority_ref: maturation-baseline-validation.yaml
+    validation_ref: null
+  baseline_actionability_matrix:
+    authority_ref: baseline-actionability-matrix.yaml
+    validation_ref: baseline-actionability-matrix-validation.yaml
+  baseline_actionability_matrix_validation:
+    authority_ref: baseline-actionability-matrix-validation.yaml
     validation_ref: null
   actionability_matrix:
     authority_ref: actionability-matrix.yaml
@@ -1220,6 +1258,15 @@ validation_gate_catalog:
   - gate_id: source_safety_gate
     validation_artifact_ref: source-safety-ledger-validation.yaml
     required_when: source_observations_exist
+  - gate_id: source_scout_pack_gate
+    validation_artifact_ref: source-scout-pack-validation.yaml
+    required_when: source_observations_exist
+  - gate_id: source_scout_pack_pre_seed_gate
+    validation_artifact_ref: source-scout-pack-validation.pre-seed.yaml
+    required_when: source_scout_pack_pre_seed_snapshot_exists
+  - gate_id: source_scout_pack_post_maturation_gate
+    validation_artifact_ref: source-scout-pack-validation.post-maturation.yaml
+    required_when: source_scout_pack_post_maturation_snapshot_exists
   - gate_id: source_purpose_candidates_gate
     validation_artifact_ref: source-purpose-candidates-validation.yaml
     required_when: seed_validity_or_seed_iteration_readiness_is_projected
@@ -1232,6 +1279,9 @@ validation_gate_catalog:
   - gate_id: candidate_disposition_gate
     validation_artifact_ref: candidate-disposition-validation.yaml
     required_when: candidate_inventory_exists
+  - gate_id: seed_authoring_readiness_gate
+    validation_artifact_ref: seed-authoring-readiness-validation.yaml
+    required_when: seed_validity_or_seed_iteration_readiness_is_projected
   - gate_id: ontology_seed_gate
     validation_artifact_ref: ontology-seed-validation.yaml
     required_when: seed_validity_or_seed_iteration_readiness_is_projected
@@ -1263,6 +1313,9 @@ validation_gate_catalog:
   - gate_id: maturation_baseline_gate
     validation_artifact_ref: maturation-baseline-validation.yaml
     required_when: maturation_baseline_required
+  - gate_id: baseline_actionability_matrix_gate
+    validation_artifact_ref: baseline-actionability-matrix-validation.yaml
+    required_when: baseline_actionability_matrix_required
   - gate_id: actionability_matrix_gate
     validation_artifact_ref: actionability-matrix-validation.yaml
     required_when: actionability_matrix_required
@@ -1371,6 +1424,16 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(source-observation-lineage-index.yaml)"
     unknown_projection: blocked
     explanation_template: "A session-level source observation lineage index exists and must be validated before downstream semantic use."
+  - predicate_id: source_scout_pack_pre_seed_snapshot_exists
+    input_authority_refs: [source-scout-pack.pre-seed.yaml]
+    truth_expression: "artifact_exists(source-scout-pack.pre-seed.yaml)"
+    unknown_projection: blocked
+    explanation_template: "An immutable pre-seed SourceScoutPack snapshot exists and requires snapshot-scoped validation before source-purpose, candidate-inventory, or seed-readiness consumption."
+  - predicate_id: source_scout_pack_post_maturation_snapshot_exists
+    input_authority_refs: [source-scout-pack.post-maturation.yaml]
+    truth_expression: "artifact_exists(source-scout-pack.post-maturation.yaml)"
+    unknown_projection: blocked
+    explanation_template: "An immutable post-maturation SourceScoutPack snapshot exists and requires snapshot-scoped validation before post-maturation audit or replay use."
   - predicate_id: source_frontier_observation_delta
     gate_instance_scope: per_round
     input_authority_refs: [rounds/<round-id>/source-observation-delta.yaml]
@@ -1532,6 +1595,11 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(maturation-baseline.yaml)"
     unknown_projection: blocked
     explanation_template: "A maturation baseline validation is required when maturation-baseline.yaml exists."
+  - predicate_id: baseline_actionability_matrix_required
+    input_authority_refs: [baseline-actionability-matrix.yaml, maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
+    truth_expression: "artifact_exists(baseline-actionability-matrix.yaml)"
+    unknown_projection: blocked
+    explanation_template: "A baseline actionability matrix validation is required when baseline-actionability-matrix.yaml exists."
   - predicate_id: actionability_matrix_required
     input_authority_refs: [actionability-matrix.yaml, maturation-promotion-request.yaml, maturation-promotion-request-validation.yaml]
     truth_expression: "artifact_exists(actionability-matrix.yaml)"
@@ -1577,6 +1645,11 @@ required_when_predicate_catalog:
     truth_expression: "maturation_baseline_validation.validation_status == valid"
     unknown_projection: blocked
     explanation_template: "The maturation baseline validation authority is valid for downstream promotion."
+  - predicate_id: baseline_actionability_matrix_validation_is_valid
+    input_authority_refs: [baseline-actionability-matrix-validation.yaml]
+    truth_expression: "baseline_actionability_matrix_validation.validation_status == valid"
+    unknown_projection: blocked
+    explanation_template: "The baseline actionability matrix validation authority is valid for downstream frontier authoring."
   - predicate_id: actionability_matrix_validation_is_valid
     input_authority_refs: [actionability-matrix-validation.yaml]
     truth_expression: "actionability_matrix_validation.validation_status == valid"
@@ -1706,7 +1779,7 @@ required_when_predicate_catalog:
     explanation_template: "A downstream graph exploration claim exists and requires graph-exploration proof validation."
   - predicate_id: required_gate_failed_or_runtime_halted_or_unresolved_work_exists
     gate_instance_scope: global_with_concrete_gate_instance_inputs
-    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, source-purpose-candidates-validation.yaml, purpose-confirmation-validation.yaml, maturation-promotion-request-validation.yaml, maturation-runtime-capability-profile-validation.yaml, maturation-promotion-readiness-validation.yaml, maturation-baseline-validation.yaml, actionability-matrix-validation.yaml, maturation-question-frontier-validation.yaml, maturation-closure-frontier-validation.yaml, answer-support-ledger-validation.yaml, maturation-authority-response-validation.yaml, maturation-answer-claims-validation.yaml, ontology-expansion-validation.yaml, maturation-convergence-ledger-validation.yaml, maturation-continuation-decision-validation.yaml, actionable-ontology-validation.yaml, ontology-handoff-mapping-validation.yaml, rounds/*/source-observation-delta-validation.yaml, rounds/*/source-observation-reentry-validation.yaml, query-proofs-validation.yaml, visualization-proofs-validation.yaml, graph-exploration-proofs-validation.yaml, required-when-evaluation-validation.yaml, reconstruct-metrics.yaml]
+    input_authority_refs: [target-material-profile-validation.yaml, source-observation-directive-validation.yaml, rounds/*/source-frontier-validation.yaml, candidate-disposition-validation.yaml, ontology-seed-validation.yaml, claim-realization-map-validation.yaml, competency-questions-validation.yaml, competency-question-assessment-validation.yaml, seed-confirmation-validation.yaml, reconstruct-run-manifest.pre-handoff-validation.yaml, source-purpose-candidates-validation.yaml, purpose-confirmation-validation.yaml, maturation-promotion-request-validation.yaml, maturation-runtime-capability-profile-validation.yaml, maturation-promotion-readiness-validation.yaml, maturation-baseline-validation.yaml, baseline-actionability-matrix-validation.yaml, actionability-matrix-validation.yaml, maturation-question-frontier-validation.yaml, maturation-closure-frontier-validation.yaml, answer-support-ledger-validation.yaml, maturation-authority-response-validation.yaml, maturation-answer-claims-validation.yaml, ontology-expansion-validation.yaml, maturation-convergence-ledger-validation.yaml, maturation-continuation-decision-validation.yaml, actionable-ontology-validation.yaml, ontology-handoff-mapping-validation.yaml, rounds/*/source-observation-delta-validation.yaml, rounds/*/source-observation-reentry-validation.yaml, query-proofs-validation.yaml, visualization-proofs-validation.yaml, graph-exploration-proofs-validation.yaml, required-when-evaluation-validation.yaml, reconstruct-metrics.yaml]
     dynamic_input_authority_rule: Consume every validation_artifact_ref from validation_gate_catalog and planned_validation_gate_catalog whose required_when predicate evaluates true for the concrete gate instance; hand-maintained lists are non-authoritative cache hints only.
     truth_expression: "any_required_applicable_validation_artifact_missing_or_failed or runtime_halted == true or reconstruct_metrics.unresolved_question_count > 0"
     unknown_projection: blocked
@@ -1726,6 +1799,63 @@ required_when_predicate_catalog:
     truth_expression: "artifact_exists(claim-projection.yaml)"
     unknown_projection: not_applicable
     explanation_template: "A claim projection exists and requires validation before public status, result, MCP, API, handoff, or material-kind support surfaces reuse its claim values; final-output may cite only the canonical refs before validation."
+seed_authoring_readiness_taxonomy:
+  taxonomy_version: seed_authoring_readiness:v1
+  authority_rule: Pre-seed readiness classifies deterministic selected-purpose closure only. It must not decide ontology semantic adequacy, source sufficiency from unstructured text, or final seed iteration readiness.
+  deterministic_gate_scope: pre_seed_closure_only
+  required_boundary_notes:
+    - SeedAuthoringReadiness validates deterministic closure only; semantic adequacy remains owned by seed authoring and downstream validators.
+    - Actor-action-state scout rows are prioritization evidence, not selected-purpose required elements.
+  max_round_exhaustion_interpretation_values:
+    - not_exhausted
+    - exhausted_after_sufficient_selected_scope
+    - exhausted_with_open_frontier
+    - exhausted_with_non_source_blocker
+    - exhausted_not_evaluated_due_validation_gap
+  readiness_classification_values:
+    - seed_ready
+    - limited_seed_possible
+    - frontier_required
+    - purpose_confirmation_required
+    - blocked_no_authority
+    - blocked_validation_gap
+  allowed_seed_authoring_classifications:
+    - seed_ready
+    - limited_seed_possible
+  closure_axis_values:
+    - purpose
+    - actor
+    - action
+    - object_data
+    - state_transition
+    - guard_policy
+    - static_core
+    - profile_local
+  closure_state_values:
+    - evidence_backed
+    - limitation_backed
+    - frontier_backed
+    - missing
+    - unsupported
+    - blocked_by_validation_gap
+  frontier_availability_values:
+    - none
+    - concrete_frontier_available
+    - no_concrete_frontier
+    - unknown
+  source_sufficiency_state_values:
+    - sufficient_for_claim_scope
+    - insufficient_for_claim_scope
+    - unknown_until_frontier
+    - not_evaluated_due_non_source_blocker
+    - not_evaluated_due_validation_gap
+  rule_notes:
+    - actor_action_state_scout_rows_prioritize_exploration_but_do_not_replace_selected_purpose_required_elements
+    - max_round_exhausted_with_sufficient_selected_scope_remains_sufficient
+    - max_round_exhausted_with_open_frontier_projects_insufficient_for_claim_scope
+    - validation_artifact_may_be_valid_while_readiness_classification_blocks_seed_authoring
+    - phase1_scout_scope_limitations_are_boundary_notes_unless_selected_purpose_closure_itself_is_missing_or_validation_blocked
+    - ontology_domain_category_rows_are_diagnostic_unless_a_selected_purpose_closure_row_resolves_to_that_category
 readiness_projection:
   runtime_authority: reconstruct_runtime_readiness_projection_v1
   authority_rule: This registry declares allowed readiness values and semantic mapping labels; the executable precedence and status folding rule is owned by the runtime readinessProjection implementation until a registry-owned readiness-policy evaluator is promoted.
@@ -1818,7 +1948,7 @@ readiness_projection:
     terminal_validation_ref: handoff-decision-validation.yaml
     output_projection_policy: final_output_and_reconstruct_record_are_emitted_after_handoff_validation_passes
     applicability_source: Runtime evaluates active validation_gate_catalog.required_when plus promoted or requested planned_validation_gate_catalog.required_when through required_when_predicate_catalog and records concrete gate instances in handoff-decision-validation.yaml.gate_projection[].
-    promoted_planned_gate_policy: A planned gate becomes terminal-readiness-applicable when its activation_condition is implemented and its required_when predicate is true; accepted maturation execution additionally admits maturation_baseline_gate, actionability_matrix_gate, and maturation_question_frontier_gate through their *_required predicates even if the artifacts are missing.
+    promoted_planned_gate_policy: A planned gate becomes terminal-readiness-applicable when its activation_condition is implemented and its required_when predicate is true; accepted maturation execution additionally admits maturation_baseline_gate, baseline_actionability_matrix_gate, actionability_matrix_gate, and maturation_question_frontier_gate through their *_required predicates even if the artifacts are missing.
     conditional_absence_policy:
       unmet_required_when: not_applicable
       met_required_when_missing_artifact: blocked
@@ -1960,6 +2090,59 @@ validator_records:
       - validate_source_safety_subject_refs_against_observed_source_refs
       - preserve_prompt_context_evidence_support_public_output_replay_and_material_claim_consumption_boundaries
     output_ref: source-safety-ledger-validation.yaml
+  - validator_id: source-scout-pack-validator
+    gate_ids: [source_scout_pack_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-scout-pack.yaml
+      - source-observations.yaml
+      - source-safety-ledger.yaml
+      - source-safety-ledger-validation.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_scout_pack_is_profile_local_and_contains_no_selected_purpose_required_element_refs
+      - validate_prompt_visible_rows_have_source_safety_validation_refs
+      - validate_scout_scope_derives_from_target_material_profile_validation
+      - validate_signal_rows_resolve_to_source_observations
+      - validate_group_and_coverage_refs_resolve
+    output_ref: source-scout-pack-validation.yaml
+  - validator_id: source-scout-pack-pre-seed-validator
+    gate_ids: [source_scout_pack_pre_seed_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-scout-pack.pre-seed.yaml
+      - source-observations.yaml
+      - source-safety-ledger.yaml
+      - source-safety-ledger-validation.yaml
+      - source-observation-lineage-index-validation.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_pre_seed_scout_snapshot_is_immutable_consumed_authority
+      - validate_prompt_visible_rows_have_source_safety_validation_refs
+      - validate_signal_rows_resolve_to_source_observations
+      - validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
+      - validate_snapshot_scope_derives_from_target_material_profile_validation
+    output_ref: source-scout-pack-validation.pre-seed.yaml
+  - validator_id: source-scout-pack-post-maturation-validator
+    gate_ids: [source_scout_pack_post_maturation_gate]
+    validator_version: 1
+    input_authority_refs:
+      - source-scout-pack.post-maturation.yaml
+      - source-observations.yaml
+      - source-safety-ledger.yaml
+      - source-safety-ledger-validation.yaml
+      - source-observation-lineage-index-validation.yaml
+      - target-material-profile-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_post_maturation_scout_snapshot_is_immutable_audit_authority
+      - validate_prompt_visible_rows_have_source_safety_validation_refs
+      - validate_signal_rows_resolve_to_source_observations
+      - validate_snapshot_lineage_validation_ref_and_hash_match_current_lineage_authority
+      - validate_snapshot_scope_derives_from_target_material_profile_validation
+    output_ref: source-scout-pack-validation.post-maturation.yaml
   - validator_id: source-purpose-candidates-validator
     gate_ids: [source_purpose_candidates_gate]
     validator_version: 1
@@ -2047,6 +2230,30 @@ validator_records:
         activation_condition: source_purpose_candidate_runtime_is_implemented
         input_authority_refs: [source-purpose-candidates-validation.yaml]
     output_ref: candidate-disposition-validation.yaml
+  - validator_id: seed-authoring-readiness-validator
+    gate_ids: [seed_authoring_readiness_gate]
+    validator_version: 1
+    input_authority_refs:
+      - seed-authoring-readiness.yaml
+      - target-material-profile-validation.yaml
+      - source-scout-pack-validation.pre-seed.yaml
+      - source-observation-directive-validation.yaml
+      - source-purpose-candidates.yaml
+      - source-purpose-candidates-validation.yaml
+      - purpose-confirmation-validation.yaml
+      - material-admission-ledger.yaml
+      - candidate-disposition-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - validate_readiness_projection_uses_validated_input_refs_only
+      - validate_readiness_consumes_pre_seed_source_scout_validation_snapshot
+      - validate_selected_purpose_required_elements_have_closure_rows
+      - validate_actor_action_state_scout_rows_do_not_replace_purpose_required_elements
+      - validate_blocked_validation_gap_is_projection_not_semantic_decision
+      - validate_frontier_required_preserves_exploration_budget_state_without_declaring_source_insufficiency
+      - validate_ontology_domain_required_category_rows_only_when_selected_purpose_closure_rows_resolve_to_domain_categories
+      - validate_only_seed_ready_or_limited_seed_possible_allows_seed_authoring
+    output_ref: seed-authoring-readiness-validation.yaml
   - validator_id: ontology-seed-validator
     gate_ids: [ontology_seed_gate]
     validator_version: 1
@@ -2228,6 +2435,10 @@ validator_records:
         required_when: maturation_baseline_required
         consumed_for:
           - validate_failure_trigger_against_promoted_planned_validation_authorities
+      - artifact_ref: baseline-actionability-matrix-validation.yaml
+        required_when: baseline_actionability_matrix_required
+        consumed_for:
+          - validate_failure_trigger_against_promoted_planned_validation_authorities
       - artifact_ref: actionability-matrix-validation.yaml
         required_when: actionability_matrix_required
         consumed_for:
@@ -2326,12 +2537,30 @@ validator_records:
       - preserve_immutable_source_seed_and_validation_refs_used_to_compute_baseline
       - require_source_reconstruct_record_ref_and_sha256_before_maturation_baseline_consumption
     output_ref: maturation-baseline-validation.yaml
+  - validator_id: baseline-actionability-matrix-validator
+    gate_ids: [baseline_actionability_matrix_gate]
+    validator_version: 1
+    input_authority_refs:
+      - baseline-actionability-matrix.yaml
+      - maturation-baseline-validation.yaml
+      - reconstruct-contract-registry.yaml
+    validation_obligations:
+      - support_zero_delta_baseline_only_matrix_before_maturation_deltas_exist
+      - validate_matrix_rows_derive_from_validated_baseline_without_maturation_deltas
+      - reject_matrix_rows_without_baseline_row_ref
+      - validate_matrix_row_ids_are_stable_and_baseline_row_refs_close
+      - preserve_frontier_seed_state_before_question_frontier_authoring
+    output_ref: baseline-actionability-matrix-validation.yaml
   - validator_id: actionability-matrix-validator
     gate_ids: [actionability_matrix_gate]
     validator_version: 1
     input_authority_refs:
       - actionability-matrix.yaml
       - maturation-baseline-validation.yaml
+      - maturation-answer-claims.yaml
+      - maturation-answer-claims-validation.yaml
+      - ontology-expansion.yaml
+      - ontology-expansion-validation.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
       - support_zero_delta_baseline_only_matrix_when_no_maturation_deltas_exist
@@ -2347,7 +2576,7 @@ validator_records:
     input_authority_refs:
       - maturation-question-frontier.yaml
       - maturation-baseline-validation.yaml
-      - actionability-matrix-validation.yaml
+      - baseline-actionability-matrix-validation.yaml
       - reconstruct-contract-registry.yaml
     validation_obligations:
       - require_unique_question_id
@@ -2595,6 +2824,10 @@ validator_records:
           - validate_terminal_projection_for_requested_or_promoted_planned_gates
       - artifact_ref: maturation-baseline-validation.yaml
         required_when: maturation_baseline_required
+        consumed_for:
+          - validate_terminal_projection_for_requested_or_promoted_planned_gates
+      - artifact_ref: baseline-actionability-matrix-validation.yaml
+        required_when: baseline_actionability_matrix_required
         consumed_for:
           - validate_terminal_projection_for_requested_or_promoted_planned_gates
       - artifact_ref: actionability-matrix-validation.yaml

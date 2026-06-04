@@ -11,6 +11,7 @@ import type {
 import {
   finalizeReconstructRunControl,
   initializeReconstructRunControl,
+  markReconstructRunControlAttemptFailed,
   recordReconstructRunControlTransactions,
   validateReconstructRunControl,
 } from "./run-control-validation.js";
@@ -55,6 +56,12 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     source_observation_lineage_index_validation: null,
     source_safety_ledger: null,
     source_safety_ledger_validation: null,
+    source_scout_pack: null,
+    source_scout_pack_validation: null,
+    source_scout_pack_pre_seed: null,
+    source_scout_pack_validation_pre_seed: null,
+    source_scout_pack_post_maturation: null,
+    source_scout_pack_validation_post_maturation: null,
     source_observation_directive: null,
     source_observation_directive_validation: null,
     lens_judgment_index: null,
@@ -70,6 +77,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     candidate_inventory: null,
     candidate_disposition: null,
     candidate_disposition_validation: null,
+    seed_authoring_readiness: null,
+    seed_authoring_readiness_validation: null,
     ontology_seed: null,
     ontology_seed_validation: null,
     claim_realization_map: null,
@@ -91,6 +100,8 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     handoff_decision_validation: null,
     maturation_baseline: null,
     maturation_baseline_validation: null,
+    baseline_actionability_matrix: null,
+    baseline_actionability_matrix_validation: null,
     actionability_matrix: null,
     actionability_matrix_validation: null,
     maturation_question_frontier: null,
@@ -105,10 +116,18 @@ function emptyRefs(): ReconstructRecordArtifactRefs {
     maturation_answer_claims_validation: null,
     ontology_expansion: null,
     ontology_expansion_validation: null,
+    maturation_source_delta: null,
+    maturation_source_delta_validation: null,
     maturation_convergence_ledger: null,
     maturation_convergence_ledger_validation: null,
     maturation_continuation_decision: null,
     maturation_continuation_decision_validation: null,
+    query_proofs: null,
+    query_proofs_validation: null,
+    visualization_proofs: null,
+    visualization_proofs_validation: null,
+    graph_exploration_proofs: null,
+    graph_exploration_proofs_validation: null,
     actionable_ontology: null,
     actionable_ontology_validation: null,
     claim_projection: null,
@@ -142,6 +161,22 @@ function baseInitArgs(root: string) {
       "reconstruct-run-bootstrap-diagnostic.yaml",
     ),
   };
+}
+
+async function writeTerminalValidation(
+  root: string,
+  status: "valid" | "invalid" = "valid",
+): Promise<string> {
+  const terminalValidationRef = path.join(
+    root,
+    "reconstruct-run-manifest.post-publication-validation.yaml",
+  );
+  await fs.writeFile(
+    terminalValidationRef,
+    `schema_version: '1'\nvalidation_status: ${status}\n`,
+    "utf8",
+  );
+  return terminalValidationRef;
 }
 
 describe("reconstruct run-control validation", () => {
@@ -187,6 +222,88 @@ describe("reconstruct run-control validation", () => {
     expect(diagnostic.safe_recovery_action).toBe("return_existing");
   });
 
+  it("admits explicit same-request promoted resume after a failed attempt", async () => {
+    const root = await tempSessionRoot();
+    const initial = await initializeReconstructRunControl(baseInitArgs(root));
+    for (const filename of [
+      "target-material-profile-validation.yaml",
+      "source-safety-ledger-validation.yaml",
+      "source-scout-pack-validation.yaml",
+      "source-observation-lineage-index-validation.yaml",
+      "seed-authoring-readiness-validation.yaml",
+    ]) {
+      await fs.writeFile(
+        path.join(root, filename),
+        "schema_version: '1'\nvalidation_status: valid\n",
+        "utf8",
+      );
+    }
+    await fs.writeFile(
+      path.join(root, "source-purpose-candidates.yaml.reuse-provenance.yaml"),
+      "schema_version: '1'\ncompatibility_hash: fixture\n",
+      "utf8",
+    );
+    await markReconstructRunControlAttemptFailed({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: initial.attemptId,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    const resumed = await initializeReconstructRunControl({
+      ...baseInitArgs(root),
+      resumeMode: "reuse_existing_authored_artifacts",
+    });
+
+    expect(resumed.validation.validation_status).toBe("valid");
+    expect(resumed.runControl.resume_rows).toHaveLength(1);
+    expect(resumed.runControl.resume_rows[0]).toMatchObject({
+      source_attempt_id: initial.attemptId,
+      resume_decision: "resume_pending_provenance",
+      compatibility_policy: "authored_artifact_provenance:v1",
+    });
+    expect(resumed.runControl.resume_rows[0]?.compatibility_check_refs)
+      .toEqual(expect.arrayContaining([
+        path.join(root, "source-scout-pack-validation.yaml"),
+        path.join(root, "seed-authoring-readiness-validation.yaml"),
+        path.join(root, "source-purpose-candidates.yaml.reuse-provenance.yaml"),
+      ]));
+    expect(resumed.runControl.resume_rows[0]?.checkpoint_refs)
+      .toEqual(expect.arrayContaining(
+        resumed.runControl.resume_rows[0]?.compatibility_check_refs ?? [],
+      ));
+    expect(resumed.runControl.attempt_rows).toHaveLength(2);
+    expect(resumed.runControl.attempt_rows[0]).toMatchObject({
+      attempt_id: initial.attemptId,
+      attempt_status: "failed",
+    });
+    expect(resumed.runControl.attempt_rows[1]).toMatchObject({
+      attempt_kind: "resume",
+      attempt_status: "running",
+      parent_attempt_id: initial.attemptId,
+    });
+
+    const terminalValidationRef = await writeTerminalValidation(root);
+    const finalized = await finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: resumed.attemptId,
+      artifactRefs: emptyRefs(),
+      postPublicationRunManifestValidationPath: terminalValidationRef,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    expect(finalized.validation.validation_status).toBe("valid");
+    expect(finalized.runControl.resume_rows[0]).toMatchObject({
+      resume_decision: "resume_allowed",
+    });
+    expect(finalized.runControl.attempt_rows[1]).toMatchObject({
+      attempt_status: "completed",
+    });
+  });
+
   it("atomically admits only one concurrent same-session run-control owner", async () => {
     const root = await tempSessionRoot();
 
@@ -223,11 +340,13 @@ describe("reconstruct run-control validation", () => {
       reconstruct_run_control_validation: baseInitArgs(root).validationOutputPath,
       target_material_profile: artifactPath,
     };
+    const terminalValidationRef = await writeTerminalValidation(root);
     const finalized = await finalizeReconstructRunControl({
       runControlPath: baseInitArgs(root).outputPath,
       validationOutputPath: baseInitArgs(root).validationOutputPath,
       attemptId: init.attemptId,
       artifactRefs: refs,
+      postPublicationRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -241,6 +360,11 @@ describe("reconstruct run-control validation", () => {
       row.commit_method === "observed_file_hash" &&
       row.committed_hash !== null
     )).toBe(true);
+    expect(finalized.runControl.write_transactions.some((row) =>
+      row.artifact_ref === terminalValidationRef &&
+      row.transaction_status === "committed" &&
+      row.committed_hash !== null
+    )).toBe(true);
 
     const persisted = await readYaml<ReconstructRunControlArtifact>(
       baseInitArgs(root).outputPath,
@@ -248,11 +372,77 @@ describe("reconstruct run-control validation", () => {
     expect(persisted.write_transactions.length).toBeGreaterThan(0);
   });
 
+  it("rejects completion before valid post-publication terminal validation exists", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const missingTerminalValidationRef = path.join(
+      root,
+      "reconstruct-run-manifest.post-publication-validation.yaml",
+    );
+
+    await expect(finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: emptyRefs(),
+      postPublicationRunManifestValidationPath: missingTerminalValidationRef,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    })).rejects.toThrow(/cannot finalize without valid post-publication/);
+
+    const persisted = await readYaml<ReconstructRunControlArtifact>(
+      baseInitArgs(root).outputPath,
+    );
+    expect(persisted.attempt_rows[0]?.attempt_status).toBe("running");
+  });
+
+  it("rejects completion when post-publication terminal validation is invalid", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const terminalValidationRef = await writeTerminalValidation(root, "invalid");
+
+    await expect(finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: emptyRefs(),
+      postPublicationRunManifestValidationPath: terminalValidationRef,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    })).rejects.toThrow(/validation_status=invalid/);
+  });
+
+  it("rejects completed run-control validation without terminal validation authority context", async () => {
+    const root = await tempSessionRoot();
+    const init = await initializeReconstructRunControl(baseInitArgs(root));
+    const terminalValidationRef = await writeTerminalValidation(root);
+    const finalized = await finalizeReconstructRunControl({
+      runControlPath: baseInitArgs(root).outputPath,
+      validationOutputPath: baseInitArgs(root).validationOutputPath,
+      attemptId: init.attemptId,
+      artifactRefs: emptyRefs(),
+      postPublicationRunManifestValidationPath: terminalValidationRef,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    const validation = validateReconstructRunControl({
+      runControl: finalized.runControl,
+      expectedSessionId: path.basename(root),
+      expectedSessionRoot: root,
+    });
+
+    expect(validation.validation_status).toBe("invalid");
+    expect(validation.violations.map((item) => item.code))
+      .toContain("terminal_validation_missing");
+  });
+
   it("records zero-byte artifacts as committed write transactions", async () => {
     const root = await tempSessionRoot();
     const init = await initializeReconstructRunControl(baseInitArgs(root));
     const artifactPath = path.join(root, "empty-artifact.yaml");
     await fs.writeFile(artifactPath, "", "utf8");
+    const terminalValidationRef = await writeTerminalValidation(root);
 
     const finalized = await finalizeReconstructRunControl({
       runControlPath: baseInitArgs(root).outputPath,
@@ -262,6 +452,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
+      postPublicationRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -342,6 +533,7 @@ describe("reconstruct run-control validation", () => {
     const artifactPath = path.join(root, "artifact.yaml");
     const missingPath = path.join(root, "missing-claim-input.yaml");
     await fs.writeFile(artifactPath, "schema_version: '1'\n", "utf8");
+    const terminalValidationRef = await writeTerminalValidation(root);
 
     await finalizeReconstructRunControl({
       runControlPath: baseInitArgs(root).outputPath,
@@ -351,6 +543,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
+      postPublicationRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
@@ -399,6 +592,7 @@ describe("reconstruct run-control validation", () => {
     const init = await initializeReconstructRunControl(baseInitArgs(root));
     const artifactPath = path.join(root, "claim-input.yaml");
     await fs.writeFile(artifactPath, "schema_version: '1'\n", "utf8");
+    const terminalValidationRef = await writeTerminalValidation(root);
     await finalizeReconstructRunControl({
       runControlPath: baseInitArgs(root).outputPath,
       validationOutputPath: baseInitArgs(root).validationOutputPath,
@@ -407,6 +601,7 @@ describe("reconstruct run-control validation", () => {
         ...emptyRefs(),
         target_material_profile: artifactPath,
       },
+      postPublicationRunManifestValidationPath: terminalValidationRef,
       expectedSessionId: path.basename(root),
       expectedSessionRoot: root,
     });
