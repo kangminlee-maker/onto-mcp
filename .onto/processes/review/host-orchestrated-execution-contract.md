@@ -111,25 +111,61 @@ host_orchestrated는 신규 데이터 구조를 거의 만들지 않는다. 기�
 
 ---
 
-## 4. host_orchestrated 데이터 흐름
+## 4. host_orchestrated 데이터 흐름 — 반복 라운드 구동 (iterative round-driven)
+
+**P0 확정(2026-06-04).** onto가 DAG를 **결정론적으로 구동**하고, host는 매 라운드의 "지금 실행 가능한 unit"만 실행한다. onto는 LLM을 호출하지 않고 **Round Directive 발행 + seat 검증 + DAG 전진**만 한다. 이 모델은 기존 running-handle/`onto_review_continue` 기계를 재사용한다.
 
 ```
 [host = Claude Code 세션]
-  1. host → onto prepare → onto가 execution-plan.yaml(directive) +
-     prompt-packets/{lens}.prompt.md + canonical output seat 고정
-        ※ onto는 아무 프로세스도 spawn하지 않음
-  2. host가 토폴로지(§5)로 lens 실행:
-        각 lens 산출 markdown을 round1/{lens}.md (등 canonical seat)에 기록
-  3. host → onto completion 신호 → onto가:
-        - structural conformance gate(§7)로 seat 검증
-        - controlled deliberation / synthesize / assemble (기존 경로)
-        - review-record.yaml 조립
+ prepare:
+   host → onto_prepare_review (host_orchestrated)
+   onto → Round Directive R1 = { ready unit들(deps 충족) + 각 packet/seat 경로
+                                  + topology + "seat 기록 후 advance 호출" }
+        ※ onto는 spawn하지 않음. R1은 보통 lens 레벨(병렬 6~9)
+ loop (DAG의 각 위계 level마다):
+   host → 이번 라운드 unit들을 topology(§5)로 실행, 각 output_path(seat)에 기록
+   host → onto advance (= onto_review_continue 계열)
+   onto → 직전 라운드 seat를 structural conformance gate(§7)로 검증(trusted 표시)
+          → 다음 ready unit 계산 → 다음 Round Directive 반환
+          (남은 unit 없음 = synthesize까지 완료 → assemble)
+ complete:
+   onto → review-record.yaml 조립 후 최종 결과 반환
 ```
+
+라운드 = DAG의 한 위계(level). 예: `R1=lens(병렬)` → `R2=finding-ledger` → `R3=finding-relation-graph` → … → `R_k=deliberation(병렬)` → `R_last=synthesize`.
 
 원칙:
 
-- prepare가 emit하는 directive는 host가 "어느 lens 산출을 어느 seat에 쓸지"를 닫는 declared handoff다(신규 semantic 아님).
-- onto는 host가 기록한 seat를 **재수집**할 뿐, host의 context로 결과가 흘러도 onto는 디스크 seat만 권위로 본다.
+- onto가 "다음에 무엇을 실행할지"를 **검증된 artifact 기준으로 결정**(결정론적 통제 유지). host는 그 라운드만 실행한다.
+- prepare/advance가 내는 Round Directive는 "어느 unit 산출을 어느 seat에 쓸지"를 닫는 declared handoff다(신규 semantic 아님).
+- onto는 host가 기록한 seat만 권위로 본다 — host context의 중간 상태를 추론으로 보완하지 않는다.
+- **거부된 대안**: one-shot 전체-directive(host가 DAG 전체를 자력 구동). host LLM의 다단계 의존 구동 신뢰성이 낮고 onto의 결정론적 통제·검증을 잃으므로 비채택.
+
+### 4.1 Round Directive 스키마 (prepare/advance 응답의 host-consumable projection)
+
+`execution-plan.yaml`의 projection이며 신규 권위가 아니다. 최소 형상:
+
+```yaml
+host_orchestration_directive:
+  session_root: <abs path>
+  round: 1
+  topology: nested-workers | main-workers      # permitted_topologies 내
+  status: ready | complete
+  advance:                                      # 이 라운드 기록 후 호출 방법
+    tool: onto_review_continue
+    args: { sessionRoot: <path> }
+  units:                                        # 이번 라운드 ready unit들
+    - unit_id: logic
+      unit_kind: lens
+      packet_path: prompt-packets/logic.prompt.md   # host가 읽어 실행할 bounded prompt
+      output_path: round1/logic.md                  # host가 결과를 기록할 canonical seat(§3)
+      depends_on: []
+  completion:                                   # status=complete일 때만
+    review_record_path: review-record.yaml
+```
+
+- `packet_path`/`output_path`는 모두 기존 seat(§3) — 변경 없음.
+- onto는 advance 시 직전 라운드의 `output_path`들을 검증한 뒤에만 다음 라운드를 연다.
 
 ---
 
@@ -151,11 +187,30 @@ host_orchestrated는 신규 데이터 구조를 거의 만들지 않는다. 기�
 
 ---
 
-## 6. Gate
+## 6. Gate (P0 확정)
 
-- `host_orchestrated`는 **`host=claude-code`일 때만** 적격. profile resolver는 actor route 단일화 검사(`commonActorRouteSelection`) **이전에 short-circuit**한다 — host가 호출을 소유하므로 single-route 제약은 무의미하다.
-- 그 외 host(codex/standalone/...)에서 host_orchestrated 요청 시 **fail-loud noHost**: "이 host에선 host_orchestrated 미지원. `executor=claude`(CLI) 또는 codex worker를 사용하라."
-- 이 분기에서 actor별 이질성(teamlead-on-host / lens-on-subagent) 허용 여부를 명시한다(host가 소유하므로 worker route 제약 비적용).
+적격 조건은 **둘 다** 충족해야 한다(fail-closed 기본):
+
+1. **명시적 opt-in** — `review.execution.host_orchestrated: true`(settings) 또는 `ONTO_EXPERIMENTAL_HOST_ORCHESTRATION=1`(env). 미설정 시 host_orchestrated 경로는 아예 후보가 아니다.
+2. **host=claude-code 감지** — `ONTO_HOST_RUNTIME=claude-code`(onto가 Claude Code 하에서 떠 있을 때 설정) 또는 동등 감지 seam.
+
+리졸버 배치:
+
+- profile resolver는 위 두 조건을 **`commonActorRouteSelection`(actor route 단일화 검사) 이전에 평가**해 short-circuit한다 — host가 호출을 소유하므로 single-route 제약은 무의미하다. 이 분기에서는 actor별 이질성(teamlead-on-host / lens-on-subagent)을 허용한다.
+- opt-in은 켜졌으나 host≠claude-code면 **fail-loud noHost**: "host_orchestrated는 host=claude-code에서만 지원. `executor=claude`(CLI) 또는 codex worker를 사용하라."
+- opt-in이 꺼져 있으면 host_orchestrated는 선택되지 않고 기존 worker/direct-call 경로로 정상 진행한다.
+
+### 6.1 realization / projection 타입 (sentinel, P0 확정)
+
+- `ReviewExecutionRealization`(`artifact-types.ts`) += **`host-orchestrated`** (kebab; 기존 `worker`/`direct-call` 동형).
+- `buildReviewExecutionRoute`(`review-execution-route.ts`)에 host_orchestrated 분기. onto가 spawn하지 않으므로 sentinel로 projection 불변식을 유지한다:
+  - `executor`: `host_orchestrated`
+  - `resolved_provider`: **`host`**(신규 sentinel — provider를 onto가 해소하지 않음)
+  - `host`(route host): `claude-code`
+  - `artifact_host_runtime`: `claude-code`
+  - `auth_mode`: `oauth`
+- 이미 도입된 `assertNever` exhaustiveness 가드(1.8a)가 누락을 컴파일 타임에 차단한다 → `ReviewWorkerExecutor`/route host union/`resolved_provider` union에 sentinel 추가 시 모든 소비처가 처리하도록 강제된다.
+- `ReviewHostRuntime` += `claude-code`(이미 worker_claude용 `claude`와 별개; §2.4 naming 표의 axis 구분).
 
 ---
 
@@ -177,10 +232,21 @@ host_orchestrated는 신규 데이터 구조를 거의 만들지 않는다. 기�
 
 ---
 
-## 9. Immediate Follow-up
+## 9. Phase 2 구현 로드맵
 
-1. **rank-1 `core-lexicon.yaml` 실험적 carve-out 등록**(§2.3) — canonical instances(셋) 불변, `experimental_instances`에 `host_orchestrated`(nested/flat 한정) 추가.
-2. `prompt-execution-runner-contract.md §2 inputs`에 `host_orchestrated` realization + `claude`/`claude-code` host runtime + `worker+claude` profile 반영(rank-1 승인 후).
-3. profile resolver의 `host=claude-code` short-circuit + `ONTO_HOST_RUNTIME=claude` stub 대체(설계 §7).
-4. 공유 structural conformance gate preflight 보강 구현(§7) — worker/direct-call도 함께 이득.
-5. host_orchestrated directive가 host에게 전달되는 표면(prepare 응답 + resource/prompt) 명세를 `review-execution-ux-contract.md`와 정합 확인.
+P0 설계 확정(2026-06-04): §4 반복 라운드 구동 + §4.1 Round Directive + §6 게이트 + §6.1 realization/projection sentinel. 이제 구현은 위험을 단계로 분리한다.
+
+**단계 P2-A (mock host POC, 결정론적·저비용 — 실 Claude Code 호스트 불필요)**
+1. `ReviewExecutionRealization` += `host-orchestrated`; route projection sentinel(§6.1).
+2. profile resolver 게이트(§6): opt-in + host=claude-code short-circuit, `ONTO_HOST_RUNTIME=claude` stub 대체.
+3. prepare/advance가 Round Directive(§4.1) 발행 — execution-plan.yaml projection.
+4. **mock host 드라이버**(테스트 전용): prepare → directive → 각 라운드 unit의 기대 artifact를 seat에 기록(mock executor 산출 재사용) → advance 반복 → assemble. **데이터 흐름·DAG 라운드·검증·조립을 실 호스트 없이 검증.**
+5. 공유 structural conformance gate preflight 보강(§7) — worker/direct-call도 함께 이득.
+
+**단계 P2-B (실 Claude Code 호스트 통합)**
+6. host=claude-code에서 Round Directive를 받아 topology(nested/flat)로 실행하는 실제 경로(Agent teams/subagent). prepare 응답 표면을 `review-execution-ux-contract.md`와 정합.
+7. 실 opus 호스트로 end-to-end 1회.
+
+**선행/병행**
+- rank-1 `core-lexicon.yaml` carve-out(§2.3)·`prompt-execution-runner-contract.md` 반영은 P2-A 진입 전 완료.
+- peer 토폴로지·`live-peer-deliberation`은 본 로드맵 밖(design-only, §2.2).
