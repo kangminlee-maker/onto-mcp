@@ -1,5 +1,5 @@
 export type LlmAuthMode = "api_key" | "oauth" | "local";
-export type LlmProviderName = "openai" | "anthropic" | "grok" | "lmstudio";
+export type LlmProviderName = "openai" | "anthropic" | "grok" | "lmstudio" | "claude";
 
 export interface LlmModelSwitcherConfig {
   provider?: LlmProviderName | undefined;
@@ -13,6 +13,7 @@ export interface LlmModelSwitcherConfig {
 
 export type RuntimeLlmProvider =
   | "codex"
+  | "claude"
   | "openai"
   | "anthropic"
   | "grok"
@@ -37,11 +38,13 @@ export function normalizeLlmModelSwitcher(
   if (!config || config.provider === undefined) return null;
 
   const provider = config.provider;
-  const auth = config.auth ?? (provider === "lmstudio" ? "local" : "api_key");
+  const auth = config.auth ?? (
+    provider === "lmstudio" ? "local" : provider === "claude" ? "oauth" : "api_key"
+  );
 
-  if (auth === "oauth" && provider !== "openai") {
+  if (auth === "oauth" && provider !== "openai" && provider !== "claude") {
     throw new Error(
-      `auth=oauth is only supported with provider=openai; got provider=${provider}.`,
+      `auth=oauth is only supported with provider=openai (Codex) or provider=claude (Claude CLI); got provider=${provider}.`,
     );
   }
   if (auth === "local" && provider !== "lmstudio") {
@@ -76,6 +79,15 @@ export function normalizeLlmModelSwitcher(
         provider: auth === "oauth" ? "codex" : "openai",
         ...common,
         ...(config.base_url ? { base_url: config.base_url } : {}),
+      };
+    case "claude":
+      // provider=claude is the Claude Code CLI worker (`claude -p`), distinct
+      // from provider=anthropic (Anthropic SDK direct-call). Both oauth
+      // (claude.ai subscription) and api_key (ANTHROPIC_API_KEY) authenticate
+      // the same CLI worker runtime; auth=local is rejected above.
+      return {
+        provider: "claude",
+        ...common,
       };
     case "anthropic":
       if (auth !== "api_key") {

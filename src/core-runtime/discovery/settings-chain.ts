@@ -15,7 +15,7 @@ import { fileExists } from "../review/review-artifact-utils.js";
 import type { ReviewStructuredFailureRecord } from "../review/artifact-types.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
-const LlmProviderSchema = z.enum(["openai", "anthropic", "grok", "lmstudio"]);
+const LlmProviderSchema = z.enum(["openai", "anthropic", "grok", "lmstudio", "claude"]);
 
 const LlmSettingsSchema = z
   .object({
@@ -48,6 +48,7 @@ const ReviewExecutionModeSchema = z.enum(["main-workers", "nested-workers"]);
 const ReviewExecutorSelectionSchema = z.enum([
   "auto",
   "codex",
+  "claude",
   "direct_call",
   "mock",
 ]);

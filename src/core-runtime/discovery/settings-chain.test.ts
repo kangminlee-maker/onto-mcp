@@ -84,6 +84,29 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.synthesize?.llm).toBe("inherit");
   });
 
+  it("accepts provider=claude (oauth) and executor=claude (Claude CLI worker)", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      llm: {
+        auth: "oauth",
+        provider: "claude",
+        model: "claude-opus-4-8",
+      },
+      review: {
+        execution: {
+          executor: "claude",
+          mode: "main-workers",
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.llm?.provider).toBe("claude");
+    expect(settings.llm?.auth).toBe("oauth");
+    expect(settings.review?.execution?.executor).toBe("claude");
+  });
+
   it("normalizes v2 settings into the runtime projection", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
