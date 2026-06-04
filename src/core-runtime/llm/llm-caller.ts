@@ -24,6 +24,7 @@ import {
   DEFAULT_LMSTUDIO_BASE_URL,
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
+  type LlmAuthMode,
 } from "./model-switcher.js";
 import {
   appendRuntimeModelCallLogFromCurrentContext,
@@ -38,13 +39,13 @@ import {
  * task seat) → review (lens seat).
  */
 export interface ResolvedPlanLike {
-  provider_identity: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "mock";
+  provider_identity: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "claude" | "mock";
   model_id?: string;
   base_url?: string;
 }
 
 export interface LlmCallConfig {
-  provider: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
+  provider: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "claude";
   model_id: string;
   max_tokens: number;
   /** Optional base URL for OpenAI-style providers. Ignored by codex/anthropic. */
@@ -76,6 +77,7 @@ export interface LlmCallConfig {
     grok?: string;
     lmstudio?: string;
     codex?: string;
+    claude?: string;
   };
 }
 
@@ -91,7 +93,7 @@ export interface LlmProviderConfigInputs {
  * Maps to the CLI-flag > env > project-config > onto-home-config precedence (D3).
  */
 export interface LlmProviderCliOverrides {
-  provider?: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
+  provider?: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "claude";
   auth?: "api_key" | "oauth" | "local";
   base_url?: string;
   model?: string;
@@ -616,6 +618,191 @@ async function callCodexCli(
 }
 
 // ---------------------------------------------------------------------------
+// claude CLI call (Claude Code CLI worker — OAuth subscription / API key)
+// ---------------------------------------------------------------------------
+
+export interface ClaudeResultEvent {
+  type: string;
+  is_error?: boolean;
+  result?: string;
+  total_cost_usd?: number;
+  session_id?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
+  modelUsage?: Record<string, unknown>;
+}
+
+/**
+ * Parse `claude -p --output-format json` stdout. Observed environments emit a
+ * TOP-LEVEL ARRAY of stream events (system/init, assistant, result, …) rather
+ * than a single object; others may emit a single result object. Handle both by
+ * locating the `type === "result"` element, which carries the answer text plus
+ * real usage/cost (claude DOES return tokens, unlike codex).
+ */
+export function parseClaudeResultEvent(stdout: string): ClaudeResultEvent {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(
+      `claude CLI returned unparseable JSON (--output-format json). First 200 chars: ${stdout
+        .slice(0, 200)
+        .replace(/\n/g, " ")}`,
+    );
+  }
+  const events: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  const result = events.find(
+    (e): e is ClaudeResultEvent =>
+      typeof e === "object" &&
+      e !== null &&
+      (e as { type?: unknown }).type === "result",
+  );
+  if (!result) {
+    throw new Error(
+      'claude CLI JSON contained no result event (type="result"). The run may have failed before producing an answer.',
+    );
+  }
+  return result;
+}
+
+/**
+ * Invoke `claude -p --output-format json` as a single-turn Claude Code CLI
+ * worker (mirrors the codex worker call; no agentic scaffold, no tools). The
+ * prompt is piped via stdin (verified: `printf '…' | claude -p --output-format
+ * json`). We spawn the binary directly so PATH resolves the real `claude`;
+ * interactive-shell aliases are bypassed by execve.
+ *
+ * Distinct from callAnthropic (Anthropic SDK direct-call). Auth is the host
+ * CLI's own (claude.ai OAuth subscription, or ANTHROPIC_API_KEY).
+ */
+async function callClaudeCli(
+  systemPrompt: string,
+  userPrompt: string,
+  modelId?: string,
+  authMode: LlmAuthMode = "oauth",
+): Promise<LlmCallResult> {
+  const { spawn } = await import("node:child_process");
+
+  const args: string[] = ["-p", "--output-format", "json"];
+  if (modelId) args.push("--model", modelId);
+
+  const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}`;
+
+  emitModelCallLog(
+    `claude call: model="${modelId ?? "(claude default)"}" auth="${authMode}" timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+  );
+
+  const child = spawn("claude", args, { stdio: ["pipe", "pipe", "pipe"] });
+  const claudeStreamSourceBase = {
+    kind: "process" as const,
+    label: "claude-cli",
+  };
+  const claudeStreamSource = child.pid !== undefined
+    ? { ...claudeStreamSourceBase, processId: child.pid }
+    : claudeStreamSourceBase;
+
+  let stdout = "";
+  let stderr = "";
+  let timedOut = false;
+
+  child.stdout.on("data", (chunk: Buffer | string) => {
+    stdout += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stdout",
+      chunk,
+      claudeStreamSource,
+    );
+  });
+  child.stderr.on("data", (chunk: Buffer | string) => {
+    stderr += String(chunk);
+    appendRuntimeStreamChunkFromCurrentContextSync(
+      "stderr",
+      chunk,
+      claudeStreamSource,
+    );
+  });
+
+  child.stdin.write(combinedPrompt);
+  child.stdin.end();
+
+  const timeoutHandle = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+  }, DEFAULT_TIMEOUT_MS);
+
+  const exitCode = await new Promise<number>((resolve, reject) => {
+    child.on("error", (err: NodeJS.ErrnoException) => {
+      clearTimeout(timeoutHandle);
+      if (err.code === "ENOENT") {
+        reject(new Error(
+          "claude CLI not found on PATH. Install Claude Code to use provider=claude: https://docs.claude.com/claude-code",
+        ));
+      } else {
+        reject(err);
+      }
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeoutHandle);
+      resolve(code ?? 1);
+    });
+  });
+
+  if (timedOut) {
+    emitModelCallLog(
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" reason=timeout timeout_ms=${DEFAULT_TIMEOUT_MS}`,
+    );
+    throw new Error(`claude CLI call timed out after ${DEFAULT_TIMEOUT_MS}ms`);
+  }
+  if (exitCode !== 0) {
+    const combined = [stderr.trim(), stdout.trim()]
+      .filter((m) => m.length > 0)
+      .join("\n");
+    emitModelCallLog(
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" exit_code=${exitCode} message="${combined.slice(0, 200).replace(/\n/g, " ")}"`,
+    );
+    throw new Error(
+      combined.length > 0 ? combined : `claude CLI exited with code ${exitCode}`,
+    );
+  }
+
+  // exit 0 does not guarantee success: the run may have produced an error
+  // result or no result event. Surface that instead of passing empty output.
+  const resultEvent = parseClaudeResultEvent(stdout);
+  if (resultEvent.is_error) {
+    emitModelCallLog(
+      `claude call FAILED: model="${modelId ?? "(claude default)"}" is_error=true result="${(resultEvent.result ?? "").slice(0, 200).replace(/\n/g, " ")}"`,
+    );
+    throw new Error(
+      `claude CLI reported an error result: ${resultEvent.result ?? "(no message)"}`,
+    );
+  }
+  const text = (resultEvent.result ?? "").trim();
+  if (text.length === 0) {
+    throw new Error("claude CLI returned an empty result.");
+  }
+
+  const estimateTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
+  const in_tokens = resultEvent.usage?.input_tokens ?? estimateTokens(combinedPrompt);
+  const out_tokens = resultEvent.usage?.output_tokens ?? estimateTokens(text);
+  const resolvedModelId =
+    modelId ??
+    (resultEvent.modelUsage ? Object.keys(resultEvent.modelUsage)[0] : undefined) ??
+    "claude-default";
+
+  emitModelCallLog(
+    `claude success: model_id=${resolvedModelId} input_tokens=${in_tokens} output_tokens=${out_tokens} cost_usd=${resultEvent.total_cost_usd ?? "?"}`,
+  );
+
+  return {
+    text,
+    input_tokens: in_tokens,
+    output_tokens: out_tokens,
+    model_id: resolvedModelId,
+    effective_base_url: "claude-cli://oauth",
+    declared_billing_mode: authMode === "api_key" ? "per_token" : "subscription",
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Plan-aware dispatch (Review Recovery PR-1)
 // ---------------------------------------------------------------------------
 
@@ -651,6 +838,10 @@ async function dispatchByPlan(
       config.reasoning_effort,
       config.service_tier,
     );
+  }
+  if (plan.provider_identity === "claude") {
+    const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.claude;
+    return callClaudeCli(systemPrompt, userPrompt, modelId);
   }
   if (plan.provider_identity === "anthropic") {
     const apiKey = readEnvApiKey(
@@ -743,6 +934,14 @@ export async function callLlm(
       config.model_id ?? config.models_per_provider?.codex,
       config.reasoning_effort,
       config.service_tier,
+    );
+  }
+
+  if (config?.provider === "claude") {
+    return callClaudeCli(
+      systemPrompt,
+      userPrompt,
+      config.model_id ?? config.models_per_provider?.claude,
     );
   }
 

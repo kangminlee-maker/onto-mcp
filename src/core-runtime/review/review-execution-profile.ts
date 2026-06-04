@@ -18,6 +18,7 @@ export type ReviewWorkerExecutor = "codex" | "direct_call" | "mock";
 
 export type ReviewExecutionHost =
   | "codex"
+  | "claude"
   | "standalone"
   | "openai"
   | "anthropic"
