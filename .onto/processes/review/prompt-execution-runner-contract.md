@@ -56,6 +56,7 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
    - `direct-call`
 9. host runtime
    - `codex`
+   - `claude` (claude CLI worker — `executor=claude`, canonical instance `worker_claude`)
    - `openai`
    - `anthropic`
    - `grok`
@@ -139,6 +140,10 @@ npm run review:run-prompt-execution -- \
 - `worker + codex` (Codex CLI 경로)
 - `worker + direct-call` (API/local provider 경로)
 - `worker + mock` (conformance/test 경로)
+
+canonical 등록·구현 예정(설계 `development-records/design/claude-code-executor-design.md` §5.1–5.2, Phase 1):
+
+- `worker + claude` (Claude CLI 경로 — `claude -p`, core-lexicon `worker_claude`)
 
 원칙:
 

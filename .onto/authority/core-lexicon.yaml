@@ -472,6 +472,7 @@ provisional_terms:
         - "src/core-runtime/discovery/host-detection.ts (canonical seat)"
       notes:
         - "Host/team capability matrix는 canonical runtime path에서 제거했다. 현재 execution route는 worker, direct-call, mock 세 경로로 닫는다."
+        - "예외(실험적): host_orchestrated는 canonical에 포함하지 않는 실험적 route로, 명시적 opt-in + host=claude-code 게이트 하에서만 nested/flat(aggregator) 토폴로지로 제한 허용한다. canonical 3경로 닫힘은 불변. 상세: LlmAgentSpawnRealization.experimental_instances, .onto/processes/review/host-orchestrated-execution-contract.md."
 
     main_worker_llm_axis:
       term_id: main_worker_llm_axis
@@ -835,7 +836,7 @@ entities:
   LlmAgentSpawnRealization:
     canonical_label: "LlmAgentSpawnRealization"
     korean_label: "LLM 에이전트 생성 실현"
-    definition: "review 작업에서 lens reasoning unit을 어떤 실행 경로로 호출하는가를 규정하는 축. 현재 onto-mcp canonical route는 worker_codex, direct_call_provider, mock 세 instance로 닫는다."
+    definition: "review 작업에서 lens reasoning unit을 어떤 실행 경로로 호출하는가를 규정하는 축. canonical route instance: worker_codex, worker_claude, direct_call_provider, mock (realization 축은 worker, direct-call, mock 셋으로 닫힘). worker_claude는 worker realization의 provider 확장(worker_codex sibling)이며 닫힌 host/team 결정과 무관하다. host 실행 경로(host-orchestrated)는 canonical이 아니라 experimental_instances로 격리해 명시적 opt-in + host=claude-code 게이트 하에서만 제한 허용한다(아래 experimental_instances 참조)."
     core_value: "이 개념이 없으면 execution_realization과 provider/auth 설정이 단순 문자열 조합으로 흩어져, 어떤 경로가 독립 context를 제공하고 어떤 경로가 direct HTTP 호출인지 판단하기 어렵다."
     attributes:
       shared: []
@@ -846,6 +847,7 @@ entities:
             runtime_main: "TS runtime main path가 session과 dispatch를 준비"
             external_worker: "외부 worker가 자체 orchestration"
             direct_runtime_call: "TS runtime이 provider API/local endpoint를 직접 호출"
+            host_agent_team: "host(Claude Code) 세션이 자기 Agent teams/subagent로 dispatch·실행 — 실험적(experimental) 경로 전용"
         context_cost:
           definition: "메인 세션 context 소비 특성"
           values:
@@ -855,6 +857,7 @@ entities:
           definition: "실행 비용이 청구되는 자원 rail (누가·어떤 계정이 지불하느냐). 과금 방식(subscription vs per-token 등) 자체의 분류는 별도 개념 `LlmBillingMode`가 담당 — 이 필드는 rail 식별만 한다."
           values:
             chatgpt_account: "~/.codex/auth.json OAuth mode 경유 chatgpt 계정이 지불"
+            claudeai_account: "claude.ai OAuth 구독 계정이 지불 — claude CLI worker(worker_claude) 및 host-orchestrated(claude-code) 경로"
             api_provider_account: "OPENAI/ANTHROPIC/XAI 등 provider API key 계정이 지불"
             local_or_self_hosted: "로컬 모델 또는 자체 호스팅 (외부 지불 없음)"
     instances:
@@ -865,6 +868,13 @@ entities:
         context_cost: "independent"
         billing_source: "chatgpt_account"
         notes: "Canonical v3 경로는 actor별 `review.execution.actors.*.llm.auth=oauth` + `provider=openai`. codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
+      worker_claude:
+        execution_realization: "worker"
+        host_runtime: "claude"
+        orchestration_locus: "external_worker"
+        context_cost: "independent"
+        billing_source: "claudeai_account | api_provider_account"
+        notes: "claude CLI(`claude -p`)를 단일턴 subprocess worker로 호출(worker_codex와 대칭). OAuth 구독(claude.ai) 또는 ANTHROPIC_API_KEY. host=claude-code 게이트와 무관한 host-agnostic worker 경로(executor=claude). 과금 모드는 LlmBillingMode subscription(oauth)/per-token(api_key) 참조. 출력은 stdout JSON(stream-event 배열의 type=result 요소; usage/total_cost_usd 포함)."
       direct_call_provider:
         execution_realization: "direct-call"
         host_runtime: "openai | anthropic | grok | lmstudio"
@@ -879,6 +889,30 @@ entities:
         context_cost: "bounded_direct_call"
         billing_source: "local_or_self_hosted"
         notes: "테스트 전용 deterministic executor."
+    experimental_instances:
+      host_orchestrated:
+        lifecycle_status: "experimental"
+        execution_realization: "host-orchestrated"
+        host_runtime: "claude-code"
+        orchestration_locus: "host_agent_team"
+        context_cost: "independent"
+        billing_source: "claudeai_account | api_provider_account"
+        gated_by: "명시적 opt-in 플래그 + host=claude-code 감지. 미설정 시 fail-closed (canonical 3경로로만 동작)."
+        permitted_topologies: ["nested-workers", "main-workers"]
+        excluded_topologies: ["peer-workers", "teamlead-peer-workers"]
+        rationale: >
+          Claude Code CLI(OAuth) 복귀 + Agent teams 메커니즘 실측 검증(2026-06-03)으로 host 실행이
+          가능해짐. onto는 LLM을 spawn하지 않고 directive(execution-plan) 발행 + canonical output seat
+          재수집 + 기존 structural gate/assemble만 수행한다.
+        removal_history: >
+          host/team capability는 커밋 31c25f7 "Simplify review MCP runtime"(2026-05-26)에서 canonical
+          route로부터 제거됨(teamcreate-lens-deliberation-executor, host-detection.ts capability matrix 등
+          → development-records/archive/retired-processes-20260526/). 제거 사유: 단순화·개념 경제, 당시
+          headless CLI 구동 불가, 비결정성·검증 불가(env-gated 실험). 본 carve-out은 그 중 비결정 경로
+          (peer/team live deliberation)를 제외하고 결정론적 nested/flat(aggregator)만 실험 허용하여
+          제거 사유를 재유발하지 않는다.
+        canonical_invariant: "canonical instances(worker_codex/direct_call_provider/mock)는 불변. 본 항목은 canonical이 아니다."
+        contract_ref: ".onto/processes/review/host-orchestrated-execution-contract.md"
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"

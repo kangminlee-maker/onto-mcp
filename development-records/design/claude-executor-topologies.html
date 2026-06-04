@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>onto · 리뷰 실행 토폴로지 (4모델 · 확정판)</title>
+<style>
+  :root{
+    --onto:#2563eb; --worker:#0d9488; --host:#b45309; --lens:#7c3aed;
+    --agg:#0369a1; --peer:#be123c;
+    --ink:#1f2937; --muted:#6b7280; --line:#cbd5e1; --bg:#f8fafc; --card:#fff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;padding:24px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--muted);margin:0 0 16px;font-size:13px;max-width:980px}
+  .verified{display:inline-block;background:#dcfce7;color:#15803d;border:1px solid #86efac;
+    border-radius:6px;padding:1px 8px;font-size:11.5px;font-weight:700}
+  .axes{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin:0 0 18px}
+  .axis{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px}
+  .axis b{display:block;margin-bottom:4px;font-size:13px}
+  table.matrix{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line);
+    border-radius:10px;overflow:hidden;font-size:12.5px;margin:0 0 20px}
+  table.matrix th,table.matrix td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  table.matrix th{background:#f1f5f9;font-size:12px}
+  table.matrix td.no{color:var(--muted);background:#fafafa}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 16px;font-size:12px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column}
+  .card.agg{border-top:4px solid var(--agg)} .card.peer{border-top:4px solid var(--peer)}
+  .tag{display:inline-block;font-weight:700;font-size:12px;color:#fff;border-radius:6px;padding:2px 9px}
+  .t-agg{background:var(--agg)} .t-peer{background:var(--peer)}
+  .card h2{font-size:15px;margin:9px 0 2px}
+  .card .role{font-size:12px;color:var(--muted);margin:0 0 12px;min-height:32px}
+  .flow{flex:1;display:flex;flex-direction:column;align-items:center;margin:2px 0 12px}
+  .box{border-radius:8px;padding:7px 10px;width:100%;text-align:center;font-size:12px;border:1.5px solid;background:#fff}
+  .box small{display:block;color:var(--muted);font-size:10.5px;margin-top:2px}
+  .b-onto{border-color:var(--onto);color:var(--onto);font-weight:600}
+  .b-worker{border-color:var(--worker);color:var(--worker)}
+  .b-host{border-color:var(--host);color:var(--host);font-weight:600}
+  .b-lens{border-color:var(--lens);color:var(--lens)}
+  .arrow{color:var(--muted);font-size:13px;line-height:1.2;margin:5px 0;text-align:center}
+  .row{display:flex;gap:6px;width:100%}
+  .row .box{flex:1;padding:6px 3px;font-size:10.5px}
+  .meta{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:11.5px;margin-top:auto;
+    border-top:1px dashed var(--line);padding-top:10px}
+  .meta b{color:var(--muted);font-weight:600}
+  .ok{color:#15803d;font-weight:600}.warn{color:#b45309;font-weight:600}
+  .foot{margin-top:22px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:12px;max-width:1000px}
+  .foot b{color:var(--ink)}
+  code{background:#f1f5f9;border-radius:4px;padding:1px 5px;font-size:11.5px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#0f172a}
+</style>
+</head>
+<body>
+  <h1>onto 리뷰 실행 토폴로지 — 4모델 (확정판)</h1>
+  <p class="sub">"N개 lens를 누가·어떤 팀 구조로 실행하나". 두 축으로 정리: <b>executor 계열</b>(누가 LLM을 소유) × <b>topology</b>(팀 구조). deliberation 색: <b style="color:var(--agg)">파랑=aggregator(현행 onto)</b> / <b style="color:var(--peer)">빨강=live peer(신능력)</b>.</p>
+
+  <div class="axes">
+    <div class="axis"><b>축 1 · executor 계열 (LLM 소유)</b>
+      <span class="dot" style="background:var(--worker)"></span> <b style="display:inline;color:var(--worker)">onto subprocess</b> — <code>codex exec</code> / <code>claude -p</code> CLI worker. <b>host 무관</b>.<br>
+      <span class="dot" style="background:var(--host)"></span> <b style="display:inline;color:var(--host)">host Claude Code</b> — teammate / subagent. <b>host=claude-code 한정</b>.
+    </div>
+    <div class="axis"><b>축 2 · topology (팀 구조)</b>
+      <b>nested</b> 1 버퍼 → N inner · <b>flat</b> N 직접 · <b>flat+peer</b> N + peer SendMessage · <b>flat+teamlead+peer</b> N+1(teamlead) + peer
+    </div>
+  </div>
+
+  <table class="matrix">
+    <tr><th>topology \ executor</th><th>onto subprocess (CLI)</th><th>host Claude Code</th><th>deliberation</th></tr>
+    <tr><td><b>nested</b></td>
+        <td>outer CLI → inner CLI ×N</td>
+        <td>teammate → subagent ×N <span class="verified">✓ 실측</span></td>
+        <td style="color:var(--agg)">aggregator</td></tr>
+    <tr><td><b>flat</b></td>
+        <td>main → CLI worker ×N</td>
+        <td>main → subagent ×N <span class="verified">✓ 실측</span></td>
+        <td style="color:var(--agg)">aggregator</td></tr>
+    <tr><td><b>flat+peer</b></td>
+        <td class="no">— (CLI엔 SendMessage 없음)</td>
+        <td>main → teammate ×N (peer 통신) <span class="verified">✓ 실측</span></td>
+        <td style="color:var(--peer)">live peer</td></tr>
+    <tr><td><b>flat+teamlead+peer</b></td>
+        <td class="no">—</td>
+        <td>main → teamlead + worker ×N (teammate) <span class="verified">✓ 실측</span></td>
+        <td style="color:var(--peer)">live peer</td></tr>
+  </table>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--onto)"></i> onto / main 런타임</span>
+    <span><i class="dot" style="background:var(--worker)"></i> CLI worker (<code>codex exec</code>/<code>claude -p</code>)</span>
+    <span><i class="dot" style="background:var(--host)"></i> teammate (full 세션)</span>
+    <span><i class="dot" style="background:var(--lens)"></i> subagent / lens 단위</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- nested -->
+    <div class="card agg">
+      <div><span class="tag t-agg">nested</span></div>
+      <h2>nested-workers</h2>
+      <p class="role">버퍼 1개(teammate/outer CLI)가 lens마다 inner를 fan-out하고 취합. <b>main context가 N에 무관하게 상수 → 가장 깨끗</b>.</p>
+      <div class="flow">
+        <div class="box b-onto">main / onto<small>버퍼 1개만 띄움</small></div>
+        <div class="arrow">↓ 생성 1</div>
+        <div class="box b-host">buffer<small>host: <b>teammate</b> · CLI: <b>outer codex/claude</b></small></div>
+        <div class="arrow">↓ buffer가 fan-out (host: teammate→subagent ✓)</div>
+        <div class="row">
+          <div class="box b-lens">lens A</div><div class="box b-lens">lens B</div><div class="box b-lens">lens C</div>
+        </div>
+        <div class="arrow">↑ buffer가 취합 → main엔 요약 1건</div>
+      </div>
+      <div class="meta">
+        <b>executor</b><span>CLI · host 둘 다</span>
+        <b>host</b><span class="ok">무관 (host판은 claude-code)</span>
+        <b>main context</b><span class="ok">최소 (상수)</span>
+        <b>deliberation</b><span style="color:var(--agg)">aggregator (현행 정합)</span>
+      </div>
+    </div>
+
+    <!-- flat -->
+    <div class="card agg">
+      <div><span class="tag t-agg">flat</span></div>
+      <h2>flat</h2>
+      <p class="role">main이 lens마다 일꾼을 직접 N개. 버퍼 없음, 결과를 직접 회수. SendMessage·idle 없음.</p>
+      <div class="flow">
+        <div class="box b-onto">main / onto<small>N개 직접 생성</small></div>
+        <div class="arrow">↓ 생성 N (병렬)</div>
+        <div class="row">
+          <div class="box b-lens">lens A<small>subagent<br>/CLI</small></div>
+          <div class="box b-lens">lens B</div>
+          <div class="box b-lens">lens C</div>
+        </div>
+        <div class="arrow">↑ 결과 N개 직접 회수</div>
+        <div class="box b-onto" style="opacity:.5">synthesize</div>
+      </div>
+      <div class="meta">
+        <b>executor</b><span>CLI · host 둘 다</span>
+        <b>host</b><span class="ok">무관</span>
+        <b>main context</b><span class="ok">결과 N개 인라인 · chatter 0 ✓실측</span>
+        <b>deliberation</b><span style="color:var(--agg)">aggregator (현행 정합)</span>
+      </div>
+    </div>
+
+    <!-- flat+peer -->
+    <div class="card peer">
+      <div><span class="tag t-peer">flat+peer</span></div>
+      <h2>flat + peer</h2>
+      <p class="role">main이 teammate N개 생성, teammate끼리 SendMessage로 <b>live deliberation</b>. teamlead 없음.</p>
+      <div class="flow">
+        <div class="box b-onto">main<small>TeamCreate + teammate N 생성</small></div>
+        <div class="arrow">↓ 생성 N</div>
+        <div class="row">
+          <div class="box b-host">tm A</div><div class="box b-host">tm B</div><div class="box b-host">tm C</div>
+        </div>
+        <div class="arrow">⇄ teammate끼리 SendMessage (live deliberation)</div>
+        <div class="box b-onto" style="opacity:.5">main ← idle 알림 N (잔류)</div>
+      </div>
+      <div class="meta">
+        <b>executor</b><span>host 전용</span>
+        <b>host</b><span class="warn">claude-code 한정</span>
+        <b>main context</b><span class="warn">idle×N + peer-DM 요약/메시지 (전문 off-load) ✓실측</span>
+        <b>deliberation</b><span style="color:var(--peer)">live peer (신능력)</span>
+      </div>
+    </div>
+
+    <!-- flat+teamlead+peer -->
+    <div class="card peer">
+      <div><span class="tag t-peer">flat+teamlead+peer</span></div>
+      <h2>flat + teamlead + peer</h2>
+      <p class="role">main이 teamlead 포함 teammate N+1개 생성. teamlead가 프롬프트 생성·SendMessage로 작업 리드, worker끼리 live deliberation.</p>
+      <div class="flow">
+        <div class="box b-onto">main<small>TeamCreate + teammate N+1 생성</small></div>
+        <div class="arrow">↓ 생성 N+1</div>
+        <div class="box b-host">teamlead (teammate)<small>프롬프트 생성 · SendMessage 리드</small></div>
+        <div class="arrow">↓ SendMessage 분배 / ⇄ worker live deliberation</div>
+        <div class="row">
+          <div class="box b-host">worker A</div><div class="box b-host">worker B</div><div class="box b-host">worker C</div>
+        </div>
+        <div class="arrow">↑ teamlead 취합 (dispatch는 teamlead 흡수)</div>
+      </div>
+      <div class="meta">
+        <b>executor</b><span>host 전용</span>
+        <b>host</b><span class="warn">claude-code 한정</span>
+        <b>main context</b><span class="warn">idle×(N+1) + peer-DM 요약 (dispatch 전문 off-load) ✓실측</span>
+        <b>deliberation</b><span style="color:var(--peer)">live peer (신능력)</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="foot">
+    <p><b>실측 검증 결과 (2026-06-03)</b> — 도구셋: <b>subagent</b> = Bash·Read·Write·Edit O, <b>Agent·SendMessage X</b>(∴ fan-out·peer 불가, 인라인 반환만). <b>teammate</b> = 위 + <b>Agent·SendMessage O</b>. 차단(실측): ❌ subagent→subagent, ❌ teammate→teammate, ❌ 재귀 TeamCreate. 가능(실측): ✅ <b>teammate→subagent</b>(PONG), ✅ <b>teammate↔teammate 양방향 SendMessage</b>(lead 경유 없이 직접, 7+5=12 회신). main 관측: idle 알림은 lead(메인)에 옴(실측), <b>teammate끼리 DM 전문은 off-load</b>되고 메인엔 <b>요약 한 줄</b>만 노출.</p>
+    <p><b>deliberation 매핑</b> — nested·flat = aggregator-mediated(onto 현행 <code>controlled_lens_deliberation</code>→synthesize와 정합) / flat+peer·flat+teamlead+peer = live peer(onto에 없던 신능력).</p>
+    <p><b>구현 우선순위</b> — ① onto subprocess <b>flat·nested</b>(codex 패턴에 claude 어댑터 추가, host 무관) → ② host Claude Code <b>flat·nested</b>(현행 deliberation 정합, main 최소) → ③ host <b>peer 계열</b>(live deliberation 신능력, 마지막).</p>
+  </div>
+</body>
+</html>
