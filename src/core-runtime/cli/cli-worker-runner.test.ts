@@ -14,6 +14,9 @@ import {
 const ECHO_STDIN = "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{process.stdout.write('OUT:'+d.trim());process.exit(0)})";
 const FAIL_EXIT3 = "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{process.stderr.write('boom');process.exit(3)})";
 const EXIT0_NO_OUTPUT = "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{process.exit(0)})";
+// Drains stdin, then stays alive indefinitely so the runner's timeout / abort
+// kill path can be exercised.
+const HANG_FOREVER = "process.stdin.resume();setInterval(()=>{},1000)";
 
 function fakeAdapter(script: string, binary = process.execPath): CliWorkerAdapter {
   return {
@@ -80,5 +83,22 @@ describe("runCliWorkerUnit", () => {
     await expect(
       runCliWorkerUnit(fakeAdapter(ECHO_STDIN, "onto-nonexistent-binary-xyz"), ctx()),
     ).rejects.toThrow("FAKE-NOT-FOUND");
+  });
+
+  it("times out a hanging worker and preserves the running log", async () => {
+    await expect(
+      runCliWorkerUnit(fakeAdapter(HANG_FOREVER), ctx(), { timeoutMs: 300 }),
+    ).rejects.toThrow(/timed out/);
+    expect(fs.existsSync(runningLog())).toBe(false);
+    expect(fs.existsSync(nestedErr())).toBe(true);
+  });
+
+  it("cancels a running worker via AbortSignal and preserves the running log", async () => {
+    const ac = new AbortController();
+    const pending = runCliWorkerUnit(fakeAdapter(HANG_FOREVER), ctx(), { signal: ac.signal });
+    setTimeout(() => ac.abort(), 100);
+    await expect(pending).rejects.toThrow(/cancelled/);
+    expect(fs.existsSync(runningLog())).toBe(false);
+    expect(fs.existsSync(nestedErr())).toBe(true);
   });
 });
