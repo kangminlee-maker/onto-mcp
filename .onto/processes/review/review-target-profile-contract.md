@@ -133,7 +133,7 @@ representation rather than the original artifact set.
 
 ---
 
-## 6. Target Material Kind Compatibility
+## 6. Target Material Kind Alignment
 
 The current profile fixes how the target entered review, what artifact role it
 carries, what material kind it appears to be, and what closure obligation

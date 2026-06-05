@@ -78,7 +78,7 @@ function claim(args: {
   name: string | null;
   statement: string | null;
   evidence_refs: ReconstructEvidenceRef[];
-  fallbackName: string;
+  defaultName: string;
 }): ReconstructSeedClaim | null {
   if (!args.id) return null;
   return {
@@ -86,8 +86,8 @@ function claim(args: {
     seed_ref_path: args.seed_ref_path,
     projection_source: "actionable_ontology_seed",
     evidence_policy: "direct_evidence_only",
-    name: args.name ?? args.fallbackName,
-    statement: args.statement ?? args.name ?? args.fallbackName,
+    name: args.name ?? args.defaultName,
+    statement: args.statement ?? args.name ?? args.defaultName,
     evidence_refs: args.evidence_refs,
   };
 }
@@ -97,7 +97,7 @@ function collectRecordClaims(args: {
   idKey: string;
   nameKeys: string[];
   statementKeys: string[];
-  fallbackPrefix: string;
+  defaultPrefix: string;
   pathPrefix: string;
   evidence?: (record: Record<string, unknown>) => ReconstructEvidenceRef[];
 }): ReconstructSeedClaim[] {
@@ -109,7 +109,7 @@ function collectRecordClaims(args: {
       statement:
         args.statementKeys.map((key) => stringValue(record[key])).find(Boolean) ?? null,
       evidence_refs: args.evidence ? args.evidence(record) : directEvidence(record),
-      fallbackName: `${args.fallbackPrefix} ${index + 1}`,
+      defaultName: `${args.defaultPrefix} ${index + 1}`,
     }))
     .filter((item): item is ReconstructSeedClaim => item !== null);
 }
@@ -132,7 +132,7 @@ export function ontologySeedClaimProjections(
     name: stringValue(seedIdentity?.title) ?? "Ontology Seed Purpose",
     statement: stringValue(purpose?.declared_purpose),
     evidence_refs: directEvidence(purpose),
-    fallbackName: "Ontology Seed Purpose",
+    defaultName: "Ontology Seed Purpose",
   });
 
   return [
@@ -142,7 +142,7 @@ export function ontologySeedClaimProjections(
       idKey: "concept_id",
       nameKeys: ["name"],
       statementKeys: ["definition", "purpose_role"],
-      fallbackPrefix: "Concept",
+      defaultPrefix: "Concept",
       pathPrefix: "conceptual_frame.concepts",
     }),
     ...collectRecordClaims({
@@ -150,7 +150,7 @@ export function ontologySeedClaimProjections(
       idKey: "association_id",
       nameKeys: ["association_kind"],
       statementKeys: ["statement"],
-      fallbackPrefix: "Association",
+      defaultPrefix: "Association",
       pathPrefix: "conceptual_frame.associations",
     }),
     ...collectRecordClaims({
@@ -158,7 +158,7 @@ export function ontologySeedClaimProjections(
       idKey: "object_type_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Object Type",
+      defaultPrefix: "Object Type",
       pathPrefix: "semantic_layer.object_types",
     }),
     ...collectRecordClaims({
@@ -166,7 +166,7 @@ export function ontologySeedClaimProjections(
       idKey: "link_type_id",
       nameKeys: ["business_meaning"],
       statementKeys: ["business_meaning"],
-      fallbackPrefix: "Link Type",
+      defaultPrefix: "Link Type",
       pathPrefix: "semantic_layer.link_types",
     }),
     ...collectRecordClaims({
@@ -174,7 +174,7 @@ export function ontologySeedClaimProjections(
       idKey: "value_type_id",
       nameKeys: ["name"],
       statementKeys: ["representation"],
-      fallbackPrefix: "Value Type",
+      defaultPrefix: "Value Type",
       pathPrefix: "semantic_layer.value_types",
     }),
     ...collectRecordClaims({
@@ -182,7 +182,7 @@ export function ontologySeedClaimProjections(
       idKey: "constraint_id",
       nameKeys: ["constraint_kind"],
       statementKeys: ["statement"],
-      fallbackPrefix: "Constraint",
+      defaultPrefix: "Constraint",
       pathPrefix: "semantic_layer.constraints",
     }),
     ...collectRecordClaims({
@@ -190,7 +190,7 @@ export function ontologySeedClaimProjections(
       idKey: "actor_type_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Actor Type",
+      defaultPrefix: "Actor Type",
       pathPrefix: "dynamic_layer.actor_types",
     }),
     ...collectRecordClaims({
@@ -198,7 +198,7 @@ export function ontologySeedClaimProjections(
       idKey: "role_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Actor Role",
+      defaultPrefix: "Actor Role",
       pathPrefix: "dynamic_layer.actor_roles",
     }),
     ...collectRecordClaims({
@@ -206,7 +206,7 @@ export function ontologySeedClaimProjections(
       idKey: "policy_id",
       nameKeys: ["permission_kind"],
       statementKeys: ["condition", "permission_kind"],
-      fallbackPrefix: "Permission Policy",
+      defaultPrefix: "Permission Policy",
       pathPrefix: "dynamic_layer.permission_policies",
     }),
     ...collectRecordClaims({
@@ -214,7 +214,7 @@ export function ontologySeedClaimProjections(
       idKey: "state_model_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "State Model",
+      defaultPrefix: "State Model",
       pathPrefix: "dynamic_layer.state_models",
       evidence: (record) => nestedRecordEvidence(record, ["transitions"]),
     }),
@@ -223,7 +223,7 @@ export function ontologySeedClaimProjections(
       idKey: "rule_id",
       nameKeys: ["name", "rule_kind"],
       statementKeys: ["statement", "description"],
-      fallbackPrefix: "Lifecycle Rule",
+      defaultPrefix: "Lifecycle Rule",
       pathPrefix: "dynamic_layer.lifecycle_rules",
     }),
     ...collectRecordClaims({
@@ -231,7 +231,7 @@ export function ontologySeedClaimProjections(
       idKey: "action_type_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Action Type",
+      defaultPrefix: "Action Type",
       pathPrefix: "kinetic_layer.action_types",
     }),
     ...collectRecordClaims({
@@ -239,7 +239,7 @@ export function ontologySeedClaimProjections(
       idKey: "function_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Function",
+      defaultPrefix: "Function",
       pathPrefix: "kinetic_layer.functions",
     }),
     ...collectRecordClaims({
@@ -247,7 +247,7 @@ export function ontologySeedClaimProjections(
       idKey: "workflow_id",
       nameKeys: ["name"],
       statementKeys: ["description"],
-      fallbackPrefix: "Workflow",
+      defaultPrefix: "Workflow",
       pathPrefix: "kinetic_layer.workflows",
     }),
     ...collectRecordClaims({
@@ -255,7 +255,7 @@ export function ontologySeedClaimProjections(
       idKey: "binding_id",
       nameKeys: ["binding_kind"],
       statementKeys: ["statement"],
-      fallbackPrefix: "Source Binding",
+      defaultPrefix: "Source Binding",
       pathPrefix: "data_binding_layer.source_bindings",
     }),
     ...collectRecordClaims({
@@ -263,7 +263,7 @@ export function ontologySeedClaimProjections(
       idKey: "read_model_id",
       nameKeys: ["name"],
       statementKeys: ["transformation_summary"],
-      fallbackPrefix: "Read Model",
+      defaultPrefix: "Read Model",
       pathPrefix: "data_binding_layer.read_models",
     }),
     ...collectRecordClaims({
@@ -271,7 +271,7 @@ export function ontologySeedClaimProjections(
       idKey: "writeback_id",
       nameKeys: ["name"],
       statementKeys: ["writeback_summary", "description"],
-      fallbackPrefix: "Writeback",
+      defaultPrefix: "Writeback",
       pathPrefix: "data_binding_layer.writebacks",
     }),
     ...collectRecordClaims({
@@ -279,7 +279,7 @@ export function ontologySeedClaimProjections(
       idKey: "provenance_id",
       nameKeys: ["author_or_system"],
       statementKeys: ["timestamp_ref", "statement"],
-      fallbackPrefix: "Provenance Binding",
+      defaultPrefix: "Provenance Binding",
       pathPrefix: "data_binding_layer.provenance_bindings",
     }),
     ...collectRecordClaims({
@@ -287,7 +287,7 @@ export function ontologySeedClaimProjections(
       idKey: "limitation_id",
       nameKeys: ["limitation_kind"],
       statementKeys: ["description", "mitigation_or_next_action"],
-      fallbackPrefix: "Handoff Limitation",
+      defaultPrefix: "Handoff Limitation",
       pathPrefix: "handoff_limitations",
     }),
   ];

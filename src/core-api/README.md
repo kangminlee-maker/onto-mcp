@@ -85,8 +85,8 @@ same lexical and realpath-aware semantics while preserving surface-specific
 errors. Review execution-plan refs are validated through
 `src/core-runtime/review/execution-plan-boundary.ts` before continuation or
 direct prompt-runner execution consumes plan-owned output paths.
-Explicit domain tokens are preflighted before dispatch: exact and alias matches
-proceed, while unknown tokens return a `ReviewDomainResolutionError` with either
+Explicit domain tokens are preflighted before dispatch: exact canonical matches
+proceed, while retired aliases and unknown tokens return a `ReviewDomainResolutionError` with either
 `resolution="suggestion"` and candidate ids or `resolution="unknown"`.
 
 `reconstruct-api.ts` is the bounded facade for the reconstruct MCP surface. It

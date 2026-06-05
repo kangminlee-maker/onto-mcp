@@ -24,7 +24,7 @@
 set -euo pipefail
 
 # Structural (versioned) subdirectory prefixes. Runtime-ephemeral directories
-# remain ignored; archived command surfaces live under development-records/.
+# remain ignored; archived command surfaces stay outside the .onto allowlist.
 ALLOWED=(
   ".onto/domains"
   ".onto/roles"

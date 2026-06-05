@@ -2196,7 +2196,7 @@ describe("runReconstruct", () => {
   }
 
   function answerSupportPromptFixture(options: {
-    fallbackObservationCount?: number;
+    supplementalObservationCount?: number;
     priorityObservations?: Array<{
       observationId: string;
       sourceRef: string;
@@ -2243,7 +2243,7 @@ describe("runReconstruct", () => {
       session_id: "answer-support-prompt-fixture",
       created_at: "2026-06-04T00:00:00.000Z",
       observations: [
-        ...Array.from({ length: options.fallbackObservationCount ?? 69 }, (_, index) => ({
+        ...Array.from({ length: options.supplementalObservationCount ?? 69 }, (_, index) => ({
           observation_id: `obs-${index + 1}`,
           target_material_kind: "code" as const,
           adapter_id: "fixture",
@@ -2494,7 +2494,7 @@ describe("runReconstruct", () => {
         prioritized_observation_count: 1,
         prompt_observation_count: 64,
         prompt_visible_prioritized_observation_count: 1,
-        prompt_visible_fallback_observation_count: 63,
+        prompt_visible_supplemental_observation_count: 63,
         omitted_prioritized_observation_count: 0,
         observation_limit: 64,
         content_excerpt_char_limit: 500,
@@ -2615,14 +2615,14 @@ describe("runReconstruct", () => {
     ) => observation.observation_id)).toContain("obs-priority");
   });
 
-  it("preserves full answer-support prompt catalog order across multiple priority categories before fallback rows", async () => {
+  it("preserves full answer-support prompt catalog order across multiple priority categories before supplemental rows", async () => {
     const hintSourceRef = "/fixture/hint-priority.md";
     const requestedSourceRef = "/fixture/requested-priority.md";
     const memberSourceRef = "/fixture/member-priority.md";
     const crossSourceRef = "/fixture/cross-priority.md";
     const payload = await captureAnswerSupportPromptPayload(
       answerSupportPromptFixture({
-        fallbackObservationCount: 3,
+        supplementalObservationCount: 3,
         priorityObservations: [
           {
             observationId: "obs-cross-priority",
@@ -2673,7 +2673,7 @@ describe("runReconstruct", () => {
     const secondCrossSourceRef = "/fixture/cross-second.md";
     const payload = await captureAnswerSupportPromptPayload(
       answerSupportPromptFixture({
-        fallbackObservationCount: 2,
+        supplementalObservationCount: 2,
         priorityObservations: [
           {
             observationId: "obs-cross-second",
@@ -2739,7 +2739,7 @@ describe("runReconstruct", () => {
     const requestedSourceRef = "/fixture/requested-after-duplicate.md";
     const payload = await captureAnswerSupportPromptPayload(
       answerSupportPromptFixture({
-        fallbackObservationCount: 2,
+        supplementalObservationCount: 2,
         priorityObservations: [
           {
             observationId: "obs-requested-after-duplicate",
@@ -2785,7 +2785,7 @@ describe("runReconstruct", () => {
     const highFanoutRef = "/fixture/high-fanout-requested-source.md";
     const competingRef = "/fixture/competing-requested-source.md";
     const fixture = answerSupportPromptFixture({
-      fallbackObservationCount: 0,
+      supplementalObservationCount: 0,
       priorityObservations: [
         ...Array.from({ length: 65 }, (_, index) => ({
           observationId: `obs-priority-${index + 1}`,
@@ -3792,7 +3792,7 @@ describe("runReconstruct", () => {
         result.reconstructRunManifest.artifact_refs.competency_questions!,
       );
     const sourcePurposeReuseProvenance = await readYaml<{
-      compatibility?: {
+      reuse_match?: {
         competency_question_assessment_projection_contract_version?: string;
         competency_question_assessment_projection_contract_sha256?: string | null;
         source_scout_pack_sha256?: string | null;
@@ -3801,7 +3801,7 @@ describe("runReconstruct", () => {
       };
     }>(path.join(sessionRoot, "source-purpose-candidates.yaml.reuse-provenance.yaml"));
     const ontologySeedReuseProvenance = await readYaml<{
-      compatibility?: {
+      reuse_match?: {
         competency_question_assessment_projection_contract_version?: string;
         competency_question_assessment_projection_contract_sha256?: string | null;
         source_scout_pack_sha256?: string | null;
@@ -3811,7 +3811,7 @@ describe("runReconstruct", () => {
       };
     }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
     const competencyQuestionAssessmentReuseProvenance = await readYaml<{
-      compatibility?: {
+      reuse_match?: {
         competency_question_assessment_projection_contract_version?: string;
         competency_question_assessment_projection_contract_sha256?: string | null;
       };
@@ -3927,44 +3927,44 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain(postMaturationScoutPackValidationRef);
     expect(result.finalOutputText)
       .toContain(postMaturationGateProjectionValidationRef);
-    expect(sourcePurposeReuseProvenance.compatibility?.source_scout_pack_sha256)
+    expect(sourcePurposeReuseProvenance.reuse_match?.source_scout_pack_sha256)
       .toHaveLength(64);
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
     ).toBe("competency_question_assessment_compact_projection:v2");
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
     ).toHaveLength(64);
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
         ?.source_observation_lineage_index_validation_sha256,
     ).toHaveLength(64);
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
         ?.seed_authoring_readiness_validation_sha256,
     ).toBeNull();
-    expect(ontologySeedReuseProvenance.compatibility?.source_scout_pack_sha256)
+    expect(ontologySeedReuseProvenance.reuse_match?.source_scout_pack_sha256)
       .toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.source_observation_lineage_index_validation_sha256,
     ).toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.seed_authoring_readiness_validation_sha256,
     ).toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.seed_authoring_readiness_taxonomy_version,
     ).toBe("seed_authoring_readiness:v1");
     expect(
-      competencyQuestionAssessmentReuseProvenance.compatibility
+      competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_version,
     ).toBe("competency_question_assessment_compact_projection:v2");
     expect(
-      competencyQuestionAssessmentReuseProvenance.compatibility
+      competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
     ).toHaveLength(64);
 
@@ -4150,7 +4150,7 @@ describe("runReconstruct", () => {
       prompt_char_limit: 49_000,
     }))).not.toBe(competencyQuestionAssessmentProjectionContractSha256);
     expect(
-      competencyQuestionAssessmentReuseProvenance.compatibility
+      competencyQuestionAssessmentReuseProvenance.reuse_match
         ?.competency_question_assessment_projection_contract_sha256,
     ).toBe(competencyQuestionAssessmentProjectionContractSha256);
     expect(
@@ -4495,7 +4495,7 @@ describe("runReconstruct", () => {
       "seed-timeout-retry-run",
     );
     let primarySeedTimedOut = false;
-    let fallbackSeedPromptSeen = false;
+    let retrySeedPromptSeen = false;
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (
         systemPrompt.includes("Author ontology-seed.yaml as an OntologySeed") &&
@@ -4511,7 +4511,7 @@ describe("runReconstruct", () => {
           "smallest valid operational seed kernel after the full seed authoring call timed out",
         )
       ) {
-        fallbackSeedPromptSeen = true;
+        retrySeedPromptSeen = true;
         return fakeLiveLlm("Author ontology-seed.yaml", userPrompt);
       }
       return fakeLiveLlm(systemPrompt, userPrompt);
@@ -4536,7 +4536,7 @@ describe("runReconstruct", () => {
 
     expect(result.status).toBe("completed");
     expect(primarySeedTimedOut).toBe(true);
-    expect(fallbackSeedPromptSeen).toBe(true);
+    expect(retrySeedPromptSeen).toBe(true);
     const ontologySeedValidation =
       await readYaml<ReconstructOntologySeedValidationArtifact>(
         result.reconstructRunManifest.artifact_refs.ontology_seed_validation!,
@@ -4611,7 +4611,7 @@ describe("runReconstruct", () => {
       "source-purpose-timeout-retry-run",
     );
     let primarySourcePurposeTimedOut = false;
-    let fallbackSourcePurposePromptSeen = false;
+    let retrySourcePurposePromptSeen = false;
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (
         systemPrompt.includes(
@@ -4629,7 +4629,7 @@ describe("runReconstruct", () => {
           "minimal source-purpose frame after the full source-purpose call timed out",
         )
       ) {
-        fallbackSourcePurposePromptSeen = true;
+        retrySourcePurposePromptSeen = true;
         return fakeLiveLlm("Author source-purpose-candidates.yaml", userPrompt);
       }
       return fakeLiveLlm(systemPrompt, userPrompt);
@@ -4655,7 +4655,7 @@ describe("runReconstruct", () => {
 
     expect(result.status).toBe("completed");
     expect(primarySourcePurposeTimedOut).toBe(true);
-    expect(fallbackSourcePurposePromptSeen).toBe(true);
+    expect(retrySourcePurposePromptSeen).toBe(true);
     const sourcePurposeValidation =
       await readYaml<ReconstructSourcePurposeCandidatesValidationArtifact>(
         path.join(sessionRoot, "source-purpose-candidates-validation.yaml"),
@@ -5676,7 +5676,7 @@ describe("runReconstruct", () => {
       provenancePath,
       stringifyYaml({
         ...provenance,
-        compatibility_hash: "0".repeat(64),
+        reuse_match_hash: "0".repeat(64),
       }),
       "utf8",
     );

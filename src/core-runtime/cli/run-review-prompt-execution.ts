@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
+import YAML from "yaml";
 import type { OntoConfig } from "../discovery/settings-chain.js";
 import type {
   DeliberationStatus,
@@ -20,10 +21,16 @@ import type {
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewExecutionStatus,
+  ReviewHostRuntime,
   ReviewIssueArtifactId,
   ReviewLensCompletionBarrierArtifact,
+  ReviewCitationAuditMetadata,
+  ReviewCitationAuditRejectionMetadata,
+  ReviewNativeAdmissionMetadata,
+  ReviewToolBoundarySkipMetadata,
   ReviewUnitKind,
   ReviewUnitExecutionResult,
+  ReviewUnitFailureKind,
 } from "../review/artifact-types.js";
 import {
   appendMarkdownLogEntry,
@@ -38,7 +45,6 @@ import {
   PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
   issueArtifactConsumerId,
   issueArtifactSpec,
-  renderIssueArtifactContext,
   renderIssueArtifactRefs,
   resolveProblemFramingProfileRef,
   validateIssueArtifactOnDisk,
@@ -71,6 +77,12 @@ import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
 } from "../observability/runtime-stream-observation.js";
+import {
+  renderReviewUnitBoundaryDetailsSection,
+} from "../review/unit-boundary-details.js";
+import {
+  parsePacketAllowedReadAuthority,
+} from "../review/packet-boundary-policy.js";
 
 export interface ReviewUnitExecutorConfig {
   bin: string;
@@ -105,6 +117,21 @@ interface ExecutionFailure {
   packet_path: string;
   output_path: string;
   message: string;
+  failure_kind: ReviewUnitFailureKind;
+}
+
+interface ReviewExecutorRunMetadata {
+  input_tokens?: number;
+  output_tokens?: number;
+  tool_calls?: number;
+  tool_iterations?: number;
+  tool_mode?: string;
+  native_admission?: ReviewNativeAdmissionMetadata;
+  tool_boundary_skips?: ReviewToolBoundarySkipMetadata;
+  citation_audit?: ReviewCitationAuditMetadata;
+  citation_audit_rejection?: ReviewCitationAuditRejectionMetadata;
+  host_runtime?: ReviewHostRuntime;
+  model_id?: string;
 }
 
 interface ExecutionOutcome {
@@ -112,6 +139,10 @@ interface ExecutionOutcome {
   success: boolean;
   startedAtMs: number;
   completedAtMs: number;
+  attemptCount?: number;
+  executorMetadata?: ReviewExecutorRunMetadata;
+  packetBytes?: number | null;
+  outputBytes?: number | null;
   failure?: ExecutionFailure;
   preservedResult?: ReviewUnitExecutionResult;
 }
@@ -184,6 +215,73 @@ function renderEffectiveBoundaryStateLog(
       (note) => `note.filesystem_scope: ${note}`,
     ),
   ].join("\n");
+}
+
+function issueArtifactOutputPaths(
+  executionPlan: ReviewExecutionPlan,
+  artifactIds: ReviewIssueArtifactId[],
+): string[] {
+  const ids = new Set(artifactIds);
+  return executionPlan.issue_artifact_prompt_packet_seats
+    .filter((seat) => ids.has(seat.artifact_id))
+    .map((seat) => seat.output_path);
+}
+
+function renderReviewUnitBoundaryContext(
+  projectRoot: string,
+  executionPlan: ReviewExecutionPlan,
+  unitId: string,
+  outputPath: string,
+  allowedReadRefs: string[],
+): string {
+  return `\n${renderReviewUnitBoundaryDetailsSection({
+    projectRoot,
+    unitId,
+    outputPath,
+    allowedReadRefs,
+    repoExplorationPolicy: "denied",
+    boundaryPolicy: executionPlan.boundary_policy,
+    effectiveBoundaryState: executionPlan.effective_boundary_state,
+    boundaryEnforcementProfile: executionPlan.boundary_enforcement_profile,
+  })}`;
+}
+
+function resolveAllowedReadRef(projectRoot: string, ref: string): string {
+  return path.isAbsolute(ref) ? ref : path.resolve(projectRoot, ref);
+}
+
+function uniqueAllowedReadRefs(projectRoot: string, refs: string[]): string[] {
+  return [
+    ...new Set(
+      refs
+        .filter((ref) => ref.trim().length > 0)
+        .map((ref) => resolveAllowedReadRef(projectRoot, ref)),
+    ),
+  ];
+}
+
+function stripReviewUnitBoundaryDetailsSections(packetText: string): string {
+  const lines = packetText.split(/\r?\n/);
+  const output: string[] = [];
+  let skippingBoundaryDetails = false;
+  for (const line of lines) {
+    const isHeading = /^\s*#{1,6}\s+\S/.test(line);
+    const isBoundaryDetailsHeading =
+      /^\s*#{1,6}\s*(?:Runtime\s+Unit\s+|Unit\s+)?Boundary\s+Details\s*$/.test(
+        line,
+      );
+    if (isBoundaryDetailsHeading) {
+      skippingBoundaryDetails = true;
+      continue;
+    }
+    if (skippingBoundaryDetails && isHeading) {
+      skippingBoundaryDetails = false;
+    }
+    if (!skippingBoundaryDetails) {
+      output.push(line);
+    }
+  }
+  return output.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd();
 }
 
 function renderLensOutputRefsSection(
@@ -352,6 +450,16 @@ function isReviewUnitTimeoutError(error: unknown): boolean {
   return error instanceof ReviewUnitTimeoutError;
 }
 
+class ReviewUnitOutputContractError extends Error {
+  readonly failureKind: ReviewUnitFailureKind;
+
+  constructor(message: string, failureKind: ReviewUnitFailureKind = "output_contract") {
+    super(message);
+    this.name = "ReviewUnitOutputContractError";
+    this.failureKind = failureKind;
+  }
+}
+
 class ReviewIssueArtifactDispatchError extends Error {
   readonly outcome: ExecutionOutcome | null;
   readonly originalError: unknown;
@@ -442,6 +550,501 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function maxUnitOutputBytes(): number {
+  const raw = process.env.ONTO_REVIEW_MAX_UNIT_OUTPUT_BYTES;
+  if (raw === undefined || raw.trim().length === 0) return 512 * 1024;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 512 * 1024;
+}
+
+async function fileSizeIfPresent(filePath: string): Promise<number | null> {
+  try {
+    return (await fs.stat(filePath)).size;
+  } catch {
+    return null;
+  }
+}
+
+function isMarkdownFenceLine(line: string): boolean {
+  return /^\s{0,3}(?:```|~~~)/.test(line);
+}
+
+function markdownHeadingRegex(heading: string): RegExp {
+  const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(#{2,3})\\s+${escaped}\\s*$`);
+}
+
+function findMarkdownHeading(
+  lines: string[],
+  heading: string,
+): { index: number; level: number } | null {
+  const headingPattern = markdownHeadingRegex(heading);
+  let inFence = false;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (isMarkdownFenceLine(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+    const match = headingPattern.exec(line);
+    if (!match) continue;
+    return { index, level: match[1]?.length ?? 0 };
+  }
+  return null;
+}
+
+function markdownSectionBody(text: string, heading: string): string | null {
+  const lines = text.split(/\r?\n/);
+  const headingMatch = findMarkdownHeading(lines, heading);
+  if (headingMatch === null) return null;
+
+  const bodyLines: string[] = [];
+  let inFence = false;
+  for (let index = headingMatch.index + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (isMarkdownFenceLine(line)) {
+      inFence = !inFence;
+      bodyLines.push(line);
+      continue;
+    }
+    const nextHeading = inFence ? null : /^(#{2,3})\s+\S/.exec(line);
+    if (nextHeading && (nextHeading[1]?.length ?? 0) <= headingMatch.level) break;
+    bodyLines.push(line);
+  }
+  return bodyLines.join("\n").trim();
+}
+
+function requireMarkdownHeadings(args: {
+  text: string;
+  outputPath: string;
+  unitId: string;
+  headings: string[];
+  requireNonEmptyBodies?: boolean;
+}): void {
+  const missing: string[] = [];
+  const empty: string[] = [];
+  for (const heading of args.headings) {
+    const body = markdownSectionBody(args.text, heading);
+    if (body === null) {
+      missing.push(heading);
+      continue;
+    }
+    if (args.requireNonEmptyBodies && body.trim().length === 0) {
+      empty.push(heading);
+    }
+  }
+  if (missing.length === 0 && empty.length === 0) return;
+  if (empty.length > 0) {
+    throw new ReviewUnitOutputContractError(
+      `Review unit ${args.unitId} output has empty required section body/bodies: ${empty.join(", ")} in ${args.outputPath}`,
+    );
+  }
+  throw new ReviewUnitOutputContractError(
+    `Review unit ${args.unitId} output is missing required section heading(s): ${missing.join(", ")} in ${args.outputPath}`,
+  );
+}
+
+function parseLensYamlListSection(args: {
+  text: string;
+  outputPath: string;
+  unitId: string;
+  heading: string;
+}): unknown[] {
+  const body = markdownSectionBody(args.text, args.heading);
+  if (body === null || body.trim().length === 0) {
+    throw new ReviewUnitOutputContractError(
+      `Review unit ${args.unitId} output section ${args.heading} must contain a YAML list body in ${args.outputPath}`,
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = YAML.parse(body);
+  } catch (error) {
+    throw new ReviewUnitOutputContractError(
+      `Review unit ${args.unitId} output section ${args.heading} has malformed YAML in ${args.outputPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new ReviewUnitOutputContractError(
+      `Review unit ${args.unitId} output section ${args.heading} must be a YAML list in ${args.outputPath}`,
+    );
+  }
+  return parsed;
+}
+
+function assertLensDomainConstraintsUsed(args: {
+  items: unknown[];
+  outputPath: string;
+  unitId: string;
+}): void {
+  for (const [index, item] of args.items.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new ReviewUnitOutputContractError(
+        `Review unit ${args.unitId} Domain Constraints Used item ${index} must be a YAML mapping in ${args.outputPath}`,
+      );
+    }
+    const record = item as Record<string, unknown>;
+    for (const field of ["source_doc", "source_version_or_snapshot_id", "anchor"]) {
+      if (typeof record[field] !== "string" || record[field].trim().length === 0) {
+        throw new ReviewUnitOutputContractError(
+          `Review unit ${args.unitId} Domain Constraints Used item ${index} must include non-empty ${field} in ${args.outputPath}`,
+        );
+      }
+    }
+  }
+}
+
+function assertLensDomainContextAssumptions(args: {
+  items: unknown[];
+  outputPath: string;
+  unitId: string;
+}): void {
+  for (const [index, item] of args.items.entries()) {
+    if (typeof item !== "string") {
+      throw new ReviewUnitOutputContractError(
+        `Review unit ${args.unitId} Domain Context Assumptions item ${index} must be a string in ${args.outputPath}`,
+      );
+    }
+  }
+}
+
+const SYNTHESIZE_PARTICIPATION_RUN_STATUS_VALUES = new Set([
+  "full",
+  "degraded",
+  "insufficient",
+]);
+const SYNTHESIZE_MISSING_LENS_REASON_VALUES = new Set([
+  "missing",
+  "failed",
+  "abstained",
+]);
+
+interface SynthesizeMissingOrFailedLensFrontmatter {
+  lens_id: string;
+  reason: string;
+}
+
+interface SynthesizeParticipationFrontmatter {
+  expected_lenses: string[];
+  received_lenses: string[];
+  missing_or_failed_lenses: SynthesizeMissingOrFailedLensFrontmatter[];
+  run_status: string;
+}
+
+function requireFrontmatterStringArray(
+  value: unknown,
+  label: string,
+  outputPath: string,
+): string[] {
+  if (!Array.isArray(value)) {
+    throw new ReviewUnitOutputContractError(
+      `${label} must be a YAML list in ${outputPath}`,
+    );
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "string" || item.trim().length === 0) {
+      throw new ReviewUnitOutputContractError(
+        `${label}[${index}] must be a non-empty string in ${outputPath}`,
+      );
+    }
+    return item;
+  });
+}
+
+function requireFrontmatterRecord(
+  value: unknown,
+  label: string,
+  outputPath: string,
+): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ReviewUnitOutputContractError(
+      `${label} must be a YAML mapping in ${outputPath}`,
+    );
+  }
+  return value as Record<string, unknown>;
+}
+
+function validateSynthesizeParticipationFrontmatter(args: {
+  metadata: Record<string, unknown> | null;
+  outputPath: string;
+}): SynthesizeParticipationFrontmatter {
+  const participation = requireFrontmatterRecord(
+    args.metadata?.participation,
+    "Synthesize frontmatter participation",
+    args.outputPath,
+  );
+  const expectedLenses = requireFrontmatterStringArray(
+    participation.expected_lenses,
+    "Synthesize frontmatter participation.expected_lenses",
+    args.outputPath,
+  );
+  const receivedLenses = requireFrontmatterStringArray(
+    participation.received_lenses,
+    "Synthesize frontmatter participation.received_lenses",
+    args.outputPath,
+  );
+  const missingOrFailed = participation.missing_or_failed_lenses;
+  if (!Array.isArray(missingOrFailed)) {
+    throw new ReviewUnitOutputContractError(
+      `Synthesize frontmatter participation.missing_or_failed_lenses must be a YAML list in ${args.outputPath}`,
+    );
+  }
+  const missingOrFailedLenses: SynthesizeMissingOrFailedLensFrontmatter[] = [];
+  for (const [index, item] of missingOrFailed.entries()) {
+    const record = requireFrontmatterRecord(
+      item,
+      `Synthesize frontmatter participation.missing_or_failed_lenses[${index}]`,
+      args.outputPath,
+    );
+    if (typeof record.lens_id !== "string" || record.lens_id.trim().length === 0) {
+      throw new ReviewUnitOutputContractError(
+        `Synthesize frontmatter participation.missing_or_failed_lenses[${index}].lens_id must be a non-empty string in ${args.outputPath}`,
+      );
+    }
+    if (
+      typeof record.reason !== "string" ||
+      !SYNTHESIZE_MISSING_LENS_REASON_VALUES.has(record.reason)
+    ) {
+      throw new ReviewUnitOutputContractError(
+        `Synthesize frontmatter participation.missing_or_failed_lenses[${index}].reason must be one of missing, failed, abstained in ${args.outputPath}`,
+      );
+    }
+    missingOrFailedLenses.push({
+      lens_id: record.lens_id,
+      reason: record.reason,
+    });
+  }
+  if (
+    typeof participation.run_status !== "string" ||
+    !SYNTHESIZE_PARTICIPATION_RUN_STATUS_VALUES.has(participation.run_status)
+  ) {
+    throw new ReviewUnitOutputContractError(
+      `Synthesize frontmatter participation.run_status must be one of full, degraded, insufficient in ${args.outputPath}`,
+    );
+  }
+  return {
+    expected_lenses: expectedLenses,
+    received_lenses: receivedLenses,
+    missing_or_failed_lenses: missingOrFailedLenses,
+    run_status: participation.run_status,
+  };
+}
+
+function assertStringSetEqual(args: {
+  actual: string[];
+  expected: string[];
+  label: string;
+  outputPath: string;
+}): void {
+  const actualSet = new Set(args.actual);
+  const expectedSet = new Set(args.expected);
+  const missing = [...expectedSet].filter((value) => !actualSet.has(value));
+  const extra = [...actualSet].filter((value) => !expectedSet.has(value));
+  const hasDuplicates = actualSet.size !== args.actual.length;
+  if (missing.length === 0 && extra.length === 0 && !hasDuplicates) return;
+  throw new ReviewUnitOutputContractError(
+    `${args.label} does not match runtime lens truth in ${args.outputPath}: ` +
+      `expected=[${args.expected.join(", ")}], actual=[${args.actual.join(", ")}]` +
+      (hasDuplicates ? ", duplicate values present" : "") +
+      (missing.length > 0 ? `, missing=[${missing.join(", ")}]` : "") +
+      (extra.length > 0 ? `, extra=[${extra.join(", ")}]` : ""),
+  );
+}
+
+function synthesizeRunStatusForLensTruth(args: {
+  expectedLensIds: string[];
+  receivedLensIds: string[];
+}): "full" | "degraded" | "insufficient" {
+  if (
+    args.expectedLensIds.length > 0 &&
+    args.receivedLensIds.length === args.expectedLensIds.length
+  ) {
+    return "full";
+  }
+  if (
+    args.receivedLensIds.length === 0 ||
+    (args.receivedLensIds.length === 1 && args.receivedLensIds[0] === "axiology")
+  ) {
+    return "insufficient";
+  }
+  return "degraded";
+}
+
+function validateSynthesizeParticipationTruth(args: {
+  text: string;
+  outputPath: string;
+  expectedLensIds: string[];
+  receivedLensIds: string[];
+}): void {
+  const metadata = parseMarkdownFrontmatter<{
+    participation?: unknown;
+  }>(args.text).metadata;
+  const participation = validateSynthesizeParticipationFrontmatter({
+    metadata: metadata as Record<string, unknown> | null,
+    outputPath: args.outputPath,
+  });
+  assertStringSetEqual({
+    actual: participation.expected_lenses,
+    expected: args.expectedLensIds,
+    label: "Synthesize frontmatter participation.expected_lenses",
+    outputPath: args.outputPath,
+  });
+  assertStringSetEqual({
+    actual: participation.received_lenses,
+    expected: args.receivedLensIds,
+    label: "Synthesize frontmatter participation.received_lenses",
+    outputPath: args.outputPath,
+  });
+  const expectedMissingLensIds = args.expectedLensIds.filter(
+    (lensId) => !args.receivedLensIds.includes(lensId),
+  );
+  assertStringSetEqual({
+    actual: participation.missing_or_failed_lenses.map((item) => item.lens_id),
+    expected: expectedMissingLensIds,
+    label: "Synthesize frontmatter participation.missing_or_failed_lenses",
+    outputPath: args.outputPath,
+  });
+  const expectedRunStatus = synthesizeRunStatusForLensTruth({
+    expectedLensIds: args.expectedLensIds,
+    receivedLensIds: args.receivedLensIds,
+  });
+  if (participation.run_status !== expectedRunStatus) {
+    throw new ReviewUnitOutputContractError(
+      `Synthesize frontmatter participation.run_status must be ${expectedRunStatus} for runtime lens truth in ${args.outputPath}; got ${participation.run_status}`,
+    );
+  }
+}
+
+function validateMarkdownOutputContract(args: {
+  dispatch: ExecutionDispatchResult;
+  outputPath: string;
+  text: string;
+}): void {
+  if (args.dispatch.unit_kind === "lens") {
+    requireMarkdownHeadings({
+      text: args.text,
+      outputPath: args.outputPath,
+      unitId: args.dispatch.unit_id,
+      headings: [
+        "Domain Constraints Used",
+        "Domain Context Assumptions",
+      ],
+    });
+    assertLensDomainConstraintsUsed({
+      items: parseLensYamlListSection({
+        text: args.text,
+        outputPath: args.outputPath,
+        unitId: args.dispatch.unit_id,
+        heading: "Domain Constraints Used",
+      }),
+      outputPath: args.outputPath,
+      unitId: args.dispatch.unit_id,
+    });
+    assertLensDomainContextAssumptions({
+      items: parseLensYamlListSection({
+        text: args.text,
+        outputPath: args.outputPath,
+        unitId: args.dispatch.unit_id,
+        heading: "Domain Context Assumptions",
+      }),
+      outputPath: args.outputPath,
+      unitId: args.dispatch.unit_id,
+    });
+    return;
+  }
+
+  if (args.dispatch.unit_kind === "deliberation") {
+    if (args.dispatch.unit_id === "controlled-deliberation") {
+      if (!args.text.trimStart().startsWith("---")) {
+        throw new ReviewUnitOutputContractError(
+          `Controlled deliberation output must start with YAML frontmatter: ${args.outputPath}`,
+        );
+      }
+      const frontmatterStatus = parseMarkdownFrontmatter<{
+        deliberation_status?: string;
+      }>(args.text).metadata?.deliberation_status;
+      if (frontmatterStatus !== "performed") {
+        throw new ReviewUnitOutputContractError(
+          `Controlled deliberation output must declare deliberation_status: performed in ${args.outputPath}`,
+        );
+      }
+      requireMarkdownHeadings({
+        text: args.text,
+        outputPath: args.outputPath,
+        unitId: args.dispatch.unit_id,
+        headings: [
+          "Consensus",
+          "Conditional Consensus",
+          "Disagreement",
+          "Deliberation Decision",
+          "Axiology-Proposed Additional Perspectives",
+          "Purpose Alignment Verification",
+          "Immediate Actions Required",
+          "Recommendations",
+          "Unique Finding Tagging",
+        ],
+      });
+      return;
+    }
+    requireMarkdownHeadings({
+      text: args.text,
+      outputPath: args.outputPath,
+      unitId: args.dispatch.unit_id,
+      headings: [
+        "Re-evaluation Summary",
+        "Accepted From Other Lenses",
+        "Contested Points",
+        "Position Changes",
+        "Final Lens Position",
+      ],
+    });
+    return;
+  }
+
+  if (args.dispatch.unit_kind === "synthesize") {
+    if (!args.text.trimStart().startsWith("---")) {
+      throw new ReviewUnitOutputContractError(
+        `Synthesize output must start with YAML frontmatter: ${args.outputPath}`,
+      );
+    }
+    const frontmatter = parseMarkdownFrontmatter<{
+      deliberation_status?: string;
+      participation?: unknown;
+    }>(args.text).metadata;
+    if (frontmatter?.deliberation_status !== "performed") {
+      throw new ReviewUnitOutputContractError(
+        `Synthesize output must acknowledge controlled deliberation with deliberation_status: performed in ${args.outputPath}`,
+      );
+    }
+    validateSynthesizeParticipationFrontmatter({
+      metadata: frontmatter as Record<string, unknown> | null,
+      outputPath: args.outputPath,
+    });
+    requireMarkdownHeadings({
+      text: args.text,
+      outputPath: args.outputPath,
+      unitId: args.dispatch.unit_id,
+      requireNonEmptyBodies: true,
+      headings: [
+        "Consensus",
+        "Conditional Consensus",
+        "Disagreement",
+        "Deliberation Decision",
+        "Axiology-Proposed Additional Perspectives",
+        "Purpose Alignment Verification",
+        "Final Review Result",
+        "Boundary Notes",
+        "Immediate Actions Required",
+        "Recommendations",
+        "Unique Finding Tagging",
+      ],
+    });
+  }
+}
+
 async function readReviewCancelRequest(
   sessionRoot: string,
 ): Promise<ReviewCancelRequestArtifact | null> {
@@ -452,13 +1055,320 @@ async function readReviewCancelRequest(
 
 async function ensureNonEmptyOutputFile(outputPath: string): Promise<void> {
   if (!(await fileExists(outputPath))) {
-    throw new Error(`Executor did not create output file: ${outputPath}`);
+    throw new ReviewUnitOutputContractError(
+      `Executor did not create output file: ${outputPath}`,
+    );
   }
 
   const fileText = await fs.readFile(outputPath, "utf8");
   if (fileText.trim().length === 0) {
-    throw new Error(`Executor created empty output file: ${outputPath}`);
+    throw new ReviewUnitOutputContractError(
+      `Executor created empty output file: ${outputPath}`,
+      "empty_output",
+    );
   }
+}
+
+async function validateUnitOutputFile(args: {
+  dispatch: ExecutionDispatchResult;
+  outputPath: string;
+}): Promise<void> {
+  await ensureNonEmptyOutputFile(args.outputPath);
+  const outputBytes = await fileSizeIfPresent(args.outputPath);
+  const maxBytes = maxUnitOutputBytes();
+  if (outputBytes !== null && outputBytes > maxBytes) {
+    throw new ReviewUnitOutputContractError(
+      `Review unit ${args.dispatch.unit_id} output is too large: ${outputBytes} bytes > ${maxBytes} bytes (${args.outputPath}).`,
+    );
+  }
+  const outputText = await fs.readFile(args.outputPath, "utf8");
+  validateMarkdownOutputContract({
+    dispatch: args.dispatch,
+    outputPath: args.outputPath,
+    text: outputText,
+  });
+}
+
+async function validateSynthesizeOutputParticipationTruth(args: {
+  outputPath: string;
+  expectedLensIds: string[];
+  receivedLensIds: string[];
+}): Promise<void> {
+  await ensureNonEmptyOutputFile(args.outputPath);
+  const outputText = await fs.readFile(args.outputPath, "utf8");
+  validateSynthesizeParticipationTruth({
+    text: outputText,
+    outputPath: args.outputPath,
+    expectedLensIds: args.expectedLensIds,
+    receivedLensIds: args.receivedLensIds,
+  });
+}
+
+function failureKindFromError(error: unknown): ReviewUnitFailureKind {
+  if (error instanceof ReviewUnitTimeoutError) return "timeout";
+  if (error instanceof ReviewUnitOutputContractError) return error.failureKind;
+  if (error instanceof Error) return failureKindFromMessage(error.message);
+  return "unknown";
+}
+
+function failureKindFromMessage(message: string): ReviewUnitFailureKind {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("empty output") ||
+    normalized.includes("empty final text")
+  ) {
+    return "empty_output";
+  }
+  if (
+    normalized.includes("did not create output file") ||
+    normalized.includes("missing output") ||
+    normalized.includes("output missing") ||
+    normalized.includes("orchestrator rejected") ||
+    normalized.includes("missing required section heading") ||
+    normalized.includes("malformed output") ||
+    normalized.includes("must start with yaml frontmatter") ||
+    normalized.includes("deliberation_status: performed")
+  ) {
+    return "output_contract";
+  }
+  return "executor_exit";
+}
+
+function shouldRetryUnitFailure(args: {
+  error: unknown;
+  attempt: number;
+  maxRetries: number;
+}): boolean {
+  if (args.attempt >= args.maxRetries) return false;
+  const failureKind = failureKindFromError(args.error);
+  if (
+    failureKind === "timeout" ||
+    failureKind === "empty_output" ||
+    failureKind === "output_contract"
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function parseExecutorRunMetadata(stdout: string): ReviewExecutorRunMetadata | undefined {
+  const trimmed = stdout.trim();
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return undefined;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const record = parsed as Record<string, unknown>;
+    const metadata: ReviewExecutorRunMetadata = {};
+    if (typeof record.input_tokens === "number") {
+      metadata.input_tokens = record.input_tokens;
+    }
+    if (typeof record.output_tokens === "number") {
+      metadata.output_tokens = record.output_tokens;
+    }
+    if (typeof record.tool_calls === "number") {
+      metadata.tool_calls = record.tool_calls;
+    }
+    if (typeof record.tool_iterations === "number") {
+      metadata.tool_iterations = record.tool_iterations;
+    }
+    if (typeof record.tool_mode === "string") {
+      metadata.tool_mode = record.tool_mode;
+    }
+    const nativeAdmission = parseNativeAdmissionMetadata(record.native_admission);
+    if (nativeAdmission) {
+      metadata.native_admission = nativeAdmission;
+    }
+    const toolBoundarySkips = parseToolBoundarySkipMetadata(
+      record.tool_boundary_skips,
+    );
+    if (toolBoundarySkips) {
+      metadata.tool_boundary_skips = toolBoundarySkips;
+    }
+    const citationAudit = parseCitationAuditMetadata(record.citation_audit);
+    if (citationAudit.audit) {
+      metadata.citation_audit = citationAudit.audit;
+    }
+    if (citationAudit.rejection) {
+      metadata.citation_audit_rejection = citationAudit.rejection;
+    }
+    if (isReviewHostRuntime(record.host_runtime)) {
+      metadata.host_runtime = record.host_runtime;
+    }
+    if (typeof record.model_id === "string") {
+      metadata.model_id = record.model_id;
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isReviewHostRuntime(value: unknown): value is ReviewHostRuntime {
+  return (
+    value === "codex" ||
+    value === "anthropic" ||
+    value === "openai" ||
+    value === "grok" ||
+    value === "lmstudio" ||
+    value === "standalone"
+  );
+}
+
+function parseCitationAuditMetadata(value: unknown): {
+  audit?: ReviewCitationAuditMetadata;
+  rejection?: ReviewCitationAuditRejectionMetadata;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  const record = value as Record<string, unknown>;
+  const quotesUnmatched = record.quotes_unmatched;
+  const quotesUnmatchedMeta = record.quotes_unmatched_meta;
+  const status = record.status;
+  const coverageStatus = record.coverage_status;
+  const failedRefs = record.failed_refs;
+  if (
+    typeof record.quotes_checked !== "number" ||
+    !Array.isArray(quotesUnmatched) ||
+    !quotesUnmatched.every((item) => typeof item === "string") ||
+    !Array.isArray(quotesUnmatchedMeta) ||
+    !quotesUnmatchedMeta.every((item) => typeof item === "string") ||
+    typeof record.attribution_count !== "number" ||
+    typeof record.min_quote_length !== "number"
+  ) {
+    return {};
+  }
+  if (status !== undefined && status !== "completed" && status !== "skipped") {
+    return {};
+  }
+  if (
+    coverageStatus !== undefined &&
+    coverageStatus !== "complete" &&
+    coverageStatus !== "partial" &&
+    coverageStatus !== "none"
+  ) {
+    return {};
+  }
+  if (
+    failedRefs !== undefined &&
+    (!Array.isArray(failedRefs) ||
+      !failedRefs.every((item) => typeof item === "string"))
+  ) {
+    return {};
+  }
+  const normalizedStatus =
+    status === "completed" || status === "skipped"
+      ? status
+      : typeof record.skip_reason === "string"
+        ? "skipped"
+        : "completed";
+  const normalizedCoverageStatus =
+    coverageStatus === "complete" ||
+    coverageStatus === "partial" ||
+    coverageStatus === "none"
+      ? coverageStatus
+      : normalizedStatus === "skipped"
+        ? "none"
+        : Array.isArray(failedRefs) && failedRefs.length > 0
+          ? "partial"
+          : "complete";
+  const normalizedFailedRefs = Array.isArray(failedRefs) ? failedRefs : [];
+  if (
+    (normalizedStatus === "skipped" && normalizedCoverageStatus !== "none") ||
+    (normalizedStatus === "completed" && normalizedCoverageStatus === "none") ||
+    (normalizedCoverageStatus === "complete" && normalizedFailedRefs.length > 0)
+  ) {
+    return {
+      rejection: {
+        reason: "contradictory_status_coverage",
+        status: normalizedStatus,
+        coverage_status: normalizedCoverageStatus,
+        ...(typeof record.skip_reason === "string"
+          ? { skip_reason: record.skip_reason }
+          : {}),
+      },
+    };
+  }
+  return {
+    audit: {
+      status: normalizedStatus,
+      coverage_status: normalizedCoverageStatus,
+      quotes_checked: record.quotes_checked,
+      quotes_unmatched: [...quotesUnmatched],
+      quotes_unmatched_meta: [...quotesUnmatchedMeta],
+      attribution_count: record.attribution_count,
+      min_quote_length: record.min_quote_length,
+      ...(typeof record.skip_reason === "string"
+        ? { skip_reason: record.skip_reason }
+        : {}),
+      ...(normalizedFailedRefs.length > 0
+        ? { failed_refs: [...normalizedFailedRefs] }
+        : {}),
+    },
+  };
+}
+
+function parseNativeAdmissionMetadata(
+  value: unknown,
+): ReviewNativeAdmissionMetadata | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const attemptedNativeToolBoundarySkips = parseToolBoundarySkipMetadata(
+    record.attempted_native_tool_boundary_skips,
+  );
+  if (
+    typeof record.requested_tool_mode !== "string" ||
+    typeof record.effective_tool_mode !== "string" ||
+    typeof record.decision !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    requested_tool_mode: record.requested_tool_mode,
+    effective_tool_mode: record.effective_tool_mode,
+    decision: record.decision,
+    ...(typeof record.reason === "string" ? { reason: record.reason } : {}),
+    ...(typeof record.allowed_read_refs_count === "number"
+      ? { allowed_read_refs_count: record.allowed_read_refs_count }
+      : {}),
+    ...(typeof record.read_authority_declared === "boolean"
+      ? { read_authority_declared: record.read_authority_declared }
+      : {}),
+    ...(typeof record.read_authority_malformed === "boolean"
+      ? { read_authority_malformed: record.read_authority_malformed }
+      : {}),
+    ...(typeof record.read_authority_failure === "string"
+      ? { read_authority_failure: record.read_authority_failure }
+      : {}),
+    ...(attemptedNativeToolBoundarySkips
+      ? { attempted_native_tool_boundary_skips: attemptedNativeToolBoundarySkips }
+      : {}),
+  };
+}
+
+function parseToolBoundarySkipMetadata(
+  value: unknown,
+): ReviewToolBoundarySkipMetadata | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.boundary_skips !== "number" ||
+    typeof record.unreadable_skips !== "number" ||
+    typeof record.oversized_skips !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    boundary_skips: record.boundary_skips,
+    unreadable_skips: record.unreadable_skips,
+    oversized_skips: record.oversized_skips,
+  };
 }
 
 async function invokeExecutor(
@@ -467,7 +1377,7 @@ async function invokeExecutor(
   sessionRoot: string,
   dispatch: ExecutionDispatchResult,
   timeoutMs: number = DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
-): Promise<void> {
+): Promise<ReviewExecutorRunMetadata | undefined> {
   await fs.mkdir(path.dirname(dispatch.output_path), { recursive: true });
 
   const detached = process.platform !== "win32";
@@ -605,13 +1515,19 @@ async function invokeExecutor(
     console.warn(`[review runner warning] ${dispatch.unit_id}: ${stderr.trim()}`);
   }
 
-  await ensureNonEmptyOutputFile(dispatch.output_path);
+  await validateUnitOutputFile({
+    dispatch,
+    outputPath: dispatch.output_path,
+  });
+  return parseExecutorRunMetadata(stdout);
 }
 
 function toUnitExecutionResult(
   outcome: ExecutionOutcome,
 ): ReviewUnitExecutionResult {
-  if (outcome.preservedResult) return outcome.preservedResult;
+  if (outcome.preservedResult) {
+    return normalizePreservedUnitExecutionResult(outcome.preservedResult);
+  }
   return {
     unit_id: outcome.dispatch.unit_id,
     unit_kind: outcome.dispatch.unit_kind,
@@ -625,6 +1541,74 @@ function toUnitExecutionResult(
     // invokeExecutor; both ends are exact to millisecond precision.
     timestamp_provenance: "runner_wallclock",
     failure_message: outcome.failure?.message ?? null,
+    failure_kind: outcome.failure?.failure_kind ?? null,
+    ...(outcome.attemptCount !== undefined
+      ? { attempt_count: outcome.attemptCount }
+      : {}),
+    ...(outcome.packetBytes !== undefined
+      ? { packet_bytes: outcome.packetBytes }
+      : {}),
+    ...(outcome.outputBytes !== undefined
+      ? { output_bytes: outcome.outputBytes }
+      : {}),
+    ...(outcome.executorMetadata?.input_tokens !== undefined
+      ? { input_tokens: outcome.executorMetadata.input_tokens }
+      : {}),
+    ...(outcome.executorMetadata?.output_tokens !== undefined
+      ? { output_tokens: outcome.executorMetadata.output_tokens }
+      : {}),
+    ...(outcome.executorMetadata?.tool_calls !== undefined
+      ? { tool_calls: outcome.executorMetadata.tool_calls }
+      : {}),
+    ...(outcome.executorMetadata?.tool_iterations !== undefined
+      ? { tool_iterations: outcome.executorMetadata.tool_iterations }
+      : {}),
+    ...(outcome.executorMetadata?.tool_mode !== undefined
+      ? { executor_tool_mode: outcome.executorMetadata.tool_mode }
+      : {}),
+    ...(outcome.executorMetadata?.native_admission !== undefined
+      ? { native_admission: outcome.executorMetadata.native_admission }
+      : {}),
+    ...(outcome.executorMetadata?.tool_boundary_skips !== undefined
+      ? { tool_boundary_skips: outcome.executorMetadata.tool_boundary_skips }
+      : {}),
+    ...(outcome.executorMetadata?.citation_audit !== undefined
+      ? { citation_audit: outcome.executorMetadata.citation_audit }
+      : {}),
+    ...(outcome.executorMetadata?.citation_audit_rejection !== undefined
+      ? {
+          citation_audit_rejection:
+            outcome.executorMetadata.citation_audit_rejection,
+        }
+      : {}),
+    ...(outcome.executorMetadata?.host_runtime !== undefined
+      ? { executor_host_runtime: outcome.executorMetadata.host_runtime }
+      : {}),
+    ...(outcome.executorMetadata?.model_id !== undefined
+      ? { model_id: outcome.executorMetadata.model_id }
+      : {}),
+  };
+}
+
+function normalizePreservedUnitExecutionResult(
+  result: ReviewUnitExecutionResult,
+): ReviewUnitExecutionResult {
+  if (result.citation_audit === undefined || result.citation_audit === null) {
+    return result;
+  }
+  const citationAudit = parseCitationAuditMetadata(result.citation_audit);
+  if (citationAudit.audit) {
+    const sanitized: ReviewUnitExecutionResult = { ...result };
+    delete sanitized.citation_audit_rejection;
+    return { ...sanitized, citation_audit: citationAudit.audit };
+  }
+  const sanitized: ReviewUnitExecutionResult = { ...result };
+  delete sanitized.citation_audit;
+  return {
+    ...sanitized,
+    ...(citationAudit.rejection
+      ? { citation_audit_rejection: citationAudit.rejection }
+      : {}),
   };
 }
 
@@ -665,9 +1649,52 @@ function outcomeFromPreviousResult(
             packet_path: result.packet_path,
             output_path: result.output_path,
             message: result.failure_message ?? "Previous unit failed.",
+            failure_kind: result.failure_kind ?? "unknown",
           },
         }
       : {}),
+    ...(result.attempt_count !== undefined
+      ? { attemptCount: result.attempt_count }
+      : {}),
+    ...(result.packet_bytes !== undefined ? { packetBytes: result.packet_bytes } : {}),
+    ...(result.output_bytes !== undefined ? { outputBytes: result.output_bytes } : {}),
+    executorMetadata: {
+      ...(result.input_tokens !== undefined && result.input_tokens !== null
+        ? { input_tokens: result.input_tokens }
+        : {}),
+      ...(result.output_tokens !== undefined && result.output_tokens !== null
+        ? { output_tokens: result.output_tokens }
+        : {}),
+      ...(result.tool_calls !== undefined && result.tool_calls !== null
+        ? { tool_calls: result.tool_calls }
+        : {}),
+      ...(result.tool_iterations !== undefined && result.tool_iterations !== null
+        ? { tool_iterations: result.tool_iterations }
+        : {}),
+      ...(result.executor_tool_mode !== undefined && result.executor_tool_mode !== null
+        ? { tool_mode: result.executor_tool_mode }
+        : {}),
+      ...(result.native_admission !== undefined && result.native_admission !== null
+        ? { native_admission: result.native_admission }
+        : {}),
+      ...(result.tool_boundary_skips !== undefined && result.tool_boundary_skips !== null
+        ? { tool_boundary_skips: result.tool_boundary_skips }
+        : {}),
+      ...(result.citation_audit !== undefined && result.citation_audit !== null
+        ? { citation_audit: result.citation_audit }
+        : {}),
+      ...(result.citation_audit_rejection !== undefined &&
+      result.citation_audit_rejection !== null
+        ? { citation_audit_rejection: result.citation_audit_rejection }
+        : {}),
+      ...(result.executor_host_runtime !== undefined &&
+      result.executor_host_runtime !== null
+        ? { host_runtime: result.executor_host_runtime }
+        : {}),
+      ...(result.model_id !== undefined && result.model_id !== null
+        ? { model_id: result.model_id }
+        : {}),
+    },
     preservedResult: result,
   };
 }
@@ -764,6 +1791,7 @@ function collectFailedUnits(
       lens_id: inferFailureLensId(artifact, result),
       packet_path: result.packet_path,
       output_path: result.output_path,
+      failure_kind: result.failure_kind ?? null,
       failure_message: result.failure_message ?? "unknown failure",
     }));
 }
@@ -1443,6 +2471,21 @@ async function unitManifestEntry(
     duration_ms: result.duration_ms,
     timestamp_provenance: result.timestamp_provenance ?? "unknown",
     failure_message: result.failure_message ?? null,
+    failure_kind: result.failure_kind ?? null,
+    attempt_count: result.attempt_count ?? null,
+    packet_bytes: result.packet_bytes ?? null,
+    output_bytes: result.output_bytes ?? null,
+    input_tokens: result.input_tokens ?? null,
+    output_tokens: result.output_tokens ?? null,
+    tool_calls: result.tool_calls ?? null,
+    tool_iterations: result.tool_iterations ?? null,
+    executor_tool_mode: result.executor_tool_mode ?? null,
+    native_admission: result.native_admission ?? null,
+    tool_boundary_skips: result.tool_boundary_skips ?? null,
+    citation_audit: result.citation_audit ?? null,
+    citation_audit_rejection: result.citation_audit_rejection ?? null,
+    executor_host_runtime: result.executor_host_runtime ?? null,
+    model_id: result.model_id ?? null,
   };
 }
 
@@ -1625,6 +2668,7 @@ async function appendExecutionFailure(
       `unit_kind: ${failure.unit_kind}`,
       `packet_path: ${failure.packet_path}`,
       `output_path: ${failure.output_path}`,
+      `failure_kind: ${failure.failure_kind}`,
       `message: ${failure.message}`,
       ...(effectiveBoundaryState
         ? [
@@ -1671,9 +2715,11 @@ async function runSingleDispatchWithRetries(args: {
 
   const startedAtMs = Date.now();
   let lastError: unknown = undefined;
+  let attemptsUsed = 0;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    attemptsUsed = attempt + 1;
     try {
-      await invokeExecutor(
+      const executorMetadata = await invokeExecutor(
         executorConfig,
         projectRoot,
         sessionRoot,
@@ -1696,10 +2742,14 @@ async function runSingleDispatchWithRetries(args: {
         success: true,
         startedAtMs,
         completedAtMs,
+        attemptCount: attempt + 1,
+        ...(executorMetadata !== undefined ? { executorMetadata } : {}),
+        packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+        outputBytes: await fileSizeIfPresent(dispatch.output_path),
       };
     } catch (error: unknown) {
       lastError = error;
-      if (!isReviewUnitTimeoutError(error) && attempt < maxRetries) {
+      if (shouldRetryUnitFailure({ error, attempt, maxRetries })) {
         const retryDelay = retryInitialDelayMs * (attempt + 1);
         console.log(
           `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -1715,7 +2765,7 @@ async function runSingleDispatchWithRetries(args: {
         );
         await sleep(retryDelay);
       }
-      if (isReviewUnitTimeoutError(error)) break;
+      if (!shouldRetryUnitFailure({ error, attempt, maxRetries })) break;
     }
   }
 
@@ -1726,7 +2776,10 @@ async function runSingleDispatchWithRetries(args: {
     packet_path: dispatch.packet_path,
     output_path: dispatch.output_path,
     message: lastError instanceof Error ? lastError.message : String(lastError),
+    failure_kind: failureKindFromError(lastError),
   };
+  const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+  const outputBytes = await fileSizeIfPresent(dispatch.output_path);
   await removeFileIfExists(dispatch.output_path);
   await appendExecutionFailure(
     executionPlan.error_log_path,
@@ -1738,20 +2791,20 @@ async function runSingleDispatchWithRetries(args: {
     success: false,
     startedAtMs,
     completedAtMs,
+    attemptCount: attemptsUsed,
+    packetBytes,
+    outputBytes,
     failure,
   };
 }
 
-async function readLensOutputsForDeliberation(
+function lensOutputsForDeliberation(
   dispatches: ExecutionDispatchResult[],
-): Promise<LensOutputForDeliberation[]> {
-  return Promise.all(
-    dispatches.map(async (dispatch) => ({
-      lens_id: dispatch.unit_id,
-      output_path: dispatch.output_path,
-      content: await fs.readFile(dispatch.output_path, "utf8"),
-    })),
-  );
+): LensOutputForDeliberation[] {
+  return dispatches.map((dispatch) => ({
+    lens_id: dispatch.unit_id,
+    output_path: dispatch.output_path,
+  }));
 }
 
 function requireDeliberationSeat(
@@ -1841,7 +2894,7 @@ async function runIssueArtifactDispatch(args: {
   );
   let lastOutcome: ExecutionOutcome | null = null;
   let lastValidationError: unknown = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 1; attempt += 1) {
     if (attempt > 0) {
       await fs.appendFile(
         seat.packet_path,
@@ -1894,7 +2947,7 @@ async function runIssueArtifactDispatch(args: {
     } catch (error) {
       lastValidationError = error;
       console.warn(
-        `[review progress] ${progress.step}/${REVIEW_PROGRESS_TOTAL_STEPS} ${args.artifactId} validation failed on attempt ${attempt + 1}/2: ${
+        `[review progress] ${progress.step}/${REVIEW_PROGRESS_TOTAL_STEPS} ${args.artifactId} validation failed on attempt ${attempt + 1}/1: ${
           error instanceof Error ? error.message : String(error)
         }`,
       );
@@ -1902,7 +2955,7 @@ async function runIssueArtifactDispatch(args: {
     }
   }
   const failureMessage =
-    "An issue artifact review unit produced malformed output after validation retry.";
+    "An issue artifact review unit produced malformed output.";
   const failedOutcome =
     lastOutcome === null
       ? null
@@ -1911,12 +2964,25 @@ async function runIssueArtifactDispatch(args: {
           success: false,
           startedAtMs: lastOutcome.startedAtMs,
           completedAtMs: Date.now(),
+          ...(lastOutcome.attemptCount !== undefined
+            ? { attemptCount: lastOutcome.attemptCount }
+            : {}),
+          ...(lastOutcome.packetBytes !== undefined
+            ? { packetBytes: lastOutcome.packetBytes }
+            : {}),
+          ...(lastOutcome.outputBytes !== undefined
+            ? { outputBytes: lastOutcome.outputBytes }
+            : {}),
+          ...(lastOutcome.executorMetadata !== undefined
+            ? { executorMetadata: lastOutcome.executorMetadata }
+            : {}),
           failure: {
             unit_id: dispatch.unit_id,
             unit_kind: dispatch.unit_kind,
             packet_path: dispatch.packet_path,
             output_path: dispatch.output_path,
             message: `${failureMessage}: ${errorMessage(lastValidationError)}`,
+            failure_kind: "output_contract" as const,
           },
         };
   try {
@@ -1982,9 +3048,7 @@ async function runControlledLensDeliberation(args: {
     ],
   );
 
-  const lensOutputs = await readLensOutputsForDeliberation(
-    successfulLensDispatches,
-  );
+  const lensOutputs = lensOutputsForDeliberation(successfulLensDispatches);
   const lensOutputById = new Map(
     lensOutputs.map((lensOutput) => [lensOutput.lens_id, lensOutput]),
   );
@@ -2026,6 +3090,14 @@ async function runControlledLensDeliberation(args: {
       throw new Error(`Missing primary lens output for deliberation: ${lensId}`);
     }
     const otherOutputs = lensOutputs.filter((lens) => lens.lens_id !== lensId);
+    const deliberationReadRefs = [
+      ownOutput.output_path,
+      ...otherOutputs.map((output) => output.output_path),
+      ...issueArtifactOutputPaths(
+        executionPlan,
+        PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+      ),
+    ];
     const packetText = buildLensControlledDeliberationPrompt({
       session_id: executionPlan.session_id,
       lens_id: lensId,
@@ -2033,6 +3105,13 @@ async function runControlledLensDeliberation(args: {
       own_output: ownOutput,
       other_outputs: otherOutputs,
       ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
+      boundary_context: renderReviewUnitBoundaryContext(
+        projectRoot,
+        executionPlan,
+        dispatch.unit_id,
+        dispatch.output_path,
+        deliberationReadRefs,
+      ),
     });
     await fs.mkdir(path.dirname(dispatch.packet_path), { recursive: true });
     await fs.writeFile(dispatch.packet_path, `${packetText.trimEnd()}\n`, "utf8");
@@ -2094,16 +3173,18 @@ async function runControlledLensDeliberation(args: {
   }
 
   const lensDeliberationResponses: LensDeliberationResponseForTeamlead[] =
-    await Promise.all(
-      deliberationDispatches.map(async (dispatch) => {
-        const lensId = dispatch.unit_id.replace(/^deliberation-/, "");
-        return {
-          lens_id: lensId,
-          response_path: dispatch.output_path,
-          content: await fs.readFile(dispatch.output_path, "utf8"),
-        };
-      }),
-    );
+    deliberationDispatches.map((dispatch) => ({
+      lens_id: dispatch.unit_id.replace(/^deliberation-/, ""),
+      response_path: dispatch.output_path,
+    }));
+  const teamleadReadRefs = [
+    ...lensOutputs.map((output) => output.output_path),
+    ...lensDeliberationResponses.map((response) => response.response_path),
+    ...issueArtifactOutputPaths(
+      executionPlan,
+      PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+    ),
+  ];
 
   const teamleadDispatch: ExecutionDispatchResult = {
     unit_id: "controlled-deliberation",
@@ -2119,6 +3200,13 @@ async function runControlledLensDeliberation(args: {
       lens_outputs: lensOutputs,
       lens_deliberation_responses: lensDeliberationResponses,
       ...(issueArtifactContext ? { issue_artifact_context: issueArtifactContext } : {}),
+      boundary_context: renderReviewUnitBoundaryContext(
+        projectRoot,
+        executionPlan,
+        teamleadDispatch.unit_id,
+        executionPlan.deliberation_output_path,
+        teamleadReadRefs,
+      ),
     });
     await fs.writeFile(
       executionPlan.teamlead_deliberation_prompt_packet_path,
@@ -2452,10 +3540,13 @@ export async function executeReviewPromptExecution(
       const startedAtMs = Date.now();
       let lastError: unknown = undefined;
       let succeeded = false;
+      let executorMetadata: ReviewExecutorRunMetadata | undefined = undefined;
+      let attemptsUsed = 0;
 
       for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        attemptsUsed = attempt + 1;
         try {
-          await invokeExecutor(
+          executorMetadata = await invokeExecutor(
             defaultExecutorConfig,
             projectRoot,
             sessionRoot,
@@ -2466,7 +3557,7 @@ export async function executeReviewPromptExecution(
           break;
         } catch (error: unknown) {
           lastError = error;
-          if (!isReviewUnitTimeoutError(error) && attempt < maxRetries) {
+          if (shouldRetryUnitFailure({ error, attempt, maxRetries })) {
             const retryDelay = retryInitialDelayMs * (attempt + 1);
             console.log(
               `[review runner] ${dispatch.unit_id} attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -2482,7 +3573,7 @@ export async function executeReviewPromptExecution(
             );
             await sleep(retryDelay);
           }
-          if (isReviewUnitTimeoutError(error)) break;
+          if (!shouldRetryUnitFailure({ error, attempt, maxRetries })) break;
         }
       }
 
@@ -2503,6 +3594,10 @@ export async function executeReviewPromptExecution(
           success: true,
           startedAtMs,
           completedAtMs,
+          attemptCount: attemptsUsed,
+          ...(executorMetadata !== undefined ? { executorMetadata } : {}),
+          packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+          outputBytes: await fileSizeIfPresent(dispatch.output_path),
         };
       } else {
         const completedAtMs = Date.now();
@@ -2512,7 +3607,10 @@ export async function executeReviewPromptExecution(
           packet_path: dispatch.packet_path,
           output_path: dispatch.output_path,
           message: lastError instanceof Error ? lastError.message : String(lastError),
+          failure_kind: failureKindFromError(lastError),
         };
+        const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+        const outputBytes = await fileSizeIfPresent(dispatch.output_path);
         await removeFileIfExists(dispatch.output_path);
         await appendExecutionFailure(
           executionPlan.error_log_path,
@@ -2524,6 +3622,9 @@ export async function executeReviewPromptExecution(
           success: false,
           startedAtMs,
           completedAtMs,
+          attemptCount: attemptsUsed,
+          packetBytes,
+          outputBytes,
           failure,
         };
       }
@@ -2556,10 +3657,10 @@ export async function executeReviewPromptExecution(
     });
     const nestedCompletedAtMs = Date.now();
     // Map nested-dispatch outcomes into executionOutcomes[] in lensDispatches order.
-    // `participating_lens_ids` is the authoritative success set (orchestrator
-    // ok AND output file exists + non-empty). Missing / failed → record as
-    // ExecutionFailure; also remove empty output files for consistency with
-    // worker-pool cleanup path.
+    // `participating_lens_ids` is the nested bridge's candidate success set
+    // (orchestrator ok AND output file exists + non-empty). The parent runner
+    // still applies its local output-contract validator before admitting a lens
+    // as participating so every execution profile shares the same sink gate.
     for (let i = 0; i < lensDispatches.length; i += 1) {
       const dispatch = lensDispatches[i]!;
       const reported = nestedResult.nested_raw.outcomes[i];
@@ -2567,6 +3668,40 @@ export async function executeReviewPromptExecution(
         dispatch.unit_id,
       );
       if (participating) {
+        try {
+          await validateUnitOutputFile({
+            dispatch,
+            outputPath: dispatch.output_path,
+          });
+        } catch (error) {
+          const failure: ExecutionFailure = {
+            unit_id: dispatch.unit_id,
+            unit_kind: dispatch.unit_kind,
+            packet_path: dispatch.packet_path,
+            output_path: dispatch.output_path,
+            message: error instanceof Error ? error.message : String(error),
+            failure_kind: failureKindFromError(error),
+          };
+          const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+          const outputBytes = await fileSizeIfPresent(dispatch.output_path);
+          await removeFileIfExists(dispatch.output_path);
+          await appendExecutionFailure(
+            executionPlan.error_log_path,
+            failure,
+            executionPlan.effective_boundary_state,
+          );
+          executionOutcomes[i] = {
+            dispatch,
+            success: false,
+            startedAtMs: nestedStartedAtMs,
+            completedAtMs: nestedCompletedAtMs,
+            attemptCount: 1,
+            packetBytes,
+            outputBytes,
+            failure,
+          };
+          continue;
+        }
         console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
         await appendExecutionProgress(
           executionPlan.error_log_path,
@@ -2582,6 +3717,9 @@ export async function executeReviewPromptExecution(
           success: true,
           startedAtMs: nestedStartedAtMs,
           completedAtMs: nestedCompletedAtMs,
+          attemptCount: 1,
+          packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+          outputBytes: await fileSizeIfPresent(dispatch.output_path),
         };
       } else {
         const message =
@@ -2595,7 +3733,10 @@ export async function executeReviewPromptExecution(
           packet_path: dispatch.packet_path,
           output_path: dispatch.output_path,
           message,
+          failure_kind: failureKindFromMessage(message),
         };
+        const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+        const outputBytes = await fileSizeIfPresent(dispatch.output_path);
         await removeFileIfExists(dispatch.output_path);
         await appendExecutionFailure(
           executionPlan.error_log_path,
@@ -2607,6 +3748,9 @@ export async function executeReviewPromptExecution(
           success: false,
           startedAtMs: nestedStartedAtMs,
           completedAtMs: nestedCompletedAtMs,
+          attemptCount: 1,
+          packetBytes,
+          outputBytes,
           failure,
         };
       }
@@ -2860,10 +4004,16 @@ export async function executeReviewPromptExecution(
       });
     }
   }
-  const issueArtifactContext = await renderIssueArtifactContext({
-    projectRoot,
-    executionPlan,
-  });
+  const issueArtifactContext = [
+    "Use the issue artifact refs below as the root-cause issue frame.",
+    "Read these YAML artifacts when evaluating contested points; do not infer issue state from memory.",
+    "",
+    renderIssueArtifactRefs(
+      projectRoot,
+      executionPlan,
+      PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+    ),
+  ].join("\n");
 
   let controlledDeliberation: Awaited<
     ReturnType<typeof runControlledLensDeliberation>
@@ -3034,7 +4184,36 @@ export async function executeReviewPromptExecution(
     executionPlan.synthesize_prompt_packet_path,
     "utf8",
   );
-  const enrichedSynthesizePacketText = `${synthesizePacketText.trimEnd()}\n\n${renderLensOutputRefsSection(
+  const synthesizeBaseReadAuthority =
+    parsePacketAllowedReadAuthority(synthesizePacketText);
+  if (
+    !synthesizeBaseReadAuthority.declared ||
+    synthesizeBaseReadAuthority.malformed
+  ) {
+    throw new ReviewUnitOutputContractError(
+      `Synthesize base prompt packet has invalid Unit Boundary Details read authority: ${executionPlan.synthesize_prompt_packet_path}`,
+    );
+  }
+  const synthesizeBaseReadRefs = synthesizeBaseReadAuthority.refs;
+  const synthesizePacketBaseText =
+    stripReviewUnitBoundaryDetailsSections(synthesizePacketText);
+  const synthesizeRuntimeReadRefs = uniqueAllowedReadRefs(projectRoot, [
+    ...synthesizeBaseReadRefs,
+    ...successfulLensDispatches.map((dispatch) => dispatch.output_path),
+    executionPlan.deliberation_output_path,
+    ...controlledDeliberation.deliberationDispatches.map(
+      (dispatch) => dispatch.output_path,
+    ),
+    ...issueArtifactOutputPaths(executionPlan, [
+      "finding-ledger",
+      "finding-relation-graph",
+      "issue-ledger",
+      "issue-stance-matrix",
+      "deliberation-plan",
+      "problem-framing",
+    ]),
+  ]);
+  const enrichedSynthesizePacketText = `${synthesizePacketBaseText.trimEnd()}\n\n${renderLensOutputRefsSection(
     projectRoot,
     successfulLensDispatches,
   )}\n${renderControlledDeliberationRefsSection(
@@ -3048,7 +4227,13 @@ export async function executeReviewPromptExecution(
     "issue-stance-matrix",
     "deliberation-plan",
     "problem-framing",
-  ])}\n\n${renderDegradedLensFailuresSection(
+  ])}\n\n${renderReviewUnitBoundaryContext(
+    projectRoot,
+    executionPlan,
+    "synthesize",
+    executionPlan.synthesis_output_path,
+    synthesizeRuntimeReadRefs,
+  )}\n\n${renderDegradedLensFailuresSection(
     executionFailures.filter((failure) => failure.unit_kind === "lens"),
   )}`;
   await fs.writeFile(
@@ -3107,22 +4292,34 @@ export async function executeReviewPromptExecution(
   let synthesizeOutcome: ExecutionOutcome | null = null;
   let synthesizeLastError: unknown = undefined;
   let synthesizeSucceeded = false;
+  let synthesizeExecutorMetadata: ReviewExecutorRunMetadata | undefined = undefined;
+  let synthesizeAttemptsUsed = 0;
 
   if (shouldRunUnit("synthesize")) {
     for (let attempt = 0; attempt <= synthesizeMaxRetries; attempt++) {
+      synthesizeAttemptsUsed = attempt + 1;
       try {
-        await invokeExecutor(
+        synthesizeExecutorMetadata = await invokeExecutor(
           synthesizeExecutorConfig,
           projectRoot,
           sessionRoot,
           synthesizeDispatch,
           unitTimeoutMs,
         );
+        await validateSynthesizeOutputParticipationTruth({
+          outputPath: synthesizeDispatch.output_path,
+          expectedLensIds: lensDispatches.map((dispatch) => dispatch.unit_id),
+          receivedLensIds: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+        });
         synthesizeSucceeded = true;
         break;
       } catch (error: unknown) {
         synthesizeLastError = error;
-        if (!isReviewUnitTimeoutError(error) && attempt < synthesizeMaxRetries) {
+        if (shouldRetryUnitFailure({
+          error,
+          attempt,
+          maxRetries: synthesizeMaxRetries,
+        })) {
           const retryDelay = DEFAULT_LENS_RETRY_INITIAL_DELAY_MS;
           console.log(
             `[review runner] synthesize attempt ${attempt + 1} failed, retrying in ${retryDelay}ms...`,
@@ -3138,11 +4335,24 @@ export async function executeReviewPromptExecution(
           );
           await sleep(retryDelay);
         }
-        if (isReviewUnitTimeoutError(error)) break;
+        if (!shouldRetryUnitFailure({
+          error,
+          attempt,
+          maxRetries: synthesizeMaxRetries,
+        })) break;
       }
     }
   } else {
     synthesizeOutcome = preservedOutcomeForDispatch(synthesizeDispatch);
+    await validateUnitOutputFile({
+      dispatch: synthesizeDispatch,
+      outputPath: synthesizeDispatch.output_path,
+    });
+    await validateSynthesizeOutputParticipationTruth({
+      outputPath: synthesizeDispatch.output_path,
+      expectedLensIds: lensDispatches.map((dispatch) => dispatch.unit_id),
+      receivedLensIds: successfulLensDispatches.map((dispatch) => dispatch.unit_id),
+    });
     synthesizeSucceeded = true;
   }
 
@@ -3152,6 +4362,12 @@ export async function executeReviewPromptExecution(
       success: true,
       startedAtMs: synthesizeStartedAtMs,
       completedAtMs: Date.now(),
+      attemptCount: synthesizeAttemptsUsed,
+      ...(synthesizeExecutorMetadata !== undefined
+        ? { executorMetadata: synthesizeExecutorMetadata }
+        : {}),
+      packetBytes: await fileSizeIfPresent(synthesizeDispatch.packet_path),
+      outputBytes: await fileSizeIfPresent(synthesizeDispatch.output_path),
     };
   }
 
@@ -3163,12 +4379,18 @@ export async function executeReviewPromptExecution(
       packet_path: synthesizeDispatch.packet_path,
       output_path: synthesizeDispatch.output_path,
       message: error instanceof Error ? error.message : String(error),
+      failure_kind: failureKindFromError(error),
     };
+    const packetBytes = await fileSizeIfPresent(synthesizeDispatch.packet_path);
+    const outputBytes = await fileSizeIfPresent(synthesizeDispatch.output_path);
     synthesizeOutcome = {
       dispatch: synthesizeDispatch,
       success: false,
       startedAtMs: synthesizeStartedAtMs,
       completedAtMs: Date.now(),
+      attemptCount: synthesizeAttemptsUsed,
+      packetBytes,
+      outputBytes,
       failure,
     };
     executionFailures.push(failure);

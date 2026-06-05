@@ -159,7 +159,9 @@ export interface ReviewResultClosureSummary {
 
 export interface ReviewResultExplanationSummary {
   final_review_result: string;
+  boundary_notes: string;
   screen_lines: string[];
+  boundary_screen_lines: string[];
 }
 
 // Lens IDs derived from .onto/authority/core-lens-registry.yaml (single source of truth)
@@ -375,7 +377,7 @@ function displaySettingValue(value: string | undefined | null): string {
 function displayActorLlmRef(
   value: ReviewExecutionProfile["teamlead"]["llm"],
 ): string {
-  if (value === "inherit") return "inherit";
+  if (!value) return "(unset)";
   return [
     `auth=${displaySettingValue(value.auth)}`,
     `provider=${displaySettingValue(value.provider)}`,
@@ -473,10 +475,10 @@ function renderReviewStartPreview(args: {
   ].join("\n");
 }
 
-function stringValue(value: unknown, fallback = "unknown"): string {
+function stringValue(value: unknown, defaultValue = "unknown"): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
-    : fallback;
+    : defaultValue;
 }
 
 function countStringValues(values: string[]): Record<string, number> {
@@ -555,7 +557,9 @@ export async function readReviewResultExplanationSummary(
     const unavailable = "- final output unavailable";
     return {
       final_review_result: unavailable,
+      boundary_notes: unavailable,
       screen_lines: renderScreenBoundedLines(unavailable),
+      boundary_screen_lines: renderScreenBoundedLines(unavailable),
     };
   }
 
@@ -567,10 +571,18 @@ export async function readReviewResultExplanationSummary(
       "Overall Result Explanation",
       "Review Result Explanation",
     ]) ?? "- final review result section unavailable";
+  const boundaryNotes =
+    extractMarkdownSectionByHeadings(finalOutputText, [
+      "Boundary Notes",
+      "Boundary Limitations",
+      "Evidence Gaps",
+    ]) ?? "- boundary notes section unavailable";
 
   return {
     final_review_result: finalReviewResult,
+    boundary_notes: boundaryNotes,
     screen_lines: renderScreenBoundedLines(finalReviewResult),
+    boundary_screen_lines: renderScreenBoundedLines(boundaryNotes, 5),
   };
 }
 
@@ -675,6 +687,8 @@ function renderReviewResultOverview(args: {
     "result_explanation:",
     "  final_review_result:",
     ...args.explanationSummary.screen_lines,
+    "  boundary_notes:",
+    ...args.explanationSummary.boundary_screen_lines,
     "issues:",
     `  count: ${args.closureSummary.issue_count}`,
     `  highest_severity: ${args.closureSummary.highest_severity ?? "none"}`,
@@ -828,7 +842,7 @@ function appendExecutorModelArgs(
   if (isMock) return config;
 
   const args = [...config.args];
-  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const llmSettings = llmRef;
   const llmSelection = normalizeLlmModelSwitcher(llmSettings);
   const model = readSingleOptionValueFromArgv(argv, "model") ?? llmSelection?.model_id;
   if (typeof model === "string" && model.length > 0) {
@@ -855,7 +869,7 @@ function appendDirectCallLlmArgs(
   llmRef?: ReviewExecutionProfile["synthesize"]["llm"],
 ): ReviewUnitExecutorConfig {
   const args = [...config.args];
-  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const llmSettings = llmRef;
   const selection = normalizeLlmModelSwitcher(llmSettings);
 
   if (selection && selection.provider !== "codex") {
@@ -1058,11 +1072,41 @@ function hasCredentialEnv(selection: {
   provider: string;
   api_key_env?: string;
 }): boolean {
-  return visibleCredentialEnvNames(selection).some(
-    (envName) =>
-      typeof process.env[envName] === "string" &&
-      process.env[envName]!.length > 0,
-  );
+  if (selection.api_key_env) {
+    const value = process.env[selection.api_key_env];
+    return (
+      typeof value === "string" &&
+      value.trim().length > 0
+    );
+  }
+  if (
+    visibleCredentialEnvNames(selection).some(
+      (envName) =>
+        typeof process.env[envName] === "string" &&
+        process.env[envName]!.trim().length > 0,
+    )
+  ) {
+    return true;
+  }
+  if (selection.provider === "openai") {
+    return readCodexOpenAiApiKey() !== null;
+  }
+  return false;
+}
+
+function readCodexOpenAiApiKey(): string | null {
+  const codexAuthPath = path.join(os.homedir(), ".codex", "auth.json");
+  if (!fsSync.existsSync(codexAuthPath)) return null;
+  try {
+    const auth = JSON.parse(fsSync.readFileSync(codexAuthPath, "utf8")) as unknown;
+    if (!auth || typeof auth !== "object" || Array.isArray(auth)) return null;
+    const value = (auth as Record<string, unknown>).OPENAI_API_KEY;
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function assertValidLocalBaseUrl(baseUrl: string | undefined): void {
@@ -1098,10 +1142,9 @@ export async function ensureProviderRouteReadyForDispatch(args: {
 
   if (profile.worker_executor === "codex") {
     for (const actorRef of actorRefs) {
-      const selection =
-        actorRef.llm === "inherit"
-          ? null
-          : normalizeLlmModelSwitcher(actorRef.llm);
+      const selection = actorRef.llm
+        ? normalizeLlmModelSwitcher(actorRef.llm)
+        : null;
       const selectsCodexOauth =
         selection?.auth === "oauth" &&
         (selection.provider === "codex" || selection.provider === "openai");
@@ -1143,10 +1186,9 @@ export async function ensureProviderRouteReadyForDispatch(args: {
   }
 
   for (const actorRef of actorRefs) {
-    const selection =
-      actorRef.llm === "inherit"
-        ? null
-        : normalizeLlmModelSwitcher(actorRef.llm);
+    const selection = actorRef.llm
+      ? normalizeLlmModelSwitcher(actorRef.llm)
+      : null;
     if (selection === null || selection.provider === "codex") {
       await writeAndThrowStructuredFailureRecord({
         sessionRoot: args.sessionRoot,
@@ -2971,10 +3013,8 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const resolvedOntoHome = rawOntoHome ? path.resolve(rawOntoHome) : undefined;
 
   const noWatch = hasOptionFlag(argv, "no-watch");
-  const hasExplicitExecutorOverride =
-    readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
+  const hasExplicitExecutorBinOverride =
     readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
-    readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
   const effectiveReviewExecutionProfile =
     setup.executionProfile.review_execution_profile;
@@ -3062,7 +3102,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "lens",
@@ -3072,7 +3112,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "teamlead",
@@ -3082,7 +3122,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "synthesize-",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "synthesize",
@@ -3260,6 +3300,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     },
     explanation: {
       final_review_result: explanationSummary.final_review_result,
+      boundary_notes: explanationSummary.boundary_notes,
     },
     issues: closureSummary,
     artifacts: artifactRefs,

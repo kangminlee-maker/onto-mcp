@@ -28,18 +28,22 @@
  *   tool-native (Tier 1) modes based on `--tool-mode`.
  * - `llm-tool-loop.ts` runs the multi-turn loop by translating OntoTool[] into
  *   provider-specific tool schemas (Anthropic vs OpenAI Chat Completions).
- * - The Boundary Policy enforced here is the runtime guarantee. The packet's
- *   "Boundary Policy" section is descriptive — this code is normative.
+ * - Packet "Boundary Policy" declarations are authoritative at admission time:
+ *   the executor may reject or downgrade tool-native mode before tools are
+ *   exposed. Once a tool loop is admitted, this module enforces the concrete
+ *   per-call path boundary for every tool invocation.
  *
  * # Boundary policy
  *
  * Every tool call is constrained to:
  *   1. Path must resolve INSIDE projectRoot or ontoHome (no escapes via `..`).
  *   2. Symlinks pointing outside the boundary are rejected.
- *   3. Files larger than MAX_FILE_BYTES are read partially with a truncation
+ *   3. When `allowedReadRefs` is present, the resolved path must equal or sit
+ *      under one of those unit-local refs.
+ *   4. Files larger than MAX_FILE_BYTES are read partially with a truncation
  *      marker (no error — LLM gets best-effort content + signal).
- *   4. search_content matches are capped at MAX_SEARCH_MATCHES.
- *   5. Hidden directories (.git, node_modules, .onto/sessions) are skipped
+ *   5. search_content matches are capped at MAX_SEARCH_MATCHES.
+ *   6. Hidden directories (.git, node_modules, .onto/sessions) are skipped
  *      from list_directory and search_content traversal — they pollute output
  *      and are rarely the answer.
  *
@@ -97,13 +101,101 @@ export interface ToolExecutionContext {
    * boundary, and `.onto` is already inside projectRoot by design.
    */
   allowOntoTraversal?: boolean;
+  /**
+   * Optional unit-local read authority. When present, read/list/search paths
+   * must resolve to one of these refs or a child path under a directory ref.
+   * Refs may be absolute, projectRoot-relative, or ~/-prefixed onto-home refs.
+   */
+  allowedReadRefs?: string[];
+  toolDiagnostics?: ToolExecutionDiagnostics;
+}
+
+interface RealBoundary {
+  projectRoot: string;
+  ontoHome: string;
+  allowedReadRefs: string[];
+}
+
+export interface ToolBoundarySkipSummary {
+  boundary_skips: number;
+  unreadable_skips: number;
+  oversized_skips: number;
+}
+
+export interface ToolExecutionDiagnostics {
+  search_skips: ToolBoundarySkipSummary;
+}
+
+interface SearchSkipSummary {
+  boundary: number;
+  unreadable: number;
+  oversized: number;
+}
+
+export interface ReviewUnitToolExecutionContextInput {
+  projectRoot: string;
+  ontoHome: string;
+  allowOntoTraversal?: boolean;
+  allowedReadRefs: string[];
+}
+
+export function createReviewUnitToolExecutionContext(
+  input: ReviewUnitToolExecutionContextInput,
+): ToolExecutionContext {
+  if (!Array.isArray(input.allowedReadRefs) || input.allowedReadRefs.length === 0) {
+    throw new BoundaryViolationError(
+      "review-unit native tool context requires non-empty allowed_read_refs",
+    );
+  }
+  const allowedReadRefs: string[] = [];
+  for (const ref of input.allowedReadRefs) {
+    if (typeof ref !== "string" || ref.trim().length === 0) {
+      throw new BoundaryViolationError(
+        "review-unit native tool context received malformed allowed_read_refs",
+      );
+    }
+    allowedReadRefs.push(ref);
+  }
+  const contextAllowedReadRefs = [...allowedReadRefs];
+  Object.freeze(contextAllowedReadRefs);
+  const context: ToolExecutionContext = {
+    projectRoot: path.resolve(input.projectRoot),
+    ontoHome: path.resolve(input.ontoHome),
+    ...(input.allowOntoTraversal !== undefined
+      ? { allowOntoTraversal: input.allowOntoTraversal }
+      : {}),
+    allowedReadRefs: contextAllowedReadRefs,
+    toolDiagnostics: {
+      search_skips: {
+        boundary_skips: 0,
+        unreadable_skips: 0,
+        oversized_skips: 0,
+      },
+    },
+  };
+  return Object.freeze(context);
+}
+
+export function getToolBoundarySkipSummary(
+  ctx: ToolExecutionContext,
+): ToolBoundarySkipSummary | undefined {
+  const summary = ctx.toolDiagnostics?.search_skips;
+  if (!summary) return undefined;
+  if (
+    summary.boundary_skips === 0 &&
+    summary.unreadable_skips === 0 &&
+    summary.oversized_skips === 0
+  ) {
+    return undefined;
+  }
+  return { ...summary };
 }
 
 /**
  * Provider-agnostic tool schema. Mirrors JSON Schema semantics; both Anthropic
  * and OpenAI accept this shape with thin wrappers (see llm-tool-loop.ts).
  *
- * The index signature is required for structural compatibility with the
+ * The index signature is required for structural typing with the
  * Anthropic SDK's `InputSchema` and OpenAI's `FunctionParameters` types under
  * `exactOptionalPropertyTypes: true` — both treat the schema as a free-form
  * Record<string, unknown> at the type level.
@@ -146,34 +238,132 @@ export interface OntoTool {
  *     We do NOT call os.homedir() — ontoHome's parent is the canonical seat.
  *   - Relative paths resolve against projectRoot.
  */
-function resolveInBoundary(rawPath: string, ctx: ToolExecutionContext): string {
+function resolveCandidate(rawPath: string, ctx: ToolExecutionContext): string {
   if (typeof rawPath !== "string" || rawPath.length === 0) {
     throw new BoundaryViolationError("path must be a non-empty string");
   }
 
-  let candidate: string;
   if (rawPath.startsWith("~/")) {
     const home = path.dirname(ctx.ontoHome);
-    candidate = path.resolve(home, rawPath.slice(2));
-  } else if (path.isAbsolute(rawPath)) {
-    candidate = path.resolve(rawPath);
-  } else {
-    candidate = path.resolve(ctx.projectRoot, rawPath);
+    return path.resolve(home, rawPath.slice(2));
   }
+  if (path.isAbsolute(rawPath)) {
+    return path.resolve(rawPath);
+  }
+  return path.resolve(ctx.projectRoot, rawPath);
+}
 
-  const inProject = isWithin(candidate, ctx.projectRoot);
-  const inOntoHome = isWithin(candidate, ctx.ontoHome);
-  if (!inProject && !inOntoHome) {
+async function resolveInBoundary(
+  rawPath: string,
+  ctx: ToolExecutionContext,
+  realBoundary?: RealBoundary,
+): Promise<string> {
+  const candidate = resolveCandidate(rawPath, ctx);
+  const boundary = realBoundary ?? await createRealBoundary(ctx);
+
+  const lexicalRoots = [path.resolve(ctx.projectRoot), path.resolve(ctx.ontoHome)];
+  const realRoots = [boundary.projectRoot, boundary.ontoHome];
+  const pathStartsInBoundary = [...lexicalRoots, ...realRoots].some((root) =>
+    isWithin(candidate, root),
+  );
+  if (!pathStartsInBoundary) {
     throw new BoundaryViolationError(
       `path "${rawPath}" resolves to "${candidate}", which is outside projectRoot (${ctx.projectRoot}) and ontoHome (${ctx.ontoHome}).`,
     );
   }
-  return candidate;
+
+  const realCandidate = await realpathExisting(candidate, rawPath);
+  const realPathStaysInBoundary = realRoots.some((root) =>
+    isWithin(realCandidate, root),
+  );
+  if (!realPathStaysInBoundary) {
+    throw new BoundaryViolationError(
+      `path "${rawPath}" resolves through the filesystem to "${realCandidate}", which is outside projectRoot (${ctx.projectRoot}) and ontoHome (${ctx.ontoHome}).`,
+    );
+  }
+
+  assertWithinAllowedReadRefs(rawPath, realCandidate, boundary);
+  return realCandidate;
 }
 
 function isWithin(child: string, parent: string): boolean {
   const rel = path.relative(parent, child);
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+async function createRealBoundary(
+  ctx: ToolExecutionContext,
+): Promise<RealBoundary> {
+  const projectRoot = await realpathRoot(ctx.projectRoot);
+  const ontoHome = await realpathRoot(ctx.ontoHome);
+  const lexicalRoots = [path.resolve(ctx.projectRoot), path.resolve(ctx.ontoHome)];
+  const realRoots = [projectRoot, ontoHome];
+  const allowedReadRefs: string[] = [];
+
+  for (const ref of ctx.allowedReadRefs ?? []) {
+    const candidate = resolveCandidate(ref, ctx);
+    const startsInBoundary = [...lexicalRoots, ...realRoots].some((root) =>
+      isWithin(candidate, root),
+    );
+    if (!startsInBoundary) {
+      throw new BoundaryViolationError(
+        `allowed_read_refs entry "${ref}" resolves to "${candidate}", which is outside projectRoot (${ctx.projectRoot}) and ontoHome (${ctx.ontoHome}).`,
+      );
+    }
+    const realRef = await realpathExisting(candidate, ref);
+    const staysInBoundary = realRoots.some((root) => isWithin(realRef, root));
+    if (!staysInBoundary) {
+      throw new BoundaryViolationError(
+        `allowed_read_refs entry "${ref}" resolves through the filesystem to "${realRef}", which is outside projectRoot (${ctx.projectRoot}) and ontoHome (${ctx.ontoHome}).`,
+      );
+    }
+    allowedReadRefs.push(realRef);
+  }
+
+  return {
+    projectRoot,
+    ontoHome,
+    allowedReadRefs: [...new Set(allowedReadRefs)].sort(),
+  };
+}
+
+async function realpathRoot(root: string): Promise<string> {
+  try {
+    return await fs.realpath(path.resolve(root));
+  } catch {
+    return path.resolve(root);
+  }
+}
+
+async function realpathExisting(
+  candidate: string,
+  rawPath: string,
+): Promise<string> {
+  try {
+    return await fs.realpath(candidate);
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new BoundaryViolationError(
+      `path "${rawPath}" is not readable/resolvable within boundary: ${reason}`,
+    );
+  }
+}
+
+function assertWithinAllowedReadRefs(
+  rawPath: string,
+  realCandidate: string,
+  realBoundary: RealBoundary,
+): void {
+  if (realBoundary.allowedReadRefs.length === 0) return;
+
+  const allowed = realBoundary.allowedReadRefs.some((allowedRef) =>
+    isWithin(realCandidate, allowedRef),
+  );
+  if (allowed) return;
+
+  throw new BoundaryViolationError(
+    `path "${rawPath}" resolves to "${realCandidate}", which is outside this unit's allowed_read_refs.`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +394,7 @@ const READ_FILE_TOOL: OntoTool = {
     required: ["path"],
   },
   async execute(args, ctx) {
-    const target = resolveInBoundary(String(args["path"] ?? ""), ctx);
+    const target = await resolveInBoundary(String(args["path"] ?? ""), ctx);
     const stat = await fs.stat(target);
     if (!stat.isFile()) {
       throw new BoundaryViolationError(`"${args["path"]}" is not a regular file.`);
@@ -264,7 +454,7 @@ const LIST_DIRECTORY_TOOL: OntoTool = {
     required: ["path"],
   },
   async execute(args, ctx) {
-    const target = resolveInBoundary(String(args["path"] ?? ""), ctx);
+    const target = await resolveInBoundary(String(args["path"] ?? ""), ctx);
     const stat = await fs.stat(target);
     if (!stat.isDirectory()) {
       throw new BoundaryViolationError(`"${args["path"]}" is not a directory.`);
@@ -340,7 +530,8 @@ const SEARCH_CONTENT_TOOL: OntoTool = {
     const rawPath = typeof args["path"] === "string" && (args["path"] as string).length > 0
       ? (args["path"] as string)
       : ctx.projectRoot;
-    const root = resolveInBoundary(rawPath, ctx);
+    const realBoundary = await createRealBoundary(ctx);
+    const root = await resolveInBoundary(rawPath, ctx, realBoundary);
     const stat = await fs.stat(root);
     if (!stat.isDirectory()) {
       throw new BoundaryViolationError(`search root "${rawPath}" is not a directory.`);
@@ -348,21 +539,37 @@ const SEARCH_CONTENT_TOOL: OntoTool = {
 
     const matches: string[] = [];
     const traversed = { count: 0 };
-    await walkAndSearch(root, needle, caseInsensitive, ctx, matches, traversed);
+    const skips: SearchSkipSummary = { boundary: 0, unreadable: 0, oversized: 0 };
+    await walkAndSearch(
+      root,
+      needle,
+      caseInsensitive,
+      ctx,
+      matches,
+      traversed,
+      skips,
+      realBoundary,
+    );
+    recordSearchSkips(ctx, skips);
 
     if (matches.length === 0) {
-      return `# search_content: no matches for "${pattern}" under ${path.relative(ctx.projectRoot, root) || root}`;
+      return [
+        `# search_content: no matches for "${pattern}" under ${path.relative(ctx.projectRoot, root) || root}`,
+        renderSearchSkipSummary(skips),
+      ].filter((line) => line.length > 0).join("\n");
     }
     const limited = matches.slice(0, MAX_SEARCH_MATCHES);
     const trailer =
       matches.length > MAX_SEARCH_MATCHES
         ? `\n<!-- ${matches.length - MAX_SEARCH_MATCHES} additional matches elided; narrow path or pattern to see them -->`
         : "";
+    const skipSummary = renderSearchSkipSummary(skips);
     return [
       `# search_content: ${limited.length} match${limited.length === 1 ? "" : "es"} for "${pattern}"${
         traversed.count >= MAX_SEARCH_TRAVERSAL ? " (traversal cap hit)" : ""
       }`,
       ...limited,
+      ...(skipSummary ? [skipSummary] : []),
     ].join("\n") + trailer;
   },
 };
@@ -374,6 +581,8 @@ async function walkAndSearch(
   ctx: ToolExecutionContext,
   matches: string[],
   traversed: { count: number },
+  skips: SearchSkipSummary,
+  realBoundary: RealBoundary,
 ): Promise<void> {
   if (matches.length >= MAX_SEARCH_MATCHES) return;
   if (traversed.count >= MAX_SEARCH_TRAVERSAL) return;
@@ -382,6 +591,7 @@ async function walkAndSearch(
   try {
     entries = await fs.readdir(dir, { withFileTypes: true });
   } catch {
+    skips.unreadable++;
     return; // permission denied, missing — silently skip
   }
 
@@ -392,28 +602,78 @@ async function walkAndSearch(
 
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      await walkAndSearch(full, needle, caseInsensitive, ctx, matches, traversed);
+      try {
+        const safeDir = await resolveInBoundary(full, ctx, realBoundary);
+        await walkAndSearch(
+          safeDir,
+          needle,
+          caseInsensitive,
+          ctx,
+          matches,
+          traversed,
+          skips,
+          realBoundary,
+        );
+      } catch {
+        skips.boundary++;
+        // Boundary escape, unreadable path, or symlink outside root — skip.
+      }
     } else if (entry.isFile()) {
       traversed.count++;
+      let safeFile: string;
       try {
-        const stat = await fs.stat(full);
-        if (stat.size > MAX_FILE_BYTES) continue; // skip files we couldn't read in read_file either
-        const text = await fs.readFile(full, "utf8");
+        safeFile = await resolveInBoundary(full, ctx, realBoundary);
+      } catch {
+        skips.boundary++;
+        continue;
+      }
+      try {
+        const stat = await fs.stat(safeFile);
+        if (stat.size > MAX_FILE_BYTES) {
+          skips.oversized++;
+          continue; // skip files we couldn't read in read_file either
+        }
+        const text = await fs.readFile(safeFile, "utf8");
         const lines = text.split("\n");
         for (let i = 0; i < lines.length; i++) {
           const line = lines[i] ?? "";
           const haystack = caseInsensitive ? line.toLowerCase() : line;
           if (haystack.includes(needle)) {
-            const rel = path.relative(ctx.projectRoot, full) || full;
+            const rel = path.relative(ctx.projectRoot, safeFile) || safeFile;
             matches.push(`${rel}:${i + 1}: ${line.trim().slice(0, 200)}`);
             if (matches.length >= MAX_SEARCH_MATCHES) return;
           }
         }
       } catch {
+        skips.unreadable++;
         // binary or unreadable — skip
       }
+    } else if (
+      "isSymbolicLink" in entry &&
+      typeof entry.isSymbolicLink === "function" &&
+      entry.isSymbolicLink()
+    ) {
+      skips.boundary++;
     }
   }
+}
+
+function renderSearchSkipSummary(skips: SearchSkipSummary): string {
+  if (skips.boundary === 0 && skips.unreadable === 0 && skips.oversized === 0) {
+    return "";
+  }
+  return `<!-- search skips: boundary_skips=${skips.boundary}; unreadable_skips=${skips.unreadable}; oversized_skips=${skips.oversized} -->`;
+}
+
+function recordSearchSkips(
+  ctx: ToolExecutionContext,
+  skips: SearchSkipSummary,
+): void {
+  const summary = ctx.toolDiagnostics?.search_skips;
+  if (!summary) return;
+  summary.boundary_skips += skips.boundary;
+  summary.unreadable_skips += skips.unreadable;
+  summary.oversized_skips += skips.oversized;
 }
 
 // ---------------------------------------------------------------------------

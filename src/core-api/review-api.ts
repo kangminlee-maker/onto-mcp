@@ -2,6 +2,7 @@ import type {
   InvocationBindingArtifact,
   InvocationInterpretationArtifact,
   ReviewActorInvocationProfilesArtifact,
+  ReviewResolvedActorInvocationProfile,
   ReviewExecutionResultArtifact,
   ReviewExecutionPlan,
   ReviewLensCompletionBarrierArtifact,
@@ -41,6 +42,7 @@ import {
   buildReviewRouteVisibilityFromSession,
   type ReviewRouteVisibility,
 } from "../core-runtime/review/route-visibility.js";
+import { buildReviewExecutionRoute } from "../core-runtime/review/review-execution-route.js";
 import { readValidatedReviewRecord } from "../core-runtime/review/review-record-validation.js";
 import { readReviewResultClassification } from "../core-runtime/review/review-result-classification.js";
 import {
@@ -60,7 +62,12 @@ import {
 import { completeReviewSession } from "../core-runtime/cli/complete-review-session.js";
 import {
   buildExecutorConfigFromRealization,
+  ensureProviderRouteReadyForDispatch,
+  resolveExecutorConfig,
 } from "../core-runtime/cli/review-invoke.js";
+import {
+  writeAndThrowStructuredFailureRecord,
+} from "../core-runtime/review/failure-records.js";
 import {
   executeReviewPromptExecution,
   type ReviewPromptExecutionResult,
@@ -151,7 +158,7 @@ export type ReviewResultProjectionLevel = "compact" | "standard" | "full";
 export interface ReviewDomainTokenResolution {
   requestedToken: string;
   normalizedDomain: string | null;
-  resolution: "exact" | "alias" | "suggestion" | "no_domain" | "unknown";
+  resolution: "exact" | "suggestion" | "no_domain" | "unknown";
   suggestionIds: string[];
 }
 
@@ -316,8 +323,8 @@ export interface ReviewRunResult {
   summary?: unknown;
   resultOverview?: unknown;
   artifactRefs?: Record<string, string>;
-  pipelineExecutionLedger?: PipelineExecutionLedger;
-  resultClassificationSummary?: ReviewResultClassificationSummary;
+  pipelineExecutionLedger?: PipelineExecutionLedgerProjection;
+  resultClassificationSummary?: ReviewResultClassificationProjection;
   failureRefs?: string[];
   routeVisibility?: ReviewRouteVisibility | null;
   startPreview?: {
@@ -343,17 +350,22 @@ export interface ReviewContinuationAttempt {
   }>;
 }
 
+export type ReviewContinuationPlanProjection =
+  Omit<ReviewContinuationPlan, "unitLedger"> & {
+    unitLedger?: CompactPipelineExecutionLedger;
+  };
+
 export interface ReviewContinueResult {
   sessionId: string;
   sessionRoot: string;
   decision: "executed" | "already_running";
   status: ReviewStatus["status"];
-  continuationPlan?: ReviewContinuationPlan;
+  continuationPlan?: ReviewContinuationPlanProjection;
   continuationAttempt?: ReviewContinuationAttempt;
   promptExecutionResult?: ReviewPromptExecutionResult;
   artifactRefs: Record<string, string>;
-  pipelineExecutionLedger?: PipelineExecutionLedger;
-  resultClassificationSummary?: ReviewResultClassificationSummary;
+  pipelineExecutionLedger?: PipelineExecutionLedgerProjection;
+  resultClassificationSummary?: ReviewResultClassificationProjection;
   failureRefs: string[];
   routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation?: LlmPresentationPrompts;
@@ -387,7 +399,7 @@ export interface ReviewContinuationFailureContent {
   attempt_root: string;
   attempt_manifest_ref: string;
   continuation_plan_ref: string;
-  continuation_plan: ReviewContinuationPlan;
+  continuation_plan: ReviewContinuationPlanProjection;
   superseded_artifact_backups: ReviewContinuationAttempt["supersededArtifactBackups"];
   restored_artifact_backups: ReviewContinuationArtifactRestore[];
   error_message: string;
@@ -477,8 +489,8 @@ export interface ReviewResult {
   reviewRunManifestPath: string;
   finalOutputText?: string;
   artifactRefs: Record<string, string>;
-  pipelineExecutionLedger?: PipelineExecutionLedger;
-  resultClassificationSummary?: ReviewResultClassificationSummary;
+  pipelineExecutionLedger?: PipelineExecutionLedgerProjection;
+  resultClassificationSummary?: ReviewResultClassificationProjection;
   failureRefs: string[];
   routeVisibility?: ReviewRouteVisibility | null;
   llmPresentation?: LlmPresentationPrompts;
@@ -631,13 +643,13 @@ async function resolveReviewRecordFinalOutputPath(args: {
     });
     return candidate;
   }
-  const fallback = candidates[0] ?? path.join(sessionRoot, "final-output.md");
+  const defaultCandidate = candidates[0] ?? path.join(sessionRoot, "final-output.md");
   await assertPathInsideRoot({
     root: sessionRoot,
-    candidate: fallback,
+    candidate: defaultCandidate,
     label: "ReviewRecord.final_output_ref",
   });
-  return fallback;
+  return defaultCandidate;
 }
 
 async function assertSamePath(args: {
@@ -675,14 +687,111 @@ function buildFinalResultPresentation(input: unknown): LlmPresentationPrompt {
     prompt: [
       "Explain this onto review result to the user after execution.",
       "Use only the provided input facts and referenced final result fields. Do not invent new findings or silently resolve unresolved disagreement.",
-      "Cover: outcome, deliberation status, coverage, final review result, highest severity, material issues, non-material findings, action candidates, and primary artifacts.",
+      "Cover: outcome, deliberation status, coverage, final review result, boundary notes, highest severity, material issues, non-material findings, action candidates, and primary artifacts.",
       "Make the result comprehensive enough for the user to understand what to do next, but keep operational detail bounded. Use the user's conversation language.",
     ].join("\n"),
     input,
   };
 }
 
+function markdownHeadingLevel(line: string): number | null {
+  const match = /^(#{1,6})\s+\S/.exec(line.trim());
+  if (!match) return null;
+  return match[1]?.length ?? null;
+}
+
+function extractMarkdownSectionByHeadings(
+  markdownText: string,
+  headings: string[],
+): string | null {
+  const lines = markdownText.split("\n");
+  const accepted = new Set(
+    headings.flatMap((heading) => [`## ${heading}`, `### ${heading}`]),
+  );
+  const startIndex = lines.findIndex((line) => accepted.has(line.trim()));
+  if (startIndex === -1) return null;
+
+  const startHeadingLevel = markdownHeadingLevel(lines[startIndex] ?? "");
+  const collected: string[] = [];
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const currentHeadingLevel = markdownHeadingLevel(line);
+    if (
+      currentHeadingLevel !== null &&
+      startHeadingLevel !== null &&
+      currentHeadingLevel <= startHeadingLevel
+    ) {
+      break;
+    }
+    collected.push(line);
+  }
+  const section = collected.join("\n").trim();
+  return section.length > 0 ? section : null;
+}
+
+function extractFinalResultExplanationFields(finalOutputText: string): {
+  final_review_result: string;
+  boundary_notes: string;
+} {
+  return {
+    final_review_result:
+      extractMarkdownSectionByHeadings(finalOutputText, [
+        "Final Review Result",
+        "Comprehensive Result Explanation",
+        "Overall Result Explanation",
+        "Review Result Explanation",
+      ]) ?? "- final review result section unavailable",
+    boundary_notes:
+      extractMarkdownSectionByHeadings(finalOutputText, [
+        "Boundary Notes",
+        "Boundary Limitations",
+        "Evidence Gaps",
+      ]) ?? "- boundary notes section unavailable",
+  };
+}
+
+function compactFinalResultExplanationFields(
+  summary: ReviewResultClassificationSummary,
+): {
+  final_review_result: string;
+  boundary_notes: string;
+} {
+  const materialSignals = summary.material_issues
+    .slice(0, 3)
+    .map((issue) =>
+      compactSignalLine([
+        issue.issue_id,
+        issue.problem_definition ?? issue.issue_statement ?? issue.impact,
+      ]),
+    )
+    .filter((line) => line.length > 0);
+  const boundarySignals = summary.non_material_findings
+    .slice(0, 3)
+    .map((finding) =>
+      compactSignalLine([
+        finding.issue_id,
+        finding.problem_definition ?? finding.issue_statement ?? finding.rationale,
+      ]),
+    )
+    .filter((line) => line.length > 0);
+  return {
+    final_review_result:
+      materialSignals.length > 0
+        ? materialSignals.join("\n")
+        : `No material issues classified. highest=${summary.highest_severity ?? "none"}`,
+    boundary_notes:
+      boundarySignals.length > 0
+        ? boundarySignals.join("\n")
+        : "No non-material boundary notes classified in compact projection.",
+  };
+}
+
 const REVIEW_PRESENTATION_CONTRACT_VERSION = "1";
+const COMPACT_REVIEW_SIGNAL_MAX_CHARS = 360;
+const COMPACT_REVIEW_ID_MAX_CHARS = 120;
+const OPENING_BRIEF_MAX_ARRAY_ITEMS = 5;
+const OPENING_BRIEF_MAX_OBJECT_KEYS = 20;
+const OPENING_BRIEF_MAX_DEPTH = 3;
 
 const PRESENTATION_SOURCE_REF_KEYS = [
   "execution_plan",
@@ -868,7 +977,6 @@ function domainTokenResolution(args: {
   suggestionIds?: string[];
 }): ReviewDomainTokenResolution {
   const requestedToken = args.requestedToken ?? "";
-  const stripped = stripDomainTokenValue(requestedToken);
   const normalized = args.normalizedDomain ?? null;
   const suggestionIds = args.suggestionIds ?? [];
   if (normalized === "none") {
@@ -890,10 +998,7 @@ function domainTokenResolution(args: {
   return {
     requestedToken,
     normalizedDomain: normalized,
-    resolution:
-      stripped.length > 0 && normalizeDomainValue(stripped) !== stripped
-        ? "alias"
-        : "exact",
+    resolution: "exact",
     suggestionIds,
   };
 }
@@ -1286,6 +1391,49 @@ interface ReviewProgressUpdate {
   evidence_refs: string[];
 }
 
+interface CompactIssueSignal {
+  issue_id: string;
+  severity: ReviewResultClassificationSummary["highest_severity"];
+  material: boolean;
+  signal: string;
+  action_candidate_count: number;
+}
+
+export interface CompactReviewResultClassificationSummary {
+  highest_severity: ReviewResultClassificationSummary["highest_severity"];
+  finding_count: number;
+  issue_count: number;
+  severity_counts: ReviewResultClassificationSummary["severity_counts"];
+  material_issue_count: number;
+  non_material_finding_count: number;
+  action_candidate_count: number;
+  material_issue_signals: CompactIssueSignal[];
+  non_material_finding_signals: CompactIssueSignal[];
+}
+
+export type ReviewResultClassificationProjection =
+  | ReviewResultClassificationSummary
+  | CompactReviewResultClassificationSummary;
+
+interface PipelineExecutionLedgerUnitProjection {
+  unitId: string | null;
+  unitKind: string | null;
+  status: string | null;
+  trustStatus: string | null;
+}
+
+export interface CompactPipelineExecutionLedger {
+  schemaVersion?: string;
+  pipeline?: string;
+  sessionId?: string;
+  unitCount: number;
+  units: PipelineExecutionLedgerUnitProjection[];
+}
+
+export type PipelineExecutionLedgerProjection =
+  | PipelineExecutionLedger
+  | CompactPipelineExecutionLedger;
+
 interface ReviewHaltPresentation {
   phase: string | null;
   unit_id: string | null;
@@ -1307,7 +1455,10 @@ interface ReviewStatusPresentationInput {
   progress: ReviewProgressState;
   liveness: ReviewLivenessState;
   latest_update: ReviewProgressUpdate;
-  result_classification_summary: ReviewResultClassificationSummary | null;
+  result_classification_summary:
+    | ReviewResultClassificationSummary
+    | CompactReviewResultClassificationSummary
+    | null;
   halt: ReviewHaltPresentation | null;
   run_control: ReviewRunControlProjection;
   target_material_support: ReviewTargetMaterialSupportProjection | null;
@@ -1330,6 +1481,226 @@ function compactClassificationSignal(
   summary: ReviewResultClassificationSummary,
 ): string {
   return `highest=${summary.highest_severity ?? "none"}, material=${summary.material_issue_count}, severity_counts=${compactSeverityCounts(summary)}`;
+}
+
+function compactText(
+  value: string,
+  maxChars = COMPACT_REVIEW_SIGNAL_MAX_CHARS,
+): string {
+  const oneLine = value.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxChars) return oneLine;
+  return `${oneLine.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function compactSignalLine(parts: Array<string | null | undefined>): string {
+  return compactText(
+    parts
+      .filter((part): part is string => typeof part === "string" && part.length > 0)
+      .join(": "),
+  );
+}
+
+function boundedOpeningBriefValue(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return compactText(value);
+  if (
+    value === null ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    value === undefined
+  ) {
+    return value ?? null;
+  }
+  if (Array.isArray(value)) {
+    return {
+      items: value
+        .slice(0, OPENING_BRIEF_MAX_ARRAY_ITEMS)
+        .map((item) => boundedOpeningBriefValue(item, depth + 1)),
+      total_count: value.length,
+      omitted_count: Math.max(0, value.length - OPENING_BRIEF_MAX_ARRAY_ITEMS),
+    };
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (depth >= OPENING_BRIEF_MAX_DEPTH) {
+      return {
+        nested_object_key_count: entries.length,
+        omitted: true,
+      };
+    }
+    const projected: Record<string, unknown> = {};
+    for (const [key, item] of entries.slice(0, OPENING_BRIEF_MAX_OBJECT_KEYS)) {
+      projected[key] = boundedOpeningBriefValue(item, depth + 1);
+    }
+    const omittedCount = entries.length - OPENING_BRIEF_MAX_OBJECT_KEYS;
+    if (omittedCount > 0) projected._omitted_key_count = omittedCount;
+    return projected;
+  }
+  return String(value);
+}
+
+function compactIssueSignal(
+  issue: ReviewResultClassificationSummary["material_issues"][number],
+): CompactIssueSignal {
+  return {
+    issue_id: compactText(issue.issue_id, COMPACT_REVIEW_ID_MAX_CHARS),
+    severity: issue.severity,
+    material: issue.material,
+    signal: compactText(
+      issue.problem_definition ??
+        issue.issue_statement ??
+        issue.impact ??
+        issue.rationale ??
+        "",
+    ),
+    action_candidate_count: issue.action_candidates.length,
+  };
+}
+
+function compactPipelineExecutionLedger(
+  ledger: PipelineExecutionLedger,
+): CompactPipelineExecutionLedger {
+  return {
+    schemaVersion: ledger.schemaVersion,
+    pipeline: ledger.pipeline,
+    sessionId: ledger.sessionId,
+    unitCount: ledger.units.length,
+    units: ledger.units.map((unit) => ({
+      unitId: compactText(unit.unitId, COMPACT_REVIEW_ID_MAX_CHARS) || null,
+      unitKind: compactText(unit.unitKind, COMPACT_REVIEW_ID_MAX_CHARS) || null,
+      status: unit.status,
+      trustStatus: unit.trustStatus,
+    })),
+  };
+}
+
+function pipelineExecutionLedgerForProjection(
+  ledger: PipelineExecutionLedger | undefined,
+  projectionLevel: ReviewResultProjectionLevel,
+): PipelineExecutionLedgerProjection | undefined {
+  if (!ledger || projectionLevel === "compact") return undefined;
+  return projectionLevel === "full" ? ledger : compactPipelineExecutionLedger(ledger);
+}
+
+function continuationPlanForPublicProjection(
+  plan: ReviewContinuationPlan,
+): ReviewContinuationPlanProjection {
+  const { unitLedger: _unitLedger, ...projected } = plan;
+  return projected;
+}
+
+function compactResultClassificationSummary(
+  summary: ReviewResultClassificationSummary,
+): CompactReviewResultClassificationSummary {
+  return {
+    highest_severity: summary.highest_severity,
+    finding_count: summary.finding_count,
+    issue_count: summary.issue_count,
+    severity_counts: summary.severity_counts,
+    material_issue_count: summary.material_issue_count,
+    non_material_finding_count: summary.non_material_finding_count,
+    action_candidate_count: summary.action_candidates.length,
+    material_issue_signals: summary.material_issues
+      .slice(0, 3)
+      .map(compactIssueSignal),
+    non_material_finding_signals: summary.non_material_findings
+      .slice(0, 3)
+      .map(compactIssueSignal),
+  };
+}
+
+function resultClassificationSummaryForPresentation(
+  summary: ReviewResultClassificationSummary,
+  projectionLevel: ReviewResultProjectionLevel,
+):
+  | ReviewResultClassificationSummary
+  | CompactReviewResultClassificationSummary {
+  return projectionLevel === "full"
+    ? summary
+    : compactResultClassificationSummary(summary);
+}
+
+function reviewStatusPresentationInputForProjection(
+  input: ReviewStatusPresentationInput,
+  projectionLevel: ReviewResultProjectionLevel,
+): ReviewStatusPresentationInput {
+  if (
+    projectionLevel === "full" ||
+    input.result_classification_summary === null
+  ) {
+    return input;
+  }
+  return {
+    ...input,
+    result_classification_summary: compactResultClassificationSummary(
+      input.result_classification_summary as ReviewResultClassificationSummary,
+    ),
+  };
+}
+
+function projectPresentationInputForProjection(
+  input: unknown,
+  projectionLevel: ReviewResultProjectionLevel,
+): unknown {
+  if (
+    projectionLevel === "full" ||
+    !input ||
+    typeof input !== "object" ||
+    Array.isArray(input)
+  ) {
+    return input;
+  }
+  const record = input as Record<string, unknown>;
+  const resultClassificationSummary = record.result_classification_summary;
+  if (
+    !resultClassificationSummary ||
+    typeof resultClassificationSummary !== "object" ||
+    Array.isArray(resultClassificationSummary) ||
+    !Array.isArray(
+      (resultClassificationSummary as Record<string, unknown>).material_issues,
+    ) ||
+    !Array.isArray(
+      (resultClassificationSummary as Record<string, unknown>)
+        .non_material_findings,
+    ) ||
+    !Array.isArray(
+      (resultClassificationSummary as Record<string, unknown>).action_candidates,
+    )
+  ) {
+    return input;
+  }
+  return {
+    ...record,
+    result_classification_summary: compactResultClassificationSummary(
+      resultClassificationSummary as ReviewResultClassificationSummary,
+    ),
+  };
+}
+
+function projectLlmPresentationForProjection(
+  llmPresentation: LlmPresentationPrompts | undefined,
+  projectionLevel: ReviewResultProjectionLevel,
+): LlmPresentationPrompts | undefined {
+  if (!llmPresentation || projectionLevel === "full") return llmPresentation;
+  const projectPrompt = (prompt: LlmPresentationPrompt): LlmPresentationPrompt => {
+    return {
+      ...prompt,
+      input: projectPresentationInputForProjection(prompt.input, projectionLevel),
+    };
+  };
+  const projected: LlmPresentationPrompts = {};
+  if (llmPresentation.openingBrief) {
+    projected.openingBrief = projectPrompt(llmPresentation.openingBrief);
+  }
+  if (llmPresentation.progress) {
+    projected.progress = projectPrompt(llmPresentation.progress);
+  }
+  if (llmPresentation.halt) {
+    projected.halt = projectPrompt(llmPresentation.halt);
+  }
+  if (llmPresentation.finalResult) {
+    projected.finalResult = projectPrompt(llmPresentation.finalResult);
+  }
+  return projected;
 }
 
 function buildProgressPresentation(input: unknown): LlmPresentationPrompt {
@@ -2207,7 +2578,7 @@ async function buildPreparedOpeningBriefInput(
       OPENING_PRESENTATION_SOURCE_REF_KEYS,
     ),
     interpretation: interpretation
-      ? {
+      ? boundedOpeningBriefValue({
           entrypoint: interpretation.entrypoint,
           target_scope_candidate: interpretation.target_scope_candidate,
           intent_summary: interpretation.intent_summary,
@@ -2216,10 +2587,10 @@ async function buildPreparedOpeningBriefInput(
           review_mode_recommendation: interpretation.review_mode_recommendation,
           lens_selection_plan: interpretation.lens_selection_plan,
           ambiguity_notes: interpretation.ambiguity_notes,
-        }
+        })
       : null,
     binding: binding
-      ? {
+      ? boundedOpeningBriefValue({
           resolved_target_scope: binding.resolved_target_scope,
           resolved_session_domain: binding.resolved_session_domain,
           resolved_review_mode: binding.resolved_review_mode,
@@ -2229,10 +2600,10 @@ async function buildPreparedOpeningBriefInput(
           boundary_policy: binding.boundary_policy,
           effective_boundary_state: binding.effective_boundary_state,
           binding_notes: binding.binding_notes ?? [],
-        }
+        })
       : null,
     review_target_profile: reviewTargetProfile
-      ? {
+      ? boundedOpeningBriefValue({
           target_input_kind: reviewTargetProfile.target_input_kind,
           target_material_kind: reviewTargetProfile.target_material_kind,
           material_profile: reviewTargetProfile.material_profile,
@@ -2245,14 +2616,16 @@ async function buildPreparedOpeningBriefInput(
             reviewTargetProfile.closure_obligation_policy,
           target_refs: reviewTargetProfile.target_refs,
           inference: reviewTargetProfile.inference,
-        }
+        })
       : null,
     execution_plan: {
       review_mode: executionPlan.review_mode,
       execution_realization: executionPlan.execution_realization,
       host_runtime: executionPlan.host_runtime,
-      lens_ids: executionPlan.lens_execution_seats.map((seat) => seat.lens_id),
-      prompt_packets_root: executionPlan.prompt_packets_root,
+      lens_ids: boundedOpeningBriefValue(
+        executionPlan.lens_execution_seats.map((seat) => seat.lens_id),
+      ),
+      prompt_packets_root: compactText(executionPlan.prompt_packets_root),
       review_run_manifest_path: path.join(sessionRoot, "review-run-manifest.yaml"),
     },
   };
@@ -2346,6 +2719,10 @@ async function buildRunningReviewRunResult(args: {
     executionResult,
     reviewRecord,
   });
+  const progressPresentationInput = reviewStatusPresentationInputForProjection(
+    progressInput,
+    "standard",
+  );
   const runHandle = await buildReviewRunHandle({
     sessionRoot,
     status: "running",
@@ -2353,7 +2730,7 @@ async function buildRunningReviewRunResult(args: {
     ...(args.requestHash !== undefined ? { requestHash: args.requestHash } : {}),
   });
   const llmPresentation: LlmPresentationPrompts = {
-    progress: buildProgressPresentation(progressInput),
+    progress: buildProgressPresentation(progressPresentationInput),
   };
   if (executionPlan) {
     llmPresentation.openingBrief = buildOpeningBriefPresentation(
@@ -2379,9 +2756,9 @@ async function buildRunningReviewRunResult(args: {
     routeVisibility: await buildReviewRouteVisibilityFromSession(sessionRoot),
     llmPresentation,
     runHandle,
-    runControl: progressInput.run_control,
-    targetMaterialSupport: progressInput.target_material_support,
-    environmentWarnings: progressInput.environment_warnings,
+    runControl: progressPresentationInput.run_control,
+    targetMaterialSupport: progressPresentationInput.target_material_support,
+    environmentWarnings: progressPresentationInput.environment_warnings,
   };
 }
 
@@ -2544,6 +2921,7 @@ function reviewExecutionProfileFromManifest(
   if (typeof profile.base_url === "string") {
     reconstructed.base_url = profile.base_url;
   }
+  buildReviewExecutionRoute(reconstructed);
   return reconstructed;
 }
 
@@ -2567,11 +2945,52 @@ function reviewExecutionProfileFromActorProfiles(args: {
     teamlead.runtime_provider !== "codex"
       ? teamlead.runtime_provider
       : undefined;
+  const actorLlmFromProfile = (
+    profile: ReviewResolvedActorInvocationProfile,
+  ): ReviewExecutionProfile["teamlead"]["llm"] | undefined => {
+    if (
+      profile.auth_mode !== "api_key" &&
+      profile.auth_mode !== "oauth" &&
+      profile.auth_mode !== "local"
+    ) {
+      return undefined;
+    }
+    const provider =
+      profile.runtime_provider === "codex" ? "openai" : profile.runtime_provider;
+    if (
+      provider !== "openai" &&
+      provider !== "anthropic" &&
+      provider !== "grok" &&
+      provider !== "lmstudio"
+    ) {
+      return undefined;
+    }
+    const credentialEnv =
+      typeof profile.credential_ref === "string" &&
+      profile.credential_ref.startsWith("env:")
+        ? profile.credential_ref.slice("env:".length).trim()
+        : "";
+    return {
+      auth: profile.auth_mode,
+      provider,
+      ...(profile.model ? { model: profile.model } : {}),
+      ...(profile.effort ? { effort: profile.effort } : {}),
+      ...(profile.service_tier ? { service_tier: profile.service_tier } : {}),
+      ...(profile.base_url ? { base_url: profile.base_url } : {}),
+      ...(credentialEnv.length > 0 ? { api_key_env: credentialEnv } : {}),
+    };
+  };
+  const teamleadLlm = actorLlmFromProfile(teamlead);
+  const lensLlm = actorLlmFromProfile(lens);
+  const synthesizeLlm = actorLlmFromProfile(synthesize);
   const reconstructed: ReviewExecutionProfile = {
     mode: "main-workers",
-    teamlead: { seat: teamlead.seat, llm: "inherit" },
-    lens: { seat: lens.seat, llm: "inherit" },
-    synthesize: { seat: synthesize.seat, llm: "inherit" },
+    teamlead: { seat: teamlead.seat, ...(teamleadLlm ? { llm: teamleadLlm } : {}) },
+    lens: { seat: lens.seat, ...(lensLlm ? { llm: lensLlm } : {}) },
+    synthesize: {
+      seat: synthesize.seat,
+      ...(synthesizeLlm ? { llm: synthesizeLlm } : {}),
+    },
     deliberation: "controlled-lens-deliberation",
     worker_executor: workerExecutor,
     host,
@@ -2593,6 +3012,7 @@ function reviewExecutionProfileFromActorProfiles(args: {
   if (teamlead.effort) reconstructed.effort = teamlead.effort;
   if (teamlead.service_tier) reconstructed.service_tier = teamlead.service_tier;
   if (teamlead.base_url) reconstructed.base_url = teamlead.base_url;
+  buildReviewExecutionRoute(reconstructed);
   return reconstructed;
 }
 
@@ -2926,10 +3346,14 @@ export function createOntoReviewCoreApi(
           const result = parsed.review_result;
           const status = result.record_status ?? "halted_partial";
           const startPreview: ReviewRunResult["startPreview"] = {
-            entrypointPlan: parsed.entrypoint_plan,
-            routeSummary: parsed.route_summary,
+            entrypointPlan: boundedOpeningBriefValue(parsed.entrypoint_plan),
+            routeSummary: boundedOpeningBriefValue(parsed.route_summary),
             ...(parsed.bounded_invoke_steps !== undefined
-              ? { boundedInvokeSteps: parsed.bounded_invoke_steps }
+              ? {
+                  boundedInvokeSteps: parsed.bounded_invoke_steps
+                    .slice(0, OPENING_BRIEF_MAX_ARRAY_ITEMS)
+                    .map((step) => compactText(String(step))),
+                }
               : {}),
           };
           const resolvedResultSessionRoot = path.resolve(result.session_root);
@@ -2963,6 +3387,7 @@ export function createOntoReviewCoreApi(
           );
           const resultClassificationSummary =
             await readReviewResultClassification(resolvedResultSessionRoot);
+          const presentationProjectionLevel: ReviewResultProjectionLevel = "standard";
           const progressInput = await buildReviewStatusPresentationInput({
             sessionRoot: resolvedResultSessionRoot,
             status,
@@ -2971,6 +3396,10 @@ export function createOntoReviewCoreApi(
             executionResult,
             reviewRecord,
           });
+          const progressPresentationInput = reviewStatusPresentationInputForProjection(
+            progressInput,
+            presentationProjectionLevel,
+          );
           const openingBriefInput = executionPlan
             ? await buildPreparedOpeningBriefInput(resolvedResultSessionRoot, executionPlan)
             : {
@@ -2989,17 +3418,35 @@ export function createOntoReviewCoreApi(
             session_root: resolvedResultSessionRoot,
             status,
             generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
-            result_overview: parsed.result_overview ?? null,
-            result_classification_summary: resultClassificationSummary,
-            review_result: result,
+            explanation: compactFinalResultExplanationFields(resultClassificationSummary),
+            result_classification_summary: resultClassificationSummaryForPresentation(
+              resultClassificationSummary,
+              presentationProjectionLevel,
+            ),
+            review_result_summary: {
+              final_output_path: result.final_output_path,
+              review_record_path: result.review_record_path,
+              execution_result_path: result.execution_result_path,
+              review_run_manifest_path:
+                result.review_run_manifest_path ??
+                path.join(resolvedResultSessionRoot, "review-run-manifest.yaml"),
+              deliberation_status: result.deliberation_status ?? null,
+              participating_lens_count: result.participating_lens_ids?.length ?? 0,
+              degraded_lens_count: result.degraded_lens_ids?.length ?? 0,
+            },
           };
+          const projectedPipelineExecutionLedger =
+            pipelineExecutionLedgerForProjection(
+              pipelineExecutionLedger,
+              presentationProjectionLevel,
+            );
           const llmPresentation: LlmPresentationPrompts = {
             openingBrief: buildOpeningBriefPresentation(openingBriefInput),
-            progress: buildProgressPresentation(progressInput),
-            ...(progressInput.halt
+            progress: buildProgressPresentation(progressPresentationInput),
+            ...(progressPresentationInput.halt
               ? {
                   halt: buildHaltPresentation({
-                    ...progressInput,
+                    ...progressPresentationInput,
                     presentation_kind: "halt",
                   }),
                 }
@@ -3031,12 +3478,14 @@ export function createOntoReviewCoreApi(
             participatingLensIds: result.participating_lens_ids ?? [],
             degradedLensIds: result.degraded_lens_ids ?? [],
             ...(result.summary !== undefined ? { summary: result.summary } : {}),
-            ...(parsed.result_overview !== undefined
-              ? { resultOverview: parsed.result_overview }
-              : {}),
             artifactRefs,
-            ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
-            resultClassificationSummary,
+            ...(projectedPipelineExecutionLedger
+              ? { pipelineExecutionLedger: projectedPipelineExecutionLedger }
+              : {}),
+            resultClassificationSummary: resultClassificationSummaryForPresentation(
+              resultClassificationSummary,
+              presentationProjectionLevel,
+            ),
             ...failures,
             routeVisibility:
               await buildReviewRouteVisibilityFromSession(resolvedResultSessionRoot),
@@ -3171,6 +3620,18 @@ export function createOntoReviewCoreApi(
         )
       ) {
         const status = await api.getReviewStatus(resolvedSessionRoot);
+        const projectionLevel: ReviewResultProjectionLevel = "standard";
+        const resultClassificationSummary =
+          await readReviewResultClassification(resolvedSessionRoot);
+        const projectedPipelineExecutionLedger =
+          pipelineExecutionLedgerForProjection(
+            status.pipelineExecutionLedger,
+            projectionLevel,
+          );
+        const projectedLlmPresentation = projectLlmPresentationForProjection(
+          status.llmPresentation,
+          projectionLevel,
+        );
         return {
           sessionId: status.sessionId,
           sessionRoot: resolvedSessionRoot,
@@ -3178,16 +3639,18 @@ export function createOntoReviewCoreApi(
           status: "running",
           artifactRefs: status.artifactRefs,
           failureRefs: status.failureRefs,
-          ...(status.pipelineExecutionLedger
-            ? { pipelineExecutionLedger: status.pipelineExecutionLedger }
+          ...(projectedPipelineExecutionLedger
+            ? { pipelineExecutionLedger: projectedPipelineExecutionLedger }
             : {}),
-          resultClassificationSummary:
-            await readReviewResultClassification(resolvedSessionRoot),
+          resultClassificationSummary: resultClassificationSummaryForPresentation(
+            resultClassificationSummary,
+            projectionLevel,
+          ),
           ...(status.routeVisibility !== undefined
             ? { routeVisibility: status.routeVisibility }
             : {}),
-          ...(status.llmPresentation !== undefined
-            ? { llmPresentation: status.llmPresentation }
+          ...(projectedLlmPresentation !== undefined
+            ? { llmPresentation: projectedLlmPresentation }
             : {}),
           ...(activeRunControl.activeAttempt
             ? { activeAttempt: activeRunControl.activeAttempt }
@@ -3258,6 +3721,67 @@ export function createOntoReviewCoreApi(
         : actorProfileReviewExecutionProfile
           ? "actor-invocation-profiles"
           : "none";
+      const continuationRouteVisibility =
+        await buildReviewRouteVisibilityFromSession(resolvedSessionRoot);
+      if (
+        continuationRouteVisibility?.source === "review-run-manifest" &&
+        (continuationRouteVisibility.routeConsistency === "profile_actual_conflict" ||
+          continuationRouteVisibility.routeConsistency === "actual_mixed")
+      ) {
+        await writeAndThrowStructuredFailureRecord({
+          sessionRoot: resolvedSessionRoot,
+          phase: "pre_dispatch.actor_route",
+          reasonCode: "continuation_route_visibility_conflict",
+          humanMessage:
+            "Review continuation cannot dispatch because the prior review run route conflicts with actual worker runtime evidence.",
+          requiredUserAction:
+            "Start a fresh review, or repair the prior review-run-manifest and actor route artifacts before continuing.",
+          retrySafety: "safe_after_input_change",
+          artifactTrust: "execution_artifacts_partial",
+          dispatchState: "dispatch_blocked",
+          artifactRefs: {
+            execution_plan:
+              continuationRouteVisibility.artifactRefs.executionPlan ??
+              path.join(resolvedSessionRoot, "execution-plan.yaml"),
+            ...(continuationRouteVisibility.artifactRefs.reviewRunManifest
+              ? {
+                  review_run_manifest:
+                    continuationRouteVisibility.artifactRefs.reviewRunManifest,
+                }
+              : {}),
+            ...(continuationRouteVisibility.artifactRefs.actorInvocationProfiles
+              ? {
+                  actor_invocation_profiles:
+                    continuationRouteVisibility.artifactRefs.actorInvocationProfiles,
+                }
+              : {}),
+          },
+          mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+          detailsKind: "actor_route",
+          details: {
+            route_consistency: continuationRouteVisibility.routeConsistency,
+            actual_host_runtimes:
+              continuationRouteVisibility.actualHostRuntimes,
+            host_runtime: continuationRouteVisibility.hostRuntime,
+            runtime_provider: continuationRouteVisibility.runtimeProvider,
+            auth_mode: continuationRouteVisibility.authMode,
+            worker_executor: continuationRouteVisibility.workerExecutor,
+            profile_source: reviewExecutionProfileSource,
+          },
+        });
+      }
+      if (!reviewExecutionProfile && executorRealization !== "mock") {
+        throw new Error(
+          "Review continuation requires a review execution profile for non-mock executor dispatch.",
+        );
+      }
+      if (reviewExecutionProfile) {
+        await ensureProviderRouteReadyForDispatch({
+          sessionRoot: resolvedSessionRoot,
+          executionPlanPath: path.join(resolvedSessionRoot, "execution-plan.yaml"),
+          reviewExecutionProfile,
+        });
+      }
       const attemptId = continuationAttemptId();
       const attemptRoot = path.join(
         resolvedSessionRoot,
@@ -3325,16 +3849,57 @@ export function createOntoReviewCoreApi(
 
       let promptExecutionResult: ReviewPromptExecutionResult | undefined;
       try {
-        const executorConfig = buildExecutorConfigFromRealization(
-          executorRealization,
-          ontoHome,
-        );
+        const executorConfig = reviewExecutionProfile
+          ? resolveExecutorConfig(
+              [],
+              "",
+              undefined,
+              ontoHome,
+              reviewExecutionProfile,
+              "lens",
+            )
+          : buildExecutorConfigFromRealization(executorRealization, ontoHome);
+        const teamleadExecutorConfig = reviewExecutionProfile
+          ? resolveExecutorConfig(
+              [],
+              "",
+              undefined,
+              ontoHome,
+              reviewExecutionProfile,
+              "teamlead",
+            )
+          : undefined;
+        const synthesizeExecutorConfig = reviewExecutionProfile
+          ? resolveExecutorConfig(
+              [],
+              "synthesize-",
+              undefined,
+              ontoHome,
+              reviewExecutionProfile,
+              "synthesize",
+            )
+          : undefined;
+        const sameExecutorConfig = (
+          left: typeof executorConfig,
+          right: typeof executorConfig | undefined,
+        ): boolean =>
+          right !== undefined &&
+          left.bin === right.bin &&
+          JSON.stringify(left.args) === JSON.stringify(right.args);
         promptExecutionResult = (
           await withCapturedConsole(() =>
             executeReviewPromptExecution({
               projectRoot,
               sessionRoot: resolvedSessionRoot,
               defaultExecutorConfig: executorConfig,
+              ...(teamleadExecutorConfig &&
+              !sameExecutorConfig(executorConfig, teamleadExecutorConfig)
+                ? { teamleadExecutorConfig }
+                : {}),
+              ...(synthesizeExecutorConfig &&
+              !sameExecutorConfig(executorConfig, synthesizeExecutorConfig)
+                ? { synthesizeExecutorConfig }
+                : {}),
               ...(reviewExecutionProfile ? { reviewExecutionProfile } : {}),
               continuationPlan,
             }),
@@ -3395,7 +3960,7 @@ export function createOntoReviewCoreApi(
             attempt_root: attemptRoot,
             attempt_manifest_ref: attemptManifestPath,
             continuation_plan_ref: continuationPlanPath,
-            continuation_plan: continuationPlan,
+            continuation_plan: continuationPlanForPublicProjection(continuationPlan),
             superseded_artifact_backups: supersededArtifactBackups,
             restored_artifact_backups: restoredArtifactBackups,
             error_message: errorMessage,
@@ -3407,12 +3972,24 @@ export function createOntoReviewCoreApi(
       }
 
       const postStatus = await api.getReviewStatus(resolvedSessionRoot);
+      const projectionLevel: ReviewResultProjectionLevel = "standard";
+      const resultClassificationSummary =
+        await readReviewResultClassification(resolvedSessionRoot);
+      const projectedPipelineExecutionLedger =
+        pipelineExecutionLedgerForProjection(
+          postStatus.pipelineExecutionLedger,
+          projectionLevel,
+        );
+      const projectedLlmPresentation = projectLlmPresentationForProjection(
+        postStatus.llmPresentation,
+        projectionLevel,
+      );
       return {
         sessionId: postStatus.sessionId,
         sessionRoot: resolvedSessionRoot,
         decision: "executed",
         status: postStatus.status,
-        continuationPlan,
+        continuationPlan: continuationPlanForPublicProjection(continuationPlan),
         continuationAttempt: {
           attemptId,
           attemptRoot,
@@ -3422,17 +3999,19 @@ export function createOntoReviewCoreApi(
         },
         promptExecutionResult,
         artifactRefs: postStatus.artifactRefs,
-        ...(postStatus.pipelineExecutionLedger
-          ? { pipelineExecutionLedger: postStatus.pipelineExecutionLedger }
+        ...(projectedPipelineExecutionLedger
+          ? { pipelineExecutionLedger: projectedPipelineExecutionLedger }
           : {}),
-        resultClassificationSummary:
-          await readReviewResultClassification(resolvedSessionRoot),
+        resultClassificationSummary: resultClassificationSummaryForPresentation(
+          resultClassificationSummary,
+          projectionLevel,
+        ),
         failureRefs: postStatus.failureRefs,
         ...(postStatus.routeVisibility !== undefined
           ? { routeVisibility: postStatus.routeVisibility }
           : {}),
-        ...(postStatus.llmPresentation !== undefined
-          ? { llmPresentation: postStatus.llmPresentation }
+        ...(projectedLlmPresentation !== undefined
+          ? { llmPresentation: projectedLlmPresentation }
           : {}),
       };
     },
@@ -3653,7 +4232,7 @@ export function createOntoReviewCoreApi(
       options: { projectionLevel?: ReviewResultProjectionLevel } = {},
     ): Promise<ReviewResult> {
       const resolvedSessionRoot = path.resolve(sessionRoot);
-      const projectionLevel = options.projectionLevel ?? "full";
+      const projectionLevel = options.projectionLevel ?? "standard";
       const artifactRefs = await collectArtifactRefs(resolvedSessionRoot);
       const { failureRefs } = await collectStructuredFailures(resolvedSessionRoot);
       const reviewRecordPath = path.join(resolvedSessionRoot, "review-record.yaml");
@@ -3666,10 +4245,18 @@ export function createOntoReviewCoreApi(
         projectRoot: resultSessionMetadata?.project_root ?? null,
         finalOutputRef: reviewRecord.final_output_ref,
       });
+      const resultClassificationSummary =
+        await readReviewResultClassification(resolvedSessionRoot);
+      const finalOutputPresentationText =
+        projectionLevel === "full" ? await readOptionalText(finalOutputPath) : null;
       const finalOutputText =
-        projectionLevel === "compact"
+        projectionLevel !== "full"
           ? undefined
-          : await readOptionalText(finalOutputPath);
+          : finalOutputPresentationText ?? undefined;
+      const finalResultExplanation =
+        projectionLevel === "full"
+          ? extractFinalResultExplanationFields(finalOutputPresentationText ?? "")
+          : compactFinalResultExplanationFields(resultClassificationSummary);
       const executionPlan = await readOptionalYaml<ReviewExecutionPlan>(
         path.join(resolvedSessionRoot, "execution-plan.yaml"),
       );
@@ -3683,8 +4270,6 @@ export function createOntoReviewCoreApi(
           executionPlan,
           executionResult,
         });
-      const resultClassificationSummary =
-        await readReviewResultClassification(resolvedSessionRoot);
       const status = reviewRecord.record_status;
       const progressInput = await buildReviewStatusPresentationInput({
         sessionRoot: resolvedSessionRoot,
@@ -3694,6 +4279,10 @@ export function createOntoReviewCoreApi(
         executionResult,
         reviewRecord,
       });
+      const progressPresentationInput = reviewStatusPresentationInputForProjection(
+        progressInput,
+        projectionLevel,
+      );
       const finalResultInput = {
         presentation_contract_version: REVIEW_PRESENTATION_CONTRACT_VERSION,
         presentation_kind: "final_result",
@@ -3701,7 +4290,11 @@ export function createOntoReviewCoreApi(
         session_root: resolvedSessionRoot,
         status,
         generated_from_artifact_refs: generatedFromArtifactRefs(artifactRefs),
-        result_classification_summary: resultClassificationSummary,
+        explanation: finalResultExplanation,
+        result_classification_summary: resultClassificationSummaryForPresentation(
+          resultClassificationSummary,
+          projectionLevel,
+        ),
         review_record: projectionLevel === "full" ? reviewRecord : null,
         review_record_summary: {
           review_record_id: reviewRecord.review_record_id,
@@ -3717,6 +4310,8 @@ export function createOntoReviewCoreApi(
         executionPlan,
       );
       const environmentWarnings = await readEnvironmentWarnings(resolvedSessionRoot);
+      const projectedPipelineExecutionLedger =
+        pipelineExecutionLedgerForProjection(pipelineExecutionLedger, projectionLevel);
       return {
         sessionId: reviewRecord.session_id,
         sessionRoot: resolvedSessionRoot,
@@ -3724,7 +4319,10 @@ export function createOntoReviewCoreApi(
         reviewRecordSummary: {
           reviewRecordId: reviewRecord.review_record_id,
           recordStatus: reviewRecord.record_status,
-          requestText: reviewRecord.request_text,
+          requestText:
+            projectionLevel === "full"
+              ? reviewRecord.request_text
+              : compactText(reviewRecord.request_text),
           resolvedLensIds: reviewRecord.resolved_lens_ids,
           participatingLensIds: reviewRecord.participating_lens_ids,
           degradedLensIds: reviewRecord.degraded_lens_ids,
@@ -3734,16 +4332,21 @@ export function createOntoReviewCoreApi(
         finalOutputPath,
         reviewRunManifestPath: path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         artifactRefs,
-        ...(pipelineExecutionLedger ? { pipelineExecutionLedger } : {}),
-        resultClassificationSummary,
+        ...(projectedPipelineExecutionLedger
+          ? { pipelineExecutionLedger: projectedPipelineExecutionLedger }
+          : {}),
+        resultClassificationSummary: resultClassificationSummaryForPresentation(
+          resultClassificationSummary,
+          projectionLevel,
+        ),
         failureRefs,
         routeVisibility: await buildReviewRouteVisibilityFromSession(resolvedSessionRoot),
         llmPresentation: {
-          progress: buildProgressPresentation(progressInput),
+          progress: buildProgressPresentation(progressPresentationInput),
           ...(progressInput.halt
             ? {
                 halt: buildHaltPresentation({
-                  ...progressInput,
+                  ...progressPresentationInput,
                   presentation_kind: "halt",
                 }),
               }

@@ -240,7 +240,7 @@ describe("reconstruct run-control validation", () => {
     }
     await fs.writeFile(
       path.join(root, "source-purpose-candidates.yaml.reuse-provenance.yaml"),
-      "schema_version: '1'\ncompatibility_hash: fixture\n",
+      "schema_version: '1'\nreuse_match_hash: fixture\n",
       "utf8",
     );
     await markReconstructRunControlAttemptFailed({
@@ -261,9 +261,9 @@ describe("reconstruct run-control validation", () => {
     expect(resumed.runControl.resume_rows[0]).toMatchObject({
       source_attempt_id: initial.attemptId,
       resume_decision: "resume_pending_provenance",
-      compatibility_policy: "authored_artifact_provenance:v1",
+      provenance_match_policy: "authored_artifact_reuse_match:v1",
     });
-    expect(resumed.runControl.resume_rows[0]?.compatibility_check_refs)
+    expect(resumed.runControl.resume_rows[0]?.provenance_match_check_refs)
       .toEqual(expect.arrayContaining([
         path.join(root, "source-scout-pack-validation.yaml"),
         path.join(root, "seed-authoring-readiness-validation.yaml"),
@@ -271,7 +271,7 @@ describe("reconstruct run-control validation", () => {
       ]));
     expect(resumed.runControl.resume_rows[0]?.checkpoint_refs)
       .toEqual(expect.arrayContaining(
-        resumed.runControl.resume_rows[0]?.compatibility_check_refs ?? [],
+        resumed.runControl.resume_rows[0]?.provenance_match_check_refs ?? [],
       ));
     expect(resumed.runControl.attempt_rows).toHaveLength(2);
     expect(resumed.runControl.attempt_rows[0]).toMatchObject({

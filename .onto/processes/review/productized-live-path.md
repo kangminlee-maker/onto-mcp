@@ -288,8 +288,9 @@ Round 1 lens outputs
 - conditional consensus
 - disagreement
 - overlooked premises
-- immediate actions
+- immediate actions required
 - recommendations
+- boundary notes
 - final review result
 
 중요:

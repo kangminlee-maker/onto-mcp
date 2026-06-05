@@ -12,7 +12,7 @@ small set of tools with a stable MCP surface.
 | `onto.review_status` | Read progress for a review session or recover the latest matching session | structured status plus `llmPresentation.progress`, liveness, run-control, material-support, warning, and latest-session projections |
 | `onto.review_continue` | Continue a review when `runControl.continuationAvailable` is true without re-running trusted or active units | continuation plan, continuation attempt refs, updated artifact refs, status, or `already_running` decision |
 | `onto.review_cancel` | Request cancellation for a running review session | cancellation request artifact ref plus updated status/run-control projection |
-| `onto.review_result` | Read final result and artifact refs | compact/standard/full projection over `review-record.yaml`, `final-output.md`, `resultClassificationSummary`, material support, and warnings |
+| `onto.review_result` | Read final result and artifact refs | compact/standard/full projection; `compact` and `standard` keep bounded count-and-signal summaries, `full` includes `review-record.yaml` and `final-output.md` |
 | `onto.list_lenses` | Show canonical lens sets | full/core-axis lens IDs |
 | `onto.list_domains` | Show available domains | domain IDs and source dirs |
 | `onto.list_source_profiles` | Show reconstruct source profiles | source profile refs keyed by `target_material_kind` |
@@ -61,8 +61,8 @@ an active cancellable attempt; prepared, terminal, failed, or stale sessions do
 not receive orphan cancellation-request artifacts. This keeps cancellation
 separate from host-call timeouts and unit timeouts.
 
-Explicit domain tokens are normalized before dispatch. Exact and alias matches
-proceed; unknown explicit tokens fail before dispatch with
+Explicit domain tokens are normalized only for sigil/no-domain syntax before
+dispatch. Exact canonical matches proceed; retired aliases and unknown explicit tokens fail before dispatch with
 `ReviewDomainTokenResolution.resolution` set to `suggestion` when safe
 suggestions exist, or `unknown` when they do not.
 
@@ -218,7 +218,7 @@ In `settings.json/v3`, each actor owns a complete LLM block. Review actors use
 `review.execution.actors.*.llm`; reconstruct direct-call actors use
 `reconstruct.execution.actors.semantic_author.llm` and
 `reconstruct.execution.actors.confirmation_provider.llm`. There is no root
-`llm.default`, no root reconstruct LLM fallback, and no actor inheritance in the
+`llm.default`, no root reconstruct LLM setting, and no actor inheritance in the
 canonical settings shape. Review execution route selection belongs to
 `review.execution.executor`: `auto` derives the route from the actor LLM
 selections, auth mode, host availability, and execution topology, while

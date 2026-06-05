@@ -139,16 +139,37 @@ async function loadOntoConfigForPlan(
  * OntoConfig subset → ResolvedLlmPlan.
  * Returns undefined if no fields are populated (avoid empty record noise).
  */
-function derivePlanTimeLlmResolution(
-  config: { llm?: LlmModelSwitcherConfig },
-): ResolvedLlmPlan | undefined {
-  const partial = normalizeLlmModelSwitcher(config.llm);
-  if (partial === null) return undefined;
+function commonDefinedField<T>(values: Array<T | undefined>): T | undefined {
+  const defined = values.filter((value): value is T => value !== undefined);
+  if (defined.length === 0) return undefined;
+  const first = defined[0]!;
+  return defined.every((value) => value === first) ? first : undefined;
+}
+
+function derivePlanTimeLlmResolution(config: OntoSettings): ResolvedLlmPlan | undefined {
+  const actorLlms = [
+    config.review?.execution?.teamlead?.llm,
+    config.review?.execution?.lens?.llm,
+    config.review?.execution?.synthesize?.llm,
+  ].filter((llm): llm is LlmModelSwitcherConfig => llm !== undefined);
+  if (actorLlms.length === 0) return undefined;
+  const selections = actorLlms
+    .map((llm) => normalizeLlmModelSwitcher(llm))
+    .filter((selection) => selection !== null);
+  if (selections.length === 0) return undefined;
   const plan: ResolvedLlmPlan = {};
-  if (partial.model_id) plan.model = partial.model_id;
-  if (partial.reasoning_effort) plan.reasoning_effort = partial.reasoning_effort;
-  if (partial.service_tier) plan.service_tier = partial.service_tier;
-  if (partial.provider) plan.provider = partial.provider;
+  const model = commonDefinedField(selections.map((selection) => selection.model_id));
+  const reasoningEffort = commonDefinedField(
+    selections.map((selection) => selection.reasoning_effort),
+  );
+  const serviceTier = commonDefinedField(
+    selections.map((selection) => selection.service_tier),
+  );
+  const provider = commonDefinedField(selections.map((selection) => selection.provider));
+  if (model) plan.model = model;
+  if (reasoningEffort) plan.reasoning_effort = reasoningEffort;
+  if (serviceTier) plan.service_tier = serviceTier;
+  if (provider) plan.provider = provider;
   return Object.keys(plan).length > 0 ? plan : undefined;
 }
 
@@ -177,16 +198,9 @@ function resolveReviewExecutionSettingsForArtifacts(
 }
 
 function resolveActorLlmForArtifact(
-  actorLlmRef: ReviewLlmRef,
-  inherited: OntoSettings["llm"],
+  actorLlmRef: ReviewLlmRef | undefined,
 ): LlmModelSwitcherConfig | undefined {
-  if (actorLlmRef === "inherit") return inherited;
-  const shouldOverlayInherited =
-    actorLlmRef.auth === undefined && actorLlmRef.provider === undefined;
-  return {
-    ...(shouldOverlayInherited ? inherited ?? {} : {}),
-    ...actorLlmRef,
-  };
+  return actorLlmRef ? { ...actorLlmRef } : undefined;
 }
 
 function workerExecutorForRealization(
@@ -222,16 +236,12 @@ function credentialRefForSelection(args: {
 function buildActorInvocationProfile(args: {
   actorKind: ReviewActorKind;
   seat: ReviewActorSeat;
-  actorLlmRef: ReviewLlmRef;
-  inheritedLlm: OntoSettings["llm"];
+  actorLlmRef: ReviewLlmRef | undefined;
   executionRealization: ReviewExecutionRealization;
   hostRuntime: ReviewHostRuntime;
   sourceSettingsRefs: string[];
 }): ReviewResolvedActorInvocationProfile {
-  const resolvedLlm = resolveActorLlmForArtifact(
-    args.actorLlmRef,
-    args.inheritedLlm,
-  );
+  const resolvedLlm = resolveActorLlmForArtifact(args.actorLlmRef);
   const normalized = normalizeLlmModelSwitcher(resolvedLlm);
   const effectiveWorkerExecutor = workerExecutorForRealization(
     args.executionRealization,
@@ -833,37 +843,31 @@ export async function bootstrapInvocationBindingArtifacts(
         actorKind: "teamlead",
         seat: reviewExecutionSettings.teamlead.seat,
         actorLlmRef: reviewExecutionSettings.teamlead.llm,
-        inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: [
-          "review.execution.actors.teamlead.llm",
-          ...(ontoConfig.llm ? ["llm.default"] : []),
-        ],
+        sourceSettingsRefs: reviewExecutionSettings.teamlead.llm
+          ? ["review.execution.actors.teamlead.llm"]
+          : [],
       }),
       buildActorInvocationProfile({
         actorKind: "lens",
         seat: reviewExecutionSettings.lens.seat,
         actorLlmRef: reviewExecutionSettings.lens.llm,
-        inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: [
-          "review.execution.actors.lens.llm",
-          ...(ontoConfig.llm ? ["llm.default"] : []),
-        ],
+        sourceSettingsRefs: reviewExecutionSettings.lens.llm
+          ? ["review.execution.actors.lens.llm"]
+          : [],
       }),
       buildActorInvocationProfile({
         actorKind: "synthesize",
         seat: reviewExecutionSettings.synthesize.seat,
         actorLlmRef: reviewExecutionSettings.synthesize.llm,
-        inheritedLlm: ontoConfig.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
-        sourceSettingsRefs: [
-          "review.execution.actors.synthesize.llm",
-          ...(ontoConfig.llm ? ["llm.default"] : []),
-        ],
+        sourceSettingsRefs: reviewExecutionSettings.synthesize.llm
+          ? ["review.execution.actors.synthesize.llm"]
+          : [],
       }),
     ],
   };

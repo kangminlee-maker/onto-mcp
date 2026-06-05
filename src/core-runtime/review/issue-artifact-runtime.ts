@@ -16,6 +16,10 @@ import {
   REVIEW_SEVERITY_ORDER,
 } from "./review-result-classification.js";
 import { reviewProgressStepByIssueArtifact } from "./review-progress-contract.js";
+import {
+  renderBoundaryPolicySection,
+  renderUnitBoundaryDetailsSection,
+} from "./boundary-prompt-sections.js";
 
 export interface IssueArtifactSpec {
   artifact_id: ReviewIssueArtifactId;
@@ -291,6 +295,82 @@ function relativeList(projectRoot: string, paths: string[]): string {
   return paths.map((targetPath) => `- ${toRelativePath(targetPath, projectRoot)}`).join("\n");
 }
 
+function projectAbsoluteRef(projectRoot: string, ref: string | null | undefined): string | null {
+  if (typeof ref !== "string" || ref.trim().length === 0) return null;
+  return path.isAbsolute(ref) ? ref : path.resolve(projectRoot, ref);
+}
+
+function uniqueRefs(refs: Array<string | null | undefined>): string[] {
+  return [
+    ...new Set(refs.filter((ref): ref is string => typeof ref === "string" && ref.trim().length > 0)),
+  ];
+}
+
+function issueArtifactOutputRef(
+  executionPlan: ReviewExecutionPlan,
+  artifactId: ReviewIssueArtifactId,
+): string {
+  return requireIssueArtifactSeat(executionPlan, artifactId).output_path;
+}
+
+function priorIssueArtifactIds(
+  artifactId: ReviewIssueArtifactId,
+): ReviewIssueArtifactId[] {
+  switch (artifactId) {
+    case "finding-ledger":
+      return [];
+    case "finding-relation-graph":
+      return ["finding-ledger"];
+    case "issue-ledger":
+      return ["finding-ledger", "finding-relation-graph"];
+    case "issue-stance-matrix":
+      return ["finding-ledger", "finding-relation-graph", "issue-ledger"];
+    case "deliberation-plan":
+      return [
+        "finding-ledger",
+        "finding-relation-graph",
+        "issue-ledger",
+        "issue-stance-matrix",
+      ];
+    case "problem-framing":
+      return [
+        "finding-ledger",
+        "finding-relation-graph",
+        "issue-ledger",
+        "issue-stance-matrix",
+        "deliberation-plan",
+      ];
+  }
+}
+
+export function issueArtifactAllowedReadRefs(args: {
+  artifactId: ReviewIssueArtifactId;
+  projectRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  lensOutputPaths: string[];
+  deliberationResponsePaths?: string[];
+  deliberationOutputPath?: string;
+  problemFramingProfileRef?: string | null;
+}): string[] {
+  const priorArtifactRefs = priorIssueArtifactIds(args.artifactId).map((artifactId) =>
+    issueArtifactOutputRef(args.executionPlan, artifactId),
+  );
+  const problemFramingOnlyRefs =
+    args.artifactId === "problem-framing"
+      ? [
+          args.deliberationOutputPath,
+          ...(args.deliberationResponsePaths ?? []),
+          projectAbsoluteRef(args.projectRoot, args.problemFramingProfileRef),
+        ]
+      : [];
+  return uniqueRefs([
+    ...args.lensOutputPaths,
+    args.executionPlan.review_target_profile_path,
+    ...priorArtifactRefs,
+    ...problemFramingOnlyRefs,
+  ]);
+}
+
 export function renderIssueArtifactRefs(
   projectRoot: string,
   executionPlan: ReviewExecutionPlan,
@@ -348,6 +428,7 @@ export function buildIssueArtifactPrompt(args: {
     args.projectRoot,
     args.deliberationResponsePaths ?? [],
   );
+  const allowedReadRefs = issueArtifactAllowedReadRefs(args);
   const commonHeader = `# Issue-Stance Artifact Prompt
 
 session_id: ${args.sessionId}
@@ -396,6 +477,21 @@ ${lensRefs}
 
 ## Review Target Profile
 - profile: ${reviewTargetProfileRef}
+
+${renderBoundaryPolicySection(args.executionPlan, args.projectRoot, {
+  tools: "required",
+  repoExplorationPolicy: "denied",
+  allowedOutputRefs: [args.outputPath],
+})}
+
+${renderUnitBoundaryDetailsSection({
+  context: args.executionPlan,
+  projectRoot: args.projectRoot,
+  unitId: issueArtifactConsumerId(args.artifactId),
+  outputPath: args.outputPath,
+  repoExplorationPolicy: "denied",
+  allowedReadRefs,
+})}
 `;
 
   switch (args.artifactId) {
@@ -559,7 +655,7 @@ ${renderIssueArtifactRefs(args.projectRoot, args.executionPlan, [
 ## Task
 Build \`deliberation-plan.yaml\`.
 Only material conflicts enter planned deliberation.
-Compatible issue stances should be listed under skipped_issues with a reason.
+Consistent issue stances should be listed under skipped_issues with a reason.
 
 ## Required YAML Shape
 schema_version: 1
@@ -569,7 +665,7 @@ planned_issues:
     order: 1
     material_conflict: true
     participating_lens_ids: [logic, structure]
-    conflict_summary: "what incompatible claims must be deliberated"
+    conflict_summary: "what conflicting claims must be deliberated"
     resolution_question: "the exact question deliberation must answer"
 skipped_issues:
   - issue_id: issue-002

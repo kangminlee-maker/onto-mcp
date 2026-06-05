@@ -75,7 +75,7 @@ export type ReviewInvocationProgressObserver = (
   event: ReviewInvocationProgressEvent,
 ) => void | Promise<void>;
 
-export interface LegacyReviewInvocationOutput {
+export interface ReviewInvocationCliOutput {
   summary?: unknown;
   review_result: {
     session_root: string;
@@ -102,7 +102,7 @@ export interface LegacyReviewInvocationOutput {
   completion?: unknown;
 }
 
-type LegacyReviewInvocationRecordStatus =
+type ReviewInvocationRecordStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial"
@@ -115,13 +115,13 @@ export interface RunReviewInvocationOptions {
 }
 
 export interface RunReviewInvocationResult {
-  output: LegacyReviewInvocationOutput;
+  output: ReviewInvocationCliOutput;
   stdout: string[];
   stderr: string[];
 }
 
 export interface ReviewInvocationEquivalenceProjection {
-  recordStatus: LegacyReviewInvocationRecordStatus;
+  recordStatus: ReviewInvocationRecordStatus;
   deliberationStatus: string | null;
   domainFinalValue: string | null;
   domainSelectionMode: string | null;
@@ -297,15 +297,15 @@ export async function collectReviewInvocationArtifactRefs(
   return Object.fromEntries(entries);
 }
 
-export function parseLegacyReviewInvocationOutput(
+export function parseReviewInvocationCliOutput(
   stdout: string[],
-): LegacyReviewInvocationOutput {
+): ReviewInvocationCliOutput {
   for (const line of [...stdout].reverse()) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("{")) continue;
     try {
       const parsed = JSON.parse(trimmed) as unknown;
-      if (isLegacyReviewInvocationOutput(parsed)) return parsed;
+      if (isReviewInvocationCliOutput(parsed)) return parsed;
     } catch {
       // Keep looking: progress messages may contain braces or partial JSON.
     }
@@ -314,7 +314,7 @@ export function parseLegacyReviewInvocationOutput(
 }
 
 export function projectReviewInvocationEquivalence(
-  output: LegacyReviewInvocationOutput,
+  output: ReviewInvocationCliOutput,
 ): ReviewInvocationEquivalenceProjection {
   const entrypointPlan = isRecord(output.entrypoint_plan)
     ? output.entrypoint_plan
@@ -343,9 +343,9 @@ export function projectReviewInvocationEquivalence(
   };
 }
 
-function isLegacyReviewInvocationOutput(
+function isReviewInvocationCliOutput(
   value: unknown,
-): value is LegacyReviewInvocationOutput {
+): value is ReviewInvocationCliOutput {
   if (value === null || typeof value !== "object") return false;
   const reviewResult = (value as { review_result?: unknown }).review_result;
   return reviewResult !== null && typeof reviewResult === "object";
@@ -435,9 +435,9 @@ function sessionIdFromRoot(sessionRoot: string | null): string | null {
   return sessionRoot ? path.basename(path.resolve(sessionRoot)) : null;
 }
 
-function normalizeLegacyRecordStatus(
+function normalizeReviewInvocationRecordStatus(
   status: string | null | undefined,
-): LegacyReviewInvocationRecordStatus {
+): ReviewInvocationRecordStatus {
   if (
     status === "completed" ||
     status === "completed_with_degradation" ||
@@ -509,7 +509,7 @@ export async function prepareReviewInvocationArgv(
 export async function runReviewInvocationArgv(
   argv: string[],
   observer?: ReviewInvocationProgressObserver,
-): Promise<LegacyReviewInvocationOutput> {
+): Promise<ReviewInvocationCliOutput> {
   const setup = await resolveReviewInvokeSetup(argv);
   const resolvedProjectRoot = path.resolve(
     readSingleOptionValueFromArgv(setup.startArgv, "project-root") ?? ".",
@@ -646,7 +646,7 @@ export async function runReviewInvocationArgv(
     message: "Review record assembled.",
   });
 
-  const output = await projectLegacyReviewInvocationOutput({
+  const output = await projectReviewInvocationCliOutput({
     setup,
     sessionRoot,
     resolvedProjectRoot,
@@ -666,13 +666,13 @@ export async function runReviewInvocationArgv(
   return output;
 }
 
-async function projectLegacyReviewInvocationOutput(args: {
+async function projectReviewInvocationCliOutput(args: {
   setup: Awaited<ReturnType<typeof resolveReviewInvokeSetup>>;
   sessionRoot: string;
   resolvedProjectRoot: string;
   promptExecutionResult: Awaited<ReturnType<typeof executeReviewPromptExecution>>;
   defaultExecutorConfig: ReturnType<typeof resolveExecutorConfig>;
-}): Promise<LegacyReviewInvocationOutput> {
+}): Promise<ReviewInvocationCliOutput> {
   const reviewSummary = await readOptionalReviewSummary(args.sessionRoot);
   const boundedInvokeSteps = [
     "start_review_session",
@@ -738,7 +738,7 @@ async function projectLegacyReviewInvocationOutput(args: {
   const degradedLensIds =
     reviewSummary.reviewRecord?.degraded_lens_ids ??
     args.promptExecutionResult.degraded_lens_ids;
-  const recordStatus = normalizeLegacyRecordStatus(
+  const recordStatus = normalizeReviewInvocationRecordStatus(
     reviewSummary.reviewRecord?.record_status ??
       reviewSummary.executionResult?.execution_status ??
       null,
@@ -823,6 +823,7 @@ async function projectLegacyReviewInvocationOutput(args: {
     },
     explanation: {
       final_review_result: explanationSummary.final_review_result,
+      boundary_notes: explanationSummary.boundary_notes,
     },
     issues: closureSummary,
     artifacts: artifactRefs,

@@ -185,7 +185,7 @@ describe("spawnWatcherPane — prereq failure", () => {
   });
 });
 
-describe("spawnWatcherPane — ontoHome fallback", () => {
+describe("spawnWatcherPane — ontoHome helper discovery", () => {
   let projectFixture: Fixture;
   let ontoHomeFixture: Fixture;
   let envSnapshot: Record<string, string | undefined>;

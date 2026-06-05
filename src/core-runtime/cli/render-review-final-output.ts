@@ -310,6 +310,11 @@ export async function runRenderReviewFinalOutputCli(
     ],
     "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts",
   );
+  const boundaryNotes = sectionOrDefault(sourceText, [
+    "Boundary Notes",
+    "Boundary Limitations",
+    "Evidence Gaps",
+  ]);
   const immediateActions = sectionOrDefault(sourceText, [
     "Immediate Actions Required",
     "Immediate Actions",
@@ -419,6 +424,9 @@ ${sourceText.length > 0 ? axiologyPerspectives : "- unavailable"}
 
 ### Purpose Alignment Verification
 ${sourceText.length > 0 ? purposeAlignment : defaultPurposeAlignment}
+
+### Boundary Notes
+${sourceText.length > 0 ? boundaryNotes : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts"}
 
 ### Immediate Actions Required
 ${sourceText.length > 0 ? immediateActions : degradationSummary}

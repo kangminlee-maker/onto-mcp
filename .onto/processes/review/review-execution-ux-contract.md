@@ -375,7 +375,7 @@ hide halt/artifact truth.
 
 When CLI output is hidden, the canonical user-facing MCP delivery path is
 `onto.review_status` polling over a prepared or active session. Other paths are
-allowed only as compatibility or later optimization layers.
+allowed only as conformance or later optimization layers.
 
 Priority:
 
@@ -405,7 +405,7 @@ rather than maintain separate step taxonomies.
 `onto.review_status` is the canonical MCP surface for hidden-CLI progress
 presentation.
 
-All host-facing status presentation inputs share this compatibility envelope:
+All host-facing status presentation inputs share this presentation envelope:
 
 ```yaml
 presentation_contract_version: "1"

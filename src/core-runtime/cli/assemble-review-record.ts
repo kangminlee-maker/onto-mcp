@@ -215,7 +215,7 @@ export function parseStringList(
     return (yamlParsed as string[]).map((item) => item.trim());
   }
 
-  // Fallback: treat markdown bullet lines as literal strings.
+  // Otherwise, treat markdown bullet lines as literal strings.
   const bullets = source
     .split(/\r?\n/u)
     .map((line) => /^\s*[-*]\s+(.*\S)\s*$/u.exec(line)?.[1]?.trim())

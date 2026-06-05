@@ -1,17 +1,60 @@
 export interface LensOutputForDeliberation {
   lens_id: string;
   output_path: string;
-  content: string;
+  content?: string;
 }
 
 export interface LensDeliberationResponseForTeamlead {
   lens_id: string;
   response_path: string;
-  content: string;
+  content?: string;
 }
 
 function fencedBlock(label: string, content: string): string {
   return [`### ${label}`, "", content.trim() || "(empty)"].join("\n");
+}
+
+function lensOutputRefs(outputs: LensOutputForDeliberation[]): string {
+  if (outputs.length === 0) return "- (none)";
+  return outputs
+    .map((output) => `- ${output.lens_id}: ${output.output_path}`)
+    .join("\n");
+}
+
+function lensResponseRefs(responses: LensDeliberationResponseForTeamlead[]): string {
+  if (responses.length === 0) return "- (none)";
+  return responses
+    .map((response) => `- ${response.lens_id}: ${response.response_path}`)
+    .join("\n");
+}
+
+function indentRefs(refs: string): string {
+  return refs
+    .split("\n")
+    .map((line) => `  ${line}`)
+    .join("\n");
+}
+
+function optionalEmbeddedLensOutputs(outputs: LensOutputForDeliberation[]): string {
+  const embedded = outputs.filter(
+    (output): output is LensOutputForDeliberation & { content: string } =>
+      typeof output.content === "string" && output.content.trim().length > 0,
+  );
+  if (embedded.length === 0) return "";
+  return [
+    "## Embedded Lens Outputs",
+    "These embedded bodies are comparison context. Prefer the required refs above as the authoritative artifact seats.",
+    "",
+    embedded
+      .map((output) =>
+        fencedBlock(
+          `${output.lens_id} primary output (${output.output_path})`,
+          output.content,
+        ),
+      )
+      .join("\n\n---\n\n"),
+    "",
+  ].join("\n");
 }
 
 export function buildLensControlledDeliberationPrompt(args: {
@@ -21,13 +64,8 @@ export function buildLensControlledDeliberationPrompt(args: {
   own_output: LensOutputForDeliberation;
   other_outputs: LensOutputForDeliberation[];
   issue_artifact_context?: string;
+  boundary_context?: string;
 }): string {
-  const otherBlocks = args.other_outputs
-    .map((other) =>
-      fencedBlock(`${other.lens_id} primary output (${other.output_path})`, other.content),
-    )
-    .join("\n\n---\n\n");
-
   return `# Controlled Lens Deliberation Prompt
 
 session_id: ${args.session_id}
@@ -38,15 +76,22 @@ output_path: ${args.output_path}
 
 ## Canonical Role
 You are the ${args.lens_id} lens participating in controlled lens deliberation.
-This is a fresh bounded context. You receive only your primary lens output and
-the other participating lens outputs. The teamlead controls this context; do not
-perform final synthesis and do not inspect extra repository files.
+This is a fresh bounded context. You must read only the required artifact refs
+listed in this packet. The teamlead controls this context; do not perform final
+synthesis and do not inspect extra repository files.
 
-## Own Primary Lens Output
-${fencedBlock(`${args.lens_id} primary output (${args.own_output.output_path})`, args.own_output.content)}
+## Boundary Policy
+- tools: required
+- source mutation: denied
+- write output only to: ${args.output_path}
+${args.boundary_context?.trim() || ""}
 
-## Other Participating Lens Outputs
-${otherBlocks || "(none)"}
+## Required Artifact Reads
+- own primary lens output: ${args.own_output.output_path}
+- other participating lens outputs:
+${indentRefs(lensOutputRefs(args.other_outputs))}
+
+${optionalEmbeddedLensOutputs([args.own_output, ...args.other_outputs])}
 
 ## Issue Artifact Context
 ${args.issue_artifact_context?.trim() || "(none)"}
@@ -84,19 +129,8 @@ export function buildTeamleadControlledDeliberationPrompt(args: {
   lens_outputs: LensOutputForDeliberation[];
   lens_deliberation_responses: LensDeliberationResponseForTeamlead[];
   issue_artifact_context?: string;
+  boundary_context?: string;
 }): string {
-  const primaryBlocks = args.lens_outputs
-    .map((lens) => fencedBlock(`${lens.lens_id} primary output (${lens.output_path})`, lens.content))
-    .join("\n\n---\n\n");
-  const responseBlocks = args.lens_deliberation_responses
-    .map((response) =>
-      fencedBlock(
-        `${response.lens_id} deliberation response (${response.response_path})`,
-        response.content,
-      ),
-    )
-    .join("\n\n---\n\n");
-
   return `# Teamlead Controlled Deliberation Prompt
 
 session_id: ${args.session_id}
@@ -109,14 +143,20 @@ You are the teamlead-controlled deliberation resolver. Your job is to derive the
 controlled deliberation result from lens primary outputs and lens deliberation
 responses. You are not the final synthesize actor.
 
+## Boundary Policy
+- tools: required
+- source mutation: denied
+- write output only to: ${args.output_path}
+${args.boundary_context?.trim() || ""}
+
 ## Inputs In Scope
-Only the material below is in scope.
+Only the required artifact refs below are in scope.
 
-## Primary Lens Outputs
-${primaryBlocks}
-
-## Lens Deliberation Responses
-${responseBlocks}
+## Required Artifact Reads
+- primary lens outputs:
+${indentRefs(lensOutputRefs(args.lens_outputs))}
+- lens deliberation responses:
+${indentRefs(lensResponseRefs(args.lens_deliberation_responses))}
 
 ## Issue Artifact Context
 ${args.issue_artifact_context?.trim() || "(none)"}

@@ -36,7 +36,7 @@
 | 2 | `.onto/principles/ontology-as-code-guideline.md` | OaC 원칙 |
 | 2 | `.onto/principles/llm-native-development-guideline.md` | LLM-native 원칙 |
 | 2 | `.onto/principles/product-locality-principle.md` | product 우선 원칙 |
-| 3 | `development-records/evolve/<onto-direction>.md` 최신 정본 | 상위 목표 · 4 축 · 완료 기준 |
+| 3 | `.onto/processes/review/*` active contracts | 현재 review 실행 목표 · 완료 기준 |
 | 4 | 세션 binding `session_domain` 이 non-none 이면 해당 `.onto/domains/{domain}/` 의 purpose-critical 규정 | domain-specific 가치 commitments |
 
 이 순위는 동일 주제에서 충돌 시 낮은 번호 우선. 동순위 내 충돌은 `CLAUDE.md` authority 위계표의 원칙을 따른다 (동일 순위 파일 중복 금지 + 예외 cross-reference).

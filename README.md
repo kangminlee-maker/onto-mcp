@@ -182,7 +182,7 @@ Available MCP tools:
 | `onto_prepare_review` | Prepare a review session and prompt packets |
 | `onto_review_continue` | Continue a prepared or halted review from the ledger frontier |
 | `onto_review_status` | Read structured status and artifact refs |
-| `onto_review_result` | Read `review-record.yaml` and final output |
+| `onto_review_result` | Read bounded result projections; `compact`/`standard` use count-and-signal summaries, `full` includes `review-record.yaml` and final output |
 | `onto_list_lenses` | List canonical lens sets |
 | `onto_list_domains` | List available domain ids |
 | `onto_list_source_profiles` | List reconstruct source profiles |
@@ -276,7 +276,7 @@ Project settings override user defaults for scalar keys. In
 inherit from a root `llm.default`. Reconstruct direct-call execution uses
 `reconstruct.execution.actors.semantic_author.llm` and
 `reconstruct.execution.actors.confirmation_provider.llm`; v3 does not expose a
-root reconstruct LLM fallback.
+root reconstruct LLM setting.
 
 Minimal Codex OAuth profile:
 
@@ -411,7 +411,7 @@ artifact and gate catalog authority is
 | `post-maturation-gate-projection-validation.yaml` | runtime | later terminal-equivalent projection proving the post-maturation SourceScoutPack gate is applicable and valid before final-output or record consumption |
 | `source-observation-directive.yaml` | host LLM author | selected observations for evidence use |
 | `source-observation-directive-validation.yaml` | runtime | validation of selected observation refs |
-| `reconstruct-run-control.yaml#resume_rows` | runtime | promoted same-request resume admission when existing authored artifacts have compatible provenance and no completed attempt already owns the session |
+| `reconstruct-run-control.yaml#resume_rows` | runtime | promoted same-request resume admission when existing authored artifacts have matching provenance and no completed attempt already owns the session |
 | `rounds/<round-id>/lens-judgments/*.yaml` | host LLM author | reconstruct lens judgments over trusted observations |
 | `rounds/<round-id>/exploration-synthesis.yaml` | host LLM author | integrated gaps and next-source needs |
 | `rounds/<round-id>/source-frontier.yaml` | host LLM author plus bounded runtime policy | requested next source refs or no-next-frontier rationale; round-1 may receive scout-derived actor/action/state gap candidates and runtime may add up to three unobserved inventory refs when the author returns an empty frontier |
@@ -522,8 +522,8 @@ Explicit authored-artifact resume is fail-closed through reuse provenance that
 binds intent, target refs, source inventory/observations, governing domain
 snapshot, provider ids, source-safety validation, scout pack validation, source
 lineage validation, and seed-authoring readiness validation once each authority
-exists. Run-control `resume_rows[]` records the compatibility policy and check
-refs used for the promoted resume audit.
+exists. Run-control `resume_rows[]` records the provenance match policy and
+check refs used for the promoted resume audit.
 Terminal projection uses `handoff-decision-validation.yaml.readiness_projection`
 as the seed iteration readiness authority and requires atomically admitted valid run-control, valid registry verification,
 validated handoff, and a validated pre-handoff run-manifest snapshot. Run-control write transactions currently record

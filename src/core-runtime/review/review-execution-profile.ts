@@ -26,7 +26,7 @@ export type ReviewExecutionHost =
 
 export interface ReviewExecutionActorProfile {
   seat: ReviewWorkerSeat;
-  llm: ReviewLlmRef;
+  llm?: ReviewLlmRef;
 }
 
 export interface ReviewExecutionProfile {
@@ -81,42 +81,48 @@ function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSetti
   };
 }
 
-function actorLlm(
-  actorLlmRef: ReviewLlmRef,
-  inherited: OntoSettings["llm"],
-): ReviewLlmRef {
-  if (actorLlmRef === "inherit") return inherited ?? "inherit";
-  const shouldOverlayInherited =
-    actorLlmRef.auth === undefined && actorLlmRef.provider === undefined;
-  return {
-    ...(shouldOverlayInherited ? inherited ?? {} : {}),
-    ...actorLlmRef,
-  };
-}
-
 function actorLlmEntries(
   execution: ResolvedReviewExecutionSettings,
-  inherited: OntoSettings["llm"],
-): Array<{ actor: ReviewActorName; llm: ReviewLlmRef }> {
+): Array<{ actor: ReviewActorName; llm: ReviewLlmRef | undefined }> {
   return [
-    { actor: "teamlead", llm: actorLlm(execution.teamlead.llm, inherited) },
-    { actor: "lens", llm: actorLlm(execution.lens.llm, inherited) },
-    { actor: "synthesize", llm: actorLlm(execution.synthesize.llm, inherited) },
+    { actor: "teamlead", llm: execution.teamlead.llm },
+    { actor: "lens", llm: execution.lens.llm },
+    { actor: "synthesize", llm: execution.synthesize.llm },
   ];
 }
 
 function actorRouteSelections(
   execution: ResolvedReviewExecutionSettings,
-  inherited: OntoSettings["llm"],
 ): Array<{
   actor: ReviewActorName;
   selection: NormalizedLlmSelection | null;
 }> {
-  return actorLlmEntries(execution, inherited).map((entry) => ({
+  return actorLlmEntries(execution).map((entry) => ({
     actor: entry.actor,
-    selection:
-      entry.llm === "inherit" ? null : normalizeLlmModelSwitcher(entry.llm),
+    selection: entry.llm ? normalizeLlmModelSwitcher(entry.llm) : null,
   }));
+}
+
+function directCallActorRouteSelection(
+  selections: Array<{
+    actor: ReviewActorName;
+    selection: NormalizedLlmSelection | null;
+  }>,
+): NormalizedLlmSelection | null {
+  const configured = selections.filter(
+    (entry): entry is { actor: ReviewActorName; selection: NormalizedLlmSelection } =>
+      entry.selection !== null,
+  );
+  if (configured.length === 0) return null;
+  if (
+    configured.every(
+      (entry) =>
+        entry.selection.provider !== "codex" && entry.selection.auth !== "oauth",
+    )
+  ) {
+    return configured[0]!.selection;
+  }
+  return null;
 }
 
 function commonActorRouteSelection(
@@ -158,11 +164,11 @@ function commonField<T>(
 }
 
 function commonActorLlmConfig(
-  entries: Array<{ actor: ReviewActorName; llm: ReviewLlmRef }>,
+  entries: Array<{ actor: ReviewActorName; llm: ReviewLlmRef | undefined }>,
 ): LlmModelSwitcherConfig | undefined {
   const configs = entries
-    .map((entry) => (entry.llm === "inherit" ? null : entry.llm))
-    .filter((config): config is LlmModelSwitcherConfig => config !== null);
+    .map((entry) => entry.llm)
+    .filter((config): config is LlmModelSwitcherConfig => config !== undefined);
   const provider = commonField(configs.map((config) => config.provider));
   if (!provider) return undefined;
   const auth = commonField(configs.map((config) => config.auth));
@@ -206,28 +212,22 @@ function buildProfile(args: {
   trace: string[];
 }): ReviewExecutionProfile {
   const execution = settingsExecution(args.settings);
-  const inherited = args.settings.llm;
-  const teamleadLlm = actorLlm(execution.teamlead.llm, inherited);
-  const lensLlm = actorLlm(execution.lens.llm, inherited);
-  const synthesizeLlm = actorLlm(execution.synthesize.llm, inherited);
-  const commonActorLlm = commonActorLlmConfig(
-    actorLlmEntries(execution, inherited),
-  );
-  const profileLlm = inherited ?? commonActorLlm;
+  const commonActorLlm = commonActorLlmConfig(actorLlmEntries(execution));
+  const profileLlm = commonActorLlm;
   const normalized = normalizeLlmModelSwitcher(profileLlm);
   return {
     mode: execution.mode,
     teamlead: {
       seat: execution.teamlead.seat,
-      llm: teamleadLlm,
+      ...(execution.teamlead.llm ? { llm: execution.teamlead.llm } : {}),
     },
     lens: {
       seat: execution.lens.seat,
-      llm: lensLlm,
+      ...(execution.lens.llm ? { llm: execution.lens.llm } : {}),
     },
     synthesize: {
       seat: execution.synthesize.seat,
-      llm: synthesizeLlm,
+      ...(execution.synthesize.llm ? { llm: execution.synthesize.llm } : {}),
     },
     deliberation: execution.deliberation,
     worker_executor: args.workerExecutor,
@@ -273,14 +273,27 @@ export function resolveReviewExecutionProfile(
     args.codexAvailable ?? detectCodexBinaryAvailable();
   const envHost = hostFromEnv(env);
   const execution = settingsExecution(args.settings);
-  const actorRoute = commonActorRouteSelection(
-    actorRouteSelections(execution, args.settings.llm),
-  );
-  const rootSelection = normalizeLlmModelSwitcher(args.settings.llm);
-  const selection =
-    actorRoute.type === "common" ? actorRoute.selection : rootSelection;
+  const routeSelections = actorRouteSelections(execution);
+  const actorRoute = commonActorRouteSelection(routeSelections);
+  const selection = actorRoute.type === "common" ? actorRoute.selection : null;
+  const directCallSelection = directCallActorRouteSelection(routeSelections);
 
   if (actorRoute.type === "mixed") {
+    if (
+      directCallSelection &&
+      (execution.executor === "direct_call" || execution.executor === "auto")
+    ) {
+      log("direct-call selected by actor-specific API/local provider routes");
+      return {
+        type: "resolved",
+        profile: buildProfile({
+          settings: args.settings,
+          workerExecutor: "direct_call",
+          host: directCallSelection.provider,
+          trace,
+        }),
+      };
+    }
     return noHost(trace, actorRoute.reason);
   }
 

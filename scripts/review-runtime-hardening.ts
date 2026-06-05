@@ -223,25 +223,30 @@ async function cleanupTempRoots(): Promise<void> {
 }
 
 function defaultSettings(): unknown {
+  const oauthLlm = {
+    auth: "oauth",
+    provider: "openai",
+    model: "gpt-5.5",
+    effort: "medium",
+    service_tier: "fast",
+  };
+  const synthesizeLlm = {
+    ...oauthLlm,
+    effort: "xhigh",
+  };
   return {
-    llm: {
-      auth: "oauth",
-      provider: "openai",
-      model: "gpt-5.5",
-      effort: "medium",
-      service_tier: "fast",
-    },
+    schema_version: "settings.json/v3",
     review: {
       execution: {
-        mode: "main-workers",
-        teamlead: { seat: "main", llm: "inherit" },
-        lens: { seat: "worker", llm: "inherit" },
-        synthesize: { seat: "worker", llm: { effort: "xhigh" } },
+        topology: "main-workers",
+        actors: {
+          teamlead: { seat: "main", llm: oauthLlm },
+          lens: { seat: "worker", llm: oauthLlm },
+          synthesize: { seat: "worker", llm: synthesizeLlm },
+        },
         deliberation: "controlled-lens-deliberation",
       },
     },
-    review_mode: "core-axis",
-    domains: [],
   };
 }
 
@@ -539,7 +544,25 @@ async function runRepeatedReviewCheck(): Promise<CheckResult> {
   };
 }
 
-const TOOLS_REQUIRED_PACKET = `# Hardening Synthesize Packet
+function toolsRequiredPacket(args: {
+  projectRoot: string;
+  outputPath: string;
+}): string {
+  const outputRef = path.relative(args.projectRoot, args.outputPath);
+  const boundary = {
+    unit_boundary: {
+      authority: "authoritative_unit_boundary",
+      unit_id: "synthesize",
+      read_authority: {
+        allowed_read_refs: [".onto/review/session/round1/logic.md"],
+      },
+      output_seat: {
+        output_path: outputRef,
+        allowed_output_refs: [outputRef],
+      },
+    },
+  };
+  return `# Hardening Synthesize Packet
 
 The packet intentionally requires native tools.
 
@@ -551,9 +574,25 @@ The packet intentionally requires native tools.
 ## Participating Lens Outputs
 - logic: .onto/review/session/round1/logic.md
 
+## Unit Boundary Details
+\`\`\`json
+${JSON.stringify(boundary)}
+\`\`\`
+
 ## Required Output Sections
+- Consensus
+- Conditional Consensus
+- Disagreement
+- Deliberation Decision
+- Axiology-Proposed Additional Perspectives
+- Purpose Alignment Verification
 - Final Review Result
+- Boundary Notes
+- Immediate Actions Required
+- Recommendations
+- Unique Finding Tagging
 `;
+}
 
 async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
   const { projectRoot, home } = await makeProject("tool-boundary");
@@ -574,7 +613,14 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
     "utf8",
   );
   const packetPath = path.join(sessionRoot, "synthesize.prompt.md");
-  await fs.writeFile(packetPath, TOOLS_REQUIRED_PACKET, "utf8");
+
+  const writePacketForOutput = async (outputPath: string): Promise<void> => {
+    await fs.writeFile(
+      packetPath,
+      toolsRequiredPacket({ projectRoot, outputPath }),
+      "utf8",
+    );
+  };
 
   const baseArgs = (outputPath: string): string[] =>
     inlineHttpUnitExecutorArgs([
@@ -602,6 +648,7 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
 
   const env = { ...isolatedEnv(home), ONTO_LLM_MOCK: "1" };
   const successOutputPath = path.join(sessionRoot, "synthesize-success.md");
+  await writePacketForOutput(successOutputPath);
   const success = await runCommand(baseArgs(successOutputPath), env);
   assert(await fileExists(successOutputPath), "tool-required native success output missing.");
   const successResult = JSON.parse(success.stdout) as {
@@ -626,6 +673,7 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
   );
 
   const throwOutputPath = path.join(sessionRoot, "synthesize-throw.md");
+  await writePacketForOutput(throwOutputPath);
   const throwFailure = await runCommandExpectFailure(baseArgs(throwOutputPath), {
     ...env,
     ONTO_LLM_MOCK_TOOL_LOOP_THROW: "1",
@@ -637,10 +685,11 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
   );
   assert(
     !(await fileExists(throwOutputPath)),
-    "tool-required native failure must not write inline fallback output.",
+    "tool-required native failure must not write inline downgrade output.",
   );
 
   const emptyOutputPath = path.join(sessionRoot, "synthesize-empty.md");
+  await writePacketForOutput(emptyOutputPath);
   const emptyFailure = await runCommandExpectFailure(baseArgs(emptyOutputPath), {
     ...env,
     ONTO_LLM_MOCK_TOOL_LOOP_EMPTY: "1",
@@ -652,7 +701,7 @@ async function runToolRequiredBoundaryCheck(): Promise<CheckResult> {
   );
   assert(
     !(await fileExists(emptyOutputPath)),
-    "tool-required native empty result must not write inline fallback output.",
+    "tool-required native empty result must not write inline downgrade output.",
   );
 
   return {
@@ -689,13 +738,25 @@ function providerSettings(args: {
   apiKeyEnv?: string;
   baseUrl?: string;
 }): unknown {
+  const llm = {
+    auth: args.auth,
+    provider: args.provider,
+    model: args.provider === "lmstudio" ? "local-hardening-model" : "gpt-5.5",
+    ...(args.apiKeyEnv ? { api_key_env: args.apiKeyEnv } : {}),
+    ...(args.baseUrl ? { base_url: args.baseUrl } : {}),
+  };
   return {
-    llm: {
-      auth: args.auth,
-      provider: args.provider,
-      model: args.provider === "lmstudio" ? "local-hardening-model" : "gpt-5.5",
-      ...(args.apiKeyEnv ? { api_key_env: args.apiKeyEnv } : {}),
-      ...(args.baseUrl ? { base_url: args.baseUrl } : {}),
+    schema_version: "settings.json/v3",
+    review: {
+      execution: {
+        executor: "direct_call",
+        topology: "main-workers",
+        actors: {
+          teamlead: { seat: "main", llm },
+          lens: { seat: "worker", llm },
+          synthesize: { seat: "worker", llm },
+        },
+      },
     },
   };
 }

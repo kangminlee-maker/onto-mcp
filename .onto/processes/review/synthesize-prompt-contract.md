@@ -35,7 +35,7 @@
 2. consensus를 정리한다
 3. disagreement를 보존한다
 4. overlooked premises를 드러낸다
-5. immediate actions와 recommendations를 정리한다
+5. immediate actions required와 recommendations를 정리한다
 6. final review output을 작성한다
 
 단, purpose/value 관점에서의 추가 검토 관점 제안(`New Perspectives`)은
@@ -137,7 +137,7 @@ participation:
 
 | 층 | 섹션 범위 | 소비자 | 언어 정책 |
 |---|---|---|---|
-| **Internal Body** | §5.3 의 section list (1-12 번) 전체 | ReviewRecord assembler, audit | English 고정 |
+| **Internal Body** | §5.3 의 canonical taxonomy (1-13 번) | ReviewRecord assembler, audit | English 고정 |
 | **Final Review Summary** | §5.3 의 items 중 Principal 직접 소비 가치가 있는 subset 의 prose 요약 | Principal | final output stage에서 제공 |
 
 #### 5.2.1.2 Synthesize 특유 rationale
@@ -161,7 +161,7 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Final Review
 
 ### 5.3 Section list (canonical taxonomy)
 
-아래는 이 contract 가 정하는 **단독 canonical section 명칭** 이다. 동의어는 §5.4 alias map 을 따르며 이 list 로 정규화한다.
+아래는 synthesize 의미 분류를 위한 **canonical taxonomy** 다. 이 목록은 `ReviewRecord` assembler, audit, alias 정규화가 참조하는 개념 좌석이며, 현 runtime packet 이 반드시 동일한 13개 heading 을 모두 물리적으로 emit 한다는 뜻은 아니다. 현 runtime-required heading surface 는 §5.6 `Runtime packet과의 정합성` 이 단일 authority 다.
 
 1. consensus
 2. conditional consensus
@@ -169,12 +169,13 @@ record-contract §4.5 Synthesis Layer 는 Internal Body 만 source. Final Review
 4. overlooked premises
 5. axiology-proposed additional perspectives (if any)
 6. purpose alignment verification
-7. immediate actions
+7. immediate actions required
 8. recommendations
 9. unique finding tagging
 10. deliberation decision
 11. final review result — principal-facing comprehensive explanation of the bounded review result. It explains what to conclude from the target/boundary, review target profile, root-cause issue clusters, lens agreement and disagreement, controlled deliberation outcome, problem-framing classification, closure/timing/obligation, and practical next step. It must be grounded in lens outputs and issue artifacts and must not introduce independent findings
-12. shared phenomenon summary — 동일 phenomenon에 대한 다중 lens claim이 있는 경우, claim relation 분류 결과를 명시한다 (corroboration / disagreement / partial overlap / dedup). 분류 규칙은 `.onto/processes/review/shared-phenomenon-contract.md` §4를 따른다. 이 계약은 분류 규칙을 재정의하지 않는다
+12. boundary notes — non-material evidence gaps and scope limitations that affect trust in the result. Keep compact: at most 3 bullets, each one sentence. Do not turn these notes into material issues unless the issue artifacts classify them as material
+13. shared phenomenon summary — 동일 phenomenon에 대한 다중 lens claim이 있는 경우, claim relation 분류 결과를 명시한다 (corroboration / disagreement / partial overlap / dedup). 분류 규칙은 `.onto/processes/review/shared-phenomenon-contract.md` §4를 따른다. 이 계약은 분류 규칙을 재정의하지 않는다
 
 ### 5.4 Alias map (IA-3)
 
@@ -184,15 +185,16 @@ canonical label 과 자주 drift 되는 alias 쌍. synthesis output 은 canonica
 |---|---|
 | `disagreement` | `contradiction`, `conflict` (lens 간 의견 차이 의미일 때) |
 | `conditional consensus` | `conditional agreement`, `conditional agreement (with stipulation)` |
-| `immediate actions` | `recommended actions (urgent)`, `required actions` |
+| `immediate actions required` | `immediate actions`, `recommended actions (urgent)`, `required actions` |
 | `recommendations` | `recommended actions (non-urgent)`, `suggestions` |
+| `boundary notes` | `evidence gaps`, `boundary limitations`, `scope notes` |
 | `axiology-proposed additional perspectives` | `axiology-proposed new perspectives`, `new perspectives` (role header 제외) |
 
-alias 발견 시 synthesis output 은 canonical 로 정규화한다. prompt packet materializer 는 §5.3 label 만 emit 한다.
+alias 발견 시 synthesis output 은 canonical 로 정규화한다. prompt packet materializer 는 §5.6 이 정의한 runtime-required heading surface 를 emit 하며, 해당 heading 이 §5.3 taxonomy 항목을 대표할 때는 §5.3 canonical label 을 사용한다.
 
 ### 5.5 Per-item provenance (IA-4)
 
-sections 1–12 의 각 item 은 아래 provenance 필드를 갖는다. 명시 형식은 markdown 내 bullet 로 기술한다 (직렬 예시 §5.5.1).
+sections 1–13 의 각 item 은 아래 provenance 필드를 갖는다. 명시 형식은 markdown 내 bullet 로 기술한다 (직렬 예시 §5.5.1).
 
 - **supporting_lenses** — 이 item 의 claim 을 지지한 lens id 목록
 - **contesting_lenses** — 이 item 에 대해 반대 claim 을 제기한 lens id 목록. 없으면 빈 배열
@@ -211,15 +213,15 @@ sections 1–12 의 각 item 은 아래 provenance 필드를 갖는다. 명시 �
 
 ### 5.6 Immediate actions priority rule (IA-1)
 
-§5.3 item 7 `immediate actions` 에 부여되는 priority 는 아래 중 하나의 declared source 에 근거해야 한다.
+§5.3 item 7 `immediate actions required` 에 부여되는 priority 는 아래 중 하나의 declared source 에 근거해야 한다.
 
 - cited lens output 이 "immediate" 또는 "blocking" 으로 표기한 finding
 - declared rule-resolved artifact (예: `shared-phenomenon-contract` 가 blocking 으로 분류) 
 - deliberation artifact 가 priority 를 명시
 
-위 source 중 어느 것도 없는 action 은 `recommendations` (§5.3 item 8) 로 분류하거나 priority 없이 `immediate actions` 에 unprioritized marker 와 함께 유지한다. synthesize 가 "합리적 판단" 으로 priority 를 부여하는 것은 §Adjudication boundary 금지 경로다.
+위 source 중 어느 것도 없는 action 은 `recommendations` (§5.3 item 8) 로 분류하거나 priority 없이 `immediate actions required` 에 unprioritized marker 와 함께 유지한다. synthesize 가 "합리적 판단" 으로 priority 를 부여하는 것은 §Adjudication boundary 금지 경로다.
 
-**Runtime packet과의 정합성**: 위 12개 항목 중 11 (final review result)은 현 runtime packet (`materialize-review-prompt-packets.ts`)에서 별도 heading으로 강제한다. 4 (overlooked premises)와 12 (shared phenomenon summary)는 현 runtime packet이 별도 heading으로 강제하지 않으며, 9개 분류 섹션 (Consensus / Conditional Consensus / Disagreement / Unique Finding Tagging)이 적용하는 Tagging Completeness Rule에 흡수된다. 4와 12를 별도 heading으로 부활시킬지 또는 이 contract에서 제거할지는 packet 갱신 PR이 단일 결정 seat이며, 본 contract는 그 결정 시점까지 12개 enumeration을 conceptual reference로 보존한다.
+**Runtime packet과의 정합성**: 위 13개 항목 중 11 (final review result)과 12 (boundary notes)는 현 runtime packet (`materialize-review-prompt-packets.ts`)에서 별도 heading으로 강제한다. 4 (overlooked premises)와 13 (shared phenomenon summary)는 현 runtime packet이 별도 heading으로 강제하지 않으며, 9개 분류 섹션 (Consensus / Conditional Consensus / Disagreement / Unique Finding Tagging)이 적용하는 Tagging Completeness Rule에 흡수된다. 4와 13을 별도 heading으로 부활시킬지 또는 이 contract에서 제거할지는 packet 갱신 PR이 단일 결정 seat이며, 본 contract는 그 결정 시점까지 13개 enumeration을 conceptual reference로 보존한다.
 
 즉 현재 prompt-backed reference path에서는
 `synthesis markdown`이 canonical prompt output이다.

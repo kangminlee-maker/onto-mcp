@@ -165,9 +165,9 @@ run_expect_pass "T3: external-dir/auto-approve" \
   /tmp "external dir review" \
   --executor-realization mock
 
-run_expect_pass "T4: retired-domain-token-alias" \
+run_expect_pass "T4: canonical-software-engineering-domain" \
   src/ "ontology check" \
-  --domain llm-native-development --executor-realization mock --review-mode core-axis
+  --domain software-engineering --executor-realization mock --review-mode core-axis
 
 run_expect_pass "T5: diff-range" \
   . "changes review" \
@@ -418,11 +418,40 @@ mkdir -p "$E23C_ROOT/.onto"
 printf 'provider route missing credential\n' > "$E23C_ROOT/target.txt"
 cat > "$E23C_ROOT/.onto/settings.json" <<'JSON'
 {
-  "llm": {
-    "auth": "api_key",
-    "provider": "openai",
-    "model": "gpt-5.5",
-    "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+  "schema_version": "settings.json/v3",
+  "review": {
+    "execution": {
+      "executor": "direct_call",
+      "actors": {
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "api_key",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "api_key",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "api_key",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+          }
+        }
+      }
+    }
   }
 }
 JSON
@@ -450,20 +479,35 @@ printf '{}\n' > "$HOME/.codex/auth.json"
 printf 'codex actor mismatch\n' > "$E23D_ROOT/target.txt"
 cat > "$E23D_ROOT/.onto/settings.json" <<'JSON'
 {
-  "llm": {
-    "auth": "oauth",
-    "provider": "openai",
-    "model": "gpt-5.5"
-  },
+  "schema_version": "settings.json/v3",
   "review": {
     "execution": {
-      "lens": {
-        "seat": "worker",
-        "llm": {
-          "auth": "api_key",
-          "provider": "openai",
-          "model": "gpt-5.5",
-          "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+      "executor": "codex",
+      "actors": {
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "api_key",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "api_key_env": "ONTO_E2E_MISSING_OPENAI_API_KEY"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5"
+          }
         }
       }
     }

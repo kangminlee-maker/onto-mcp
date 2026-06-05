@@ -13,25 +13,33 @@ function actorOwnedOauthSettings(effort: string) {
   };
 }
 
+function actorOwnedApiSettings(provider: "openai" | "anthropic", model: string) {
+  return {
+    auth: "api_key" as const,
+    provider,
+    model,
+  };
+}
+
 describe("resolveReviewExecutionProfile", () => {
-  it("overlays actor llm partials on the root llm selection", () => {
+  it("uses actor-owned llm blocks without root inheritance", () => {
     const execution = defaultReviewExecution();
     const settings: OntoSettings = {
-      llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "gpt-5.5",
-        effort: "medium",
-        service_tier: "fast",
-      },
+      schema_version: "settings.json/v3",
       review: {
         execution: {
           ...execution,
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedOauthSettings("medium"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedOauthSettings("medium"),
+          },
           synthesize: {
             seat: "worker",
-            llm: {
-              effort: "xhigh",
-            },
+            llm: actorOwnedOauthSettings("xhigh"),
           },
         },
       },
@@ -45,29 +53,31 @@ describe("resolveReviewExecutionProfile", () => {
 
     expect(result.type).toBe("resolved");
     if (result.type !== "resolved") return;
-    expect(result.profile.teamlead.llm).toEqual(settings.llm);
-    expect(result.profile.lens.llm).toEqual(settings.llm);
-    expect(result.profile.synthesize.llm).toEqual({
-      auth: "oauth",
-      provider: "openai",
-      model: "gpt-5.5",
-      effort: "xhigh",
-      service_tier: "fast",
-    });
+    expect(result.profile.teamlead.llm).toEqual(actorOwnedOauthSettings("medium"));
+    expect(result.profile.lens.llm).toEqual(actorOwnedOauthSettings("medium"));
+    expect(result.profile.synthesize.llm).toEqual(actorOwnedOauthSettings("xhigh"));
   });
 
   it("honors explicit direct-call executor settings", () => {
     const execution = defaultReviewExecution();
     const settings: OntoSettings = {
-      llm: {
-        auth: "api_key",
-        provider: "openai",
-        model: "gpt-5.5",
-      },
+      schema_version: "settings.json/v3",
       review: {
         execution: {
           ...execution,
           executor: "direct_call",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedApiSettings("openai", "gpt-5.5"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedApiSettings("openai", "gpt-5.5"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedApiSettings("openai", "gpt-5.5"),
+          },
         },
       },
     };
@@ -88,15 +98,23 @@ describe("resolveReviewExecutionProfile", () => {
   it("honors explicit codex executor settings", () => {
     const execution = defaultReviewExecution();
     const settings: OntoSettings = {
-      llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "gpt-5.5",
-      },
+      schema_version: "settings.json/v3",
       review: {
         execution: {
           ...execution,
           executor: "codex",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedOauthSettings("medium"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedOauthSettings("medium"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedOauthSettings("medium"),
+          },
         },
       },
     };
@@ -186,5 +204,44 @@ describe("resolveReviewExecutionProfile", () => {
     expect(result.type).toBe("no_host");
     if (result.type !== "no_host") return;
     expect(result.reason).toContain("different executor routes");
+  });
+
+  it("allows mixed API direct-call actor provider routes", () => {
+    const settings: OntoSettings = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          executor: "direct_call",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedApiSettings("openai", "gpt-5.5"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedApiSettings("openai", "gpt-5.5"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedApiSettings("anthropic", "claude-sonnet-4-6"),
+          },
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: true,
+      env: {},
+    });
+
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.profile.worker_executor).toBe("direct_call");
+    expect(result.profile.host).toBe("openai");
+    expect(result.profile.provider).toBeUndefined();
+    expect(result.profile.synthesize.llm).toEqual(
+      actorOwnedApiSettings("anthropic", "claude-sonnet-4-6"),
+    );
   });
 });

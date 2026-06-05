@@ -11,7 +11,7 @@ import {
 } from "../src/core-api/review-api.js";
 import {
   projectReviewInvocationEquivalence,
-  type LegacyReviewInvocationOutput,
+  type ReviewInvocationCliOutput,
 } from "../src/core-runtime/review/review-invocation-runner.js";
 
 const execFileAsync = promisify(execFile);
@@ -83,7 +83,7 @@ interface ArtifactProjection {
 }
 
 interface AdapterRun {
-  adapter: "legacy-adapter" | "core-api" | "mcp";
+  adapter: "cli" | "core-api" | "mcp";
   sessionRoot: string;
   responseProjection: unknown;
   artifactProjection: ArtifactProjection;
@@ -213,7 +213,7 @@ async function readYamlIfExists<T>(filePath: string): Promise<T | null> {
   }
 }
 
-function parseLastJsonObject(stdout: string): LegacyReviewInvocationOutput {
+function parseLastJsonObject(stdout: string): ReviewInvocationCliOutput {
   const indexes: number[] = [];
   for (let index = stdout.indexOf("{"); index >= 0; index = stdout.indexOf("{", index + 1)) {
     indexes.push(index);
@@ -222,13 +222,13 @@ function parseLastJsonObject(stdout: string): LegacyReviewInvocationOutput {
     try {
       const parsed = JSON.parse(stdout.slice(index).trim()) as unknown;
       if (isRecord(parsed) && isRecord(parsed.review_result)) {
-        return parsed as LegacyReviewInvocationOutput;
+        return parsed as ReviewInvocationCliOutput;
       }
     } catch {
       // Keep looking for the final pretty-printed JSON object.
     }
   }
-  throw new Error("Legacy adapter stdout did not include a review invocation JSON result.");
+  throw new Error("CLI adapter stdout did not include a review invocation JSON result.");
 }
 
 function tsxArgs(entrypoint: string, scriptArgs: string[]): string[] {
@@ -366,7 +366,7 @@ function assertSameProjection(caseName: string, runs: AdapterRun[]): void {
   }
 }
 
-async function runLegacyAdapter(projectRoot: string, fixture: FixtureCase): Promise<AdapterRun> {
+async function runCliAdapter(projectRoot: string, fixture: FixtureCase): Promise<AdapterRun> {
   const result = await execFileAsync(
     TSX,
     reviewInvokeArgs(invocationArgs(projectRoot, fixture)),
@@ -379,7 +379,7 @@ async function runLegacyAdapter(projectRoot: string, fixture: FixtureCase): Prom
   );
   const output = parseLastJsonObject(result.stdout);
   return {
-    adapter: "legacy-adapter",
+    adapter: "cli",
     sessionRoot: output.review_result.session_root,
     responseProjection: projectReviewInvocationEquivalence(output),
     artifactProjection: await artifactProjection(output.review_result.session_root),
@@ -462,7 +462,7 @@ async function runMcp(
   };
 }
 
-async function expectLegacyAdapterFailure(projectRoot: string): Promise<void> {
+async function expectCliAdapterFailure(projectRoot: string): Promise<void> {
   try {
     await execFileAsync(
       TSX,
@@ -492,11 +492,11 @@ async function expectLegacyAdapterFailure(projectRoot: string): Promise<void> {
     assert(
       `${stdout}\n${stderr}`.includes("no-domain") ||
         `${stdout}\n${stderr}`.includes("noDomain"),
-      "Legacy adapter conflict failure did not mention no-domain.",
+      "CLI adapter conflict failure did not mention no-domain.",
     );
     return;
   }
-  throw new Error("Legacy adapter conflict request unexpectedly passed.");
+  throw new Error("CLI adapter conflict request unexpectedly passed.");
 }
 
 async function expectCoreApiFailure(projectRoot: string): Promise<void> {
@@ -560,6 +560,10 @@ async function prepareFixtureProject(): Promise<string> {
 async function main(): Promise<void> {
   const projectRoot = await prepareFixtureProject();
   const home = await fs.mkdtemp(path.join(os.tmpdir(), "onto-review-invocation-home-"));
+  const originalHome = process.env.HOME;
+  const originalUserProfile = process.env.USERPROFILE;
+  process.env.HOME = home;
+  process.env.USERPROFILE = home;
   const child = spawn(TSX, mcpServerArgs(), {
     cwd: PROJECT_ROOT,
     env: { ...process.env, HOME: home, USERPROFILE: home, ONTO_LLM_MOCK: "1" },
@@ -606,7 +610,7 @@ async function main(): Promise<void> {
 
     for (const fixture of fixtures) {
       const runs = [
-        await runLegacyAdapter(projectRoot, fixture),
+        await runCliAdapter(projectRoot, fixture),
         await runCoreApi(projectRoot, fixture),
         await runMcp(client, projectRoot, fixture),
       ];
@@ -623,13 +627,13 @@ async function main(): Promise<void> {
       });
     }
 
-    await expectLegacyAdapterFailure(projectRoot);
+    await expectCliAdapterFailure(projectRoot);
     await expectCoreApiFailure(projectRoot);
     await expectMcpFailure(client, projectRoot);
     checks.push({
       name: "domain-conflict-failure",
       status: "passed",
-      adapters: ["legacy-adapter", "core-api", "mcp"],
+      adapters: ["cli", "core-api", "mcp"],
     });
 
     console.log(JSON.stringify({
@@ -639,6 +643,16 @@ async function main(): Promise<void> {
     }, null, 2));
   } finally {
     child.kill();
+    if (originalHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = originalHome;
+    }
+    if (originalUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = originalUserProfile;
+    }
     if (!KEEP_TEMP_ROOTS) {
       await fs.rm(projectRoot, { recursive: true, force: true });
       await fs.rm(home, { recursive: true, force: true });

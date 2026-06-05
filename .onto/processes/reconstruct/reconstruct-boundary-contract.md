@@ -349,6 +349,7 @@ material kind requires a contract change and registry update.
 Active reconstruct prompts and contracts may load only the active contract set
 listed in Section 1.
 
-Development history belongs under `development-records/`. Historical notes must
-not be referenced by runtime prompt packets, active source profiles, active UX
-contracts, or MCP result wording unless a user explicitly asks for that history.
+Development history belongs outside runtime reference paths. Historical notes
+must not be referenced by runtime prompt packets, active source profiles, active
+UX contracts, or MCP result wording unless a user explicitly asks for that
+history.

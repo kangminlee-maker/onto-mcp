@@ -623,7 +623,7 @@ export interface RunReconstructParams {
   confirmationProvider: ReconstructConfirmationProvider;
 }
 
-interface AuthoredArtifactCompatibility {
+interface AuthoredArtifactReuseMatch {
   session_id: string;
   intent_sha256: string;
   target_refs_sha256: string;
@@ -654,8 +654,8 @@ interface AuthoredArtifactReuseProvenance {
   artifact_ref: string;
   artifact_sha256: string;
   created_at: string;
-  compatibility_hash: string;
-  compatibility: AuthoredArtifactCompatibility;
+  reuse_match_hash: string;
+  reuse_match: AuthoredArtifactReuseMatch;
 }
 
 export interface ReconstructRunResult {
@@ -957,8 +957,28 @@ function authoredArtifactProvenancePath(filePath: string): string {
   return `${filePath}.reuse-provenance.yaml`;
 }
 
-function compatibilityHash(compatibility: AuthoredArtifactCompatibility): string {
-  return sha256Text(stableJson(compatibility));
+function assertCurrentReuseProvenance(
+  provenance: AuthoredArtifactReuseProvenance,
+  provenancePath: string,
+): void {
+  const record = provenance as unknown as Record<string, unknown>;
+  if ("compatibility_hash" in record || "compatibility" in record) {
+    throw new Error(
+      `${provenancePath} uses retired compatibility fields; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+  if (
+    typeof provenance.reuse_match_hash !== "string" ||
+    !isRecord(provenance.reuse_match)
+  ) {
+    throw new Error(
+      `${provenancePath} is missing reuse_match_hash or reuse_match; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+}
+
+function reuseMatchHash(reuseMatch: AuthoredArtifactReuseMatch): string {
+  return sha256Text(stableJson(reuseMatch));
 }
 
 function stripVolatileArtifactFields(value: unknown): unknown {
@@ -980,11 +1000,11 @@ function stripVolatileArtifactFields(value: unknown): unknown {
   return value;
 }
 
-function compatibilityArtifactHash(value: unknown): string {
+function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 
-function authoredArtifactCompatibility(args: {
+function authoredArtifactReuseMatch(args: {
   sessionId: string;
   intent: string;
   targetRefs: string[];
@@ -1007,7 +1027,7 @@ function authoredArtifactCompatibility(args: {
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
-}): AuthoredArtifactCompatibility {
+}): AuthoredArtifactReuseMatch {
   return {
     session_id: args.sessionId,
     intent_sha256: sha256Text(args.intent),
@@ -1031,7 +1051,7 @@ function authoredArtifactCompatibility(args: {
       })),
     })),
     target_material_profile_validation_sha256: args.targetMaterialProfileValidation
-      ? compatibilityArtifactHash(args.targetMaterialProfileValidation)
+      ? reuseMatchArtifactHash(args.targetMaterialProfileValidation)
       : null,
     source_inventory_sha256: sha256Text(stableJson(
       args.sourceInventory.inventory_units.map((unit) => ({
@@ -1067,24 +1087,24 @@ function authoredArtifactCompatibility(args: {
       })),
     })),
     source_safety_ledger_sha256: args.sourceSafetyLedger
-      ? compatibilityArtifactHash(args.sourceSafetyLedger)
+      ? reuseMatchArtifactHash(args.sourceSafetyLedger)
       : null,
     source_safety_ledger_validation_sha256: args.sourceSafetyLedgerValidation
-      ? compatibilityArtifactHash(args.sourceSafetyLedgerValidation)
+      ? reuseMatchArtifactHash(args.sourceSafetyLedgerValidation)
       : null,
     source_scout_pack_sha256: args.sourceScoutPack
-      ? compatibilityArtifactHash(args.sourceScoutPack)
+      ? reuseMatchArtifactHash(args.sourceScoutPack)
       : null,
     source_scout_pack_validation_sha256: args.sourceScoutPackValidation
-      ? compatibilityArtifactHash(args.sourceScoutPackValidation)
+      ? reuseMatchArtifactHash(args.sourceScoutPackValidation)
       : null,
     source_observation_lineage_index_validation_sha256:
       args.sourceObservationLineageIndexValidation
-        ? compatibilityArtifactHash(args.sourceObservationLineageIndexValidation)
+        ? reuseMatchArtifactHash(args.sourceObservationLineageIndexValidation)
         : null,
     seed_authoring_readiness_validation_sha256:
       args.seedAuthoringReadinessValidation
-        ? compatibilityArtifactHash(args.seedAuthoringReadinessValidation)
+        ? reuseMatchArtifactHash(args.seedAuthoringReadinessValidation)
         : null,
     seed_authoring_readiness_taxonomy_version:
       args.seedAuthoringReadinessValidation?.readiness_classification
@@ -1105,11 +1125,11 @@ async function writeFreshAuthoredYamlDocument<T>(
   create: () => Promise<T>,
   options: {
     reuseExisting?: boolean;
-    compatibility?: AuthoredArtifactCompatibility;
+    reuseMatch?: AuthoredArtifactReuseMatch;
   } = {},
 ): Promise<T> {
-  const currentCompatibilityHash = options.compatibility
-    ? compatibilityHash(options.compatibility)
+  const currentReuseMatchHash = options.reuseMatch
+    ? reuseMatchHash(options.reuseMatch)
     : null;
   if (await exists(filePath)) {
     if (options.reuseExisting) {
@@ -1120,15 +1140,16 @@ async function writeFreshAuthoredYamlDocument<T>(
         );
       if (!provenance) {
         throw new Error(
-          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove authored artifact compatibility.`,
+          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove the authored artifact reuse match.`,
         );
       }
+      assertCurrentReuseProvenance(provenance, provenancePath);
       if (
-        currentCompatibilityHash &&
-        provenance.compatibility_hash !== currentCompatibilityHash
+        currentReuseMatchHash &&
+        provenance.reuse_match_hash !== currentReuseMatchHash
       ) {
         throw new Error(
-          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for compatibility_hash=${provenance.compatibility_hash}, current compatibility_hash=${currentCompatibilityHash}.`,
+          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for reuse_match_hash=${provenance.reuse_match_hash}, current reuse_match_hash=${currentReuseMatchHash}.`,
         );
       }
       const currentArtifactSha256 = await sha256File(filePath);
@@ -1145,12 +1166,12 @@ async function writeFreshAuthoredYamlDocument<T>(
   }
   const created = await create();
   await writeYamlDocument(filePath, created);
-  if (options.compatibility && currentCompatibilityHash) {
+  if (options.reuseMatch && currentReuseMatchHash) {
     await writeAuthoredArtifactReuseProvenance({
       filePath,
       artifactName,
-      compatibility: options.compatibility,
-      compatibilityHash: currentCompatibilityHash,
+      reuseMatch: options.reuseMatch,
+      reuseMatchHash: currentReuseMatchHash,
     });
   }
   return created;
@@ -1159,8 +1180,8 @@ async function writeFreshAuthoredYamlDocument<T>(
 async function writeAuthoredArtifactReuseProvenance(args: {
   filePath: string;
   artifactName: string;
-  compatibility: AuthoredArtifactCompatibility;
-  compatibilityHash?: string | null;
+  reuseMatch: AuthoredArtifactReuseMatch;
+  reuseMatchHash?: string | null;
 }): Promise<void> {
   await writeYamlDocument(authoredArtifactProvenancePath(args.filePath), {
     schema_version: "1",
@@ -1168,9 +1189,9 @@ async function writeAuthoredArtifactReuseProvenance(args: {
     artifact_ref: args.filePath,
     artifact_sha256: await sha256File(args.filePath),
     created_at: isoNow(),
-    compatibility_hash:
-      args.compatibilityHash ?? compatibilityHash(args.compatibility),
-    compatibility: args.compatibility,
+    reuse_match_hash:
+      args.reuseMatchHash ?? reuseMatchHash(args.reuseMatch),
+    reuse_match: args.reuseMatch,
   } satisfies AuthoredArtifactReuseProvenance);
 }
 
@@ -3317,7 +3338,7 @@ interface MaturationAnswerSupportPromptCatalog {
   prioritizedObservationIds: string[];
   promptObservationIds: string[];
   promptVisiblePrioritizedObservationIds: string[];
-  promptVisibleFallbackObservationIds: string[];
+  promptVisibleSupplementalObservationIds: string[];
   omittedPrioritizedObservationIds: string[];
 }
 
@@ -3346,13 +3367,13 @@ function maturationAnswerSupportPromptCatalog(args: {
     ),
   ];
   const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
-  const fallbackObservationIds = args.sourceObservations.observations
+  const supplementalObservationIds = args.sourceObservations.observations
     .filter((observation) =>
       !prioritizedObservationIdSet.has(observation.observation_id)
     )
     .map((observation) => observation.observation_id);
   const promptObservationIds = [
-    ...new Set([...prioritizedObservationIds, ...fallbackObservationIds]),
+    ...new Set([...prioritizedObservationIds, ...supplementalObservationIds]),
   ].slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
   const promptObservationIdSet = new Set(promptObservationIds);
   return {
@@ -3361,7 +3382,7 @@ function maturationAnswerSupportPromptCatalog(args: {
     promptVisiblePrioritizedObservationIds: prioritizedObservationIds.filter((
       observationId,
     ) => promptObservationIdSet.has(observationId)),
-    promptVisibleFallbackObservationIds: fallbackObservationIds.filter((
+    promptVisibleSupplementalObservationIds: supplementalObservationIds.filter((
       observationId,
     ) => promptObservationIdSet.has(observationId)),
     omittedPrioritizedObservationIds: prioritizedObservationIds.filter((
@@ -5094,9 +5115,11 @@ function selectedSourcePurposeCandidateForSeed(
 
 function dispositionEvidenceRefs(
   disposition: ReconstructCandidateDispositionArtifact["dispositions"][number],
-  fallback: ReconstructEvidenceRef,
+  defaultEvidenceRef: ReconstructEvidenceRef,
 ): ReconstructEvidenceRef[] {
-  return disposition.evidence_refs.length > 0 ? disposition.evidence_refs : [fallback];
+  return disposition.evidence_refs.length > 0
+    ? disposition.evidence_refs
+    : [defaultEvidenceRef];
 }
 
 function seedPlacementForDisposition(args: {
@@ -5154,7 +5177,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
   authorId: string;
 }): ReconstructOntologySeedArtifact {
   const input = args.input;
-  const fallbackEvidence = firstEvidenceRef(input.sourceObservations);
+  const defaultEvidenceRef = firstEvidenceRef(input.sourceObservations);
   const selectedPurpose = selectedSourcePurposeCandidateForSeed(input);
   const usedIds = new Set<string>();
   const objectTypes: Array<Record<string, unknown>> = [];
@@ -5298,7 +5321,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
     sourceBindings.push({
       binding_id: id,
       seed_ref: seedRef,
-      source_ref: evidenceRefs[0]?.source_ref ?? fallbackEvidence.source_ref,
+      source_ref: evidenceRefs[0]?.source_ref ?? defaultEvidenceRef.source_ref,
       binding_kind: "evidence",
       statement: `${titleFromId(seedRef)} is backed by validated source evidence.`,
       evidence_refs: evidenceRefs,
@@ -5325,7 +5348,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
 
   for (const disposition of input.candidateDisposition.dispositions) {
     const candidate = candidateById.get(disposition.candidate_id);
-    const evidenceRefs = dispositionEvidenceRefs(disposition, fallbackEvidence);
+    const evidenceRefs = dispositionEvidenceRefs(disposition, defaultEvidenceRef);
     for (const targetSeedRef of disposition.target_seed_refs) {
       const placement = seedPlacementForDisposition({
         dispositionId: disposition.disposition_id,
@@ -5422,7 +5445,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
     }
   }
 
-  const defaultEvidence = [fallbackEvidence];
+  const defaultEvidence = [defaultEvidenceRef];
   if (objectIds.size === 0) addObject(uniqueRuntimeSeedId("object-recovered-source", usedIds), defaultEvidence);
   if (actorIds.size === 0) addActor(uniqueRuntimeSeedId("actor-recovered-principal", usedIds), defaultEvidence);
   if (actionIds.size === 0) addAction(uniqueRuntimeSeedId("action-recovered-use", usedIds), defaultEvidence);
@@ -5445,14 +5468,14 @@ function deterministicOntologySeedTimeoutRecovery(args: {
       read_model_id: uniqueRuntimeSeedId(`read-${objectId}`, usedIds),
       name: `${titleFromId(objectId)} Read Model`,
       object_type_ids: [objectId],
-      source_refs: [fallbackEvidence.source_ref],
+      source_refs: [defaultEvidenceRef.source_ref],
       transformation_summary: "Timeout recovery uses direct source evidence only.",
       evidence_refs: defaultEvidence,
     });
     provenanceBindings.push({
       provenance_id: uniqueRuntimeSeedId(`provenance-${objectId}`, usedIds),
       seed_ref: objectId,
-      source_ref: fallbackEvidence.source_ref,
+      source_ref: defaultEvidenceRef.source_ref,
       author_or_system: "onto-reconstruct-runtime-timeout-recovery",
       timestamp_ref: "source-observations.yaml",
       evidence_refs: defaultEvidence,
@@ -7032,14 +7055,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         if (!isLlmTimeoutError(error) || input.repairAttempt) {
           throw error;
         }
-        const fallbackLlmConfig: Partial<LlmCallConfig> = { ...llmConfig };
-        if (fallbackLlmConfig.reasoning_effort === "high") {
-          fallbackLlmConfig.reasoning_effort = "medium";
+        const retryLlmConfig: Partial<LlmCallConfig> = { ...llmConfig };
+        if (retryLlmConfig.reasoning_effort === "high") {
+          retryLlmConfig.reasoning_effort = "medium";
         }
         try {
           raw = await callJsonAuthor({
             llmCall,
-            llmConfig: fallbackLlmConfig,
+            llmConfig: retryLlmConfig,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
             systemPrompt: [
@@ -7098,8 +7121,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               },
             },
           });
-        } catch (fallbackError) {
-          if (!isLlmTimeoutError(fallbackError)) throw fallbackError;
+        } catch (retryError) {
+          if (!isLlmTimeoutError(retryError)) throw retryError;
           throw new Error(
             "OntologySeedMinimalKernel timed out after the primary seed authoring timeout; deterministic seed timeout recovery is disabled because runtime must not author semantic seed content.",
           );
@@ -7289,7 +7312,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
       const rawQuestionRows: Record<string, unknown>[] = [];
       const openQuestions: string[] = [];
-      const fallbackObservationIds = (observationIds: string[]): string[] =>
+      const observationIdsWithDefault = (observationIds: string[]): string[] =>
         observationIds.length > 0
           ? observationIds
           : input.sourceObservations.observations.slice(0, 1)
@@ -7299,7 +7322,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         domainRows: typeof domainCompetencyPromptRows;
         observationIds: string[];
       }): { questions: Record<string, unknown>[]; open_questions: string[] } => {
-        const observationIds = fallbackObservationIds(args.observationIds);
+        const observationIds = observationIdsWithDefault(args.observationIds);
         const defaultSeedRef = [...seedRefIds][0] ?? args.eligibleClaimRows[0]?.claim_id;
         const sharedRefs = {
           coverage_axis_refs: allowedPayload.allowed_coverage_axis_ids,
@@ -8486,15 +8509,15 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           source_observation_prompt_policy: {
             projection_kind: "maturation_answer_support_bounded_catalog",
             selection_basis:
-              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with fallback observations; semantic answer support remains LLM-owned.",
+              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
             source_observation_count: input.sourceObservations.observations.length,
             prioritized_observation_count:
               promptCatalog.prioritizedObservationIds.length,
             prompt_observation_count: promptObservationIds.length,
             prompt_visible_prioritized_observation_count:
               promptCatalog.promptVisiblePrioritizedObservationIds.length,
-            prompt_visible_fallback_observation_count:
-              promptCatalog.promptVisibleFallbackObservationIds.length,
+            prompt_visible_supplemental_observation_count:
+              promptCatalog.promptVisibleSupplementalObservationIds.length,
             omitted_prioritized_observation_count:
               promptCatalog.omittedPrioritizedObservationIds.length,
             observation_limit: ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
@@ -10652,7 +10675,7 @@ export async function runReconstruct(
   const { directiveAuthor, confirmationProvider } = params;
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
-  let currentAuthoredArtifactCompatibility: AuthoredArtifactCompatibility | null = null;
+  let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
   let currentSourceObservationLineageIndexValidation:
     ReconstructSourceObservationLineageIndexValidationArtifact | null = null;
   let currentSeedAuthoringReadinessValidation:
@@ -10664,8 +10687,8 @@ export async function runReconstruct(
   ): Promise<T> =>
     writeFreshAuthoredYamlDocument(filePath, artifactName, create, {
       reuseExisting: reuseExistingAuthoredArtifacts,
-      ...(currentAuthoredArtifactCompatibility
-        ? { compatibility: currentAuthoredArtifactCompatibility }
+      ...(currentAuthoredArtifactReuseMatch
+        ? { reuseMatch: currentAuthoredArtifactReuseMatch }
         : {}),
     });
   if (
@@ -10925,8 +10948,8 @@ export async function runReconstruct(
     lensIds,
     admittedDomainIds: params.domain ? [params.domain] : [],
   });
-  const refreshAuthoredArtifactCompatibility = (): void => {
-    currentAuthoredArtifactCompatibility = authoredArtifactCompatibility({
+  const refreshAuthoredArtifactReuseMatch = (): void => {
+    currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
       intent: params.intent,
       targetRefs,
@@ -10949,7 +10972,7 @@ export async function runReconstruct(
       confirmationProvider,
     });
   };
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
   let sourceObservationDirectivePath = path.join(
     sessionRoot,
     "source-observation-directive.yaml",
@@ -11268,7 +11291,7 @@ export async function runReconstruct(
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
     });
-    refreshAuthoredArtifactCompatibility();
+    refreshAuthoredArtifactReuseMatch();
   }
 
   if (
@@ -11317,7 +11340,7 @@ export async function runReconstruct(
     sourceScoutPackPreSeedValidationPath;
   sourceScoutPack = preSeedSourceScoutPack;
   sourceScoutPackValidation = preSeedSourceScoutPackValidation;
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
 
   const sourcePurposeCandidatesPath = path.join(
     sessionRoot,
@@ -11530,7 +11553,7 @@ export async function runReconstruct(
     validation: seedAuthoringReadinessValidation,
   });
   currentSeedAuthoringReadinessValidation = seedAuthoringReadinessValidation;
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
 
   const ontologySeedPath = path.join(sessionRoot, "ontology-seed.yaml");
   const ontologySeedAuthorInput: ReconstructOntologySeedAuthorInput = {
@@ -11596,11 +11619,11 @@ export async function runReconstruct(
       },
     });
     await writeYamlDocument(ontologySeedPath, ontologySeed);
-    if (currentAuthoredArtifactCompatibility) {
+    if (currentAuthoredArtifactReuseMatch) {
       await writeAuthoredArtifactReuseProvenance({
         filePath: ontologySeedPath,
         artifactName: "ontology-seed.yaml",
-        compatibility: currentAuthoredArtifactCompatibility,
+        reuseMatch: currentAuthoredArtifactReuseMatch,
       });
     }
     ontologySeedValidation = await writeOntologySeedValidationArtifact({
@@ -12466,7 +12489,7 @@ export async function runReconstruct(
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
     });
-    refreshAuthoredArtifactCompatibility();
+    refreshAuthoredArtifactReuseMatch();
   }
   await writeSourceObservationLineageIndexArtifact({
     sessionId,
@@ -12516,7 +12539,7 @@ export async function runReconstruct(
     artifactRef: postMaturationGateProjectionValidationPath,
     validation: postMaturationGateProjectionValidation,
   });
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
   const maturationAuthorityResponse =
     await writeMaturationAuthorityResponseArtifact({
       sessionId,

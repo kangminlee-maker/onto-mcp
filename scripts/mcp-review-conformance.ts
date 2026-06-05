@@ -48,6 +48,7 @@ interface ReviewRunStructured {
     workerExecutor?: unknown;
     runtimeProvider?: unknown;
     authMode?: unknown;
+    actorRoute?: unknown;
     actorProfiles?: unknown;
   };
   llmPresentation?: {
@@ -83,6 +84,7 @@ interface ReviewContinueStructured {
   status: string;
   continuationPlan?: {
     eligible?: unknown;
+    unitLedger?: unknown;
     frontierUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
     downstreamUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
   };
@@ -99,8 +101,10 @@ interface ReviewContinueStructured {
   };
   pipelineExecutionLedger?: {
     pipeline?: unknown;
-    units?: Array<{ unitId?: unknown; trustStatus?: unknown }>;
+    units?: Array<{ unitId?: unknown; trustStatus?: unknown; trustReason?: unknown }>;
   };
+  resultClassificationSummary?: unknown;
+  llmPresentation?: ReviewRunStructured["llmPresentation"];
   artifactRefs?: Record<string, string>;
 }
 
@@ -298,12 +302,19 @@ function assertCompletedRouteVisibility(
       routeVisibility.actorProfiles.length === 3,
     `${label} routeVisibility must expose three actor profiles.`,
   );
+  assert(
+    routeVisibility.actorRoute !== null &&
+      typeof routeVisibility.actorRoute === "object" &&
+      (routeVisibility.actorRoute as { mode?: unknown }).mode === "single",
+    `${label} routeVisibility must expose single actor route summary.`,
+  );
 }
 
 function assertProgressPresentation(
   presentation: ReviewRunStructured["llmPresentation"],
   label: string,
   expectedStatus?: string,
+  classificationProjection: "full" | "compact" = "full",
 ): void {
   const progress = presentation?.progress;
   assert(typeof progress?.prompt === "string", `${label} progress prompt missing.`);
@@ -339,10 +350,17 @@ function assertProgressPresentation(
       typeof input.generated_from_artifact_refs === "object",
     `${label} generated artifact refs missing.`,
   );
-  assertClassificationSummary(
-    input.result_classification_summary,
-    `${label} progress result classification summary`,
-  );
+  if (classificationProjection === "compact") {
+    assertCompactClassificationSummary(
+      input.result_classification_summary,
+      `${label} progress result classification summary`,
+    );
+  } else {
+    assertClassificationSummary(
+      input.result_classification_summary,
+      `${label} progress result classification summary`,
+    );
+  }
 }
 
 function assertLivenessState(value: unknown, label: string): void {
@@ -414,6 +432,67 @@ function assertClassificationSummary(value: unknown, label: string): void {
   assert(Array.isArray(summary.material_issues), `${label} material_issues missing.`);
   assert(Array.isArray(summary.non_material_findings), `${label} non_material_findings missing.`);
   assert(Array.isArray(summary.action_candidates), `${label} action_candidates missing.`);
+}
+
+function assertCompactClassificationSummary(value: unknown, label: string): void {
+  assert(value !== null && typeof value === "object", `${label} missing.`);
+  const summary = value as {
+    highest_severity?: unknown;
+    severity_counts?: unknown;
+    material_issue_count?: unknown;
+    non_material_finding_count?: unknown;
+    action_candidate_count?: unknown;
+    material_issues?: unknown;
+    non_material_findings?: unknown;
+    action_candidates?: unknown;
+    material_issue_signals?: unknown;
+    non_material_finding_signals?: unknown;
+  };
+  assert(
+    summary.highest_severity === null || typeof summary.highest_severity === "string",
+    `${label} highest_severity invalid.`,
+  );
+  assert(
+    summary.severity_counts !== null && typeof summary.severity_counts === "object",
+    `${label} severity_counts missing.`,
+  );
+  assert(
+    typeof summary.material_issue_count === "number" &&
+      typeof summary.non_material_finding_count === "number" &&
+      typeof summary.action_candidate_count === "number",
+    `${label} bounded counts missing.`,
+  );
+  assert(summary.material_issues === undefined, `${label} material_issues must be omitted.`);
+  assert(
+    summary.non_material_findings === undefined,
+    `${label} non_material_findings must be omitted.`,
+  );
+  assert(
+    summary.action_candidates === undefined,
+    `${label} action_candidates must be omitted.`,
+  );
+  assert(
+    Array.isArray(summary.material_issue_signals),
+    `${label} material_issue_signals missing.`,
+  );
+  assert(
+    Array.isArray(summary.non_material_finding_signals),
+    `${label} non_material_finding_signals missing.`,
+  );
+  for (const signal of [
+    ...summary.material_issue_signals,
+    ...summary.non_material_finding_signals,
+  ]) {
+    assert(
+      signal !== null &&
+        typeof signal === "object" &&
+        typeof (signal as { signal?: unknown }).signal === "string" &&
+        typeof (signal as { issue_id?: unknown }).issue_id === "string" &&
+        ((signal as { issue_id: string }).issue_id.length <= 120) &&
+        ((signal as { signal: string }).signal.length <= 360),
+      `${label} compact signal must be bounded.`,
+    );
+  }
 }
 
 function assertProgressNotifications(
@@ -587,7 +666,7 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(Array.isArray(result.participatingLensIds), "participatingLensIds missing.");
   assert(Array.isArray(result.degradedLensIds), "degradedLensIds missing.");
   assert(result.summary !== undefined, "summary missing.");
-  assertClassificationSummary(
+  assertCompactClassificationSummary(
     result.resultClassificationSummary,
     "structuredContent resultClassificationSummary",
   );
@@ -595,7 +674,7 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   assert(presentation !== undefined, "llmPresentation missing.");
   assertCompletedRouteVisibility(result.routeVisibility, "onto.review");
   const openingBrief = presentation.openingBrief;
-  assertProgressPresentation(presentation, "llmPresentation", "completed");
+  assertProgressPresentation(presentation, "llmPresentation", "completed", "compact");
   const finalResult = presentation.finalResult;
   assert(
     typeof openingBrief?.prompt === "string",
@@ -620,10 +699,14 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
         .presentation_contract_version === "1",
     "llmPresentation.finalResult.input must expose presentation_contract_version.",
   );
-  assertClassificationSummary(
+  assertCompactClassificationSummary(
     (finalResult.input as { result_classification_summary?: unknown })
       .result_classification_summary,
     "llmPresentation.finalResult result classification summary",
+  );
+  assert(
+    (finalResult.input as { review_result?: unknown }).review_result === undefined,
+    "llmPresentation.finalResult must not expose full review_result.",
   );
   return result as ReviewRunStructured;
 }
@@ -649,7 +732,12 @@ function requireReviewRunningStructured(value: unknown): ReviewRunStructured {
       Array.isArray(result.runControl.activeAttempt.activeUnits),
     "running result must expose active initial attempt metadata.",
   );
-  assertProgressPresentation(result.llmPresentation, "running llmPresentation", "running");
+  assertProgressPresentation(
+    result.llmPresentation,
+    "running llmPresentation",
+    "running",
+    "compact",
+  );
   return result as ReviewRunStructured;
 }
 
@@ -699,6 +787,10 @@ function requireReviewContinueStructured(value: unknown): ReviewContinueStructur
     "review_continue continuationPlan.frontierUnits missing.",
   );
   assert(
+    result.continuationPlan.unitLedger === undefined,
+    "review_continue continuationPlan must not expose full unitLedger.",
+  );
+  assert(
     result.promptExecutionResult?.synthesis_executed === true,
     "review_continue must execute synthesize when continuation completes.",
   );
@@ -713,6 +805,22 @@ function requireReviewContinueStructured(value: unknown): ReviewContinueStructur
         (unit) => unit.unitId === "synthesize" && unit.trustStatus === "trusted",
       ),
     "review_continue must return a trusted post-continuation review ledger.",
+  );
+  assert(
+    !result.pipelineExecutionLedger?.units?.some(
+      (unit) => unit.unitId === "synthesize" && unit.trustReason !== undefined,
+    ),
+    "review_continue must return a bounded post-continuation review ledger.",
+  );
+  assertCompactClassificationSummary(
+    result.resultClassificationSummary,
+    "review_continue resultClassificationSummary",
+  );
+  assertProgressPresentation(
+    result.llmPresentation,
+    "review_continue llmPresentation",
+    "completed",
+    "compact",
   );
   return result as ReviewContinueStructured;
 }
@@ -1477,9 +1585,63 @@ async function main(): Promise<void> {
       typeof reviewResultStructured.llmPresentation?.finalResult?.prompt === "string",
       "onto.review_result must expose llmPresentation.finalResult.",
     );
+    const fullFinalInput = reviewResultStructured.llmPresentation?.finalResult?.input as
+      | {
+          review_record?: unknown;
+          result_classification_summary?: unknown;
+        }
+      | undefined;
+    assert(
+      fullFinalInput?.review_record !== null &&
+        typeof fullFinalInput?.review_record === "object",
+      "full onto.review_result finalResult input must expose ReviewRecord.",
+    );
+    assertClassificationSummary(
+      fullFinalInput?.result_classification_summary,
+      "full onto.review_result llmPresentation.finalResult classification summary",
+    );
     assertCompletedRouteVisibility(
       reviewResultStructured.routeVisibility,
       "onto.review_result",
+    );
+    const standardReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto_review_result",
+      arguments: { sessionRoot },
+    }), "tools/call onto.review_result standard default"));
+    const standardReviewResult = standardReviewResultTool.structuredContent as
+      | {
+          projectionLevel?: unknown;
+          reviewRecord?: unknown;
+          finalOutputText?: unknown;
+          resultClassificationSummary?: unknown;
+          llmPresentation?: ReviewRunStructured["llmPresentation"];
+        }
+      | undefined;
+    assert(
+      standardReviewResult?.projectionLevel === "standard" &&
+        standardReviewResult.reviewRecord === undefined &&
+        standardReviewResult.finalOutputText === undefined,
+      "standard onto.review_result must be default and omit ReviewRecord/final output text.",
+    );
+    assertCompactClassificationSummary(
+      standardReviewResult.resultClassificationSummary,
+      "standard onto.review_result resultClassificationSummary",
+    );
+    assertCompactClassificationSummary(
+      (
+        standardReviewResult.llmPresentation?.finalResult?.input as
+          | { result_classification_summary?: unknown }
+          | undefined
+      )?.result_classification_summary,
+      "standard onto.review_result llmPresentation.finalResult classification summary",
+    );
+    assertCompactClassificationSummary(
+      (
+        standardReviewResult.llmPresentation?.progress?.input as
+          | { result_classification_summary?: unknown }
+          | undefined
+      )?.result_classification_summary,
+      "standard onto.review_result llmPresentation.progress classification summary",
     );
     const compactReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_result",
@@ -1500,7 +1662,7 @@ async function main(): Promise<void> {
         compactReviewResult.finalOutputText === undefined,
       "compact onto.review_result must omit ReviewRecord and final output text.",
     );
-    assertClassificationSummary(
+    assertCompactClassificationSummary(
       compactReviewResult.resultClassificationSummary,
       "compact onto.review_result resultClassificationSummary",
     );
@@ -2217,6 +2379,7 @@ async function main(): Promise<void> {
           continuationPlan?: {
             eligible?: unknown;
             ineligibleReason?: unknown;
+            unitLedger?: unknown;
           };
           routeVisibility?: ReviewRunStructured["routeVisibility"];
           llmPresentation?: ReviewRunStructured["llmPresentation"];
@@ -2235,23 +2398,42 @@ async function main(): Promise<void> {
       relativeStatus.routeVisibility,
       "onto.review_status",
     );
-    assertProgressPresentation(
-      relativeStatus.llmPresentation,
-      "onto.review_status",
-      "completed",
+    assert(
+      relativeStatus.llmPresentation === undefined,
+      "default onto.review_status must omit llmPresentation.",
     );
     assert(
       relativeStatus.pipelineExecutionLedger?.pipeline === "review" &&
         relativeStatus.pipelineExecutionLedger.units?.some(
           (unit) => unit.unitId === "synthesize" && unit.trustStatus === "trusted",
         ) &&
-        relativeStatus.continuationPlan?.eligible === false,
+        relativeStatus.continuationPlan?.eligible === false &&
+        relativeStatus.continuationPlan.unitLedger === undefined,
       "onto.review_status must expose review PipelineExecutionLedger and completed continuation projection.",
+    );
+    const fullStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
+      name: "onto_review_status",
+      arguments: {
+        sessionRoot: relativeSessionRoot,
+        projectRoot,
+        projectionLevel: "full",
+      },
+    }), "tools/call onto.review_status full relative sessionRoot"));
+    const fullStatus = fullStatusResult.structuredContent as
+      | {
+          status?: unknown;
+          llmPresentation?: ReviewRunStructured["llmPresentation"];
+        }
+      | undefined;
+    assertProgressPresentation(
+      fullStatus?.llmPresentation,
+      "full onto.review_status",
+      "completed",
     );
     assertProgressNotificationsMatchReview(
       progressNotifications,
       structured,
-      relativeStatus,
+      fullStatus ?? {},
     );
     const completedRequestHash = structured.runHandle?.requestHash;
     assert(
@@ -2293,7 +2475,7 @@ async function main(): Promise<void> {
         HOME: delayedHome,
         USERPROFILE: delayedHome,
         ONTO_LLM_MOCK: "1",
-        ONTO_REVIEW_MOCK_UNIT_DELAY_MS: "750",
+        ONTO_REVIEW_MOCK_UNIT_DELAY_MS: "5000",
       },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -2511,7 +2693,8 @@ async function main(): Promise<void> {
             };
             continuationPlan?: {
               eligible?: unknown;
-              frontierUnits?: Array<{ unitId?: unknown; dispatchDecision?: unknown }>;
+              frontierUnits?: unknown[];
+              unitLedger?: unknown;
             };
             llmPresentation?: ReviewRunStructured["llmPresentation"];
           }
@@ -2520,27 +2703,39 @@ async function main(): Promise<void> {
         malformedStatus?.status === "halted_partial",
         "malformed halted session must report halted_partial status.",
       );
-      assertProgressPresentation(
-        malformedStatus.llmPresentation,
-        "malformed onto.review_status",
-        "halted_partial",
-      );
       assert(
-        typeof malformedStatus.llmPresentation?.halt?.prompt === "string" &&
-          malformedStatus.llmPresentation.halt.input !== undefined,
-        "malformed halted session must expose llmPresentation.halt.",
+        malformedStatus.llmPresentation === undefined,
+        "default malformed halted status must omit llmPresentation.",
       );
       assert(
         malformedStatus.pipelineExecutionLedger?.units?.some(
           (unit) => unit.unitId === "finding-ledger" && unit.status === "failed",
         ) &&
           malformedStatus.continuationPlan?.eligible === true &&
-          malformedStatus.continuationPlan.frontierUnits?.some(
-            (unit) =>
-              unit.unitId === "finding-ledger" &&
-              unit.dispatchDecision === "run",
-          ),
+          malformedStatus.continuationPlan.unitLedger === undefined &&
+          malformedStatus.continuationPlan.frontierUnits?.includes("finding-ledger"),
         "malformed halted status must expose ledger-backed continuation frontier.",
+      );
+      const malformedFullStatusResult = requireToolResult(requireResult(await malformedClient.request("tools/call", {
+        name: "onto_review_status",
+        arguments: {
+          sessionRoot: malformedSessionRoot,
+          projectRoot,
+          projectionLevel: "full",
+        },
+      }), "tools/call onto.review_status malformed halted session full"));
+      const malformedFullStatus = malformedFullStatusResult.structuredContent as
+        | { llmPresentation?: ReviewRunStructured["llmPresentation"] }
+        | undefined;
+      assertProgressPresentation(
+        malformedFullStatus?.llmPresentation,
+        "full malformed onto.review_status",
+        "halted_partial",
+      );
+      assert(
+        typeof malformedFullStatus?.llmPresentation?.halt?.prompt === "string" &&
+          malformedFullStatus.llmPresentation.halt.input !== undefined,
+        "full malformed halted session must expose llmPresentation.halt.",
       );
       const continuedMalformedResult =
         requireToolResult(requireResult(await client.request("tools/call", {

@@ -35,23 +35,41 @@ function isDirectCallHost(
 function directCallProviderForProfile(
   profile: ReviewExecutionProfile,
 ): ReviewExecutionRouteProvider {
+  let provider: ReviewExecutionRouteProvider | null = null;
   if (isDirectCallHost(profile.host)) {
     if (profile.provider && profile.provider !== profile.host) {
       throw new Error(
         `Review direct-call route has conflicting provider authority: host=${profile.host}, provider=${profile.provider}.`,
       );
     }
-    if (profile.auth === "oauth") {
-      throw new Error(
-        `Review direct-call route requires API-key/local auth; got auth=oauth for host=${profile.host}.`,
-      );
-    }
-    return profile.host;
+    provider = profile.host;
+  } else if (profile.provider) {
+    provider = profile.provider;
+  } else {
+    throw new Error(
+      `Review direct-call route requires an API/local provider host; got host=${profile.host}.`,
+    );
   }
-  if (profile.provider) return profile.provider;
-  throw new Error(
-    `Review direct-call route requires an API/local provider host; got host=${profile.host}.`,
-  );
+  if (profile.auth === "oauth") {
+    throw new Error(
+      `Review direct-call route requires API-key/local auth; got auth=oauth for host=${profile.host}.`,
+    );
+  }
+  return provider;
+}
+
+function defaultDirectCallAuthMode(
+  provider: ReviewExecutionRouteProvider,
+): LlmAuthMode | null {
+  if (provider === "lmstudio") return "local";
+  if (
+    provider === "openai" ||
+    provider === "anthropic" ||
+    provider === "grok"
+  ) {
+    return "api_key";
+  }
+  return null;
 }
 
 export function buildReviewExecutionRoute(
@@ -87,7 +105,7 @@ export function buildReviewExecutionRoute(
     host: "standalone",
     executor: "direct_call",
     resolved_provider: resolvedProvider,
-    auth_mode: profile.auth ?? null,
+    auth_mode: profile.auth ?? defaultDirectCallAuthMode(resolvedProvider),
     execution_realization: "direct-call",
     artifact_host_runtime: artifactHostRuntime as ReviewHostRuntime,
   };

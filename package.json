@@ -19,6 +19,7 @@
   "files": [
     "bin/",
     "dist/",
+    "scripts/check-retired-root-paths.sh",
     "scripts/onto-runtime-watch.sh",
     "scripts/onto-review-watch.sh",
     "scripts/postinstall-hint.js",
@@ -39,8 +40,11 @@
     "build:ts-core": "npm run clean:ts-core && tsc -p tsconfig.json",
     "check:ts-core": "tsc -p tsconfig.json --noEmit",
     "test:review:invocation-runner": "tsx scripts/review-invocation-runner-conformance.ts",
+    "check:retired-root-paths": "bash scripts/check-retired-root-paths.sh",
     "test:mcp:review": "tsx scripts/mcp-review-conformance.ts",
     "test:review:hardening": "tsx scripts/review-runtime-hardening.ts",
+    "benchmark:review:pipeline": "tsx scripts/review-pipeline-benchmark.ts",
+    "migrate:reconstruct-artifact-fields": "tsx scripts/migrate-reconstruct-artifact-fields.ts",
     "test:e2e": "bash src/core-runtime/cli/e2e-review-invoke.test.sh",
     "test:e2e:codex-multi-agent-fixes": "vitest run src/core-runtime/cli/e2e-codex-multi-agent-fixes.test.ts"
   },

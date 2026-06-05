@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   appendReviewInvocationRequestArgs,
   collectReviewInvocationArtifactRefs,
-  parseLegacyReviewInvocationOutput,
+  parseReviewInvocationCliOutput,
   projectReviewInvocationEquivalence,
 } from "./review-invocation-runner.js";
 
@@ -28,7 +28,7 @@ afterEach(async () => {
 });
 
 describe("appendReviewInvocationRequestArgs", () => {
-  it("maps a typed request to the legacy review invoke argv shape", () => {
+  it("maps a typed request to the review invoke argv adapter shape", () => {
     const projectRoot = path.resolve("/tmp/onto-project");
     const argv = appendReviewInvocationRequestArgs(
       ["--no-watch"],
@@ -59,7 +59,7 @@ describe("appendReviewInvocationRequestArgs", () => {
       "--onto-home",
       "/tmp/onto-home",
       "--domain",
-      "software-engineering",
+      "software-development",
       "--requested-domain-token",
       "software-development",
       "--review-mode",
@@ -151,9 +151,9 @@ describe("collectReviewInvocationArtifactRefs", () => {
   });
 });
 
-describe("parseLegacyReviewInvocationOutput", () => {
-  it("parses the trailing legacy JSON result from captured stdout", () => {
-    const parsed = parseLegacyReviewInvocationOutput([
+describe("parseReviewInvocationCliOutput", () => {
+  it("parses the trailing adapter JSON result from captured stdout", () => {
+    const parsed = parseReviewInvocationCliOutput([
       "[review invoke] step 1/3 start session",
       "{ not json",
       JSON.stringify(
@@ -187,9 +187,9 @@ describe("parseLegacyReviewInvocationOutput", () => {
     ]);
   });
 
-  it("rejects output without the legacy review result shape", () => {
+  it("rejects output without the review result adapter shape", () => {
     expect(() =>
-      parseLegacyReviewInvocationOutput([
+      parseReviewInvocationCliOutput([
         "[review invoke] completed",
         JSON.stringify({ ok: true }),
       ]),

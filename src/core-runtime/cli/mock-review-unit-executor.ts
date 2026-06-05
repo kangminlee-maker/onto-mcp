@@ -6,6 +6,7 @@ import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
+import { parseParticipatingLensPaths } from "../review/participating-lens-paths.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -50,9 +51,62 @@ function renderLensOutput(unitId: string, packetPath: string): string {
 `;
 }
 
-function renderSynthesizeOutput(packetPath: string): string {
+function synthesizeRunStatus(args: {
+  expectedLensIds: string[];
+  receivedLensIds: string[];
+}): "full" | "degraded" | "insufficient" {
+  if (
+    args.expectedLensIds.length > 0 &&
+    args.receivedLensIds.length === args.expectedLensIds.length
+  ) {
+    return "full";
+  }
+  if (
+    args.receivedLensIds.length === 0 ||
+    (args.receivedLensIds.length === 1 && args.receivedLensIds[0] === "axiology")
+  ) {
+    return "insufficient";
+  }
+  return "degraded";
+}
+
+function renderYamlStringList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values.map((value) => `  - ${JSON.stringify(value)}`).join("\n")}`;
+}
+
+function renderMissingOrFailedLensList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values
+    .map(
+      (value) =>
+        `  - lens_id: ${JSON.stringify(value)}\n    reason: "missing"`,
+    )
+    .join("\n")}`;
+}
+
+function renderSynthesizeOutput(args: {
+  packetPath: string;
+  packetText: string;
+  expectedLensIds: string[];
+}): string {
+  const receivedLensIds = parseParticipatingLensPaths(args.packetText).map(
+    (entry) => entry.lensId,
+  );
+  const missingLensIds = args.expectedLensIds.filter(
+    (lensId) => !receivedLensIds.includes(lensId),
+  );
+  const runStatus = synthesizeRunStatus({
+    expectedLensIds: args.expectedLensIds,
+    receivedLensIds,
+  });
   return `---
 deliberation_status: performed
+participation:
+  expected_lenses: ${renderYamlStringList(args.expectedLensIds)}
+  received_lenses: ${renderYamlStringList(receivedLensIds)}
+  missing_or_failed_lenses: ${renderMissingOrFailedLensList(missingLensIds)}
+  run_status: ${runStatus}
 ---
 
 # synthesize Result
@@ -78,6 +132,9 @@ deliberation_status: performed
 ### Final Review Result
 - The review completed the bounded path with isolated lens outputs, controlled deliberation, and issue framing preserved. The mock result indicates no unresolved disagreement and one low-severity issue that can be handled as watch/defer work rather than a current blocker.
 
+### Boundary Notes
+- No non-material evidence gaps were produced by the mock executor.
+
 ### Immediate Actions Required
 - Replace the mock executor with a real ContextIsolatedReasoningUnit realization.
 
@@ -88,7 +145,7 @@ deliberation_status: performed
 - mock-runner-generated
 
 ### Execution Trace
-- prompt packet: \`${packetPath}\`
+- prompt packet: \`${args.packetPath}\`
 `;
 }
 
@@ -286,7 +343,7 @@ export async function runMockReviewUnitExecutorCli(
   const outputPath = path.resolve(requireString(values["output-path"], "output-path"));
   const sessionId = path.basename(sessionRoot);
   const executionPlan =
-    unitKind === "issue_artifact"
+    unitKind === "issue_artifact" || unitKind === "synthesize"
       ? await readYamlDocument<ReviewExecutionPlan>(
           path.join(sessionRoot, "execution-plan.yaml"),
         )
@@ -306,7 +363,12 @@ export async function runMockReviewUnitExecutorCli(
 
   const outputText =
     unitKind === "synthesize"
-      ? renderSynthesizeOutput(packetPath)
+      ? renderSynthesizeOutput({
+          packetPath,
+          packetText: await fs.readFile(packetPath, "utf8"),
+          expectedLensIds:
+            executionPlan?.lens_execution_seats.map((seat) => seat.lens_id) ?? [],
+        })
       : unitKind === "deliberation"
         ? renderDeliberationOutput(unitId, packetPath)
       : unitKind === "issue_artifact"

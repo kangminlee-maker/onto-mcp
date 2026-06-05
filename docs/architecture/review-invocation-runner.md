@@ -2,7 +2,7 @@
 
 > Status: Design
 > Date: 2026-05-28
-> Purpose: keep the review runtime independent of legacy CLI adapter shape while
+> Purpose: keep the review runtime independent of CLI adapter shape while
 > preserving current artifact truth and MCP behavior.
 
 ---
@@ -10,10 +10,10 @@
 ## 1. Goal
 
 Create one typed review invocation runner that the MCP product surface and
-internal compatibility adapter can call:
+internal adapter can call:
 
 ```text
-legacy argv adapter      MCP onto.review
+argv adapter             MCP onto.review
         |                     |
         v                     v
     parse argv            parse tool args
@@ -28,18 +28,18 @@ legacy argv adapter      MCP onto.review
                  v
         ReviewInvocationResult
           /                 \
- legacy render/json    MCP structuredContent
+ adapter render/json   MCP structuredContent
 ```
 
 The runner owns product runtime orchestration. MCP owns the public transport
-surface; the legacy argv adapter is an internal compatibility and test harness.
+surface; the argv adapter is an internal test harness.
 
 ---
 
 ## 2. Current Shape
 
 Current MCP review execution is not shelling out to a CLI command, but it still
-calls a legacy adapter-shaped runtime function in process:
+calls an adapter-shaped runtime function in process:
 
 ```text
 src/mcp/server.ts
@@ -59,7 +59,7 @@ This works, but it gives `review-invoke.ts` two responsibilities:
 2. runtime responsibility: target binding, domain selection, route selection,
    session preparation, execution, completion, result projection
 
-That makes MCP correctness depend on legacy text/argv conventions and console
+That makes MCP correctness depend on adapter text/argv conventions and console
 capture.
 
 ---
@@ -69,7 +69,7 @@ capture.
 | Layer | Owns | Must not own |
 |---|---|---|
 | `src/core-runtime/review/` | typed request contract, authority and boundary resolution, plan resolution, artifact orchestration, progress events, artifact-to-result projection | transport rendering |
-| `src/core-runtime/cli/review-invoke.ts` | argv parsing, terminal preview, progress text rendering, JSON stdout compatibility | review semantics, artifact decisions, artifact projection |
+| `src/core-runtime/cli/review-invoke.ts` | argv parsing, terminal preview, progress text rendering, JSON stdout adapter contract | review semantics, artifact decisions, artifact projection |
 | `src/core-api/review-api.ts` | project-safe facade, typed request mapping, API/MCP response mapping from runner results, presentation prompt inputs | argv construction, console capture, artifact-to-result projection |
 | `src/mcp/` | schemas, tool routing, MCP progress notification projection, security disclosure | review runtime semantics, artifact decisions |
 
@@ -92,7 +92,7 @@ The design is governed by five compact contracts:
 1. request/result contract
 2. progress event contract
 3. boundary and authority resolution contract
-4. adapter compatibility and equivalence contract
+4. adapter equivalence contract
 5. interpretation and binding mapping contract
 
 ---
@@ -128,7 +128,7 @@ export interface ReviewInvocationRequest {
 Rules:
 
 - `domain` and `noDomain` remain mutually exclusive.
-- `noDomain` is an explicit user decision, not a failed inference fallback.
+- `noDomain` is an explicit user decision, not failed inference recovery.
 - omitted domain means the runner may use configured domains or target-based
   inference.
 - `projectRoot`, `ontoHome`, `target`, `primaryRef`, `memberRefs`, and
@@ -196,9 +196,10 @@ binding_notes:
   - "No explicit domain token or configured domain was provided. Selected @ontology because ..."
 ```
 
-`no_domain_default` must only represent a runtime fallback to no domain. If the
-user explicitly declines a domain, use a distinct mode such as
-`explicit_no_domain` and persist that meaning in `binding.yaml`.
+`no_domain_default` must only represent the runtime default when no configured
+or inferred domain exists. If the user explicitly declines a domain, use a
+distinct mode such as `explicit_no_domain` and persist that meaning in
+`binding.yaml`.
 
 ### 4.4 `PreparedReviewInvocation`
 
@@ -491,7 +492,7 @@ documents and target/domain metadata.
 
 ## 10. Adapter Behavior
 
-### 10.1 Legacy Argv Adapter
+### 10.1 CLI Argv Adapter
 
 `src/core-runtime/cli/review-invoke.ts` should become:
 
@@ -500,11 +501,11 @@ documents and target/domain metadata.
 3. call `runReviewInvocation`
 4. render start preview, progress text, final overview, JSON stdout
 
-Compatibility rules:
+Conformance rules:
 
 - keep existing internal flags only while they are still needed by tests
 - keep current final JSON shape during migration
-- keep `npm run test:e2e` as the compatibility gate
+- keep `npm run test:e2e` as the conformance gate
 
 ### 10.2 MCP/Core API Adapter
 
@@ -520,7 +521,7 @@ It must not:
 
 - build argv for review execution
 - capture console output
-- parse legacy adapter stdout JSON
+- parse adapter stdout JSON
 - independently derive artifact-to-result projection
 
 MCP progress should be emitted from typed progress events, not parsed console
@@ -528,21 +529,21 @@ lines.
 
 ---
 
-## 11. Adapter Compatibility And Equivalence
+## 11. Adapter Conformance And Equivalence
 
-Compatibility is field-level, not whole-object textual equality.
+Conformance is field-level, not whole-object textual equality.
 
-| Field group | Legacy adapter expectation | MCP/Core API expectation | Equivalence rule |
+| Field group | CLI adapter expectation | MCP/Core API expectation | Equivalence rule |
 |---|---|---|---|
 | session identity | visible in JSON and logs | visible in structured result | compare shape only; session ids are volatile |
-| artifact refs | JSON-compatible paths | structured refs | strict after path normalization |
+| artifact refs | JSON-safe paths | structured refs | strict after path normalization |
 | domain selection | JSON fields and final output text | structured result and final output text | strict for final value, mode, reason |
 | route visibility | JSON route projection | structured route projection | strict |
 | progress | terminal text | MCP notifications | compare event facts, not rendered text |
 | timestamps/durations | may differ | may differ | ignored or normalized |
 | diagnostics | visible in JSON/text | structured failure/diagnostic refs | strict for failure kind and diagnostic refs |
 
-Migration cannot be considered safe until both legacy adapter and MCP/Core API execute
+Migration cannot be considered safe until both adapter and MCP/Core API execute
 through the shared runner and pass this equivalence oracle.
 
 ---
@@ -562,7 +563,7 @@ Move implementation out of `review-invoke.ts` without changing behavior:
 Done when:
 
 - helpers live under `src/core-runtime/review/`
-- existing legacy adapter tests still pass
+- existing adapter tests still pass
 - no MCP public shape changes
 
 ### Phase 2 - Add Typed Runner
@@ -573,12 +574,12 @@ execution, completion functions directly.
 Done when:
 
 - `runReviewInvocation(request)` can run the full mock review path
-- result projection matches current legacy JSON result facts
+- result projection matches current adapter JSON result facts
 - artifact refs are still derived from session files
 - prepare-only returns a `PreparedReviewInvocation` that can be inspected from
   session artifacts
 
-### Phase 3 - Switch Core API And Legacy Adapter To Runner Authority
+### Phase 3 - Switch Core API And CLI Adapter To Runner Authority
 
 Replace:
 
@@ -596,16 +597,16 @@ Done when:
 - `src/core-runtime/cli/review-invoke.ts` calls the same runner for execution
 - MCP `onto.review` behavior is unchanged
 - native MCP progress does not depend on console parsing
-- legacy adapter/MCP equivalence fixtures pass
+- adapter/MCP equivalence fixtures pass
 
-### Phase 4 - Thin Legacy Adapter
+### Phase 4 - Thin CLI Adapter
 
 Reduce `review-invoke.ts` to adapter code.
 
 Done when:
 
 - product logic is owned by `src/core-runtime/review/`
-- legacy argv handling remains only as an internal harness when still needed
+- argv handling remains only as an internal harness when still needed
 - no CLI-shaped review command is treated as conceptual runtime authority
 
 ---
@@ -641,14 +642,14 @@ Regression expectations:
 Focused fixtures required before implementation proceeds:
 
 - `resolveReviewInvocation` precedence: explicit domain, explicit no-domain,
-  configured domain, target-inferred domain, and no-domain fallback.
+  configured domain, target-inferred domain, and no-domain default.
 - boundary rejection for unsafe `projectRoot`, `ontoHome`, target refs, bundle
   refs, and `diffRange`.
 - prepare-only artifact refs and opening brief input reconstruction.
 - artifact-derived `ReviewInvocationResult` projection.
 - progress event ordering, degraded events, failure events, and unknown event
   projection behavior.
-- legacy adapter/MCP equivalence fixtures using strict, normalized, and ignored field
+- adapter/MCP equivalence fixtures using strict, normalized, and ignored field
   groups.
 - provider/realization fixture proving extension without adapter churn.
 
@@ -658,7 +659,7 @@ Focused fixtures required before implementation proceeds:
 
 | Risk | Control |
 |---|---|
-| Legacy adapter and MCP diverge during migration | both adapters call the same runner before deleting old path |
+| CLI adapter and MCP diverge during migration | both adapters call the same runner before deleting old path |
 | accidental new artifact authority | runner result must derive from existing artifacts |
 | progress regressions | introduce typed progress observer before removing console parsing |
 | route visibility drift | keep `buildReviewExecutionRoute` as the single projection helper |
@@ -686,10 +687,10 @@ The refactor is complete when:
 
 1. `src/core-api/review-api.ts` does not call `runReviewInvokeCli`.
 2. `src/core-api/review-api.ts` does not construct review execution argv.
-3. `src/core-api/review-api.ts` does not parse legacy adapter stdout JSON.
+3. `src/core-api/review-api.ts` does not parse adapter stdout JSON.
 4. `src/core-runtime/cli/review-invoke.ts` is an adapter over
    `runReviewInvocation`.
-5. Legacy adapter and MCP produce equivalent review artifacts for the same typed request.
+5. CLI adapter and MCP produce equivalent review artifacts for the same typed request.
 6. boundary, progress, failure, prepare-only, projection, and equivalence
    contracts have focused tests.
 7. static, API, E2E, hardening, and MCP conformance tests pass.

@@ -66,7 +66,7 @@
  * Case-insensitive.
  */
 
-const DEFAULT_MIN_QUOTE_LENGTH = 20;
+export const DEFAULT_MIN_QUOTE_LENGTH = 20;
 const ATTRIBUTION_CONTEXT_WINDOW = 120;
 
 const LENS_IDS = [
@@ -102,6 +102,18 @@ const ATTRIBUTION_REGEXES: readonly RegExp[] = [
 ];
 
 export interface CitationAuditResult {
+  /**
+   * `completed` means the audit ran against at least one readable lens output.
+   * `skipped` means the audit was applicable but could not build a trustworthy
+   * lens pool or boundary authority; consumers should surface the reason.
+   */
+  status: "completed" | "skipped";
+  /**
+   * `complete` means every participating lens ref was included in the audit
+   * pool, `partial` means at least one ref was omitted, and `none` is used with
+   * skipped audits.
+   */
+  coverage_status: "complete" | "partial" | "none";
   /** Total number of significant quotes extracted from the synthesize output. */
   quotes_checked: number;
   /**
@@ -123,6 +135,10 @@ export interface CitationAuditResult {
   attribution_count: number;
   /** Configured threshold used for this audit run. */
   min_quote_length: number;
+  /** Human-readable reason when `status=skipped`. */
+  skip_reason?: string;
+  /** Participating lens refs that prevented a complete audit. */
+  failed_refs?: string[];
 }
 
 export interface CitationAuditOptions {
@@ -254,6 +270,8 @@ export function auditCitations(
     else unmatched_meta.push(q.text);
   }
   return {
+    status: "completed",
+    coverage_status: "complete",
     quotes_checked: quotes.length,
     quotes_unmatched: unmatched_strict,
     quotes_unmatched_meta: unmatched_meta,

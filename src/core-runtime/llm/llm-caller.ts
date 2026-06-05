@@ -29,6 +29,7 @@ import {
   appendRuntimeModelCallLogFromCurrentContext,
   appendRuntimeStreamChunkFromCurrentContextSync,
 } from "../observability/runtime-stream-observation.js";
+import { parseParticipatingLensPaths } from "../review/participating-lens-paths.js";
 
 /**
  * Structural subset of ExecutionPlan that callLlm reads. Accepts either the
@@ -133,7 +134,7 @@ export function resolveLlmProviderConfig(args: {
 
   const reasoning_effort = cli.reasoning_effort ?? selection?.reasoning_effort;
   const service_tier = selection?.provider === "codex" ? selection.service_tier : undefined;
-  const api_key_env = selection?.api_key_env;
+  const api_key_env = cli.api_key_env ?? selection?.api_key_env;
   const models_per_provider: NonNullable<LlmCallConfig["models_per_provider"]> = {};
   if (provider && model_id) models_per_provider[provider] = model_id;
 
@@ -293,7 +294,7 @@ function explicitProviderMissingCredentialError(
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),
     `명시적 provider override를 사용하려면 ${envVar}를 export하세요.`,
-    "또는 .onto/settings.json 의 actor/root llm 설정을 현재 credential에 맞게 수정하세요.",
+    "또는 .onto/settings.json 의 actor별 llm 설정을 현재 credential에 맞게 수정하세요.",
   ].join("\n");
 }
 
@@ -324,7 +325,7 @@ function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio
     [
       `provider=${provider} 경로는 model 지정이 필요합니다. 하드코딩된 기본 모델은 제거되었습니다.`,
       "다음 중 한 가지로 설정하세요:",
-      "  1. .onto/settings.json 의 actor/root `llm.model: <model-id>`",
+      "  1. .onto/settings.json 의 actor별 `llm.model: <model-id>`",
       "  3. 호출부에서 LlmCallConfig.model_id 인자 전달 (런타임 override)",
       "(codex provider는 model 미지정 시 codex CLI가 자체 기본값을 사용하므로 이 메시지의 대상이 아닙니다.)",
     ].join("\n"),
@@ -583,7 +584,7 @@ async function callCodexCli(
           "",
           `지정된 모델 "${requested}"이 현재 ChatGPT 계정의 codex allowlist에 없습니다.`,
           "다음 중 한 가지로 해결하세요:",
-          "  1. .onto/settings.json 의 actor/root llm.model 값을 현재 계정에서 허용되는 모델로 변경",
+          "  1. .onto/settings.json 의 actor별 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
           "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인",
           "  3. `codex login` 으로 API-key 모드로 전환 (per-token 과금, 더 넓은 모델 범위)",
         ].join("\n"),
@@ -844,6 +845,65 @@ export async function callLlm(
 
 const MOCK_MODEL_ID = "mock-llm-deterministic";
 
+function parseExpectedLensIdsFromSynthesizePacket(packetText: string): string[] {
+  const match = /participation\.expected_lenses[^\n]*\(([^)]*)\)/.exec(packetText);
+  if (!match || typeof match[1] !== "string") return [];
+  return match[1]
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function parseDegradedLensIdsFromSynthesizePacket(packetText: string): string[] {
+  const match =
+    /##\s+Degraded Lens Failures\s*\n([\s\S]*?)(?=\n##\s+|\s*$)/i.exec(
+      packetText,
+    );
+  if (!match || typeof match[1] !== "string") return [];
+  return match[1]
+    .split(/\r?\n/)
+    .map((line) => /^-\s*([^:\s]+)\s*:/.exec(line.trim())?.[1])
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function mockSynthesizeRunStatus(args: {
+  expectedLensIds: string[];
+  receivedLensIds: string[];
+}): "full" | "degraded" | "insufficient" {
+  if (
+    args.expectedLensIds.length > 0 &&
+    args.receivedLensIds.length === args.expectedLensIds.length
+  ) {
+    return "full";
+  }
+  if (
+    args.receivedLensIds.length === 0 ||
+    (args.receivedLensIds.length === 1 && args.receivedLensIds[0] === "axiology")
+  ) {
+    return "insufficient";
+  }
+  return "degraded";
+}
+
+function renderMockYamlStringList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values.map((value) => `  - ${JSON.stringify(value)}`).join("\n")}`;
+}
+
+function renderMockMissingOrFailedLensList(values: string[]): string {
+  if (values.length === 0) return "[]";
+  return `\n${values
+    .map(
+      (value) =>
+        `  - lens_id: ${JSON.stringify(value)}\n    reason: "missing"`,
+    )
+    .join("\n")}`;
+}
+
 /**
  * Pattern-match review prompt headers and return deterministic test output.
  * Unknown prompts fail immediately so prompt drift is visible at the mock layer.
@@ -900,7 +960,7 @@ function callMockProvider(
       "",
     ].join("\n");
   } else if (
-    systemPrompt.startsWith("You are the synthesize actor for a 9-lens review")
+    systemPrompt.startsWith("You are the synthesize actor for a bounded review")
   ) {
     // Phase 3-3: synthesize-variant executor mock. Returns a minimal
     // synthesize-shaped markdown with the 8 required sections + YAML
@@ -922,9 +982,31 @@ function callMockProvider(
       process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE === "1"
         ? 'Axiology said "A fabricated quote that is definitely nowhere in the lens pool for this mock test run".'
         : "(none — mock executor)";
+    const receivedLensIds = parseParticipatingLensPaths(userPrompt).map(
+      (entry) => entry.lensId,
+    );
+    const parsedExpectedLensIds =
+      parseExpectedLensIdsFromSynthesizePacket(userPrompt);
+    const degradedLensIds = parseDegradedLensIdsFromSynthesizePacket(userPrompt);
+    const expectedLensIds =
+      parsedExpectedLensIds.length > 0
+        ? parsedExpectedLensIds
+        : uniqueStrings([...receivedLensIds, ...degradedLensIds]);
+    const missingLensIds = expectedLensIds.filter(
+      (lensId) => !receivedLensIds.includes(lensId),
+    );
+    const runStatus = mockSynthesizeRunStatus({
+      expectedLensIds,
+      receivedLensIds,
+    });
     const synthesizeBody = [
       "---",
       "deliberation_status: performed",
+      "participation:",
+      `  expected_lenses: ${renderMockYamlStringList(expectedLensIds)}`,
+      `  received_lenses: ${renderMockYamlStringList(receivedLensIds)}`,
+      `  missing_or_failed_lenses: ${renderMockMissingOrFailedLensList(missingLensIds)}`,
+      `  run_status: ${runStatus}`,
       "---",
       "",
       "# Mock Synthesize Output (ts_inline_http executor mock, synthesize variant)",
@@ -941,13 +1023,25 @@ function callMockProvider(
       "## Deliberation Decision",
       "Mock synthesize consumed the controlled deliberation artifact via ONTO_LLM_MOCK=1.",
       "",
+      "## Axiology-Proposed Additional Perspectives",
+      "(none — mock executor)",
+      "",
+      "## Purpose Alignment Verification",
+      "Mock synthesize preserved the bounded review purpose.",
+      "",
+      "## Final Review Result",
+      "Mock synthesize completed the bounded artifact path without introducing independent findings.",
+      "",
+      "## Boundary Notes",
+      "- No non-material evidence gaps were produced by the mock executor.",
+      "",
+      "## Immediate Actions Required",
+      "(none — mock executor)",
+      "",
+      "## Recommendations",
+      "(none — mock executor)",
+      "",
       "## Unique Finding Tagging",
-      "(none — mock executor)",
-      "",
-      "## Axiology Integration",
-      "(none — mock executor)",
-      "",
-      "## Degraded Lens Failures",
       "(none — mock executor)",
       "",
     ].join("\n");

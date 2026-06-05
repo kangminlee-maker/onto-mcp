@@ -146,7 +146,7 @@ source_profile_records:
 
 source_profile_migration_policy:
   migration_fields: [profile_id, profile_version, migration_status, supersedes, replaced_by, split_from, split_into, merged_from, merged_into]
-  migration_status_values: [current, supported_previous, deprecated_supported, replaced, split, merged, unsupported]
+  migration_status_values: [current, supported_previous, limited_previous, replaced, split, merged, unsupported]
   replay_rule: Previous source profile snapshots must either match an active source_profile_records.profile_id or resolve through supersedes/replaced_by/split_from/split_into/merged_from/merged_into mappings before replay, comparison, or migration projection can be trusted.
   unresolved_previous_profile_projection: blocked
 
@@ -456,7 +456,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: ontology_handoff.reasoning_or_formalism_profile.owl_profile
     - standard_ref_id: rdfs
       concern_ids: [ontology_representation_formalism, controlled_vocabulary_modeling, meta_modeling]
@@ -469,7 +469,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: skos
       concern_ids: [controlled_vocabulary_modeling]
@@ -481,7 +481,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: shacl
       concern_ids: [shape_or_validation_modeling]
@@ -494,7 +494,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: dublin_core_terms
       concern_ids: [metadata_and_provenance_modeling]
@@ -508,7 +508,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: dcat
       concern_ids: [dataset_or_data_catalog_modeling, data_integration, metadata_and_provenance_modeling]
@@ -522,7 +522,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: w3c_time
       concern_ids: [temporal_modeling]
@@ -536,7 +536,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: rdf_data_cube
       concern_ids: [dataset_or_observation_modeling]
@@ -549,7 +549,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: sosa_ssn
       concern_ids: [dataset_or_observation_modeling]
@@ -562,7 +562,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: qudt
       concern_ids: [quantity_unit_modeling]
@@ -576,7 +576,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: om
       concern_ids: [quantity_unit_modeling]
@@ -590,7 +590,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: geo_sparql
       concern_ids: [geospatial_modeling]
@@ -603,7 +603,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: prov_o
       concern_ids: [metadata_and_provenance_modeling]
@@ -615,7 +615,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
     - standard_ref_id: sparql
       concern_ids: [query_interface]
@@ -627,7 +627,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_standard_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
       profile_or_subset_ref: null
   reference_pattern_catalog_registry:
     - pattern_catalog_ref_id: ontology_design_pattern_catalog
@@ -644,7 +644,7 @@ ontology_handoff_facet_contract:
       license_or_usage_constraint: external_catalog_terms_apply
       supersedes: []
       migration_status: current
-      compatible_validator_versions: [current]
+      supported_validator_versions: [current]
   reference_standard_field_path_closure:
     path_source: ontology_handoff_facet_contract.reference_standard_registry[].governed_seed_fields[]
     schema_authority_ref: .onto/processes/reconstruct/operational-ontology-seed-contract.md#OntologySeed
@@ -704,8 +704,8 @@ ontology_handoff_facet_contract:
       silent_omission_projection: not_ready
     competency_id_migration_policy:
       migration_fields: [competency_id, source_version_or_snapshot_id, migration_status, supersedes, replaced_by, split_from, split_into, merged_from, merged_into]
-      migration_status_values: [current, supported_previous, deprecated_supported, replaced, split, merged, unsupported]
-      deprecated_alias_resolution: resolve_to_current_id_or_require_explicit_replacement_disposition
+      migration_status_values: [current, supported_previous, limited_previous, replaced, split, merged, unsupported]
+      previous_id_resolution: resolve_to_current_id_or_require_explicit_replacement_disposition
   predicate_execution_contract:
     default_predicate_evaluator_id: reconstruct_registry_predicate_v1
     allowed_predicate_evaluator_ids:
@@ -2380,7 +2380,7 @@ validator_records:
       - required_admitted_competency_ids_match_admitted_domain_competency_snapshot
       - competency_id_migration_mappings_contain_required_policy_fields
       - competency_id_migration_status_values_are_allowed
-      - deprecated_or_previous_competency_aliases_resolve_to_current_id_or_explicit_replacement_disposition
+      - previous_competency_ids_resolve_to_current_id_or_explicit_replacement_disposition
       - split_merged_replaced_competency_ids_close_against_admitted_domain_competency_snapshot
       - selected_reference_standard_ids_resolve_to_reference_standard_registry
       - selected_reference_standard_versions_or_snapshots_are_recorded
@@ -2388,7 +2388,7 @@ validator_records:
       - selected_pattern_catalog_versions_or_snapshots_are_recorded
       - selected_pattern_catalog_canonical_uris_satisfy_reference_pattern_catalog_registry_policy
       - governed_seed_fields_close_against_selected_reference_and_pattern_refs
-      - selected_reference_and_pattern_migration_status_is_compatible
+      - selected_reference_and_pattern_migration_status_is_supported
     output_ref: reconstruct-run-manifest.pre-handoff-validation.yaml
   - validator_id: failure-classification-validator
     gate_ids: [failure_classification_gate]
@@ -3035,20 +3035,20 @@ version_policy:
   validator_version_field: validator_version
   runtime_version_field: runtime_version
   content_hash_field: sha256
-  compatibility_fields:
-    - compatible_runtime_versions
-    - compatible_validator_versions
+  version_support_fields:
+    - supported_runtime_versions
+    - supported_validator_versions
     - supersedes_registry_snapshot
-  active_ref_default_compatibility:
-    compatible_runtime_versions:
+  active_ref_default_version_support:
+    supported_runtime_versions:
       - current
-    compatible_validator_versions:
+    supported_validator_versions:
       - current
     supersedes_registry_snapshot: null
   contract_migration_status_values:
     - current
     - supported_previous
-    - deprecated_supported
+    - limited_previous
     - unsupported
   active_contract_migration_status_values_ref: version_policy.contract_migration_status_values
   selected_source_profile_migration_status_values_ref: source_profile_migration_policy.migration_status_values

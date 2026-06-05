@@ -49,11 +49,16 @@
  * a runaway-safety brake).
  */
 
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
   type OntoTool,
+  type ToolBoundarySkipSummary,
   type ToolExecutionContext,
   BoundaryViolationError,
   findToolByName,
+  getToolBoundarySkipSummary,
 } from "../cli/onto-tools.js";
 import {
   DEFAULT_GROK_BASE_URL,
@@ -84,10 +89,58 @@ export interface ToolLoopConfig {
   provider: ToolLoopProvider;
   model_id: string;
   max_tokens?: number;
+  /** Optional provider API-key environment variable override. */
+  api_key_env?: string;
   /** For OpenAI-style endpoints. */
   base_url?: string;
   /** Override iteration cap (default 12). */
   max_iterations?: number;
+}
+
+function readEnvApiKey(names: string[]): string | null {
+  for (const name of names) {
+    const value = process.env[name];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value;
+    }
+  }
+  return null;
+}
+
+function readCodexOpenAiApiKey(): string | null {
+  const codexAuthPath = path.join(os.homedir(), ".codex", "auth.json");
+  if (!fs.existsSync(codexAuthPath)) return null;
+  try {
+    const auth = JSON.parse(fs.readFileSync(codexAuthPath, "utf8")) as unknown;
+    if (!auth || typeof auth !== "object" || Array.isArray(auth)) return null;
+    const value = (auth as Record<string, unknown>).OPENAI_API_KEY;
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function missingToolLoopCredentialError(
+  provider: ToolLoopProvider,
+  configuredEnv?: string,
+): string {
+  if (provider === "openai") {
+    return configuredEnv
+      ? `callLlmWithTools(openai) requires ${configuredEnv}`
+      : "callLlmWithTools(openai) requires OPENAI_API_KEY or ~/.codex/auth.json OPENAI_API_KEY";
+  }
+  if (configuredEnv) {
+    return `callLlmWithTools(${provider}) requires ${configuredEnv}`;
+  }
+  if (provider === "grok") {
+    return "callLlmWithTools(grok) requires XAI_API_KEY or GROK_API_KEY";
+  }
+  if (provider === "lmstudio") {
+    return "callLlmWithTools(lmstudio) requires configured local auth or api_key_env";
+  }
+  return `callLlmWithTools(${provider}) requires ${provider.toUpperCase()}_API_KEY`;
 }
 
 export interface ToolLoopResult {
@@ -102,6 +155,18 @@ export interface ToolLoopResult {
   model_id: string;
   /** True if the loop hit MAX_ITERATIONS without the model producing a final answer. */
   truncated_by_iteration_cap: boolean;
+  /** Aggregated boundary skip telemetry from tool execution, when non-zero. */
+  tool_boundary_skips?: ToolBoundarySkipSummary;
+}
+
+function withToolDiagnostics(
+  result: Omit<ToolLoopResult, "tool_boundary_skips">,
+  toolCtx: ToolExecutionContext,
+): ToolLoopResult {
+  const toolBoundarySkips = getToolBoundarySkipSummary(toolCtx);
+  return toolBoundarySkips
+    ? { ...result, tool_boundary_skips: toolBoundarySkips }
+    : result;
 }
 
 /**
@@ -156,9 +221,11 @@ async function runAnthropicToolLoop(
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = readEnvApiKey(
+    config.api_key_env ? [config.api_key_env] : ["ANTHROPIC_API_KEY"],
+  );
   if (!apiKey) {
-    throw new Error("callLlmWithTools(anthropic) requires ANTHROPIC_API_KEY");
+    throw new Error(missingToolLoopCredentialError("anthropic", config.api_key_env));
   }
   const client = new Anthropic({ apiKey });
 
@@ -227,7 +294,7 @@ async function runAnthropicToolLoop(
         .filter((b): b is { type: "text"; text: string } => b.type === "text")
         .map((b) => b.text)
         .join("\n");
-      return {
+      return withToolDiagnostics({
         text: finalText.trim(),
         iterations: iteration + 1,
         tool_calls: toolCallCount,
@@ -235,7 +302,7 @@ async function runAnthropicToolLoop(
         output_tokens: totalOut,
         model_id: config.model_id,
         truncated_by_iteration_cap: false,
-      };
+      }, toolCtx);
     }
 
     const resultBlocks: AnthropicContentBlock[] = [];
@@ -253,7 +320,7 @@ async function runAnthropicToolLoop(
   }
 
   truncated = true;
-  return {
+  return withToolDiagnostics({
     text: finalText.trim(),
     iterations: cap,
     tool_calls: toolCallCount,
@@ -261,7 +328,7 @@ async function runAnthropicToolLoop(
     output_tokens: totalOut,
     model_id: config.model_id,
     truncated_by_iteration_cap: truncated,
-  };
+  }, toolCtx);
 }
 
 // ---------------------------------------------------------------------------
@@ -295,17 +362,19 @@ async function runOpenAIToolLoop(
         ? process.env.LMSTUDIO_BASE_URL ?? DEFAULT_LMSTUDIO_BASE_URL
         : undefined);
   const apiKey =
-    config.provider === "grok"
-      ? process.env.XAI_API_KEY ?? process.env.GROK_API_KEY
-      : config.provider === "lmstudio"
-        ? "lmstudio-local"
-        : process.env.OPENAI_API_KEY;
+    config.provider === "openai"
+      ? config.api_key_env
+        ? readEnvApiKey([config.api_key_env])
+        : readEnvApiKey(["OPENAI_API_KEY"]) ?? readCodexOpenAiApiKey()
+      : config.provider === "grok"
+        ? readEnvApiKey(
+            config.api_key_env ? [config.api_key_env] : ["XAI_API_KEY", "GROK_API_KEY"],
+          )
+        : config.provider === "lmstudio"
+          ? "lmstudio-local"
+          : readEnvApiKey(["OPENAI_API_KEY"]);
   if (!apiKey) {
-    throw new Error(
-      config.provider === "grok"
-        ? "callLlmWithTools(grok) requires XAI_API_KEY or GROK_API_KEY"
-        : "callLlmWithTools(openai) requires OPENAI_API_KEY",
-    );
+    throw new Error(missingToolLoopCredentialError(config.provider, config.api_key_env));
   }
   const client = new OpenAI({ apiKey, baseURL });
 
@@ -391,7 +460,7 @@ async function runOpenAIToolLoop(
 
     if (toolCalls.length === 0 || choice.finish_reason !== "tool_calls") {
       finalText = message.content ?? "";
-      return {
+      return withToolDiagnostics({
         text: finalText.trim(),
         iterations: iteration + 1,
         tool_calls: toolCallCount,
@@ -399,7 +468,7 @@ async function runOpenAIToolLoop(
         output_tokens: totalOut,
         model_id: config.model_id,
         truncated_by_iteration_cap: false,
-      };
+      }, toolCtx);
     }
 
     for (const call of toolCalls) {
@@ -425,7 +494,7 @@ async function runOpenAIToolLoop(
     }
   }
 
-  return {
+  return withToolDiagnostics({
     text: finalText.trim(),
     iterations: cap,
     tool_calls: toolCallCount,
@@ -433,7 +502,7 @@ async function runOpenAIToolLoop(
     output_tokens: totalOut,
     model_id: config.model_id,
     truncated_by_iteration_cap: true,
-  };
+  }, toolCtx);
 }
 
 // ---------------------------------------------------------------------------
@@ -487,11 +556,23 @@ async function callMockToolLoop(
   config: ToolLoopConfig,
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
+  const recordMockBoundarySkip = (): void => {
+    const searchSkips = toolCtx.toolDiagnostics?.search_skips;
+    if (searchSkips) {
+      searchSkips.boundary_skips += 1;
+    }
+  };
   if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW === "1") {
+    if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP === "1") {
+      recordMockBoundarySkip();
+    }
     throw new Error("mock tool-loop failure");
   }
   if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY === "1") {
-    return {
+    if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP === "1") {
+      recordMockBoundarySkip();
+    }
+    return withToolDiagnostics({
       text: "",
       iterations: 1,
       tool_calls: 0,
@@ -499,7 +580,7 @@ async function callMockToolLoop(
       output_tokens: 0,
       model_id: config.model_id,
       truncated_by_iteration_cap: false,
-    };
+    }, toolCtx);
   }
 
   let toolCalls = 0;
@@ -535,6 +616,9 @@ async function callMockToolLoop(
     "",
     "## Structural Inspection",
     "- Mock tool-loop exercised list_directory and read_file successfully.",
+    ...(process.env.ONTO_LLM_MOCK_TOOL_LOOP_ECHO_CONFIG === "1"
+      ? [`- api_key_env: ${config.api_key_env ?? "(default)"}`]
+      : []),
     "",
     "## Findings",
     "(none — mock executor)",
@@ -547,7 +631,7 @@ async function callMockToolLoop(
     "",
   ].join("\n");
 
-  return {
+  return withToolDiagnostics({
     text,
     iterations: 1,
     tool_calls: toolCalls,
@@ -555,5 +639,5 @@ async function callMockToolLoop(
     output_tokens: text.length / 4,
     model_id: config.model_id,
     truncated_by_iteration_cap: false,
-  };
+  }, toolCtx);
 }

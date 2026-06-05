@@ -283,9 +283,9 @@ artifact authorities with runtime validators. `ontology-seed.yaml` may carry
 only a bounded projection of the selected validated source-purpose authority and
 confirmation result.
 
-The first implementation must not create compatibility projections for legacy
-seed names. If an old artifact shape remains in tests or docs, migrate or remove
-the old reference instead of projecting it into the new runtime path.
+The first implementation must not create alias projections for retired seed
+names. If an old artifact shape remains in tests or docs, migrate or remove the
+old reference instead of projecting it into the new runtime path.
 
 #### Purpose Authority Split
 
@@ -2354,7 +2354,7 @@ seed, which profile was selected, or what next action is required.
 The registry predicate catalog should contain only executable predicates,
 predicate-family instances that have current consumers, or explicitly reserved
 predicates with a named future consumer. Unused executable-looking predicate
-rows are removed rather than kept as compatibility aliases.
+rows are removed rather than kept as alias rows.
 
 ## 10. Maturation Convergence Strategy
 
@@ -2448,7 +2448,7 @@ handoff, final output, run manifest, and reconstruct record.
 `claim-realization-map.yaml` is the per-seed-claim realization stance authority
 registered in `reconstruct-contract-registry.yaml`; it records exactly one
 realization row per seed claim and closes realization evidence refs against
-`source-observations.yaml`. It is not a legacy compatibility projection.
+`source-observations.yaml`. It is the current claim-realization projection.
 `competency-questions.yaml` is the question authority.
 `competency-question-assessment.yaml` is the answerability-result authority.
 `reconstruct-contract-registry.yaml` is the active runtime authority graph.
@@ -3098,10 +3098,10 @@ projection is active for `actionable_limited` or `actionable_ready` continuation
 states and is validated as a runtime projection of existing seed, expansion,
 matrix, convergence, continuation, and proof boundary authorities.
 Promoted same-request resume is active for authored artifacts only when reuse
-provenance compatibility matches the current request, source/profile/domain
+provenance matches the current request, source/profile/domain
 snapshot, source-safety/scout/lineage validation, and seed-authoring readiness
 validation once those upstream authorities exist. Run-control resume rows record
-the compatibility policy and check refs; semantic quality remains revalidated by
+the provenance match policy and check refs; semantic quality remains revalidated by
 the downstream artifact validators.
 `seed-authoring-readiness-validation.yaml` now also records
 `deterministic_gate_scope: pre_seed_closure_only` and fails when the readiness
@@ -3142,7 +3142,7 @@ the seed handoff. Runtime closes the later lifecycle boundary with
 `source_scout_pack_post_maturation_gate` from the post-maturation snapshot refs
 before final-output and record consumption. That projection also requires the
 post-maturation validation artifact and SourceScoutPack snapshot to be concrete
-same-session siblings, not only phase-compatible basenames.
+same-session siblings, not only same-phase basenames.
 Prompt payloads now compact `exploration-synthesis.yaml` before source-frontier,
 source-purpose, and candidate-inventory authoring. The projection preserves gap
 ids, lens ids, descriptions, requested source refs, and evidence observation ids,

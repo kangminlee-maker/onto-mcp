@@ -154,8 +154,8 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 - degraded case가 발생하면 later audit가 그 원인을 다시 읽을 수 있어야 한다
 - `degradation-summary.yaml`이 degraded/halted 판단의 구조화 source다
 - `error-log.md`가 boundary/conformance state만 담는 경우에는 `degradation_notes_ref`로 간주하지 않는다
-- `lens_output_schema_version`은 lens output의 schema version을 기록한다 (v2부터 적용)
-- `per_lens_provenance`는 각 lens의 `domain_constraints_used`, `domain_context_assumptions`를 보존한다. pre-v2 artifact에서는 해당 필드가 `null`일 수 있다
+- `lens_output_schema_version`은 현재 lens output contract의 schema version을 기록한다
+- `per_lens_provenance`는 각 lens의 `domain_constraints_used`, `domain_context_assumptions`를 보존한다. 해당 섹션이 없는 lens output은 해당 필드를 `null`로 기록한다
 - `upstream_evidence_required`는 finding-level 속성이며 `round1/{lens-id}.md`의 각 finding에 기록한다
 - `per_lens_provenance`는 `upstream_evidence_required`를 저장하지 않는다. finding-level 보존은 `lens_result_refs.{lens-id}` 경로를 따라 원본 round1 markdown에서 추출한다
 - lens-level aggregate summary가 필요하면 별도 명시적 파생 필드로 정의한다
@@ -202,7 +202,7 @@ degraded_lens_ids: []
 - controlled deliberation timeout은 unresolved stance continuation으로 승격하지 않는다. `execution-result.yaml`과 `review-run-manifest.yaml`에 halt phase, failed unit id/kind, lens-bound unit의 lens id, failure message를 보존한다
 - `final_output_ref`는 주체자에게 보여주는 rendered output을 가리킨다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
-- `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없으면 (pre-v2 또는 shared phenomenon 미발생) 빈 배열이다
+- `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없거나 shared phenomenon이 없으면 빈 배열이다
 
 ### 4.5.1 Issue-Stance Deliberation Layer
 
@@ -424,4 +424,4 @@ npm run review:assemble-record -- \
 
 다음 단계는 아래다.
 
-1. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
+1. real provider path가 current lens provenance sections를 안정적으로 산출하게 한다

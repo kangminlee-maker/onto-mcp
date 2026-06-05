@@ -5,7 +5,7 @@
 
 이 원칙들은 **OaC authority chain 무결성**과 **product 데이터 주권**을 보호한다.
 
-> **Terminology note (framework v1.0 sync, 2026-04-20)**: 본 문서의 `product` 는 knowledge framework v1.0 (`development-records/evolve/20260419-knowledge-framework.md`) §2.1 이 정의하는 scope axis 값 — Principal 이 시간·비용 투입해 만든 작동 실체. 이전 버전의 `project` 어휘는 framework §8.5 에서 retire 됐으며 본 문서에서도 `product` 로 통합했다. 단 npm 생태계 표준 어휘 (`node_modules`, `package.json` 등) 는 그대로 보존한다.
+> **Terminology note (framework v1.0 sync, 2026-04-20)**: 본 문서의 `product` 는 Principal 이 시간·비용 투입해 만든 작동 실체를 뜻하는 scope axis 값이다. 이전 버전의 `project` 어휘는 retire 됐으며 본 문서에서도 `product` 로 통합했다. 단 npm 생태계 표준 어휘 (`node_modules`, `package.json` 등) 는 그대로 보존한다.
 
 ---
 
@@ -21,7 +21,7 @@ onto는 세 가지 방식으로 설치될 수 있다.
 
 이 세 형태가 공존할 수 있으며, 공존할 때의 동작은 아래 원칙으로 결정한다.
 
-**용어 규칙**: 이 문서 및 `.onto/principles/` 내에서는 **global**을 사용한다. 코드(`src/`)에서는 `detectInstallationMode()`의 반환값 `"user"`를 사용한다. 두 용어는 동일 개념이다. (`"user"` 변수명은 framework v1.0 의 scope value retire 대상이며 runtime migration backlog 에서 전환 예정 — 본 문서는 현 코드 기준.)
+**용어 규칙**: 설치 형태는 문서와 런타임 모두 product-local / global / development 의미로 해석한다. 주체자 홈(`~/.onto`)은 공유 데이터 seat이며, framework scope 값인 methodology와 같은 실행 모드가 아니다.
 
 새 설치 형태(monorepo workspace, pnpm/Yarn PnP 등)가 필요할 경우, §1 테이블에 행을 추가하고 §2.1 위임 규칙, §2.2 축적 규칙, §3 위반 판정 기준, §4 구현 지점을 함께 갱신해야 한다.
 
@@ -48,7 +48,7 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 
 ### 2.2 데이터 축적: product 부터 쌓는다
 
-리뷰 세션, 설정 등 onto가 생성하는 데이터는 **항상 product 디렉토리(`{product}/.onto/`)에 먼저 기록**한다. 글로벌 설치만 존재하는 경우에도 동일하다. 단, Trust Boundary 확인(§5.3)이 선행 조건이다. 주체자가 거부하면 기록하지 않고 에러를 반환한다.
+리뷰 세션, 설정 등 onto가 생성하는 데이터는 **항상 product 디렉토리(`{product}/.onto/`)에 먼저 기록**한다. 글로벌 설치만 존재하는 경우에도 동일하다. Runtime은 `resolveProjectRoot()`로 product root를 고정한 뒤 그 아래의 `.onto/`만 생성·갱신한다.
 
 | 데이터 종류 | 축적 위치 | 비고 |
 |---|---|---|
@@ -92,7 +92,7 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 아래 중 하나라도 해당하면 이 원칙을 위반한 것이다. 각 기준의 보장 메커니즘은 §4에 명시된다 (#3 제외).
 
 1. **글로벌 바이너리가 로컬 설치를 무시하고 직접 실행**한다 (`--global` 플래그 없이) → §4 `bin/onto`
-2. **리뷰 세션이 product 외부에 기록**된다 → §4 `cli.ts`, `checkOntoDirectoryInit()`
+2. **리뷰 세션이 product 외부에 기록**된다 → §4 `src/core-runtime/discovery/project-root.ts`와 호출부의 session root 계산
 3. **글로벌 자산이 product 자산을 자동으로 덮어쓴다** → 해당 기능 없음. 코드 리뷰로 보장
 4. **위임된 프로세스가 위임 원본(global)의 설치 리소스(roles, authority)를 사용**한다 → §4 `bin/onto` (`ONTO_HOME` 강제 설정)
 
@@ -107,8 +107,6 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 | `bin/onto` | 로컬 설치 감지 + 위임 + `ONTO_HOME` 강제 설정 | #1, #4 |
 | `src/core-runtime/discovery/onto-home.ts` | 설치 루트 해석 (리소스 기준 경로 결정) | #4 |
 | `src/core-runtime/discovery/project-root.ts` | product 루트 해석 | #2 |
-| `src/cli.ts` `checkOntoDirectoryInit()` | Trust Boundary 확인 (신규 product `.onto/` 생성 동의) | #2 |
-| `src/cli.ts` `detectInstallationMode()` | 설치 형태 감지 (진단용) | — |
 
 ---
 
@@ -126,4 +124,4 @@ onto CLI 진입 스크립트(`bin/onto`)가 실행될 때, 현재 product 에 �
 
 ### 5.3 `{product}/.onto/` 디렉토리가 없는 경우
 
-신규 product 에서 `.onto/` 디렉토리가 아직 없을 때: `onto` CLI는 Trust Boundary 확인(`checkOntoDirectoryInit`)을 거쳐 주체자 동의 후 디렉토리를 생성한다. 주체자가 거부하면 데이터 기록은 발생하지 않으며 에러를 반환한다. `checkOntoDirectoryInit`은 `resolveWritePaths()` 호출 전에 상위 caller가 보장해야 하는 선행 조건이다.
+신규 product 에서 `.onto/` 디렉토리가 아직 없을 때 runtime은 resolved product root 아래에 필요한 하위 디렉토리만 생성한다. 사용자 확인이 필요한 host에서는 confirmation을 runtime 호출 전에 처리해야 하며, runtime은 product root 밖의 대체 쓰기 위치를 만들지 않는다.

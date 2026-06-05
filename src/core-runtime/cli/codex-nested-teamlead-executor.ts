@@ -13,9 +13,8 @@
  * The nested-workers variant delegates per-lens scheduling decisions to an
  * outer Codex teamlead.
  *
- * Sketch v3 §9 recorded the live validation (2026-04-18, codex
- * v0.120.0): outer+inner session ids are independent, both exit 0,
- * responses pass through. Preconditions confirmed:
+ * Runtime validation requires independent outer/inner session ids, successful
+ * exit for both layers, and response pass-through. Preconditions:
  *   - `codex` binary on PATH
  *   - `~/.codex/auth.json` valid
  *   - non-seatbelt sandbox (outer invoked with `--sandbox danger-full-access`
@@ -37,7 +36,8 @@
  *     parse failure)
  * # Design reference
  *
- * - Nested Codex validation notes under `development-records/`
+ * Current nested worker behavior is owned by this module. Historical
+ * validation notes are not runtime references.
  */
 
 import { spawn } from "node:child_process";

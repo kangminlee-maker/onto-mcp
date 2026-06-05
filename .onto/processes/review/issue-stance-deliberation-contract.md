@@ -145,7 +145,7 @@ Rules:
 1. Every Round 1 issue/finding claim that may affect final output must receive a stable `finding_id`.
 2. `finding_id` is session-local and stable across downstream artifacts.
 3. A finding is not a root-cause issue by itself.
-4. `severity` must use `blocker`, `high`, `medium`, `low`, or `info`; legacy `critical` is not a valid output value.
+4. `severity` must use `blocker`, `high`, `medium`, `low`, or `info`; retired `critical` is not a valid output value.
 5. Every material finding must explain the affected purpose, failure condition, impact, and evidence refs.
 6. If a lens output lacks enough evidence for a material severity, use `severity: info` and record the evidence gap instead of inventing a material issue.
 7. If a lens output lacks a stable anchor, ledger construction must fail loudly or mark the finding as unaddressable with a reason in a validation section.
@@ -357,7 +357,7 @@ Material conflict exists when at least one condition holds:
 2. `alternative_root` appears for the issue.
 3. `surface_only` contests the cluster's root-cause grouping.
 4. A `narrow` stance changes the issue's action, severity, scope, or root hypothesis in a way other applicable stances do not accept.
-5. Two or more `narrow` stances impose incompatible conditions.
+5. Two or more `narrow` stances impose conflicting conditions.
 6. Lenses disagree on whether a cited domain constraint applies.
 7. Axiology limits or reverses another lens's proposed action on purpose/value grounds.
 8. `insufficient_evidence` contests the actionability of the root-cause issue, not merely confidence wording.
@@ -454,10 +454,10 @@ Every root-cause issue must end in exactly one status.
 
 | Status | Condition |
 |---|---|
-| `no-deliberation-needed` | Stance matrix is complete and no material conflict exists. Applicable stances are compatible on root hypothesis, action, severity, scope, and domain applicability. |
+| `no-deliberation-needed` | Stance matrix is complete and no material conflict exists. Applicable stances are consistent on root hypothesis, action, severity, scope, and domain applicability. |
 | `resolved` | After deliberation, all material-conflict participants explicitly converge on one root hypothesis and one claim/action/severity. Prior opposition or alternative-root claims are withdrawn, accepted, or declared non-blocking with rationale. |
 | `narrowed` | After deliberation, participants converge only under explicit conditions, reduced scope, changed severity, modified action, or a narrower root hypothesis. The narrowed form must be accepted by all material-conflict participants. |
-| `unresolved-with-reason` | At least one material-conflict participant maintains an incompatible root/action/severity stance, required evidence is outside boundary, or a participant fails to provide a required updated stance. |
+| `unresolved-with-reason` | At least one material-conflict participant maintains a conflicting root/action/severity stance, required evidence is outside boundary, or a participant fails to provide a required updated stance. |
 
 Global invariant:
 

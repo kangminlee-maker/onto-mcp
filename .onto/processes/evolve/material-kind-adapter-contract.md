@@ -76,7 +76,7 @@ Host LLM and user-mediated flow own:
 | `mixed` | Must split or enumerate per-member material kinds before adapter dispatch. |
 | `unknown` | Must halt or ask for clarification; do not guess an adapter. |
 
-The code adapter is not the fallback for non-code material.
+The code adapter is not the default for non-code material.
 
 ## 5. Future Artifact Alignment
 
@@ -100,8 +100,8 @@ match this contract or update this contract before code lands.
 - No active `evolve` MCP tool is introduced by this contract.
 - No code, spreadsheet, document, or database expert engine is implied.
 - No runtime-generated design specification is allowed.
-- No legacy `src/core-runtime/evolve` path should be revived as-is.
-- No `source_kind` or legacy `fact_type` value should be reused for target
+- No retired `src/core-runtime/evolve` path should be revived as-is.
+- No `source_kind` or retired `fact_type` value should be reused for target
   material classification.
 
 ## 7. Verification Target

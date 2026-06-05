@@ -173,17 +173,9 @@ Recommended reference targets:
 Reference runs must preserve invocation/binding, material profiling, evidence
 refs, unsupported states, and user-facing result separation.
 
-Current evidence:
-
-- `development-records/reference/20260527-target-material-kind-reference-evidence.md`
-  records a spreadsheet review reference run proving the first material-aware
-  review target profile step.
-- `development-records/reference/20260527-reconstruct-material-kind-reference-evidence.md`
-  records a spreadsheet reconstruct reference slice proving material profiling,
-  source observation, LLM-authored directive evidence validation, and
-  `reconstruct-record.yaml` assembly. MCP conformance now covers the initial
-  reconstruct tool surface. The reference does not close user confirmation,
-  metrics, revision, full reconstruct workflow, or evolve runtime integration.
+Historical reference-run evidence is isolated outside runtime reference context.
+Current runtime authority is the artifact contract in this file plus the
+review/reconstruct process contracts that consume it.
 
 ## 9. UX Output Contract
 
@@ -222,7 +214,7 @@ This design goal is implementation-ready when:
 1. `target_material_kind` is present in core lexicon and process contracts.
 2. Review and reconstruct contracts agree on the axis and naming boundaries.
 3. `source_kind` is not overloaded for material classification.
-4. Legacy `fact_type` is not used for new source observations.
+4. Retired `fact_type` is not used for new source observations.
 5. Artifact additions and validation rules are documented.
 6. The prompt-backed reference-run requirement is documented.
 7. Runtime replacement steps are small enough to implement and verify one by

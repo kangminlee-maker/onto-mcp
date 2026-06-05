@@ -36,6 +36,10 @@ import {
   ISSUE_ARTIFACT_IDS,
   issueArtifactConsumerId,
 } from "../review/issue-artifact-runtime.js";
+import {
+  renderBoundaryPolicySection as renderBoundaryPolicySectionBase,
+  renderUnitBoundaryDetailsSection as renderUnitBoundaryDetailsSectionBase,
+} from "../review/boundary-prompt-sections.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -54,32 +58,47 @@ async function readOptionalText(targetPath: string): Promise<string> {
   return fs.readFile(targetPath, "utf8");
 }
 
-function renderBoundaryPolicySection(
+export function renderBoundaryPolicySection(
   binding: InvocationBindingArtifact,
   projectRoot: string,
-  options?: { tools?: "required" | "optional" },
+  options?: {
+    tools?: "required" | "optional" | "denied";
+    repoExplorationPolicy?: "allowed" | "denied";
+    filesystemPolicy?: "read-only" | "denied";
+    allowedOutputRefs?: string[];
+  },
 ): string {
-  const toolsLine =
-    options?.tools !== undefined ? `\n- tools: ${options.tools}` : "";
-  return `## Boundary Policy
-- web research: ${binding.boundary_policy.web_research_policy}
-- repo exploration: ${binding.boundary_policy.repo_exploration_policy}
-- recursive reference expansion: ${binding.boundary_policy.recursive_reference_expansion_policy}
-- filesystem allowed roots:
-${binding.boundary_policy.filesystem_scope.allowed_roots
-  .map((rootPath) => `  - ${toRelativePath(rootPath, projectRoot)}`)
-  .join("\n")}
-- source mutation: ${binding.boundary_policy.write_policy.source_mutation_policy}
-- allowed output refs:
-${binding.boundary_policy.write_policy.allowed_output_refs
-  .map((outputPath) => `  - ${toRelativePath(outputPath, projectRoot)}`)
-  .join("\n")}
-- extra exploration citation required: ${
-    binding.boundary_policy.provenance_policy.extra_exploration_citation_required
-  }
-- web source citation required: ${
-    binding.boundary_policy.provenance_policy.web_source_citation_required
-  }${toolsLine}`;
+  return renderBoundaryPolicySectionBase(binding, projectRoot, options);
+}
+
+export function renderUnitBoundaryDetailsSection(args: {
+  binding: InvocationBindingArtifact;
+  projectRoot: string;
+  unitId: string;
+  outputPath: string;
+  repoExplorationPolicy: "allowed" | "denied";
+  allowedReadRefs: string[];
+}): string {
+  return renderUnitBoundaryDetailsSectionBase({
+    context: args.binding,
+    projectRoot: args.projectRoot,
+    unitId: args.unitId,
+    outputPath: args.outputPath,
+    repoExplorationPolicy: args.repoExplorationPolicy,
+    allowedReadRefs: args.allowedReadRefs,
+  });
+}
+
+export function renderEmbeddedMaterializedInputSection(
+  materializedInput: string,
+): string {
+  const lineCount =
+    materializedInput.length === 0 ? 0 : materializedInput.split(/\r?\n/).length;
+  return `## Embedded Materialized Input
+
+<!-- onto:embedded-materialized-input:start lines=${lineCount} -->
+${materializedInput}
+<!-- onto:embedded-materialized-input:end -->`;
 }
 
 function renderBoundaryEnforcementSection(
@@ -708,7 +727,7 @@ async function writePreManifestContextArtifacts(args: {
     schema_version: "1",
     producer: "onto-review-runtime",
     producer_version: "review-runtime-settings-domain-axiology-plan-20260523",
-    settings_schema_version: "settings.json/v1",
+    settings_schema_version: "settings.json/v3",
     domain_registry_version: "domain-docs/v1",
     alignment_contract_version: "review-value-alignment-criteria/v1",
     lifecycle_state: "validated",
@@ -955,6 +974,34 @@ export async function runMaterializeReviewPromptPacketsCli(
         (ontoHome ? ` (ontoHome: ${ontoHome})` : ""),
       );
     }
+    const lensAllowedReadRefs = [
+      binding.materialized_input_path,
+      roleDefinitionPath,
+      interpretationPath,
+      bindingPath,
+      binding.review_target_profile_path,
+      reviewContextManifestPath,
+      sessionMetadataPath,
+      binding.target_snapshot_path,
+      contextCandidateAssemblyPath,
+      executionPlan.domain_binding_path ??
+        path.join(sessionRoot, "execution-preparation", "domain-binding.yaml"),
+      executionPlan.review_value_alignment_criteria_path ??
+        path.join(
+          sessionRoot,
+          "execution-preparation",
+          "review-value-alignment-criteria.yaml",
+      ),
+      ...allowedDomainFiles,
+    ];
+    const embeddedMaterializedInput =
+      materializedInputText.trim().length > 0
+        ? truncateForEmbedding(
+            materializedInputText.trim(),
+            maxEmbedLines,
+            toRelativePath(binding.materialized_input_path, projectRoot),
+          )
+        : "(unavailable)";
     const lensPacketText = `# Review Lens Prompt Packet
 
 session_id: ${executionPlan.session_id}
@@ -984,9 +1031,7 @@ ${roleDefinitionText.trim().length > 0 ? `${roleDefinitionText.trim()}\n` : ""}
 - review target profile: ${toRelativePath(binding.review_target_profile_path, projectRoot)}
 - review context manifest: ${toRelativePath(reviewContextManifestPath, projectRoot)}
 
-## Embedded Materialized Input
-
-${materializedInputText.trim().length > 0 ? truncateForEmbedding(materializedInputText.trim(), maxEmbedLines, toRelativePath(binding.materialized_input_path, projectRoot)) : "(unavailable)"}
+${renderEmbeddedMaterializedInputSection(embeddedMaterializedInput)}
 
 ## Optional Context Inputs
 - session metadata: ${toRelativePath(sessionMetadataPath, projectRoot)}
@@ -997,11 +1042,24 @@ ${materializedInputText.trim().length > 0 ? truncateForEmbedding(materializedInp
 - consumer id: ${consumerId}
 - allowed context source ids: ${allowedContextSourceIds.join(", ")}
 
-${renderBoundaryPolicySection(binding, projectRoot)}
+${renderBoundaryPolicySection(binding, projectRoot, {
+  allowedOutputRefs: [seat.output_path],
+  tools: "denied",
+})}
 
 ${renderBoundaryEnforcementSection(binding)}
 
 ${renderEffectiveBoundaryStateSection(binding, projectRoot)}
+
+${renderUnitBoundaryDetailsSection({
+  binding,
+  projectRoot,
+  unitId: consumerId,
+  outputPath: seat.output_path,
+  repoExplorationPolicy:
+    binding.effective_boundary_state.repo_exploration.effective_policy,
+  allowedReadRefs: lensAllowedReadRefs,
+})}
 
 ## Session Summary
 - requested target: ${toRelativePath(sessionMetadata.requested_target, projectRoot)}
@@ -1044,6 +1102,31 @@ ${renderDomainDocumentRefsSection(seat.lens_id, resolvedDomainDir, allowedDomain
 
   const synthesizeAllowedContextSourceIds =
     reviewContextManifest.derived_context_access_matrix.synthesize ?? [];
+  const synthesizeAllowedReadRefs = [
+    binding.materialized_input_path,
+    interpretationPath,
+    bindingPath,
+    binding.review_target_profile_path,
+    reviewContextManifestPath,
+    executionPlan.finding_ledger_path,
+    executionPlan.finding_relation_graph_path,
+    executionPlan.issue_ledger_path,
+    executionPlan.issue_stance_matrix_path,
+    executionPlan.deliberation_plan_path,
+    executionPlan.deliberation_output_path,
+    executionPlan.problem_framing_path,
+    sessionMetadataPath,
+    binding.target_snapshot_path,
+    contextCandidateAssemblyPath,
+    executionPlan.domain_binding_path ??
+      path.join(sessionRoot, "execution-preparation", "domain-binding.yaml"),
+    executionPlan.review_value_alignment_criteria_path ??
+      path.join(
+        sessionRoot,
+        "execution-preparation",
+        "review-value-alignment-criteria.yaml",
+      ),
+  ];
   const synthesizePacketText = `# Review Synthesize Prompt Packet
 
 session_id: ${executionPlan.session_id}
@@ -1082,25 +1165,31 @@ You must preserve lens evidence and must not invent new independent perspectives
 - consumer id: synthesize
 - allowed context source ids: ${synthesizeAllowedContextSourceIds.join(", ")}
 
-${renderBoundaryPolicySection(binding, projectRoot, { tools: "required" })}
+${renderBoundaryPolicySection(binding, projectRoot, {
+  tools: "required",
+  repoExplorationPolicy: "denied",
+  allowedOutputRefs: [executionPlan.synthesis_output_path],
+})}
 
 ${renderBoundaryEnforcementSection(binding)}
 
 ${renderEffectiveBoundaryStateSection(binding, projectRoot)}
 
-## Participating Lens Outputs
-${(executionPlan.lens_execution_seats ?? binding.resolved_lens_set.map((lensId) => ({
-    lens_id: lensId,
-    output_path: path.join(binding.round1_root, `${lensId}.md`),
-  })))
-  .map(
-    (seat) =>
-      `- ${seat.lens_id}: ${toRelativePath(seat.output_path, projectRoot)}`,
-  )
-  .join("\n")}
+${renderUnitBoundaryDetailsSection({
+  binding,
+  projectRoot,
+  unitId: "synthesize",
+  outputPath: executionPlan.synthesis_output_path,
+  repoExplorationPolicy: "denied",
+  allowedReadRefs: synthesizeAllowedReadRefs,
+})}
+
+## Runtime Lens Output Authority
+The execution coordinator appends \`## Runtime Participating Lens Outputs\` before dispatch.
+Read only that runtime lens list; do not assume every planned lens produced a valid output.
 
 ## Execution Directives
-- Read the materialized input first, then all participating lens outputs.
+- Read the materialized input first, then all runtime participating lens outputs.
 - Read all issue-stance closure artifacts before writing final classification.
 - Read the controlled lens deliberation result before classifying or rendering disagreements.
 - Preserve issue IDs, root hypotheses, common spine values, and domain axes from the issue-stance closure artifacts.
@@ -1114,8 +1203,13 @@ ${(executionPlan.lens_execution_seats ?? binding.resolved_lens_set.map((lensId) 
 - Do not resolve disagreements that the controlled deliberation result preserved as unresolved.
 - Do not override a controlled deliberation decision unless the result contradicts an explicit cited artifact; in that case preserve the contradiction in Disagreement instead of silently choosing a new answer.
 - In Final Review Result, comprehensively explain what the principal should conclude from the full bounded artifact set: review target and boundary, issue/root-cause clusters, lens agreement and disagreement, controlled deliberation outcome, problem framing classification, closure/timing, and the practical next step. Ground this explanation in existing lens outputs and issue artifacts; do not introduce new independent findings.
-- Start the output with YAML frontmatter using this exact field:
+- In Boundary Notes, preserve non-material evidence gaps and scope limitations that affect trust in the final answer. Keep this section compact: at most 3 bullets, each one sentence. Do not turn these notes into material issues unless the issue artifacts classify them as material.
+- Start the output with YAML frontmatter using these exact fields:
   - \`deliberation_status: performed\`
+  - \`participation.expected_lenses\`: planned lens ids (${binding.resolved_lens_set.join(", ")})
+  - \`participation.received_lenses\`: runtime participating lens ids only
+  - \`participation.missing_or_failed_lenses\`: expected lens ids that are not received, with \`reason\` in \`missing | failed | abstained\`
+  - \`participation.run_status\`: \`full\` when expected equals received, \`degraded\` when received is a non-empty subset, \`insufficient\` when received is empty or axiology-only
   - Use \`performed\` because controlled lens deliberation is a required pre-synthesize stage.
 - Write your result to: ${toRelativePath(executionPlan.synthesis_output_path, projectRoot)}
 
@@ -1130,6 +1224,7 @@ Use exactly these heading names in your output. The downstream renderer extracts
 ## Axiology-Proposed Additional Perspectives
 ## Purpose Alignment Verification
 ## Final Review Result
+## Boundary Notes
 ## Immediate Actions Required
 ## Recommendations
 ## Unique Finding Tagging

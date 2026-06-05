@@ -99,7 +99,7 @@ Each rule is tagged with a strength level:
 
 ### LLM-Native Context Noise
 
-- [MUST-REMOVE] Historical migration notes, deprecated domain split rationale, or old LLM-native domain instructions from active execution context — they inflate model context with non-current behavior. Keep them in development-records or archive paths and link only when needed.
+- [MUST-REMOVE] Historical migration notes, deprecated domain split rationale, or old LLM-native domain instructions from active execution context — they inflate model context with non-current behavior. Keep them outside runtime reference paths and link only when explicitly needed.
 - [MUST-REMOVE] Duplicate prompt templates in agent instructions and prompt-template files — the agent's behavior diverges when one copy changes. Keep one source of truth and reference it.
 - [MUST-REMOVE] Multiple tools with overlapping descriptions and identical practical capability — agents choose non-deterministically unless routing rules distinguish the tools.
 - [MUST-REMOVE] Hidden fallback descriptions that are not connected to diagnostic artifacts — they make failures look successful and increase investigation cost.

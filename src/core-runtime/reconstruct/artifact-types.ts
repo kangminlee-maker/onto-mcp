@@ -181,8 +181,8 @@ export interface ReconstructRunControlResumeRow {
   resume_id: string;
   resume_token_hash: string;
   source_attempt_id: string;
-  compatibility_policy?: "authored_artifact_provenance:v1";
-  compatibility_check_refs?: string[];
+  provenance_match_policy?: "authored_artifact_reuse_match:v1";
+  provenance_match_check_refs?: string[];
   checkpoint_refs: string[];
   trusted_artifact_refs: string[];
   stale_artifact_refs: string[];

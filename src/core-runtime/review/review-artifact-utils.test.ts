@@ -5,9 +5,13 @@ import {
 } from "./review-artifact-utils.js";
 
 describe("normalizeDomainValue", () => {
-  it("canonicalizes the retired llm-native-development domain to software-engineering", () => {
-    expect(normalizeDomainValue("llm-native-development")).toBe("software-engineering");
-    expect(normalizeDomainValue("@llm-native-development")).toBe("software-engineering");
+  it("does not rewrite retired domain aliases", () => {
+    expect(normalizeDomainValue("llm-native-development")).toBe(
+      "llm-native-development",
+    );
+    expect(normalizeDomainValue("@llm-native-development")).toBe(
+      "llm-native-development",
+    );
   });
 
   it("preserves canonical domains and no-domain tokens", () => {

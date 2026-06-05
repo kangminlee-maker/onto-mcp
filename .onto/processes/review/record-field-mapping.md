@@ -128,11 +128,11 @@ degraded case rule:
 - `resolved_lens_ids`에는 있었지만 결과 파일이 없고 `error-log.md` 또는 synthesize 전달 메시지에 제외 사실이 남은 lens는 `degraded_lens_ids`로 분류한다
 - `excluded_lens_ids`는 원래 실행 대상에서 빠진 lens만 뜻한다
 
-per_lens_provenance derive rule (schema_version 2 이후):
+per_lens_provenance derive rule:
 
 - `per_lens_provenance.{lens-id}.domain_constraints_used`: 각 lens round1 output에서 `### Domain Constraints Used` 섹션에서 추출. durable provenance 형식 `{source_doc, source_version_or_snapshot_id, anchor}`
 - `per_lens_provenance.{lens-id}.domain_context_assumptions`: 각 lens round1 output에서 `### Domain Context Assumptions` 섹션에서 추출
-- pre-v2 artifact에서 해당 필드가 없으면 `null`로 기록
+- 해당 provenance section이 없으면 해당 필드를 `null`로 기록
 
 lens_output_schema_version derive rule:
 
@@ -157,7 +157,7 @@ lens_output_schema_version derive rule:
 
 derive rule:
 
-- `finding-ledger.yaml`는 finding-level severity count와 finding-only fallback projection의 source다.
+- `finding-ledger.yaml`는 finding-level severity count와 finding-level-only projection의 source다.
 - `issue-ledger.yaml`가 있으면 issue-level severity가 final result classification의 primary severity source다.
 - `problem-framing.yaml`는 action candidate derivation의 primary source다. `timing_class`, `closure_class`, `closure_obligation`, `judgment_state`가 action candidates로 project된다.
 - `execution-result.yaml`가 `halted_partial`이면 runtime-level `retry_execution`/`continue_review` action candidate가 추가된다.
@@ -249,7 +249,7 @@ team lead는 아래 순서로 `review-record.yaml`을 assemble한다.
 2. `binding.yaml`의 ref와 resolved fields를 기록
 3. execution-preparation artifact ref를 기록
 4. 실제 존재하는 `round1/*.md`를 lens id별로 매핑
-5. 각 lens output의 schema v2 provenance section을 `per_lens_provenance`로 구조화한다
+5. 각 lens output의 current provenance section을 `per_lens_provenance`로 구조화한다
 6. `deliberation.md`와 `synthesis.md`를 기록한다
 7. `synthesis.md`의 shared phenomenon section이 있으면 `shared_phenomenon_summary`로 구조화한다
 8. `final-output.md` ref를 기록
@@ -334,4 +334,4 @@ final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 
 다음 단계는 아래다.
 
-1. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
+1. real provider path가 current lens provenance sections를 안정적으로 산출하게 한다

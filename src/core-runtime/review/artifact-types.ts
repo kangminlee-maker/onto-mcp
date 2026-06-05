@@ -358,9 +358,9 @@ export interface ReviewExecutionPlan {
  * Session-level override is applied at executor dispatch when present, so
  * 본 필드는 **project-level 의도** 를 기록한다 (세션별 override 와 별개).
  *
- * Stderr `[plan:executor]` 로그의 artifact 화 목적. codex global config fallthrough
- * (v0.18.0 hardcoded override 제거 이후) 의 실제 값은 여기에 반영되지 않음 — 그 값은
- * 로그로만 관찰 가능하다는 경계를 의식적으로 유지.
+ * Stderr `[plan:executor]` 로그의 artifact 화 목적. codex global config
+ * fallthrough 의 실제 값은 여기에 반영되지 않음 — 그 값은 로그로만 관찰
+ * 가능하다는 경계를 의식적으로 유지.
  */
 export interface ResolvedLlmPlan {
   model?: string;
@@ -651,6 +651,13 @@ export function isPerUnitComparableProvenance(
   return provenance === "runner_wallclock";
 }
 
+export type ReviewUnitFailureKind =
+  | "timeout"
+  | "executor_exit"
+  | "empty_output"
+  | "output_contract"
+  | "unknown";
+
 export interface ReviewUnitExecutionResult {
   unit_id: string;
   unit_kind: ReviewUnitKind;
@@ -672,6 +679,58 @@ export interface ReviewUnitExecutionResult {
    */
   timestamp_provenance?: UnitTimestampProvenance;
   failure_message?: string | null;
+  failure_kind?: ReviewUnitFailureKind | null;
+  attempt_count?: number;
+  packet_bytes?: number | null;
+  output_bytes?: number | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  tool_calls?: number | null;
+  tool_iterations?: number | null;
+  executor_tool_mode?: string | null;
+  native_admission?: ReviewNativeAdmissionMetadata | null;
+  tool_boundary_skips?: ReviewToolBoundarySkipMetadata | null;
+  citation_audit?: ReviewCitationAuditMetadata | null;
+  citation_audit_rejection?: ReviewCitationAuditRejectionMetadata | null;
+  executor_host_runtime?: ReviewHostRuntime | null;
+  model_id?: string | null;
+}
+
+export interface ReviewNativeAdmissionMetadata {
+  requested_tool_mode: string;
+  effective_tool_mode: string;
+  decision: string;
+  reason?: string;
+  allowed_read_refs_count?: number | null;
+  read_authority_declared?: boolean | null;
+  read_authority_malformed?: boolean | null;
+  read_authority_failure?: string | null;
+  attempted_native_tool_boundary_skips?: ReviewToolBoundarySkipMetadata | null;
+}
+
+export interface ReviewToolBoundarySkipMetadata {
+  boundary_skips: number;
+  unreadable_skips: number;
+  oversized_skips: number;
+}
+
+export interface ReviewCitationAuditMetadata {
+  status?: "completed" | "skipped";
+  coverage_status?: "complete" | "partial" | "none";
+  quotes_checked: number;
+  quotes_unmatched: string[];
+  quotes_unmatched_meta: string[];
+  attribution_count: number;
+  min_quote_length: number;
+  skip_reason?: string;
+  failed_refs?: string[];
+}
+
+export interface ReviewCitationAuditRejectionMetadata {
+  reason: "contradictory_status_coverage";
+  status: string;
+  coverage_status: string;
+  skip_reason?: string;
 }
 
 export interface ReviewExecutionResultArtifact {
@@ -723,6 +782,7 @@ export interface ReviewDegradationUnitFailure {
   lens_id?: string | null;
   packet_path: string;
   output_path: string;
+  failure_kind?: ReviewUnitFailureKind | null;
   failure_message: string;
 }
 

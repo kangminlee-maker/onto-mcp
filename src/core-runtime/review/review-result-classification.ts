@@ -75,10 +75,10 @@ function records(value: unknown): UnknownRecord[] {
   );
 }
 
-function stringValue(value: unknown, fallback = ""): string {
+function stringValue(value: unknown, defaultValue = ""): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
-    : fallback;
+    : defaultValue;
 }
 
 function nullableStringValue(value: unknown): string | null {
@@ -115,7 +115,7 @@ function buildFindingEvidenceRefs(finding: UnknownRecord): string[] {
   return unique(refs);
 }
 
-function candidateFallbackForSeverity(
+function defaultCandidatesForSeverity(
   severity: ReviewFindingSeverity,
 ): ReviewActionCandidate[] {
   switch (severity) {
@@ -204,7 +204,7 @@ function deriveActionCandidates(args: {
 
   if (candidates.length > 0) return candidates;
   if (args.hasProblemFraming) return ["follow_up"];
-  return candidateFallbackForSeverity(args.severity);
+  return defaultCandidatesForSeverity(args.severity);
 }
 
 function actionRationale(args: {

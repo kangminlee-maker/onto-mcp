@@ -60,7 +60,7 @@ lens_definitions:
 # 간결 / 가치) 을 독립적으로 검증. 분류 (meta-level vs content-level) 는
 # v0.2.0 의 design-intent 잠정 분류였으나 v0.2.1 empirical 재구성 이후
 # 이 taxonomy 는 SSOT 에서 제거 — 실제 선정 근거는 core_axis_lens_ids
-# 섹션의 empirical 주석 및 benchmark 참조.
+# 섹션의 current registry notes.
 full_review_lens_ids:
   - logic
   - structure
@@ -80,17 +80,8 @@ full_review_lens_ids:
 #   - explicit reviewMode / config `review_mode` 없으면 → `full`
 #   - compact host-facing review tools may select `core-axis`
 #
-# 선정 근거 · 각 lens 의 empirical 역할 · 이름 `core-axis` 의 의미 shift
-# (PR #127 meta-level axis → PR #131 empirical core lens) · rejected
-# alternative 분석 은 아래 proposal §1.1.1 (이름 shift) / §1.1.2 (Pareto
-# 용어) / §3.2 (Pareto frontier) / §4 (권장안 근거) 에 기술.
-# 수치 (coverage / depth / items-lost / cost) SSOT 는 benchmark 파일.
-#
-# 참조:
-#   - Proposal (설계 rationale + 이름 의미 shift):
-#       development-records/evolve/20260419-core-axis-empirical-recomposition.md
-#   - Benchmark (수치 SSOT):
-#       development-records/benchmark/20260419-lens-contribution-analysis.md
+# 선정 근거 · 각 lens 의 empirical 역할 · 이름 `core-axis` 의 의미 shift 는
+# historical notes 로 격리되어 있으며 runtime reference 가 아니다.
 #
 # 이력 (세대 변경 시 본 section 1 줄 추가, schema_version 함께 bump):
 #   - 세대 1 (v0.2.0, PR #127 light→core-axis rename): 4 lens (logic / pragmatics / evolution / axiology) — meta-level axis 잠정
@@ -101,8 +92,8 @@ full_review_lens_ids:
 #   2. `schema_version: N+1` bump
 #   3. 본 "이력" 블록에 "세대 N+1" 한 줄 추가
 #   4. lens-registry.test.ts 의 content assertion (정확 집합) + raw-text schema_version guard 갱신
-#   5. 신규 proposal 파일 생성 `development-records/evolve/YYYYMMDD-<topic>.md` (rationale + alternative + empirical 근거)
-#   6. 본 yaml "참조" 블록의 proposal pointer 를 신규 파일로 교체 (또는 append)
+#   5. 신규 rationale 은 runtime reference 밖에 격리하고 본 registry 에는 current decision 만 반영
+#   6. 본 yaml 의 current notes 를 신규 세대 결정에 맞게 갱신
 core_axis_lens_ids:
   - axiology
   - coverage

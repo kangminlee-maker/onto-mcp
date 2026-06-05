@@ -130,7 +130,7 @@ interface ReviewRunHandle {
   domain: {
     requestedToken: string;
     normalizedDomain: string | null;
-    resolution: "exact" | "alias" | "suggestion" | "no_domain" | "unknown";
+    resolution: "exact" | "suggestion" | "no_domain" | "unknown";
     suggestionIds: string[];
   };
   artifactRefs: {
@@ -298,22 +298,21 @@ Both paths must project the same progress step ids from
 
 ### 5.7 Domain Alias Normalization
 
-Domain handling should keep the existing canonical domain id authority while
-adding a bounded alias projection:
+Domain handling should keep canonical domain id authority without alias
+normalization:
 
 ```ts
 interface ReviewDomainTokenResolution {
   requestedToken: string;
   normalizedDomain: string | null;
-  resolution: "exact" | "alias" | "suggestion" | "no_domain" | "unknown";
+  resolution: "exact" | "suggestion" | "no_domain" | "unknown";
   suggestionIds: string[];
 }
 ```
 
 If `software-development` is not a domain but `software-engineering` is the
-nearest alias, the runtime should either normalize through a declared alias map
-or fail with suggestions before dispatch. Manual host-side remapping should not
-be the only path.
+nearest safe candidate, the runtime should fail with suggestions before
+dispatch. Manual host-side remapping should not be the only path.
 
 Unknown explicit domain tokens fail before dispatch. When safe candidates exist,
 the runtime returns `resolution: "suggestion"` plus `suggestionIds`; otherwise it

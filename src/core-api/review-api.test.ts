@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import type { ReviewExecutionPlan } from "../core-runtime/review/artifact-types.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  ReviewActorInvocationProfilesArtifact,
+  ReviewExecutionPlan,
+} from "../core-runtime/review/artifact-types.js";
 import {
   assertReviewExecutionPlanSessionBoundary,
 } from "../core-runtime/review/execution-plan-boundary.js";
@@ -21,6 +24,14 @@ import {
 } from "./review-api.js";
 
 const tempRoots: string[] = [];
+let originalHome: string | undefined;
+
+beforeEach(async () => {
+  originalHome = process.env.HOME;
+  const homeRoot = await fs.mkdtemp(path.join(os.tmpdir(), "onto-core-api-home-"));
+  tempRoots.push(homeRoot);
+  process.env.HOME = homeRoot;
+});
 
 async function tempProjectRoot(): Promise<string> {
   const projectRoot = await fs.mkdtemp(
@@ -41,6 +52,8 @@ async function tempProjectRoot(): Promise<string> {
 }
 
 afterEach(async () => {
+  if (originalHome === undefined) delete process.env.HOME;
+  else process.env.HOME = originalHome;
   await Promise.all(
     tempRoots.splice(0).map((root) =>
       fs.rm(root, { recursive: true, force: true }),
@@ -187,11 +200,78 @@ describe("createOntoReviewCoreApi", () => {
     expect(observedProgressEvents).toBeGreaterThan(0);
     expect(result.status).toBe("completed");
     expect(result.participatingLensIds).toEqual(["logic"]);
+    expect(result.resultOverview).toBeUndefined();
+    expect(
+      (result.startPreview?.entrypointPlan as { request_text?: string } | undefined)
+        ?.request_text?.length,
+    ).toBeLessThanOrEqual(360);
+    expect(
+      result.startPreview?.boundedInvokeSteps?.every((step) => step.length <= 360),
+    ).toBe(true);
     expect(result.pipelineExecutionLedger?.pipeline).toBe("review");
     expect(
       result.pipelineExecutionLedger?.units.find((unit) => unit.unitId === "logic")
         ?.trustStatus,
     ).toBe("trusted");
+    expect(
+      result.pipelineExecutionLedger?.units.find((unit) => unit.unitId === "logic"),
+    ).not.toHaveProperty("trustReason");
+    expect(
+      (result.resultClassificationSummary as { material_issues?: unknown } | undefined)
+        ?.material_issues,
+    ).toBeUndefined();
+    expect(
+      (
+        result.llmPresentation?.finalResult?.input as
+          | {
+              result_classification_summary?: {
+                material_issues?: unknown;
+                material_issue_signals?: unknown;
+              };
+              review_result?: unknown;
+              review_result_summary?: unknown;
+            }
+          | undefined
+      )?.result_classification_summary?.material_issues,
+    ).toBeUndefined();
+    expect(
+      (
+        result.llmPresentation?.finalResult?.input as
+          | {
+              result_classification_summary?: {
+                material_issue_signals?: unknown;
+              };
+              review_result?: unknown;
+              review_result_summary?: unknown;
+            }
+          | undefined
+      )?.result_classification_summary?.material_issue_signals,
+    ).toEqual(expect.any(Array));
+    expect(
+      (result.llmPresentation?.finalResult?.input as { review_result?: unknown })
+        ?.review_result,
+    ).toBeUndefined();
+    expect(
+      (
+        result.llmPresentation?.finalResult?.input as {
+          review_result_summary?: unknown;
+        }
+      )?.review_result_summary,
+    ).toEqual(expect.any(Object));
+    expect(
+      (
+        result.llmPresentation?.openingBrief?.input as
+          | {
+              execution_plan?: {
+                lens_ids?: { items?: unknown[]; total_count?: number };
+              };
+            }
+          | undefined
+      )?.execution_plan?.lens_ids,
+    ).toMatchObject({
+      items: ["logic"],
+      total_count: 1,
+    });
 
     const status = await api.getReviewStatus(result.sessionRoot);
     expect(status.pipelineExecutionLedger?.sessionId).toBe(result.sessionId);
@@ -205,34 +285,24 @@ describe("createOntoReviewCoreApi", () => {
     );
   });
 
-  it("normalizes the software-development domain alias while preserving the requested token", async () => {
+  it("rejects retired domain aliases before dispatch", async () => {
     const projectRoot = await tempProjectRoot();
     const api = createOntoReviewCoreApi({
       ontoHome: path.resolve("."),
     });
 
-    const prepared = await api.prepareReview({
-      projectRoot,
-      target: "target.txt",
-      intent: "Core API domain alias test",
-      domain: "software-development",
-      reviewMode: "core-axis",
-      lensIds: ["logic"],
-      executorRealization: "mock",
-    });
-    const metadata = await readYamlDocument<{ requested_domain_token?: string }>(
-      path.join(prepared.sessionRoot, "session-metadata.yaml"),
-    );
-    const binding = await readYamlDocument<{ resolved_session_domain?: string }>(
-      path.join(prepared.sessionRoot, "binding.yaml"),
-    );
-
-    expect(metadata.requested_domain_token).toBe("software-development");
-    expect(binding.resolved_session_domain).toBe("software-engineering");
-    expect(prepared.llmPresentation.openingBrief?.input).toMatchObject({
-      binding: {
-        resolved_session_domain: "software-engineering",
-      },
+    await expect(
+      api.prepareReview({
+        projectRoot,
+        target: "target.txt",
+        intent: "Core API domain alias test",
+        domain: "software-development",
+        reviewMode: "core-axis",
+        lensIds: ["logic"],
+        executorRealization: "mock",
+      }),
+    ).rejects.toMatchObject({
+      name: "ReviewDomainResolutionError",
     });
   });
 
@@ -307,6 +377,20 @@ describe("createOntoReviewCoreApi", () => {
       if (!requestHash) {
         throw new Error("running handle requestHash missing");
       }
+      const runningProgressInput = running.llmPresentation?.progress?.input as
+        | {
+            result_classification_summary?: {
+              material_issues?: unknown;
+              material_issue_signals?: unknown;
+            };
+          }
+        | undefined;
+      expect(
+        runningProgressInput?.result_classification_summary?.material_issues,
+      ).toBeUndefined();
+      expect(
+        runningProgressInput?.result_classification_summary?.material_issue_signals,
+      ).toEqual(expect.any(Array));
 
       const activeStatus = await api.getReviewStatus(running.sessionRoot);
       expect(activeStatus.status).toBe("running");
@@ -332,6 +416,32 @@ describe("createOntoReviewCoreApi", () => {
       expect(duplicateContinue.activeAttempt?.attemptId).toBe(
         running.runControl?.activeAttempt?.attemptId,
       );
+      expect(
+        (
+          duplicateContinue.resultClassificationSummary as
+            | { material_issues?: unknown; material_issue_signals?: unknown }
+            | undefined
+        )?.material_issues,
+      ).toBeUndefined();
+      expect(
+        (
+          duplicateContinue.resultClassificationSummary as
+            | { material_issues?: unknown; material_issue_signals?: unknown }
+            | undefined
+        )?.material_issue_signals,
+      ).toEqual(expect.any(Array));
+      expect(
+        (
+          duplicateContinue.llmPresentation?.progress?.input as
+            | {
+                result_classification_summary?: {
+                  material_issues?: unknown;
+                  material_issue_signals?: unknown;
+                };
+              }
+            | undefined
+        )?.result_classification_summary?.material_issues,
+      ).toBeUndefined();
 
       const completedStatus = await waitForReviewStatus(
         api,
@@ -655,22 +765,216 @@ describe("createOntoReviewCoreApi", () => {
       expect(status.environmentWarnings?.map((warning) => warning.message))
         .not.toContain("unrelated process warning outside review runner prefix");
 
-      const compact = await api.getReviewResult(result.sessionRoot, {
-        projectionLevel: "compact",
+      const longIssueText = `long-signal ${"detail ".repeat(120)}`.trim();
+      const longIssueId = `issue-${"id".repeat(100)}`;
+      await writeYamlDocument(path.join(result.sessionRoot, "issue-ledger.yaml"), {
+        schema_version: 1,
+        session_id: result.sessionId,
+        issues: [
+          {
+            issue_id: longIssueId,
+            severity: "high",
+            issue_statement: longIssueText,
+            affected_purpose: "bounded projection regression test",
+            failure_condition: longIssueText,
+            impact: longIssueText,
+            evidence_refs: ["round1/logic.md#finding-1"],
+            raised_by_lens_ids: ["logic"],
+          },
+        ],
       });
+      await writeYamlDocument(path.join(result.sessionRoot, "problem-framing.yaml"), {
+        schema_version: 1,
+        session_id: result.sessionId,
+        classifications: [
+          {
+            issue_id: longIssueId,
+            problem_definition: longIssueText,
+            rationale: longIssueText,
+          },
+        ],
+      });
+
+      const readFileSpy = vi.spyOn(fs, "readFile");
+      let compact: Awaited<ReturnType<typeof api.getReviewResult>> | null = null;
+      let finalOutputRead = false;
+      try {
+        const defaultResult = await api.getReviewResult(result.sessionRoot);
+        expect(defaultResult.projectionLevel).toBe("standard");
+        expect(defaultResult.reviewRecord).toBeUndefined();
+        expect(defaultResult.finalOutputText).toBeUndefined();
+        expect(
+          (
+            defaultResult.resultClassificationSummary as
+              | { material_issues?: unknown; material_issue_signals?: unknown }
+              | undefined
+          )?.material_issues,
+        ).toBeUndefined();
+        expect(
+          (
+            defaultResult.resultClassificationSummary as
+              | { material_issues?: unknown; material_issue_signals?: unknown }
+              | undefined
+          )?.material_issue_signals,
+        ).toEqual(expect.any(Array));
+        compact = await api.getReviewResult(result.sessionRoot, {
+          projectionLevel: "compact",
+        });
+        finalOutputRead = readFileSpy.mock.calls.some(([file]) => {
+          if (typeof file !== "string") return false;
+          return path.resolve(file) === path.resolve(result.finalOutputPath);
+        });
+      } finally {
+        readFileSpy.mockRestore();
+      }
+      expect(compact).not.toBeNull();
+      if (compact === null) throw new Error("compact review result missing");
       expect(compact.projectionLevel).toBe("compact");
       expect(compact.reviewRecord).toBeUndefined();
       expect(compact.finalOutputText).toBeUndefined();
-      expect(compact.resultClassificationSummary.material_issues).toEqual(
-        expect.any(Array),
-      );
+      expect(compact.pipelineExecutionLedger).toBeUndefined();
+      expect(finalOutputRead).toBe(false);
+      const finalResultInput = compact.llmPresentation?.finalResult?.input as
+        | {
+            result_classification_summary?: {
+              material_issues?: unknown;
+              material_issue_signals?: unknown;
+            };
+          }
+        | undefined;
+      expect(
+        finalResultInput?.result_classification_summary?.material_issues,
+      ).toBeUndefined();
+      expect(
+        finalResultInput?.result_classification_summary?.material_issue_signals,
+      ).toEqual(expect.any(Array));
+      const progressInput = compact.llmPresentation?.progress?.input as
+        | {
+            result_classification_summary?: {
+              non_material_findings?: unknown;
+              non_material_finding_signals?: unknown;
+            };
+          }
+        | undefined;
+      expect(
+        progressInput?.result_classification_summary?.non_material_findings,
+      ).toBeUndefined();
+      expect(
+        progressInput?.result_classification_summary?.non_material_finding_signals,
+      ).toEqual(expect.any(Array));
+      const compactSummary = compact.resultClassificationSummary as
+        | {
+            material_issues?: unknown;
+            material_issue_signals?: unknown;
+          }
+        | undefined;
+      expect(compactSummary?.material_issues).toBeUndefined();
+      expect(compactSummary?.material_issue_signals).toEqual(expect.any(Array));
       expect(compact.targetMaterialSupport?.supportStatus).toBe("partial");
+
+      const standardReadSpy = vi.spyOn(fs, "readFile");
+      let standardFinalOutputRead = false;
+      let standard: Awaited<ReturnType<typeof api.getReviewResult>> | null = null;
+      try {
+        standard = await api.getReviewResult(result.sessionRoot, {
+          projectionLevel: "standard",
+        });
+        standardFinalOutputRead = standardReadSpy.mock.calls.some(([file]) => {
+          if (typeof file !== "string") return false;
+          return path.resolve(file) === path.resolve(result.finalOutputPath);
+        });
+      } finally {
+        standardReadSpy.mockRestore();
+      }
+      expect(standard).not.toBeNull();
+      if (standard === null) throw new Error("standard review result missing");
+      expect(standard.projectionLevel).toBe("standard");
+      expect(standard.reviewRecord).toBeUndefined();
+      expect(standard.finalOutputText).toBeUndefined();
+      expect(standard.reviewRecordSummary.requestText.length).toBeLessThanOrEqual(
+        360,
+      );
+      expect(standard.pipelineExecutionLedger?.units[0]).not.toHaveProperty(
+        "trustReason",
+      );
+      expect(standardFinalOutputRead).toBe(false);
+      const standardSummary = standard.resultClassificationSummary as
+        | {
+            material_issues?: unknown;
+            material_issue_signals?: unknown;
+          }
+        | undefined;
+      expect(standardSummary?.material_issues).toBeUndefined();
+      expect(standardSummary?.material_issue_signals).toEqual(expect.any(Array));
+      const [standardMaterialSignal] =
+        (standardSummary?.material_issue_signals as
+          | Array<{ issue_id?: string; signal?: string }>
+          | undefined) ??
+        [];
+      expect(standardMaterialSignal?.issue_id?.length).toBeLessThanOrEqual(120);
+      expect(standardMaterialSignal?.signal?.length).toBeLessThanOrEqual(360);
+      const standardFinalResultInput = standard.llmPresentation?.finalResult?.input as
+        | {
+            explanation?: {
+              final_review_result?: string;
+            };
+            result_classification_summary?: {
+              material_issues?: unknown;
+              material_issue_signals?: unknown;
+            };
+          }
+        | undefined;
+      expect(
+        standardFinalResultInput?.result_classification_summary?.material_issues,
+      ).toBeUndefined();
+      expect(
+        standardFinalResultInput?.result_classification_summary
+          ?.material_issue_signals,
+      ).toEqual(expect.any(Array));
+      expect(
+        standardFinalResultInput?.explanation?.final_review_result?.length,
+      ).toBeLessThanOrEqual(360);
+      const standardProgressInput = standard.llmPresentation?.progress?.input as
+        | {
+            result_classification_summary?: {
+              material_issues?: unknown;
+              material_issue_signals?: unknown;
+            };
+          }
+        | undefined;
+      expect(
+        standardProgressInput?.result_classification_summary?.material_issues,
+      ).toBeUndefined();
+      expect(
+        standardProgressInput?.result_classification_summary
+          ?.material_issue_signals,
+      ).toEqual(expect.any(Array));
 
       const full = await api.getReviewResult(result.sessionRoot, {
         projectionLevel: "full",
       });
       expect(full.reviewRecord?.session_id).toBe(result.sessionId);
       expect(full.finalOutputText).toEqual(expect.any(String));
+      expect(full.resultClassificationSummary?.material_issues).toEqual(
+        expect.any(Array),
+      );
+      expect(
+        full.resultClassificationSummary?.material_issues[0]?.problem_definition,
+      ).toBe(longIssueText);
+      const fullFinalResultInput = full.llmPresentation?.finalResult?.input as
+        | {
+            review_record?: unknown;
+            result_classification_summary?: {
+              material_issues?: unknown;
+            };
+          }
+        | undefined;
+      expect(fullFinalResultInput?.review_record).toEqual(
+        expect.objectContaining({ session_id: result.sessionId }),
+      );
+      expect(
+        fullFinalResultInput?.result_classification_summary?.material_issues,
+      ).toEqual(expect.any(Array));
     } finally {
       if (previousWarning === undefined) {
         delete process.env.ONTO_REVIEW_MOCK_ENV_WARNING;
@@ -803,15 +1107,323 @@ describe("createOntoReviewCoreApi", () => {
     expect(continued.promptExecutionResult.synthesis_executed).toBe(true);
     expect(continued.continuationPlan.frontierUnits.map((unit) => unit.unitId))
       .toEqual(["logic"]);
+    expect(
+      (continued.continuationPlan as { unitLedger?: unknown }).unitLedger,
+    ).toBeUndefined();
     expect(continued.pipelineExecutionLedger?.units.find(
       (unit) => unit.unitId === "synthesize",
     )?.trustStatus).toBe("trusted");
+    expect(
+      continued.pipelineExecutionLedger?.units.find(
+        (unit) => unit.unitId === "synthesize",
+      ),
+    ).not.toHaveProperty("trustReason");
+    const continuedSummary = continued.resultClassificationSummary as
+      | {
+          material_issues?: unknown;
+          non_material_findings?: unknown;
+          action_candidates?: unknown;
+          material_issue_signals?: Array<{ issue_id?: string; signal?: string }>;
+        }
+      | undefined;
+    expect(continuedSummary?.material_issues).toBeUndefined();
+    expect(continuedSummary?.non_material_findings).toBeUndefined();
+    expect(continuedSummary?.action_candidates).toBeUndefined();
+    expect(continuedSummary?.material_issue_signals).toEqual(expect.any(Array));
+    expect(
+      continuedSummary?.material_issue_signals?.every(
+        (signal) =>
+          (signal.issue_id?.length ?? 0) <= 120 &&
+          (signal.signal?.length ?? 0) <= 360,
+      ),
+    ).toBe(true);
+    const continuedProgressInput = continued.llmPresentation?.progress?.input as
+      | {
+          result_classification_summary?: {
+            material_issues?: unknown;
+            material_issue_signals?: unknown;
+          };
+        }
+      | undefined;
+    expect(
+      continuedProgressInput?.result_classification_summary?.material_issues,
+    ).toBeUndefined();
+    expect(
+      continuedProgressInput?.result_classification_summary?.material_issue_signals,
+    ).toEqual(expect.any(Array));
     await expect(
       fs.stat(continued.continuationAttempt.continuationPlanPath),
     ).resolves.toMatchObject({ size: expect.any(Number) });
     await expect(
       fs.stat(continued.continuationAttempt.attemptManifestPath),
     ).resolves.toMatchObject({ size: expect.any(Number) });
+  });
+
+  it("rejects continuation when manifest reconstructs unsupported direct-call OAuth", async () => {
+    const projectRoot = await tempProjectRoot();
+    const api = createOntoReviewCoreApi({
+      ontoHome: path.resolve("."),
+    });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Core API invalid continuation route test",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic"],
+      executorRealization: "mock",
+    });
+    await writeYamlDocument(path.join(prepared.sessionRoot, "review-run-manifest.yaml"), {
+      session_id: prepared.sessionId,
+      review_execution_profile: {
+        mode: "main-workers",
+        teamlead: { seat: "main" },
+        lens: { seat: "worker" },
+        synthesize: { seat: "worker" },
+        deliberation: "controlled-lens-deliberation",
+        runtime_route: {
+          execution_realization: "direct-call",
+          host_runtime: "openai",
+          worker_executor: "direct_call",
+          runtime_provider: "openai",
+          auth_mode: "oauth",
+        },
+        trace: [],
+      },
+      worker_units: [],
+    });
+
+    await expect(
+      api.continueReview({
+        projectRoot,
+        sessionRoot: prepared.sessionRoot,
+      }),
+    ).rejects.toThrow("Review direct-call route requires API-key/local auth");
+  });
+
+  it("rejects continuation when actor-specific direct-call route resolves to OAuth", async () => {
+    const projectRoot = await tempProjectRoot();
+    const api = createOntoReviewCoreApi({
+      ontoHome: path.resolve("."),
+    });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Core API invalid continuation actor route test",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic"],
+      executorRealization: "mock",
+    });
+    const oauthActor = {
+      seat: "worker",
+      llm: {
+        auth: "oauth",
+        provider: "openai",
+        model: "gpt-5.5",
+      },
+    };
+    await writeYamlDocument(path.join(prepared.sessionRoot, "review-run-manifest.yaml"), {
+      session_id: prepared.sessionId,
+      review_execution_profile: {
+        mode: "main-workers",
+        teamlead: { ...oauthActor, seat: "main" },
+        lens: oauthActor,
+        synthesize: oauthActor,
+        deliberation: "controlled-lens-deliberation",
+        runtime_route: {
+          execution_realization: "direct-call",
+          host_runtime: "openai",
+          worker_executor: "direct_call",
+          runtime_provider: "openai",
+          auth_mode: "api_key",
+        },
+        trace: [],
+      },
+      worker_units: [],
+    });
+
+    await expect(
+      api.continueReview({
+        projectRoot,
+        sessionRoot: prepared.sessionRoot,
+      }),
+    ).rejects.toThrow("Review direct-call route cannot dispatch");
+  });
+
+  it("blocks continuation when manifest route conflicts with actual worker runtime", async () => {
+    const projectRoot = await tempProjectRoot();
+    const api = createOntoReviewCoreApi({
+      ontoHome: path.resolve("."),
+    });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Core API continuation route visibility conflict test",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic"],
+      executorRealization: "mock",
+    });
+    await writeYamlDocument(path.join(prepared.sessionRoot, "review-run-manifest.yaml"), {
+      session_id: prepared.sessionId,
+      artifact_refs: {
+        execution_plan: path.join(prepared.sessionRoot, "execution-plan.yaml"),
+        actor_invocation_profiles: path.join(
+          prepared.sessionRoot,
+          "execution-preparation",
+          "actor-invocation-profiles.yaml",
+        ),
+      },
+      review_execution_profile: {
+        mode: "main-workers",
+        teamlead: {
+          seat: "main",
+          llm: {
+            auth: "api_key",
+            provider: "openai",
+            model: "gpt-5.5",
+          },
+        },
+        lens: {
+          seat: "worker",
+          llm: {
+            auth: "api_key",
+            provider: "openai",
+            model: "gpt-5.5",
+          },
+        },
+        synthesize: {
+          seat: "worker",
+          llm: {
+            auth: "api_key",
+            provider: "openai",
+            model: "gpt-5.5",
+          },
+        },
+        deliberation: "controlled-lens-deliberation",
+        runtime_route: {
+          execution_realization: "direct-call",
+          host_runtime: "openai",
+          worker_executor: "direct_call",
+          runtime_provider: "openai",
+          auth_mode: "api_key",
+        },
+        trace: [],
+      },
+      worker_units: [
+        {
+          unit_id: "logic",
+          executor_host_runtime: "anthropic",
+        },
+      ],
+    });
+
+    await expect(
+      api.continueReview({
+        projectRoot,
+        sessionRoot: prepared.sessionRoot,
+      }),
+    ).rejects.toThrow(
+      "Review continuation cannot dispatch because the prior review run route conflicts with actual worker runtime evidence.",
+    );
+    const failureFiles = await fs.readdir(
+      path.join(prepared.sessionRoot, "failures"),
+    );
+    const failure = await readYamlDocument<Record<string, unknown>>(
+      path.join(prepared.sessionRoot, "failures", failureFiles[0]!),
+    );
+    expect(failure).toMatchObject({
+      reason_code: "continuation_route_visibility_conflict",
+      mcp_error_code: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
+      details_kind: "actor_route",
+      dispatch_state: "dispatch_blocked",
+    });
+    expect(failure.details).toMatchObject({
+      route_consistency: "profile_actual_conflict",
+      actual_host_runtimes: ["anthropic"],
+    });
+  });
+
+  it("preserves actor credential_ref custom env during continuation reconstruction", async () => {
+    const projectRoot = await tempProjectRoot();
+    const api = createOntoReviewCoreApi({
+      ontoHome: path.resolve("."),
+    });
+    const savedMock = process.env.ONTO_LLM_MOCK;
+    const savedOpenAi = process.env.OPENAI_API_KEY;
+    const savedCustom = process.env.CUSTOM_OPENAI_API_KEY;
+    process.env.ONTO_LLM_MOCK = "1";
+    delete process.env.OPENAI_API_KEY;
+    process.env.CUSTOM_OPENAI_API_KEY = "custom-test-key";
+    try {
+      const prepared = await api.prepareReview({
+        projectRoot,
+        target: "target.txt",
+        intent: "Core API custom credential continuation route test",
+        noDomain: true,
+        reviewMode: "core-axis",
+        lensIds: ["logic"],
+        executorRealization: "mock",
+      });
+      const actorProfilesPath = path.join(
+        prepared.sessionRoot,
+        "execution-preparation",
+        "actor-invocation-profiles.yaml",
+      );
+      const actorProfile = (
+        actorKind: "teamlead" | "lens" | "synthesize",
+        seat: "main" | "worker",
+      ) => ({
+        actor_profile_id: `actor:${actorKind}`,
+        actor_kind: actorKind,
+        seat,
+        execution_realization: "direct-call",
+        host_runtime: "openai",
+        runtime_provider: "openai",
+        auth_mode: "api_key",
+        model: "mock-model",
+        effort: null,
+        service_tier: null,
+        base_url: null,
+        effective_worker_executor: "direct_call",
+        credential_ref: "env:CUSTOM_OPENAI_API_KEY",
+        credential_serialization_policy: "ref_only_no_secret",
+        route_unavailable_policy: "fail_before_dispatch",
+        capability_requirements: ["review_unit_execution", "artifact_write"],
+        source_settings_refs: [],
+      });
+      await writeYamlDocument(actorProfilesPath, {
+        schema_version: "1",
+        session_id: prepared.sessionId,
+        created_at: new Date().toISOString(),
+        profiles: [
+          actorProfile("teamlead", "main"),
+          actorProfile("lens", "worker"),
+          actorProfile("synthesize", "worker"),
+        ],
+      } satisfies ReviewActorInvocationProfilesArtifact);
+
+      let errorMessage = "";
+      try {
+        await api.continueReview({
+          projectRoot,
+          sessionRoot: prepared.sessionRoot,
+          executorRealization: "ts_inline_http",
+        });
+      } catch (error) {
+        errorMessage = error instanceof Error ? error.message : String(error);
+      }
+      expect(errorMessage).not.toContain("credential environment variable is missing");
+      expect(errorMessage).not.toContain("direct_call_actor_credential_missing");
+    } finally {
+      if (savedMock === undefined) delete process.env.ONTO_LLM_MOCK;
+      else process.env.ONTO_LLM_MOCK = savedMock;
+      if (savedOpenAi === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = savedOpenAi;
+      if (savedCustom === undefined) delete process.env.CUSTOM_OPENAI_API_KEY;
+      else process.env.CUSTOM_OPENAI_API_KEY = savedCustom;
+    }
   });
 
   it("rejects targetUnits that try to continue after the current frontier", async () => {

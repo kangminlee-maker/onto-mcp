@@ -1,7 +1,7 @@
 name: Action-Centric (Palantir style)
 version: 1
 description: Action-centric practical ontology structure. Defines domain objects with ObjectType, actions with ActionType, and relationships with LinkType.
-golden_reference: golden/b-action-centric.yaml
+golden_reference: b-action-centric.yaml
 sections:
   - name: enums
     description: List of enumeration values used in the domain
