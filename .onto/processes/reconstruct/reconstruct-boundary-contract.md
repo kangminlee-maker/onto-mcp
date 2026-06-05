@@ -312,12 +312,12 @@ MCP tools expose bounded reconstruct operations:
 
 | Tool | Responsibility |
 |---|---|
-| `onto.list_source_profiles` | list supported material profiles |
-| `onto.observe_source` | produce runtime source observations |
-| `onto.validate_reconstruct_directive` | validate an authored directive against runtime observations |
-| `onto.reconstruct` | run the reconstruct process |
-| `onto.reconstruct_status` | read progress, liveness, stage state, and artifact refs |
-| `onto.reconstruct_result` | read final output, record refs, and structured result projection |
+| `onto_list_source_profiles` | list supported material profiles |
+| `onto_observe_source` | produce runtime source observations |
+| `onto_validate_reconstruct_directive` | validate an authored directive against runtime observations |
+| `onto_reconstruct` | run the reconstruct process |
+| `onto_reconstruct_status` | read progress, liveness, stage state, and artifact refs |
+| `onto_reconstruct_result` | read final output, record refs, and structured result projection |
 
 Tool responses should expose artifact refs and validation state, not duplicate a
 second semantic authority.

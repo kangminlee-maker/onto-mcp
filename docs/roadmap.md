@@ -24,7 +24,7 @@ Done when:
 
 - `src/mcp/` exposes stable tool schemas.
 - A local MCP server can list tools and route calls into the core API.
-- `onto.review`, `onto.review_status`, and `onto.review_result` work with a
+- `onto_review`, `onto_review_status`, and `onto_review_result` work with a
   mock/local provider.
 
 ## Stage 3 — Execution Profiles
@@ -51,10 +51,10 @@ Done when:
 - The shared `PipelineExecutionLedger` contract is implemented as a derived
   trust/provenance projection for `review`, with the same shape reserved for
   `reconstruct`, future `evolve`, and later onto pipelines.
-- `onto.review_status` exposes a derived pipeline execution ledger that marks
+- `onto_review_status` exposes a derived pipeline execution ledger that marks
   artifact trust boundaries and feeds the continuation plan for prepared and
   halted review sessions.
-- `onto.review_continue` continues a session from existing artifacts by running
+- `onto_review_continue` continues a session from existing artifacts by running
   only failed or missing review units.
 - Completed unit outputs are reused and completed unit overwrite attempts are
   rejected.
@@ -76,7 +76,7 @@ Done when:
 - Runtime validates claim realization, confirmation-derived claim sets,
   competency-question assessment, failure classification, revision proposal, and
   final-output provenance without authoring ontology meaning.
-- `onto.reconstruct_status` and `onto.reconstruct_result` expose bounded facts,
+- `onto_reconstruct_status` and `onto_reconstruct_result` expose bounded facts,
   counts, liveness, and artifact refs for host-rendered progress and final
   output.
 - A fixture run produces the full post-Seed artifact set and validates

@@ -83,7 +83,7 @@ prompt-backed path에서도 이 단계의 결과는 최종적으로
 이 단계는 semantic recommendation과 deterministic binding의 중간에서
 주체자가 최종 authority를 행사하는 구간이다.
 
-현재 host-facing `review:invoke`의 기본 규칙:
+현재 host-facing `onto_review`의 domain 고정 규칙:
 
 - explicit `--domain {name}` / `--no-domain` 이 있으면 그대로 사용
 - configured domain이 하나면 바로 사용
@@ -109,18 +109,13 @@ runtime/host가 아래를 고정한다.
 이 단계가 끝나면 prompt-backed path에서도
 적어도 `session_root`와 각 artifact path는 확정되어 있어야 한다.
 
-현재 bounded runtime step은 TypeScript core로 구현한다.
+현재 bounded runtime step은 TypeScript Core API로 구현한다.
+Host-facing combined entrypoint는 `onto_review`이며, 준비만 필요한 경우
+`onto_prepare_review`를 사용한다.
 
-Preferred repo-local combined entrypoint는 아래다.
-
-- `npm run review:invoke -- ...`
-
-기본 bounded start step은 아래다.
-
-- `npm run review:start-session -- ...`
-
-`review:start-session` 내부에서 interpretation, binding, execution preparation,
-prompt packet materialization을 순서대로 수행한다.
+Core API review runner는 interpretation, binding, execution preparation,
+prompt packet materialization을 순서대로 수행하고 같은 session artifact truth
+아래에 기록한다.
 
 ### 3.5 Execution Preparation Artifacts
 
@@ -180,9 +175,7 @@ prompt-backed path에서도 실제 파일이 만들어져야 한다.
 각 lens는 **맥락 격리 추론 단위 (ContextIsolatedReasoningUnit)** 로 실행된다.
 
 가능하면 host는 자유 텍스트 대신 TS core가 materialize한 prompt packet을 사용해야 한다.
-기본 bounded dispatch step은 아래다.
-
-- `npm run review:run-prompt-execution -- ...`
+기본 bounded dispatch step은 Core API review runner가 내부 runtime step으로 수행한다.
 
 이 step은 실행 종료 시 `execution-result.yaml`을 반드시 materialize해야 한다.
 
@@ -216,9 +209,9 @@ worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 
 이 유지되는 것이다.
 
-packet materialization만 단독으로 디버깅해야 할 때는 아래 내부 bounded step을 쓸 수 있다.
-
-- `npm run review:materialize-prompt-packets -- ...`
+packet materialization만 단독으로 디버깅해야 할 때도 host-facing 표면은
+`onto_prepare_review`다. Repo-local harness는 conformance/debug 목적의 내부
+adapter로만 취급한다.
 
 현재 TS bounded runner의 lens 병렬성은 선택된 lens 수와 같다. full review는
 9개 lens를 모두 병렬 dispatch하고, core-axis 또는 명시적 lens 선택은 해당 lens
@@ -321,18 +314,9 @@ later `learn/govern`가 읽을 canonical artifact는 `ReviewRecord`여야 한다
 prompt-backed path에서는 `final-output.md`를 먼저 render한 뒤,
 team lead 또는 bounded TS step이 마지막에 `review-record.yaml`을 actual aggregate로 assemble해야 한다.
 
-Preferred repo-local combined completion 포함 entrypoint는 아래다.
-
-- `npm run review:invoke -- ...`
-
-기본 bounded completion step은 아래다.
-
-- `npm run review:complete-session -- ...`
-
-필요하면 아래 분해된 step도 내부 bounded step으로 사용할 수 있다.
-
-- `npm run review:render-final-output -- ...`
-- `npm run review:finalize-session -- ...`
+Combined completion 포함 host-facing entrypoint는 `onto_review`다.
+Completion은 Core API review runner가 session artifact truth에 맞춰 내부적으로
+수행한다.
 
 ### 3.10 Human-Readable Final Output
 
@@ -342,14 +326,10 @@ Preferred repo-local combined completion 포함 entrypoint는 아래다.
 즉 사람이 읽는 결과와
 later system handoff artifact를 분리한다.
 
-기본 bounded render step은 아래다.
-
-- `npm run review:render-final-output -- ...`
-
 중요:
 
-- degraded case가 발생하면 `review:run-prompt-execution`은 `degradation-summary.yaml`을 구조화 source로 기록하고 `error-log.md`에는 실행 로그를 남긴다
-- `review:complete-session`은 `final-output.md`와 `review-record.yaml`을 모두 필수 산출물로 취급한다
+- degraded case가 발생하면 prompt execution runner는 `degradation-summary.yaml`을 구조화 source로 기록하고 `error-log.md`에는 실행 로그를 남긴다
+- completion step은 `final-output.md`와 `review-record.yaml`을 모두 필수 산출물로 취급한다
 - 필수 artifact가 없으면 해당 단계는 즉시 실패한다
 
 ### 3.11 Execution UX Presentation Target
@@ -361,7 +341,7 @@ execution, issue construction, controlled deliberation, synthesize, halted parti
 result 전 구간에서 주체자가 판단 가능한 상태를 받도록 하는 presentation target이다.
 
 현재 active runtime truth는 기존 artifacts와 CLI/MCP 결과가 소유한다.
-`onto.review_status`는 artifact-backed `llmPresentation.progress`를 반환하며,
+`onto_review_status`는 artifact-backed `llmPresentation.progress`를 반환하며,
 그 안에는 polling liveness state, latest review signal, progress stepper가
 포함된다. halted partial일 때는 `llmPresentation.halt`도 반환한다. completed result는
 `llmPresentation.finalResult`, `final-output.md`, `review-record.yaml`에서 같은
@@ -384,18 +364,18 @@ Target rules:
 - issue-stage artifact가 생성되면 progress update는 finding/issue count, highest severity, material issue count 같은 새 review signal을 함께 제시해야 한다
 - 중간 finding-like update는 `lens_local`, `issue_candidate`, `deliberation_pending`, `deliberated`, `finalized` 같은 interim signal status를 표시해야 한다
 - halted partial result는 halt identity와 produced/absent artifact truth를 먼저 보여줘야 한다
-- CLI가 보이지 않는 MCP/host 환경에서는 `onto.review_status` polling을 기본 경로로 host LLM presentation input을 갱신해야 한다
+- CLI가 보이지 않는 MCP/host 환경에서는 `onto_review_status` polling을 기본 경로로 host LLM presentation input을 갱신해야 한다
 - 별도 HTML/UI 구현은 요구하지 않는다. CLI, MCP, `final-output.md`, `review-record.yaml`은 같은 bounded facts를 제시해야 한다
 
 ---
 
 ## 4. Immediate Follow-up
 
-이 문서의 productized live path는 현재 MCP `onto.review`에서
-`review:invoke`를 통해 `review:start-session`, `review:run-prompt-execution`,
-`review:complete-session` bounded steps를 유지한다.
+이 문서의 productized live path는 현재 MCP `onto_review`에서 Core API
+review runner를 통해 prepare, prompt execution, completion을 같은 session
+artifact truth 아래에서 수행한다.
 
 남은 follow-up은 live path 자체의 구조 변경이 아니라 운영/확장 품질이다.
 
 1. provider credentials/endpoints가 의도적으로 준비된 환경에서 provider별 live conformance를 수행한다.
-2. `.onto/processes/shared/pipeline-execution-ledger-contract.md`의 shared ledger를 `review`에 먼저 투영하고, `docs/architecture/review-continuation-surface.md`의 설계에 따라 `onto.review_status` continuation plan과 `onto.review_continue`를 구현한다.
+2. `.onto/processes/shared/pipeline-execution-ledger-contract.md`의 shared ledger를 `review`에 먼저 투영하고, `docs/architecture/review-continuation-surface.md`의 설계에 따라 `onto_review_status` continuation plan과 `onto_review_continue`를 구현한다.

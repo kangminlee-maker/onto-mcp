@@ -10,7 +10,7 @@
 
 ## 1. Position
 
-`검토 해석 (InvocationInterpretation)`은 `onto.review` 또는 `onto.prepare_review`가 실제 실행에 들어가기 전에 수행하는
+`검토 해석 (InvocationInterpretation)`은 `onto_review` 또는 `onto_prepare_review`가 실제 실행에 들어가기 전에 수행하는
 `LLM` 소유 단계다.
 
 이 단계의 목적은 아래를 해석하는 것이다.
@@ -202,7 +202,7 @@ ambiguity_notes:
 
 이 계약이 뜻하는 바는 아래다.
 
-1. `onto.review`는 해석 없이 process 전체를 바로 실행하면 안 된다.
+1. `onto_review`는 해석 없이 process 전체를 바로 실행하면 안 된다.
 2. 먼저 interpretation 결과를 만든 뒤,
 3. 그 interpretation을 다음 단계에 넘겨야 한다.
 

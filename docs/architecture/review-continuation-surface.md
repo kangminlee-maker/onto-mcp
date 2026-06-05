@@ -51,18 +51,18 @@ failure records.
 Use one new MCP tool:
 
 ```text
-onto.review_continue(sessionRoot, projectRoot?, targetUnits?)
+onto_review_continue(sessionRoot, projectRoot?, targetUnits?)
 ```
 
-`onto.review_status` remains the read surface. It should expose a bounded
+`onto_review_status` remains the read surface. It should expose a bounded
 `continuationPlan` projection for halted or prepared sessions so the host LLM
-can explain what will run before the caller invokes `onto.review_continue`.
+can explain what will run before the caller invokes `onto_review_continue`.
 
 This keeps the command surface small:
 
-- `onto.review_status` answers "what is missing or failed?"
-- `onto.review_continue` performs the operator-controlled continuation.
-- `onto.review_result` remains a completed-result reader.
+- `onto_review_status` answers "what is missing or failed?"
+- `onto_review_continue` performs the operator-controlled continuation.
+- `onto_review_result` remains a completed-result reader.
 
 ## Tool Contract
 
@@ -79,7 +79,7 @@ interface ReviewContinueToolInput {
 Rules:
 
 - `sessionRoot` uses the same project-boundary disclosure guard as
-  `onto.review_status` and `onto.review_result`.
+  `onto_review_status` and `onto_review_result`.
 - `targetUnits` is optional. When omitted, the runtime derives the minimal
   continuation frontier from artifacts and the pipeline execution ledger.
 - When provided, target units may use public aliases such as `lens:{lens_id}`,
@@ -313,7 +313,7 @@ after a successful continuation attempt. Attempt files preserve replay evidence.
 
 ## Status Presentation
 
-`onto.review_status` should expose a read-only continuation projection when a
+`onto_review_status` should expose a read-only continuation projection when a
 session is `halted_partial` or `prepared`.
 
 The host-facing presentation should say:
@@ -333,7 +333,7 @@ facts. It should use only artifact-backed inputs.
    exposed from `getReviewStatus`.
 2. `continueReview` in `src/core-api/review-api.ts` calls the same bounded
    prompt execution runtime used by the CLI path.
-3. `onto.review_continue` is exposed in MCP schemas and server dispatch.
+3. `onto_review_continue` is exposed in MCP schemas and server dispatch.
 4. Conformance covers halted malformed-output continuation and session-level
    backup provenance. Target selection, alias normalization, and session
    boundary guards are covered by focused unit tests.

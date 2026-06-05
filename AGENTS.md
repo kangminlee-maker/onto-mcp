@@ -188,12 +188,15 @@ issue-stance deliberation target artifact:
 
 core 제품화 계층은 TypeScript다.
 
-주요 entrypoint:
+현재 host-facing review entrypoint는 MCP tool call이다.
 
-- `npm run review:invoke -- ...` (preferred)
-- `npm run review:start-session -- ...`
-- `npm run review:run-prompt-execution -- ...`
-- `npm run review:complete-session -- ...`
+- `onto_review` — review 실행
+- `onto_prepare_review` — 실행 전 session과 prompt packet 준비
+- `onto_review_status` — 진행/상태 조회
+- `onto_review_result` — 완료 결과 조회
+
+`onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
+`src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter/conformance harness로만 취급한다.
 
 관련 설정: [package.json](/Users/kangmin/cowork/onto-mcp/package.json), [tsconfig.json](/Users/kangmin/cowork/onto-mcp/tsconfig.json)
 

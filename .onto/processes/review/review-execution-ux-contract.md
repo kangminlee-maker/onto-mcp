@@ -374,14 +374,14 @@ The host LLM may rephrase for the user, but it must not invent runtime facts or
 hide halt/artifact truth.
 
 When CLI output is hidden, the canonical user-facing MCP delivery path is
-`onto.review_status` polling over a prepared or active session. Other paths are
+`onto_review_status` polling over a prepared or active session. Other paths are
 allowed only as conformance or later optimization layers.
 
 Priority:
 
-1. `onto.review_status` polling using the active session root or run identifier.
+1. `onto_review_status` polling using the active session root or run identifier.
 2. Native MCP progress notifications when the host supplies a
-   `_meta.progressToken` on `onto.review`.
+   `_meta.progressToken` on `onto_review`.
 3. A split execution flow where preparation returns the opening brief and
    session identity before long worker dispatch continues.
 
@@ -389,20 +389,20 @@ A long blocking MCP tool call with no visible opening brief, progress update, or
 status polling path is not conformant with this UX contract.
 
 Native MCP progress notifications are a transport projection only. The runtime
-sends `notifications/progress` during `onto.review` when the caller supplies
+sends `notifications/progress` during `onto_review` when the caller supplies
 `_meta.progressToken`; each notification carries a versioned
 `ontoReviewProgress` metadata payload. These notifications must remain
 reconstructable from runtime progress lines and artifacts. They are not a new
-artifact authority and do not replace `onto.review_status`.
+artifact authority and do not replace `onto_review_status`.
 
 Progress step ids, labels, and total step count are owned by the runtime review
 progress contract and projected into `review-run-manifest.yaml`. MCP progress
-updates and `onto.review_status` must read from that shared contract/manifest
+updates and `onto_review_status` must read from that shared contract/manifest
 rather than maintain separate step taxonomies.
 
 ### 6.7 Status Presentation Shapes
 
-`onto.review_status` is the canonical MCP surface for hidden-CLI progress
+`onto_review_status` is the canonical MCP surface for hidden-CLI progress
 presentation.
 
 All host-facing status presentation inputs share this presentation envelope:
@@ -740,7 +740,7 @@ MCP, CLI, and final-output rendering must align on the same facts:
 | primary aggregate | `review-record.yaml` |
 | human explanation | `final-output.md` and host-rendered `llmPresentation` |
 
-For hidden-CLI runs, `onto.review_status` is the default progress presentation
+For hidden-CLI runs, `onto_review_status` is the default progress presentation
 read surface. It should return or enable construction of
 `llmPresentation.progress` from the same artifact-backed facts.
 
@@ -773,7 +773,7 @@ Recommended implementation order:
 2. Render a text/Markdown stepper in CLI-visible environments without adding a
    separate HTML UI.
 3. Add `llmPresentation.progress` or equivalent progress presentation input to
-   `onto.review_status`.
+   `onto_review_status`.
 4. Label in-progress finding-like updates as `lens_local`, `issue_candidate`,
    `deliberation_pending`, `deliberated`, or `finalized`.
 5. Update prompt contracts to require severity, affected purpose, failure
@@ -805,7 +805,7 @@ Current runtime coverage:
   recommended polling interval, last observed artifact, seconds since last
   observed artifact, and a process-only waiting/stale summary when no new
   review signal is available.
-- MCP `onto.review` emits native `notifications/progress` when the caller
+- MCP `onto_review` emits native `notifications/progress` when the caller
   supplies `_meta.progressToken`; the notification payload carries versioned
   `ontoReviewProgress` metadata and is covered by MCP conformance.
 - Degraded or halted execution writes `degradation-summary.yaml` as the
@@ -825,7 +825,7 @@ This UX contract is implemented when:
    and review direction with non-secret model/profile facts or explicit
    unresolved reasons,
 3. CLI-hidden review execution has an MCP-visible progress delivery path through
-   `onto.review_status` polling by default,
+   `onto_review_status` polling by default,
 4. progress is visible as a stepwise view or progress bar derived from runtime
    state,
 5. progress updates include newly gathered review information, not only process

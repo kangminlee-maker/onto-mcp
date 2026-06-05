@@ -506,7 +506,7 @@ function assertProgressNotifications(
   });
   assert(
     progressNotifications.length > 0,
-    "onto.review must emit notifications/progress when _meta.progressToken is supplied.",
+    "onto_review must emit notifications/progress when _meta.progressToken is supplied.",
   );
   const stages = new Set<string>();
   let previousSequence = -1;
@@ -672,7 +672,7 @@ function requireReviewRunStructured(value: unknown): ReviewRunStructured {
   );
   const presentation = result.llmPresentation;
   assert(presentation !== undefined, "llmPresentation missing.");
-  assertCompletedRouteVisibility(result.routeVisibility, "onto.review");
+  assertCompletedRouteVisibility(result.routeVisibility, "onto_review");
   const openingBrief = presentation.openingBrief;
   assertProgressPresentation(presentation, "llmPresentation", "completed", "compact");
   const finalResult = presentation.finalResult;
@@ -928,8 +928,8 @@ async function main(): Promise<void> {
       }
     }
     // Tool names must match the MCP/host name pattern ^[a-zA-Z0-9_-]{1,64}$.
-    // A dot (e.g. "onto.review") fails strict hosts like Claude Desktop and
-    // rejects the whole tool list. Names use underscores ("onto_review").
+    // Dot separators fail strict hosts like Claude Desktop and reject the whole
+    // tool list. Names use underscores (for example, "onto_review").
     const toolNamePattern = /^[a-zA-Z0-9_-]{1,64}$/u;
     for (const tool of toolsResult.tools ?? []) {
       assert(
@@ -983,11 +983,11 @@ async function main(): Promise<void> {
       | undefined;
     assert(
       deliberationSchema?.enum?.includes("controlled_lens_deliberation"),
-      "onto.review schema must expose controlled_lens_deliberation.",
+      "onto_review schema must expose controlled_lens_deliberation.",
     );
     assert(
       !("maxConcurrentLenses" in (reviewTool.inputSchema?.properties ?? {})),
-      "onto.review schema must not expose maxConcurrentLenses.",
+      "onto_review schema must not expose maxConcurrentLenses.",
     );
     assert(
       "targetScopeKind" in (reviewTool.inputSchema?.properties ?? {}) &&
@@ -995,7 +995,7 @@ async function main(): Promise<void> {
         "memberRefs" in (reviewTool.inputSchema?.properties ?? {}) &&
         "diffRange" in (reviewTool.inputSchema?.properties ?? {}) &&
         "returnRunningAfterMs" in (reviewTool.inputSchema?.properties ?? {}),
-      "onto.review schema must expose explicit target contract fields.",
+      "onto_review schema must expose explicit target contract fields.",
     );
     const reviewResultToolDefinition = toolsResult.tools?.find((tool) => tool.name === "onto_review_result");
     const projectionSchema = reviewResultToolDefinition?.inputSchema?.properties?.projectionLevel as
@@ -1005,13 +1005,13 @@ async function main(): Promise<void> {
       projectionSchema?.enum?.includes("compact") &&
         projectionSchema.enum.includes("standard") &&
         projectionSchema.enum.includes("full"),
-      "onto.review_result schema must expose compact/standard/full projection levels.",
+      "onto_review_result schema must expose compact/standard/full projection levels.",
     );
     const reviewStatusTool = toolsResult.tools?.find((tool) => tool.name === "onto_review_status");
     assert(
       "latest" in (reviewStatusTool?.inputSchema?.properties ?? {}) &&
         "requestHash" in (reviewStatusTool?.inputSchema?.properties ?? {}),
-      "onto.review_status schema must expose latest-session recovery filters.",
+      "onto_review_status schema must expose latest-session recovery filters.",
     );
     assert(
         toolsResult.tools?.some((tool) => tool.name === "onto_list_source_profiles") &&
@@ -1034,7 +1034,7 @@ async function main(): Promise<void> {
         directiveKindSchema.enum.includes("candidate_disposition") &&
         directiveKindSchema.enum.includes("ontology_seed") &&
         !directiveKindSchema.enum.includes("seed_candidate"),
-      "onto.validate_reconstruct_directive schema must expose only active directive kinds.",
+      "onto_validate_reconstruct_directive schema must expose only active directive kinds.",
     );
 
     const reconstructProjectRoot = await fs.mkdtemp(
@@ -1057,7 +1057,7 @@ async function main(): Promise<void> {
         arguments: {
           projectRoot: reconstructProjectRoot,
         },
-      }), "tools/call onto.list_source_profiles"));
+      }), "tools/call onto_list_source_profiles"));
       // structuredContent must be a JSON object (MCP requirement); the profile
       // list lives under `sourceProfiles`.
       const profilesStructured = profilesResult.structuredContent;
@@ -1065,7 +1065,7 @@ async function main(): Promise<void> {
         profilesStructured !== null &&
           typeof profilesStructured === "object" &&
           !Array.isArray(profilesStructured),
-        "onto.list_source_profiles structuredContent must be a JSON object.",
+        "onto_list_source_profiles structuredContent must be a JSON object.",
       );
       const sourceProfiles = (profilesStructured as { sourceProfiles?: unknown }).sourceProfiles;
       assert(
@@ -1076,7 +1076,7 @@ async function main(): Promise<void> {
               (profile as { target_material_kind?: unknown }).target_material_kind ===
                 "spreadsheet"
           ),
-        "onto.list_source_profiles.sourceProfiles must include spreadsheet profile.",
+        "onto_list_source_profiles.sourceProfiles must include spreadsheet profile.",
       );
 
       const domainsResult = requireToolResult(requireResult(await client.request("tools/call", {
@@ -1084,14 +1084,14 @@ async function main(): Promise<void> {
         arguments: {
           projectRoot: reconstructProjectRoot,
         },
-      }), "tools/call onto.list_domains"));
+      }), "tools/call onto_list_domains"));
       const domainsStructured = domainsResult.structuredContent;
       assert(
         domainsStructured !== null &&
           typeof domainsStructured === "object" &&
           !Array.isArray(domainsStructured) &&
           Array.isArray((domainsStructured as { domains?: unknown }).domains),
-        "onto.list_domains structuredContent must be a JSON object with a domains array.",
+        "onto_list_domains structuredContent must be a JSON object with a domains array.",
       );
 
       const observeResult = requireToolResult(requireResult(await client.request("tools/call", {
@@ -1101,7 +1101,7 @@ async function main(): Promise<void> {
             targetRefs: ["src/feature.ts"],
             sessionRoot: ".onto/reconstruct/mcp-observe-code-session",
         },
-      }), "tools/call onto.observe_source"));
+      }), "tools/call onto_observe_source"));
       const observed = observeResult.structuredContent as
         | {
             sessionRoot?: unknown;
@@ -1124,11 +1124,11 @@ async function main(): Promise<void> {
           observed.reconstructRecord.runtime_boundary?.semantic_generation ===
             "not_performed" &&
           observed.reconstructRecord.record_stage === "preparation_artifacts_written",
-        "onto.observe_source must return code reconstruct preparation record without semantic generation.",
+        "onto_observe_source must return code reconstruct preparation record without semantic generation.",
       );
       assert(
         typeof observed.artifactRefs?.source_observations === "string",
-        "onto.observe_source must expose source_observations artifact ref.",
+        "onto_observe_source must expose source_observations artifact ref.",
       );
       const sourceObservations = await readYaml<{
         observations?: Array<{
@@ -1182,7 +1182,7 @@ async function main(): Promise<void> {
             directivePath,
             sourceObservationsPath: observed.artifactRefs.source_observations,
           },
-        }), "tools/call onto.validate_reconstruct_directive source_observation"));
+        }), "tools/call onto_validate_reconstruct_directive source_observation"));
       assert(
         (sourceDirectiveValidationResult.structuredContent as {
           validation_status?: unknown;
@@ -1200,7 +1200,7 @@ async function main(): Promise<void> {
           semanticAuthorRealization: "mock",
           confirmationProviderRealization: "mock",
         },
-      }), "tools/call onto.reconstruct"));
+      }), "tools/call onto_reconstruct"));
       const reconstructStructured = reconstructResult.structuredContent as
         | {
             sessionRoot?: unknown;
@@ -1253,7 +1253,7 @@ async function main(): Promise<void> {
           reconstructStructured.reconstructRecord.target_material_kind === "code" &&
           reconstructStructured.reconstructRecord.runtime_boundary?.semantic_generation ===
             "not_performed",
-        "onto.reconstruct must complete the code happy path without runtime semantic generation.",
+        "onto_reconstruct must complete the code happy path without runtime semantic generation.",
       );
       assert(
         Array.isArray(
@@ -1275,7 +1275,7 @@ async function main(): Promise<void> {
           ?.semantic_author_realization === "mock" &&
           reconstructStructured.reconstructRunManifest.execution_profile
             .confirmation_provider_realization === "mock",
-        "onto.reconstruct must expose explicit mock semantic author and confirmation realizations.",
+        "onto_reconstruct must expose explicit mock semantic author and confirmation realizations.",
       );
       const seedCandidateStep =
         reconstructStructured.reconstructRunManifest?.steps?.find(
@@ -1298,7 +1298,7 @@ async function main(): Promise<void> {
           typeof reconstructArtifactRefs.candidate_inventory === "string" &&
           typeof reconstructArtifactRefs.candidate_disposition === "string" &&
           typeof reconstructArtifactRefs.ontology_seed === "string",
-        "onto.reconstruct must expose source observations, candidate disposition, and ontology seed refs.",
+        "onto_reconstruct must expose source observations, candidate disposition, and ontology seed refs.",
       );
       const candidateDispositionValidationResult =
         requireToolResult(requireResult(await client.request("tools/call", {
@@ -1310,7 +1310,7 @@ async function main(): Promise<void> {
             candidateDispositionPath: reconstructArtifactRefs.candidate_disposition,
             sourceObservationsPath: reconstructArtifactRefs.source_observations,
           },
-        }), "tools/call onto.validate_reconstruct_directive candidate_disposition"));
+        }), "tools/call onto_validate_reconstruct_directive candidate_disposition"));
       assert(
         (candidateDispositionValidationResult.structuredContent as {
           validation_status?: unknown;
@@ -1331,7 +1331,7 @@ async function main(): Promise<void> {
             candidateDispositionPath: reconstructArtifactRefs.candidate_disposition,
             sourceObservationsPath: reconstructArtifactRefs.source_observations,
           },
-        }), "tools/call onto.validate_reconstruct_directive ontology_seed"));
+        }), "tools/call onto_validate_reconstruct_directive ontology_seed"));
       assert(
         (ontologySeedValidationResult.structuredContent as {
           validation_status?: unknown;
@@ -1363,7 +1363,7 @@ async function main(): Promise<void> {
             reconstructStructured.finalOutputPath &&
           reconstructStructured.artifactRefs.reconstruct_run_manifest ===
             reconstructStructured.reconstructRunManifestPath,
-        "onto.reconstruct must expose final output, record, and run manifest refs.",
+        "onto_reconstruct must expose final output, record, and run manifest refs.",
       );
       await assertFile(reconstructStructured.finalOutputPath, "reconstruct final output");
       await assertFile(
@@ -1381,11 +1381,11 @@ async function main(): Promise<void> {
             projectRoot: reconstructProjectRoot,
             sessionRoot: ".onto/reconstruct/mcp-code-run",
           },
-        }), "tools/call onto.reconstruct_status"));
+        }), "tools/call onto_reconstruct_status"));
       assert(
         (reconstructStatusResult.structuredContent as { status?: unknown }).status ===
           "completed",
-        "onto.reconstruct_status must report completed reconstruct status.",
+        "onto_reconstruct_status must report completed reconstruct status.",
       );
       assert(
         (reconstructStatusResult.structuredContent as {
@@ -1394,7 +1394,7 @@ async function main(): Promise<void> {
           Array.isArray((reconstructStatusResult.structuredContent as {
             pipelineExecutionLedger?: { units?: unknown };
           }).pipelineExecutionLedger?.units),
-        "onto.reconstruct_status must expose reconstruct PipelineExecutionLedger.",
+        "onto_reconstruct_status must expose reconstruct PipelineExecutionLedger.",
       );
       const reconstructResultReadback =
         requireToolResult(requireResult(await client.request("tools/call", {
@@ -1403,7 +1403,7 @@ async function main(): Promise<void> {
             projectRoot: reconstructProjectRoot,
             sessionRoot: ".onto/reconstruct/mcp-code-run",
           },
-        }), "tools/call onto.reconstruct_result"));
+        }), "tools/call onto_reconstruct_result"));
       assert(
         typeof (reconstructResultReadback.structuredContent as {
           finalOutputText?: unknown;
@@ -1412,7 +1412,7 @@ async function main(): Promise<void> {
           (reconstructResultReadback.structuredContent as {
             reconstructRunManifest?: unknown;
           }).reconstructRunManifest !== null,
-        "onto.reconstruct_result must expose final output text and run manifest.",
+        "onto_reconstruct_result must expose final output text and run manifest.",
       );
 
       const outsideReconstructSessionRoot = await fs.mkdtemp(
@@ -1442,7 +1442,7 @@ async function main(): Promise<void> {
               projectRoot: reconstructProjectRoot,
               sessionRoot: ".onto/reconstruct/escaped-session",
             },
-          }), "tools/call onto.reconstruct_status escaped session"));
+          }), "tools/call onto_reconstruct_status escaped session"));
         assert(
           requireStructuredFailure(reconstructBoundaryError.structuredContent)
             .failure.mcp_error_code ===
@@ -1472,7 +1472,7 @@ async function main(): Promise<void> {
         deliberation: "controlled_lens_deliberation",
         executorRealization: "mock",
       },
-    }), "tools/call onto.review"));
+    }), "tools/call onto_review"));
     const progressNotifications = assertProgressNotifications(
       client.notifications,
       reviewProgressToken,
@@ -1486,7 +1486,7 @@ async function main(): Promise<void> {
     const reviewTargetProfilePath = structured.artifactRefs?.review_target_profile;
     assert(
       typeof reviewTargetProfilePath === "string",
-      "onto.review structured artifact refs must include review_target_profile.",
+      "onto_review structured artifact refs must include review_target_profile.",
     );
 
     const numericProgressToken = 42;
@@ -1504,7 +1504,7 @@ async function main(): Promise<void> {
         deliberation: "controlled_lens_deliberation",
         executorRealization: "mock",
       },
-    }), "tools/call onto.review numeric progress token"));
+    }), "tools/call onto_review numeric progress token"));
     assertProgressNotifications(
       client.notifications.slice(beforeNumericProgress),
       numericProgressToken,
@@ -1552,7 +1552,7 @@ async function main(): Promise<void> {
     const reviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_result",
       arguments: { sessionRoot, projectionLevel: "full" },
-    }), "tools/call onto.review_result"));
+    }), "tools/call onto_review_result"));
     const reviewResultStructured = reviewResultTool.structuredContent as
       | {
           reviewRunManifestPath?: unknown;
@@ -1567,23 +1567,23 @@ async function main(): Promise<void> {
       reviewResultStructured &&
         typeof reviewResultStructured.reviewRunManifestPath === "string" &&
         reviewResultStructured.reviewRunManifestPath === structured.reviewRunManifestPath,
-      "onto.review_result must expose reviewRunManifestPath.",
+      "onto_review_result must expose reviewRunManifestPath.",
     );
     assert(
       reviewResultStructured.reviewRecord !== undefined,
-      "onto.review_result must expose ReviewRecord.",
+      "onto_review_result must expose ReviewRecord.",
     );
     assert(
       typeof reviewResultStructured.finalOutputText === "string",
-      "onto.review_result must expose finalOutputText.",
+      "onto_review_result must expose finalOutputText.",
     );
     assertClassificationSummary(
       reviewResultStructured.resultClassificationSummary,
-      "onto.review_result resultClassificationSummary",
+      "onto_review_result resultClassificationSummary",
     );
     assert(
       typeof reviewResultStructured.llmPresentation?.finalResult?.prompt === "string",
-      "onto.review_result must expose llmPresentation.finalResult.",
+      "onto_review_result must expose llmPresentation.finalResult.",
     );
     const fullFinalInput = reviewResultStructured.llmPresentation?.finalResult?.input as
       | {
@@ -1594,20 +1594,20 @@ async function main(): Promise<void> {
     assert(
       fullFinalInput?.review_record !== null &&
         typeof fullFinalInput?.review_record === "object",
-      "full onto.review_result finalResult input must expose ReviewRecord.",
+      "full onto_review_result finalResult input must expose ReviewRecord.",
     );
     assertClassificationSummary(
       fullFinalInput?.result_classification_summary,
-      "full onto.review_result llmPresentation.finalResult classification summary",
+      "full onto_review_result llmPresentation.finalResult classification summary",
     );
     assertCompletedRouteVisibility(
       reviewResultStructured.routeVisibility,
-      "onto.review_result",
+      "onto_review_result",
     );
     const standardReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_result",
       arguments: { sessionRoot },
-    }), "tools/call onto.review_result standard default"));
+    }), "tools/call onto_review_result standard default"));
     const standardReviewResult = standardReviewResultTool.structuredContent as
       | {
           projectionLevel?: unknown;
@@ -1621,11 +1621,11 @@ async function main(): Promise<void> {
       standardReviewResult?.projectionLevel === "standard" &&
         standardReviewResult.reviewRecord === undefined &&
         standardReviewResult.finalOutputText === undefined,
-      "standard onto.review_result must be default and omit ReviewRecord/final output text.",
+      "standard onto_review_result must be default and omit ReviewRecord/final output text.",
     );
     assertCompactClassificationSummary(
       standardReviewResult.resultClassificationSummary,
-      "standard onto.review_result resultClassificationSummary",
+      "standard onto_review_result resultClassificationSummary",
     );
     assertCompactClassificationSummary(
       (
@@ -1633,7 +1633,7 @@ async function main(): Promise<void> {
           | { result_classification_summary?: unknown }
           | undefined
       )?.result_classification_summary,
-      "standard onto.review_result llmPresentation.finalResult classification summary",
+      "standard onto_review_result llmPresentation.finalResult classification summary",
     );
     assertCompactClassificationSummary(
       (
@@ -1641,12 +1641,12 @@ async function main(): Promise<void> {
           | { result_classification_summary?: unknown }
           | undefined
       )?.result_classification_summary,
-      "standard onto.review_result llmPresentation.progress classification summary",
+      "standard onto_review_result llmPresentation.progress classification summary",
     );
     const compactReviewResultTool = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_result",
       arguments: { sessionRoot, projectionLevel: "compact" },
-    }), "tools/call onto.review_result compact"));
+    }), "tools/call onto_review_result compact"));
     const compactReviewResult = compactReviewResultTool.structuredContent as
       | {
           projectionLevel?: unknown;
@@ -1660,15 +1660,15 @@ async function main(): Promise<void> {
       compactReviewResult?.projectionLevel === "compact" &&
         compactReviewResult.reviewRecord === undefined &&
         compactReviewResult.finalOutputText === undefined,
-      "compact onto.review_result must omit ReviewRecord and final output text.",
+      "compact onto_review_result must omit ReviewRecord and final output text.",
     );
     assertCompactClassificationSummary(
       compactReviewResult.resultClassificationSummary,
-      "compact onto.review_result resultClassificationSummary",
+      "compact onto_review_result resultClassificationSummary",
     );
     assert(
       compactReviewResult.targetMaterialSupport?.supportStatus === "supported",
-      "compact onto.review_result must expose supported code material support.",
+      "compact onto_review_result must expose supported code material support.",
     );
 
     const deliberationPath = path.join(sessionRoot, "deliberation.md");
@@ -2000,10 +2000,10 @@ async function main(): Promise<void> {
         deliberation: "controlled_lens_deliberation",
         executorRealization: "mock",
       },
-    }), "tools/call onto.review single lens"));
+    }), "tools/call onto_review single lens"));
     assertNoProgressNotifications(
       client.notifications.slice(beforeNoTokenProgress),
-      "onto.review without _meta.progressToken",
+      "onto_review without _meta.progressToken",
     );
     const singleLensStructured = requireReviewRunStructured(
       singleLensCallResult.structuredContent,
@@ -2089,7 +2089,7 @@ async function main(): Promise<void> {
         lensIds: ["logic"],
         executorRealization: "mock",
       },
-    }), "tools/call onto.prepare_review explicit bundle target"));
+    }), "tools/call onto_prepare_review explicit bundle target"));
     const preparedBundle = requirePreparedReviewStructured(
       bundlePrepareResult.structuredContent,
     );
@@ -2131,7 +2131,7 @@ async function main(): Promise<void> {
         lensIds: ["logic"],
         executorRealization: "mock",
       },
-    }), "tools/call onto.prepare_review target shape mismatch"));
+    }), "tools/call onto_prepare_review target shape mismatch"));
     assert(
       requireStructuredFailure(targetShapeError.structuredContent).failure.mcp_error_code ===
         "ONTO_REVIEW_TARGET_BINDING_FAILED",
@@ -2153,7 +2153,7 @@ async function main(): Promise<void> {
         lensIds: ["logic"],
         executorRealization: "mock",
       },
-    }), "tools/call onto.prepare_review bundle boundary guard"));
+    }), "tools/call onto_prepare_review bundle boundary guard"));
     assert(
       requireStructuredFailure(boundaryError.structuredContent).failure.mcp_error_code ===
         "ONTO_REVIEW_TARGET_BINDING_FAILED",
@@ -2174,7 +2174,7 @@ async function main(): Promise<void> {
           lensIds: ["logic"],
           executorRealization: "mock",
         },
-      }), "tools/call onto.prepare_review git diff target profile"));
+      }), "tools/call onto_prepare_review git diff target profile"));
       const preparedDiff = requirePreparedReviewStructured(
         diffPrepareResult.structuredContent,
       );
@@ -2208,7 +2208,7 @@ async function main(): Promise<void> {
         lensIds: ["logic"],
         executorRealization: "mock",
       },
-    }), "tools/call onto.prepare_review domain context admission"));
+    }), "tools/call onto_prepare_review domain context admission"));
     const preparedDomain = requirePreparedReviewStructured(
       domainPrepareResult.structuredContent,
     );
@@ -2219,7 +2219,7 @@ async function main(): Promise<void> {
       preparedDomainStructured?.routeVisibility?.source === "execution-plan" &&
         preparedDomainStructured.routeVisibility.executionRealization === "direct-call" &&
         preparedDomainStructured.routeVisibility.workerExecutor === "mock",
-      "onto.prepare_review must expose execution-plan routeVisibility.",
+      "onto_prepare_review must expose execution-plan routeVisibility.",
     );
     const preparedManifestPath = path.join(
       preparedDomain.sessionRoot,
@@ -2289,10 +2289,10 @@ async function main(): Promise<void> {
           reviewMode: "core-axis",
           executorRealization: "mock",
         },
-      }), "tools/call onto.review retired config"));
+      }), "tools/call onto_review retired config"));
       assertNoProgressNotifications(
         client.notifications.slice(beforeInvalidTokenProgress),
-        "onto.review with invalid _meta.progressToken",
+        "onto_review with invalid _meta.progressToken",
       );
       const structuredFailure = requireStructuredFailure(
         retiredConfigError.structuredContent,
@@ -2339,7 +2339,7 @@ async function main(): Promise<void> {
           reviewMode: "core-axis",
           executorRealization: "mock",
         },
-      }), "tools/call onto.review invalid settings"));
+      }), "tools/call onto_review invalid settings"));
       const settingsFailure = requireStructuredFailure(
         settingsValidationError.structuredContent,
       );
@@ -2367,7 +2367,7 @@ async function main(): Promise<void> {
         sessionRoot: relativeSessionRoot,
         projectRoot,
       },
-    }), "tools/call onto.review_status relative sessionRoot"));
+    }), "tools/call onto_review_status relative sessionRoot"));
     const relativeStatus = relativeStatusResult.structuredContent as
       | {
           sessionRoot?: unknown;
@@ -2387,20 +2387,20 @@ async function main(): Promise<void> {
       | undefined;
     assert(
       relativeStatus?.status === "completed",
-      "relative onto.review_status must resolve completed status.",
+      "relative onto_review_status must resolve completed status.",
     );
     assert(
       typeof relativeStatus.sessionRoot === "string" &&
         path.resolve(relativeStatus.sessionRoot) === sessionRoot,
-      "relative onto.review_status must return canonical sessionRoot.",
+      "relative onto_review_status must return canonical sessionRoot.",
     );
     assertCompletedRouteVisibility(
       relativeStatus.routeVisibility,
-      "onto.review_status",
+      "onto_review_status",
     );
     assert(
       relativeStatus.llmPresentation === undefined,
-      "default onto.review_status must omit llmPresentation.",
+      "default onto_review_status must omit llmPresentation.",
     );
     assert(
       relativeStatus.pipelineExecutionLedger?.pipeline === "review" &&
@@ -2409,7 +2409,7 @@ async function main(): Promise<void> {
         ) &&
         relativeStatus.continuationPlan?.eligible === false &&
         relativeStatus.continuationPlan.unitLedger === undefined,
-      "onto.review_status must expose review PipelineExecutionLedger and completed continuation projection.",
+      "onto_review_status must expose review PipelineExecutionLedger and completed continuation projection.",
     );
     const fullStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_status",
@@ -2418,7 +2418,7 @@ async function main(): Promise<void> {
         projectRoot,
         projectionLevel: "full",
       },
-    }), "tools/call onto.review_status full relative sessionRoot"));
+    }), "tools/call onto_review_status full relative sessionRoot"));
     const fullStatus = fullStatusResult.structuredContent as
       | {
           status?: unknown;
@@ -2427,7 +2427,7 @@ async function main(): Promise<void> {
       | undefined;
     assertProgressPresentation(
       fullStatus?.llmPresentation,
-      "full onto.review_status",
+      "full onto_review_status",
       "completed",
     );
     assertProgressNotificationsMatchReview(
@@ -2438,7 +2438,7 @@ async function main(): Promise<void> {
     const completedRequestHash = structured.runHandle?.requestHash;
     assert(
       typeof completedRequestHash === "string" && completedRequestHash.length >= 32,
-      "completed onto.review must expose runHandle.requestHash for recovery.",
+      "completed onto_review must expose runHandle.requestHash for recovery.",
     );
     const latestStatusResult = requireToolResult(requireResult(await client.request("tools/call", {
       name: "onto_review_status",
@@ -2449,7 +2449,7 @@ async function main(): Promise<void> {
         domain: "none",
         requestHash: completedRequestHash,
       },
-    }), "tools/call onto.review_status latest recovery"));
+    }), "tools/call onto_review_status latest recovery"));
     const latestStatus = latestStatusResult.structuredContent as
       | {
           sessionRoot?: unknown;
@@ -2462,7 +2462,7 @@ async function main(): Promise<void> {
         typeof latestStatus.sessionRoot === "string" &&
         path.resolve(latestStatus.sessionRoot) === sessionRoot &&
         latestStatus.latestSessionMatches?.[0]?.requestHash === completedRequestHash,
-      "onto.review_status latest recovery must return the matching completed session.",
+      "onto_review_status latest recovery must return the matching completed session.",
     );
 
     const delayedHome = await fs.mkdtemp(
@@ -2498,7 +2498,7 @@ async function main(): Promise<void> {
           executorRealization: "mock",
           returnRunningAfterMs: 0,
         },
-      }), "tools/call onto.review delayed running"));
+      }), "tools/call onto_review delayed running"));
       const runningStructured = requireReviewRunningStructured(
         runningCall.structuredContent,
       );
@@ -2516,7 +2516,7 @@ async function main(): Promise<void> {
           domain: "none",
           requestHash: runningRequestHash,
         },
-      }), "tools/call onto.review_status delayed latest"));
+      }), "tools/call onto_review_status delayed latest"));
       const runningLatestStructured = runningLatest.structuredContent as
         | { status?: unknown; sessionRoot?: unknown }
         | undefined;
@@ -2535,7 +2535,7 @@ async function main(): Promise<void> {
           sessionRoot: runningStructured.sessionRoot,
           executorRealization: "mock",
         },
-      }), "tools/call onto.review_continue delayed active"));
+      }), "tools/call onto_review_continue delayed active"));
       const duplicateStructured = duplicateContinue.structuredContent as
         | { decision?: unknown; activeAttempt?: { attemptId?: unknown } }
         | undefined;
@@ -2551,7 +2551,7 @@ async function main(): Promise<void> {
           sessionRoot: runningStructured.sessionRoot,
           reason: "MCP conformance cancellation request",
         },
-      }), "tools/call onto.review_cancel delayed active"));
+      }), "tools/call onto_review_cancel delayed active"));
       assert(
         typeof (cancelResult.structuredContent as { cancelRequestPath?: unknown })
           .cancelRequestPath === "string",
@@ -2602,7 +2602,7 @@ async function main(): Promise<void> {
       arguments: {
         sessionRoot: path.join(os.tmpdir(), "not-owned-review-session"),
       },
-    }), "tools/call onto.review_status disclosure block"));
+    }), "tools/call onto_review_status disclosure block"));
     const blockedSessionFailure = requireStructuredFailure(
       blockedSessionRead.structuredContent,
     );
@@ -2647,7 +2647,7 @@ async function main(): Promise<void> {
           reviewMode: "core-axis",
           executorRealization: "mock",
         },
-      }), "tools/call onto.review malformed output"));
+      }), "tools/call onto_review malformed output"));
       const malformedFailure = requireStructuredFailure(
         malformedResult.structuredContent,
       );
@@ -2684,7 +2684,7 @@ async function main(): Promise<void> {
           sessionRoot: malformedSessionRoot,
           projectRoot,
         },
-      }), "tools/call onto.review_status malformed halted session"));
+      }), "tools/call onto_review_status malformed halted session"));
       const malformedStatus = malformedStatusResult.structuredContent as
         | {
             status?: unknown;
@@ -2723,13 +2723,13 @@ async function main(): Promise<void> {
           projectRoot,
           projectionLevel: "full",
         },
-      }), "tools/call onto.review_status malformed halted session full"));
+      }), "tools/call onto_review_status malformed halted session full"));
       const malformedFullStatus = malformedFullStatusResult.structuredContent as
         | { llmPresentation?: ReviewRunStructured["llmPresentation"] }
         | undefined;
       assertProgressPresentation(
         malformedFullStatus?.llmPresentation,
-        "full malformed onto.review_status",
+        "full malformed onto_review_status",
         "halted_partial",
       );
       assert(
@@ -2745,7 +2745,7 @@ async function main(): Promise<void> {
             projectRoot,
             executorRealization: "mock",
           },
-        }), "tools/call onto.review_continue malformed halted session"));
+        }), "tools/call onto_review_continue malformed halted session"));
       const continuedMalformed = requireReviewContinueStructured(
         continuedMalformedResult.structuredContent,
       );
@@ -2810,7 +2810,7 @@ async function main(): Promise<void> {
             sessionRoot: malformedSessionRoot,
             projectRoot,
           },
-        }), "tools/call onto.review_status continued malformed session"));
+        }), "tools/call onto_review_status continued malformed session"));
       assert(
         (continuedStatusResult.structuredContent as { status?: unknown }).status ===
           "completed",

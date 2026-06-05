@@ -432,7 +432,7 @@ async function runMcp(
     name: "onto_review",
     _meta: { progressToken },
     arguments: requestArgs(projectRoot, fixture),
-  }), `tools/call onto.review ${fixture.name}`));
+  }), `tools/call onto_review ${fixture.name}`));
   const structured = result.structuredContent;
   assert(isRecord(structured), `${fixture.name}: MCP structuredContent missing.`);
   const sessionRoot = structured.sessionRoot;
@@ -531,7 +531,7 @@ async function expectMcpFailure(client: McpClient, projectRoot: string): Promise
       domain: "software-engineering",
       noDomain: true,
     },
-  }), "tools/call onto.review conflict failure"));
+  }), "tools/call onto_review conflict failure"));
 }
 
 async function prepareFixtureProject(): Promise<string> {

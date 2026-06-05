@@ -19,12 +19,12 @@ Codex, Claude, 또는 다른 host가 사용자의 자연어 요청을 받아 플
 있게 한다.
 
 ```text
-onto.review(target, intent, domain?, review_mode?, deliberation?)
-onto.review_status(session_id)
-onto.review_result(session_id)
-onto.list_lenses()
-onto.list_domains()
-onto.prepare_review(target, intent, ...)
+onto_review(target, intent, domain?, review_mode?, deliberation?)
+onto_review_status(session_id)
+onto_review_result(session_id)
+onto_list_lenses()
+onto_list_domains()
+onto_prepare_review(target, intent, ...)
 ```
 
 사용자에게 중요한 결과는 “어느 host에서 실행하든 같은 `onto` 의미론과

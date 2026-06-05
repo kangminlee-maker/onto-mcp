@@ -105,15 +105,10 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 
 ## 4. Canonical Bounded Step
 
-현재 TS core bounded step:
-
-```bash
-npm run review:run-prompt-execution -- \
-  --project-root {project_root} \
-  --session-root {session_root} \
-  --executor-bin {executor_bin} \
-  --executor-arg {executor_arg}
-```
+현재 TS core bounded step은 host-facing command가 아니라 Core API가 호출하는
+내부 runtime step이다. Canonical product entrypoint는 `onto_review`이며,
+prompt execution dispatch는 `src/core-runtime/review/review-invocation-runner.ts`
+에서 `src/core-runtime/cli/run-review-prompt-execution.ts`로 전달된다.
 
 옵션:
 
@@ -122,17 +117,8 @@ npm run review:run-prompt-execution -- \
 
 를 통해 synthesize만 다른 realization으로 분리할 수 있다.
 
-현재 repo-local actual realization 예:
-
-```bash
-npm run review:run-prompt-execution -- \
-  --project-root {project_root} \
-  --session-root {session_root} \
-  --executor-bin npm \
-  --executor-arg=run \
-  --executor-arg=review:codex-unit-executor \
-  --executor-arg=--
-```
+Repo-local 검증은 `npm run test:review:invocation-runner`와
+`npm run test:mcp:review`가 adapter/Core API/MCP artifact truth를 비교한다.
 
 현재 구현에서 prompt execution runner를 통해 실행되는 execution profile:
 
@@ -182,6 +168,6 @@ authoritative artifact path와 output seat를 고정하는 쪽을 우선한다.
 
 다음 단계는 아래다.
 
-1. `review:start-session -> review:run-prompt-execution -> review:complete-session`를 `onto.review`의 canonical bounded runtime path로 유지한다
+1. `onto_review`가 Core API review runner를 통해 prepare, prompt execution, completion을 같은 session artifact truth 아래에서 수행하도록 유지한다
 2. 실제 host realization이 이 contract를 따르도록 연결한다
 3. provider별 controlled deliberation conformance test를 추가한다

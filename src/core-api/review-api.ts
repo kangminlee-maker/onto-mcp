@@ -833,7 +833,7 @@ interface ReviewActiveAttemptArtifact {
   requested_frontier_units: string[];
   run_control: {
     stale_after_seconds: number;
-    source_tool: "onto.review" | "onto.review_continue";
+    source_tool: "onto_review" | "onto_review_continue";
     request_hash: string | null;
   };
   latest_observed_artifact_ref: string | null;
@@ -1180,7 +1180,7 @@ async function writeActiveAttemptStarted(args: {
   sessionRoot: string;
   attemptId: string;
   attemptKind: ReviewActiveAttemptProjection["attemptKind"];
-  sourceTool: "onto.review" | "onto.review_continue";
+  sourceTool: "onto_review" | "onto_review_continue";
   requestHash: string | null;
   activeUnits: string[];
   requestedFrontierUnits?: string[];
@@ -3257,7 +3257,7 @@ export function createOntoReviewCoreApi(
         appendRuntimeStatusEventSync({
           pipeline: "review",
           sessionRoot: resolved,
-          sourceLabel: "onto.review",
+          sourceLabel: "onto_review",
           message: "review session observed",
           stageId: "start",
         });
@@ -3283,7 +3283,7 @@ export function createOntoReviewCoreApi(
             sessionRoot: resolved,
             attemptId: invocationId,
             attemptKind: "initial_review",
-            sourceTool: "onto.review",
+            sourceTool: "onto_review",
             requestHash,
             activeUnits: activeUnitsForInitialReview(executionPlan),
           });
@@ -3299,7 +3299,7 @@ export function createOntoReviewCoreApi(
           appendRuntimeStatusEventSync({
             pipeline: "review",
             sessionRoot: runtimeSessionRoot,
-            sourceLabel: "onto.review",
+            sourceLabel: "onto_review",
             message: `${event.status}: ${event.message}`,
             stageId: event.phase,
           });
@@ -3567,7 +3567,7 @@ export function createOntoReviewCoreApi(
       appendRuntimeStatusEventSync({
         pipeline: "review",
         sessionRoot: resolvedSessionRoot,
-        sourceLabel: "onto.review_continue",
+        sourceLabel: "onto_review_continue",
         message: "review continuation starting",
         stageId: "continue",
       });
@@ -3841,7 +3841,7 @@ export function createOntoReviewCoreApi(
         sessionRoot: resolvedSessionRoot,
         attemptId,
         attemptKind: "continuation",
-        sourceTool: "onto.review_continue",
+        sourceTool: "onto_review_continue",
         requestHash: null,
         activeUnits: continuationPlan.frontierUnits.map((unit) => unit.unitId),
         requestedFrontierUnits: request.targetUnits ?? [],

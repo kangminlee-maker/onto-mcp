@@ -579,7 +579,7 @@ export function createOntoReconstructCoreApi(
       appendRuntimeStatusEventSync({
         pipeline: "reconstruct",
         sessionRoot,
-        sourceLabel: "onto.reconstruct",
+        sourceLabel: "onto_reconstruct",
         message: "reconstruct session starting",
         stageId: "start",
       });
@@ -627,7 +627,7 @@ export function createOntoReconstructCoreApi(
         appendRuntimeStatusEventSync({
           pipeline: "reconstruct",
           sessionRoot,
-          sourceLabel: "onto.reconstruct",
+          sourceLabel: "onto_reconstruct",
           message: "reconstruct session completed",
           stageId: "complete",
         });
@@ -636,7 +636,7 @@ export function createOntoReconstructCoreApi(
         appendRuntimeStatusEventSync({
           pipeline: "reconstruct",
           sessionRoot,
-          sourceLabel: "onto.reconstruct",
+          sourceLabel: "onto_reconstruct",
           message: `reconstruct session failed: ${error instanceof Error ? error.message : String(error)}`,
           stageId: "complete",
         });

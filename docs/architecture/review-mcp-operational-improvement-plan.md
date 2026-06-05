@@ -4,7 +4,7 @@ Status: Implemented locally; kept as operational design reference
 
 Date: 2026-05-27
 
-Purpose: close the operational gaps observed while running `onto.review`
+Purpose: close the operational gaps observed while running `onto_review`
 through the MCP-native surface, without changing review lens semantics or
 creating a second review artifact truth.
 
@@ -38,19 +38,19 @@ Verified facts:
 
 Operator-observed facts from the MCP session:
 
-- A long-running `onto.review` call exceeded the host tool timeout before the
+- A long-running `onto_review` call exceeded the host tool timeout before the
   run completed.
 - The review session continued producing artifacts after the host-level timeout.
-- `onto.review_status` and `onto.review_continue` were not useful as immediate
+- `onto_review_status` and `onto_review_continue` were not useful as immediate
   in-flight recovery surfaces during that long-running window.
-- `onto.review_result` worked quickly after the session completed.
+- `onto_review_result` worked quickly after the session completed.
 - The operator had to discover the session root by searching artifacts when the
   initial tool call timed out before returning a durable handle.
 
 Existing design facts:
 
 - `docs/architecture/mcp-native-tool-surface.md` already names
-  `onto.review_status`, `onto.review_continue`, native MCP progress, and
+  `onto_review_status`, `onto_review_continue`, native MCP progress, and
   `llmPresentation`.
 - `docs/architecture/review-continuation-surface.md` already designs
   artifact-backed continuation.
@@ -58,8 +58,8 @@ Existing design facts:
   concepts.
 
 Therefore the missing work is not a new review meaning model. The missing work
-is a reliable long-running operation contract across `onto.review`,
-`onto.review_status`, `onto.review_continue`, and `onto.review_result`.
+is a reliable long-running operation contract across `onto_review`,
+`onto_review_status`, `onto_review_continue`, and `onto_review_result`.
 
 ## 2. Design Goals
 
@@ -87,9 +87,9 @@ is a reliable long-running operation contract across `onto.review`,
 
 | ID | Problem | Improvement |
 |---|---|---|
-| OR-001 | Long-running `onto.review` can outlive the host call. | Return a durable `ReviewRunHandle` early, then let background execution continue under the same session. |
+| OR-001 | Long-running `onto_review` can outlive the host call. | Return a durable `ReviewRunHandle` early, then let background execution continue under the same session. |
 | OR-002 | Host timeout response can omit session identity. | Emit session identity before long work begins and make timeout-safe responses include the last known handle. |
-| OR-003 | Status can be unusable during active execution. | Make `onto.review_status` a lightweight artifact-backed reader with bounded liveness, never a worker wait. |
+| OR-003 | Status can be unusable during active execution. | Make `onto_review_status` a lightweight artifact-backed reader with bounded liveness, never a worker wait. |
 | OR-004 | `review_continue` can be invoked while a unit is already running. | Add active-attempt detection and return `already_running` instead of dispatching duplicate frontier work. |
 | OR-005 | A caller may not know which session was just started. | Add latest-session lookup by target/domain/request hash and expose it from status/result error recovery. |
 | OR-006 | Progress is not reliably visible without manual log tailing. | Project runtime progress through native MCP notifications when possible and status polling otherwise. |
@@ -104,7 +104,7 @@ is a reliable long-running operation contract across `onto.review`,
 
 ### 5.1 `ReviewRunHandle`
 
-`onto.review` should return or emit a durable handle before dispatching
+`onto_review` should return or emit a durable handle before dispatching
 long-running units:
 
 ```ts
@@ -151,7 +151,7 @@ review truth.
 
 ### 5.2 Long-Running Response Rule
 
-`onto.review` should follow a bounded synchronous window:
+`onto_review` should follow a bounded synchronous window:
 
 1. materialize interpretation, binding, execution plan, and session metadata;
 2. return or emit `ReviewRunHandle`;
@@ -164,7 +164,7 @@ Done when a host-level timeout cannot leave the caller without `sessionRoot`.
 
 ### 5.3 Status Read Rule
 
-`onto.review_status(sessionRoot)` must only read artifacts and lightweight
+`onto_review_status(sessionRoot)` must only read artifacts and lightweight
 runtime state. It must not wait for a running worker.
 
 Minimum status projection mirrors the exported Core API status shape:
@@ -234,7 +234,7 @@ derived view.
 
 ### 5.4 Continue Guard
 
-`onto.review_continue` must reject or no-op when the selected frontier is
+`onto_review_continue` must reject or no-op when the selected frontier is
 already active.
 
 Result shape mirrors the exported Core API result. `decision` is the
@@ -291,7 +291,7 @@ Use two paths:
 
 - native MCP `notifications/progress` when the caller supplies
   `_meta.progressToken`;
-- `onto.review_status` polling when native progress is unavailable.
+- `onto_review_status` polling when native progress is unavailable.
 
 Both paths must project the same progress step ids from
 `review-run-manifest.yaml.execution_contract.execution_step_ids`.
@@ -320,7 +320,7 @@ returns `resolution: "unknown"` with an empty suggestion list.
 
 ### 5.8 Result Projection Levels
 
-`onto.review_result` should support compact and full projections:
+`onto_review_result` should support compact and full projections:
 
 - compact: status, classification summary, material issues, key artifact refs;
 - standard: compact plus final output text;
@@ -449,7 +449,7 @@ eventual result retrieval.
 ### Slice 1: Handle And Status Recovery
 
 - Emit `ReviewRunHandle` as soon as session metadata and execution plan exist.
-- Ensure `onto.review_status` can read active sessions without blocking.
+- Ensure `onto_review_status` can read active sessions without blocking.
 - Add latest-session lookup for recovery after a lost handle.
 - Add tests for long-running review with early handle retrieval.
 
@@ -460,7 +460,7 @@ access or artifact search.
 
 - Add active-attempt metadata to the review run manifest or a session-local
   attempt artifact.
-- Make `onto.review_continue` return `already_running` for active units.
+- Make `onto_review_continue` return `already_running` for active units.
 - Preserve current continuation frontier rules for failed or missing units.
 
 Done when repeated continue calls cannot duplicate running work.
@@ -512,9 +512,9 @@ Required checks:
 
 ## 9. Done When
 
-- `onto.review` cannot lose session identity during long-running execution.
-- `onto.review_status` is the primary active-run read surface.
-- `onto.review_continue` only continues eligible halted or missing frontiers.
+- `onto_review` cannot lose session identity during long-running execution.
+- `onto_review_status` is the primary active-run read surface.
+- `onto_review_continue` only continues eligible halted or missing frontiers.
 - Native progress and polling status expose the same runtime progress truth.
 - Result retrieval defaults to bounded output while preserving artifact refs.
 - Boundary, domain, material-support, timeout, cancellation, and environment

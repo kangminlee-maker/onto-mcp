@@ -13,7 +13,7 @@ Create one typed review invocation runner that the MCP product surface and
 internal adapter can call:
 
 ```text
-argv adapter             MCP onto.review
+argv adapter             MCP onto_review
         |                     |
         v                     v
     parse argv            parse tool args
@@ -595,7 +595,7 @@ Done when:
 
 - `src/core-api/review-api.ts` has no review execution argv construction
 - `src/core-runtime/cli/review-invoke.ts` calls the same runner for execution
-- MCP `onto.review` behavior is unchanged
+- MCP `onto_review` behavior is unchanged
 - native MCP progress does not depend on console parsing
 - adapter/MCP equivalence fixtures pass
 

@@ -8,25 +8,25 @@ This layer should stay thin:
 - validate tool inputs;
 - call the TS core API;
 - return structured status, result, and artifact refs;
-- emit `notifications/progress` during `onto.review` when the caller supplies
+- emit `notifications/progress` during `onto_review` when the caller supplies
   `_meta.progressToken`;
 - avoid redefining lens, domain, review, reconstruct, or synthesis semantics.
 
-`onto.review` is timeout-safe for MCP hosts: the server passes a bounded wait
+`onto_review` is timeout-safe for MCP hosts: the server passes a bounded wait
 budget to the Core API, so a long review can return `status="running"` with a
 durable `runHandle` before the host call times out. The review keeps running in
-the same session. `onto.review_status` can poll by `sessionRoot`, or recover the
+the same session. `onto_review_status` can poll by `sessionRoot`, or recover the
 latest matching session with `latest=true` plus optional `target`, `domain`, and
 `requestHash` filters. `requestHash` is a canonical artifact-derived request
 identity hash that includes target scope and selected review shape when
 available.
 
 Progress notifications are a host transport convenience. The canonical progress
-read model remains `onto.review_status` plus artifact-backed
+read model remains `onto_review_status` plus artifact-backed
 `llmPresentation.progress`. The MCP layer forwards Core API progress events and
 does not define its own progress step taxonomy.
 
-`onto.review_continue` is the write surface when
+`onto_review_continue` is the write surface when
 `runControl.continuationAvailable` is true, including prepared, halted,
 failed-attempt, and stale-active sessions. It derives the frontier from the
 session PipelineExecutionLedger, reuses trusted units, accepts only the current
@@ -40,7 +40,7 @@ The MCP result is a projection over Core API `ReviewContinueResult`: it
 preserves the same decision values while shaping session/status/artifact/failure
 refs, continuation attempt facts, and active-attempt facts for MCP callers.
 
-`onto.review_cancel` requests cooperative cancellation for a running session.
+`onto_review_cancel` requests cooperative cancellation for a running session.
 It writes `review-cancel-request.yaml`; the runner observes that request at the
 next runtime cancellation checkpoint and closes the session as
 `halted_partial` with `halt_phase="cancellation"`. Host-call timeout still means
@@ -49,7 +49,7 @@ request is made. The tool does not write cancellation artifacts for prepared,
 terminal, failed, or stale sessions; those return a not-cancellable decision and
 the current run-control facts.
 
-`onto.review_result` defaults to a bounded `standard` projection. Callers can ask
+`onto_review_result` defaults to a bounded `standard` projection. Callers can ask
 for `compact` to omit final output text and the full ReviewRecord, or `full` to
 read the complete record and final output text. Status and result projections
 also surface target material support and non-fatal environment warnings from the
@@ -68,7 +68,7 @@ They return artifact refs, validation status, stage progress, count summaries,
 records, manifests, and final output text; they do not author ontology Seeds,
 claim realization, failure classifications, revision proposals, or design
 decisions.
-`onto.reconstruct` defaults to direct-call semantic authoring and direct-call
+`onto_reconstruct` defaults to direct-call semantic authoring and direct-call
 host-mediated confirmation through the configured `llm` provider. Missing
 provider/model/credentials and invalid LLM-authored artifact shapes fail loud;
 test-only mock helpers are not exposed as product completion evidence.

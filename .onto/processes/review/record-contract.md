@@ -392,14 +392,10 @@ shared_phenomenon_summary:
 6. `synthesize`가 `synthesis.md` 작성
 7. 마지막에 bounded TS assembler가 `review-record.yaml`을 assemble
 
-현재 bounded runtime replacement는 아래 TS core path를 따른다.
-
-```bash
-npm run review:assemble-record -- \
-  --project-root {project} \
-  --session-root "{session path}" \
-  --request-text "{original user request}"
-```
+현재 bounded runtime replacement는 Core API review runner가 호출하는
+`src/core-runtime/cli/assemble-review-record.ts` 내부 step을 따른다.
+이 step은 host-facing command가 아니며, product-facing review 실행은
+`onto_review` MCP tool call을 통해 들어온다.
 
 중요:
 

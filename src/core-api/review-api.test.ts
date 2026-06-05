@@ -568,7 +568,7 @@ describe("createOntoReviewCoreApi", () => {
       requested_frontier_units: [],
       run_control: {
         stale_after_seconds: 1200,
-        source_tool: "onto.review",
+        source_tool: "onto_review",
         request_hash: null,
       },
       latest_observed_artifact_ref: null,
