@@ -76,9 +76,9 @@ export function normalizeLlmModelSwitcher(
   const provider = config.provider;
   const auth = config.auth ?? defaultAuthForProvider(provider);
 
-  if (auth === "oauth" && provider !== "openai") {
+  if (auth === "oauth" && provider !== "openai" && provider !== "anthropic") {
     throw new Error(
-      `auth=oauth is only supported with provider=openai; got provider=${provider}.`,
+      `auth=oauth is only supported with provider=openai or provider=anthropic; got provider=${provider}.`,
     );
   }
   if (auth === "local" && provider !== "lmstudio") {
@@ -120,8 +120,21 @@ export function normalizeLlmModelSwitcher(
         ...(config.base_url ? { base_url: config.base_url } : {}),
       };
     case "anthropic":
+      if (auth === "oauth") {
+        // OAuth + anthropic resolves to the external OAuth worker route with
+        // the Claude Code adapter (subscription billing). The brand lives in
+        // execution_adapter, not the provider — provider stays "anthropic".
+        return {
+          provider: "anthropic",
+          model_provider: "anthropic",
+          execution_route: "external_oauth_worker",
+          execution_adapter: "claude_code",
+          billing_mode: "subscription",
+          ...common,
+        };
+      }
       if (auth !== "api_key") {
-        throw new Error("provider=anthropic requires auth=api_key.");
+        throw new Error("provider=anthropic requires auth=api_key or auth=oauth.");
       }
       return {
         provider: "anthropic",

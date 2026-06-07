@@ -167,6 +167,28 @@ export function buildReviewExecutionRoute(
     };
   }
 
+  if (profile.worker_executor === "claude_code") {
+    // External OAuth worker route, Claude Code adapter. The brand is carried by
+    // execution_adapter; the legacy host_runtime/resolved_provider reuse the
+    // existing "anthropic" value rather than introducing a "claude" enum. The
+    // claude_code worker vs an anthropic api-key direct-call are distinguished
+    // by execution_route + execution_adapter + billing_mode + realization.
+    return {
+      execution_route: "external_oauth_worker",
+      execution_adapter: "claude_code",
+      model_provider: "anthropic",
+      ...(profile.model ? { model_id: profile.model } : {}),
+      billing_mode: "subscription",
+      host: "standalone",
+      executor: "claude_code",
+      resolved_provider: "anthropic",
+      auth_mode: profile.auth ?? "oauth",
+      execution_realization: "worker",
+      artifact_host_runtime: "anthropic",
+      artifact_generation_realization: profile.artifact_generation_realization,
+    };
+  }
+
   const resolvedProvider = directCallProviderForProfile(profile);
   const artifactHostRuntime =
     isDirectCallHost(profile.host) ? profile.host : resolvedProvider;

@@ -10,337 +10,19 @@ import {
   appendRuntimeStreamChunkSync,
   appendRuntimeStreamEventSync,
 } from "../observability/runtime-stream-observation.js";
-import {
-  createLensSidecarSubmissionTools,
-  type LensSidecarSubmissionState,
-} from "./lens-sidecar-tools.js";
-import {
-  createRuntimeSubmitTools,
-  isRuntimeSubmitOutputFormat,
-  type RuntimeSubmitOutputFormat,
-  type RuntimeSubmitState,
-} from "./structured-output-tools.js";
-import { parseRuntimeSubmitContextForOutputFormat } from "./runtime-submit-context.js";
-import { writeYamlDocument } from "../review/review-artifact-utils.js";
-import {
-  writeValidatedLensSidecarArtifact,
-} from "../review/lens-sidecar-artifact.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "../review/artifact-generation-realization.js";
-
-type StructuredOutputFormat = "lens-sidecar" | RuntimeSubmitOutputFormat;
-type OutputFormat = "markdown" | StructuredOutputFormat;
-
-type CodexStructuredOutputState =
-  | {
-      outputFormat: "lens-sidecar";
-      submitToolName: "submit_lens_findings";
-      lensSidecarState: LensSidecarSubmissionState;
-    }
-  | {
-      outputFormat: RuntimeSubmitOutputFormat;
-      submitToolName: string;
-      runtimeSubmitState: RuntimeSubmitState;
-    };
-
-function requireString(
-  value: string | boolean | undefined,
-  optionName: string,
-): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Missing required option --${optionName}`);
-  }
-  return value;
-}
-
-function buildBoundedPrompt(
-  packetPath: string,
-  packetText: string,
-  outputPath: string,
-  unitId: string,
-  unitKind: string,
-  outputFormat: OutputFormat,
-): string {
-  if (outputFormat !== "markdown") {
-    return buildStructuredOutputPrompt({
-      packetPath,
-      packetText,
-      outputPath,
-      unitId,
-      unitKind,
-      outputFormat,
-    });
-  }
-  return `You are executing a single bounded review unit as a ContextIsolatedReasoningUnit.
-
-Unit id: ${unitId}
-Unit kind: ${unitKind}
-Authoritative prompt packet path: ${packetPath}
-Canonical output path: ${outputPath}
-
-Rules:
-- Treat the prompt packet below as the authoritative contract.
-- Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
-- Read the files referenced by the prompt packet when needed.
-- Stay within the smallest sufficient file set implied by the packet.
-- Do not recursively follow reference chains beyond the files explicitly listed in the packet unless the packet requires it.
-- Do not use web research when the packet says web research is denied.
-- Do not read outside the allowed filesystem scope described in the packet.
-- Produce only the final markdown content for the canonical output path.
-- Do not wrap the answer in code fences.
-- Do not add commentary before or after the markdown.
-- Do not modify repository files yourself.
-- Do not change the required output structure from the packet.
-- If the packet asks you to preserve disagreement or uncertainty, preserve it explicitly.
-- If you cannot complete the task within the declared boundary, preserve that limitation explicitly as insufficient access or insufficient evidence within boundary instead of broadening the search.
-
-Authoritative prompt packet follows:
-
-${packetText}
-`;
-}
-
-function submitToolNameForOutputFormat(outputFormat: StructuredOutputFormat): string {
-  if (outputFormat === "lens-sidecar") return "submit_lens_findings";
-  switch (outputFormat) {
-    case "issue-artifact":
-      return "submit_issue_artifact";
-    case "issue-stance-response":
-      return "submit_issue_stance_response";
-    case "issue-deliberation-response":
-      return "submit_issue_deliberation_response";
-    case "deliberation-resolution":
-      return "submit_deliberation_resolution";
-    case "issue-synthesis-response":
-      return "submit_issue_synthesis_response";
-  }
-}
-
-function buildStructuredOutputPrompt(args: {
-  packetPath: string;
-  packetText: string;
-  outputPath: string;
-  unitId: string;
-  unitKind: string;
-  outputFormat: StructuredOutputFormat;
-}): string {
-  const submitToolName = submitToolNameForOutputFormat(args.outputFormat);
-  return `You are executing one bounded review structured-output unit as a ContextIsolatedReasoningUnit.
-
-Unit id: ${args.unitId}
-Unit kind: ${args.unitKind}
-Output format: ${args.outputFormat}
-Authoritative prompt packet path: ${args.packetPath}
-Canonical YAML output path: ${args.outputPath}
-
-Rules:
-- Treat the prompt packet below as the authoritative contract.
-- Treat the Boundary Policy and Effective Boundary State in the packet as hard constraints.
-- Read the files referenced by the prompt packet when needed.
-- Stay within the smallest sufficient file set implied by the packet.
-- Do not recursively follow reference chains beyond the files explicitly listed in the packet unless the packet requires it.
-- Do not use web research when the packet says web research is denied.
-- Do not read outside the allowed filesystem scope described in the packet.
-- Do not modify repository files yourself.
-- Produce only one JSON object matching the provided output schema.
-- The JSON object is the argument payload for ${submitToolName}.
-- Do not wrap the JSON object in markdown or code fences.
-- Do not include runtime-owned envelope fields such as schema_version, session_id, lens_id, issue_id, or validation unless the output schema explicitly requires them.
-- The runtime will validate the JSON object through the submit contract and write the canonical YAML artifact.
-- If the packet asks you to preserve disagreement or uncertainty, preserve it explicitly in the structured fields.
-- If you cannot complete the task within the declared boundary, encode the limitation as insufficient access or insufficient evidence within boundary instead of broadening the search.
-
-Authoritative prompt packet follows:
-
-${args.packetText}
-`;
-}
-
-function parseOutputFormat(raw: unknown): OutputFormat {
-  if (raw === undefined || raw === "" || raw === "markdown") return "markdown";
-  if (typeof raw === "string" && isRuntimeSubmitOutputFormat(raw)) return raw;
-  if (raw === "lens-sidecar") return raw;
-  throw new Error(
-    `Invalid --output-format value for Codex worker: ${String(raw)} (expected markdown | lens-sidecar | issue-artifact | issue-stance-response | issue-deliberation-response | deliberation-resolution | issue-synthesis-response)`,
-  );
-}
-
-function requireRecord(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${label} must be an object.`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function toCodexStructuredOutputSchema(schema: unknown): unknown {
-  if (Array.isArray(schema)) {
-    return schema.map((item) => toCodexStructuredOutputSchema(item));
-  }
-  if (!schema || typeof schema !== "object") {
-    return schema;
-  }
-  const normalized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema)) {
-    normalized[key] = toCodexStructuredOutputSchema(value);
-  }
-  const properties = normalized.properties;
-  if (properties && typeof properties === "object" && !Array.isArray(properties)) {
-    normalized.required = Object.keys(properties);
-  }
-  return normalized;
-}
-
-async function writeOutputSchemaFile(args: {
-  rawOutputPath: string;
-  outputFormat: StructuredOutputFormat;
-  unitId: string;
-  sessionId: string;
-  rawPacketText: string;
-  humanOutputRef?: string | null;
-}): Promise<{
-  schemaPath: string;
-  state: CodexStructuredOutputState;
-}> {
-  const { state, schema } =
-    args.outputFormat === "lens-sidecar"
-      ? (() => {
-          const lensSidecarState: LensSidecarSubmissionState = {
-            sessionId: args.sessionId,
-            lensId: args.unitId,
-            humanOutputRef: args.humanOutputRef ?? null,
-          };
-          const [submitTool] = createLensSidecarSubmissionTools(lensSidecarState);
-          if (!submitTool) {
-            throw new Error("No lens sidecar submit tool for Codex structured output.");
-          }
-          return {
-            state: {
-              outputFormat: "lens-sidecar" as const,
-              submitToolName: "submit_lens_findings" as const,
-              lensSidecarState,
-            },
-            schema: toCodexStructuredOutputSchema(submitTool.input_schema),
-          };
-        })()
-      : (() => {
-          const runtimeSubmitState: RuntimeSubmitState = {
-            sessionId: args.sessionId,
-            unitId: args.unitId,
-            outputFormat: args.outputFormat,
-            ...parseRuntimeSubmitContextForOutputFormat({
-              rawPacketText: args.rawPacketText,
-              unitId: args.unitId,
-              outputFormat: args.outputFormat,
-            }),
-          };
-          const [submitTool] = createRuntimeSubmitTools(runtimeSubmitState);
-          if (!submitTool) {
-            throw new Error(
-              `No runtime submit tool for output format ${args.outputFormat}.`,
-            );
-          }
-          return {
-            state: {
-              outputFormat: args.outputFormat,
-              submitToolName: submitTool.name,
-              runtimeSubmitState,
-            },
-            schema: toCodexStructuredOutputSchema(submitTool.input_schema),
-          };
-        })();
-  const schemaPath = `${args.rawOutputPath}.schema.json`;
-  await fs.mkdir(path.dirname(args.rawOutputPath), { recursive: true });
-  await fs.writeFile(
-    schemaPath,
-    `${JSON.stringify(schema, null, 2)}\n`,
-    "utf8",
-  );
-  return { schemaPath, state };
-}
+import {
+  buildBoundedPrompt,
+  coerceStructuredPayload,
+  parseOutputFormat,
+  requireString,
+  writeLensSidecarArtifactFromPayload,
+  writeOutputSchemaFile,
+  writeRuntimeSubmitArtifactFromPayload,
+} from "./worker-structured-output.js";
 
 async function removeFileIfPresent(filePath: string): Promise<void> {
   await fs.rm(filePath, { force: true });
-}
-
-function stripWrappingCodeFence(text: string): string {
-  const trimmed = text.trim();
-  const match = trimmed.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/);
-  return match ? match[1]!.trim() : trimmed;
-}
-
-async function parseStructuredPayload(rawOutputPath: string): Promise<Record<string, unknown>> {
-  const raw = stripWrappingCodeFence(await fs.readFile(rawOutputPath, "utf8"));
-  try {
-    const payload = requireRecord(
-      JSON.parse(raw),
-      `Codex structured output ${rawOutputPath}`,
-    );
-    if (Object.prototype.hasOwnProperty.call(payload, "payload_json")) {
-      throw new Error(
-        "payload_json wrapper is no longer accepted; structured output must be the submit payload object.",
-      );
-    }
-    return payload;
-  } catch (error) {
-    throw new Error(
-      `Failed to parse Codex structured output JSON: ${rawOutputPath}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
-  }
-}
-
-async function writeRuntimeSubmitArtifactFromCodexJson(args: {
-  rawOutputPath: string;
-  outputPath: string;
-  state: RuntimeSubmitState;
-}): Promise<number> {
-  const payload = await parseStructuredPayload(args.rawOutputPath);
-  const [submitTool] = createRuntimeSubmitTools(args.state);
-  if (!submitTool) {
-    throw new Error(`No runtime submit tool for output format ${args.state.outputFormat}.`);
-  }
-  await submitTool.execute(payload, {
-    projectRoot: "",
-    ontoHome: "",
-  });
-  if (args.state.artifact === undefined) {
-    throw new Error(
-      `${args.state.outputFormat} mode completed without ${submitTool.name} for unit ${args.state.unitId}.`,
-    );
-  }
-  await writeYamlDocument(args.outputPath, args.state.artifact);
-  return Object.keys(payload).length;
-}
-
-async function writeLensSidecarArtifactFromCodexJson(args: {
-  rawOutputPath: string;
-  outputPath: string;
-  state: LensSidecarSubmissionState;
-}): Promise<number> {
-  const payload = await parseStructuredPayload(args.rawOutputPath);
-  const [submitTool] = createLensSidecarSubmissionTools(args.state);
-  if (!submitTool) {
-    throw new Error("No lens sidecar submit tool for Codex structured output.");
-  }
-  await submitTool.execute(payload, {
-    projectRoot: "",
-    ontoHome: "",
-  });
-  if (args.state.artifact === undefined) {
-    throw new Error(
-      `lens-sidecar mode completed without ${submitTool.name} for unit ${args.state.lensId}.`,
-    );
-  }
-  await writeValidatedLensSidecarArtifact({
-    sidecarPath: args.outputPath,
-    artifact: args.state.artifact,
-    sessionId: args.state.sessionId,
-    lensId: args.state.lensId,
-    ...(args.state.humanOutputRef !== undefined
-      ? { expectedHumanOutputRef: args.state.humanOutputRef }
-      : {}),
-  });
-  return Object.keys(payload).length;
 }
 
 async function runCodexWorker(
@@ -640,15 +322,20 @@ export async function runCodexReviewUnitExecutorCli(
     if (!structuredOutput) {
       throw new Error(`Missing structured output state for ${outputFormat}.`);
     }
+    const rawText = await fs.readFile(rawOutputPath, "utf8");
+    const payload = coerceStructuredPayload(
+      rawText,
+      `Codex structured output ${rawOutputPath}`,
+    );
     structuredPayloadFields =
       structuredOutput.state.outputFormat === "lens-sidecar"
-        ? await writeLensSidecarArtifactFromCodexJson({
-            rawOutputPath,
+        ? await writeLensSidecarArtifactFromPayload({
+            payload,
             outputPath,
             state: structuredOutput.state.lensSidecarState,
           })
-        : await writeRuntimeSubmitArtifactFromCodexJson({
-            rawOutputPath,
+        : await writeRuntimeSubmitArtifactFromPayload({
+            payload,
             outputPath,
             state: structuredOutput.state.runtimeSubmitState,
           });

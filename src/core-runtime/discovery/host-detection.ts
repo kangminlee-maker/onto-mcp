@@ -31,3 +31,43 @@ export function detectCodexBinaryAvailable(): boolean {
   if (!codexOnPath) return false;
   return fsSync.existsSync(path.join(os.homedir(), ".codex", "auth.json"));
 }
+
+/** OAuth credential filenames Claude Code may write under its config dir. */
+const CLAUDE_OAUTH_CREDENTIAL_FILENAMES = [
+  ".credentials.json",
+  ".oauth-token",
+] as const;
+
+function claudeConfigDir(): string {
+  const configured = process.env.CLAUDE_CONFIG_DIR;
+  if (typeof configured === "string" && configured.trim().length > 0) {
+    return configured.trim();
+  }
+  return path.join(os.homedir(), ".claude");
+}
+
+/**
+ * True when the Claude Code worker path can be used from this process.
+ *
+ * Mirrors {@link detectCodexBinaryAvailable}: both the executable and an OAuth
+ * credential are required so the external OAuth worker (`claude_code` adapter)
+ * route stays fail-loud when the host-bound worker is unavailable. The config
+ * dir honors CLAUDE_CONFIG_DIR; the credential filename is tolerant of the
+ * known Claude Code variants.
+ */
+export function detectClaudeBinaryAvailable(): boolean {
+  const pathEnv = process.env.PATH ?? "";
+  let claudeOnPath = false;
+  for (const dir of pathEnv.split(path.delimiter)) {
+    if (!dir) continue;
+    if (fsSync.existsSync(path.join(dir, "claude"))) {
+      claudeOnPath = true;
+      break;
+    }
+  }
+  if (!claudeOnPath) return false;
+  const configDir = claudeConfigDir();
+  return CLAUDE_OAUTH_CREDENTIAL_FILENAMES.some((name) =>
+    fsSync.existsSync(path.join(configDir, name)),
+  );
+}

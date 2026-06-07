@@ -12,7 +12,10 @@ import {
   REVIEW_EXECUTION_UNIT_IDS,
   defaultReviewExecution,
 } from "../discovery/settings-chain.js";
-import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
+import {
+  detectClaudeBinaryAvailable,
+  detectCodexBinaryAvailable,
+} from "../discovery/host-detection.js";
 import {
   isDirectModelCallSelection,
   isExternalOauthWorkerSelection,
@@ -23,7 +26,7 @@ import {
   type LlmProviderName,
 } from "../llm/model-switcher.js";
 
-export type ReviewWorkerExecutor = "codex" | "direct_call";
+export type ReviewWorkerExecutor = "codex" | "direct_call" | "claude_code";
 
 export type ReviewExecutionHost =
   | "codex"
@@ -68,6 +71,7 @@ export interface ResolveReviewExecutionProfileArgs {
   settings: OntoSettings;
   env?: NodeJS.ProcessEnv;
   codexAvailable?: boolean;
+  claudeAvailable?: boolean;
 }
 
 export type ReviewActorName = "teamlead" | "lens" | "synthesize";
@@ -354,6 +358,8 @@ export function resolveReviewExecutionProfile(
 
   const codexAvailable =
     args.codexAvailable ?? detectCodexBinaryAvailable();
+  const claudeAvailable =
+    args.claudeAvailable ?? detectClaudeBinaryAvailable();
   const envHost = hostFromEnv(env);
   const execution = settingsExecution(args.settings);
   const routeSelections = actorRouteSelections(execution);
@@ -388,10 +394,16 @@ export function resolveReviewExecutionProfile(
   }
 
   if (execution.executor === "codex") {
-    if (selection && !isExternalOauthWorkerSelection(selection)) {
+    if (
+      selection &&
+      !(
+        isExternalOauthWorkerSelection(selection) &&
+        selection.execution_adapter === "codex_cli"
+      )
+    ) {
       return noHost(
         trace,
-        "review.execution.executor=codex requires every configured actor/unit llm to use OpenAI OAuth.",
+        "review.execution.executor=codex requires every configured actor/unit llm to use OpenAI OAuth (codex_cli adapter).",
       );
     }
     if (!codexAvailable) {
@@ -491,10 +503,28 @@ export function resolveReviewExecutionProfile(
   }
 
   if (isExternalOauthWorkerSelection(selection)) {
+    if (selection.execution_adapter === "claude_code") {
+      if (!claudeAvailable) {
+        return noHost(
+          trace,
+          "Anthropic OAuth actor settings require an available Claude Code worker.",
+        );
+      }
+      log("claude_code worker selected by host-bound Anthropic OAuth settings");
+      return {
+        type: "resolved",
+        profile: buildProfile({
+          settings: args.settings,
+          workerExecutor: "claude_code",
+          host: selection.model_provider,
+          trace,
+        }),
+      };
+    }
     if (selection.execution_adapter !== "codex_cli") {
       return noHost(
         trace,
-        "External OAuth worker settings must resolve to the current Codex CLI adapter.",
+        "External OAuth worker settings must resolve to a supported adapter (codex_cli or claude_code).",
       );
     }
     if (!codexAvailable) {

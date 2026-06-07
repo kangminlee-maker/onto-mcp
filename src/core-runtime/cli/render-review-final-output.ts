@@ -763,7 +763,7 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Execution realization: ${bindingArtifact.resolved_execution_realization}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
 - Artifact generation realization: ${bindingArtifact.resolved_artifact_generation_realization}
-- Semantic quality evidence: ${bindingArtifact.semantic_quality_evidence.status} (${bindingArtifact.semantic_quality_evidence.applicability})
+- Semantic quality evidence: ${bindingArtifact.semantic_quality_evidence?.status ?? "not_recorded"} (${bindingArtifact.semantic_quality_evidence?.applicability ?? "n/a"})
 - Finding ledger: \`${toRelativePath(bindingArtifact.finding_ledger_path, projectRoot)}\`
 - Issue ledger: \`${toRelativePath(bindingArtifact.issue_ledger_path, projectRoot)}\`
 - Problem framing: \`${toRelativePath(bindingArtifact.problem_framing_path, projectRoot)}\`

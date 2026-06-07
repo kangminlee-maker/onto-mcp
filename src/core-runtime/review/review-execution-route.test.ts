@@ -47,6 +47,32 @@ describe("buildReviewExecutionRoute", () => {
     });
   });
 
+  it("maps Anthropic OAuth claude_code worker to the external OAuth worker route", () => {
+    expect(
+      buildReviewExecutionRoute(
+        profile({
+          worker_executor: "claude_code",
+          host: "anthropic",
+          auth: "oauth",
+          provider: "anthropic",
+          model: "claude-opus-4-8",
+        }),
+      ),
+    ).toMatchObject({
+      execution_route: "external_oauth_worker",
+      execution_adapter: "claude_code",
+      model_provider: "anthropic",
+      model_id: "claude-opus-4-8",
+      billing_mode: "subscription",
+      host: "standalone",
+      executor: "claude_code",
+      resolved_provider: "anthropic",
+      auth_mode: "oauth",
+      execution_realization: "worker",
+      artifact_host_runtime: "anthropic",
+    });
+  });
+
   it("maps OpenAI API-key direct-call to resolved provider openai", () => {
     expect(
       buildReviewExecutionRoute(
