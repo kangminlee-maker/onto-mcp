@@ -71,7 +71,6 @@ function buildPlan(
     })),
     prompt_packets_root: path.join(sessionRoot, "prompt-packets"),
     lens_prompt_packet_seats: lenses,
-    synthesize_prompt_packet_path: path.join(sessionRoot, "synthesize-packet.md"),
     synthesis_output_path: path.join(sessionRoot, "synthesis.md"),
     deliberation_output_path: path.join(sessionRoot, "deliberation.md"),
     execution_result_path: path.join(sessionRoot, "execution-result.yaml"),

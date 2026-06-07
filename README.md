@@ -243,23 +243,23 @@ Minimal reconstruct MCP call shape:
 
 `semanticAuthorRealization` and `confirmationProviderRealization` default to
 `direct_call`. Configure `.onto/settings.json` or user `~/.onto/settings.json`
-with provider/model settings before running. Test-only mock helpers are not
-product completion evidence.
+with provider/model settings before running. Test-only mock helpers are
+verification realizations: they can support contract and harness checks, but
+they are not product completion or semantic quality evidence.
 
 For MCP clients, prefer the `llmPresentation.openingBrief` and
 `llmPresentation.finalResult` prompt/input pairs when presenting start and
 finish explanations.
 
-Runtime hardening is available as a development verification harness:
+Route hardening is available as a development verification harness:
 
 ```bash
-npm run test:review:hardening
+npm run check:review:route
 ```
 
-It runs large and repeated mock reviews, validates primary artifact consistency,
-checks `Tools: required` native-tool boundaries, verifies provider preflight
-fail-loud behavior, and removes temporary fixtures unless
-`ONTO_REVIEW_HARDENING_KEEP_TMP=1` is set.
+It validates the configured review route and provider/auth preflight behavior.
+Mock-backed or fixture-backed checks should be reported separately from live
+E2E evidence.
 
 ## Settings
 
@@ -583,7 +583,8 @@ dependencies, and unresolved decisions that change the answer.
 ```bash
 npm run check:ts-core
 npm run build:ts-core
-npm run test:mcp:review
-npm run test:review:hardening
+npm run check:mcp:review
+npm run check:review:route
+npm run test:e2e
 git diff --check
 ```

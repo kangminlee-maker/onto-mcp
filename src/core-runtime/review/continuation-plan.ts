@@ -35,20 +35,6 @@ export interface BuildReviewContinuationPlanParams {
   targetUnits?: string[];
 }
 
-function normalizeRequestedTargetUnitId(unitId: string): string {
-  if (unitId.startsWith("lens:")) return unitId.slice("lens:".length);
-  if (unitId.startsWith("deliberation:")) {
-    return `deliberation-${unitId.slice("deliberation:".length)}`;
-  }
-  if (unitId.startsWith("issue-artifact:")) {
-    return unitId.slice("issue-artifact:".length);
-  }
-  if (unitId === "controlled-lens-deliberation") {
-    return "controlled-deliberation";
-  }
-  return unitId;
-}
-
 function lensIdFromUnit(unit: PipelineExecutionLedgerUnitEntry): string | null {
   if (unit.unitKind === "lens") return unit.unitId;
   if (unit.unitId.startsWith("deliberation-")) {
@@ -160,9 +146,7 @@ export function buildReviewContinuationPlan(
   params: BuildReviewContinuationPlanParams,
 ): ReviewContinuationPlan {
   const trustedIds = trustedUnitIds(params.ledger);
-  const requestedTargets = (params.targetUnits ?? []).map(
-    normalizeRequestedTargetUnitId,
-  );
+  const requestedTargets = params.targetUnits ?? [];
   const naturalFrontier = params.ledger.units.filter((unit) =>
     isFrontierUnit(unit, trustedIds),
   );

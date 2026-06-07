@@ -17,6 +17,13 @@ function validRecord(): Record<string, unknown> {
     resolved_review_mode: "core-axis",
     resolved_execution_realization: "direct-call",
     resolved_host_runtime: "standalone",
+    resolved_artifact_generation_realization: "live",
+    semantic_quality_evidence: {
+      status: "not_evaluated",
+      applicability: "real_semantic_path_only",
+      reason:
+        "live semantic path output requires a separate semantic quality gate before quality is claimed",
+    },
     resolved_lens_ids: ["logic"],
     execution_result_ref: "execution-result.yaml",
     session_metadata_ref: "session-metadata.yaml",
@@ -96,10 +103,14 @@ function validRecord(): Record<string, unknown> {
         },
       ],
     },
-    synthesis_result_ref: "synthesis.md",
+    synthesis_result_ref: "synthesis-ledger.yaml",
+    synthesis_result_sha256: "1123456789abcdef",
+    synthesis_output_sha256: "2123456789abcdef",
     deliberation_status: "performed",
-    deliberation_result_ref: "deliberation.md",
+    deliberation_result_ref: "deliberation-resolution.yaml",
+    deliberation_result_sha256: "3123456789abcdef",
     final_output_ref: "final-output.md",
+    final_output_sha256: "0123456789abcdef",
     shared_phenomenon_summary: [],
   };
 }
@@ -125,7 +136,91 @@ describe("validateReviewRecordObject", () => {
     );
   });
 
-  it("rejects materiality that contradicts severity", () => {
+  it("requires completed_with_degradation records to preserve synthesis and deliberation refs", () => {
+    const record = validRecord();
+    record.record_status = "completed_with_degradation";
+    record.synthesis_result_ref = null;
+    record.synthesis_result_sha256 = null;
+    record.synthesis_output_sha256 = null;
+    record.deliberation_result_ref = null;
+    record.deliberation_result_sha256 = null;
+    record.deliberation_status = "not_performed";
+    expect(() => validateReviewRecordObject(record)).toThrow(
+      /synthesis_result_ref for completed records/,
+    );
+  });
+
+  it("requires completed records to preserve terminal artifact digests", () => {
+    for (const [fieldName, expectedMessage] of [
+      ["synthesis_result_sha256", /synthesis_result_sha256 for completed records/],
+      ["synthesis_output_sha256", /synthesis_output_sha256 for completed records/],
+      [
+        "deliberation_result_sha256",
+        /deliberation_result_sha256 for completed records/,
+      ],
+      ["final_output_sha256", /ReviewRecord\.final_output_sha256 must be a non-empty string/],
+    ] as const) {
+      const record = validRecord();
+      record[fieldName] = null;
+      expect(() => validateReviewRecordObject(record)).toThrow(expectedMessage);
+    }
+  });
+
+  it("accepts halted_partial records with absent terminal refs and digests kept null", () => {
+    const record = validRecord();
+    record.record_status = "halted_partial";
+    record.result_classification_summary = null;
+    record.synthesis_result_ref = null;
+    record.synthesis_result_sha256 = null;
+    record.synthesis_output_sha256 = null;
+    record.deliberation_status = "not_performed";
+    record.deliberation_result_ref = null;
+    record.deliberation_result_sha256 = null;
+
+    expect(validateReviewRecordObject(record).record_status).toBe("halted_partial");
+  });
+
+  it("rejects halted_partial not_performed records with non-null terminal refs or digests", () => {
+    for (const [fieldName, expectedMessage] of [
+      [
+        "synthesis_result_ref",
+        /synthesis_result_ref must be null when deliberation_status=not_performed/,
+      ],
+      [
+        "synthesis_result_sha256",
+        /synthesis_result_sha256 must be null when deliberation_status=not_performed/,
+      ],
+      [
+        "synthesis_output_sha256",
+        /synthesis_output_sha256 must be null when deliberation_status=not_performed/,
+      ],
+      [
+        "deliberation_result_ref",
+        /deliberation_result_ref must be null when deliberation_status=not_performed/,
+      ],
+      [
+        "deliberation_result_sha256",
+        /deliberation_result_sha256 must be null when deliberation_status=not_performed/,
+      ],
+    ] as const) {
+      const record = validRecord();
+      record.record_status = "halted_partial";
+      record.result_classification_summary = null;
+      record.synthesis_result_ref = null;
+      record.synthesis_result_sha256 = null;
+      record.synthesis_output_sha256 = null;
+      record.deliberation_status = "not_performed";
+      record.deliberation_result_ref = null;
+      record.deliberation_result_sha256 = null;
+      record[fieldName] = fieldName.endsWith("_sha256")
+        ? "deadbeef"
+        : `${fieldName}.yaml`;
+
+      expect(() => validateReviewRecordObject(record)).toThrow(expectedMessage);
+    }
+  });
+
+  it("rejects materiality that contradicts problem-framing admission", () => {
     const record = validRecord();
     const summary = record.result_classification_summary as Record<string, unknown>;
     summary.non_material_findings = [
@@ -143,7 +238,31 @@ describe("validateReviewRecordObject", () => {
       },
     ];
     expect(() => validateReviewRecordObject(record)).toThrow(
-      /material must match severity-derived materiality/,
+      /material must match problem-framing material admission/,
     );
+  });
+
+  it("accepts non-material high severity projections when problem framing says evidence is insufficient", () => {
+    const record = validRecord();
+    const summary = record.result_classification_summary as Record<string, unknown>;
+    summary.non_material_findings = [
+      {
+        issue_id: "issue-001",
+        severity: "high",
+        material: false,
+        affected_purpose: "declared purpose",
+        failure_condition: "specific condition",
+        impact: "unsafe if intent is confirmed",
+        evidence_refs: ["round1/logic.md#finding-1"],
+        source_lens_ids: ["logic"],
+        action_candidates: ["needs_evidence"],
+        rationale: "evidence is required before material admission",
+        issue_role: "evidence_gap",
+        judgment_state: "insufficient_evidence",
+        closure_class: "needs_evidence",
+      },
+    ];
+
+    expect(validateReviewRecordObject(record).session_id).toBe("session-001");
   });
 });

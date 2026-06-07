@@ -31,7 +31,7 @@ export interface CommandRun {
   stderr: string;
 }
 
-/** Injectable command runner (defaults to real process execution; mocked in tests). */
+/** Injectable command runner (defaults to real process execution; replaced by test doubles in tests). */
 export interface CommandRunner {
   exists(command: string): boolean;
   run(command: string, args: string[], env?: Record<string, string>): CommandRun;

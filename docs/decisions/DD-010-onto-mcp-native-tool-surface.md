@@ -52,7 +52,7 @@ execution providers
   - codex
   - api-key direct call
   - local direct call
-  - local/mock
+  - mock/local conformance harness
 ```
 
 ## Boundary Rules
@@ -105,5 +105,7 @@ lens-deliberation result, then synthesize consumption of `deliberation.md`.
    process-bound worker calls.
 2. Define MCP tool schemas and result shapes.
 3. Map current `.onto` YAML/MD and TS runtime artifacts to those tool schemas.
-4. Define provider conformance tests using mock/local provider first.
+4. Define provider conformance tests using explicit mock/local harnesses first,
+   while keeping product completion and semantic quality evidence on live
+   provider paths.
 5. Decide which Python parity code is kept as fixture, bridge, or removed.

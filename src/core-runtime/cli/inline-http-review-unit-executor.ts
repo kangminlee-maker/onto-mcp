@@ -28,8 +28,8 @@
  * The materialized target is already inline in normal prompt packets. Domain
  * document embedding remains opt-in via `--embed-domain-docs`.
  *
- * The LLM always produces a single markdown output file; the tool-native tier
- * only changes how it reads bounded context before producing that file.
+ * The LLM normally produces a single markdown output file. Structured artifact
+ * modes instead require a tool submission and let the runtime write YAML.
  *
  * # Provider selection
  *
@@ -64,6 +64,29 @@ import {
   type ToolBoundarySkipSummary,
   type ToolExecutionContext,
 } from "./onto-tools.js";
+import {
+  createLensSidecarSubmissionTools,
+  type LensSidecarSubmissionState,
+} from "./lens-sidecar-tools.js";
+import {
+  createRuntimeSubmitTools,
+  isRuntimeSubmitOutputFormat,
+  type RuntimeSubmitOutputFormat,
+  type RuntimeSubmitState,
+} from "./structured-output-tools.js";
+import { parseRuntimeSubmitContextForOutputFormat } from "./runtime-submit-context.js";
+import {
+  writeValidatedLensSidecarArtifact,
+} from "../review/lens-sidecar-artifact.js";
+import {
+  isReviewArtifactGenerationRealization,
+  semanticQualityEvidenceForArtifactGeneration,
+} from "../review/artifact-generation-realization.js";
+import type {
+  ReviewArtifactGenerationRealization,
+  ReviewSemanticQualityEvidence,
+} from "../review/artifact-types.js";
+import { writeYamlDocument } from "../review/review-artifact-utils.js";
 import { embedInlineContext } from "../review/inline-context-embedder.js";
 import {
   parsePacketAllowedReadAuthority,
@@ -90,6 +113,50 @@ function requireString(
     throw new Error(`Missing required option --${optionName}`);
   }
   return value;
+}
+
+function collectSemanticStrings(value: unknown, out: string[] = []): string[] {
+  if (typeof value === "string" && value.trim().length > 0) {
+    out.push(value.trim());
+    return out;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectSemanticStrings(item, out);
+    return out;
+  }
+  if (value && typeof value === "object") {
+    for (const item of Object.values(value as Record<string, unknown>)) {
+      collectSemanticStrings(item, out);
+    }
+  }
+  return out;
+}
+
+function citationAuditTextForOutput(args: {
+  outputText: string;
+  runtimeSubmitState: RuntimeSubmitState | undefined;
+}): string {
+  if (args.runtimeSubmitState?.artifact === undefined) {
+    return args.outputText;
+  }
+  return collectSemanticStrings(args.runtimeSubmitState.artifact).join("\n");
+}
+
+function citationAuditSourceRefsForOutput(
+  runtimeSubmitState: RuntimeSubmitState | undefined,
+): string[] {
+  const refs =
+    runtimeSubmitState?.artifact &&
+    typeof runtimeSubmitState.artifact === "object" &&
+    !Array.isArray(runtimeSubmitState.artifact)
+      ? (runtimeSubmitState.artifact as Record<string, unknown>).source_refs_used
+      : undefined;
+  if (!Array.isArray(refs)) return [];
+  return [
+    ...new Set(
+      refs.filter((ref): ref is string => typeof ref === "string" && ref.trim().length > 0),
+    ),
+  ];
 }
 
 /**
@@ -198,11 +265,111 @@ function buildSystemPromptToolNative(
   unitKind: string,
   packetPath: string,
   outputPath: string,
+  outputFormat: OutputFormat = "markdown",
 ): string {
+  if (outputFormat === "lens-sidecar") {
+    return buildLensSidecarSystemPromptToolNative(unitId, packetPath, outputPath);
+  }
+  if (isRuntimeSubmitOutputFormat(outputFormat)) {
+    return buildRuntimeSubmitSystemPromptToolNative(
+      unitId,
+      unitKind,
+      packetPath,
+      outputPath,
+      outputFormat,
+    );
+  }
   if (unitKind === "synthesize") {
     return buildSynthesizeSystemPromptToolNative(unitId, packetPath, outputPath);
   }
   return buildLensSystemPromptToolNative(unitId, unitKind, packetPath, outputPath);
+}
+
+function buildLensSidecarSystemPromptToolNative(
+  unitId: string,
+  packetPath: string,
+  outputPath: string,
+): string {
+  return `You are executing one bounded review lens as a ContextIsolatedReasoningUnit.
+
+Unit id: ${unitId}
+Unit kind: lens
+Authoritative prompt packet path: ${packetPath}
+Canonical sidecar output path: ${outputPath}
+
+OUTPUT FORMAT:
+- Do not write YAML or markdown yourself.
+- Your durable output is created only by calling submit_lens_findings.
+- Call submit_lens_findings exactly once with the complete finding batch.
+- After the tool call succeeds, produce only a brief final confirmation.
+
+Available tools:
+- read_file(path, start_line?, end_line?) — read allowed packet/context refs when the embedded packet is insufficient
+- list_directory(path) — list allowed directories
+- search_content(pattern, path?, case_insensitive?) — search within allowed refs
+- submit_lens_findings(findings, domain_constraints_used, domain_context_assumptions, no_findings_rationale?)
+
+Rules:
+- Treat the prompt packet as the authoritative review contract.
+- Include only findings supported by evidence inside the packet boundary.
+- Do not invent new facts or source refs.
+- Use findings: [] only when this lens has no contract-affecting finding, and then include no_findings_rationale.
+- Use domain_constraints_used: [] when no domain document rule was used.
+- severity_hint is non-authoritative; finding-ledger remains the severity authority.
+- For blocker/high/medium severity_hint, include evidence-backed materiality_basis and causal_path.
+- For clear low/info surface findings, set materiality_basis and causal_path to null.
+- Runtime owns session_id, lens_id, candidate_id, source_ref, causal step ids, and YAML serialization.`;
+}
+
+function submitToolNameForOutputFormat(outputFormat: RuntimeSubmitOutputFormat): string {
+  switch (outputFormat) {
+    case "issue-artifact":
+      return "submit_issue_artifact";
+    case "issue-stance-response":
+      return "submit_issue_stance_response";
+    case "issue-deliberation-response":
+      return "submit_issue_deliberation_response";
+    case "deliberation-resolution":
+      return "submit_deliberation_resolution";
+    case "issue-synthesis-response":
+      return "submit_issue_synthesis_response";
+  }
+}
+
+function buildRuntimeSubmitSystemPromptToolNative(
+  unitId: string,
+  unitKind: string,
+  packetPath: string,
+  outputPath: string,
+  outputFormat: RuntimeSubmitOutputFormat,
+): string {
+  const submitToolName = submitToolNameForOutputFormat(outputFormat);
+  return `You are executing one bounded review structured-output unit.
+
+Unit id: ${unitId}
+Unit kind: ${unitKind}
+Output format: ${outputFormat}
+Authoritative prompt packet path: ${packetPath}
+Canonical YAML output path: ${outputPath}
+
+OUTPUT FORMAT:
+- Do not write YAML or markdown yourself.
+- Your durable output is created only by calling ${submitToolName}.
+- Call ${submitToolName} exactly once with the complete semantic payload.
+- Do not submit runtime-owned envelope fields such as schema_version, session_id, lens_id, issue_id, or validation unless the tool schema explicitly asks for them.
+- After the tool call succeeds, produce only a brief final confirmation.
+
+Available tools:
+- read_file(path, start_line?, end_line?) — read allowed packet/context refs when the embedded packet is insufficient
+- list_directory(path) — list allowed directories
+- search_content(pattern, path?, case_insensitive?) — search within allowed refs
+- ${submitToolName}
+
+Rules:
+- Treat the prompt packet as the authoritative review contract.
+- Use the runtime projection in the prompt before reading additional files.
+- Read only refs allowed by the packet boundary when the projection is insufficient.
+- Runtime owns envelope fields and YAML serialization.`;
 }
 
 function buildLensSystemPromptToolNative(
@@ -269,13 +436,13 @@ You have THREE read-only tools:
 Tool boundary for synthesize:
 - Paths must resolve inside projectRoot or ontoHome.
 - If the packet declares unit_boundary.read_authority.allowed_read_refs, tools may read/list/search only those refs or child paths under a directory ref.
-- Lens outputs live under \`.onto/review/<session>/round1/<lens>.md\`. The packet's "Runtime Participating Lens Outputs" section lists the exact completed paths when present; otherwise fall back to "Participating Lens Outputs". Call read_file on those paths to read each lens's findings.
+- Lens finding sources live under \`.onto/review/<session>/round1/\` as either \`<lens>.findings.yaml\` sidecars or \`<lens>.md\` markdown projections. The packet's "Runtime Participating Lens Outputs" section lists the exact completed paths when present; otherwise fall back to "Participating Lens Outputs". Call read_file on those paths to read each lens's findings.
 - The controlled lens deliberation result lives at the packet's "Controlled Lens Deliberation Result" path — call read_file on that path before classifying disagreements.
 - The materialized input (the actual review target) is also referenced in the packet — read_file it whenever you need to verify a contested claim against the source.
 - For synthesize, .onto traversal IS allowed (unlike lens runs) so list_directory and search_content work under .onto/review.
 
 Your job:
-- Read every runtime participating lens output via read_file. Do not skip any successful lens.
+- Read every runtime participating lens finding source via read_file. Do not skip any successful lens.
 - Read the Controlled Lens Deliberation Result via read_file.
 - Classify findings: Consensus, Conditional Consensus, Disagreement, Unique Finding Tagging.
 - Do not perform deliberation yourself. Controlled lens deliberation already produced the authoritative resolution or unresolved-disagreement record.
@@ -308,6 +475,7 @@ interface ExecutorOptions {
 
 type ToolModeRequest = "native" | "inline" | "auto";
 type ToolModeUsed = "native" | "inline";
+type OutputFormat = "markdown" | "lens-sidecar" | RuntimeSubmitOutputFormat;
 type NativeAdmissionDecision =
   | "native_admitted"
   | "inline_requested"
@@ -335,8 +503,11 @@ interface ExecutorResult {
   output_path: string;
   realization: "ts_inline_http";
   host_runtime: "anthropic" | "openai" | "grok" | "lmstudio" | "codex";
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
+  semantic_quality_evidence: ReviewSemanticQualityEvidence;
   /** Tier picked at execution time. "native" = function-calling loop; "inline" = single-turn with all context inlined. */
   tool_mode: ToolModeUsed;
+  output_format?: OutputFormat;
   /** Resolved LLM model used. */
   model_id?: string;
   /** Token usage for cost tracking. */
@@ -369,12 +540,22 @@ interface ExecutorResult {
    * WARNING ONLY, the executor never fails on audit findings alone.
    */
   citation_audit?: CitationAuditResult;
+  sidecar_findings?: number;
 }
 
 function parseToolMode(raw: unknown): ToolModeRequest {
   if (raw === "native" || raw === "inline" || raw === "auto") return raw;
   if (raw === undefined || raw === "") return "auto";
   throw new Error(`Invalid --tool-mode value: ${String(raw)} (expected native | inline | auto)`);
+}
+
+function parseOutputFormat(raw: unknown): OutputFormat {
+  if (raw === "markdown" || raw === undefined || raw === "") return "markdown";
+  if (raw === "lens-sidecar") return raw;
+  if (typeof raw === "string" && isRuntimeSubmitOutputFormat(raw)) return raw;
+  throw new Error(
+    `Invalid --output-format value: ${String(raw)} (expected markdown | lens-sidecar | issue-artifact | issue-stance-response | issue-deliberation-response | deliberation-resolution | issue-synthesis-response)`,
+  );
 }
 
 /**
@@ -528,6 +709,31 @@ function resolveCitationAuditRef(args: {
   );
 }
 
+function stripCitationAuditSourceAnchor(ref: string): string {
+  return ref.split("#", 1)[0]?.trim() ?? "";
+}
+
+function resolveCitationAuditSourceRefCandidates(args: {
+  ref: string;
+  projectRoot: string;
+  sessionRoot: string;
+  ontoHome: string;
+}): string[] {
+  const refPath = stripCitationAuditSourceAnchor(args.ref);
+  if (refPath.length === 0) return [];
+  if (refPath.startsWith("~/")) {
+    return [path.resolve(path.dirname(args.ontoHome), refPath.slice(2))];
+  }
+  if (path.isAbsolute(refPath)) {
+    return [path.resolve(refPath)];
+  }
+  return [
+    path.resolve(args.sessionRoot, refPath),
+    path.resolve(args.projectRoot, refPath),
+    path.resolve(args.ontoHome, refPath),
+  ];
+}
+
 async function resolveCitationAuditAllowedReadRef(args: {
   ref: string;
   projectRoot: string;
@@ -581,12 +787,18 @@ export async function runInlineHttpReviewUnitExecutorCli(
       model: { type: "string" },
       "reasoning-effort": { type: "string" },
       "max-tokens": { type: "string" },
+      "artifact-generation-realization": { type: "string" },
       // Inline embedding control
       "embed-domain-docs": { type: "boolean", default: false },
       // Tool mode: native (Tier 1 function-calling loop) | inline (Tier 2,
       // current behavior) | auto (try native, fall back to inline if the
       // provider rejects tools or no tool_calls came back).
       "tool-mode": { type: "string", default: "auto" },
+      // Output format: markdown writes final text. Structured formats collect
+      // submit_* tool calls and write runtime YAML.
+      "output-format": { type: "string", default: "markdown" },
+      // Optional human markdown projection ref to preserve in lens sidecars.
+      "human-output-ref": { type: "string" },
       // Citation audit (A5) configuration. The audit is post-flight and
       // warning-only; this flag tunes how aggressive the extractor is about
       // what counts as a "significant quote". Default 20 skips noise like
@@ -615,7 +827,17 @@ export async function runInlineHttpReviewUnitExecutorCli(
   const unitKind = requireString(values["unit-kind"], "unit-kind");
   const packetPath = path.resolve(requireString(values["packet-path"], "packet-path"));
   const outputPath = path.resolve(requireString(values["output-path"], "output-path"));
+  const outputFormat = parseOutputFormat(values["output-format"]);
+  const humanOutputRef =
+    typeof values["human-output-ref"] === "string" &&
+    values["human-output-ref"].trim().length > 0
+      ? values["human-output-ref"].trim()
+      : null;
   const embedDomainDocs = Boolean(values["embed-domain-docs"]);
+  const artifactGenerationRealizationValue =
+    typeof values["artifact-generation-realization"] === "string"
+      ? values["artifact-generation-realization"]
+      : undefined;
 
   const maxTokensRaw = values["max-tokens"];
   const maxTokens =
@@ -625,6 +847,15 @@ export async function runInlineHttpReviewUnitExecutorCli(
 
   // Resolve LLM provider config: CLI flags → OntoConfig.
   const ontoConfig = await loadOntoConfig(projectRoot);
+  const artifactGenerationRealization =
+    artifactGenerationRealizationValue ??
+    ontoConfig.review?.execution?.artifact_generation_realization ??
+    "live";
+  if (!isReviewArtifactGenerationRealization(artifactGenerationRealization)) {
+    throw new Error(
+      `Invalid artifact generation realization: ${artifactGenerationRealization}`,
+    );
+  }
   const cliOverrides: LlmProviderCliOverrides = {};
   const providerValue = values.provider;
   if (
@@ -673,6 +904,37 @@ export async function runInlineHttpReviewUnitExecutorCli(
   );
 
   const requestedToolMode = parseToolMode(values["tool-mode"]);
+  const requiresRuntimeSubmit =
+    outputFormat === "lens-sidecar" || isRuntimeSubmitOutputFormat(outputFormat);
+  if (outputFormat === "lens-sidecar" && unitKind !== "lens") {
+    throw new Error("--output-format=lens-sidecar is only supported for unit-kind=lens.");
+  }
+  if (outputFormat === "issue-artifact" && unitKind !== "issue_artifact") {
+    throw new Error("--output-format=issue-artifact is only supported for unit-kind=issue_artifact.");
+  }
+  if (outputFormat === "issue-stance-response" && !unitId.startsWith("issue-stance:")) {
+    throw new Error("--output-format=issue-stance-response requires unit-id=issue-stance:{lens_id}.");
+  }
+  if (outputFormat === "issue-deliberation-response" && !unitId.startsWith("deliberation:")) {
+    throw new Error(
+      "--output-format=issue-deliberation-response requires unit-id=deliberation:{issue_id}:{lens_id}.",
+    );
+  }
+  if (outputFormat === "deliberation-resolution" && unitId !== "controlled-deliberation") {
+    throw new Error(
+      "--output-format=deliberation-resolution is only supported for unit-id=controlled-deliberation.",
+    );
+  }
+  if (outputFormat === "issue-synthesis-response" && !unitId.startsWith("synthesis:")) {
+    throw new Error(
+      "--output-format=issue-synthesis-response requires unit-id=synthesis:{issue_id}.",
+    );
+  }
+  if (requiresRuntimeSubmit && requestedToolMode === "inline") {
+    throw new Error(
+      `--output-format=${outputFormat} requires --tool-mode=native or --tool-mode=auto.`,
+    );
+  }
 
   // Determine which Tier the auto/native paths should attempt. codex provider
   // bypasses callLlmWithTools entirely — auto
@@ -681,6 +943,11 @@ export async function runInlineHttpReviewUnitExecutorCli(
   if (requestedToolMode === "native" && toolLoopProvider === null) {
     throw new Error(
       `--tool-mode=native requires provider in {anthropic, openai, grok, lmstudio}; got "${llmPartial.provider ?? "(auto)"}".`,
+    );
+  }
+  if (requiresRuntimeSubmit && toolLoopProvider === null) {
+    throw new Error(
+      `--output-format=${outputFormat} requires a tool-capable provider in {anthropic, openai, grok, lmstudio}; got "${llmPartial.provider ?? "(auto)"}".`,
     );
   }
 
@@ -707,7 +974,19 @@ export async function runInlineHttpReviewUnitExecutorCli(
         }. ` +
         "All current executor tools (read_file / list_directory / search_content) require filesystem access, " +
         "so a packet cannot deny filesystem while also requiring tools. " +
-        "Remove one of the two declarations.",
+      "Remove one of the two declarations.",
+    );
+  }
+
+  if (
+    requiresRuntimeSubmit &&
+    (packetPolicy.tools === "denied" || packetPolicy.filesystem === "denied")
+  ) {
+    throw new Error(
+      `--output-format=${outputFormat} requires runtime submit tools, but packet Boundary Policy declares ` +
+        `Tools: ${packetPolicy.toolsRaw ?? packetPolicy.tools ?? "(unspecified)"} and Filesystem: ${
+          packetPolicy.filesystemRaw ?? packetPolicy.filesystem ?? "(unspecified)"
+        }. Structured artifact units must allow the native tool loop so the runtime can write the durable YAML artifact.`,
     );
   }
 
@@ -807,6 +1086,11 @@ export async function runInlineHttpReviewUnitExecutorCli(
     });
   let packetReadAuthorityDowngrade = false;
   if (readAuthorityFailure) {
+    if (requiresRuntimeSubmit) {
+      throw new Error(
+        `--output-format=${outputFormat} requires native runtime submit tools, but packet Unit Boundary Details read authority is invalid for unit ${unitId}: ${readAuthorityFailure}. Regenerate prompt packets from the current materializer.`,
+      );
+    }
     const message =
       `Packet Unit Boundary Details read authority is invalid for unit ${unitId}: ` +
       `${readAuthorityFailure}. ` +
@@ -884,9 +1168,17 @@ export async function runInlineHttpReviewUnitExecutorCli(
   let attemptedNativeToolBoundarySkips: ToolBoundarySkipSummary | undefined;
   let nativeToolContext: ToolExecutionContext | undefined;
   let nativeAttemptError: string | undefined;
+  let lensSidecarState: LensSidecarSubmissionState | undefined;
+  let runtimeSubmitState: RuntimeSubmitState | undefined;
 
   if (tryNative && toolLoopProvider) {
-    const systemPrompt = buildSystemPromptToolNative(unitId, unitKind, packetPath, outputPath);
+    const systemPrompt = buildSystemPromptToolNative(
+      unitId,
+      unitKind,
+      packetPath,
+      outputPath,
+      outputFormat,
+    );
     const modelForLoop = llmPartial.model_id ?? llmPartial.models_per_provider?.[toolLoopProvider];
     if (!modelForLoop) {
       throw new Error(
@@ -903,18 +1195,51 @@ export async function runInlineHttpReviewUnitExecutorCli(
         allowedReadRefs: packetReadAuthority.refs,
       });
       nativeToolContext = toolContext;
+      lensSidecarState =
+        outputFormat === "lens-sidecar"
+          ? {
+              sessionId: path.basename(sessionRoot),
+              lensId: unitId,
+              humanOutputRef,
+            }
+          : undefined;
+      runtimeSubmitState = isRuntimeSubmitOutputFormat(outputFormat)
+        ? {
+            sessionId: path.basename(sessionRoot),
+            unitId,
+            outputFormat,
+            ...parseRuntimeSubmitContextForOutputFormat({
+              rawPacketText,
+              unitId,
+              outputFormat,
+            }),
+          }
+        : undefined;
+      const tools = [
+        ...ONTO_DEFAULT_TOOLS,
+        ...(lensSidecarState !== undefined
+          ? createLensSidecarSubmissionTools(lensSidecarState)
+          : []),
+        ...(runtimeSubmitState !== undefined
+          ? createRuntimeSubmitTools(runtimeSubmitState)
+          : []),
+      ];
       const loopResult = await callLlmWithTools(
         systemPrompt,
         userPrompt,
-        ONTO_DEFAULT_TOOLS,
+        tools,
         {
           provider: toolLoopProvider,
           model_id: modelForLoop,
           max_tokens: maxTokens,
+          ...(llmPartial.reasoning_effort
+            ? { reasoning_effort: llmPartial.reasoning_effort }
+            : {}),
           ...(llmPartial.base_url ? { base_url: llmPartial.base_url } : {}),
           ...(llmPartial.api_key_env
             ? { api_key_env: llmPartial.api_key_env }
             : {}),
+          artifact_generation_realization: artifactGenerationRealization,
         },
         toolContext,
       );
@@ -932,7 +1257,11 @@ export async function runInlineHttpReviewUnitExecutorCli(
       // the iteration cap). In ordinary auto mode we downgrade to inline; when
       // the packet declares Tools: required, native execution is the boundary.
       if (outputText.length === 0) {
-        if (requestedToolMode === "auto" && !packetForcedNative) {
+        if (outputFormat === "lens-sidecar" && lensSidecarState?.artifact !== undefined) {
+          outputText = "sidecar submitted";
+        } else if (runtimeSubmitState?.artifact !== undefined) {
+          outputText = `${outputFormat} submitted`;
+        } else if (requestedToolMode === "auto" && !packetForcedNative) {
           nativeAttemptError = `tool-native produced empty final text${
             loopResult.truncated_by_iteration_cap ? " (iteration cap hit)" : ""
           }`;
@@ -947,7 +1276,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
         }
       }
     } catch (err) {
-      if (requestedToolMode === "auto" && !packetForcedNative) {
+      if (requestedToolMode === "auto" && !packetForcedNative && !requiresRuntimeSubmit) {
         nativeAttemptError = err instanceof Error ? err.message : String(err);
         attemptedNativeToolBoundarySkips =
           nativeToolContext !== undefined
@@ -973,6 +1302,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     }
     const systemPrompt = buildSystemPromptInline(unitId, unitKind, packetPath, outputPath);
     const llmConfig: Partial<LlmCallConfig> = { ...llmPartial, max_tokens: maxTokens };
+    llmConfig.artifact_generation_realization = artifactGenerationRealization;
     const result = await callLlm(systemPrompt, userPrompt, llmConfig);
     outputText = result.text.trim();
     modelIdUsed = result.model_id;
@@ -987,15 +1317,41 @@ export async function runInlineHttpReviewUnitExecutorCli(
   // blocks and well-formed markdown untouched. See strip-wrapping-code-fence.ts.
   outputText = stripWrappingCodeFence(outputText);
 
-  if (outputText.length === 0) {
+  if (
+    outputText.length === 0 &&
+    !(outputFormat === "lens-sidecar" && lensSidecarState?.artifact !== undefined) &&
+    runtimeSubmitState?.artifact === undefined
+  ) {
     throw new Error(
       `Inline-HTTP executor produced empty output for unit ${unitId} (provider: ${cliOverrides.provider ?? "auto"}, tool_mode: ${toolModeUsed}).`,
     );
   }
 
-  // Write output file.
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, `${outputText}\n`, "utf8");
+  if (outputFormat === "lens-sidecar") {
+    if (lensSidecarState?.artifact === undefined) {
+      throw new Error(
+        `Lens sidecar mode completed without submit_lens_findings for unit ${unitId}.`,
+      );
+    }
+    await writeValidatedLensSidecarArtifact({
+      sidecarPath: outputPath,
+      artifact: lensSidecarState.artifact,
+      sessionId: path.basename(sessionRoot),
+      lensId: unitId,
+      expectedHumanOutputRef: humanOutputRef,
+    });
+  } else if (runtimeSubmitState !== undefined) {
+    if (runtimeSubmitState.artifact === undefined) {
+      throw new Error(
+        `${outputFormat} mode completed without ${submitToolNameForOutputFormat(runtimeSubmitState.outputFormat)} for unit ${unitId}.`,
+      );
+    }
+    await writeYamlDocument(outputPath, runtimeSubmitState.artifact);
+  } else {
+    // Write output file.
+    await fs.mkdir(path.dirname(outputPath), { recursive: true });
+    await fs.writeFile(outputPath, `${outputText}\n`, "utf8");
+  }
 
   // A5 citation audit — post-flight fabrication detector for synthesize units.
   // Parses the packet's runtime participating lens output section when present,
@@ -1021,7 +1377,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
     try {
       citationAudit = await runCitationAudit(
         rawPacketText,
-        outputText,
+        citationAuditTextForOutput({ outputText, runtimeSubmitState }),
         projectRoot,
         sessionRoot,
         ontoHome,
@@ -1029,6 +1385,7 @@ export async function runInlineHttpReviewUnitExecutorCli(
         outputPath,
         packetReadAuthority,
         minQuoteLength,
+        citationAuditSourceRefsForOutput(runtimeSubmitState),
       );
     } catch (err) {
       const reason = err instanceof Error ? err.message : String(err);
@@ -1049,7 +1406,12 @@ export async function runInlineHttpReviewUnitExecutorCli(
     output_path: outputPath,
     realization: "ts_inline_http",
     host_runtime: deriveHostRuntime(llmPartial.provider),
+    artifact_generation_realization: artifactGenerationRealization,
+    semantic_quality_evidence: semanticQualityEvidenceForArtifactGeneration(
+      artifactGenerationRealization,
+    ),
     tool_mode: toolModeUsed,
+    ...(outputFormat !== "markdown" ? { output_format: outputFormat } : {}),
     input_tokens: inputTokensUsed,
     output_tokens: outputTokensUsed,
     ...(modelIdUsed !== undefined ? { model_id: modelIdUsed } : {}),
@@ -1075,6 +1437,9 @@ export async function runInlineHttpReviewUnitExecutorCli(
         : {}),
     },
     ...(citationAudit !== undefined ? { citation_audit: citationAudit } : {}),
+    ...(lensSidecarState?.artifact !== undefined
+      ? { sidecar_findings: lensSidecarState.artifact.findings.length }
+      : {}),
   };
 
   console.log(JSON.stringify(executorResult, null, 2));
@@ -1101,9 +1466,24 @@ async function runCitationAudit(
   outputPath: string,
   authority: ReturnType<typeof parsePacketAllowedReadAuthority>,
   minQuoteLength?: number,
+  sourceRefsUsed: string[] = [],
 ): Promise<CitationAuditResult | undefined> {
-  const participating = parseParticipatingLensPaths(rawPacketText);
-  if (participating.length === 0) return undefined;
+  const participatingSources = parseParticipatingLensPaths(rawPacketText).map(
+    (source) => ({
+      id: source.lensId,
+      ref: source.path,
+      kind: "participating_lens" as const,
+    }),
+  );
+  const sourceRefSources = sourceRefsUsed.map((ref, index) => ({
+    id: `source_ref_${index + 1}`,
+    ref,
+    kind: "source_ref" as const,
+  }));
+  const auditSources =
+    participatingSources.length > 0 ? participatingSources : sourceRefSources;
+  if (auditSources.length === 0) return undefined;
+  const usingSourceRefs = participatingSources.length === 0;
   const readAuthorityFailure =
     describeReadAuthorityFailure(authority) ??
     describeBoundaryDetailsMismatch({
@@ -1144,39 +1524,56 @@ async function runCitationAudit(
       // stale allowed_read_refs entry cannot downgrade the whole audit.
     }
   }
-  for (const { lensId, path: lensPath } of participating) {
-    const absPath = path.isAbsolute(lensPath)
-      ? lensPath
-      : path.resolve(projectRoot, lensPath);
+  for (const source of auditSources) {
+    const candidates =
+      source.kind === "participating_lens"
+        ? [
+            path.isAbsolute(source.ref)
+              ? source.ref
+              : path.resolve(projectRoot, source.ref),
+          ]
+        : resolveCitationAuditSourceRefCandidates({
+            ref: source.ref,
+            projectRoot,
+            sessionRoot,
+            ontoHome,
+          });
     let realLensPath: string | null = null;
     let pathInsideAllowedRoot = false;
     let realpathFailed = false;
-    for (const allowedRoot of allowedRoots) {
-      try {
-        await assertPathInsideRoot({
-          root: allowedRoot,
-          candidate: absPath,
-          label: `citation audit lens path ${lensId}`,
-        });
-        pathInsideAllowedRoot = true;
+    let missingCandidateSeen = false;
+    for (const absPath of candidates) {
+      for (const allowedRoot of allowedRoots) {
         try {
-          realLensPath = await fs.realpath(absPath);
-        } catch {
-          realpathFailed = true;
+          await assertPathInsideRoot({
+            root: allowedRoot,
+            candidate: absPath,
+            label: `citation audit ${source.kind} ${source.id}`,
+          });
+          pathInsideAllowedRoot = true;
+          try {
+            realLensPath = await fs.realpath(absPath);
+          } catch {
+            missingCandidateSeen = true;
+            realpathFailed = source.kind === "participating_lens";
+            break;
+          }
           break;
+        } catch {
+          // Try the next allowed root before declaring the path unreadable.
+          realLensPath = null;
         }
+      }
+      if (realLensPath !== null || realpathFailed) {
         break;
-      } catch {
-        // Try the next allowed root before declaring the path unreadable.
-        realLensPath = null;
       }
     }
     if (realLensPath === null) {
       const reason =
-        pathInsideAllowedRoot && realpathFailed
+        pathInsideAllowedRoot && (realpathFailed || missingCandidateSeen)
           ? "unreadable or missing"
           : "outside allowed root";
-      unreadable.push(`${lensId} (${lensPath}: ${reason})`);
+      unreadable.push(`${source.id} (${source.ref}: ${reason})`);
       continue;
     }
     if (
@@ -1184,27 +1581,30 @@ async function runCitationAudit(
         isPathUnder(realLensPath, allowedRef),
       )
     ) {
-      unreadable.push(`${lensId} (${lensPath}: outside allowed_read_refs)`);
+      unreadable.push(`${source.id} (${source.ref}: outside allowed_read_refs)`);
       continue;
     }
     try {
       const content = await fs.readFile(realLensPath, "utf8");
       lensContents.push(content);
     } catch {
-      unreadable.push(`${lensId} (${lensPath})`);
+      unreadable.push(`${source.id} (${source.ref})`);
     }
   }
 
   if (lensContents.length === 0) {
     // No lens file readable — don't audit against an empty pool (every quote
     // would trivially be unmatched, producing noise). Surface the state.
+    const readableSourceLabel = usingSourceRefs
+      ? "citation source refs"
+      : "lens outputs";
     process.stderr.write(
-      `[onto] citation audit skipped for unit ${unitId}: no lens outputs readable (${unreadable.length}/${participating.length} failed). ` +
-        "Audit requires at least one readable lens for meaningful detection. " +
+      `[onto] citation audit skipped for unit ${unitId}: no ${readableSourceLabel} readable (${unreadable.length}/${auditSources.length} failed). ` +
+        "Audit requires at least one readable source artifact for meaningful detection. " +
         `Failed refs: ${unreadable.join(", ")}.\n`,
     );
     return skippedCitationAudit({
-      reason: `no lens outputs readable (${unreadable.length}/${participating.length} failed)`,
+      reason: `no ${readableSourceLabel} readable (${unreadable.length}/${auditSources.length} failed)`,
       failedRefs: unreadable,
       minQuoteLength,
     });
@@ -1215,9 +1615,12 @@ async function runCitationAudit(
   const result = auditCitations(outputText, lensContents, auditOptions);
 
   if (unreadable.length > 0) {
+    const readableSourceLabel = usingSourceRefs
+      ? "source ref(s)"
+      : "lens file(s)";
     process.stderr.write(
-      `[onto] citation audit partial for unit ${unitId}: ${unreadable.length}/${participating.length} lens file(s) unreadable (${unreadable.join(", ")}). ` +
-        "Remaining lens files used as audit pool.\n",
+      `[onto] citation audit partial for unit ${unitId}: ${unreadable.length}/${auditSources.length} ${readableSourceLabel} unreadable (${unreadable.join(", ")}). ` +
+        "Remaining source artifacts used as audit pool.\n",
     );
     result.coverage_status = "partial";
     result.failed_refs = unreadable;

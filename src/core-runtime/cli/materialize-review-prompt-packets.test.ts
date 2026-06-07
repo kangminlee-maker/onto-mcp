@@ -4,6 +4,7 @@ import {
   renderBoundaryPolicySection,
   renderEmbeddedMaterializedInputSection,
   renderLensOutputSchemaGate,
+  renderLensSidecarOutputContract,
   renderUnitBoundaryDetailsSection,
 } from "./materialize-review-prompt-packets.js";
 
@@ -22,6 +23,20 @@ describe("renderLensOutputSchemaGate", () => {
     expect(text).toContain("source_doc");
     expect(text).toContain("source_version_or_snapshot_id");
     expect(text).toContain("anchor");
+  });
+});
+
+describe("renderLensSidecarOutputContract", () => {
+  it("requires tool submission and names optional markdown projection", () => {
+    const text = renderLensSidecarOutputContract({
+      sessionDomain: "none",
+      humanOutputPath: "/repo/.onto/review/session/round1/logic.md",
+      projectRoot: "/repo",
+    });
+
+    expect(text).toContain("submit_lens_findings");
+    expect(text).toContain("Do not write markdown or YAML yourself");
+    expect(text).toContain(".onto/review/session/round1/logic.md");
   });
 });
 

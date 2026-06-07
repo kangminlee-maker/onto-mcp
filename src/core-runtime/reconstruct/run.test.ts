@@ -38,10 +38,8 @@ import type {
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
-  createAutoAcceptReconstructConfirmationProvider,
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
-  createMockReconstructDirectiveAuthor,
   runReconstruct,
 } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -360,8 +358,8 @@ describe("runReconstruct", () => {
         text,
         input_tokens: 1,
         output_tokens: 1,
-        model_id: "fake-live-model",
-        effective_base_url: "test://fake-live",
+        model_id: "reconstruct-fixture-model",
+        effective_base_url: "test://reconstruct-fixture",
         declared_billing_mode: "local",
       });
     };
@@ -506,8 +504,8 @@ describe("runReconstruct", () => {
         text,
         input_tokens: 1,
         output_tokens: 1,
-        model_id: "fake-live-model",
-        effective_base_url: "test://fake-live",
+        model_id: "reconstruct-fixture-model",
+        effective_base_url: "test://reconstruct-fixture",
         declared_billing_mode: "local",
       });
     };
@@ -577,8 +575,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         });
       },
@@ -933,8 +931,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         });
       },
@@ -1092,8 +1090,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         }),
     });
@@ -1510,7 +1508,7 @@ describe("runReconstruct", () => {
     expect(result.no_next_frontier_rationale).toBeNull();
   });
 
-  function fakeLiveLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
+  function reconstructFixtureLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
     const input = JSON.parse(userPrompt) as Record<string, any>;
     const observations = (input.source_observations ?? []) as Array<{
       observation_id: string;
@@ -2183,14 +2181,14 @@ describe("runReconstruct", () => {
         "The runtime footer should add exact artifact truth refs.",
       ].join("\n");
     } else {
-      throw new Error(`Unexpected fake live LLM prompt: ${systemPrompt.slice(0, 80)}`);
+      throw new Error(`Unexpected reconstruct fixture LLM prompt: ${systemPrompt.slice(0, 80)}`);
     }
     return Promise.resolve({
       text,
       input_tokens: 1,
       output_tokens: 1,
-      model_id: "fake-live-model",
-      effective_base_url: "test://fake-live",
+      model_id: "reconstruct-fixture-model",
+      effective_base_url: "test://reconstruct-fixture",
       declared_billing_mode: "local",
     });
   }
@@ -2883,10 +2881,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     });
 
     expect(result.status).toBe("completed");
@@ -2908,11 +2910,11 @@ describe("runReconstruct", () => {
     expect(result.metrics.failure_kind_counts.insufficient_evidence).toBe(0);
     expect(result.metrics.revision_proposal_action_counts.extend).toBe(0);
     expect(result.stopDecision.decision).toBe("stop");
-    expect(result.finalOutputText).toContain("Confirmed Seed Content");
-    expect(result.finalOutputText).toContain("Claim Realization Summary");
-    expect(result.finalOutputText).toContain("Competency Question Assessment");
-    expect(result.finalOutputText).toContain("Failure Classifications");
-    expect(result.finalOutputText).toContain("Revision Proposals");
+    expect(result.finalOutputText).toContain("Seed Answerability");
+    expect(result.finalOutputText).toContain("Claim Projection");
+    expect(result.finalOutputText).toContain("Artifact Truth");
+    expect(result.finalOutputText).toContain("Runtime Provenance Bindings");
+    expect(result.finalOutputText).toContain("full_integral_exploration");
 
     const record = await readYaml<ReconstructRecordArtifact>(
       result.reconstructRecordPath,
@@ -3045,7 +3047,7 @@ describe("runReconstruct", () => {
     });
     expect(claimProjectionValidation.validation_status).toBe("valid");
     expect(claimProjectionValidation.strongest_claim_level)
-      .toBe("blocked");
+      .toBe("actionable_ready");
     expect(registryVerificationEvidenceValidation.validation_status)
       .toBe("valid");
     expect(registryVerificationEvidenceValidation.validation_gate_count)
@@ -3059,11 +3061,10 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Claim Projection");
     expect(result.finalOutputText)
       .toContain("Public claim truth is owned by the claim projection artifact");
-    expect(result.finalOutputText).toContain("Strongest claim level: blocked");
+    expect(result.finalOutputText)
+      .toContain("Strongest claim level: actionable_ready");
     expect(result.finalOutputText).toContain("Decision states:");
     expect(result.finalOutputText).toContain("Actionability claims:");
-    expect(result.finalOutputText)
-      .toContain("No ActionableOntology artifact is claimed or emitted");
     expect(result.finalOutputText).not.toContain("Claim level:");
     expect(result.finalOutputText).not.toContain("Actionability claim:");
     expect(result.finalOutputText).toContain("source-safety-ledger.yaml");
@@ -3127,18 +3128,20 @@ describe("runReconstruct", () => {
       .toContain("graph-exploration-proofs.yaml");
     expect(record.artifact_refs.graph_exploration_proofs_validation)
       .toContain("graph-exploration-proofs-validation.yaml");
-    expect(record.artifact_refs.actionable_ontology).toBeNull();
-    expect(record.artifact_refs.actionable_ontology_validation).toBeNull();
+    expect(record.artifact_refs.actionable_ontology)
+      .toContain("actionable-ontology.yaml");
+    expect(record.artifact_refs.actionable_ontology_validation)
+      .toContain("actionable-ontology-validation.yaml");
     expect(record.validation_summary.failure_count).toBe(0);
     expect(record.validation_summary.revision_proposal_count).toBe(0);
     expect(manifest.runtime_boundary).toMatchObject({
       semantic_generation: "not_performed",
-      semantic_authority: "host_llm_or_mock_author",
+      semantic_authority: "host_llm_author",
     });
     expect(manifest.execution_profile).toMatchObject({
-      profile_kind: "mock_semantic_slice",
-      semantic_author_realization: "mock",
-      confirmation_provider_realization: "mock",
+      profile_kind: "full_integral_exploration",
+      semantic_author_realization: "direct_call",
+      confirmation_provider_realization: "direct_call",
     });
     expect(manifest.purpose_adequacy_scope.deferred_artifacts).toEqual([]);
     expect(manifest.steps.find((step) => step.step_id === "seed_candidate"))
@@ -3148,8 +3151,8 @@ describe("runReconstruct", () => {
         owner: "host_or_user",
         performed_by: {
           authority: "host_or_user",
-          realization: "mock",
-          actor_id: "mock-mixed-confirmation-provider",
+          realization: "direct_call",
+          actor_id: "direct-call-reconstruct-confirmation-provider",
         },
       });
     expect(manifest.steps.find((step) => step.step_id === "final_output"))
@@ -3173,10 +3176,10 @@ describe("runReconstruct", () => {
       step.step_id === "maturation_question_frontier_validation"
     )).toMatchObject({ status: "completed" });
     expect(manifest.steps.find((step) => step.step_id === "actionable_ontology"))
-      .toMatchObject({ status: "skipped" });
+      .toMatchObject({ status: "completed" });
     expect(manifest.steps.find((step) =>
       step.step_id === "actionable_ontology_validation"
-    )).toMatchObject({ status: "skipped" });
+    )).toMatchObject({ status: "completed" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
       "run_control",
@@ -3282,10 +3285,12 @@ describe("runReconstruct", () => {
   it("authors confirmation before competency questions and uses only CQ-eligible claims", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "eligibility-run");
-    const baseConfirmationProvider = createAutoAcceptReconstructConfirmationProvider();
+    const baseConfirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+    });
     const confirmationProvider: ReconstructConfirmationProvider = {
-      providerId: "fixture-reject-first-claim-provider",
-      owner: "mock" as const,
+      providerId: "direct-call-reject-first-claim-provider",
+      owner: "host_or_user" as const,
       confirmPurpose: baseConfirmationProvider.confirmPurpose.bind(baseConfirmationProvider),
       async confirmOntologySeed(input) {
         const artifact = await baseConfirmationProvider.confirmOntologySeed(input);
@@ -3301,11 +3306,11 @@ describe("runReconstruct", () => {
           ],
           notes: [
             ...artifact.notes,
-            "Fixture rejects one claim before competency-question authoring.",
+            "Test provider rejects one claim before competency-question authoring.",
           ],
           confirmation_provider: {
-            owner: "mock" as const,
-            provider_id: "fixture-reject-first-claim-provider",
+            owner: "host_or_user" as const,
+            provider_id: "direct-call-reject-first-claim-provider",
           },
         };
       },
@@ -3318,9 +3323,11 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
       confirmationProvider,
     })).resolves.toMatchObject({
       status: "completed",
@@ -3394,10 +3401,14 @@ describe("runReconstruct", () => {
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       domain: "fixture",
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     });
 
     const competencyQuestions =
@@ -3718,7 +3729,7 @@ describe("runReconstruct", () => {
         confirmationClaimSummaries.push(input.claim_summaries ?? []);
       }
       if (systemPrompt.includes("Write competency questions")) {
-        return fakeLiveLlm(systemPrompt, userPrompt).then((llmResult) => {
+        return reconstructFixtureLlm(systemPrompt, userPrompt).then((llmResult) => {
           const authored = JSON.parse(llmResult.text) as {
             questions?: Array<{ question?: string }>;
           };
@@ -3732,7 +3743,7 @@ describe("runReconstruct", () => {
           return { ...llmResult, text: JSON.stringify(authored) };
         });
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const result = await runReconstruct({
       projectRoot,
@@ -4431,7 +4442,7 @@ describe("runReconstruct", () => {
       }
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         ontologySeedCallCount += 1;
-        const result = await fakeLiveLlm(systemPrompt, userPrompt);
+        const result = await reconstructFixtureLlm(systemPrompt, userPrompt);
         if (ontologySeedCallCount === 1) {
           const seed = JSON.parse(result.text) as Record<string, any>;
           seed.kinetic_layer = {
@@ -4445,7 +4456,7 @@ describe("runReconstruct", () => {
         }
         return result;
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4512,9 +4523,9 @@ describe("runReconstruct", () => {
         )
       ) {
         retrySeedPromptSeen = true;
-        return fakeLiveLlm("Author ontology-seed.yaml", userPrompt);
+        return reconstructFixtureLlm("Author ontology-seed.yaml", userPrompt);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4575,7 +4586,7 @@ describe("runReconstruct", () => {
           new Error("codex CLI call timed out after 120000ms"),
         );
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -4630,9 +4641,9 @@ describe("runReconstruct", () => {
         )
       ) {
         retrySourcePurposePromptSeen = true;
-        return fakeLiveLlm("Author source-purpose-candidates.yaml", userPrompt);
+        return reconstructFixtureLlm("Author source-purpose-candidates.yaml", userPrompt);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4682,7 +4693,7 @@ describe("runReconstruct", () => {
           new Error("codex CLI call timed out after 120000ms"),
         );
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4793,7 +4804,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const result = await runReconstruct({
       projectRoot,
@@ -4994,7 +5005,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const baseDirectiveAuthor = createDirectCallReconstructDirectiveAuthor({
       llmCall,
@@ -5272,7 +5283,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -5365,7 +5376,7 @@ describe("runReconstruct", () => {
         competencyAssessmentPayloads.push(JSON.parse(userPrompt));
         competencyAssessmentPromptSizes.push(systemPrompt.length + userPrompt.length);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -5486,7 +5497,7 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         throw new Error("ontology seed author timed out");
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -5521,7 +5532,7 @@ describe("runReconstruct", () => {
     const retryPrompts: string[] = [];
     const retryLlmCall = (systemPrompt: string, userPrompt: string) => {
       retryPrompts.push(systemPrompt);
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     await expect(runReconstruct({
       projectRoot,
@@ -5556,13 +5567,13 @@ describe("runReconstruct", () => {
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
@@ -5582,7 +5593,7 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         throw new Error("ontology seed author timed out");
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -5621,13 +5632,13 @@ describe("runReconstruct", () => {
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
@@ -5647,7 +5658,7 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
         throw new Error("failure classification timed out");
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -5695,13 +5706,13 @@ describe("runReconstruct", () => {
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
@@ -5719,7 +5730,7 @@ describe("runReconstruct", () => {
     const prompts: string[] = [];
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       prompts.push(systemPrompt);
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -5769,10 +5780,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     })).rejects.toThrow(/runtime_implementation_status=planned/);
   });
 
@@ -5795,10 +5810,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     })).resolves.toMatchObject({
       status: "completed",
     });
@@ -5831,7 +5850,7 @@ describe("runReconstruct", () => {
     expect(metrics.source_observation_count).toBe(1);
     expect(metrics.selected_observation_count).toBe(1);
     expect(metrics.unresolved_question_count).toBeGreaterThan(0);
-    expect(stopDecision.decision).toBe("ask_user");
+    expect(stopDecision.decision).toBe("continue");
     expect(preHandoffManifestValidation.validation_status).toBe("valid");
     expect(handoffDecisionValidation.validation_status).toBe("valid");
     expect(handoffDecisionValidation.readiness_projection).toBe("not_ready");

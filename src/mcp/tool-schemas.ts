@@ -62,6 +62,7 @@ export const OntoReviewStatusInputSchema = z.object({
   target: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
   requestHash: z.string().min(1).optional(),
+  createdAfter: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(20).optional(),
   projectionLevel: z.enum(["compact", "standard", "full"]).optional(),
 }).strict().refine((input) => (

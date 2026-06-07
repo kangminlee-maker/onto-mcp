@@ -96,6 +96,10 @@ describe("resolveSettingsChain", () => {
         ...v3ReviewSettings({ effort: "high" }).review,
         mode: "full",
         domains: ["ontology"],
+        artifacts: {
+          lens_output_format: "sidecar",
+          write_lens_markdown: false,
+        },
       },
     });
 
@@ -113,6 +117,57 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.synthesize?.llm).toEqual(
       fullOauthLlm("xhigh"),
     );
+    expect(settings.review?.artifacts).toEqual({
+      lens_output_format: "sidecar",
+      write_lens_markdown: false,
+    });
+  });
+
+  it("accepts v3 review actor llm settings that omit auth and default to OAuth", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      ...v3ReviewSettings(),
+      review: {
+        ...v3ReviewSettings().review,
+        execution: {
+          ...v3ReviewSettings().review.execution,
+          actors: {
+            teamlead: {
+              seat: "main",
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "medium",
+                service_tier: "fast",
+              },
+            },
+            lens: {
+              seat: "worker",
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "medium",
+                service_tier: "fast",
+              },
+            },
+            synthesize: {
+              seat: "worker",
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "xhigh",
+                service_tier: "fast",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.teamlead?.llm?.auth).toBeUndefined();
+    expect(settings.review?.execution?.teamlead?.llm?.provider).toBe("openai");
   });
 
   it("parses commented v3 settings with reconstruct actor llm blocks", async () => {
@@ -135,7 +190,7 @@ describe("resolveSettingsChain", () => {
         } },
         "synthesize": { "seat": "worker", "llm": {
           "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
-          "effort": "xhigh", "service_tier": "fast"
+          "effort": "medium", "service_tier": "fast"
         } }
       }
     }
@@ -145,7 +200,7 @@ describe("resolveSettingsChain", () => {
       "actors": {
         "semantic_author": { "llm": {
           "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
-          "effort": "high", "service_tier": "fast"
+          "effort": "medium", "service_tier": "fast"
         } },
         "confirmation_provider": { "llm": {
           "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
@@ -165,9 +220,110 @@ describe("resolveSettingsChain", () => {
       fullOauthLlm("medium"),
     );
     expect(resolveReconstructActorLlmSettings(settings, "semantic_author"))
-      .toEqual(fullOauthLlm("high"));
+      .toEqual(fullOauthLlm("medium"));
     expect(resolveReconstructActorLlmSettings(settings, "confirmation_provider"))
       .toEqual(fullOauthLlm("medium"));
+  });
+
+  it("parses review execution retry settings from v3 settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      lens_max_retries: 7,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 5,
+      synthesis_max_retries: 1,
+      retry_initial_delay_ms: 250,
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry).toEqual({
+      lens_max_retries: 7,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 5,
+      synthesis_max_retries: 1,
+      retry_initial_delay_ms: 250,
+    });
+  });
+
+  it("materializes partial review retry settings into an effective policy", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      lens_max_retries: 3,
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry).toEqual({
+      lens_max_retries: 3,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 2,
+      synthesis_max_retries: 2,
+      retry_initial_delay_ms: 3000,
+    });
+  });
+
+  it("parses review max_concurrent_lenses from project settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.max_concurrent_lenses = 3;
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.max_concurrent_lenses).toBe(3);
+  });
+
+  it("parses and merges review unit execution settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const userSettings = v3ReviewSettings();
+    userSettings.review.execution.units = {
+      lens: {
+        llm: { effort: "high" },
+        max_tokens: 9000,
+        tool_mode: "auto",
+        timeout_ms: 300000,
+        max_retries: 2,
+        retry_initial_delay_ms: 1000,
+        max_output_bytes: 262144,
+      },
+    };
+    const projectSettings = v3ReviewSettings();
+    projectSettings.review.execution.units = {
+      lens: {
+        llm: { model: "gpt-5.5-review", effort: "xhigh" },
+        max_tokens: 12000,
+      },
+      issue_stance_matrix: {
+        timeout_ms: 120000,
+        max_output_bytes: 65536,
+      },
+    };
+    writeJson(userSettingsPath(), userSettings);
+    writeJson(projectSettingsPath(projectRoot), projectSettings);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.units?.lens).toEqual({
+      llm: {
+        effort: "xhigh",
+        model: "gpt-5.5-review",
+      },
+      max_tokens: 12000,
+      tool_mode: "auto",
+      timeout_ms: 300000,
+      max_retries: 2,
+      retry_initial_delay_ms: 1000,
+      max_output_bytes: 262144,
+    });
+    expect(settings.review?.execution?.units?.issue_stance_matrix).toEqual({
+      timeout_ms: 120000,
+      max_output_bytes: 65536,
+    });
   });
 
   it("allows absent settings files without manufacturing legacy defaults", async () => {
@@ -269,6 +425,24 @@ describe("resolveSettingsChain", () => {
     );
   });
 
+  it("rejects disabling lens markdown outside sidecar artifact mode", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      ...v3ReviewSettings(),
+      review: {
+        ...v3ReviewSettings().review,
+        artifacts: {
+          lens_output_format: "markdown",
+          write_lens_markdown: false,
+        },
+      },
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "write_lens_markdown=false requires lens_output_format=sidecar",
+    );
+  });
+
   it("rejects service_tier outside codex OAuth actor settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(
@@ -285,7 +459,30 @@ describe("resolveSettingsChain", () => {
     );
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "service_tier is codex-only",
+      "service_tier requires the external OAuth worker route",
+    );
+  });
+
+  it("validates unit llm overrides against their effective actor route", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings({
+      synthesizeLlm: {
+        auth: "api_key",
+        provider: "openai",
+        model: "gpt-5.5",
+      },
+    });
+    settingsDoc.review.execution.units = {
+      synthesis_response: {
+        llm: {
+          service_tier: "fast",
+        },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "review.execution.units.synthesis_response.llm is invalid",
     );
   });
 });

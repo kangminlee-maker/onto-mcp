@@ -119,6 +119,7 @@ export function buildLedgerTrust(args: {
   status: PipelineExecutionUnitStatus;
   outputRefs: readonly string[];
   outputHashes: Record<string, string | null>;
+  expectedOutputHashes?: Record<string, string>;
   upstreamTrusted: boolean;
   lastFailureMessage?: string | null;
 }): Pick<PipelineExecutionLedgerUnitEntry, "trustStatus" | "trustReason"> {
@@ -136,6 +137,17 @@ export function buildLedgerTrust(args: {
       return {
         trustStatus: "untrusted",
         trustReason: `Completed unit is missing required output refs: ${missingOutputRefs.join(", ")}.`,
+      };
+    }
+    const mismatchedOutputRefs = Object.entries(args.expectedOutputHashes ?? {})
+      .filter(([outputRef, expectedHash]) =>
+        expectedHash.length > 0 && args.outputHashes[outputRef] !== expectedHash
+      )
+      .map(([outputRef]) => outputRef);
+    if (mismatchedOutputRefs.length > 0) {
+      return {
+        trustStatus: "untrusted",
+        trustReason: `Completed unit output hash does not match review-run-manifest: ${mismatchedOutputRefs.join(", ")}.`,
       };
     }
     return {

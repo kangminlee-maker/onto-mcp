@@ -101,18 +101,18 @@ non_material_finding = severity in [low, info]
 Severity classifies how strongly a finding affects trust in the reviewed result
 for its declared purpose.
 
-| Severity | Material? | Definition | Action implication |
+| Severity | Material candidate? | Definition | Action implication |
 |---|---:|---|---|
-| `blocker` | yes | The declared primary happy path cannot be achieved by any intended user, or the result appears trustworthy while breaking a core contract. | Present first; usually `fix_now` or explicit scope change before relying on the result. |
-| `high` | yes | A supported user group, environment, data condition, or execution path cannot achieve the declared purpose. | Present before release/use; requires fix, scope exclusion, or accepted risk. |
-| `medium` | yes | The primary happy path remains possible, but trust, auditability, reproducibility, completeness, or decision quality is meaningfully weakened. | Requires owner, follow-up, evidence, or accepted risk before closure claims. |
+| `blocker` | yes | The declared primary happy path cannot be achieved by any intended user, or the result appears trustworthy while breaking a core contract. | Present first after admission; usually `fix_now` or explicit scope change before relying on the result. |
+| `high` | yes | A supported user group, environment, data condition, or execution path cannot achieve the declared purpose. | Present before release/use after admission; requires fix, scope exclusion, or accepted risk. |
+| `medium` | yes | The primary happy path remains possible, but trust, auditability, reproducibility, completeness, or decision quality is meaningfully weakened. | Requires owner, follow-up, evidence, or accepted risk before closure claims after admission. |
 | `low` | no | Improvement opportunity that does not make the reviewed result unsafe to trust for its declared purpose. | Can move to backlog or follow-up. |
 | `info` | no | Observation, question, or evidence gap that is not yet an issue. | Ask for evidence, watch, or ignore. |
 
 Rules:
 
 1. `severity` is finding-level or issue-level depending on the artifact layer.
-2. `blocker`, `high`, and `medium` are material issues.
+2. `blocker`, `high`, and `medium` are material-severity candidates; they become material issues only after problem-framing admission.
 3. `low` and `info` are not material issues.
 4. A severity claim must cite evidence. Without evidence, use `info` or a
    domain-specific `needs_evidence` classification in problem framing.
@@ -243,7 +243,7 @@ known.
 Minimum content:
 
 - environment: host/runtime route, project root, session root
-- method: execution realization, worker/direct-call/mock route, selected lens ids
+- method: execution realization, worker/direct-call route, selected lens ids
 - model: non-secret teamlead, lens, and synthesize model/profile summary
 - domain: selected domain and domain profile status
 - target: what content will be reviewed
@@ -476,7 +476,7 @@ llmPresentation:
       latest_update:
         interim_signal_status: lens_local
         summary: "logic reported 2 medium contract-risk findings"
-        evidence_refs: ["round1/logic.md"]
+        evidence_refs: ["round1/logic.findings.yaml"]
       halt: null
 ```
 
@@ -585,7 +585,7 @@ Minimum presentation facts:
 
 Primary artifact refs:
 
-- `round1/{lens_id}.md`
+- `round1/{lens_id}.findings.yaml` in sidecar mode, or `round1/{lens_id}.md` in markdown mode
 - `lens-completion-barrier.yaml`
 - `execution-result.yaml`
 - `review-run-manifest.yaml`
@@ -601,7 +601,7 @@ Minimum presentation facts:
 
 - finding count by severity
 - root-cause issue count by severity
-- material issue count derived from severity
+- material issue count derived from severity plus problem-framing admission
 - evidence gaps
 - relation/root hypothesis summary
 
@@ -633,7 +633,8 @@ Primary artifact refs:
 
 - `deliberation-plan.yaml`
 - `deliberation/round1/{lens_id}.md`
-- `deliberation.md`
+- `deliberation-resolution.yaml`
+- `deliberation.md` projection
 - `execution-result.yaml`
 - `review-run-manifest.yaml`
 
@@ -657,7 +658,8 @@ Minimum presentation facts:
 
 Primary artifact refs:
 
-- `synthesis.md`
+- `synthesis-ledger.yaml`
+- `synthesis.md` projection
 - `final-output.md`
 - `review-record.yaml`
 
@@ -696,8 +698,8 @@ Human-readable final output should use this order:
 
 1. **Review Basis**: declared purpose, target, domain, boundary, route summary.
 2. **Classification Summary**: highest severity and severity counts.
-3. **Material Issues**: `blocker`, `high`, `medium` findings or issues.
-4. **Non-Material Findings**: `low`, `info`, and evidence observations.
+3. **Material Issues**: admitted `blocker`, `high`, `medium` findings or issues.
+4. **Non-Material Findings**: `low`, `info`, evidence observations, and material-severity candidates disqualified by problem framing.
 5. **Action Candidates**: next options grouped by finding/issue.
 6. **Evidence and Limits**: what was reviewed, what was not verified, and why.
 7. **Artifact Refs**: primary refs needed for audit or follow-up.
@@ -736,7 +738,7 @@ MCP, CLI, and final-output rendering must align on the same facts:
 | progress and step identity | `review-run-manifest.yaml` |
 | target/profile/boundary | execution-preparation artifacts |
 | issue/finding truth | issue-stage artifacts |
-| deliberation truth | `deliberation.md` and deliberation artifacts |
+| deliberation truth | `deliberation-resolution.yaml` |
 | primary aggregate | `review-record.yaml` |
 | human explanation | `final-output.md` and host-rendered `llmPresentation` |
 
@@ -834,7 +836,7 @@ This UX contract is implemented when:
    available,
 7. intermediate finding-like updates are labeled with interim signal status,
 8. every completed review exposes highest severity and severity counts,
-9. material issues are derived from severity and rendered before non-material
+9. material issues are derived from severity plus problem-framing admission and rendered before non-material
    findings,
 10. every material issue has affected purpose, failure condition, impact, and
    evidence refs,

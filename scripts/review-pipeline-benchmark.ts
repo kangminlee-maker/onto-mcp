@@ -20,12 +20,12 @@ const TSX = path.join(
 const DEFAULT_TIMEOUT_MS = 240000;
 
 type BenchmarkCaseId = "existing-low-effort" | "controlled-high-effort";
-type ExecutorRealization = "mock" | "codex" | "ts_inline_http";
+type ExecutorRealization = "codex" | "ts_inline_http";
 
 interface BenchmarkOptions {
   runs: number;
   caseIds: BenchmarkCaseId[];
-  executorRealization: ExecutorRealization;
+  executorRealization?: ExecutorRealization;
   model: string;
   provider: string;
   auth: string;
@@ -73,6 +73,9 @@ interface ReviewRunManifest {
     deliberation?: string;
     effort?: string;
     runtime_route?: {
+      execution_route?: string;
+      execution_adapter?: string;
+      model_provider?: string | null;
       execution_realization?: string;
       host_runtime?: string;
       worker_executor?: string;
@@ -200,10 +203,11 @@ function usage(): string {
     "Options:",
     "  --runs <n>                         Runs per case. Default: 1",
     "  --case <existing-low-effort|controlled-high-effort|both>",
-    "  --executor-realization <mock|codex|ts_inline_http>",
+    "  --executor-realization <codex|ts_inline_http>",
+    "                                     Debug-only legacy CLI override. Omit to use project config.",
     "  --model <model-id>                  Default: gpt-5.5",
     "  --provider <provider>               Default: openai",
-    "  --auth <auth-mode>                  Default: oauth, or api_key for ts_inline_http",
+    "  --auth <auth-mode>                  Default: oauth. ts_inline_http requires explicit api_key or local",
     "  --baseline-effort <effort>          Default: low",
     "  --candidate-effort <effort>         Default: xhigh",
     "  --lens-id <id>                      Restrict selected lenses. May repeat",
@@ -254,15 +258,16 @@ function parseOptions(argv: string[]): BenchmarkOptions {
   });
 
   const executorRealization =
-    (readOption(argv, "executor-realization") ?? "mock") as ExecutorRealization;
+    readOption(argv, "executor-realization") as ExecutorRealization | undefined;
   if (
-    executorRealization !== "mock" &&
+    executorRealization !== undefined &&
     executorRealization !== "codex" &&
     executorRealization !== "ts_inline_http"
   ) {
-    throw new Error(`Unknown --executor-realization value: ${executorRealization}`);
+    throw new Error(
+      `Unknown debug --executor-realization value: ${executorRealization}`,
+    );
   }
-
   const runs = Number.parseInt(readOption(argv, "runs") ?? "1", 10);
   if (!Number.isFinite(runs) || runs <= 0) {
     throw new Error("--runs must be a positive integer.");
@@ -275,9 +280,13 @@ function parseOptions(argv: string[]): BenchmarkOptions {
     10,
   );
 
-  const auth =
-    readOption(argv, "auth") ??
-    (executorRealization === "ts_inline_http" ? "api_key" : "oauth");
+  const explicitAuth = readOption(argv, "auth");
+  if (executorRealization === "ts_inline_http" && explicitAuth === undefined) {
+    throw new Error(
+      "Debug-only --executor-realization ts_inline_http requires explicit --auth api_key or --auth local. The benchmark default auth remains oauth.",
+    );
+  }
+  const auth = explicitAuth ?? "oauth";
 
   return {
     runs,
@@ -333,11 +342,11 @@ function benchmarkCases(options: BenchmarkOptions): BenchmarkCase[] {
 }
 
 function executorSelectionForBenchmark(
-  executorRealization: ExecutorRealization,
-): "codex" | "direct_call" | "mock" {
+  executorRealization: ExecutorRealization | undefined,
+): "codex" | "direct_call" | undefined {
+  if (executorRealization === undefined) return undefined;
   if (executorRealization === "codex") return "codex";
-  if (executorRealization === "ts_inline_http") return "direct_call";
-  return "mock";
+  return "direct_call";
 }
 
 function llmSettingsForEffort(
@@ -356,13 +365,14 @@ function llmSettingsForEffort(
 }
 
 function settingsForCase(options: BenchmarkOptions, benchCase: BenchmarkCase): unknown {
+  const executor = executorSelectionForBenchmark(options.executorRealization);
   return {
     schema_version: "settings.json/v3",
     review: {
       mode: "core-axis",
       domains: [],
       execution: {
-        executor: executorSelectionForBenchmark(options.executorRealization),
+        ...(executor ? { executor } : {}),
         topology: "main-workers",
         actors: {
           teamlead: {
@@ -465,6 +475,14 @@ async function readYaml<T>(filePath: string): Promise<T> {
   return YAML.parse(await fs.readFile(filePath, "utf8")) as T;
 }
 
+async function readOptionalYaml(filePath: string): Promise<unknown | undefined> {
+  try {
+    return YAML.parse(await fs.readFile(filePath, "utf8")) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fileSize(filePath: string): Promise<number | null> {
   try {
     return (await fs.stat(filePath)).size;
@@ -495,7 +513,7 @@ async function latestSessionRoot(projectRoot: string): Promise<string | null> {
 }
 
 function reviewInvokeArgs(projectRoot: string, benchCase: BenchmarkCase, options: BenchmarkOptions): string[] {
-  return [
+  const args = [
     "src/core-runtime/cli/review-invoke.ts",
     "src/target.ts",
     `Benchmark ${benchCase.label}`,
@@ -507,21 +525,38 @@ function reviewInvokeArgs(projectRoot: string, benchCase: BenchmarkCase, options
     "--review-mode",
     "core-axis",
     "--no-watch",
-    "--executor-realization",
-    options.executorRealization,
     ...options.lensIds.flatMap((lensId) => ["--lens-id", lensId]),
   ];
+  if (options.executorRealization) {
+    args.push("--executor-realization", options.executorRealization);
+  }
+  return args;
 }
 
 function benchmarkEnv(home: string, options: BenchmarkOptions): NodeJS.ProcessEnv {
   const env = {
     ...process.env,
   };
-  if (options.executorRealization !== "codex") {
+  if (
+    options.executorRealization === "ts_inline_http"
+  ) {
     env.HOME = home;
     env.USERPROFILE = home;
   }
   return env;
+}
+
+function semanticGateExecutionRoute(args: {
+  requestedExecutorRealization: ExecutorRealization | undefined;
+  manifest: ReviewRunManifest;
+}): string {
+  const route = args.manifest.review_execution_profile?.runtime_route;
+  return (
+    route?.execution_route ??
+    args.requestedExecutorRealization ??
+    route?.worker_executor ??
+    "project_config"
+  );
 }
 
 function unitsFromExecution(execution: ReviewExecutionResult): UnitResult[] {
@@ -712,7 +747,7 @@ async function collectRunSummary(args: {
   command: CommandResult;
   sessionRoot: string | null;
   keepTmp: boolean;
-  executorRealization: ExecutorRealization;
+  executorRealization?: ExecutorRealization;
 }): Promise<BenchmarkRunSummary> {
   if (!args.sessionRoot || args.command.exitCode !== 0) {
     return {
@@ -744,6 +779,17 @@ async function collectRunSummary(args: {
   const synthesize = execution.synthesize_execution_result ?? null;
   const finalOutputPath = path.join(args.sessionRoot, "final-output.md");
   const finalOutputText = await readOptionalText(finalOutputPath);
+  const issueArtifacts = {
+    findingLedger: await readOptionalYaml(
+      path.join(args.sessionRoot, "finding-ledger.yaml"),
+    ),
+    relationGraph: await readOptionalYaml(
+      path.join(args.sessionRoot, "finding-relation-graph.yaml"),
+    ),
+    issueLedger: await readOptionalYaml(
+      path.join(args.sessionRoot, "issue-ledger.yaml"),
+    ),
+  };
 
   return {
     case_id: args.benchCase.case_id,
@@ -786,9 +832,13 @@ async function collectRunSummary(args: {
         reviewRecord.result_classification_summary?.action_candidates?.length,
     },
     semantic_quality_gate: evaluateReviewPipelineSemanticQualityGate({
-      executorRealization: args.executorRealization,
+      executionRoute: semanticGateExecutionRoute({
+        requestedExecutorRealization: args.executorRealization,
+        manifest,
+      }),
       reviewRecord,
       finalOutputText,
+      issueArtifacts,
     }),
   };
 }
@@ -858,7 +908,7 @@ async function main(): Promise<void> {
     benchmark_kind: "review_pipeline_io_effort",
     comparison_mode: "same_checkout_profile_comparison",
     git: await gitInfo(),
-    executor_realization: options.executorRealization,
+    debug_executor_realization_override: options.executorRealization ?? null,
     model: options.model,
     provider: options.provider,
     auth: options.auth,
@@ -874,8 +924,8 @@ async function main(): Promise<void> {
     case_summaries: caseSummaries,
     comparisons: compareCases(caseSummaries),
     interpretation_notes: [
-      "Mock executor runs measure runtime overhead, artifact shape, packet/output bytes, and contract stability; they do not measure model quality.",
-      "semantic_quality_gate is deterministic for the bundled benchmark fixture and is not_applicable for mock executor runs.",
+      "Benchmark runs use the selected live/project executor route and therefore measure runtime overhead, artifact shape, packet/output bytes, contract stability, and model-dependent behavior together.",
+      "semantic_quality_gate is deterministic for the bundled benchmark fixture and should be interpreted with the selected target fixture and executor route.",
       "When both cases are run from the same checkout, the labels compare runtime profiles and effort settings on that checkout, not a historical pipeline implementation.",
       "For a true old-pipeline baseline, run this script on the old-pipeline checkout with --case existing-low-effort, then run the controlled checkout with --case controlled-high-effort and compare the JSON reports.",
     ],

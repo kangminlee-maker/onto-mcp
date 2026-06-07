@@ -2,6 +2,7 @@ import type {
   TargetMaterialKind,
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
+import type { ReviewRetrySettings } from "../discovery/settings-chain.js";
 import type {
   LlmAuthMode,
   LlmBillingMode,
@@ -14,6 +15,19 @@ import type {
 export type ReviewEntrypoint = "review";
 export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 export type ReviewExecutionRealization = "worker" | "direct-call";
+export type ReviewArtifactGenerationRealization =
+  | "live"
+  | "semantic_mock"
+  | "boundary_stub"
+  | "fixture";
+export type ReviewSemanticQualityEvidenceStatus =
+  | "not_evaluated"
+  | "not_applicable";
+export interface ReviewSemanticQualityEvidence {
+  status: ReviewSemanticQualityEvidenceStatus;
+  applicability: "real_semantic_path_only";
+  reason: string;
+}
 /**
  * Host runtime for review execution.
  * - "codex":      Codex host-bound worker path.
@@ -67,6 +81,7 @@ export type ReviewUnitKind =
   | "deliberation"
   | "synthesize";
 export type ReviewDeliberationMode = "controlled-lens-deliberation";
+export type ReviewLensOutputFormat = "markdown" | "sidecar";
 export type ReviewUnitExecutionStatus = "completed" | "failed" | "skipped";
 export type ReviewTargetMaterializedInputKind =
   | "single_text"
@@ -245,6 +260,8 @@ export interface InvocationBindingArtifact {
   resolved_session_domain: string;
   resolved_execution_realization: ReviewExecutionRealization;
   resolved_host_runtime: ReviewHostRuntime;
+  resolved_artifact_generation_realization: ReviewArtifactGenerationRealization;
+  semantic_quality_evidence: ReviewSemanticQualityEvidence;
   resolved_review_mode: ReviewMode;
   resolved_lens_set: string[];
   session_id: string;
@@ -290,12 +307,14 @@ export interface InvocationBindingArtifact {
 export interface ReviewLensExecutionSeat {
   lens_id: string;
   output_path: string;
+  sidecar_output_path?: string;
 }
 
 export interface ReviewLensPromptPacketSeat {
   lens_id: string;
   packet_path: string;
   output_path: string;
+  sidecar_output_path?: string;
 }
 
 export type ReviewIssueArtifactId =
@@ -317,6 +336,8 @@ export interface ReviewExecutionPlan {
   session_root: string;
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
+  semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
   interpretation_artifact_path: string;
   binding_output_path: string;
@@ -324,12 +345,12 @@ export interface ReviewExecutionPlan {
   execution_preparation_root: string;
   round1_root: string;
   lens_execution_seats: ReviewLensExecutionSeat[];
+  lens_output_format?: ReviewLensOutputFormat;
+  write_lens_markdown?: boolean;
   prompt_packets_root: string;
   lens_prompt_packet_seats: ReviewLensPromptPacketSeat[];
   issue_artifact_prompt_packet_seats: ReviewIssueArtifactPromptPacketSeat[];
-  lens_deliberation_prompt_packet_seats: ReviewLensPromptPacketSeat[];
   teamlead_deliberation_prompt_packet_path: string;
-  synthesize_prompt_packet_path: string;
   actor_invocation_profiles_path?: string;
   actor_consumer_bindings_path?: string;
   domain_binding_path?: string;
@@ -391,6 +412,7 @@ export interface ReviewResolvedActorInvocationProfile {
   seat: ReviewActorSeat;
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
   execution_route?: LlmExecutionRoute;
   execution_adapter?: LlmExecutionAdapter;
   model_provider?: LlmProviderName | null;
@@ -559,6 +581,8 @@ export interface ReviewSessionMetadata {
   entrypoint: ReviewEntrypoint;
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
+  semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
   created_at: string;
   project_root: string;
@@ -715,6 +739,10 @@ export interface ReviewUnitExecutionResult {
   citation_audit_rejection?: ReviewCitationAuditRejectionMetadata | null;
   executor_host_runtime?: ReviewHostRuntime | null;
   model_id?: string | null;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization | null;
+  semantic_quality_evidence?: ReviewSemanticQualityEvidence | null;
+  child_result_count?: number | null;
+  child_results?: ReviewUnitExecutionResult[];
 }
 
 export interface ReviewNativeAdmissionMetadata {
@@ -759,6 +787,8 @@ export interface ReviewExecutionResultArtifact {
   session_root: string;
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
+  semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
   execution_status: ReviewExecutionStatus;
   execution_started_at: string;
@@ -766,6 +796,7 @@ export interface ReviewExecutionResultArtifact {
   total_duration_ms: number;
   max_concurrent_lenses: number;
   observed_dispatch_width?: number;
+  retry_policy: ReviewRetrySettings;
   planned_lens_ids: string[];
   participating_lens_ids: string[];
   degraded_lens_ids: string[];
@@ -852,6 +883,62 @@ export interface ReviewLensProvenance {
   domain_context_assumptions: string[] | null;
 }
 
+export interface ReviewLensSidecarFindingCandidate {
+  candidate_id: string;
+  target: string;
+  evidence_anchor: string;
+  claim: string;
+  what: string;
+  why: string;
+  how_to_fix: string;
+  upstream_evidence_required: boolean;
+  severity_hint: ReviewFindingSeverity;
+  materiality_basis: ReviewLensFindingMaterialityBasis | null;
+  causal_path: ReviewLensFindingCausalPath | null;
+}
+
+export interface ReviewLensFindingMaterialityBasis {
+  affected_purpose: string;
+  failure_condition: string;
+  impact: string;
+  evidence_refs: string[];
+}
+
+export interface ReviewLensFindingCausalPathStep {
+  cause_id: string;
+  claim: string;
+  relation_to_previous: ReviewFindingCausalStepRelation | null;
+  evidence_refs: string[];
+}
+
+export type ReviewFindingCausalStepRelation =
+  | "causes"
+  | "symptom_of"
+  | "enables";
+
+export interface ReviewLensFindingCausalPath {
+  root_cause_candidate: string;
+  root_cause_step_id?: string | null;
+  steps: ReviewLensFindingCausalPathStep[];
+  unresolved_beyond_evidence?: string | null;
+}
+
+export interface ReviewLensSidecarValidation {
+  unaddressable_candidates: string[];
+  no_findings_rationale?: string | null;
+}
+
+export interface ReviewLensSidecarArtifact {
+  schema_version: 1;
+  session_id: string;
+  lens_id: string;
+  human_output_ref?: string | null;
+  findings: ReviewLensSidecarFindingCandidate[];
+  domain_constraints_used: ReviewLensDomainConstraint[];
+  domain_context_assumptions: string[];
+  validation: ReviewLensSidecarValidation;
+}
+
 export type SharedPhenomenonClaimRelation =
   | "corroboration"
   | "disagreement"
@@ -879,6 +966,7 @@ export interface ReviewResultIssueProjection {
   domain_threshold_used?: string | null;
   problem_definition?: string;
   issue_statement?: string;
+  issue_role?: string;
   timing_class?: string;
   closure_class?: string;
   closure_obligation?: string;
@@ -927,6 +1015,8 @@ export interface ReviewRecord {
   resolved_review_mode?: string;
   resolved_execution_realization?: string;
   resolved_host_runtime?: string;
+  resolved_artifact_generation_realization?: string;
+  semantic_quality_evidence?: ReviewSemanticQualityEvidence;
   resolved_lens_ids: string[];
   execution_result_ref: string;
   session_metadata_ref: string;
@@ -950,9 +1040,13 @@ export interface ReviewRecord {
   issue_resolution_summary?: unknown[];
   result_classification_summary?: ReviewResultClassificationSummary | null;
   synthesis_result_ref: string | null;
+  synthesis_result_sha256: string | null;
+  synthesis_output_sha256: string | null;
   deliberation_status: DeliberationStatus;
   deliberation_result_ref: string | null;
+  deliberation_result_sha256: string | null;
   final_output_ref: string;
+  final_output_sha256: string;
   shared_phenomenon_summary: SharedPhenomenonSummaryEntry[];
 }
 

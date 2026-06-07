@@ -67,6 +67,9 @@ interface JsonRpcRequest {
 
 type McpProgressToken = string | number;
 
+const MCP_COMPACT_SIGNAL_MAX_CHARS = 360;
+const MCP_COMPACT_ID_MAX_CHARS = 120;
+
 interface ToolDefinition {
   [key: string]: JsonValue;
   name: OntoToolName;
@@ -215,6 +218,10 @@ const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
       type: "string",
       description: "Optional latest-session request hash filter returned by a run handle.",
     },
+    createdAfter: {
+      type: "string",
+      description: "Optional latest-session lower bound ISO timestamp.",
+    },
     limit: {
       type: "number",
       description: "Maximum latest-session matches to include. Defaults to 5.",
@@ -261,7 +268,7 @@ const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
       type: "array",
       items: { type: "string" },
       description:
-        "Optional current frontier unit ids or public aliases such as lens:logic and deliberation:logic. Omit to use the full ledger-derived first untrusted frontier.",
+        "Optional exact current frontier unit ids from the pipeline execution ledger. Omit to use the full ledger-derived first untrusted frontier.",
     },
     requestText: {
       type: "string",
@@ -606,7 +613,7 @@ configured. For review, set full actor \`llm\` blocks in
           "actors": {
             "teamlead": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
             "lens": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
-            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "xhigh" } }
+            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "medium" } }
           }
         }
       }
@@ -811,6 +818,7 @@ function projectReviewStatus(status: unknown, level: ReviewStatusProjection): un
     "runControl",
     "targetMaterialSupport",
     "environmentWarnings",
+    "unitProgress",
     "latestSessionMatches",
   ];
   for (const key of keepKeys) {
@@ -934,6 +942,49 @@ function structuredFailureFromError(error: unknown): {
   return null;
 }
 
+function compactText(value: string, maxChars = MCP_COMPACT_SIGNAL_MAX_CHARS): string {
+  const oneLine = value.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxChars) return oneLine;
+  return `${oneLine.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function compactFailureDetails(details: unknown): string {
+  try {
+    return compactText(JSON.stringify(details ?? {}));
+  } catch {
+    return "[unserializable failure details]";
+  }
+}
+
+function compactArtifactRefs(
+  artifactRefs: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(artifactRefs).map(([key, value]) => [
+      compactText(key, MCP_COMPACT_ID_MAX_CHARS),
+      compactText(value),
+    ]),
+  );
+}
+
+function projectStructuredFailureForError(
+  failure: ReviewStructuredFailureRecord,
+): JsonValue {
+  return {
+    failure_id: compactText(failure.failure_id, MCP_COMPACT_ID_MAX_CHARS),
+    phase: compactText(failure.phase, MCP_COMPACT_ID_MAX_CHARS),
+    reason_code: compactText(failure.reason_code, MCP_COMPACT_ID_MAX_CHARS),
+    human_message: compactText(failure.human_message),
+    required_user_action: compactText(failure.required_user_action),
+    retry_safety: failure.retry_safety,
+    dispatch_state: failure.dispatch_state,
+    mcp_error_code: compactText(failure.mcp_error_code, MCP_COMPACT_ID_MAX_CHARS),
+    details_kind: failure.details_kind,
+    details_signal: compactFailureDetails(failure.details),
+    artifact_refs: compactArtifactRefs(failure.artifact_refs),
+  };
+}
+
 async function formatToolError(error: unknown): Promise<JsonValue> {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof ReviewContinuationError) {
@@ -958,7 +1009,7 @@ async function formatToolError(error: unknown): Promise<JsonValue> {
     ...(structuredFailure
       ? {
           structuredContent: {
-            failure: structuredFailure.failure as unknown as JsonValue,
+            failure: projectStructuredFailureForError(structuredFailure.failure),
             failureRecordPath: structuredFailure.failureRecordPath,
             ...(routeVisibility
               ? { routeVisibility: routeVisibility as unknown as JsonValue }
@@ -1377,7 +1428,9 @@ async function callTool(
           });
           return formatToolResult(
             projectReviewStatus(
-              await reviewApi.getReviewStatus(sessionRoot),
+              await reviewApi.getReviewStatus(sessionRoot, {
+                projectionLevel: statusProjection,
+              }),
               statusProjection,
             ),
           );
@@ -1388,6 +1441,9 @@ async function callTool(
           ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
           ...(parsed.requestHash !== undefined
             ? { requestHash: parsed.requestHash }
+            : {}),
+          ...(parsed.createdAfter !== undefined
+            ? { createdAfter: parsed.createdAfter }
             : {}),
           ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
         });
@@ -1410,7 +1466,9 @@ async function callTool(
         return formatToolResult(
           projectReviewStatus(
             {
-              ...(await reviewApi.getReviewStatus(sessionRoot)),
+              ...(await reviewApi.getReviewStatus(sessionRoot, {
+                projectionLevel: statusProjection,
+              })),
               latestSessionMatches,
             },
             statusProjection,

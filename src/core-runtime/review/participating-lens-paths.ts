@@ -30,7 +30,7 @@ export interface ParticipatingLensPath {
  * Parse `## [Runtime] Participating Lens Outputs` section and return the
  * `- <lensId>: <path>` bullets as `{ lensId, path }`. Returns an empty array
  * when the section is absent or contains no recognisable bullets (e.g. the
- * `(none for mock test)` placeholder used in unit tests).
+ * parenthesized placeholder used in unit tests).
  */
 export function parseParticipatingLensPaths(
   packetBody: string,
@@ -51,7 +51,7 @@ export function parseParticipatingLensPaths(
     const lensId = (m[1] ?? "").trim();
     const rawPath = normalizeLensPathBulletValue(m[2] ?? "");
     if (lensId.length === 0 || rawPath.length === 0) continue;
-    // Skip placeholder rows the tests use, e.g. "(none for mock test)".
+    // Skip placeholder rows the tests use, e.g. "(none for fixture)".
     if (rawPath.startsWith("(")) continue;
     results.push({ lensId, path: rawPath });
   }

@@ -42,7 +42,6 @@ const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
   "declared_design_intent",
   "schema_or_contract_presence",
-  "test_or_fixture_only",
   "deferred_or_non_goal",
   "unknown",
 ] as const satisfies readonly ReconstructClaimRealizationStance[];

@@ -1,0 +1,224 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1180" viewBox="0 0 1900 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Deliberation plan optimization before and after</title>
+  <desc id="desc">A before and after process diagram for optimizing deliberation-plan generation. The before side shows current LLM-led material conflict planning. The after side shows a target runtime conflict projection followed by bounded LLM semantic filling and stronger runtime validation.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 32px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .subtitle { font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .h2 { font: 700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .label { font: 700 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .small { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+      .tiny { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #64748b; }
+      .artifact { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .runtime { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .llm { fill: #f3e8ff; stroke: #9333ea; stroke-width: 2; }
+      .toolllm { fill: #fff7ed; stroke: #f97316; stroke-width: 2; }
+      .note { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; }
+      .risk { fill: #fee2e2; stroke: #ef4444; stroke-width: 1.7; }
+      .gain { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.7; }
+      .group { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .group-dash { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 8 6; }
+      .line { fill: none; stroke: #334155; stroke-width: 2.4; marker-end: url(#arrow); }
+      .thin { fill: none; stroke: #64748b; stroke-width: 1.8; marker-end: url(#arrow-soft); }
+      .dash { stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1900" height="1180"/>
+
+  <text class="title" x="48" y="54">Deliberation Plan Optimization: Before and After</text>
+  <text class="subtitle" x="48" y="82">Next step: move deterministic conflict projection and coverage authority into runtime, leaving semantic wording and judgment gaps to a bounded LLM artifact builder.</text>
+
+  <g transform="translate(1128 34)">
+    <rect class="runtime" x="0" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="21" y="22">Runtime</text>
+    <rect class="llm" x="140" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="175" y="22">LLM</text>
+    <rect class="toolllm" x="280" y="0" width="188" height="34" rx="8"/>
+    <text class="small" x="299" y="22">LLM + file tools</text>
+    <rect class="artifact" x="484" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="515" y="22">Artifact</text>
+  </g>
+
+  <line x1="950" y1="115" x2="950" y2="1115" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="10 8"/>
+
+  <text class="h2" x="72" y="135">Before: Current Flow</text>
+  <text class="subtitle" x="72" y="160">LLM-led material conflict planning with broad allowed refs and shape-only runtime validation.</text>
+
+  <g id="before-inputs">
+    <rect class="group" x="55" y="198" width="330" height="410" rx="16"/>
+    <text class="label" x="82" y="228">Inputs Open To Unit</text>
+    <text class="tiny" x="82" y="249">Primary plus supplemental refs</text>
+
+    <rect class="artifact" x="82" y="278" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="304">review-target-profile.yaml</text>
+
+    <rect class="artifact" x="82" y="334" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="360">finding-ledger.yaml</text>
+
+    <rect class="artifact" x="82" y="390" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="416">finding-relation-graph.yaml</text>
+
+    <rect class="artifact" x="82" y="446" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="472">issue-ledger.yaml</text>
+
+    <rect class="artifact" x="82" y="502" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="528">issue-stance-matrix.yaml</text>
+
+    <rect class="artifact" x="82" y="558" width="260" height="42" rx="8"/>
+    <text class="small" x="102" y="584">round1 lens refs</text>
+  </g>
+
+  <g id="before-runtime-packet">
+    <rect class="runtime" x="445" y="230" width="300" height="122" rx="12"/>
+    <text class="label" x="470" y="260">1. Runtime Packet</text>
+    <text class="small" x="470" y="286">declares prior artifacts</text>
+    <text class="small" x="470" y="308">adds boundary policy</text>
+    <text class="tiny" x="470" y="333">deterministic orchestration</text>
+  </g>
+
+  <path class="line" d="M385 403 C412 403 414 291 445 291"/>
+
+  <g id="before-llm">
+    <rect class="toolllm" x="445" y="420" width="360" height="208" rx="14"/>
+    <text class="label" x="472" y="450">2. LLM Artifact Builder</text>
+    <text class="small" x="472" y="476">uses deterministic file tools</text>
+    <text class="small" x="472" y="500">detects material conflicts</text>
+    <text class="small" x="472" y="522">selects participating lenses</text>
+    <text class="small" x="472" y="544">writes planned or skipped issues</text>
+    <text class="small" x="472" y="566">creates conflict summary and question</text>
+    <text class="tiny" x="472" y="598">semantic judgment and reduction are bundled together</text>
+  </g>
+
+  <path class="thin" d="M595 352 V420"/>
+
+  <g id="before-output">
+    <rect class="artifact" x="445" y="700" width="300" height="95" rx="12"/>
+    <text class="label" x="470" y="730">3. Output</text>
+    <text class="small" x="470" y="756">deliberation-plan.yaml</text>
+    <text class="tiny" x="470" y="778">planned_issues plus skipped_issues</text>
+  </g>
+
+  <path class="line" d="M625 628 V700"/>
+
+  <g id="before-validate">
+    <rect class="runtime" x="445" y="865" width="300" height="116" rx="12"/>
+    <text class="label" x="470" y="895">4. Runtime Validation</text>
+    <text class="small" x="470" y="921">schema and session</text>
+    <text class="small" x="470" y="943">known issue ids</text>
+    <text class="small" x="470" y="965">all issues covered</text>
+  </g>
+
+  <path class="line" d="M595 795 V865"/>
+
+  <g id="before-risk">
+    <rect class="risk" x="70" y="690" width="315" height="155" rx="12"/>
+    <text class="label" x="96" y="720">Observed Cost</text>
+    <text class="small" x="96" y="746">LLM reads more context than needed.</text>
+    <text class="small" x="96" y="768">Conflict detection is hard to audit.</text>
+    <text class="small" x="96" y="790">Validator cannot prove conflict semantics.</text>
+    <text class="small" x="96" y="812">Output size and format can drift.</text>
+  </g>
+
+  <text class="h2" x="1002" y="135">After: Target Next Step</text>
+  <text class="subtitle" x="1002" y="160">Runtime creates compact conflict projection first; LLM fills only semantic summaries and resolution wording.</text>
+
+  <g id="after-inputs">
+    <rect class="group" x="985" y="198" width="330" height="410" rx="16"/>
+    <text class="label" x="1012" y="228">Inputs Parsed By Runtime</text>
+    <text class="tiny" x="1012" y="249">Primary artifact truth only by default</text>
+
+    <rect class="artifact" x="1012" y="278" width="260" height="42" rx="8"/>
+    <text class="small" x="1032" y="304">finding-ledger.yaml</text>
+
+    <rect class="artifact" x="1012" y="334" width="260" height="42" rx="8"/>
+    <text class="small" x="1032" y="360">finding-relation-graph.yaml</text>
+
+    <rect class="artifact" x="1012" y="390" width="260" height="42" rx="8"/>
+    <text class="small" x="1032" y="416">issue-ledger.yaml</text>
+
+    <rect class="artifact" x="1012" y="446" width="260" height="42" rx="8"/>
+    <text class="small" x="1032" y="472">issue-stance-matrix.yaml</text>
+
+    <rect class="note" x="1012" y="518" width="260" height="72" rx="8"/>
+    <text class="small" x="1032" y="544">round1 refs remain bounded</text>
+    <text class="tiny" x="1032" y="566">only for rationale gaps, not planning base</text>
+  </g>
+
+  <g id="after-projection">
+    <rect class="runtime" x="1368" y="220" width="360" height="210" rx="14"/>
+    <text class="label" x="1395" y="250">1. Runtime Conflict Projection</text>
+    <text class="small" x="1395" y="278">parse stance rows and issue severity</text>
+    <text class="small" x="1395" y="300">derive candidate conflict types</text>
+    <text class="small" x="1395" y="322">derive participant candidates</text>
+    <text class="small" x="1395" y="344">derive source stance refs</text>
+    <text class="small" x="1395" y="366">pre-classify no-conflict skips</text>
+    <rect class="artifact" x="1395" y="386" width="306" height="32" rx="7"/>
+    <text class="tiny" x="1412" y="407">embedded deliberation-plan input projection</text>
+  </g>
+
+  <path class="line" d="M1315 403 C1340 403 1340 325 1368 325"/>
+
+  <g id="after-packet">
+    <rect class="runtime" x="1368" y="488" width="360" height="120" rx="12"/>
+    <text class="label" x="1395" y="518">2. Runtime Packet</text>
+    <text class="small" x="1395" y="544">embeds compact projection</text>
+    <text class="small" x="1395" y="566">tightens output schema guidance</text>
+    <text class="tiny" x="1395" y="590">deterministic IO control</text>
+  </g>
+
+  <path class="thin" d="M1548 430 V488"/>
+
+  <g id="after-llm">
+    <rect class="toolllm" x="1010" y="675" width="365" height="175" rx="14"/>
+    <text class="label" x="1038" y="705">3. Bounded LLM Fill</text>
+    <text class="small" x="1038" y="731">uses projection first</text>
+    <text class="small" x="1038" y="753">writes conflict_summary</text>
+    <text class="small" x="1038" y="775">writes resolution_question</text>
+    <text class="small" x="1038" y="797">may read refs only for rationale gaps</text>
+    <text class="tiny" x="1038" y="825">LLM keeps semantic wording, not broad extraction</text>
+  </g>
+
+  <path class="line" d="M1548 608 C1548 660 1192 640 1192 675"/>
+
+  <g id="after-output">
+    <rect class="artifact" x="1445" y="675" width="265" height="88" rx="12"/>
+    <text class="label" x="1470" y="705">4. Same Output</text>
+    <text class="small" x="1470" y="731">deliberation-plan.yaml</text>
+    <text class="tiny" x="1470" y="751">planned plus skipped issues</text>
+  </g>
+
+  <path class="line" d="M1375 762 H1445"/>
+
+  <g id="after-validator">
+    <rect class="runtime" x="1445" y="835" width="265" height="128" rx="12"/>
+    <text class="label" x="1470" y="865">5. Stronger Validator</text>
+    <text class="small" x="1470" y="891">all issues exactly covered</text>
+    <text class="small" x="1470" y="913">planned issues from candidate set</text>
+    <text class="small" x="1470" y="935">participant ids bounded</text>
+    <text class="tiny" x="1470" y="953">fail-loud if projection contract breaks</text>
+  </g>
+
+  <path class="line" d="M1578 763 V835"/>
+
+  <g id="after-gain">
+    <rect class="gain" x="1010" y="910" width="365" height="130" rx="12"/>
+    <text class="label" x="1038" y="940">Expected Gain</text>
+    <text class="small" x="1038" y="966">Smaller LLM input and output surface.</text>
+    <text class="small" x="1038" y="988">Conflict detection becomes auditable.</text>
+    <text class="small" x="1038" y="1010">Quality preserved by semantic fill step.</text>
+  </g>
+
+  <g id="implementation-plan">
+    <rect class="group-dash" x="70" y="1030" width="1640" height="92" rx="16"/>
+    <text class="label" x="98" y="1062">Implementation Order</text>
+    <text class="small" x="98" y="1088">1. Add runtime deliberation-plan input projection from issue-ledger and issue-stance-matrix.  2. Embed projection in prompt packet.  3. Tighten validator against projection truth.  4. Add semantic and E2E regressions.</text>
+  </g>
+</svg>

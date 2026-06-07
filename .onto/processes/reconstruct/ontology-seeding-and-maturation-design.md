@@ -647,7 +647,7 @@ Implementation order for seeding gates:
 
 | Order | Runtime change | First passing evidence |
 |---|---|---|
-| S1 | add artifact types for source-purpose candidates and purpose confirmation | parser/fixture tests reject missing candidate ids, bad evidence refs, and unsupported status values |
+| S1 | add artifact types for source-purpose candidates and purpose confirmation | targeted contract tests reject missing candidate ids, bad evidence refs, and unsupported status values |
 | S2 | add source-purpose candidate author prompt after source observation and before candidate inventory | direct-call run writes `source-purpose-candidates.yaml` with ranked candidates from existing observations |
 | S3 | add purpose candidate validator and registry gate | invalid P5-only purpose and dangling evidence refs fail before seed authoring |
 | S4 | add purpose confirmation artifact and validator | inferred purpose blocks seed readiness until confirmation is valid |
@@ -658,8 +658,8 @@ Implementation order for seeding gates:
 
 The narrow release target for seeding is one real-source run that reaches
 `ready` or `limited` honestly, or fails at the first invalid gate with a concrete
-validation artifact. A mock-backed run may verify test coverage, but it does not
-count as product completion.
+validation artifact. Schema, parser, or fixture checks are development signals
+only; they do not count as product completion.
 
 #### Seeding Revision Completion Criteria
 
@@ -1146,7 +1146,7 @@ projection_rows:
         selected_source_profile_definition_sha256:
         member_source_refs: []
         validation_ref:
-        support_claim: unsupported | profile_supported | fixture_validated | golden_source_validated | real_source_validated | release_supported
+        support_claim: unsupported | profile_supported | golden_source_validated | real_source_validated | release_supported
         readiness_effect: supported | limited | blocked
         next_action:
         limitation_refs: []
@@ -3185,7 +3185,6 @@ Material-kind support claims require material-specific evidence:
 |---|---|---|
 | `unsupported` | runtime recognizes the material kind but cannot run it | fail-loud unsupported or clarify halt |
 | `profile_supported` | a source profile can be selected and validated | profile parser and material-profile validation tests |
-| `fixture_validated` | deterministic fixtures prove structural observation and validation | fixture tests for source observations, purpose adequacy, and failure cases |
 | `golden_source_validated` | a curated non-trivial target proves expected semantic artifacts | golden-source run with checked artifact refs and limitations |
 | `real_source_validated` | an external real target proves the path under realistic source noise | real-source E2E with artifacts, validation results, and first-failure visibility |
 | `release_supported` | the material kind can be claimed in user-facing docs/API | golden or real-source validation plus fail-loud unsupported/mixed-member behavior |
@@ -3196,9 +3195,9 @@ evidence. `mixed` can be release-supported only when every member kind has a
 verified path or a limitation-backed unsupported member state.
 
 Current public projection is constrained to `unsupported` and
-`profile_supported`. `fixture_validated`, `golden_source_validated`,
-`real_source_validated`, and `release_supported` remain taxonomy states until
-their material-specific evidence artifacts and validators are wired.
+`profile_supported`. `golden_source_validated`, `real_source_validated`, and
+`release_supported` remain taxonomy states until their material-specific evidence
+artifacts and validators are wired.
 
 Per-kind release evidence requirements:
 

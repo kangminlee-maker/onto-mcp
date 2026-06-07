@@ -19,17 +19,17 @@
 runtime은 아래만 한다.
 
 1. `execution-plan.yaml`을 읽는다
-2. lens/deliberation/synthesize prompt packet seat를 확인한다
+2. lens/deliberation/issue artifact prompt packet seat를 확인한다
 3. 각 lens packet을 병렬로 외부 실행 단위에 deterministic하게 전달한다
 4. 각 output seat에 실제 결과 파일이 생성되었는지 검사한다
 5. 기준 미달이면 `fail-close` 한다
 6. `EffectiveBoundaryState`를 `error-log.md`와 degraded 판단의 구조적 basis로 남긴다
 7. Round 1 완료 후 `lens-completion-barrier.yaml`을 작성한다
 
-추가로 synthesize dispatch 직전에는 runtime이
-participating lens output과 controlled deliberation result의 seat/ref를 synthesize runtime packet에 반영할 수 있다.
+추가로 synthesize dispatch 직전에는 runtime이 issue-level artifact truth에서
+`synthesis-work-items.yaml`과 issue-scoped prompt packets를 생성한다.
 이건 새로운 semantic 판단이 아니라,
-이미 존재하는 lens 결과 seat를 declared handoff에 맞게 전달하는 deterministic handoff다.
+이미 존재하는 issue artifact, problem framing, deliberation 결과의 deterministic projection이다.
 
 즉 이 runner는:
 
@@ -50,18 +50,30 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 4. `prompt-packets/{lens}.prompt.md`
 5. `prompt-packets/{lens}.deliberation.prompt.md`
 6. `prompt-packets/teamlead.deliberation.prompt.md`
-7. `prompt-packets/synthesize.prompt.md`
-8. executor realization
+7. issue artifact prompt packets
+   - `prompt-packets/finding-ledger.prompt.md`
+   - `prompt-packets/finding-relation-graph.prompt.md`
+   - `prompt-packets/issue-stance-matrix.prompt.md`
+   - `prompt-packets/problem-framing.prompt.md`
+8. runtime-generated synthesis work item packets
+   - `synthesis-work-items.yaml`
+   - `prompt-packets/synthesis/{issue_id}.prompt.md`
+9. executor realization
    - `worker`
    - `direct-call`
-9. host runtime
+10. host runtime
    - `codex`
    - `openai`
    - `anthropic`
    - `grok`
    - `lmstudio`
    - `standalone`
-10. selected lens count
+11. artifact generation realization
+   - `live`
+   - `semantic_mock`
+   - `boundary_stub`
+   - `fixture`
+12. selected lens count
 
 중요:
 
@@ -75,19 +87,39 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
 
 최소 출력:
 
-1. `round1/{lens}.md`
-2. `deliberation/round1/{lens}-deliberation.md`
-3. `deliberation.md`
-4. `synthesis.md`
-5. `execution-result.yaml`
-6. `error-log.md`
+1. `round1/{lens}.findings.yaml`
+2. optional `round1/{lens}.md` human-readable projection when enabled
+3. `deliberation/round1/{lens}-deliberation.md`
+4. `deliberation-resolution.yaml` — canonical controlled-deliberation truth
+5. `deliberation.md` — deterministic markdown projection
+6. issue artifact truth
+   - `finding-ledger.yaml`
+   - `finding-relation-graph.yaml`
+   - `issue-ledger.yaml`
+   - `issue-stance-matrix.yaml`
+   - `deliberation-plan.yaml`
+   - `problem-framing.yaml`
+7. issue-scoped synthesis artifacts
+   - `synthesis-work-items.yaml`
+   - `synthesis/responses/{issue_id}.yaml`
+8. synthesis aggregate artifacts
+   - `synthesis-ledger.yaml` — canonical synthesis truth
+   - `synthesis.md` — deterministic markdown projection
+9. `execution-result.yaml`
+10. `review-run-manifest.yaml`
+11. `error-log.md`
 
 원칙:
 
-- lens output seat는 `execution-plan.yaml`이 고정한다
+- lens output seat는 `execution-plan.yaml`이 고정한다. sidecar mode에서는
+  machine output이 `round1/{lens}.findings.yaml`이고, markdown은 설정으로 켜는
+  optional human-readable projection이다
 - deliberation output seat는 `execution-plan.yaml`이 고정한다
-- synthesize output seat도 `execution-plan.yaml`이 고정한다
+- controlled-deliberation authority는 `deliberation-resolution.yaml`이다
+- synthesize aggregate output seat는 `synthesis-ledger.yaml`과 `synthesis.md`로 고정한다
+- issue-scoped synthesis response seat는 runtime이 `synthesis-work-items.yaml`에 고정한다
 - `execution-result.yaml`은 actual execution truth의 canonical seat다
+- `execution-result.yaml`과 `review-run-manifest.yaml`은 effective retry policy를 기록해야 한다
 - `lens-completion-barrier.yaml`은 downstream stage 진입 gate다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
 - `error-log.md`는 최소 한 번 `EffectiveBoundaryState`를 기록해야 한다
@@ -97,8 +129,11 @@ participating lens output과 controlled deliberation result의 seat/ref를 synth
   - planned/participating/degraded/excluded lens ids
   - per-unit started/completed timestamps
   - per-unit duration
+  - top-level and per-unit artifact generation realization
+  - top-level and per-unit semantic quality evidence status
   - deliberation execution status
   - synthesize execution status
+  - effective retry policy
   - halt reason
 
 ---
@@ -117,14 +152,28 @@ prompt execution dispatch는 `src/core-runtime/review/review-invocation-runner.t
 
 를 통해 synthesize만 다른 realization으로 분리할 수 있다.
 
-Repo-local 검증은 `npm run test:review:invocation-runner`와
-`npm run test:mcp:review`가 adapter/Core API/MCP artifact truth를 비교한다.
+Repo-local completion 검증은 실제 LLM/provider 경로를 호출하는
+`npm run test:e2e` 또는 `npm run test:review:live`로 수행한다.
+`check:review:invocation-runner`, `check:mcp:review`, `check:review:route`와
+mock-backed harness는 wiring, schema, artifact contract, route/failure 검증
+evidence로 분리 보고한다. 이 check들은 E2E completion 또는 semantic quality
+evidence로 쓰지 않는다.
+
+`review.execution.artifact_generation_realization`은 artifact가 어떤 realization으로
+생성되었는지 고정한다. 기본값은 `live`다. `semantic_mock`, `boundary_stub`,
+`fixture`는 artifact contract 검증에는 사용할 수 있지만 product semantic completion
+또는 semantic quality evidence로 승격하지 않는다. runner는 이 값을
+`execution-result.yaml`, `review-run-manifest.yaml`, unit result metadata에 보존한다.
 
 현재 구현에서 prompt execution runner를 통해 실행되는 execution profile:
 
 - `worker + codex` (Codex CLI 경로)
 - `worker + direct-call` (API/local provider 경로)
-- `worker + mock` (conformance/test 경로)
+
+`nested-workers` mode는 현재 runner에서 pre-dispatch structured failure로
+차단한다. inner lens worker가 runtime submit-tool serialization,
+read-only sandbox, `execution-plan.max_concurrent_lenses` 기반 bounded dispatch를
+같은 방식으로 보장하기 전에는 active product path가 아니다.
 
 원칙:
 
@@ -132,7 +181,7 @@ Repo-local 검증은 `npm run test:review:invocation-runner`와
 - runtime은 선택된 lens 전체를 dispatch한다
 - host adapter가 선택된 lens 전체 dispatch를 보장할 수 없으면 fail-loud하게 중단한다
 - controlled lens deliberation은 participating lens outputs가 확정된 뒤에만 시작한다
-- synthesize는 `deliberation.md`가 생성된 뒤에만 시작한다
+- synthesize는 `deliberation-resolution.yaml`과 그 markdown projection이 생성된 뒤에만 시작한다
 - issue artifacts, controlled deliberation, synthesize는
   `.onto/processes/review/pre-dispatch-contracts.md §6`의 lens completion barrier가
   `downstream_allowed=true`일 때만 시작한다

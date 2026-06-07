@@ -16,19 +16,19 @@ import {
   buildReviewExecutionRoute,
   buildReviewRuntimeRouteArtifactProjection,
 } from "./review-execution-route.js";
-import type { LlmExecutionRoute } from "../llm/model-switcher.js";
 import type {
   PrepareOnlyResult,
   ReviewMode,
   ReviewTargetScopeKind,
 } from "./artifact-types.js";
+import type { LlmExecutionRoute } from "../llm/model-switcher.js";
 import {
   fileExists,
   normalizeDomainValue,
   readSingleOptionValueFromArgv,
 } from "./review-artifact-utils.js";
 
-export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ReviewExecutorRealization = "codex" | "ts_inline_http";
 
 export interface ReviewInvocationRequest {
   projectRoot: string;
@@ -306,6 +306,9 @@ export async function collectReviewInvocationArtifactRefs(
     deliberation_plan: path.join(sessionRoot, "deliberation-plan.yaml"),
     problem_framing: path.join(sessionRoot, "problem-framing.yaml"),
     deliberation_output: path.join(sessionRoot, "deliberation.md"),
+    deliberation_resolution: path.join(sessionRoot, "deliberation-resolution.yaml"),
+    synthesis_work_items: path.join(sessionRoot, "synthesis-work-items.yaml"),
+    synthesis_ledger: path.join(sessionRoot, "synthesis-ledger.yaml"),
     synthesis_output: path.join(sessionRoot, "synthesis.md"),
     review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
     degradation_summary: path.join(sessionRoot, "degradation-summary.yaml"),
@@ -738,10 +741,17 @@ async function projectReviewInvocationCliOutput(args: {
       ...(routeProfile.review_execution_profile.service_tier
         ? { service_tier: routeProfile.review_execution_profile.service_tier }
         : {}),
+      ...(routeProfile.review_execution_profile.retry
+        ? { retry: routeProfile.review_execution_profile.retry }
+        : {}),
     },
     review_mode: args.setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: args.setup.maxConcurrentLenses,
-    concurrency_strategy: "all_lenses_parallel",
+    concurrency_strategy:
+      args.setup.maxConcurrentLenses >=
+      args.setup.resolvedInvokeInputs.resolvedLensIds.length
+        ? "all_lenses_parallel"
+        : "bounded_lens_parallel",
     synthesize_waits_for_all_lenses: true,
   };
   const finalOutputPath =
@@ -807,7 +817,11 @@ async function projectReviewInvocationCliOutput(args: {
     },
     executor: {
       max_concurrent_lenses: args.setup.maxConcurrentLenses,
-      concurrency_strategy: "all_lenses_parallel",
+      concurrency_strategy:
+        args.setup.maxConcurrentLenses >=
+        args.setup.resolvedInvokeInputs.resolvedLensIds.length
+          ? "all_lenses_parallel"
+          : "bounded_lens_parallel",
       realization: inferExecutorRealization(args.defaultExecutorConfig),
       profile: routeSummary.review_execution_profile,
     },

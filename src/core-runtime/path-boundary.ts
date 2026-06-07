@@ -50,18 +50,29 @@ export async function assertPathInsideRoot(args: {
 }): Promise<void> {
   const root = path.resolve(args.root);
   const candidate = path.resolve(args.candidate);
-  if (!isPathInsideRoot(root, candidate)) {
-    throw new Error(`${args.label} escapes allowed root: ${candidate}`);
-  }
+  const lexicallyInside = isPathInsideRoot(root, candidate);
   const realRoot = (await realpathIfExists(root)) ?? root;
   const realCandidate = await realpathIfExists(candidate);
-  if (realCandidate && !isPathInsideRoot(realRoot, realCandidate)) {
-    throw new Error(`${args.label} realpath escapes allowed root: ${realCandidate}`);
+  if (realCandidate) {
+    if (isPathInsideRoot(realRoot, realCandidate)) return;
+    throw new Error(
+      lexicallyInside
+        ? `${args.label} realpath escapes allowed root: ${realCandidate}`
+        : `${args.label} escapes allowed root: ${candidate}`,
+    );
   }
   if (!realCandidate) {
     const nearest = await realpathNearestExisting(path.dirname(candidate));
-    if (nearest && !isPathInsideRoot(realRoot, nearest)) {
-      throw new Error(`${args.label} parent realpath escapes allowed root: ${nearest}`);
+    if (nearest) {
+      if (isPathInsideRoot(realRoot, nearest)) return;
+      throw new Error(
+        lexicallyInside
+          ? `${args.label} parent realpath escapes allowed root: ${nearest}`
+          : `${args.label} escapes allowed root: ${candidate}`,
+      );
     }
+  }
+  if (!lexicallyInside) {
+    throw new Error(`${args.label} escapes allowed root: ${candidate}`);
   }
 }

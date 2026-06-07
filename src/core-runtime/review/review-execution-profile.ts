@@ -1,12 +1,21 @@
 import type {
   OntoSettings,
+  ReviewExecutionUnitId,
+  ReviewExecutionUnits,
   ReviewLlmRef,
+  ReviewRetrySettings,
   ReviewWorkerSeat,
   ResolvedReviewExecutionSettings,
 } from "../discovery/settings-chain.js";
-import { defaultReviewExecution } from "../discovery/settings-chain.js";
+import type { ReviewArtifactGenerationRealization } from "./artifact-types.js";
+import {
+  REVIEW_EXECUTION_UNIT_IDS,
+  defaultReviewExecution,
+} from "../discovery/settings-chain.js";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
 import {
+  isDirectModelCallSelection,
+  isExternalOauthWorkerSelection,
   normalizeLlmModelSwitcher,
   type LlmAuthMode,
   type LlmModelSwitcherConfig,
@@ -14,7 +23,7 @@ import {
   type LlmProviderName,
 } from "../llm/model-switcher.js";
 
-export type ReviewWorkerExecutor = "codex" | "direct_call" | "mock";
+export type ReviewWorkerExecutor = "codex" | "direct_call";
 
 export type ReviewExecutionHost =
   | "codex"
@@ -35,14 +44,18 @@ export interface ReviewExecutionProfile {
   lens: ReviewExecutionActorProfile;
   synthesize: ReviewExecutionActorProfile;
   deliberation: ResolvedReviewExecutionSettings["deliberation"];
+  max_concurrent_lenses?: number | undefined;
+  units: ReviewExecutionUnits;
   worker_executor: ReviewWorkerExecutor;
   host: ReviewExecutionHost;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
   provider?: LlmProviderName;
   auth?: LlmAuthMode;
   model?: string;
   effort?: string;
   service_tier?: string;
   base_url?: string;
+  retry: ReviewRetrySettings;
   trace: string[];
 }
 
@@ -57,7 +70,40 @@ export interface ResolveReviewExecutionProfileArgs {
   codexAvailable?: boolean;
 }
 
-type ReviewActorName = "teamlead" | "lens" | "synthesize";
+export type ReviewActorName = "teamlead" | "lens" | "synthesize";
+type ReviewLlmRouteEntryName = ReviewActorName | `unit:${ReviewExecutionUnitId}`;
+
+export function reviewExecutionUnitActor(
+  unitId: ReviewExecutionUnitId,
+): ReviewActorName {
+  switch (unitId) {
+    case "lens":
+    case "issue_stance_response":
+    case "deliberation_response":
+      return "lens";
+    case "synthesis_response":
+      return "synthesize";
+    case "finding_ledger":
+    case "finding_relation_graph":
+    case "issue_ledger":
+    case "issue_stance_matrix":
+    case "deliberation_plan":
+    case "problem_framing":
+    case "deliberation_resolution":
+      return "teamlead";
+  }
+}
+
+function mergeLlmRef(
+  base: ReviewLlmRef | undefined,
+  override: ReviewLlmRef | undefined,
+): ReviewLlmRef | undefined {
+  if (!base && !override) return undefined;
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+  };
+}
 
 function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
@@ -78,47 +124,90 @@ function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSetti
       ...defaults.synthesize,
       ...(execution.synthesize ?? {}),
     },
+    retry: execution.retry ?? defaults.retry,
+    units: execution.units ?? defaults.units,
   };
 }
 
 function actorLlmEntries(
   execution: ResolvedReviewExecutionSettings,
-): Array<{ actor: ReviewActorName; llm: ReviewLlmRef | undefined }> {
+): Array<{ name: ReviewActorName; llm: ReviewLlmRef | undefined }> {
   return [
-    { actor: "teamlead", llm: execution.teamlead.llm },
-    { actor: "lens", llm: execution.lens.llm },
-    { actor: "synthesize", llm: execution.synthesize.llm },
+    { name: "teamlead", llm: execution.teamlead.llm },
+    { name: "lens", llm: execution.lens.llm },
+    { name: "synthesize", llm: execution.synthesize.llm },
   ];
+}
+
+function executionActorLlm(
+  execution: ResolvedReviewExecutionSettings,
+  actor: ReviewActorName,
+): ReviewLlmRef | undefined {
+  return execution[actor].llm;
+}
+
+function effectiveExecutionUnitLlm(
+  execution: ResolvedReviewExecutionSettings,
+  unitId: ReviewExecutionUnitId,
+): ReviewLlmRef | undefined {
+  const override = execution.units[unitId]?.llm;
+  if (!override) return undefined;
+  const actor = reviewExecutionUnitActor(unitId);
+  return mergeLlmRef(executionActorLlm(execution, actor), override);
+}
+
+export function effectiveReviewUnitLlmRef(
+  profile: ReviewExecutionProfile,
+  unitId: ReviewExecutionUnitId,
+): ReviewLlmRef | undefined {
+  const override = profile.units[unitId]?.llm;
+  if (!override) return undefined;
+  const actor = reviewExecutionUnitActor(unitId);
+  return mergeLlmRef(profile[actor].llm, override);
+}
+
+function unitLlmEntries(
+  execution: ResolvedReviewExecutionSettings,
+): Array<{ name: `unit:${ReviewExecutionUnitId}`; llm: ReviewLlmRef | undefined }> {
+  return REVIEW_EXECUTION_UNIT_IDS
+    .filter((unitId) => execution.units[unitId]?.llm !== undefined)
+    .map((unitId) => ({
+      name: `unit:${unitId}` as const,
+      llm: effectiveExecutionUnitLlm(execution, unitId),
+    }));
+}
+
+function llmRouteEntries(
+  execution: ResolvedReviewExecutionSettings,
+): Array<{ name: ReviewLlmRouteEntryName; llm: ReviewLlmRef | undefined }> {
+  return [...actorLlmEntries(execution), ...unitLlmEntries(execution)];
 }
 
 function actorRouteSelections(
   execution: ResolvedReviewExecutionSettings,
 ): Array<{
-  actor: ReviewActorName;
+  name: ReviewLlmRouteEntryName;
   selection: NormalizedLlmSelection | null;
 }> {
-  return actorLlmEntries(execution).map((entry) => ({
-    actor: entry.actor,
+  return llmRouteEntries(execution).map((entry) => ({
+    name: entry.name,
     selection: entry.llm ? normalizeLlmModelSwitcher(entry.llm) : null,
   }));
 }
 
 function directCallActorRouteSelection(
   selections: Array<{
-    actor: ReviewActorName;
+    name: ReviewLlmRouteEntryName;
     selection: NormalizedLlmSelection | null;
   }>,
 ): NormalizedLlmSelection | null {
   const configured = selections.filter(
-    (entry): entry is { actor: ReviewActorName; selection: NormalizedLlmSelection } =>
+    (entry): entry is { name: ReviewLlmRouteEntryName; selection: NormalizedLlmSelection } =>
       entry.selection !== null,
   );
   if (configured.length === 0) return null;
   if (
-    configured.every(
-      (entry) =>
-        entry.selection.provider !== "codex" && entry.selection.auth !== "oauth",
-    )
+    configured.every((entry) => isDirectModelCallSelection(entry.selection))
   ) {
     return configured[0]!.selection;
   }
@@ -127,7 +216,7 @@ function directCallActorRouteSelection(
 
 function commonActorRouteSelection(
   selections: Array<{
-    actor: ReviewActorName;
+    name: ReviewLlmRouteEntryName;
     selection: NormalizedLlmSelection | null;
   }>,
 ):
@@ -135,21 +224,22 @@ function commonActorRouteSelection(
   | { type: "common"; selection: NormalizedLlmSelection }
   | { type: "mixed"; reason: string } {
   const configured = selections.filter(
-    (entry): entry is { actor: ReviewActorName; selection: NormalizedLlmSelection } =>
+    (entry): entry is { name: ReviewLlmRouteEntryName; selection: NormalizedLlmSelection } =>
       entry.selection !== null,
   );
   if (configured.length === 0) return { type: "none" };
   const first = configured[0]!.selection;
   const mixed = configured.find(
     (entry) =>
-      entry.selection.provider !== first.provider ||
+      entry.selection.execution_route !== first.execution_route ||
+      entry.selection.model_provider !== first.model_provider ||
       entry.selection.auth !== first.auth,
   );
   if (mixed) {
     return {
       type: "mixed",
       reason:
-        "Actor LLM settings resolve to different executor routes. Keep actor auth/provider on one route for now.",
+        "Actor/unit LLM settings resolve to different executor routes. Keep auth/provider on one route for now.",
     };
   }
   return { type: "common", selection: first };
@@ -164,7 +254,7 @@ function commonField<T>(
 }
 
 function commonActorLlmConfig(
-  entries: Array<{ actor: ReviewActorName; llm: ReviewLlmRef | undefined }>,
+  entries: Array<{ name: ReviewLlmRouteEntryName; llm: ReviewLlmRef | undefined }>,
 ): LlmModelSwitcherConfig | undefined {
   const configs = entries
     .map((entry) => entry.llm)
@@ -212,7 +302,7 @@ function buildProfile(args: {
   trace: string[];
 }): ReviewExecutionProfile {
   const execution = settingsExecution(args.settings);
-  const commonActorLlm = commonActorLlmConfig(actorLlmEntries(execution));
+  const commonActorLlm = commonActorLlmConfig(llmRouteEntries(execution));
   const profileLlm = commonActorLlm;
   const normalized = normalizeLlmModelSwitcher(profileLlm);
   return {
@@ -230,14 +320,20 @@ function buildProfile(args: {
       ...(execution.synthesize.llm ? { llm: execution.synthesize.llm } : {}),
     },
     deliberation: execution.deliberation,
+    ...(execution.max_concurrent_lenses !== undefined
+      ? { max_concurrent_lenses: execution.max_concurrent_lenses }
+      : {}),
+    units: execution.units,
     worker_executor: args.workerExecutor,
     host: args.host,
+    artifact_generation_realization: execution.artifact_generation_realization,
     ...(profileLlm?.provider ? { provider: profileLlm.provider } : {}),
     ...(profileLlm?.auth ? { auth: profileLlm.auth } : {}),
     ...(normalized?.model_id ? { model: normalized.model_id } : {}),
     ...(normalized?.reasoning_effort ? { effort: normalized.reasoning_effort } : {}),
     ...(normalized?.service_tier ? { service_tier: normalized.service_tier } : {}),
     ...(normalized?.base_url ? { base_url: normalized.base_url } : {}),
+    retry: execution.retry,
     trace: args.trace,
   };
 }
@@ -255,19 +351,6 @@ export function resolveReviewExecutionProfile(
     trace.push(line);
     process.stderr.write(`[profile] ${line}\n`);
   };
-
-  if (env.ONTO_LLM_MOCK === "1") {
-    log("mock executor selected by ONTO_LLM_MOCK=1");
-    return {
-      type: "resolved",
-      profile: buildProfile({
-        settings: args.settings,
-        workerExecutor: "mock",
-        host: "standalone",
-        trace,
-      }),
-    };
-  }
 
   const codexAvailable =
     args.codexAvailable ?? detectCodexBinaryAvailable();
@@ -289,7 +372,7 @@ export function resolveReviewExecutionProfile(
         profile: buildProfile({
           settings: args.settings,
           workerExecutor: "direct_call",
-          host: directCallSelection.provider,
+          host: directCallSelection.model_provider,
           trace,
         }),
       };
@@ -300,28 +383,15 @@ export function resolveReviewExecutionProfile(
   if (env.ONTO_HOST_RUNTIME?.trim().toLowerCase() === "claude") {
     return noHost(
       trace,
-      "ONTO_HOST_RUNTIME=claude is not a wired onto-mcp runtime path. Use Codex OAuth, API-key direct-call, local direct-call, or mock.",
+      "ONTO_HOST_RUNTIME=claude is not a wired onto-mcp runtime path. Use Codex OAuth, API-key direct-call, or local direct-call.",
     );
   }
 
-  if (execution.executor === "mock") {
-    log("mock executor selected by review.execution.executor=mock");
-    return {
-      type: "resolved",
-      profile: buildProfile({
-        settings: args.settings,
-        workerExecutor: "mock",
-        host: "standalone",
-        trace,
-      }),
-    };
-  }
-
   if (execution.executor === "codex") {
-    if (selection && selection.provider !== "codex") {
+    if (selection && !isExternalOauthWorkerSelection(selection)) {
       return noHost(
         trace,
-        "review.execution.executor=codex requires every configured actor llm to use OpenAI OAuth.",
+        "review.execution.executor=codex requires every configured actor/unit llm to use OpenAI OAuth.",
       );
     }
     if (!codexAvailable) {
@@ -343,10 +413,10 @@ export function resolveReviewExecutionProfile(
   }
 
   if (execution.executor === "direct_call") {
-    if (!selection || selection.provider === "codex") {
+    if (!isDirectModelCallSelection(selection)) {
       return noHost(
         trace,
-        "review.execution.executor=direct_call requires every actor llm to select an API/local provider.",
+        "review.execution.executor=direct_call requires every actor/unit llm to select an API/local provider.",
       );
     }
     log("direct-call selected by review.execution.executor=direct_call");
@@ -355,22 +425,22 @@ export function resolveReviewExecutionProfile(
       profile: buildProfile({
         settings: args.settings,
         workerExecutor: "direct_call",
-        host: selection.provider,
+        host: selection.model_provider,
         trace,
       }),
     };
   }
 
-  if (selection && selection.auth !== "oauth") {
+  if (isDirectModelCallSelection(selection)) {
     log(
-      `direct-call selected by actor auth=${selection.auth} provider=${selection.provider}`,
+      `direct-call selected by actor auth=${selection.auth} provider=${selection.model_provider}`,
     );
     return {
       type: "resolved",
       profile: buildProfile({
         settings: args.settings,
         workerExecutor: "direct_call",
-        host: selection.provider,
+        host: selection.model_provider,
         trace,
       }),
     };
@@ -420,11 +490,11 @@ export function resolveReviewExecutionProfile(
     };
   }
 
-  if (selection?.auth === "oauth") {
-    if (selection.provider !== "codex") {
+  if (isExternalOauthWorkerSelection(selection)) {
+    if (selection.execution_adapter !== "codex_cli") {
       return noHost(
         trace,
-        "OAuth settings must resolve to the current host worker provider.",
+        "External OAuth worker settings must resolve to the current Codex CLI adapter.",
       );
     }
     if (!codexAvailable) {

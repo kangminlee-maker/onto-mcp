@@ -6,13 +6,16 @@ import { callLlmWithTools } from "../llm/llm-tool-loop.js";
 
 const openAiMock = vi.hoisted(() => ({
   constructorArgs: [] as Array<{ apiKey?: string; baseURL?: string }>,
+  createArgs: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("openai", () => ({
   default: class MockOpenAI {
     chat = {
       completions: {
-        create: async () => ({
+        create: async (args: Record<string, unknown>) => {
+          openAiMock.createArgs.push(args);
+          return {
           model: "mock-openai-model",
           choices: [
             {
@@ -21,7 +24,8 @@ vi.mock("openai", () => ({
             },
           ],
           usage: { prompt_tokens: 3, completion_tokens: 2 },
-        }),
+          };
+        },
       },
     };
 
@@ -44,6 +48,7 @@ describe("callLlmWithTools credential resolution", () => {
     delete process.env.OPENAI_API_KEY;
     delete process.env.CUSTOM_OPENAI_API_KEY;
     openAiMock.constructorArgs.length = 0;
+    openAiMock.createArgs.length = 0;
     tempHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-tool-loop-home-"));
     process.env.HOME = tempHome;
     await fs.mkdir(path.join(tempHome, ".codex"), { recursive: true });
@@ -81,6 +86,45 @@ describe("callLlmWithTools credential resolution", () => {
 
     expect(result.text).toBe("final answer");
     expect(openAiMock.constructorArgs[0]?.apiKey).toBe("codex-auth-key");
+  });
+
+  it("passes reasoning_effort to OpenAI native tool loops", async () => {
+    const result = await callLlmWithTools(
+      "system",
+      "user",
+      [],
+      {
+        provider: "openai",
+        model_id: "mock-openai-model",
+        reasoning_effort: "xhigh",
+      },
+      {
+        projectRoot: tempHome,
+        ontoHome: tempHome,
+      },
+    );
+
+    expect(result.text).toBe("final answer");
+    expect(openAiMock.createArgs[0]?.reasoning_effort).toBe("xhigh");
+  });
+
+  it("fails loudly when reasoning_effort is configured for unsupported tool-loop providers", async () => {
+    await expect(
+      callLlmWithTools(
+        "system",
+        "user",
+        [],
+        {
+          provider: "anthropic",
+          model_id: "mock-anthropic-model",
+          reasoning_effort: "xhigh",
+        },
+        {
+          projectRoot: tempHome,
+          ontoHome: tempHome,
+        },
+      ),
+    ).rejects.toThrow("cannot honor reasoning_effort");
   });
 
   it("ignores blank Codex auth for OpenAI native tool loops", async () => {

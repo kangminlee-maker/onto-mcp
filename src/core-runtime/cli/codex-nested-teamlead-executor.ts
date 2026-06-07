@@ -92,7 +92,7 @@ export interface CodexNestedTeamleadInput {
   project_root?: string;
   /**
    * Codex binary path. Defaults to `"codex"` (resolved via PATH). Override
-   * for tests (mock executable) or non-standard installations.
+   * for tests (fake executable) or non-standard installations.
    */
   codex_bin?: string;
   /**

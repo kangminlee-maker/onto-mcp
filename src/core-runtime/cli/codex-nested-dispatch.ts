@@ -52,7 +52,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { OntoConfig } from "../discovery/settings-chain.js";
 import type { ReviewLlmRef } from "../discovery/settings-chain.js";
-import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
+import {
+  isExternalOauthWorkerSelection,
+  normalizeLlmModelSwitcher,
+} from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
 import {
@@ -192,7 +195,12 @@ function codexConfigFromRef(
   ref: ReviewLlmRef | undefined,
 ): CodexSpawnConfig | null {
   const selection = normalizeLlmModelSwitcher(ref);
-  if (selection?.provider !== "codex") return null;
+  if (
+    !isExternalOauthWorkerSelection(selection) ||
+    selection.execution_adapter !== "codex_cli"
+  ) {
+    return null;
+  }
   return {
     ...(selection.model_id ? { model: selection.model_id } : {}),
     ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),

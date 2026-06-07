@@ -952,7 +952,7 @@ export interface ReconstructSourcePurposeCandidatesArtifact {
     unresolved_reason: string | null;
   };
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1023,7 +1023,7 @@ export interface ReconstructPurposeConfirmationArtifact {
   source_conflict_policy: string;
   limitation_refs: string[];
   confirmation_provider: {
-    owner: "host_or_user" | "mock";
+    owner: "host_or_user";
     provider_id: string;
   };
 }
@@ -1340,7 +1340,7 @@ export interface ReconstructCandidateInventoryArtifact {
   required_coverage_observation_ids?: string[];
   candidates: ReconstructCandidateInventoryCandidate[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1360,7 +1360,7 @@ export interface ReconstructCandidateDispositionArtifact {
   candidate_inventory_ref: string | null;
   dispositions: ReconstructCandidateDisposition[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1483,7 +1483,7 @@ export interface ReconstructLensJudgmentArtifact {
   }>;
   no_next_frontier_rationale: string | null;
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1518,7 +1518,7 @@ export interface ReconstructExplorationSynthesisArtifact {
   }>;
   no_next_frontier_rationale: string | null;
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1537,7 +1537,7 @@ export interface ReconstructSourceFrontierArtifact {
   }>;
   no_next_frontier_rationale: string | null;
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1672,7 +1672,6 @@ export type ReconstructClaimRealizationStance =
   | "observed_runtime_behavior"
   | "declared_design_intent"
   | "schema_or_contract_presence"
-  | "test_or_fixture_only"
   | "deferred_or_non_goal"
   | "unknown";
 
@@ -1690,7 +1689,7 @@ export interface ReconstructClaimRealizationMapArtifact {
   ontology_seed_ref: string | null;
   claim_realizations: ReconstructClaimRealization[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1759,7 +1758,7 @@ export interface ReconstructSeedConfirmationArtifact {
   deferred_claim_ids?: string[];
   notes: string[];
   confirmation_provider: {
-    owner: "host_or_user" | "mock";
+    owner: "host_or_user";
     provider_id: string;
   };
 }
@@ -1830,7 +1829,7 @@ export interface ReconstructCompetencyQuestionsArtifact {
   questions: ReconstructCompetencyQuestion[];
   open_questions: string[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -1892,7 +1891,7 @@ export interface ReconstructCompetencyQuestionAssessmentArtifact {
   competency_questions_validation_ref: string | null;
   assessments: ReconstructCompetencyQuestionAssessment[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2096,7 +2095,7 @@ export interface ReconstructMaturationQuestionFrontierArtifact {
   actionability_matrix_validation_ref: string | null;
   questions: ReconstructMaturationQuestionFrontierQuestion[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2170,7 +2169,7 @@ export interface ReconstructMaturationClosureFrontierArtifact {
   source_requests: ReconstructMaturationClosureFrontierSourceRequest[];
   authority_requests: ReconstructMaturationClosureFrontierAuthorityRequest[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2262,7 +2261,7 @@ export interface ReconstructAnswerSupportLedgerArtifact {
   round_id: string;
   evidence_clusters: ReconstructAnswerSupportEvidenceCluster[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2307,7 +2306,7 @@ export interface ReconstructMaturationAnswerClaimsArtifact {
   round_id: string;
   answer_claims: ReconstructMaturationAnswerClaim[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2351,7 +2350,7 @@ export interface ReconstructOntologyExpansionArtifact {
   source_seed_ref: string | null;
   expansions: ReconstructOntologyExpansionEntry[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2711,7 +2710,6 @@ export type ReconstructClaimProjectionActionabilityClaim =
 export type ReconstructClaimProjectionSupportClaim =
   | "unsupported"
   | "profile_supported"
-  | "fixture_validated"
   | "golden_source_validated"
   | "real_source_validated"
   | "release_supported";
@@ -2789,7 +2787,6 @@ export interface ReconstructClaimProjectionValidationViolation {
     | "required_validation_ref_invalid"
     | "derived_claim_mismatch"
     | "execution_profile_authority_missing"
-    | "mock_backed_completion_claim"
     | "broader_governance_scope_unbounded"
     | "blocked_projection_missing_recovery_ref"
     | "ready_projection_without_ready_decision";
@@ -2843,7 +2840,7 @@ export interface ReconstructFailureClassificationArtifact {
   seed_confirmation_validation_ref: string | null;
   failures: ReconstructFailureClassificationEntry[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2886,7 +2883,7 @@ export interface ReconstructRevisionProposalArtifact {
   failure_classification_ref: string | null;
   proposals: ReconstructRevisionProposalEntry[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2969,7 +2966,7 @@ export interface ReconstructStopDecisionArtifact {
   rationale: string;
   next_actions: string[];
   directive_author: {
-    owner: "host_llm" | "mock";
+    owner: "host_llm";
     author_id: string;
   };
 }
@@ -2979,7 +2976,7 @@ export interface ReconstructRunManifestStep {
   owner: "runtime" | "host_llm" | "host_or_user";
   performed_by: {
     authority: "runtime" | "host_llm" | "host_or_user";
-    realization: "runtime" | "mock" | "direct_call";
+    realization: "runtime" | "direct_call";
     actor_id: string;
   };
   status: "completed" | "skipped" | "failed";
@@ -3107,10 +3104,10 @@ export interface ReconstructRunManifestArtifact {
   target_refs: string[];
   intent: string;
   execution_profile: {
-    profile_kind: "observer_gate_slice" | "mock_semantic_slice" | "full_integral_exploration";
-    runner: "material-aware-purpose-adequacy" | "integral-exploration-direct-call";
-    semantic_author_realization: "mock" | "direct_call";
-    confirmation_provider_realization: "mock" | "direct_call";
+    profile_kind: "full_integral_exploration";
+    runner: "integral-exploration-direct-call";
+    semantic_author_realization: "direct_call";
+    confirmation_provider_realization: "direct_call";
     directive_author_id: string;
     confirmation_provider_id: string;
     allowed_completion_claim: string;
@@ -3127,7 +3124,7 @@ export interface ReconstructRunManifestArtifact {
   steps: ReconstructRunManifestStep[];
   runtime_boundary: {
     semantic_generation: "not_performed";
-    semantic_authority: "host_llm_or_mock_author";
+    semantic_authority: "host_llm_author";
   };
 }
 

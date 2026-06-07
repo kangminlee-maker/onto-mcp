@@ -204,7 +204,7 @@ import type { ReconstructSourceObservation } from "./source-observations.js";
 
 export interface ReconstructDirectiveAuthor {
   readonly authorId: string;
-  readonly owner: "host_llm" | "mock";
+  readonly owner: "host_llm";
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -265,12 +265,12 @@ export interface ReconstructDirectiveAuthor {
   writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
 }
 
-export type ReconstructSemanticAuthorRealization = "mock" | "direct_call";
-export type ReconstructConfirmationProviderRealization = "mock" | "direct_call";
+export type ReconstructSemanticAuthorRealization = "direct_call";
+export type ReconstructConfirmationProviderRealization = "direct_call";
 
 export interface ReconstructConfirmationProvider {
   readonly providerId: string;
-  readonly owner: "host_or_user" | "mock";
+  readonly owner: "host_or_user";
   confirmPurpose(
     input: ReconstructPurposeConfirmationInput,
   ): Promise<ReconstructPurposeConfirmationArtifact>;
@@ -1317,7 +1317,6 @@ const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
   "declared_design_intent",
   "schema_or_contract_presence",
-  "test_or_fixture_only",
   "deferred_or_non_goal",
   "unknown",
 ] as const satisfies readonly ReconstructClaimRealizationStance[];
@@ -1717,7 +1716,7 @@ function directiveAuthorPerformer(
 ): ReconstructRunManifestStep["performed_by"] {
   return {
     authority: "host_llm",
-    realization: directiveAuthor.owner === "mock" ? "mock" : "direct_call",
+    realization: "direct_call",
     actor_id: directiveAuthor.authorId,
   };
 }
@@ -1727,7 +1726,7 @@ function confirmationProviderPerformer(
 ): ReconstructRunManifestStep["performed_by"] {
   return {
     authority: "host_or_user",
-    realization: confirmationProvider.owner === "mock" ? "mock" : "direct_call",
+    realization: "direct_call",
     actor_id: confirmationProvider.providerId,
   };
 }
@@ -1791,22 +1790,14 @@ function createRunManifest(args: {
     target_refs: args.targetRefs,
     intent: args.intent,
     execution_profile: {
-      profile_kind:
-        args.semanticAuthorRealization === "mock"
-          ? "mock_semantic_slice"
-          : "full_integral_exploration",
-      runner:
-        args.semanticAuthorRealization === "mock"
-          ? "material-aware-purpose-adequacy"
-          : "integral-exploration-direct-call",
+      profile_kind: "full_integral_exploration",
+      runner: "integral-exploration-direct-call",
       semantic_author_realization: args.semanticAuthorRealization,
       confirmation_provider_realization: args.confirmationProviderRealization,
       directive_author_id: args.directiveAuthor.authorId,
       confirmation_provider_id: args.confirmationProvider.providerId,
       allowed_completion_claim:
-        args.semanticAuthorRealization === "mock"
-          ? "Runtime exercised the post-Seed artifact flow with mock authorship; live semantic reconstruction is not claimed."
-          : "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
+        "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
     },
     artifact_refs: {
       ...artifactRefs,
@@ -2751,7 +2742,7 @@ function createRunManifest(args: {
     ],
     runtime_boundary: {
       semantic_generation: "not_performed",
-      semantic_authority: "host_llm_or_mock_author",
+      semantic_authority: "host_llm_author",
     },
   };
 }
@@ -4336,127 +4327,6 @@ function firstEvidenceRef(sourceObservations: ReconstructSourceObservationsArtif
   return evidenceRefFromObservation(requireFirstObservation(sourceObservations));
 }
 
-function mockSourcePurposeCandidates(args: {
-  sessionId: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  authorId: string;
-}): ReconstructSourcePurposeCandidatesArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  const mixedMemberScopeRefs =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? args.sourceObservations.observations.map((observation) =>
-        observation.observation_id
-      )
-      : [];
-  const mixedMemberSourceRefs =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? [...new Set(args.sourceObservations.observations.map((observation) =>
-        observation.source_ref
-      ))]
-      : [];
-  const mixedMemberTargetKind =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? evidence.target_material_kind
-      : null;
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    target_material_kind: args.targetMaterialProfile.target_material_kind,
-    source_observations_ref: args.sourceObservationsRef,
-    selected_source_profile_refs: args.targetMaterialProfile.selected_source_profiles,
-    purpose_candidates: [
-      {
-        purpose_candidate_id: "purpose-explain-observed-material",
-        statement:
-          "Explain the observed source material as an ontology seed that can support the next maturation iteration.",
-        rank: "primary",
-        purpose_source_status: "explicit_source_declared",
-        evidence_kind_refs: ["P1", "P2"],
-        supporting_evidence_refs: [evidence],
-        contradicting_source_refs: [],
-        adequacy_frame: {
-          frame_id: "frame-observed-material-maturation",
-          frame_kind: "operational_ontology_seed",
-          frame_status: "source_declared",
-          adequacy_claim:
-            "The seed must preserve observable objects, actors, actions, data bindings, and limitations needed for maturation.",
-          material_kind_requirements: {
-            target_material_kind: args.targetMaterialProfile.target_material_kind,
-            required_facets: ["object", "actor", "action", "data_source", "limitation"],
-            optional_facets: ["permission", "workflow"],
-            rationale:
-              "The mock path needs a compact but actionability-aware purpose frame.",
-          },
-          required_elements: [
-            {
-              element_id: "purpose-element-static-observed-material",
-              element_kind: "object",
-              material_facet_kind: "object",
-              description: "Represent the observed material and its evidence source.",
-              actionability_surface_refs: ["static_surface"],
-              maturity_dimension_refs: ["structure", "evidence"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["semantic_layer.object_types"],
-              closure_expectation: "model_or_limit",
-            },
-            {
-              element_id: "purpose-element-kinetic-explain-seed",
-              element_kind: "action",
-              material_facet_kind: "action",
-              description: "Represent the action of explaining the seed.",
-              actionability_surface_refs: ["kinetic_surface"],
-              maturity_dimension_refs: ["intent", "relation"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["kinetic_layer.action_types"],
-              closure_expectation: "model_or_limit",
-            },
-            {
-              element_id: "purpose-element-dynamic-boundary",
-              element_kind: "limitation",
-              material_facet_kind: "limitation",
-              description: "Represent uncertainty and runtime boundaries for maturation.",
-              actionability_surface_refs: ["dynamic_surface"],
-              maturity_dimension_refs: ["context", "external"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["handoff_limitations"],
-              closure_expectation: "model_or_limit",
-            },
-          ],
-        },
-        ranking_rationale:
-          "The mock path uses the observed material and declared reconstruct intent as direct source-purpose evidence.",
-        limitation_refs: [],
-      },
-    ],
-    selection: {
-      primary_purpose_candidate_id: "purpose-explain-observed-material",
-      selection_basis: "Mock selected the only source-backed purpose candidate.",
-      confirmation_policy_hint:
-        "Direct source-declared purpose does not require separate user confirmation.",
-      unresolved_reason: null,
-    },
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
 function slugId(value: string): string {
   return value
     .toLowerCase()
@@ -4481,7 +4351,7 @@ function derivedMaturationQuestionFrontier(args: {
   actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
   actionabilityMatrixRef: string;
   actionabilityMatrixValidationRef: string;
-  owner: "host_llm" | "mock";
+  owner: "host_llm";
   authorId: string;
 }): ReconstructMaturationQuestionFrontierArtifact {
   const rows = maturationQuestionFrontierRows(args.actionabilityMatrix);
@@ -4529,92 +4399,7 @@ function derivedMaturationQuestionFrontier(args: {
   };
 }
 
-function mockCandidateInventory(args: {
-  sessionId: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  authorId: string;
-}): ReconstructCandidateInventoryArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    source_observations_ref: "source-observations.yaml",
-    required_coverage_observation_ids: [evidence.observation_id],
-    candidates: [
-      {
-        candidate_id: "candidate-observed-material",
-        candidate_kind: "object",
-        name: "Observed Material",
-        description: "The observed source material represented as a seed object.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-reconstruct-user",
-        candidate_kind: "actor",
-        name: "Reconstruct User",
-        description: "The user who will consume the reconstructed seed.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-explain-seed",
-        candidate_kind: "action",
-        name: "Explain Seed",
-        description: "The action of explaining the observed material through the seed.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-observed-source",
-        candidate_kind: "data_source",
-        name: "Observed Source",
-        description: "The runtime-observed source ref used as evidence.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-    ],
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
-function mockCandidateDisposition(args: {
-  sessionId: string;
-  candidateInventory: ReconstructCandidateInventoryArtifact;
-  authorId: string;
-}): ReconstructCandidateDispositionArtifact {
-  const targetByCandidateId = new Map<string, string>([
-    ["candidate-observed-material", "object-observed-material"],
-    ["candidate-reconstruct-user", "actor-reconstruct-user"],
-    ["candidate-explain-seed", "action-explain-seed"],
-    ["candidate-observed-source", "binding-observed-source"],
-  ]);
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    candidate_inventory_ref: "candidate-inventory.yaml",
-    dispositions: args.candidateInventory.candidates.map((candidate) => ({
-      candidate_id: candidate.candidate_id,
-      disposition_id: "promoted_to_seed_layer",
-      target_seed_refs: [
-        targetByCandidateId.get(candidate.candidate_id) ?? `seed-ref-${candidate.candidate_id}`,
-      ],
-      rationale: `${candidate.name} is promoted into the mock ontology seed surface.`,
-      evidence_refs: candidate.evidence_refs,
-    })),
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
-function mockOntologyHandoff(): Record<string, unknown> {
+function runtimeOntologyHandoffScaffold(): Record<string, unknown> {
   return {
     readiness_claim: "ready",
     classification_mapping: {
@@ -4658,8 +4443,8 @@ function mockOntologyHandoff(): Record<string, unknown> {
       canonical_label_policy: "seed names are canonical labels",
       alias_policy: "aliases are not asserted",
       hidden_label_policy: "hidden labels are not asserted",
-      homonym_policy: "not assessed in mock path",
-      multilingual_label_policy: "single-language mock labels",
+      homonym_policy: "not assessed in runtime scaffold",
+      multilingual_label_policy: "single-language runtime labels",
       language_tag_policy: "und",
       limitation_refs: [],
     },
@@ -4749,7 +4534,7 @@ function mockOntologyHandoff(): Record<string, unknown> {
         {
           concern_id: "instance_assertion_coverage",
           applies: false,
-          applicability_predicate_ref: "mock path has no separate instance catalog",
+          applicability_predicate_ref: "runtime scaffold has no separate instance catalog",
           trace_refs: ["object-observed-material"],
           limitation_refs: [],
         },
@@ -4778,302 +4563,6 @@ function mockOntologyHandoff(): Record<string, unknown> {
       isolation_rationale_refs: [],
     },
     limitation_refs: [],
-  };
-}
-
-function mockOntologySeed(args: {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  authorId: string;
-}): ReconstructOntologySeedArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  const sourceRef = evidence.source_ref;
-  return {
-    seed_identity: {
-      schema_version: "1",
-      seed_id: `seed-${args.sessionId}`,
-      title: "Mock Actionable Ontology Seed",
-      target_refs: args.targetMaterialProfile.target_refs,
-      generated_at: isoNow(),
-      authoring_profile: args.authorId,
-    },
-    purpose: {
-      reconstruct_intent: args.intent,
-      declared_purpose: args.intent,
-      purpose_source_status: "convergent_inferred",
-      purpose_evidence_policy: {
-        accepted_evidence_kind: "P3 observable purpose support",
-        acceptance_basis: "Mock path uses the first runtime source observation as bounded evidence.",
-      },
-      purpose_confirmation: {
-        required: false,
-        status: "not_required",
-        confirmed_purpose_candidate_id: "purpose-candidate-observed-material",
-        prompt_summary: "Mock confirmation is not required for fixture authorship.",
-        user_response_summary: "Not required for fixture authorship.",
-        source_conflict_policy: "no conflict observed in fixture source",
-        limitation_refs: [],
-      },
-      purpose_candidates: [
-        {
-          purpose_candidate_id: "purpose-candidate-observed-material",
-          statement: args.intent,
-          rank: "primary",
-          purpose_source_status: "convergent_inferred",
-          evidence_kind_refs: ["P3", "P4"],
-          supporting_source_refs: [sourceRef],
-          contradicting_source_refs: [],
-          adequacy_signal_coverage: {
-            material_kind: args.targetMaterialProfile.target_material_kind,
-            required_facets: ["object", "actor", "action", "evidence"],
-            covered_facets: ["object", "actor", "action", "evidence"],
-            missing_facets: [],
-          },
-          ranking_rationale: "Fixture source has one observed material unit used for bounded seed handoff.",
-          limitation_refs: [],
-        },
-      ],
-      purpose_adequacy_frame: {
-        frame_id: "purpose-frame-observed-material",
-        name: "Observed Material Purpose Adequacy",
-        frame_kind: "mixed_material",
-        frame_status: "evidence_inferred",
-        adequacy_claim:
-          "The seed is adequate when it names the observed material, the reconstruct user, the explanation action, and the evidence binding.",
-        ranking_rationale:
-          "The frame is derived from the material-aware observation and bounded mock handoff purpose.",
-        material_kind_requirements: {
-          target_material_kind: args.targetMaterialProfile.target_material_kind,
-          required_facets: ["object", "actor", "action", "evidence"],
-          optional_facets: ["policy", "state"],
-          rationale:
-            "A bounded fixture seed needs enough structure to support the next maturation iteration.",
-        },
-        required_elements: [
-          {
-            element_id: "purpose-element-observed-material",
-            element_kind: "object",
-            description: "Observed material is represented as a seed object.",
-            seed_ref_refs: ["object-observed-material"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-          {
-            element_id: "purpose-element-reconstruct-user",
-            element_kind: "actor",
-            description: "The reconstruct user is represented as the actor for seed explanation.",
-            seed_ref_refs: ["actor-reconstruct-user"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-          {
-            element_id: "purpose-element-explain-seed",
-            element_kind: "action",
-            description: "The explanation action is represented for bounded seed handoff.",
-            seed_ref_refs: ["action-explain-seed"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-        ],
-        source_refs: [sourceRef],
-        evidence_refs: [evidence],
-        limitation_refs: [],
-      },
-      secondary_purpose_frames: [],
-      intended_decisions: ["Decide whether the observed material can be handed off as a bounded seed."],
-      intended_actions: ["Explain the observed material from validated evidence."],
-      non_goals: ["Full formal ontology generation is outside this mock path."],
-      evidence_refs: [evidence],
-    },
-    decision_context: {
-      principal_user: "Reconstruct user",
-      downstream_use: "bounded_seed_handoff",
-      decision_boundary: "Observed runtime evidence only.",
-      risk_notes: [],
-    },
-    conceptual_frame: {
-      concepts: [
-        {
-          concept_id: "concept-observed-material",
-          name: "Observed Material",
-          definition: "The source material observed by reconstruct runtime.",
-          purpose_role: "orients the seed around the declared purpose",
-          evidence_refs: [evidence],
-          confidence: "confirmed",
-        },
-      ],
-      associations: [],
-    },
-    semantic_layer: {
-      object_types: [
-        {
-          object_type_id: "object-observed-material",
-          name: "Observed Material",
-          object_kind: "document",
-          description: "A bounded object representing the observed source material.",
-          primary_key: {
-            property_id: "property-observed-material-ref",
-            name: "source ref",
-            value_type: "string",
-            evidence_refs: [evidence],
-          },
-          properties: [],
-          backing_source_refs: [sourceRef],
-          evidence_refs: [evidence],
-          status: "confirmed",
-        },
-      ],
-      link_types: [],
-      value_types: [],
-      constraints: [],
-    },
-    kinetic_layer: {
-      action_types: [
-        {
-          action_type_id: "action-explain-seed",
-          name: "Explain Seed",
-          description: "Explain the observed material as a bounded seed.",
-          actor_type_ids: ["actor-reconstruct-user"],
-          target_object_type_ids: ["object-observed-material"],
-          affected_object_type_ids: [],
-          parameters: [],
-          preconditions: [],
-          postconditions: [],
-          side_effects: [],
-          writeback_behavior: {
-            writes: false,
-            writeback_source_refs: [],
-            rationale: "The action is explanatory and does not write source material.",
-          },
-          evidence_refs: [evidence],
-          status: "confirmed",
-        },
-      ],
-      functions: [],
-      workflows: [
-        {
-          workflow_id: "workflow-explain-seed",
-          name: "Explain Seed Workflow",
-          ordered_action_type_ids: ["action-explain-seed"],
-          trigger: "User requests reconstruct output.",
-          terminal_state: "Bounded seed explanation is available.",
-          evidence_refs: [evidence],
-        },
-      ],
-    },
-    dynamic_layer: {
-      actor_types: [
-        {
-          actor_type_id: "actor-reconstruct-user",
-          name: "Reconstruct User",
-          actor_kind: "human_user",
-          role_refs: ["role-seed-reader"],
-          description: "Human user consuming the reconstructed seed.",
-          evidence_refs: [evidence],
-        },
-      ],
-      actor_roles: [
-        {
-          role_id: "role-seed-reader",
-          name: "Seed Reader",
-          holder_actor_type_ids: ["actor-reconstruct-user"],
-          authority_scope_refs: [],
-          evidence_refs: [evidence],
-        },
-      ],
-      permission_policies: [
-        {
-          policy_id: "policy-explain-seed",
-          actor_type_id: "actor-reconstruct-user",
-          action_type_id: "action-explain-seed",
-          object_type_id: "object-observed-material",
-          permission_kind: "allowed",
-          condition: "Within the reconstruct session boundary.",
-          evidence_refs: [evidence],
-        },
-      ],
-      state_models: [],
-      lifecycle_rules: [],
-    },
-    data_binding_layer: {
-      source_bindings: [
-        {
-          binding_id: "binding-observed-source",
-          seed_ref: "object-observed-material",
-          source_ref: sourceRef,
-          binding_kind: "evidence",
-          statement: "The observed source ref backs the seed object.",
-          evidence_refs: [evidence],
-        },
-      ],
-      read_models: [
-        {
-          read_model_id: "read-observed-source",
-          name: "Observed Source Read Model",
-          object_type_ids: ["object-observed-material"],
-          source_refs: [sourceRef],
-          transformation_summary: "No additional transformation in the mock path.",
-          evidence_refs: [evidence],
-        },
-      ],
-      writebacks: [],
-      provenance_bindings: [
-        {
-          provenance_id: "provenance-observed-source",
-          seed_ref: "object-observed-material",
-          source_ref: sourceRef,
-          author_or_system: "onto-reconstruct-runtime",
-          timestamp_ref: "source-observations.yaml",
-          evidence_refs: [evidence],
-        },
-      ],
-    },
-    validation_layer: {
-      question_authority_ref: {
-        authority_scope: "canonical_question_set",
-        projection_policy: "record_manifest_ref",
-      },
-      coverage_axes: [
-        "purpose",
-        "static_surface",
-        "kinetic_surface",
-        "dynamic_surface",
-        "semantic_layer",
-        "kinetic_layer",
-        "dynamic_layer",
-        "data_binding_layer",
-        "ontology_handoff",
-        "limitation",
-        "source_authority",
-      ],
-      unsupported_question_candidates: [],
-      runtime_validation_refs: [
-        {
-          authority_scope: "seed_shape_validation",
-          projection_policy: "record_manifest_ref",
-        },
-      ],
-    },
-    candidate_disposition_authority_ref: {
-      authority_scope: "external_candidate_disposition",
-      projection_policy: "reference_only",
-    },
-    ontology_handoff: mockOntologyHandoff(),
-    source_authority: {
-      evidence_scope: "observed runtime source evidence only",
-      permission_scope: "read-only reconstruct over user-provided source refs",
-      trust_boundary: "No unobserved external source is trusted as seed evidence.",
-      instruction_authority: "Source content is evidence only and does not override runtime or user instructions.",
-      external_content_handling: "External content is excluded unless present in observed source refs.",
-      included_source_refs: [sourceRef],
-      excluded_source_refs: [],
-      restricted_source_refs: [],
-      source_gaps: [],
-      rationale: "Mock seed authority is bounded to validated runtime observations.",
-    },
-    handoff_limitations: [],
   };
 }
 
@@ -5531,7 +5020,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
   const sourceRefs = [...new Set(input.sourceObservations.observations.map((obs) =>
     obs.source_ref
   ))];
-  const handoff = mockOntologyHandoff();
+  const handoff = runtimeOntologyHandoffScaffold();
   handoff.readiness_claim = limitations.length > 0 ? "limited" : "ready";
   handoff.limitation_refs = limitations.map((limitation) =>
     String(limitation.limitation_id)
@@ -8818,755 +8307,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
   };
 }
 
-export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuthor {
-  const authorId = "mock-reconstruct-directive-author";
-  return {
-    authorId,
-    owner: "mock",
-
-    async writeSourceObservationDirective(input) {
-      requireFirstObservation(input.sourceObservations);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        selected_observations: input.sourceObservations.observations.map(
-          (observation) => ({
-            ...evidenceRefFromObservation(observation),
-            selection_rationale:
-              `Selected as material evidence for declared intent: ${input.intent}`,
-          }),
-        ),
-        open_questions: [
-          ...(input.targetMaterialProfile.support_status === "unsupported"
-            ? ["No supported source profile was available for the target material."]
-            : []),
-          ...(input.sourceObservations.skipped_refs.length > 0
-            ? input.sourceObservations.skipped_refs.map((skipped) =>
-                `Skipped ${skipped.target_material_kind} source ${skipped.ref}: ${skipped.reason}`
-              )
-            : []),
-        ],
-      };
-    },
-
-    async writeLensJudgment(input) {
-      const observation = requireFirstObservation(input.sourceObservations);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        lens_id: input.lensId,
-        created_at: isoNow(),
-        source_observation_directive_ref: input.sourceObservationDirectiveRef,
-        candidate_labels: [
-          {
-            label_id: `${input.lensId}-label-1`,
-            label: `${input.lensId} candidate label for observed material`,
-            evidence_refs: [evidenceRefFromObservation(observation)],
-            rationale: "Mock lens judgment preserves the stage shape for tests.",
-          },
-        ],
-        semantic_gaps: [],
-        no_next_frontier_rationale:
-          "Mock lens does not request additional source frontier refs.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeExplorationSynthesis(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        created_at: isoNow(),
-        lens_judgment_index_ref: input.lensJudgmentIndexRef,
-        accepted_gaps: [],
-        requested_source_refs: [],
-        no_next_frontier_rationale:
-          "Mock synthesis accepts no next frontier for the bounded test slice.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeSourceFrontier(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        created_at: isoNow(),
-        exploration_synthesis_ref: input.explorationSynthesisRef,
-        frontier_refs: [],
-        no_next_frontier_rationale:
-          input.explorationSynthesis.no_next_frontier_rationale ??
-          "Mock frontier declares no next source refs.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeSourcePurposeCandidates(input) {
-      return mockSourcePurposeCandidates({
-        sessionId: input.sessionId,
-        targetMaterialProfile: input.targetMaterialProfile,
-        sourceObservations: input.sourceObservations,
-        sourceObservationsRef: input.sourceObservationsRef,
-        authorId,
-      });
-    },
-
-    async writeCandidateInventory(input) {
-      return mockCandidateInventory({
-        sessionId: input.sessionId,
-        sourceObservations: input.sourceObservations,
-        authorId,
-      });
-    },
-
-    async writeCandidateDisposition(input) {
-      return mockCandidateDisposition({
-        sessionId: input.sessionId,
-        candidateInventory: input.candidateInventory,
-        authorId,
-      });
-    },
-
-    async writeOntologySeed(input) {
-      return mockOntologySeed({
-        sessionId: input.sessionId,
-        intent: input.intent,
-        targetMaterialProfile: input.targetMaterialProfile,
-        sourceObservations: input.sourceObservations,
-        authorId,
-      });
-    },
-
-    async writeClaimRealizationMap(input) {
-      const claims = ontologyClaims(input.ontologySeed);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        ontology_seed_ref: input.ontologySeedRef,
-	        claim_realizations: claims.map((claim) => {
-	          const stance = "observed_runtime_behavior" as const;
-	          return {
-	            claim_id: claim.claim_id,
-	            stance,
-	            evidence_refs: claim.evidence_refs,
-	            rationale:
-	              "Mock author treats this claim as directly supported by runtime observations.",
-	          };
-	        }),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeCompetencyQuestions(input) {
-      const eligibleClaims = new Set(
-        input.seedConfirmationValidation.cq_eligible_claim_ids,
-      );
-      const claimQuestions = ontologyClaims(input.ontologySeed)
-        .filter((claim) => eligibleClaims.has(claim.claim_id))
-        .map((claim, index) => {
-          const question = {
-            question_id: `cq-${index + 1}`,
-            question:
-              `Can the reconstructed Seed explain claim ${claim.claim_id} for its declared purpose?`,
-            linked_claim_ids: [claim.claim_id],
-            coverage_axis_refs: input.contractRegistry.coverage_axis_registry.map((record) =>
-              record.axis_id
-            ),
-            ontology_handoff_axis_refs:
-              input.contractRegistry.ontology_handoff_axis_registry.map((record) =>
-                record.axis_id
-              ),
-            seed_ref_refs: [claim.claim_id],
-            limitation_refs: [],
-            reasoning_or_formalism_facets: facetIds(
-              input.contractRegistry.reasoning_or_formalism_facet_registry,
-            ),
-            entity_identity_facets: facetIds(
-              input.contractRegistry.entity_identity_facet_registry,
-            ),
-            instance_assertion_facets: facetIds(
-              input.contractRegistry.instance_assertion_facet_registry,
-            ),
-            terminology_facets: facetIds(input.contractRegistry.terminology_facet_registry),
-            relation_type_facets: facetIds(
-              input.contractRegistry.relation_type_facet_registry,
-            ),
-            classification_facets: facetIds(
-              input.contractRegistry.classification_facet_registry,
-            ),
-            constraint_facets: facetIds(input.contractRegistry.constraint_facet_registry),
-            modeling_concern_facets: modelingConcernIds(input.contractRegistry),
-            domain_competency_trace_refs: [],
-            domain_competency_semantic_assessments: [],
-            reference_standard_refs: [],
-            pattern_catalog_refs: [],
-            query_access_contract_refs: [],
-            visualization_contract_refs: [],
-            graph_exploration_contract_refs: [],
-            coverage_disposition: "covered" as const,
-            expected_answer_kind: "yes_no" as const,
-            handoff_relevance: "required" as const,
-            lifecycle_status: "active" as const,
-            rationale:
-              `Mock competency question covers claim ${claim.claim_id} and all registry-required purpose adequacy axes.`,
-            evidence_refs: claim.evidence_refs,
-          };
-          return question;
-        });
-      const requiredDomainCompetencyIds = new Set(
-        input.governingSnapshot.required_admitted_competency_ids,
-      );
-      const admittedDomainCompetencies =
-        input.governingSnapshot.admitted_domain_competency_snapshots.flatMap(
-          (snapshot) => snapshot.admitted_competencies,
-        ).filter((competency) =>
-          requiredDomainCompetencyIds.has(competency.qualified_competency_id)
-        );
-      const domainEvidenceRef = input.sourceObservations.observations[0]
-        ? evidenceRefFromObservation(input.sourceObservations.observations[0])
-        : null;
-      const domainCompetencyQuestions =
-        admittedDomainCompetencies.map((competency, index) => {
-          const question = {
-            question_id: `domain-cq-${index + 1}`,
-            question:
-              `Can the reconstructed Seed answer ${competency.qualified_competency_id}: ${competency.question}`,
-            linked_claim_ids: [],
-            coverage_axis_refs: [],
-            ontology_handoff_axis_refs: [],
-            seed_ref_refs: [],
-            limitation_refs: [],
-            reasoning_or_formalism_facets: [],
-            entity_identity_facets: [],
-            instance_assertion_facets: [],
-            terminology_facets: [],
-            relation_type_facets: [],
-            classification_facets: [],
-            constraint_facets: [],
-            modeling_concern_facets: [],
-            domain_competency_trace_refs: [competency.qualified_competency_id],
-            domain_competency_semantic_assessments: [
-              {
-                competency_id: competency.qualified_competency_id,
-                source_anchor: competency.source_anchor,
-                applicability_verdict: "applicable" as const,
-                semantic_alignment: "preserved" as const,
-                rationale:
-                  `Mock semantic assessment preserves admitted domain competency ${competency.qualified_competency_id}.`,
-                evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
-              },
-            ],
-            reference_standard_refs: [],
-            pattern_catalog_refs: [],
-            query_access_contract_refs: [],
-            visualization_contract_refs: [],
-            graph_exploration_contract_refs: [],
-            coverage_disposition: "covered" as const,
-            expected_answer_kind: "gap_statement" as const,
-            handoff_relevance: "diagnostic" as const,
-            lifecycle_status: "active" as const,
-            rationale:
-              `Mock domain competency disposition row for ${competency.qualified_competency_id}. Verification criteria: ${competency.verification_criteria}`,
-            evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
-          };
-          return question;
-        });
-      const questions = [...claimQuestions, ...domainCompetencyQuestions];
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        seed_confirmation_ref: null,
-        ontology_seed_ref: input.ontologySeedRef,
-        questions,
-        open_questions: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeCompetencyQuestionAssessment(input) {
-      const realizationByClaim = new Map(
-        input.claimRealizationMap.claim_realizations.map((realization) => [
-          realization.claim_id,
-          realization,
-        ]),
-      );
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        competency_questions_ref: input.competencyQuestionsRef,
-        competency_questions_validation_ref: input.competencyQuestionsValidationRef,
-        assessments: input.competencyQuestions.questions.map((question) => {
-          const firstClaimId = question.linked_claim_ids[0] ?? null;
-          const stance = firstClaimId
-            ? realizationByClaim.get(firstClaimId)?.stance ?? "unknown"
-            : question.domain_competency_trace_refs.length > 0
-              ? "schema_or_contract_presence"
-              : "unknown";
-          const answerStatus: ReconstructCompetencyQuestionAnswerStatus =
-            stance === "observed_runtime_behavior" ||
-            stance === "schema_or_contract_presence"
-              ? "answerable"
-              : stance === "declared_design_intent"
-                ? "partially_answerable"
-                : stance === "deferred_or_non_goal"
-                  ? "deferred"
-                  : "unsupported";
-          return {
-            question_id: question.question_id,
-            answer_status: answerStatus,
-            answer_summary:
-              `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
-            required_seed_refs: question.seed_ref_refs,
-            linked_claim_ids: question.linked_claim_ids,
-            evidence_refs: question.evidence_refs,
-            missing_source_or_confirmation:
-              answerStatus === "answerable" ? null : `Mock unresolved stance: ${stance}`,
-            ambiguity_notes: [],
-            downstream_effect: downstreamEffectForAnswerStatus(answerStatus),
-            rationale:
-              `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
-          };
-        }),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeFailureClassification(input) {
-      const failures = input.competencyQuestionAssessment.assessments
-        .filter((assessment) => assessment.answer_status !== "answerable")
-        .filter((assessment) => assessment.answer_status !== "not_applicable")
-        .map((assessment, index) => {
-          const failureKind: ReconstructFailureKind =
-            assessment.answer_status === "deferred"
-              ? "deferred_scope"
-              : assessment.answer_status === "partially_answerable"
-                ? "insufficient_evidence"
-                : assessment.answer_status === "contradicted"
-                  ? "contradicted_evidence"
-                  : "unsupported_claim";
-          return {
-            failure_id: `failure-${index + 1}`,
-            failure_kind: failureKind,
-            materiality: "material" as const,
-            question_id: assessment.question_id,
-            claim_id: assessment.linked_claim_ids[0] ?? null,
-            rationale:
-              `Question ${assessment.question_id} is ${assessment.answer_status}, so the Seed is not fully safe to trust for that question.`,
-            recommended_action:
-              failureKind === "deferred_scope" ? "defer" as const : "collect_evidence" as const,
-          };
-        });
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        competency_question_assessment_ref: input.competencyQuestionAssessmentRef,
-        seed_confirmation_validation_ref:
-          input.seedConfirmationValidation.seed_confirmation_ref,
-        failures,
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeRevisionProposal(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        failure_classification_ref: input.failureClassificationRef,
-        proposals: input.failureClassification.failures.map((failure, index) => ({
-          proposal_id: `proposal-${index + 1}`,
-          target_type: "failure",
-          target_id: failure.failure_id,
-          action:
-            failure.recommended_action === "defer"
-              ? "defer"
-              : failure.recommended_action === "reject_claim"
-                ? "reject"
-                : "extend",
-          rationale:
-            `Address ${failure.failure_id} before treating the reconstructed Seed as complete.`,
-          expected_effect:
-            "Improve artifact-backed trust without making runtime author ontology meaning.",
-        })),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeStopDecision(input) {
-      const allowedDecisions = stopDecisionAllowedDecisions(input);
-      const shouldStop =
-        allowedDecisions.includes("stop") &&
-        input.metrics.validation_status.source_observation_directive === "valid" &&
-        input.metrics.validation_status.candidate_disposition === "valid" &&
-        input.metrics.validation_status.ontology_seed === "valid" &&
-        input.metrics.validation_status.seed_confirmation_validation === "valid" &&
-        input.metrics.unresolved_question_count === 0;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        decision: shouldStop ? "stop" : "ask_user",
-        declared_purpose: input.intent,
-        metrics_ref: input.metricsRef,
-        rationale: shouldStop
-          ? "All purpose adequacy runtime gates passed and the primary ontology seed was accepted."
-          : "One or more reconstruct gates remains unresolved.",
-        next_actions: shouldStop
-          ? []
-          : ["Revise the LLM-owned directive or ask the user for confirmation."],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeMaturationQuestionFrontier(input) {
-      return derivedMaturationQuestionFrontier({
-        sessionId: input.sessionId,
-        maturationBaselineRef: input.maturationBaselineRef,
-        maturationBaselineValidationRef: input.maturationBaselineValidationRef,
-        actionabilityMatrix: input.actionabilityMatrix,
-        actionabilityMatrixRef: input.actionabilityMatrixRef,
-        actionabilityMatrixValidationRef: input.actionabilityMatrixValidationRef,
-        owner: "mock",
-        authorId,
-      });
-    },
-
-    async writeMaturationClosureFrontier(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        question_frontier_ref: input.maturationQuestionFrontierRef,
-        source_requests: [],
-        authority_requests: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeAnswerSupportLedger(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        evidence_clusters: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeMaturationAnswerClaims(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        answer_claims: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeOntologyExpansion(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        answer_claims_ref: input.answerClaimsRef,
-        source_seed_ref: input.ontologySeedRef,
-        expansions: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeFinalOutput(input) {
-      const confirmedClaims = ontologyClaims(input.ontologySeed).filter((claim) =>
-        input.seedConfirmationValidation.accepted_claim_ids.includes(claim.claim_id)
-      );
-      const claimLines = confirmedClaims.length === 0
-        ? ["- No Seed claims were confirmed."]
-        : confirmedClaims.map((claim) =>
-            `- ${claim.name} (${claim.claim_id}): ${claim.statement} (ontology-seed.yaml, seed-confirmation-validation.yaml)`
-          );
-      const realizationLines = input.claimRealizationMap.claim_realizations.map(
-        (realization) =>
-          `- ${realization.claim_id}: ${realization.stance} (claim-realization-map.yaml)`,
-      );
-      const assessmentLines =
-        input.competencyQuestionAssessment.assessments.length === 0
-          ? ["- No competency question assessments recorded."]
-          : input.competencyQuestionAssessment.assessments.map((assessment) =>
-              `- ${assessment.question_id}: ${assessment.answer_status} for ${assessment.linked_claim_ids.join(", ")} (competency-question-assessment.yaml)`
-            );
-      const failureLines = input.failureClassification.failures.length === 0
-        ? ["- No material failures recorded."]
-        : input.failureClassification.failures.map((failure) =>
-            `- ${failure.failure_id}: ${failure.failure_kind} on ${failure.question_id ?? failure.claim_id ?? "run"} (${failure.materiality}) (failure-classification.yaml)`
-          );
-      const revisionLines = input.revisionProposal.proposals.length === 0
-        ? ["- No revision proposals recorded."]
-        : input.revisionProposal.proposals.map((proposal) =>
-            `- ${proposal.proposal_id}: ${proposal.action} ${proposal.target_type} ${proposal.target_id} (revision-proposal.yaml)`
-          );
-      const unresolvedQuestions = [
-        ...input.competencyQuestions.open_questions,
-      ];
-      const unresolvedLines = unresolvedQuestions.length === 0
-        ? ["- None recorded."]
-        : unresolvedQuestions.map((question) => `- ${question}`);
-      const answerabilityLines = ontologySeedSummaryLines(input.ontologySeed);
-      const skippedLines = input.sourceObservations.skipped_refs.length === 0
-        ? ["- None recorded."]
-        : input.sourceObservations.skipped_refs.map((skipped) =>
-            `- ${skipped.ref} (${skipped.target_material_kind}): ${skipped.reason}`
-          );
-      const nextActionLines = input.stopDecision.next_actions.length === 0
-        ? ["- None recorded."]
-        : input.stopDecision.next_actions.map((action) => `- ${action}`);
-      return [
-        "# Reconstruct Result",
-        "",
-        `Session: ${input.sessionId}`,
-        `Target material kind: ${input.targetMaterialProfile.target_material_kind}`,
-        `Declared purpose: ${input.intent}`,
-        `Stop decision: ${input.stopDecision.decision}`,
-        "",
-        "## Confirmed Seed Content",
-        "",
-        ...claimLines,
-        "",
-        "## Runtime Metrics",
-        "",
-        `- Source observations: ${input.metrics.source_observation_count}`,
-        `- Semantic claims: ${input.metrics.semantic_claim_count}`,
-        `- Evidence refs: ${input.metrics.evidence_ref_count}`,
-        `- Competency questions: ${input.metrics.competency_question_count}`,
-        `- Competency question assessments: ${input.metrics.competency_question_assessment_count}`,
-        `- Material failures: ${input.failureClassificationValidation.material_failure_count}`,
-        `- Revision proposals: ${input.revisionProposalValidation.proposal_count}`,
-        `- Pass rate: ${input.metrics.pass_rate}`,
-        `- Claim projection authority: ${input.artifactRefs.claim_projection}`,
-        `- Claim projection validation authority: ${input.artifactRefs.claim_projection_validation}`,
-        "",
-        "## Seed Answerability",
-        "",
-        ...answerabilityLines,
-        "",
-        "## Claim Realization Summary",
-        "",
-        ...realizationLines,
-        "",
-        "## Competency Question Assessment",
-        "",
-        ...assessmentLines,
-        "",
-        "## Failure Classifications",
-        "",
-        ...failureLines,
-        "",
-        "## Revision Proposals",
-        "",
-        ...revisionLines,
-        "",
-        "## Unresolved Material Questions",
-        "",
-        ...unresolvedLines,
-        "",
-        "## Unsupported Or Out-of-scope Material",
-        "",
-        ...skippedLines,
-        "",
-        "## Proposed Next Actions",
-        "",
-        ...nextActionLines,
-        "",
-        "## Artifact Truth",
-        "",
-        `- Reconstruct run control: ${input.artifactRefs.reconstruct_run_control}`,
-        `- Reconstruct run control validation: ${input.artifactRefs.reconstruct_run_control_validation}`,
-        `- Registry verification evidence: ${input.artifactRefs.registry_verification_evidence}`,
-        `- Registry verification evidence validation: ${input.artifactRefs.registry_verification_evidence_validation}`,
-        ...(input.artifactRefs.source_observation_delta
-          ? [
-            `- Source observation delta: ${input.artifactRefs.source_observation_delta}`,
-            `- Source observation delta validation: ${input.artifactRefs.source_observation_delta_validation}`,
-            `- Source observation re-entry validation: ${input.artifactRefs.source_observation_reentry_validation}`,
-          ]
-          : []),
-        `- Ontology seed: ${input.artifactRefs.ontology_seed}`,
-        `- Ontology seed validation: ${input.artifactRefs.ontology_seed_validation}`,
-        `- Claim realization map: ${input.artifactRefs.claim_realization_map}`,
-        `- Seed confirmation validation: ${input.artifactRefs.seed_confirmation_validation}`,
-        `- Competency question assessment: ${input.artifactRefs.competency_question_assessment}`,
-        `- Failure classification: ${input.artifactRefs.failure_classification}`,
-        `- Revision proposal: ${input.artifactRefs.revision_proposal}`,
-        `- Pre-handoff run manifest validation: ${input.artifactRefs.pre_handoff_run_manifest_validation}`,
-        `- Handoff decision validation: ${input.artifactRefs.handoff_decision_validation}`,
-        `- Maturation source delta: ${input.artifactRefs.maturation_source_delta}`,
-        `- Maturation source delta validation: ${input.artifactRefs.maturation_source_delta_validation}`,
-        `- Maturation convergence ledger: ${input.artifactRefs.maturation_convergence_ledger}`,
-        `- Maturation convergence ledger validation: ${input.artifactRefs.maturation_convergence_ledger_validation}`,
-        `- Query proofs: ${input.artifactRefs.query_proofs}`,
-        `- Query proofs validation: ${input.artifactRefs.query_proofs_validation}`,
-        `- Visualization proofs: ${input.artifactRefs.visualization_proofs}`,
-        `- Visualization proofs validation: ${input.artifactRefs.visualization_proofs_validation}`,
-        `- Graph exploration proofs: ${input.artifactRefs.graph_exploration_proofs}`,
-        `- Graph exploration proofs validation: ${input.artifactRefs.graph_exploration_proofs_validation}`,
-        ...(input.artifactRefs.actionable_ontology
-          ? [
-            `- Actionable ontology: ${input.artifactRefs.actionable_ontology}`,
-            `- Actionable ontology validation: ${input.artifactRefs.actionable_ontology_validation}`,
-          ]
-          : []),
-        `- Claim projection: ${input.artifactRefs.claim_projection}`,
-        `- Claim projection validation: ${input.artifactRefs.claim_projection_validation}`,
-        `- Reconstruct record: ${input.reconstructRecordPath}`,
-        `- Reconstruct run manifest: ${input.reconstructRunManifestPath}`,
-        `- Record stage at final output authoring: ${input.record.record_stage}`,
-        `- Semantic author realization: ${input.reconstructRunManifest.execution_profile.semantic_author_realization}`,
-        `- Confirmation provider realization: ${input.reconstructRunManifest.execution_profile.confirmation_provider_realization}`,
-      ].join("\n");
-    },
-  };
-}
-
-export function createAutoAcceptReconstructConfirmationProvider():
-  ReconstructConfirmationProvider {
-  const providerId = "mock-mixed-confirmation-provider";
-  return {
-    providerId,
-    owner: "mock",
-    async confirmPurpose(input) {
-      const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
-        .find((candidate) =>
-          candidate.purpose_candidate_id ===
-            input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id
-        );
-      const confirmationRequired =
-        input.sourcePurposeCandidatesValidation.confirmation_required;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
-        source_purpose_candidates_validation_ref:
-          input.sourcePurposeCandidatesValidationRef,
-        purpose_candidate_id:
-          input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id,
-        confirmation_status: confirmationRequired ? "confirmed" : "not_required",
-        confirmed_statement: selectedCandidate?.statement ?? null,
-        revised_statement: null,
-        confirmed_frame_element_refs:
-          selectedCandidate?.adequacy_frame.required_elements.map((element) =>
-            element.element_id
-          ) ?? [],
-        rejected_frame_element_refs: [],
-        user_response_summary: confirmationRequired
-          ? "Mock provider confirmed the inferred source purpose for test execution."
-          : "Mock provider recorded that direct source-declared purpose confirmation was not required.",
-        source_conflict_policy:
-          "No source conflict was introduced by the mock confirmation provider.",
-        limitation_refs: [],
-        confirmation_provider: {
-          owner: "mock",
-          provider_id: providerId,
-        },
-      };
-    },
-    async confirmOntologySeed(input) {
-      const claims = ontologyClaims(input.ontologySeed);
-      const canAccept = input.ontologySeedValidation.validation_status === "valid";
-      const excludedClaimIds = ontologySeedExcludedClaimIds(input.ontologySeed);
-      const acceptedClaims = canAccept
-        ? claims.filter((claim) => !excludedClaimIds.has(claim.claim_id))
-        : [];
-      const partialClaims: typeof claims = [];
-      const deferredClaims = canAccept
-        ? claims.filter((claim) => excludedClaimIds.has(claim.claim_id))
-        : [];
-      const classifiedClaimIds = new Set([
-        ...acceptedClaims.map((claim) => claim.claim_id),
-        ...partialClaims.map((claim) => claim.claim_id),
-        ...deferredClaims.map((claim) => claim.claim_id),
-      ]);
-      const rejectedClaims = canAccept
-        ? claims.filter((claim) => !classifiedClaimIds.has(claim.claim_id))
-        : claims;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        ontology_seed_ref: input.ontologySeedRef,
-        ontology_seed_validation_ref: input.ontologySeedValidationRef,
-        confirmation_status:
-          rejectedClaims.length === 0 && partialClaims.length === 0 && deferredClaims.length === 0
-            ? "accepted"
-            : canAccept
-              ? "partial"
-              : "rejected",
-        confirmed_claim_ids: acceptedClaims.map((claim) => claim.claim_id),
-        rejected_claim_ids: rejectedClaims.map((claim) => claim.claim_id),
-        partial_claim_ids: partialClaims.map((claim) => claim.claim_id),
-        deferred_claim_ids: deferredClaims.map((claim) => claim.claim_id),
-        notes: canAccept
-          ? [
-              "Mock confirmation accepts ontology seed claims before competency-question authoring.",
-            ]
-          : ["Ontology seed validation failed; confirmation rejected by provider."],
-        confirmation_provider: {
-          owner: "mock",
-          provider_id: providerId,
-        },
-      };
-    },
-  };
-}
-
 export function createDirectCallReconstructConfirmationProvider(args: {
   llmConfig?: Partial<LlmCallConfig>;
   llmCall?: ReconstructLlmCall;
@@ -10691,32 +9431,26 @@ export async function runReconstruct(
         ? { reuseMatch: currentAuthoredArtifactReuseMatch }
         : {}),
     });
-  if (
-    params.semanticAuthorRealization !== "mock" &&
-    params.semanticAuthorRealization !== "direct_call"
-  ) {
+  const runtimeParams = params as {
+    semanticAuthorRealization?: unknown;
+    confirmationProviderRealization?: unknown;
+  };
+  const runtimeDirectiveAuthor = directiveAuthor as { owner?: unknown };
+  const runtimeConfirmationProvider = confirmationProvider as { owner?: unknown };
+  if (runtimeParams.semanticAuthorRealization !== "direct_call") {
     throw new Error(
-      `Unsupported reconstruct semanticAuthorRealization: ${params.semanticAuthorRealization}`,
+      `Unsupported reconstruct semanticAuthorRealization: ${String(runtimeParams.semanticAuthorRealization)}. Reconstruct runs require direct_call.`,
     );
   }
-  if (
-    params.confirmationProviderRealization !== "mock" &&
-    params.confirmationProviderRealization !== "direct_call"
-  ) {
+  if (runtimeParams.confirmationProviderRealization !== "direct_call") {
     throw new Error(
-      `Unsupported reconstruct confirmationProviderRealization: ${params.confirmationProviderRealization}`,
+      `Unsupported reconstruct confirmationProviderRealization: ${String(runtimeParams.confirmationProviderRealization)}. Reconstruct runs require direct_call.`,
     );
   }
-  if (
-    params.semanticAuthorRealization === "direct_call" &&
-    directiveAuthor.owner !== "host_llm"
-  ) {
+  if (runtimeDirectiveAuthor.owner !== "host_llm") {
     throw new Error("direct_call semantic author realization requires a host_llm directive author.");
   }
-  if (
-    params.confirmationProviderRealization === "direct_call" &&
-    confirmationProvider.owner !== "host_or_user"
-  ) {
+  if (runtimeConfirmationProvider.owner !== "host_or_user") {
     throw new Error("direct_call confirmation provider realization requires a host_or_user provider.");
   }
 

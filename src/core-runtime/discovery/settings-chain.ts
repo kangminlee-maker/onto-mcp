@@ -13,6 +13,7 @@ import {
 } from "../review/failure-records.js";
 import { fileExists } from "../review/review-artifact-utils.js";
 import type { ReviewStructuredFailureRecord } from "../review/artifact-types.js";
+import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
 
 const LlmAuthModeSchema = z.enum(["api_key", "oauth", "local"]);
 const LlmProviderSchema = z.enum(["openai", "anthropic", "grok", "lmstudio"]);
@@ -41,6 +42,18 @@ const FullLlmSettingsSchema = z
   })
   .strict();
 
+const ReviewActorLlmSettingsSchema = z
+  .object({
+    auth: LlmAuthModeSchema.optional(),
+    provider: LlmProviderSchema,
+    model: z.string().min(1),
+    base_url: z.string().min(1).optional(),
+    effort: z.string().min(1).optional(),
+    service_tier: z.string().min(1).optional(),
+    api_key_env: z.string().min(1).optional(),
+  })
+  .strict();
+
 const LlmRefSchema = LlmSettingsSchema;
 
 const ReviewWorkerSeatSchema = z.enum(["main", "worker"]);
@@ -49,17 +62,82 @@ const ReviewExecutorSelectionSchema = z.enum([
   "auto",
   "codex",
   "direct_call",
-  "mock",
+]);
+const ReviewArtifactGenerationRealizationSchema = z.enum([
+  "live",
+  "semantic_mock",
+  "boundary_stub",
+  "fixture",
 ]);
 const ReviewDeliberationSchema = z.enum(["controlled-lens-deliberation"]);
+const ReviewLensOutputFormatSchema = z.enum(["markdown", "sidecar"]);
+export const REVIEW_EXECUTION_UNIT_IDS = [
+  "lens",
+  "finding_ledger",
+  "finding_relation_graph",
+  "issue_ledger",
+  "issue_stance_matrix",
+  "deliberation_plan",
+  "problem_framing",
+  "issue_stance_response",
+  "deliberation_response",
+  "deliberation_resolution",
+  "synthesis_response",
+] as const;
+const ReviewExecutionUnitIdSchema = z.enum(REVIEW_EXECUTION_UNIT_IDS);
+const ReviewToolModeSchema = z.enum(["auto", "native", "inline"]);
+const ReviewRetrySettingsSchema = z
+  .object({
+    lens_max_retries: z.number().int().min(0).optional(),
+    issue_artifact_max_retries: z.number().int().min(0).optional(),
+    deliberation_max_retries: z.number().int().min(0).optional(),
+    synthesis_max_retries: z.number().int().min(0).optional(),
+    retry_initial_delay_ms: z.number().int().min(0).optional(),
+  })
+  .strict();
+const ReviewUnitExecutionSettingsSchema = z
+  .object({
+    llm: LlmSettingsSchema.optional(),
+    max_tokens: z.number().int().min(1).optional(),
+    tool_mode: ReviewToolModeSchema.optional(),
+    timeout_ms: z.number().int().min(1).optional(),
+    max_retries: z.number().int().min(0).optional(),
+    retry_initial_delay_ms: z.number().int().min(0).optional(),
+    max_output_bytes: z.number().int().min(1).optional(),
+  })
+  .strict();
+const ReviewExecutionUnitsSchema = z
+  .object({
+    lens: ReviewUnitExecutionSettingsSchema.optional(),
+    finding_ledger: ReviewUnitExecutionSettingsSchema.optional(),
+    finding_relation_graph: ReviewUnitExecutionSettingsSchema.optional(),
+    issue_ledger: ReviewUnitExecutionSettingsSchema.optional(),
+    issue_stance_matrix: ReviewUnitExecutionSettingsSchema.optional(),
+    deliberation_plan: ReviewUnitExecutionSettingsSchema.optional(),
+    problem_framing: ReviewUnitExecutionSettingsSchema.optional(),
+    issue_stance_response: ReviewUnitExecutionSettingsSchema.optional(),
+    deliberation_response: ReviewUnitExecutionSettingsSchema.optional(),
+    deliberation_resolution: ReviewUnitExecutionSettingsSchema.optional(),
+    synthesis_response: ReviewUnitExecutionSettingsSchema.optional(),
+  })
+  .strict();
 
 const DEFAULT_REVIEW_EXECUTION = {
   mode: "main-workers",
   executor: "auto",
+  artifact_generation_realization: "live",
   teamlead: { seat: "main" },
   lens: { seat: "worker" },
   synthesize: { seat: "worker" },
   deliberation: "controlled-lens-deliberation",
+} as const;
+
+const DEFAULT_REVIEW_RETRY_SETTINGS = {
+  lens_max_retries: 2,
+  issue_artifact_max_retries: 2,
+  deliberation_max_retries: 2,
+  synthesis_max_retries: 2,
+  retry_initial_delay_ms: 3000,
 } as const;
 
 const ReviewActorSettingsSchema = z
@@ -73,10 +151,15 @@ const ReviewExecutionSettingsSchema = z
   .object({
     mode: ReviewExecutionModeSchema.optional(),
     executor: ReviewExecutorSelectionSchema.optional(),
+    artifact_generation_realization:
+      ReviewArtifactGenerationRealizationSchema.optional(),
+    max_concurrent_lenses: z.number().int().min(1).optional(),
     teamlead: ReviewActorSettingsSchema.optional(),
     lens: ReviewActorSettingsSchema.optional(),
     synthesize: ReviewActorSettingsSchema.optional(),
     deliberation: ReviewDeliberationSchema.optional(),
+    retry: ReviewRetrySettingsSchema.optional(),
+    units: ReviewExecutionUnitsSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -122,6 +205,26 @@ const ReviewExecutionSettingsSchema = z
     }
   });
 
+const ReviewArtifactSettingsSchema = z
+  .object({
+    lens_output_format: ReviewLensOutputFormatSchema.optional(),
+    write_lens_markdown: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.write_lens_markdown === false &&
+      (value.lens_output_format ?? "sidecar") !== "sidecar"
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["write_lens_markdown"],
+        message:
+          "review.artifacts.write_lens_markdown=false requires lens_output_format=sidecar.",
+      });
+    }
+  });
+
 const ReviewSettingsSchema = z
   .object({
     mode: z.enum(["core-axis", "full"]).optional(),
@@ -136,13 +239,14 @@ const ReviewSettingsSchema = z
       .strict()
       .optional(),
     execution: ReviewExecutionSettingsSchema.optional(),
+    artifacts: ReviewArtifactSettingsSchema.optional(),
   })
   .strict();
 
 const V3ReviewActorSettingsSchema = z
   .object({
     seat: ReviewWorkerSeatSchema.optional(),
-    llm: FullLlmSettingsSchema,
+    llm: ReviewActorLlmSettingsSchema,
   })
   .strict();
 
@@ -156,6 +260,9 @@ const V3ReviewExecutionSettingsSchema = z
   .object({
     topology: ReviewExecutionModeSchema.optional(),
     executor: ReviewExecutorSelectionSchema.optional(),
+    artifact_generation_realization:
+      ReviewArtifactGenerationRealizationSchema.optional(),
+    max_concurrent_lenses: z.number().int().min(1).optional(),
     actors: z
       .object({
         teamlead: V3ReviewActorSettingsSchema.optional(),
@@ -165,6 +272,8 @@ const V3ReviewExecutionSettingsSchema = z
       .strict()
       .optional(),
     deliberation: ReviewDeliberationSchema.optional(),
+    retry: ReviewRetrySettingsSchema.optional(),
+    units: ReviewExecutionUnitsSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -210,6 +319,8 @@ const V3ReviewExecutionSettingsSchema = z
     }
   });
 
+const V3ReviewArtifactSettingsSchema = ReviewArtifactSettingsSchema;
+
 const V3ReviewSettingsSchema = z
   .object({
     mode: z.enum(["core-axis", "full"]).optional(),
@@ -224,6 +335,7 @@ const V3ReviewSettingsSchema = z
       .strict()
       .optional(),
     execution: V3ReviewExecutionSettingsSchema.optional(),
+    artifacts: V3ReviewArtifactSettingsSchema.optional(),
   })
   .strict();
 
@@ -295,6 +407,9 @@ export type ReviewExecutionMode = z.infer<typeof ReviewExecutionModeSchema>;
 export type ReviewExecutorSelection = z.infer<typeof ReviewExecutorSelectionSchema>;
 export type ReviewWorkerSeat = z.infer<typeof ReviewWorkerSeatSchema>;
 export type ReviewDeliberation = z.infer<typeof ReviewDeliberationSchema>;
+export type ReviewLensOutputFormat = z.infer<typeof ReviewLensOutputFormatSchema>;
+export type ReviewExecutionUnitId = z.infer<typeof ReviewExecutionUnitIdSchema>;
+export type ReviewToolMode = z.infer<typeof ReviewToolModeSchema>;
 
 export type ReviewLlmRef = LlmModelSwitcherConfig;
 
@@ -320,10 +435,19 @@ interface ReviewActorSettingsInput {
 interface ReviewExecutionSettingsInput {
   mode?: ReviewExecutionMode | undefined;
   executor?: ReviewExecutorSelection | undefined;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization | undefined;
+  max_concurrent_lenses?: number | undefined;
   teamlead?: ReviewActorSettingsInput | undefined;
   lens?: ReviewActorSettingsInput | undefined;
   synthesize?: ReviewActorSettingsInput | undefined;
   deliberation?: ReviewDeliberation | undefined;
+  retry?: ReviewRetrySettingsInput | undefined;
+  units?: ReviewExecutionUnitsInput | undefined;
+}
+
+interface ReviewArtifactSettingsInput {
+  lens_output_format?: ReviewLensOutputFormat | undefined;
+  write_lens_markdown?: boolean | undefined;
 }
 
 export interface ReviewActorSettings {
@@ -336,22 +460,69 @@ export interface ResolvedReviewActorSettings {
   llm?: ReviewLlmRef;
 }
 
+export interface ReviewUnitExecutionSettings {
+  llm?: ReviewLlmRef | undefined;
+  max_tokens?: number | undefined;
+  tool_mode?: ReviewToolMode | undefined;
+  timeout_ms?: number | undefined;
+  max_retries?: number | undefined;
+  retry_initial_delay_ms?: number | undefined;
+  max_output_bytes?: number | undefined;
+}
+
+export type ReviewExecutionUnits = Partial<
+  Record<ReviewExecutionUnitId, ReviewUnitExecutionSettings>
+>;
+
+type ReviewExecutionUnitsInput = Partial<
+  Record<ReviewExecutionUnitId, ReviewUnitExecutionSettings | undefined>
+>;
+
 export interface ReviewExecutionSettings {
   mode?: ReviewExecutionMode;
   executor?: ReviewExecutorSelection;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization;
+  max_concurrent_lenses?: number | undefined;
   teamlead?: ReviewActorSettings;
   lens?: ReviewActorSettings;
   synthesize?: ReviewActorSettings;
   deliberation?: ReviewDeliberation;
+  retry?: ReviewRetrySettings;
+  units?: ReviewExecutionUnits;
+}
+
+export interface ReviewRetrySettingsInput {
+  lens_max_retries?: number | undefined;
+  issue_artifact_max_retries?: number | undefined;
+  deliberation_max_retries?: number | undefined;
+  synthesis_max_retries?: number | undefined;
+  retry_initial_delay_ms?: number | undefined;
+}
+
+export interface ReviewRetrySettings {
+  lens_max_retries: number;
+  issue_artifact_max_retries: number;
+  deliberation_max_retries: number;
+  synthesis_max_retries: number;
+  retry_initial_delay_ms: number;
+}
+
+export interface ReviewArtifactSettings {
+  lens_output_format?: ReviewLensOutputFormat;
+  write_lens_markdown?: boolean;
 }
 
 export interface ResolvedReviewExecutionSettings {
   mode: ReviewExecutionMode;
   executor: ReviewExecutorSelection;
+  artifact_generation_realization: ReviewArtifactGenerationRealization;
+  max_concurrent_lenses?: number | undefined;
   teamlead: ResolvedReviewActorSettings;
   lens: ResolvedReviewActorSettings;
   synthesize: ResolvedReviewActorSettings;
   deliberation: ReviewDeliberation;
+  retry: ReviewRetrySettings;
+  units: ReviewExecutionUnits;
 }
 
 export interface ReviewSettings {
@@ -359,6 +530,7 @@ export interface ReviewSettings {
   domains?: string[];
   context?: ReviewContextSettings;
   execution?: ReviewExecutionSettings;
+  artifacts?: ReviewArtifactSettings;
 }
 
 export interface ReconstructActorSettings {
@@ -518,6 +690,81 @@ function definedReviewContext(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function definedReviewArtifacts(
+  artifacts: ReviewArtifactSettingsInput | undefined,
+): ReviewArtifactSettings | undefined {
+  if (!artifacts) return undefined;
+  const out: ReviewArtifactSettings = {};
+  if (artifacts.lens_output_format !== undefined) {
+    out.lens_output_format = artifacts.lens_output_format;
+  }
+  if (artifacts.write_lens_markdown !== undefined) {
+    out.write_lens_markdown = artifacts.write_lens_markdown;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function definedReviewRetry(
+  retry: ReviewRetrySettingsInput | undefined,
+): ReviewRetrySettings | undefined {
+  if (!retry) return undefined;
+  return completeReviewRetrySettings(retry);
+}
+
+function definedReviewUnitExecutionSettings(
+  unit: ReviewUnitExecutionSettings | undefined,
+): ReviewUnitExecutionSettings | undefined {
+  if (!unit) return undefined;
+  const out: ReviewUnitExecutionSettings = {};
+  if (unit.llm !== undefined && Object.keys(unit.llm).length > 0) {
+    out.llm = unit.llm;
+  }
+  if (unit.max_tokens !== undefined) out.max_tokens = unit.max_tokens;
+  if (unit.tool_mode !== undefined) out.tool_mode = unit.tool_mode;
+  if (unit.timeout_ms !== undefined) out.timeout_ms = unit.timeout_ms;
+  if (unit.max_retries !== undefined) out.max_retries = unit.max_retries;
+  if (unit.retry_initial_delay_ms !== undefined) {
+    out.retry_initial_delay_ms = unit.retry_initial_delay_ms;
+  }
+  if (unit.max_output_bytes !== undefined) {
+    out.max_output_bytes = unit.max_output_bytes;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function definedReviewUnits(
+  units: ReviewExecutionUnitsInput | undefined,
+): ReviewExecutionUnits | undefined {
+  if (!units) return undefined;
+  const out: ReviewExecutionUnits = {};
+  for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
+    const unit = definedReviewUnitExecutionSettings(units[unitId]);
+    if (unit) out[unitId] = unit;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function completeReviewRetrySettings(
+  retry: ReviewRetrySettingsInput | undefined,
+): ReviewRetrySettings {
+  return {
+    lens_max_retries:
+      retry?.lens_max_retries ?? DEFAULT_REVIEW_RETRY_SETTINGS.lens_max_retries,
+    issue_artifact_max_retries:
+      retry?.issue_artifact_max_retries ??
+      DEFAULT_REVIEW_RETRY_SETTINGS.issue_artifact_max_retries,
+    deliberation_max_retries:
+      retry?.deliberation_max_retries ??
+      DEFAULT_REVIEW_RETRY_SETTINGS.deliberation_max_retries,
+    synthesis_max_retries:
+      retry?.synthesis_max_retries ??
+      DEFAULT_REVIEW_RETRY_SETTINGS.synthesis_max_retries,
+    retry_initial_delay_ms:
+      retry?.retry_initial_delay_ms ??
+      DEFAULT_REVIEW_RETRY_SETTINGS.retry_initial_delay_ms,
+  };
+}
+
 function v3ActorSettings(
   actor: z.infer<typeof V3ReviewActorSettingsSchema>,
 ): ReviewActorSettings {
@@ -563,6 +810,7 @@ function normalizeV3Settings(settings: V3Settings): OntoSettings {
   const context = settings.review?.context
     ? definedReviewContext(settings.review.context)
     : undefined;
+  const artifacts = definedReviewArtifacts(settings.review?.artifacts);
   let review: ReviewSettings | undefined;
   if (settings.review) {
     review = {};
@@ -585,14 +833,31 @@ function normalizeV3Settings(settings: V3Settings): OntoSettings {
       if (execution.executor !== undefined) {
         normalizedExecution.executor = execution.executor;
       }
+      if (execution.artifact_generation_realization !== undefined) {
+        normalizedExecution.artifact_generation_realization =
+          execution.artifact_generation_realization;
+      }
+      if (execution.max_concurrent_lenses !== undefined) {
+        normalizedExecution.max_concurrent_lenses =
+          execution.max_concurrent_lenses;
+      }
       if (execution.deliberation !== undefined) {
         normalizedExecution.deliberation = execution.deliberation;
+      }
+      const retry = definedReviewRetry(execution.retry);
+      if (retry) {
+        normalizedExecution.retry = retry;
+      }
+      const units = definedReviewUnits(execution.units);
+      if (units) {
+        normalizedExecution.units = units;
       }
       review.execution = normalizedExecution;
     }
     if (mode !== undefined) review.mode = mode;
     if (domains !== undefined) review.domains = domains;
     if (context) review.context = context;
+    if (artifacts) review.artifacts = artifacts;
   }
   const reconstruct = v3ReconstructSettings(settings.reconstruct);
   return {
@@ -714,6 +979,62 @@ function mergeReviewContextSettings(
   return definedReviewContext(merged);
 }
 
+function mergeReviewArtifactSettings(
+  userArtifacts: ReviewArtifactSettings | undefined,
+  projectArtifacts: ReviewArtifactSettings | undefined,
+): ReviewArtifactSettings | undefined {
+  const merged = {
+    ...(userArtifacts ?? {}),
+    ...(projectArtifacts ?? {}),
+  };
+  return definedReviewArtifacts(merged);
+}
+
+function mergeReviewRetrySettings(
+  userRetry: ReviewRetrySettings | undefined,
+  projectRetry: ReviewRetrySettings | undefined,
+): ReviewRetrySettings {
+  const merged = {
+    ...(userRetry ?? {}),
+    ...(projectRetry ?? {}),
+  };
+  return completeReviewRetrySettings(merged);
+}
+
+function mergeReviewUnitExecutionSettings(
+  userUnit: ReviewUnitExecutionSettings | undefined,
+  projectUnit: ReviewUnitExecutionSettings | undefined,
+): ReviewUnitExecutionSettings | undefined {
+  if (!userUnit && !projectUnit) return undefined;
+  const mergedLlm =
+    (userUnit?.llm || projectUnit?.llm)
+      ? {
+          ...(userUnit?.llm ?? {}),
+          ...(projectUnit?.llm ?? {}),
+        }
+      : undefined;
+  return definedReviewUnitExecutionSettings({
+    ...(userUnit ?? {}),
+    ...(projectUnit ?? {}),
+    ...(mergedLlm ? { llm: mergedLlm } : {}),
+  });
+}
+
+function mergeReviewUnits(
+  userUnits: ReviewExecutionUnits | undefined,
+  projectUnits: ReviewExecutionUnits | undefined,
+): ReviewExecutionUnits {
+  const out: ReviewExecutionUnits = {};
+  for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
+    const unit = mergeReviewUnitExecutionSettings(
+      userUnits?.[unitId],
+      projectUnits?.[unitId],
+    );
+    if (unit) out[unitId] = unit;
+  }
+  return out;
+}
+
 function mergeReconstructActorSettings(
   userActor: ReconstructActorSettings | undefined,
   projectActor: ReconstructActorSettings | undefined,
@@ -753,6 +1074,10 @@ function contextFromSettings(settings: OntoSettings): ReviewContextSettings | un
   });
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function resolveActorLlmForValidation(
   actorName: "teamlead" | "lens" | "synthesize",
   ref: ReviewLlmRef | undefined,
@@ -766,6 +1091,47 @@ function resolveActorLlmForValidation(
     );
   }
   return resolved;
+}
+
+function validateUnitLlmOverride(
+  unitId: ReviewExecutionUnitId,
+  ref: ReviewLlmRef | undefined,
+  baseRef: ReviewLlmRef | undefined,
+): void {
+  if (!ref) return;
+  const effectiveRef = {
+    ...(baseRef ?? {}),
+    ...ref,
+  };
+  if (effectiveRef.provider === undefined) return;
+  try {
+    normalizeLlmModelSwitcher(effectiveRef);
+  } catch (error) {
+    throw new Error(
+      `review.execution.units.${unitId}.llm is invalid: ${errorMessage(error)}`,
+    );
+  }
+}
+
+function unitDefaultActorForSettingsValidation(
+  unitId: ReviewExecutionUnitId,
+): "teamlead" | "lens" | "synthesize" {
+  switch (unitId) {
+    case "lens":
+    case "issue_stance_response":
+    case "deliberation_response":
+      return "lens";
+    case "synthesis_response":
+      return "synthesize";
+    case "finding_ledger":
+    case "finding_relation_graph":
+    case "issue_ledger":
+    case "issue_stance_matrix":
+    case "deliberation_plan":
+    case "problem_framing":
+    case "deliberation_resolution":
+      return "teamlead";
+  }
 }
 
 function mergeSettings(
@@ -782,33 +1148,57 @@ function mergeSettings(
   const hasExplicitExecution =
     user.review?.execution !== undefined || projectExecution !== undefined;
   const execution: ResolvedReviewExecutionSettings | undefined = hasExplicitExecution
-    ? {
-        mode:
-          projectExecution?.mode ?? userExecution?.mode ?? defaultExecution.mode,
-        executor:
-          projectExecution?.executor ??
-          userExecution?.executor ??
-          defaultExecution.executor,
-        teamlead: mergeReviewActorSettings(
-          defaultExecution.teamlead,
-          userExecution?.teamlead,
-          projectExecution?.teamlead,
-        ),
-        lens: mergeReviewActorSettings(
-          defaultExecution.lens,
-          userExecution?.lens,
-          projectExecution?.lens,
-        ),
-        synthesize: mergeReviewActorSettings(
-          defaultExecution.synthesize,
-          userExecution?.synthesize,
-          projectExecution?.synthesize,
-        ),
-        deliberation:
-          projectExecution?.deliberation ??
-          userExecution?.deliberation ??
-          defaultExecution.deliberation,
-      }
+    ? (() => {
+        const retry = mergeReviewRetrySettings(
+          userExecution?.retry,
+          projectExecution?.retry,
+        );
+        const units = mergeReviewUnits(
+          userExecution?.units,
+          projectExecution?.units,
+        );
+        return {
+          mode:
+            projectExecution?.mode ?? userExecution?.mode ?? defaultExecution.mode,
+          executor:
+            projectExecution?.executor ??
+            userExecution?.executor ??
+            defaultExecution.executor,
+          artifact_generation_realization:
+            projectExecution?.artifact_generation_realization ??
+            userExecution?.artifact_generation_realization ??
+            defaultExecution.artifact_generation_realization,
+          ...(projectExecution?.max_concurrent_lenses !== undefined ||
+          userExecution?.max_concurrent_lenses !== undefined
+            ? {
+                max_concurrent_lenses:
+                  projectExecution?.max_concurrent_lenses ??
+                  userExecution?.max_concurrent_lenses,
+              }
+            : {}),
+          teamlead: mergeReviewActorSettings(
+            defaultExecution.teamlead,
+            userExecution?.teamlead,
+            projectExecution?.teamlead,
+          ),
+          lens: mergeReviewActorSettings(
+            defaultExecution.lens,
+            userExecution?.lens,
+            projectExecution?.lens,
+          ),
+          synthesize: mergeReviewActorSettings(
+            defaultExecution.synthesize,
+            userExecution?.synthesize,
+            projectExecution?.synthesize,
+          ),
+          deliberation:
+            projectExecution?.deliberation ??
+            userExecution?.deliberation ??
+            defaultExecution.deliberation,
+          retry,
+          units,
+        };
+      })()
     : undefined;
   const mode =
     project.review?.mode ??
@@ -824,18 +1214,24 @@ function mergeSettings(
     contextFromSettings(user),
     contextFromSettings(project),
   );
+  const artifacts = mergeReviewArtifactSettings(
+    user.review?.artifacts,
+    project.review?.artifacts,
+  );
   const hasReview =
     user.review !== undefined ||
     project.review !== undefined ||
     mode !== undefined ||
     domains !== undefined ||
-    context !== undefined;
+    context !== undefined ||
+    artifacts !== undefined;
   const review = hasReview
     ? {
         ...(mode !== undefined ? { mode } : {}),
         ...(domains !== undefined ? { domains } : {}),
         ...(context ? { context } : {}),
         ...(execution ? { execution } : {}),
+        ...(artifacts ? { artifacts } : {}),
       }
     : undefined;
 
@@ -881,11 +1277,19 @@ export function defaultReviewExecution(): ResolvedReviewExecutionSettings {
   return {
     mode: DEFAULT_REVIEW_EXECUTION.mode,
     executor: DEFAULT_REVIEW_EXECUTION.executor,
+    artifact_generation_realization:
+      DEFAULT_REVIEW_EXECUTION.artifact_generation_realization,
     teamlead: { ...DEFAULT_REVIEW_EXECUTION.teamlead },
     lens: { ...DEFAULT_REVIEW_EXECUTION.lens },
     synthesize: { ...DEFAULT_REVIEW_EXECUTION.synthesize },
     deliberation: DEFAULT_REVIEW_EXECUTION.deliberation,
+    retry: defaultReviewRetrySettings(),
+    units: {},
   };
+}
+
+export function defaultReviewRetrySettings(): ReviewRetrySettings {
+  return { ...DEFAULT_REVIEW_RETRY_SETTINGS };
 }
 
 function validateActorLlmRefs(settings: OntoSettings): void {
@@ -898,6 +1302,14 @@ function validateActorLlmRefs(settings: OntoSettings): void {
   for (const [actorName, ref] of refs) {
     const resolved = resolveActorLlmForValidation(actorName, ref);
     if (resolved) normalizeLlmModelSwitcher(resolved);
+  }
+  for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
+    const actor = unitDefaultActorForSettingsValidation(unitId);
+    validateUnitLlmOverride(
+      unitId,
+      execution?.units?.[unitId]?.llm,
+      execution?.[actor]?.llm,
+    );
   }
 }
 

@@ -101,6 +101,8 @@ runtime/host가 아래를 고정한다.
 - final domain value
 - resolved execution realization
 - resolved host runtime
+- resolved artifact generation realization
+- semantic quality evidence status
 - resolved review mode
 - resolved lens set
 - session root
@@ -146,8 +148,12 @@ prompt-backed path에서도 실제 파일이 만들어져야 한다.
 `execution plan`은 아래를 deterministic하게 고정한다.
 
 - lens별 output seat
-- `synthesis.md` seat
-- `deliberation.md` seat
+- issue artifact output seats
+- controlled deliberation result seat: `deliberation-resolution.yaml`
+- controlled deliberation projection seat: `deliberation.md`
+- synthesize aggregate truth seat: `synthesis-ledger.yaml`
+- synthesize projection seat: `synthesis.md`
+- synthesize work item root: `synthesis-work-items.yaml` and `prompt-packets/synthesis/{issue_id}.prompt.md`
 - lens별 deliberation response seat
 - `error-log.md` seat
 - `final-output.md` seat
@@ -189,17 +195,21 @@ canonical requirement:
 6. lens dispatch는 병렬 실행이 기본이다
 7. runtime은 선택된 lens 전체를 dispatch한다. host가 자체 제한으로 이를 수행할 수 없으면 fail-loud하게 중단한다
 
-현재 repo-local TS bounded path에서 연결된 `ReviewExecutionProfile` mode는 아래다.
+현재 repo-local TS bounded path에서 실행 가능한 `ReviewExecutionProfile` mode는 아래다.
 
 - `main-workers`: main이 teamlead 역할을 수행하고 worker가 lens를 실행한다.
-- `nested-workers`: worker teamlead가 nested worker lens를 실행한다. `teamlead.llm`은 outer worker에, `lens.llm`은 inner lens worker에 각각 적용된다.
 - `synthesize.llm`: deliberation 이후 별도 synthesize unit에 적용된다. synthesize는 모든 lens output, issue artifacts, deliberation, problem framing을 통합하므로 높은 effort가 기본적으로 적합하다.
+
+`nested-workers`는 concept/profile shape로 남아 있지만 현재 active live path에서는
+pre-dispatch에서 fail-loud한다. 기존 nested bridge가 sidecar structured output,
+read-only lens execution, settings-owned bounded dispatch를 강제하지 못하기 때문이다.
+이 mode는 inner lens 실행이 동일한 structured runner 계약을 따를 때만 다시 실행
+가능한 경로가 될 수 있다.
 
 worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 
 - `codex`: host-bound OAuth 또는 Codex worker path.
 - `direct_call`: `api_key` 또는 `local` provider path.
-- `mock`: `ONTO_LLM_MOCK=1` 또는 explicit test override.
 
 중요한 점은 host-specific naming이 아니라:
 
@@ -210,15 +220,17 @@ worker executor는 profile resolution에서 아래 중 하나로 고정된다.
 이 유지되는 것이다.
 
 packet materialization만 단독으로 디버깅해야 할 때도 host-facing 표면은
-`onto_prepare_review`다. Repo-local harness는 conformance/debug 목적의 내부
-adapter로만 취급한다.
+`onto_prepare_review`다. Repo-local prepare/schema/route check와 mock-backed
+harness는 debug 및 contract verification 목적으로만 취급한다. 실제 review 완료
+증거와 semantic quality evidence는 LLM/provider를 호출하는 live E2E run에서만
+인정한다.
 
 현재 TS bounded runner의 lens 병렬성은 선택된 lens 수와 같다. full review는
 9개 lens를 모두 병렬 dispatch하고, core-axis 또는 명시적 lens 선택은 해당 lens
 전체를 병렬 dispatch한다.
 
 Round 1 이후에는 `lens-completion-barrier.yaml`이 작성되어야 한다.
-canonical review path는 선택된 lens 전원이 완료되고, 선택된 lens 수가 최소 2개일 때만
+canonical review path는 선택된 lens 수가 최소 1개이고 선택된 lens 전원이 완료될 때만
 issue artifacts, controlled deliberation, synthesize로 진행한다.
 
 ### 3.7 통제된 lens 숙의 (Controlled Lens Deliberation)
@@ -234,8 +246,8 @@ canonical requirement:
 1. 각 lens deliberation response는 fresh bounded context에서 실행된다.
 2. 입력은 해당 lens의 Round 1 결과와 다른 participating lens 결과로 제한된다.
 3. lens는 최종 종합을 수행하지 않고 자기 관점의 유지/수정/양보/지속 이견만 기록한다.
-4. teamlead-controlled deliberation result는 모든 lens response를 읽고 `deliberation.md`를 작성한다.
-5. `deliberation.md`는 synthesize보다 앞선 authoritative conflict-resolution artifact다.
+4. teamlead-controlled deliberation result는 모든 lens response를 읽고 `deliberation-resolution.yaml`을 작성한다.
+5. `deliberation-resolution.yaml`은 synthesize보다 앞선 authoritative conflict-resolution artifact다.
 6. `synthesize`는 이 결과를 소비하며, 독자적으로 새 resolution을 만들지 않는다.
 
 MCP/TS runtime에서는 이 의미론을 provider 독립적인 controlled deliberation packet으로 실현한다.
@@ -255,7 +267,8 @@ Round 1 lens outputs
 -> issue-stance-matrix.yaml
 -> deliberation-plan.yaml
 -> issue-scoped controlled deliberation
--> deliberation.md
+-> deliberation-resolution.yaml
+-> deliberation.md projection
 -> common spine + domain problem framing profile
 -> problem-framing.yaml
 -> synthesize
@@ -275,22 +288,27 @@ Round 1 lens outputs
 
 ### 3.8 종합 단계 (synthesize)
 
-`synthesize`는 lens finding을 읽고 아래를 정리한다.
+`synthesize`는 issue-level artifact truth에서 만들어진
+`synthesis-work-items.yaml`을 읽고, material issue별 bounded semantic explanation을
+생성한다. runtime은 issue response YAML을 검증한 뒤 `synthesis-ledger.yaml`을
+canonical truth로 assemble하고, `synthesis.md` projection을 생성한다.
 
-- consensus
-- conditional consensus
-- disagreement
-- overlooked premises
-- immediate actions required
-- recommendations
+`synthesize`가 보존적으로 렌더링하는 항목:
+
+- material issue conclusion and explanation
+- controlled deliberation outcome
+- root cause and causal path explanation
+- action explanation
 - boundary notes
+- non-material finding surface summary
 - final review result
 
 중요:
 
 - `synthesize`는 새 독립 관점을 만들지 않는다
 - `synthesize`는 deliberation actor가 아니다
-- 충돌 resolution의 authority는 `deliberation.md`다
+- 충돌 resolution의 authority는 `deliberation-resolution.yaml`이다
+- `deliberation.md`는 human-readable projection이다
 - `New Perspectives`는 `axiology`가 제시하는 영역이다
 - synthesize는 `axiology`가 제시한 추가 관점이 있으면 그것을 보존/배치할 수는 있지만, 스스로 invent하면 안 된다
 
@@ -304,8 +322,9 @@ later `learn/govern`가 읽을 canonical artifact는 `ReviewRecord`여야 한다
 즉:
 
 - lens markdown
-- deliberation markdown
-- synthesis markdown
+- lens sidecar/projection
+- `deliberation-resolution.yaml` and `deliberation.md` projection
+- `synthesis-ledger.yaml` and `synthesis.md` projection
 
 은 최종적으로 `ReviewRecord`의 source/human-readable layer로 내려간다.
 
@@ -355,8 +374,8 @@ Severity/result classification은 runtime active projection이다. Projection so
 
 Target rules:
 
-- `severity`가 finding의 materiality boundary를 포함한다
-- `blocker`, `high`, `medium`은 material issue로 파생된다
+- `severity`가 finding의 materiality candidate boundary를 포함한다
+- `blocker`, `high`, `medium`은 problem-framing admission을 통과해야 material issue로 파생된다
 - `low`, `info`는 non-material finding 또는 evidence observation이다
 - 모든 material issue는 affected purpose, failure condition, impact, evidence refs를 가져야 한다
 - 시작 시점에는 환경, 방식, non-secret 모델/profile, 도메인, target, review direction을 짧게 제시해야 한다

@@ -155,6 +155,16 @@ describe("collectReviewInvocationArtifactRefs", () => {
       "schema_version: '1'\n",
       "utf8",
     );
+    await fs.writeFile(
+      path.join(sessionRoot, "synthesis-ledger.yaml"),
+      "schema_version: '1'\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(sessionRoot, "synthesis-work-items.yaml"),
+      "schema_version: '1'\n",
+      "utf8",
+    );
 
     await expect(collectReviewInvocationArtifactRefs(sessionRoot)).resolves.toEqual({
       binding: path.join(sessionRoot, "binding.yaml"),
@@ -163,6 +173,8 @@ describe("collectReviewInvocationArtifactRefs", () => {
         "execution-preparation",
         "review-target-profile.yaml",
       ),
+      synthesis_ledger: path.join(sessionRoot, "synthesis-ledger.yaml"),
+      synthesis_work_items: path.join(sessionRoot, "synthesis-work-items.yaml"),
     });
   });
 });

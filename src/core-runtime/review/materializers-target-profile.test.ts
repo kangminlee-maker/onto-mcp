@@ -30,6 +30,26 @@ afterEach(async () => {
 });
 
 describe("review target profile material kind", () => {
+  it("requires an explicit session domain instead of defaulting to none", async () => {
+    const root = await makeTmpProject();
+    const sessionRoot = path.join(root, ".onto", "review", "session-domain");
+    const target = path.join(root, "target.md");
+    await fs.writeFile(target, "# Target\n", "utf8");
+
+    await expect(
+      materializeReviewExecutionPreparationArtifacts({
+        sessionRoot,
+        scopeKind: "file",
+        resolvedTargetRefs: [target],
+        materializedKind: "single_text",
+        requestedTarget: target,
+        reviewIntentSummary: "review target",
+        sessionDomain: "",
+        filesystemAllowedRoots: [root],
+      }),
+    ).rejects.toThrow("requires explicit sessionDomain");
+  });
+
   it("records spreadsheet material kind and detection evidence", async () => {
     const root = await makeTmpProject();
     const sessionRoot = path.join(root, ".onto", "review", "session-a");

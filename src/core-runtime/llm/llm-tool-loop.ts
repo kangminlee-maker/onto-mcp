@@ -67,6 +67,11 @@ import {
 import {
   appendRuntimeModelCallLogFromCurrentContext,
 } from "../observability/runtime-stream-observation.js";
+import {
+  callReviewMockLlmWithTools,
+  isReviewMockLlmRealizationEnabled,
+} from "./mock-llm-realization.js";
+import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
 
 const MAX_ITERATIONS = 12;
 const MAX_TOKENS_PER_TURN = 4096;
@@ -89,12 +94,15 @@ export interface ToolLoopConfig {
   provider: ToolLoopProvider;
   model_id: string;
   max_tokens?: number;
+  /** OpenAI-compatible reasoning effort. Unsupported providers fail loudly. */
+  reasoning_effort?: string;
   /** Optional provider API-key environment variable override. */
   api_key_env?: string;
   /** For OpenAI-style endpoints. */
   base_url?: string;
   /** Override iteration cap (default 12). */
   max_iterations?: number;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization;
 }
 
 function readEnvApiKey(names: string[]): string | null {
@@ -143,6 +151,12 @@ function missingToolLoopCredentialError(
   return `callLlmWithTools(${provider}) requires ${provider.toUpperCase()}_API_KEY`;
 }
 
+function unsupportedToolLoopEffortError(provider: ToolLoopProvider): Error {
+  return new Error(
+    `callLlmWithTools(${provider}) cannot honor reasoning_effort; remove effort from this actor or switch to provider=openai.`,
+  );
+}
+
 export interface ToolLoopResult {
   /** The final assistant text after the model declined to call more tools. */
   text: string;
@@ -153,6 +167,7 @@ export interface ToolLoopResult {
   input_tokens: number;
   output_tokens: number;
   model_id: string;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization;
   /** True if the loop hit MAX_ITERATIONS without the model producing a final answer. */
   truncated_by_iteration_cap: boolean;
   /** Aggregated boundary skip telemetry from tool execution, when non-zero. */
@@ -172,10 +187,6 @@ function withToolDiagnostics(
 /**
  * Run a tool-calling conversation until the model produces a final text
  * answer or the iteration cap is reached.
- *
- * Mock provider hook: when ONTO_LLM_MOCK=1, this routes to a deterministic
- * mock that exercises the loop wiring (see callMockToolLoop). Real provider
- * calls are gated behind that env var so unit tests never need credentials.
  */
 export async function callLlmWithTools(
   systemPrompt: string,
@@ -184,8 +195,19 @@ export async function callLlmWithTools(
   config: ToolLoopConfig,
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
-  if (process.env.ONTO_LLM_MOCK === "1") {
-    return callMockToolLoop(systemPrompt, userPrompt, tools, config, toolCtx);
+  if (
+    isReviewMockLlmRealizationEnabled() &&
+    config.artifact_generation_realization !== "semantic_mock"
+  ) {
+    throw new Error(
+      "ONTO_LLM_MOCK requires review.execution.artifact_generation_realization=semantic_mock.",
+    );
+  }
+  if (
+    isReviewMockLlmRealizationEnabled() ||
+    config.artifact_generation_realization === "semantic_mock"
+  ) {
+    return callReviewMockLlmWithTools(systemPrompt, userPrompt, tools, config, toolCtx);
   }
 
   if (config.provider === "anthropic") {
@@ -220,6 +242,9 @@ async function runAnthropicToolLoop(
   config: ToolLoopConfig,
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
+  if (config.reasoning_effort) {
+    throw unsupportedToolLoopEffortError("anthropic");
+  }
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const apiKey = readEnvApiKey(
     config.api_key_env ? [config.api_key_env] : ["ANTHROPIC_API_KEY"],
@@ -353,6 +378,12 @@ async function runOpenAIToolLoop(
   config: ToolLoopConfig,
   toolCtx: ToolExecutionContext,
 ): Promise<ToolLoopResult> {
+  if (
+    config.reasoning_effort &&
+    (config.provider === "grok" || config.provider === "lmstudio")
+  ) {
+    throw unsupportedToolLoopEffortError(config.provider);
+  }
   const { default: OpenAI } = await import("openai");
   const baseURL =
     config.base_url ??
@@ -400,16 +431,19 @@ async function runOpenAIToolLoop(
 
   for (let iteration = 0; iteration < cap; iteration++) {
     emitModelCallLog(
-      `${config.provider} tool-loop call: model="${config.model_id}" iteration=${iteration + 1}/${cap} max_tokens=${config.max_tokens ?? MAX_TOKENS_PER_TURN} tool_count=${openaiTools.length}${baseURL ? ` base_url=${baseURL}` : ""}`,
+      `${config.provider} tool-loop call: model="${config.model_id}" iteration=${iteration + 1}/${cap} max_tokens=${config.max_tokens ?? MAX_TOKENS_PER_TURN} effort=${config.reasoning_effort ?? "(unset)"} tool_count=${openaiTools.length}${baseURL ? ` base_url=${baseURL}` : ""}`,
     );
     let response;
     try {
       response = await client.chat.completions.create({
         model: config.model_id,
         max_tokens: config.max_tokens ?? MAX_TOKENS_PER_TURN,
+        ...(config.reasoning_effort
+          ? { reasoning_effort: config.reasoning_effort }
+          : {}),
         messages: messages as never,
         tools: openaiTools,
-      });
+      } as never);
     } catch (err) {
       const e = err as {
         status?: number;
@@ -532,112 +566,4 @@ async function executeOneTool(
     const msg = err instanceof Error ? err.message : String(err);
     return { text: `tool_error: ${msg}`, isError: true };
   }
-}
-
-// ---------------------------------------------------------------------------
-// Mock provider — exercises loop without credentials
-// ---------------------------------------------------------------------------
-
-/**
- * Deterministic mock for ONTO_LLM_MOCK=1. The mock reads the system prompt
- * and emits a small scripted sequence:
- *   - turn 1: call list_directory on projectRoot
- *   - turn 2: call read_file on the first .md it sees in the listing
- *   - turn 3: produce a final markdown answer
- *
- * This proves that translation + dispatch + tool-result wiring all work end
- * to end without a real LLM. Real loops will not follow this script — they
- * use whatever the LLM decides.
- */
-async function callMockToolLoop(
-  _systemPrompt: string,
-  _userPrompt: string,
-  tools: OntoTool[],
-  config: ToolLoopConfig,
-  toolCtx: ToolExecutionContext,
-): Promise<ToolLoopResult> {
-  const recordMockBoundarySkip = (): void => {
-    const searchSkips = toolCtx.toolDiagnostics?.search_skips;
-    if (searchSkips) {
-      searchSkips.boundary_skips += 1;
-    }
-  };
-  if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW === "1") {
-    if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP === "1") {
-      recordMockBoundarySkip();
-    }
-    throw new Error("mock tool-loop failure");
-  }
-  if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY === "1") {
-    if (process.env.ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP === "1") {
-      recordMockBoundarySkip();
-    }
-    return withToolDiagnostics({
-      text: "",
-      iterations: 1,
-      tool_calls: 0,
-      input_tokens: 1,
-      output_tokens: 0,
-      model_id: config.model_id,
-      truncated_by_iteration_cap: false,
-    }, toolCtx);
-  }
-
-  let toolCalls = 0;
-
-  // Step 1: list_directory(projectRoot) — exercise the dispatch path.
-  const listTool = tools.find((t) => t.name === "list_directory");
-  let firstMdName: string | undefined;
-  if (listTool) {
-    toolCalls++;
-    try {
-      const listing = await listTool.execute({ path: toolCtx.projectRoot }, toolCtx);
-      const match = listing.match(/\[F\] ([^\s]+\.md)/);
-      if (match) firstMdName = match[1];
-    } catch {
-      // Mock tolerates failure — just don't follow up with read_file.
-    }
-  }
-
-  // Step 2: read_file on first .md if we found one.
-  const readTool = tools.find((t) => t.name === "read_file");
-  if (readTool && firstMdName) {
-    toolCalls++;
-    try {
-      await readTool.execute({ path: firstMdName, start_line: 1, end_line: 20 }, toolCtx);
-    } catch {
-      // Same tolerance as above.
-    }
-  }
-
-  // Step 3: deterministic final answer.
-  const text = [
-    "# Mock Lens Output (callLlmWithTools mock)",
-    "",
-    "## Structural Inspection",
-    "- Mock tool-loop exercised list_directory and read_file successfully.",
-    ...(process.env.ONTO_LLM_MOCK_TOOL_LOOP_ECHO_CONFIG === "1"
-      ? [`- api_key_env: ${config.api_key_env ?? "(default)"}`]
-      : []),
-    "",
-    "## Findings",
-    "(none — mock executor)",
-    "",
-    "## Domain Constraints Used",
-    "[]",
-    "",
-    "## Domain Context Assumptions",
-    '- "Mock tool-loop returned this output via ONTO_LLM_MOCK=1."',
-    "",
-  ].join("\n");
-
-  return withToolDiagnostics({
-    text,
-    iterations: 1,
-    tool_calls: toolCalls,
-    input_tokens: 1,
-    output_tokens: text.length / 4,
-    model_id: config.model_id,
-    truncated_by_iteration_cap: false,
-  }, toolCtx);
 }

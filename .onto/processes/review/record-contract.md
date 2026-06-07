@@ -23,9 +23,12 @@
 
 즉:
 
-- `round1/{lens}.md`는 lens별 human-readable source layer다
-- `deliberation.md`는 controlled lens deliberation의 conflict-resolution source layer다
-- `synthesis.md`는 종합 단계의 human-readable source layer다
+- `round1/{lens}.findings.yaml`은 sidecar mode의 lens별 machine source layer다
+- `round1/{lens}.md`는 설정으로 켜는 optional human-readable projection이다
+- `deliberation-resolution.yaml`은 controlled lens deliberation의 conflict-resolution source layer다
+- `deliberation.md`는 controlled lens deliberation의 human-readable projection이다
+- `synthesis-ledger.yaml`은 종합 단계의 source layer다
+- `synthesis.md`는 종합 단계의 human-readable projection이다
 - later `learn/govern`가 읽어야 하는 canonical artifact는 `ReviewRecord`다
 
 중요:
@@ -112,6 +115,8 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 - `resolved_review_mode`
 - `resolved_execution_realization`
 - `resolved_host_runtime`
+- `resolved_artifact_generation_realization`
+- `semantic_quality_evidence`
 - `resolved_lens_ids`
 - `execution_result_ref`
 
@@ -156,17 +161,17 @@ later hardened implementation에서 identity policy가 바뀌더라도,
 - `error-log.md`가 boundary/conformance state만 담는 경우에는 `degradation_notes_ref`로 간주하지 않는다
 - `lens_output_schema_version`은 현재 lens output contract의 schema version을 기록한다
 - `per_lens_provenance`는 각 lens의 `domain_constraints_used`, `domain_context_assumptions`를 보존한다. 해당 섹션이 없는 lens output은 해당 필드를 `null`로 기록한다
-- `upstream_evidence_required`는 finding-level 속성이며 `round1/{lens-id}.md`의 각 finding에 기록한다
-- `per_lens_provenance`는 `upstream_evidence_required`를 저장하지 않는다. finding-level 보존은 `lens_result_refs.{lens-id}` 경로를 따라 원본 round1 markdown에서 추출한다
+- `upstream_evidence_required`는 finding-level 속성이며 lens sidecar finding entry에 기록한다
+- `per_lens_provenance`는 `upstream_evidence_required`를 저장하지 않는다. finding-level 보존은 `lens_result_refs.{lens-id}` 경로를 따라 원본 sidecar/projection에서 추출한다
 - lens-level aggregate summary가 필요하면 별도 명시적 파생 필드로 정의한다
 
 예시:
 
 ```yaml
 lens_result_refs:
-  logic: .onto/review/20260404-a1b2c3d4/round1/logic.md
-  structure: .onto/review/20260404-a1b2c3d4/round1/structure.md
-  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.md
+  logic: .onto/review/20260404-a1b2c3d4/round1/logic.findings.yaml
+  structure: .onto/review/20260404-a1b2c3d4/round1/structure.findings.yaml
+  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.findings.yaml
 participating_lens_ids:
   - logic
   - structure
@@ -181,9 +186,13 @@ degraded_lens_ids: []
 필수 필드:
 
 - `synthesis_result_ref`
+- `synthesis_result_sha256`
+- `synthesis_output_sha256`
 - `deliberation_status`
 - `deliberation_result_ref`
+- `deliberation_result_sha256`
 - `final_output_ref`
+- `final_output_sha256`
 - `shared_phenomenon_summary`
 
 허용되는 `deliberation_status` 값:
@@ -193,14 +202,19 @@ degraded_lens_ids: []
 
 원칙:
 
-- `synthesis_result_ref`는 생성된 `synthesis.md`를 가리킨다. synthesize가 실행되지 않았거나 출력이 생성되지 않은 `halted_partial` review에서는 `null`이다
+- `synthesis_result_ref`는 생성된 `synthesis-ledger.yaml`을 가리킨다. synthesize가 실행되지 않았거나 출력이 생성되지 않은 `halted_partial` review에서는 `null`이다
+- `synthesis_result_sha256`은 canonical `synthesis-ledger.yaml`의 생성 시점 digest다. completed 상태에서는 필수이며 status/result 조회는 현재 파일 digest가 이 값과 다르면 fail-loud 한다
+- `synthesis_output_sha256`은 canonical `synthesis.md`의 생성 시점 digest다. completed 상태에서는 필수이며 status/result 조회는 현재 파일 digest가 이 값과 다르면 fail-loud 한다
 - `deliberation_status`는 `execution-result.yaml`의 `deliberation_status`를 따른다
-- `deliberation_result_ref`는 생성된 `deliberation.md`를 가리킨다. controlled deliberation이 완료되지 않은 `halted_partial` review에서는 `null`이다
-- `deliberation.md`는 completed review에서 필수 artifact다
-- `synthesis.md`는 frontmatter로 `deliberation_status: performed`를 선언해야 한다
+- `deliberation_result_ref`는 생성된 `deliberation-resolution.yaml`을 가리킨다. controlled deliberation이 완료되지 않은 `halted_partial` review에서는 `null`이다
+- `deliberation_result_sha256`은 canonical `deliberation-resolution.yaml`의 생성 시점 digest다. completed 상태에서는 필수이며 status/result 조회는 현재 파일 digest가 이 값과 다르면 fail-loud 한다
+- `deliberation-resolution.yaml`은 `completed`와 `completed_with_degradation` review에서 필수 artifact다
+- `deliberation.md`는 `deliberation-resolution.yaml`에서 생성되는 human-readable projection이다
+- `synthesis.md`는 `synthesis-ledger.yaml`에서 생성되는 human-readable projection이며, frontmatter로 `deliberation_status: performed`를 선언해야 한다
 - `halted_partial` review에서 controlled deliberation이 완료되지 않았으면 `deliberation_status: not_performed`를 기록하고, synthesize를 실행하지 않는다
 - controlled deliberation timeout은 unresolved stance continuation으로 승격하지 않는다. `execution-result.yaml`과 `review-run-manifest.yaml`에 halt phase, failed unit id/kind, lens-bound unit의 lens id, failure message를 보존한다
-- `final_output_ref`는 주체자에게 보여주는 rendered output을 가리킨다
+- `final_output_ref`는 주체자에게 보여주는 canonical `final-output.md`를 가리킨다. status/result 조회는 세션 내부 다른 파일로의 redirect를 허용하지 않는다
+- `final_output_sha256`은 canonical `final-output.md`의 생성 시점 digest다. status/result 조회는 현재 파일 digest가 이 값과 다르면 fail-loud 한다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
 - `shared_phenomenon_summary`는 동일 phenomenon에 대한 다중 lens claim의 claim relation 분류를 보존한다. 분류가 없거나 shared phenomenon이 없으면 빈 배열이다
 
@@ -226,10 +240,10 @@ degraded_lens_ids: []
 - 공통 spine, domain profile ref, domain-specific axis 분류는 `problem-framing.yaml`에 남긴다.
 - `ReviewRecord`는 issue별 최종 status, classification, lens 참여 요약과 result classification summary만 구조화한다.
 - issue-stage artifact ref는 synthesize 실행 여부가 아니라 현재 run에서 해당 파일이 실제 생성되었는지에 따라 기록한다. 생성되지 않은 ref는 `null`이다.
-- `deliberation_result_ref`는 controlled deliberation이 생성한 `deliberation.md`를 가리키며, 생성되지 않았으면 `null`이다.
+- `deliberation_result_ref`는 controlled deliberation이 생성한 `deliberation-resolution.yaml`을 가리키며, 생성되지 않았으면 `null`이다.
 - `synthesis_result_ref`는 issue status를 변경한 source가 될 수 없다.
 - `result_classification_summary`는 `finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`, `execution-result.yaml`에서 파생되는 presentation projection이다.
-- `material_issue_count`와 `material_issues`는 별도 materiality 필드가 아니라 severity에서 파생한다. `blocker`, `high`, `medium`은 material issue이고 `low`, `info`는 non-material finding이다.
+- `material_issue_count`와 `material_issues`는 별도 materiality enum이 아니라 severity와 `problem-framing.yaml` admission fields에서 파생한다. `blocker`, `high`, `medium`은 material-severity candidates이며, `issue_role: evidence_gap`, `judgment_state: insufficient_evidence|outside_boundary`, `closure_class: needs_evidence|watch`, 또는 `closure_obligation: out_of_scope`이면 non-material finding으로 보존한다. `low`, `info`는 non-material finding이다.
 - action candidates는 severity 자체가 아니라 `problem-framing.yaml`의 timing/closure/judgment fields와 runtime halt state에서 파생한다.
 
 ### 4.6 Internal Body vs Final Review Summary 경계 (Cross-reference)
@@ -264,6 +278,11 @@ domain_final_selection_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 resolved_review_mode: full
 resolved_execution_realization: worker
 resolved_host_runtime: codex
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate before quality is claimed
 resolved_lens_ids:
   - logic
   - structure
@@ -283,15 +302,15 @@ review_target_profile_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/
 context_candidate_assembly_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/context-candidate-assembly.yaml
 
 lens_result_refs:
-  logic: .onto/review/20260404-a1b2c3d4/round1/logic.md
-  structure: .onto/review/20260404-a1b2c3d4/round1/structure.md
-  dependency: .onto/review/20260404-a1b2c3d4/round1/dependency.md
-  semantics: .onto/review/20260404-a1b2c3d4/round1/semantics.md
-  pragmatics: .onto/review/20260404-a1b2c3d4/round1/pragmatics.md
-  evolution: .onto/review/20260404-a1b2c3d4/round1/evolution.md
-  coverage: .onto/review/20260404-a1b2c3d4/round1/coverage.md
-  conciseness: .onto/review/20260404-a1b2c3d4/round1/conciseness.md
-  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.md
+  logic: .onto/review/20260404-a1b2c3d4/round1/logic.findings.yaml
+  structure: .onto/review/20260404-a1b2c3d4/round1/structure.findings.yaml
+  dependency: .onto/review/20260404-a1b2c3d4/round1/dependency.findings.yaml
+  semantics: .onto/review/20260404-a1b2c3d4/round1/semantics.findings.yaml
+  pragmatics: .onto/review/20260404-a1b2c3d4/round1/pragmatics.findings.yaml
+  evolution: .onto/review/20260404-a1b2c3d4/round1/evolution.findings.yaml
+  coverage: .onto/review/20260404-a1b2c3d4/round1/coverage.findings.yaml
+  conciseness: .onto/review/20260404-a1b2c3d4/round1/conciseness.findings.yaml
+  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.findings.yaml
 lens_output_schema_version: 2
 participating_lens_ids:
   - logic
@@ -356,7 +375,7 @@ result_classification_summary:
       affected_purpose: "Declared review purpose affected by issue-001"
       failure_condition: "Supported condition where the purpose cannot be trusted"
       impact: "Why trust is materially weakened"
-      evidence_refs: [round1/logic.md#finding-1]
+      evidence_refs: [round1/logic.findings.yaml#finding-001]
       source_lens_ids: [logic]
       action_candidates: [fix_before_release]
       rationale: "Derived from problem-framing timing/closure fields"
@@ -366,10 +385,14 @@ result_classification_summary:
       candidates: [fix_before_release]
       derivation_refs: [issue-ledger.yaml, problem-framing.yaml]
       rationale: "Derived from problem-framing timing/closure fields"
-synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis.md
+synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis-ledger.yaml
+synthesis_result_sha256: 1d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
+synthesis_output_sha256: 2d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 deliberation_status: performed
-deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation.md
+deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation-resolution.yaml
+deliberation_result_sha256: 3d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
+final_output_sha256: 0d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 shared_phenomenon_summary:
   - target: .onto/processes/review/record-contract.md
     evidence_anchor: '§5'
@@ -388,8 +411,8 @@ shared_phenomenon_summary:
 2. `검토 고정 (InvocationBinding)` 산출물 작성
 3. execution preparation artifact 작성
 4. 각 lens가 자기 markdown output 작성
-5. controlled lens deliberation이 `deliberation.md` 작성
-6. `synthesize`가 `synthesis.md` 작성
+5. controlled lens deliberation이 `deliberation-resolution.yaml`과 `deliberation.md` projection 작성
+6. `synthesize`가 `synthesis-ledger.yaml`과 `synthesis.md` projection 작성
 7. 마지막에 bounded TS assembler가 `review-record.yaml`을 assemble
 
 현재 bounded runtime replacement는 Core API review runner가 호출하는

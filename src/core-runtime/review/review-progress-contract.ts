@@ -87,7 +87,7 @@ export const REVIEW_PROGRESS_STEPS: readonly ReviewProgressStepSpec[] = [
   {
     id: "lens_deliberation_responses",
     step: 9,
-    label: "lens deliberation responses",
+    label: "issue-scoped deliberation responses",
     halt_phase: "controlled_lens_deliberation",
     halt_unit_kind: "deliberation",
   },

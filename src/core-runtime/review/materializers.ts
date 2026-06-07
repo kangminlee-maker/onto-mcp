@@ -56,11 +56,15 @@ import {
   ISSUE_ARTIFACT_IDS,
   issueArtifactConsumerId,
   issueArtifactSpec,
+  issueStanceConsumerId,
 } from "./issue-artifact-runtime.js";
+import { lensSidecarArtifactPath } from "./lens-sidecar-artifact.js";
+import { deliberationResolutionPath } from "./controlled-lens-deliberation.js";
 import {
   detectTargetMaterialKind,
   reviewMaterialSupportStatus,
 } from "../target-material-kind.js";
+import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
 
 export interface WriteInvocationInterpretationArtifactParams {
   sessionRoot: string;
@@ -111,7 +115,7 @@ export interface MaterializeReviewExecutionPreparationArtifactsParams {
   materializedKind: ReviewTargetMaterializedInputKind;
   requestedTarget?: string;
   reviewIntentSummary?: string;
-  sessionDomain?: string;
+  sessionDomain: string;
   bundleKind?: string;
   filesystemAllowedRoots?: string[];
   materializedRefs?: string[];
@@ -221,6 +225,19 @@ function resolveReviewExecutionSettingsForArtifacts(
   };
 }
 
+function resolveReviewArtifactSettingsForArtifacts(
+  config: OntoSettings,
+): { lens_output_format: "markdown" | "sidecar"; write_lens_markdown: boolean } {
+  const lensOutputFormat = config.review?.artifacts?.lens_output_format ?? "sidecar";
+  return {
+    lens_output_format: lensOutputFormat,
+    write_lens_markdown:
+      lensOutputFormat === "sidecar"
+        ? config.review?.artifacts?.write_lens_markdown ?? false
+        : true,
+  };
+}
+
 function resolveActorLlmForArtifact(
   actorLlmRef: ReviewLlmRef | undefined,
 ): LlmModelSwitcherConfig | undefined {
@@ -231,8 +248,10 @@ function workerExecutorForRealization(
   executionRealization: ReviewExecutionRealization,
   hostRuntime: ReviewHostRuntime,
 ): string {
-  if (hostRuntime === "standalone") return "mock";
   if (executionRealization === "direct-call") return "direct_call";
+  if (hostRuntime === "standalone") {
+    throw new Error("Review standalone host runtime has no workflow executor.");
+  }
   return "codex";
 }
 
@@ -263,6 +282,7 @@ function buildActorInvocationProfile(args: {
   actorLlmRef: ReviewLlmRef | undefined;
   executionRealization: ReviewExecutionRealization;
   hostRuntime: ReviewHostRuntime;
+  artifactGenerationRealization: ReviewResolvedActorInvocationProfile["artifact_generation_realization"];
   sourceSettingsRefs: string[];
 }): ReviewResolvedActorInvocationProfile {
   const resolvedLlm = resolveActorLlmForArtifact(args.actorLlmRef);
@@ -271,20 +291,19 @@ function buildActorInvocationProfile(args: {
     args.executionRealization,
     args.hostRuntime,
   );
-  const routeForcesMock = effectiveWorkerExecutor === "mock";
   const directCallWithoutSelection =
     args.executionRealization === "direct-call" && normalized === null;
   const auth =
-    directCallWithoutSelection || routeForcesMock
+    directCallWithoutSelection
       ? null
       : normalized?.auth ??
         defaultAuthForExecutionContext(args.executionRealization, args.hostRuntime);
   const provider =
-    directCallWithoutSelection || routeForcesMock
+    directCallWithoutSelection
       ? null
       : normalized?.provider ?? args.hostRuntime;
-  const runtimeProvider = routeForcesMock ? "mock" : provider;
-  const authMode = routeForcesMock ? null : auth;
+  const runtimeProvider = provider;
+  const authMode = auth;
   const apiKeyEnv = normalized?.api_key_env ?? resolvedLlm?.api_key_env;
   return {
     actor_profile_id: `actor:${args.actorKind}`,
@@ -292,6 +311,7 @@ function buildActorInvocationProfile(args: {
     seat: args.seat,
     execution_realization: args.executionRealization,
     host_runtime: args.hostRuntime,
+    artifact_generation_realization: args.artifactGenerationRealization,
     ...(normalized?.execution_route
       ? { execution_route: normalized.execution_route }
       : {}),
@@ -369,6 +389,18 @@ function buildActorConsumerBindings(args: {
       consumer_kind: "deliberation",
       lens_id: lensId,
       applies_to: ["controlled-lens-deliberation:lens-response"],
+      profile_ref: args.actorInvocationProfilesPath,
+      context_access_ref: args.reviewContextManifestPath,
+      extension_admission_status: "admitted",
+    })),
+    ...args.resolvedLensIds.map((lensId): ReviewActorConsumerBinding => ({
+      actor_profile_id: "actor:lens",
+      actor_kind: "lens",
+      actor_instance_id: `lens:${lensId}`,
+      consumer_id: issueStanceConsumerId(lensId),
+      consumer_kind: "issue_stance",
+      lens_id: lensId,
+      applies_to: ["issue-stance:lens-response"],
       profile_ref: args.actorInvocationProfilesPath,
       context_access_ref: args.reviewContextManifestPath,
       extension_admission_status: "admitted",
@@ -622,7 +654,6 @@ export async function bootstrapInvocationBindingArtifacts(
   }
   const round1Root = path.join(sessionRoot, "round1");
   const deliberationRootPath = path.join(sessionRoot, "deliberation");
-  const deliberationRound1Root = path.join(deliberationRootPath, "round1");
   const executionPreparationRoot = path.join(sessionRoot, "execution-preparation");
   const promptPacketsRoot = path.join(sessionRoot, "prompt-packets");
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
@@ -682,11 +713,41 @@ export async function bootstrapInvocationBindingArtifacts(
   const errorLogPath = path.join(sessionRoot, "error-log.md");
   const reviewRecordPath = path.join(sessionRoot, "review-record.yaml");
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
-  const allowedOutputRefs = [
-    ...params.resolvedLensIds.map((lensId) => path.join(round1Root, `${lensId}.md`)),
-    ...params.resolvedLensIds.map((lensId) =>
-      path.join(deliberationRound1Root, `${lensId}-deliberation.md`),
+  const ontoConfigSubset = await loadOntoConfigForPlan(projectRoot);
+  const ontoConfig = params.ontoConfig ?? ontoConfigSubset;
+  const resolvedLlmPlan = derivePlanTimeLlmResolution(ontoConfig);
+  const reviewExecutionSettings =
+    resolveReviewExecutionSettingsForArtifacts(ontoConfig);
+  const reviewArtifactSettings =
+    resolveReviewArtifactSettingsForArtifacts(ontoConfig);
+  const artifactGenerationRealization =
+    reviewExecutionSettings.artifact_generation_realization;
+  const semanticQualityEvidence = semanticQualityEvidenceForArtifactGeneration(
+    artifactGenerationRealization,
+  );
+  const maxConcurrentLenses = Math.max(
+    1,
+    Math.min(
+      reviewExecutionSettings.max_concurrent_lenses ?? params.resolvedLensIds.length,
+      params.resolvedLensIds.length,
     ),
+  );
+  const lensMarkdownOutputPaths = params.resolvedLensIds.map((lensId) =>
+    path.join(round1Root, `${lensId}.md`),
+  );
+  const lensSidecarOutputPaths = params.resolvedLensIds.map((lensId) =>
+    lensSidecarArtifactPath({ round1Root, lensId }),
+  );
+  const allowedOutputRefs = [
+    ...(reviewArtifactSettings.lens_output_format === "sidecar"
+      ? lensSidecarOutputPaths
+      : []),
+    ...(reviewArtifactSettings.write_lens_markdown ? lensMarkdownOutputPaths : []),
+    ...params.resolvedLensIds.map((lensId) =>
+      path.join(sessionRoot, "stance-responses", `${lensId}.yaml`),
+    ),
+    path.join(deliberationRootPath, "responses"),
+    deliberationResolutionPath(sessionRoot),
     findingLedgerPath,
     findingRelationGraphPath,
     issueLedgerPath,
@@ -701,7 +762,7 @@ export async function bootstrapInvocationBindingArtifacts(
   await Promise.all([
     ensureDirectory(sessionRoot),
     ensureDirectory(round1Root),
-    ensureDirectory(deliberationRound1Root),
+    ensureDirectory(deliberationRootPath),
     ensureDirectory(executionPreparationRoot),
     ensureDirectory(promptPacketsRoot),
   ]);
@@ -710,17 +771,13 @@ export async function bootstrapInvocationBindingArtifacts(
     ? path.resolve(params.ontoHome)
     : path.resolve(projectRoot);
 
-  const ontoConfigSubset = await loadOntoConfigForPlan(projectRoot);
-  const ontoConfig = params.ontoConfig ?? ontoConfigSubset;
-  const resolvedLlmPlan = derivePlanTimeLlmResolution(ontoConfig);
-  const reviewExecutionSettings =
-    resolveReviewExecutionSettingsForArtifacts(ontoConfig);
-
   const reviewSessionMetadata: ReviewSessionMetadata = {
     session_id: sessionId,
     entrypoint: "review",
     execution_realization: params.executionRealization,
     host_runtime: params.hostRuntime,
+    artifact_generation_realization: artifactGenerationRealization,
+    semantic_quality_evidence: semanticQualityEvidence,
     review_mode: params.reviewMode,
     created_at: isoNow(),
     project_root: projectRoot,
@@ -756,6 +813,8 @@ export async function bootstrapInvocationBindingArtifacts(
     resolved_session_domain: normalizeDomainValue(params.domainFinalValue),
     resolved_execution_realization: params.executionRealization,
     resolved_host_runtime: params.hostRuntime,
+    resolved_artifact_generation_realization: artifactGenerationRealization,
+    semantic_quality_evidence: semanticQualityEvidence,
     resolved_review_mode: params.reviewMode,
     resolved_lens_set: params.resolvedLensIds,
     session_id: sessionId,
@@ -803,6 +862,8 @@ export async function bootstrapInvocationBindingArtifacts(
     session_root: sessionRoot,
     execution_realization: params.executionRealization,
     host_runtime: params.hostRuntime,
+    artifact_generation_realization: artifactGenerationRealization,
+    semantic_quality_evidence: semanticQualityEvidence,
     review_mode: params.reviewMode,
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
@@ -812,12 +873,16 @@ export async function bootstrapInvocationBindingArtifacts(
     lens_execution_seats: params.resolvedLensIds.map((lensId) => ({
       lens_id: lensId,
       output_path: path.join(round1Root, `${lensId}.md`),
+      sidecar_output_path: lensSidecarArtifactPath({ round1Root, lensId }),
     })),
+    lens_output_format: reviewArtifactSettings.lens_output_format,
+    write_lens_markdown: reviewArtifactSettings.write_lens_markdown,
     prompt_packets_root: promptPacketsRoot,
     lens_prompt_packet_seats: params.resolvedLensIds.map((lensId) => ({
       lens_id: lensId,
       packet_path: path.join(promptPacketsRoot, `${lensId}.prompt.md`),
       output_path: path.join(round1Root, `${lensId}.md`),
+      sidecar_output_path: lensSidecarArtifactPath({ round1Root, lensId }),
     })),
     issue_artifact_prompt_packet_seats: ISSUE_ARTIFACT_IDS.map((artifactId) => {
       const spec = issueArtifactSpec(artifactId);
@@ -835,16 +900,10 @@ export async function bootstrapInvocationBindingArtifacts(
         output_path: outputPaths[artifactId],
       };
     }),
-    lens_deliberation_prompt_packet_seats: params.resolvedLensIds.map((lensId) => ({
-      lens_id: lensId,
-      packet_path: path.join(promptPacketsRoot, `${lensId}.deliberation.prompt.md`),
-      output_path: path.join(deliberationRound1Root, `${lensId}-deliberation.md`),
-    })),
     teamlead_deliberation_prompt_packet_path: path.join(
       promptPacketsRoot,
       "teamlead.deliberation.prompt.md",
     ),
-    synthesize_prompt_packet_path: path.join(promptPacketsRoot, "synthesize.prompt.md"),
     actor_invocation_profiles_path: actorInvocationProfilesPath,
     actor_consumer_bindings_path: actorConsumerBindingsPath,
     domain_binding_path: domainBindingPath,
@@ -870,6 +929,7 @@ export async function bootstrapInvocationBindingArtifacts(
     boundary_presentation: boundaryPresentation,
     boundary_enforcement_profile: boundaryEnforcementProfile,
     effective_boundary_state: effectiveBoundaryState,
+    max_concurrent_lenses: maxConcurrentLenses,
     minimum_participating_lenses: params.resolvedLensIds.length,
   };
 
@@ -884,6 +944,7 @@ export async function bootstrapInvocationBindingArtifacts(
         actorLlmRef: reviewExecutionSettings.teamlead.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
+        artifactGenerationRealization,
         sourceSettingsRefs: reviewExecutionSettings.teamlead.llm
           ? ["review.execution.actors.teamlead.llm"]
           : [],
@@ -894,6 +955,7 @@ export async function bootstrapInvocationBindingArtifacts(
         actorLlmRef: reviewExecutionSettings.lens.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
+        artifactGenerationRealization,
         sourceSettingsRefs: reviewExecutionSettings.lens.llm
           ? ["review.execution.actors.lens.llm"]
           : [],
@@ -904,6 +966,7 @@ export async function bootstrapInvocationBindingArtifacts(
         actorLlmRef: reviewExecutionSettings.synthesize.llm,
         executionRealization: params.executionRealization,
         hostRuntime: params.hostRuntime,
+        artifactGenerationRealization,
         sourceSettingsRefs: reviewExecutionSettings.synthesize.llm
           ? ["review.execution.actors.synthesize.llm"]
           : [],
@@ -1198,6 +1261,15 @@ async function targetRefSha256(
   }
 }
 
+function requireExecutionPreparationSessionDomain(value: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(
+      "materializeReviewExecutionPreparationArtifacts requires explicit sessionDomain.",
+    );
+  }
+  return normalizeDomainValue(value);
+}
+
 async function buildReviewTargetProfileArtifact(
   params: MaterializeReviewExecutionPreparationArtifactsParams,
 ): Promise<ReviewTargetProfileArtifact> {
@@ -1218,6 +1290,9 @@ async function buildReviewTargetProfileArtifact(
   const materialDetection = await detectTargetMaterialKind(resolvedRefs);
   const materialSupport = reviewMaterialSupportStatus(
     materialDetection.target_material_kind,
+  );
+  const sessionDomain = requireExecutionPreparationSessionDomain(
+    params.sessionDomain,
   );
   const closureLevel = deriveClosureLevel({
     inputKind,
@@ -1251,13 +1326,13 @@ async function buildReviewTargetProfileArtifact(
       primary: roles.primary,
       secondary: roles.secondary,
     },
-    domain: normalizeDomainValue(params.sessionDomain ?? "none"),
+    domain: sessionDomain,
     maturity: "review_candidate",
     closure_level: closureLevel,
     review_goal: uniqueStrings([
       ...goalsForRole(roles.primary),
       ...roles.secondary.flatMap(goalsForRole),
-      ...domainGoalAdditions(params.sessionDomain ?? "none"),
+      ...domainGoalAdditions(sessionDomain),
     ]),
     closure_obligation_policy: [
       "must_close_in_target",

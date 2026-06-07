@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1260" viewBox="0 0 1900 1260" role="img" aria-labelledby="title desc">
+  <title id="title">Controlled deliberation before and after</title>
+  <desc id="desc">Before and after process diagram for controlled review deliberation. The before flow uses broad lens-wide markdown deliberation. The after flow uses runtime-projected issue scoped work, runtime submit tools for structured responses, runtime validation, structured resolution, and markdown projection.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-soft" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .divider { stroke: #cbd5e1; stroke-width: 2; stroke-dasharray: 10 8; }
+      .title { font: 700 32px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .subtitle { font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .h2 { font: 700 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .label { font: 700 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .small { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+      .tiny { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #64748b; }
+      .artifact { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .runtime { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .llm { fill: #f3e8ff; stroke: #9333ea; stroke-width: 2; }
+      .toolllm { fill: #fff7ed; stroke: #f97316; stroke-width: 2; }
+      .note { fill: #f1f5f9; stroke: #94a3b8; stroke-width: 1.5; }
+      .risk { fill: #fee2e2; stroke: #ef4444; stroke-width: 1.7; }
+      .gain { fill: #ecfdf5; stroke: #10b981; stroke-width: 1.7; }
+      .group { fill: #ffffff; stroke: #cbd5e1; stroke-width: 2; }
+      .line { fill: none; stroke: #334155; stroke-width: 2.4; marker-end: url(#arrow); }
+      .thin { fill: none; stroke: #64748b; stroke-width: 1.8; marker-end: url(#arrow-soft); }
+      .dash { stroke-dasharray: 6 5; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1900" height="1260"/>
+
+  <text class="title" x="48" y="54">Controlled Deliberation: Before and After</text>
+  <text class="subtitle" x="48" y="82">Implemented change: move dispatch, validation, and projection into runtime; keep only issue-scoped semantic judgment in LLM steps.</text>
+
+  <g transform="translate(1110 34)">
+    <rect class="runtime" x="0" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="21" y="22">Runtime</text>
+    <rect class="llm" x="140" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="175" y="22">LLM</text>
+    <rect class="toolllm" x="280" y="0" width="188" height="34" rx="8"/>
+    <text class="small" x="299" y="22">LLM + file tools</text>
+    <rect class="artifact" x="484" y="0" width="124" height="34" rx="8"/>
+    <text class="small" x="515" y="22">Artifact</text>
+  </g>
+
+  <line class="divider" x1="950" y1="112" x2="950" y2="1190"/>
+
+  <text class="h2" x="72" y="135">Before: Lens-Wide Markdown Deliberation</text>
+  <text class="subtitle" x="72" y="160">Every selected lens re-enters a broad discussion path, then a teamlead resolves from markdown.</text>
+
+  <g id="before-inputs">
+    <rect class="group" x="55" y="198" width="335" height="422" rx="16"/>
+    <text class="label" x="82" y="228">Broad Inputs</text>
+    <text class="tiny" x="82" y="249">Large context is reopened for each selected lens</text>
+
+    <rect class="artifact" x="82" y="276" width="270" height="42" rx="8"/>
+    <text class="small" x="102" y="302">deliberation-plan.yaml</text>
+
+    <rect class="artifact" x="82" y="332" width="270" height="42" rx="8"/>
+    <text class="small" x="102" y="358">finding / relation / issue artifacts</text>
+
+    <rect class="artifact" x="82" y="388" width="270" height="42" rx="8"/>
+    <text class="small" x="102" y="414">issue-stance-matrix.yaml</text>
+
+    <rect class="artifact" x="82" y="444" width="270" height="42" rx="8"/>
+    <text class="small" x="102" y="470">all round1 lens outputs</text>
+
+    <rect class="note" x="82" y="524" width="270" height="72" rx="8"/>
+    <text class="small" x="102" y="550">Dispatch shape</text>
+    <text class="tiny" x="102" y="572">planned issues exist, but work is lens-wide</text>
+  </g>
+
+  <g id="before-lens-workers">
+    <rect class="toolllm" x="450" y="220" width="370" height="250" rx="14"/>
+    <text class="label" x="477" y="250">1. Lens-Wide Deliberation Workers</text>
+    <text class="small" x="477" y="278">one worker per selected lens</text>
+    <text class="small" x="477" y="300">can read own and peer lens outputs</text>
+    <text class="small" x="477" y="322">broad issue context as guidance</text>
+    <text class="small" x="477" y="344">free-form markdown response</text>
+    <text class="tiny" x="477" y="376">output authority is prose-shaped</text>
+    <rect class="artifact" x="477" y="400" width="310" height="44" rx="8"/>
+    <text class="small" x="497" y="427">deliberation/round1/*-deliberation.md</text>
+  </g>
+
+  <path class="line" d="M390 410 C425 410 419 345 450 345"/>
+
+  <g id="before-teamlead">
+    <rect class="toolllm" x="450" y="560" width="370" height="210" rx="14"/>
+    <text class="label" x="477" y="590">2. Teamlead Markdown Resolution</text>
+    <text class="small" x="477" y="616">reads all lens outputs</text>
+    <text class="small" x="477" y="638">reads all lens markdown responses</text>
+    <text class="small" x="477" y="660">resolves or preserves disagreement</text>
+    <text class="small" x="477" y="682">writes human-readable authority</text>
+    <text class="tiny" x="477" y="716">semantic decision and presentation are coupled</text>
+  </g>
+
+  <path class="line" d="M635 470 V560"/>
+
+  <g id="before-output">
+    <rect class="artifact" x="450" y="850" width="320" height="98" rx="12"/>
+    <text class="label" x="475" y="880">3. Output</text>
+    <text class="small" x="475" y="906">deliberation.md</text>
+    <text class="tiny" x="475" y="926">downstream must preserve meaning from prose</text>
+  </g>
+
+  <path class="line" d="M635 770 V850"/>
+
+  <g id="before-downstream">
+    <rect class="llm" x="450" y="1010" width="320" height="118" rx="12"/>
+    <text class="label" x="475" y="1040">4. Downstream Synthesis</text>
+    <text class="small" x="475" y="1066">problem-framing / synthesize</text>
+    <text class="small" x="475" y="1088">consume markdown plus broad refs</text>
+    <text class="tiny" x="475" y="1110">prose parsing remains on the hot path</text>
+  </g>
+
+  <path class="line" d="M610 948 V1010"/>
+
+  <g id="before-risk">
+    <rect class="risk" x="70" y="730" width="320" height="222" rx="12"/>
+    <text class="label" x="96" y="760">Cost / Risk</text>
+    <text class="small" x="96" y="786">Runs all selected lens workers even when</text>
+    <text class="small" x="96" y="808">only one issue needs two participants.</text>
+    <text class="small" x="96" y="834">Markdown output is hard to validate</text>
+    <text class="small" x="96" y="856">against exact issue status coverage.</text>
+    <text class="small" x="96" y="882">Teamlead context is broad, so long live</text>
+    <text class="small" x="96" y="904">provider runs are less stable.</text>
+    <text class="small" x="96" y="930">Downstream reinterprets prose.</text>
+  </g>
+
+  <text class="h2" x="1002" y="135">After: Issue-Scoped Structured Deliberation</text>
+  <text class="subtitle" x="1002" y="160">Runtime dispatches only planned participants, writes submitted structured YAML artifacts, validates them, and renders markdown as a projection.</text>
+
+  <g id="after-inputs">
+    <rect class="group" x="985" y="198" width="335" height="370" rx="16"/>
+    <text class="label" x="1012" y="228">Structured Artifact Truth</text>
+    <text class="tiny" x="1012" y="249">Inputs are projected, not broadly reopened</text>
+
+    <rect class="artifact" x="1012" y="278" width="270" height="42" rx="8"/>
+    <text class="small" x="1032" y="304">deliberation-plan.yaml</text>
+
+    <rect class="artifact" x="1012" y="334" width="270" height="42" rx="8"/>
+    <text class="small" x="1032" y="360">issue-ledger.yaml</text>
+
+    <rect class="artifact" x="1012" y="390" width="270" height="42" rx="8"/>
+    <text class="small" x="1032" y="416">issue-stance-matrix.yaml</text>
+
+    <rect class="artifact" x="1012" y="446" width="270" height="42" rx="8"/>
+    <text class="small" x="1032" y="472">finding-ledger / relation graph refs</text>
+
+    <rect class="note" x="1012" y="512" width="270" height="40" rx="8"/>
+    <text class="tiny" x="1032" y="536">no planned material conflict -> runtime fast path</text>
+  </g>
+
+  <g id="after-worklist">
+    <rect class="runtime" x="1370" y="210" width="370" height="178" rx="14"/>
+    <text class="label" x="1397" y="240">1. Runtime Worklist Projection</text>
+    <text class="small" x="1397" y="268">read planned_issues only</text>
+    <text class="small" x="1397" y="290">expand issue x participant lens pairs</text>
+    <text class="small" x="1397" y="312">attach only issue row and stance refs</text>
+    <text class="small" x="1397" y="334">reject missing issue/lens references</text>
+    <text class="tiny" x="1397" y="360">bounded dispatch authority</text>
+  </g>
+
+  <path class="line" d="M1320 376 C1344 376 1340 299 1370 299"/>
+
+  <g id="after-issue-workers">
+    <rect class="llm" x="1370" y="455" width="370" height="228" rx="14"/>
+    <text class="label" x="1397" y="485">2. Issue-Scoped Participant Responses</text>
+    <text class="small" x="1397" y="513">parallel LLM unit per planned participant</text>
+    <text class="small" x="1397" y="535">input: one issue, own stance, peer stances</text>
+    <text class="small" x="1397" y="557">durable structured output via submit tool</text>
+    <text class="small" x="1397" y="579">no full cross-lens re-review</text>
+    <rect class="artifact" x="1397" y="610" width="312" height="48" rx="8"/>
+    <text class="tiny" x="1416" y="640">deliberation/responses/{issue}/{lens}.yaml</text>
+  </g>
+
+  <path class="line" d="M1555 388 V455"/>
+
+  <g id="after-validate-responses">
+    <rect class="runtime" x="1005" y="610" width="335" height="174" rx="12"/>
+    <text class="label" x="1032" y="640">3. Runtime Response Validation</text>
+    <text class="small" x="1032" y="666">issue_id and lens_id exact match</text>
+    <text class="small" x="1032" y="688">updated_stance enum validation</text>
+    <text class="small" x="1032" y="710">changed stance requires reason</text>
+    <text class="small" x="1032" y="732">source stance refs remain bounded</text>
+    <text class="tiny" x="1032" y="758">fail-loud before resolver</text>
+  </g>
+
+  <path class="line" d="M1370 625 C1346 625 1348 697 1340 697"/>
+
+  <g id="after-resolution">
+    <rect class="llm" x="1005" y="850" width="370" height="180" rx="14"/>
+    <text class="label" x="1032" y="880">4. Controlled Issue Resolver</text>
+    <text class="small" x="1032" y="906">reads validated responses and plan scope</text>
+    <text class="small" x="1032" y="928">assigns final issue status</text>
+    <text class="small" x="1032" y="950">records resolution summary and blockers</text>
+    <text class="small" x="1032" y="972">does not create new issues</text>
+    <text class="tiny" x="1032" y="1000">semantic resolution stays structured</text>
+  </g>
+
+  <path class="line" d="M1172 784 V850"/>
+
+  <g id="after-structured-output">
+    <rect class="artifact" x="1450" y="815" width="315" height="96" rx="12"/>
+    <text class="label" x="1475" y="845">5. Machine Truth</text>
+    <text class="small" x="1475" y="871">deliberation-resolution.yaml</text>
+    <text class="tiny" x="1475" y="893">primary authority for downstream stages</text>
+  </g>
+
+  <path class="line" d="M1375 940 H1450"/>
+
+  <g id="after-final-validation">
+    <rect class="runtime" x="1450" y="990" width="315" height="130" rx="12"/>
+    <text class="label" x="1475" y="1020">6. Runtime Completion Gate</text>
+    <text class="small" x="1475" y="1046">every planned issue is resolved</text>
+    <text class="small" x="1475" y="1068">status enum and coverage validated</text>
+    <text class="small" x="1475" y="1090">render deliberation.md projection</text>
+    <text class="tiny" x="1475" y="1112">synthesize blocked if incomplete</text>
+  </g>
+
+  <path class="line" d="M1608 911 V990"/>
+
+  <g id="after-downstream">
+    <rect class="llm" x="1005" y="1092" width="370" height="118" rx="12"/>
+    <text class="label" x="1032" y="1122">7. Downstream Synthesis</text>
+    <text class="small" x="1032" y="1148">problem-framing / synthesize</text>
+    <text class="small" x="1032" y="1170">consume resolution YAML + response refs</text>
+    <text class="tiny" x="1032" y="1192">markdown is a readable projection, not truth</text>
+  </g>
+
+  <path class="thin" d="M1450 1055 C1410 1055 1405 1151 1375 1151"/>
+
+  <g id="after-gain">
+    <rect class="gain" x="1438" y="1152" width="327" height="90" rx="12"/>
+    <text class="label" x="1465" y="1182">Expected Runtime Gain</text>
+    <text class="small" x="1465" y="1208">smaller inputs, fewer workers, bounded outputs</text>
+    <text class="small" x="1465" y="1230">quality preserved by issue-level validation</text>
+  </g>
+</svg>

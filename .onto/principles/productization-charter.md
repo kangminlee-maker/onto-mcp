@@ -381,7 +381,8 @@ canonical execution profile은 아래 두 축으로 표현한다.
 
 원칙:
 
-- `round1/*.md`와 `synthesis.md`는 human-readable source layer
+- `round1/*.findings.yaml`와 `synthesis-ledger.yaml`은 machine source layer
+- `round1/*.md`와 `synthesis.md`는 optional/deterministic human-readable projection layer
 - canonical primary artifact는 `review-record.yaml`
 - later `learn/govern`는 `ReviewRecord`를 읽어야 한다
 

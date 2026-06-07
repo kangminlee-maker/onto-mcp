@@ -11,8 +11,9 @@ import {
 import {
   REVIEW_SEVERITY_ORDER,
   isReviewFindingSeverity,
-  isMaterialSeverity,
+  isAdmittedReviewMaterialIssue,
 } from "./review-result-classification.js";
+import { isReviewArtifactGenerationRealization } from "./artifact-generation-realization.js";
 
 const REVIEW_RECORD_STATUS_VALUES = new Set<ReviewRecordStatus>([
   "completed",
@@ -37,6 +38,10 @@ const ACTION_CANDIDATE_VALUES = new Set<ReviewActionCandidate>([
   "needs_evidence",
   "continue_review",
   "retry_execution",
+]);
+const SEMANTIC_QUALITY_EVIDENCE_STATUS_VALUES = new Set([
+  "not_evaluated",
+  "not_applicable",
 ]);
 
 type UnknownRecord = Record<string, unknown>;
@@ -176,8 +181,16 @@ function validateIssueProjection(value: unknown, label: string): void {
     new Set(REVIEW_SEVERITY_ORDER),
     `${label}.severity`,
   ) as ReviewFindingSeverity;
-  if (projection.material !== isMaterialSeverity(severity)) {
-    throw new Error(`${label}.material must match severity-derived materiality.`);
+  if (
+    projection.material !==
+      isAdmittedReviewMaterialIssue(severity, {
+        issue_role: projection.issue_role,
+        judgment_state: projection.judgment_state,
+        closure_class: projection.closure_class,
+        closure_obligation: projection.closure_obligation,
+      })
+  ) {
+    throw new Error(`${label}.material must match problem-framing material admission.`);
   }
   requireString(projection.affected_purpose, `${label}.affected_purpose`);
   requireString(projection.failure_condition, `${label}.failure_condition`);
@@ -332,6 +345,33 @@ export function validateReviewRecordObject(value: unknown): ReviewRecord {
   requireString(record.interpretation_ref, "ReviewRecord.interpretation_ref");
   requireString(record.binding_ref, "ReviewRecord.binding_ref");
   requireString(record.domain_final_selection_ref, "ReviewRecord.domain_final_selection_ref");
+  if (
+    !isReviewArtifactGenerationRealization(
+      record.resolved_artifact_generation_realization,
+    )
+  ) {
+    throw new Error(
+      "ReviewRecord.resolved_artifact_generation_realization must be one of live, semantic_mock, boundary_stub, fixture.",
+    );
+  }
+  const semanticQualityEvidence = requireRecord(
+    record.semantic_quality_evidence,
+    "ReviewRecord.semantic_quality_evidence",
+  );
+  requireAllowed(
+    semanticQualityEvidence.status,
+    SEMANTIC_QUALITY_EVIDENCE_STATUS_VALUES,
+    "ReviewRecord.semantic_quality_evidence.status",
+  );
+  requireAllowed(
+    semanticQualityEvidence.applicability,
+    new Set(["real_semantic_path_only"]),
+    "ReviewRecord.semantic_quality_evidence.applicability",
+  );
+  requireString(
+    semanticQualityEvidence.reason,
+    "ReviewRecord.semantic_quality_evidence.reason",
+  );
   const resolvedLensIds = requireStringArray(
     record.resolved_lens_ids,
     "ReviewRecord.resolved_lens_ids",
@@ -392,6 +432,14 @@ export function validateReviewRecordObject(value: unknown): ReviewRecord {
   }
   validateClassificationSummary(record.result_classification_summary);
   requireNullableString(record.synthesis_result_ref, "ReviewRecord.synthesis_result_ref");
+  requireNullableString(
+    record.synthesis_result_sha256,
+    "ReviewRecord.synthesis_result_sha256",
+  );
+  requireNullableString(
+    record.synthesis_output_sha256,
+    "ReviewRecord.synthesis_output_sha256",
+  );
   requireAllowed(
     record.deliberation_status,
     new Set(["performed", "not_performed"]),
@@ -401,17 +449,43 @@ export function validateReviewRecordObject(value: unknown): ReviewRecord {
     record.deliberation_result_ref,
     "ReviewRecord.deliberation_result_ref",
   );
+  requireNullableString(
+    record.deliberation_result_sha256,
+    "ReviewRecord.deliberation_result_sha256",
+  );
   requireString(record.final_output_ref, "ReviewRecord.final_output_ref");
+  requireString(record.final_output_sha256, "ReviewRecord.final_output_sha256");
   validateSharedPhenomenonSummary(record.shared_phenomenon_summary);
 
-  if (recordStatus === "completed") {
+  const completedTerminal =
+    recordStatus === "completed" || recordStatus === "completed_with_degradation";
+  if (completedTerminal) {
+    requireRecord(
+      record.result_classification_summary,
+      "ReviewRecord.result_classification_summary for completed records",
+    );
+  }
+
+  if (completedTerminal) {
     requireString(
       record.synthesis_result_ref,
       "ReviewRecord.synthesis_result_ref for completed records",
     );
     requireString(
+      record.synthesis_result_sha256,
+      "ReviewRecord.synthesis_result_sha256 for completed records",
+    );
+    requireString(
+      record.synthesis_output_sha256,
+      "ReviewRecord.synthesis_output_sha256 for completed records",
+    );
+    requireString(
       record.deliberation_result_ref,
       "ReviewRecord.deliberation_result_ref for completed records",
+    );
+    requireString(
+      record.deliberation_result_sha256,
+      "ReviewRecord.deliberation_result_sha256 for completed records",
     );
     if (record.deliberation_status !== "performed") {
       throw new Error("Completed ReviewRecord must declare deliberation_status=performed.");
@@ -426,6 +500,21 @@ export function validateReviewRecordObject(value: unknown): ReviewRecord {
     if (record.synthesis_result_ref !== null) {
       throw new Error(
         "ReviewRecord.synthesis_result_ref must be null when deliberation_status=not_performed.",
+      );
+    }
+    if (record.synthesis_result_sha256 !== null) {
+      throw new Error(
+        "ReviewRecord.synthesis_result_sha256 must be null when deliberation_status=not_performed.",
+      );
+    }
+    if (record.synthesis_output_sha256 !== null) {
+      throw new Error(
+        "ReviewRecord.synthesis_output_sha256 must be null when deliberation_status=not_performed.",
+      );
+    }
+    if (record.deliberation_result_sha256 !== null) {
+      throw new Error(
+        "ReviewRecord.deliberation_result_sha256 must be null when deliberation_status=not_performed.",
       );
     }
   }

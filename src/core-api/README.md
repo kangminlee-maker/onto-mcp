@@ -100,5 +100,5 @@ ids, refs, enums, coverage, metrics, stage state, and final-output provenance.
 The public run path defaults to `semanticAuthorRealization="direct_call"` and
 `confirmationProviderRealization="direct_call"`, using the configured `llm`
 provider and failing loud when provider, model, credentials, or returned
-artifact shape are invalid. Test-only mock helpers remain internal fixtures and
-must not be treated as product completion evidence.
+artifact shape are invalid. Fixed input artifacts may support local checks, but
+product completion evidence requires the actual runtime/provider path.

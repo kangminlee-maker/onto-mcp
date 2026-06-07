@@ -15,6 +15,10 @@ import {
   reviewPrepareOnly,
 } from "./review-invoke.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
+import {
+  REVIEW_MOCK_REALIZATION_ENV,
+  setTemporaryEnv,
+} from "../review/test-fixtures/mock-realization.js";
 
 const originalEnv = { ...process.env };
 
@@ -58,7 +62,7 @@ describe("review invoke execution auto-resolution", () => {
     process.env.HOME = tmp.home;
     process.env.PATH = "/tmp/onto-missing-bin";
     delete process.env.ONTO_HOST_RUNTIME;
-    delete process.env.ONTO_LLM_MOCK;
+    delete process.env[REVIEW_MOCK_REALIZATION_ENV];
     delete process.env.CLAUDECODE;
   });
 
@@ -369,33 +373,83 @@ describe("review invoke execution auto-resolution", () => {
       ].join("\n"),
     );
     try {
-      const result = await reviewPrepareOnly([
-        ".onto/processes/review/auto-domain.md",
-        "Review the ontology runtime contract domain selection behavior.",
-        "--project-root",
-        project.projectRoot,
-        "--onto-home",
-        path.resolve("."),
-        "--executor-realization",
-        "mock",
-        "--review-mode",
-        "core-axis",
-        "--lens-id",
-        "logic",
-      ]);
-      const binding = await readYamlDocument<InvocationBindingArtifact>(
-        path.join(result.session_root, "binding.yaml"),
+      fs.mkdirSync(path.join(project.projectRoot, ".onto"), { recursive: true });
+      fs.writeFileSync(
+        path.join(project.projectRoot, ".onto", "settings.json"),
+        JSON.stringify(
+          {
+            schema_version: "settings.json/v3",
+            review: {
+              execution: {
+                topology: "main-workers",
+                executor: "direct_call",
+                deliberation: "controlled-lens-deliberation",
+                actors: {
+                  teamlead: {
+                    seat: "main",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                  lens: {
+                    seat: "worker",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                  synthesize: {
+                    seat: "worker",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
       );
-      const interpretation =
-        await readYamlDocument<InvocationInterpretationArtifact>(
-          path.join(result.session_root, "interpretation.yaml"),
+      const restoreRouteEnv = setTemporaryEnv({
+        OPENAI_API_KEY: "test-openai-key",
+      });
+      try {
+        const result = await reviewPrepareOnly([
+          ".onto/processes/review/auto-domain.md",
+          "Review the ontology runtime contract domain selection behavior.",
+          "--project-root",
+          project.projectRoot,
+          "--onto-home",
+          path.resolve("."),
+          "--review-mode",
+          "core-axis",
+          "--lens-id",
+          "logic",
+        ]);
+        const binding = await readYamlDocument<InvocationBindingArtifact>(
+          path.join(result.session_root, "binding.yaml"),
         );
+        const interpretation =
+          await readYamlDocument<InvocationInterpretationArtifact>(
+            path.join(result.session_root, "interpretation.yaml"),
+          );
 
-      expect(binding.resolved_session_domain).toBe("ontology");
-      expect(binding.domain_final_selection.selection_mode).toBe("target_inferred");
-      expect(binding.binding_notes.join("\n")).toContain("Selected @ontology");
-      expect(interpretation.domain_recommendation).toBe("@ontology");
-      expect(interpretation.domain_selection_required).toBe(false);
+        expect(binding.resolved_session_domain).toBe("ontology");
+        expect(binding.domain_final_selection.selection_mode).toBe("target_inferred");
+        expect(binding.binding_notes.join("\n")).toContain("Selected @ontology");
+        expect(interpretation.domain_recommendation).toBe("@ontology");
+        expect(interpretation.domain_selection_required).toBe(false);
+      } finally {
+        restoreRouteEnv();
+      }
     } finally {
       project.cleanup();
     }

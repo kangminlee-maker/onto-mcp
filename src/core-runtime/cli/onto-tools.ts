@@ -208,9 +208,20 @@ export interface OntoToolSchema {
 }
 
 export interface OntoToolPropertySchema {
-  type: "string" | "number" | "boolean";
+  type:
+    | "string"
+    | "number"
+    | "boolean"
+    | "array"
+    | "object"
+    | "null"
+    | readonly ("string" | "number" | "boolean" | "array" | "object" | "null")[];
   description: string;
-  enum?: string[];
+  enum?: Array<string | null>;
+  properties?: Record<string, OntoToolPropertySchema>;
+  required?: string[];
+  items?: OntoToolPropertySchema;
+  additionalProperties?: boolean;
 }
 
 export interface OntoTool {

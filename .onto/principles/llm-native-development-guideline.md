@@ -301,22 +301,57 @@ host realization이 달라도 `맥락 비공유 + 계약 입력/출력 + 독립 
 
 ## 13. 테스트 전략
 
-LLM 기능 테스트는 계층을 나눠서 설계한다.
+LLM 기능 테스트는 evidence class를 분리해서 설계한다. mock은 검증
+realization이지 제품 의미 경로가 아니다.
+
+핵심 원칙:
+
+1. 제품 behavior, materiality judgment, causal reasoning, semantic quality는 실제
+   semantic path에서 검증한다.
+2. mock, fake, stub, fixture는 wiring, schema, artifact contract, deterministic
+   projection, retry/failure, harness 안정성 검증에 사용할 수 있다.
+3. mock-backed check는 verification support evidence로 보고하고, product
+   completion, E2E completion, semantic quality evidence와 분리한다.
+4. fixture는 입력 데이터와 expected invariant를 제공할 수 있지만 의미 판단이나
+   provider integration 완료 증거를 대신하지 않는다.
+5. 실제 호출이 불가능하면 product-path evidence는 blocked/degraded evidence로 기록한다.
+
+| Evidence class | 증명하는 것 | 증명하지 않는 것 |
+|---|---|---|
+| deterministic test | parser, schema, serialization, persistence, state transition | LLM 의미 품질 |
+| mock/fixture realization | wiring, artifact contract, failure/retry, harness 안정성 | materiality, causality, semantic quality, 제품 완료 |
+| live semantic path | 제품 behavior, 실제 provider integration, semantic quality | deterministic proof 전체 |
 
 ### 13.1 deterministic test
 
-기존 방식대로 유지한다.
+deterministic test는 순수 runtime 책임을 검증할 때만 사용한다.
 
 - parser/unit test
 - schema validation
-- retry/fallback behavior
+- retry/fail-loud behavior
 - storage and state transition
 - auth and permission
 - audit trail
 
-### 13.2 semantic eval
+단, 이 계층은 실제 product workflow의 semantic 완료 증거가 될 수 없다. LLM 호출,
+provider 호출, worker dispatch, file/tool boundary가 workflow의 일부라면 해당
+경로를 포함한 live test가 별도로 필요하다.
 
-LLM 기능의 핵심 품질은 여기서 본다.
+### 13.2 mock realization test
+
+mock realization test는 동일 artifact contract와 validator를 통과해야 한다.
+
+- explicit realization selector (`review.execution.artifact_generation_realization`)
+- centralized fixture payload
+- thin mock executor or provider shell
+- shared validator and artifact writer
+- artifact provenance records the realization, not only the test report
+- semantic quality `not_applicable` for non-live artifact generation
+- report separated from live/product-path verification
+
+### 13.3 semantic eval
+
+LLM 기능의 핵심 품질은 실제 호출 결과로 본다.
 
 - representative eval set
 - rubric-based scoring
@@ -325,7 +360,7 @@ LLM 기능의 핵심 품질은 여기서 본다.
 - ambiguity and abstention handling
 - human preference review
 
-### 13.3 production review
+### 13.4 production review
 
 배포 후에도 품질은 계속 확인한다.
 
