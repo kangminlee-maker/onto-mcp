@@ -83,7 +83,7 @@ import { assessComplexity, selectLenses } from "./complexity-assessment.js";
  * execution_route projections. This remains as a CLI/debug adapter switch until
  * the argv harness is retired.
  */
-export type ExecutorRealization = "codex" | "ts_inline_http";
+export type ExecutorRealization = "codex" | "ts_inline_http" | "claude_code";
 type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 type ReviewMode = "core-axis" | "full";
 type BoundaryDecisionAction = "approve_external_boundary" | "rerun_target" | "cancel";
@@ -273,6 +273,7 @@ function requireString(
 const EXECUTOR_SCRIPT_FILENAMES: Record<ExecutorRealization, string> = {
   codex: "codex-review-unit-executor",
   ts_inline_http: "inline-http-review-unit-executor",
+  claude_code: "claude-code-review-unit-executor",
 };
 
 function resolveDirectExecutorPath(
@@ -1001,7 +1002,11 @@ export function resolveExecutorConfig(
     (optionPrefixLabel.length > 0
       ? readSingleOptionValueFromArgv(argv, "executor-realization")
       : undefined);
-  if (explicitRealization === "codex" || explicitRealization === "ts_inline_http") {
+  if (
+    explicitRealization === "codex" ||
+    explicitRealization === "ts_inline_http" ||
+    explicitRealization === "claude_code"
+  ) {
     return appendExecutorModelArgs(
       buildExecutorConfigFromRealization(explicitRealization, ontoHome),
       argv,
@@ -1015,7 +1020,7 @@ export function resolveExecutorConfig(
   ) {
     throw new Error(
       `Unsupported debug --${optionPrefixLabel}executor-realization: ${explicitRealization}. ` +
-        "Supported values: codex, ts_inline_http.",
+        "Supported values: codex, ts_inline_http, claude_code.",
     );
   }
 
@@ -1030,6 +1035,14 @@ export function resolveExecutorConfig(
   if (profile?.worker_executor === "codex") {
     return appendExecutorModelArgs(
       buildExecutorConfigFromRealization("codex", ontoHome),
+      argv,
+      ontoConfig,
+      actorLlmRef,
+    );
+  }
+  if (profile?.worker_executor === "claude_code") {
+    return appendExecutorModelArgs(
+      buildExecutorConfigFromRealization("claude_code", ontoHome),
       argv,
       ontoConfig,
       actorLlmRef,
@@ -1147,7 +1160,14 @@ export async function ensureProviderRouteReadyForDispatch(args: {
       })),
   ];
 
-  if (profile.worker_executor === "codex") {
+  if (
+    profile.worker_executor === "codex" ||
+    profile.worker_executor === "claude_code"
+  ) {
+    const expectedAdapter =
+      profile.worker_executor === "claude_code" ? "claude_code" : "codex_cli";
+    const workerLabel =
+      profile.worker_executor === "claude_code" ? "Claude Code" : "Codex";
     for (const actorRef of actorRefs) {
       const selection = actorRef.llm
         ? normalizeLlmModelSwitcher(actorRef.llm)
@@ -1156,17 +1176,17 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         selection !== null &&
         !(
           isExternalOauthWorkerSelection(selection) &&
-          selection.execution_adapter === "codex_cli"
+          selection.execution_adapter === expectedAdapter
         )
       ) {
         await writeAndThrowStructuredFailureRecord({
           sessionRoot: args.sessionRoot,
           phase: "pre_dispatch.actor_route",
-          reasonCode: "codex_actor_route_mismatch",
+          reasonCode: "external_worker_actor_route_mismatch",
           humanMessage:
-            "Review Codex worker route cannot dispatch because an actor/unit selects a non-Codex provider route.",
+            `Review ${workerLabel} worker route cannot dispatch because an actor/unit selects a different execution adapter.`,
           requiredUserAction:
-            "Use OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
+            "Keep every actor/unit on one external OAuth worker adapter (OpenAI OAuth → codex_cli, or Anthropic OAuth → claude_code), or select a direct-call route for API/local providers.",
           retrySafety: "safe_after_input_change",
           artifactTrust: "manifest_artifacts_trusted",
           dispatchState: "dispatch_blocked",
@@ -1179,6 +1199,7 @@ export async function ensureProviderRouteReadyForDispatch(args: {
             actor: actorRef.ref,
             execution_route: selection.execution_route,
             execution_adapter: selection.execution_adapter,
+            expected_execution_adapter: expectedAdapter,
             model_provider: selection.model_provider,
             worker_executor: profile.worker_executor,
             host: profile.host,

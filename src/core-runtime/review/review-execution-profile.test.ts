@@ -32,6 +32,15 @@ function actorOwnedOpenAiSettingsWithoutAuth(effort: string) {
   };
 }
 
+function actorOwnedAnthropicOauthSettings(effort: string) {
+  return {
+    auth: "oauth" as const,
+    provider: "anthropic" as const,
+    model: "claude-opus-4-8",
+    effort,
+  };
+}
+
 describe("resolveReviewExecutionProfile", () => {
   it("uses actor-owned llm blocks without root inheritance", () => {
     const execution = defaultReviewExecution();
@@ -274,6 +283,114 @@ describe("resolveReviewExecutionProfile", () => {
       max_output_bytes: 262144,
     });
     expect(result.profile.model).toBeUndefined();
+  });
+
+  it("auto-selects the claude_code worker from anthropic OAuth settings", () => {
+    const settings: OntoSettings = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          executor: "auto",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("high"),
+          },
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: false,
+      claudeAvailable: true,
+      env: {},
+    });
+
+    expect(result.type).toBe("resolved");
+    if (result.type !== "resolved") return;
+    expect(result.profile.worker_executor).toBe("claude_code");
+    expect(result.profile.host).toBe("anthropic");
+    expect(result.profile.provider).toBe("anthropic");
+    expect(result.profile.auth).toBe("oauth");
+  });
+
+  it("returns no_host for anthropic OAuth when the claude worker is unavailable", () => {
+    const settings: OntoSettings = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          executor: "auto",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("high"),
+          },
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: false,
+      claudeAvailable: false,
+      env: {},
+    });
+
+    expect(result.type).toBe("no_host");
+    if (result.type !== "no_host") return;
+    expect(result.reason).toContain("Claude Code worker");
+  });
+
+  it("rejects executor=codex when actor settings resolve to the claude_code adapter", () => {
+    const settings: OntoSettings = {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          executor: "codex",
+          teamlead: {
+            seat: "main",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          lens: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("medium"),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: actorOwnedAnthropicOauthSettings("high"),
+          },
+        },
+      },
+    };
+
+    const result = resolveReviewExecutionProfile({
+      explicitCodex: false,
+      settings,
+      codexAvailable: true,
+      claudeAvailable: true,
+      env: {},
+    });
+
+    expect(result.type).toBe("no_host");
+    if (result.type !== "no_host") return;
+    expect(result.reason).toContain("codex_cli adapter");
   });
 
   it("rejects mixed actor provider routes", () => {

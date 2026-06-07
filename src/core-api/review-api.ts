@@ -104,6 +104,7 @@ import {
   type ReviewContinuationPlan,
 } from "../core-runtime/review/continuation-plan.js";
 import type {
+  LlmExecutionAdapter,
   LlmExecutionRoute,
   LlmProviderName,
 } from "../core-runtime/llm/model-switcher.js";
@@ -113,7 +114,7 @@ import type {
   ReviewWorkerExecutor,
 } from "../core-runtime/review/review-execution-profile.js";
 
-type ReviewInternalExecutorRealization = "codex" | "ts_inline_http";
+type ReviewInternalExecutorRealization = "codex" | "ts_inline_http" | "claude_code";
 
 export interface PrepareReviewRequest {
   projectRoot: string;
@@ -134,6 +135,8 @@ export interface PrepareReviewRequest {
    * `.onto/settings.json` actor LLM settings select the route.
    */
   executionRoute?: LlmExecutionRoute;
+  /** Disambiguates an external_oauth_worker override into codex_cli vs claude_code. */
+  executionAdapter?: LlmExecutionAdapter;
 }
 
 export interface PreparedReview {
@@ -335,6 +338,8 @@ export interface ContinueReviewRequest {
   targetUnits?: string[];
   requestText?: string;
   executionRoute?: LlmExecutionRoute;
+  /** Disambiguates an external_oauth_worker override into codex_cli vs claude_code. */
+  executionAdapter?: LlmExecutionAdapter;
 }
 
 export interface CancelReviewRequest {
@@ -3381,14 +3386,17 @@ function isLlmProviderName(value: unknown): value is LlmProviderName {
 
 function workerExecutorFromRuntimeRoute(route: {
   execution_route?: unknown;
+  execution_adapter?: unknown;
   worker_executor?: unknown;
 } | undefined): ReviewWorkerExecutor | null {
   if (isLlmExecutionRoute(route?.execution_route)) {
-    return route.execution_route === "external_oauth_worker"
-      ? "codex"
-      : "direct_call";
+    if (route.execution_route === "external_oauth_worker") {
+      return route.execution_adapter === "claude_code" ? "claude_code" : "codex";
+    }
+    return "direct_call";
   }
   if (route?.worker_executor === "codex") return "codex";
+  if (route?.worker_executor === "claude_code") return "claude_code";
   if (route?.worker_executor === "direct_call") return "direct_call";
   return null;
 }
@@ -3397,6 +3405,7 @@ function workerExecutorToRealization(
   workerExecutor: unknown,
 ): ReviewInternalExecutorRealization | null {
   if (workerExecutor === "codex") return "codex";
+  if (workerExecutor === "claude_code") return "claude_code";
   if (workerExecutor === "direct_call") return "ts_inline_http";
   return null;
 }
@@ -3405,13 +3414,17 @@ function workerExecutorFromRealization(
   realization: ReviewInternalExecutorRealization,
 ): ReviewWorkerExecutor {
   if (realization === "codex") return "codex";
+  if (realization === "claude_code") return "claude_code";
   return "direct_call";
 }
 
 function executorRealizationFromExecutionRoute(
   executionRoute: LlmExecutionRoute | undefined,
+  executionAdapter?: LlmExecutionAdapter | undefined,
 ): ReviewInternalExecutorRealization | undefined {
-  if (executionRoute === "external_oauth_worker") return "codex";
+  if (executionRoute === "external_oauth_worker") {
+    return executionAdapter === "claude_code" ? "claude_code" : "codex";
+  }
   if (executionRoute === "direct_model_call") return "ts_inline_http";
   return undefined;
 }
@@ -3421,6 +3434,7 @@ function reviewExecutionHostFromRuntime(
   workerExecutor: ReviewWorkerExecutor,
 ): ReviewExecutionHost {
   if (workerExecutor === "codex") return "codex";
+  if (workerExecutor === "claude_code") return "anthropic";
   if (
     hostRuntime === "openai" ||
     hostRuntime === "anthropic" ||
@@ -4419,7 +4433,10 @@ export function createOntoReviewCoreApi(
           path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         );
       const requestedExecutorRealization =
-        executorRealizationFromExecutionRoute(request.executionRoute);
+        executorRealizationFromExecutionRoute(
+          request.executionRoute,
+          request.executionAdapter,
+        );
       const preReconstructionProfileSource =
         requestedExecutorRealization === undefined &&
         reviewRunManifest?.review_execution_profile

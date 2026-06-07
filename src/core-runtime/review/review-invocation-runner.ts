@@ -21,14 +21,17 @@ import type {
   ReviewMode,
   ReviewTargetScopeKind,
 } from "./artifact-types.js";
-import type { LlmExecutionRoute } from "../llm/model-switcher.js";
+import type {
+  LlmExecutionAdapter,
+  LlmExecutionRoute,
+} from "../llm/model-switcher.js";
 import {
   fileExists,
   normalizeDomainValue,
   readSingleOptionValueFromArgv,
 } from "./review-artifact-utils.js";
 
-export type ReviewExecutorRealization = "codex" | "ts_inline_http";
+export type ReviewExecutorRealization = "codex" | "ts_inline_http" | "claude_code";
 
 export interface ReviewInvocationRequest {
   projectRoot: string;
@@ -45,6 +48,8 @@ export interface ReviewInvocationRequest {
   lensIds?: string[];
   confirmValueAlignment?: boolean;
   executionRoute?: LlmExecutionRoute;
+  /** Disambiguates external_oauth_worker into codex_cli vs claude_code. */
+  executionAdapter?: LlmExecutionAdapter;
   /** Debug-only legacy executor override. Prefer executionRoute. */
   executorRealization?: ReviewExecutorRealization;
 }
@@ -197,11 +202,16 @@ export function appendReviewInvocationRequestArgs(
 }
 
 function executorRealizationFromRequest(
-  request: Pick<ReviewInvocationRequest, "executionRoute" | "executorRealization">,
+  request: Pick<
+    ReviewInvocationRequest,
+    "executionRoute" | "executionAdapter" | "executorRealization"
+  >,
 ): ReviewExecutorRealization | undefined {
   const routeRealization =
     request.executionRoute === "external_oauth_worker"
-      ? "codex"
+      ? request.executionAdapter === "claude_code"
+        ? "claude_code"
+        : "codex"
       : request.executionRoute === "direct_model_call"
         ? "ts_inline_http"
         : undefined;

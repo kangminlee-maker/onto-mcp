@@ -450,8 +450,11 @@ function requireString(
 function defaultStaggerDelayMsForExecutorConfig(
   executorConfig: ReviewUnitExecutorConfig,
 ): number {
-  if (executorConfigUsesCodexWorker(executorConfig)) {
-    // codex executor spawns an external process -> API request per lens
+  if (
+    executorConfigUsesCodexWorker(executorConfig) ||
+    executorConfigUsesClaudeWorker(executorConfig)
+  ) {
+    // external worker (codex/claude) spawns a process -> API request per lens
     return 1500;
   }
   return 0;
@@ -461,6 +464,14 @@ function executorConfigUsesCodexWorker(
   executorConfig: ReviewUnitExecutorConfig,
 ): boolean {
   return executorConfig.args.some((arg) => arg.includes("codex-review-unit-executor"));
+}
+
+function executorConfigUsesClaudeWorker(
+  executorConfig: ReviewUnitExecutorConfig,
+): boolean {
+  return executorConfig.args.some((arg) =>
+    arg.includes("claude-code-review-unit-executor"),
+  );
 }
 
 function executorConfigUsesInlineHttpWorker(
@@ -829,6 +840,15 @@ function executorConfigWithUnitSettings(args: {
       settings: unitSettings,
       unitId,
       executorKind: "codex_cli",
+    });
+  } else if (executorConfigUsesClaudeWorker(args.executorConfig)) {
+    // The claude worker accepts the same --model/--reasoning-effort overrides
+    // and likewise cannot enforce the inline-http unit execution knobs.
+    appendCodexLlmOverrideArgs(executorArgs, effectiveLlm);
+    rejectUnsupportedUnitExecutionKnobs({
+      settings: unitSettings,
+      unitId,
+      executorKind: "claude_code",
     });
   } else {
     rejectUnsupportedUnitExecutionKnobs({

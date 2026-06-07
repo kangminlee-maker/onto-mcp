@@ -693,13 +693,13 @@ entities:
         execution_realization: "worker"
         execution_route: "external_oauth_worker"
         auth_mode: "oauth"
-        model_provider: "openai; reserved/future: anthropic"
+        model_provider: "openai | anthropic"
         model_id: "required"
-        execution_adapter: "codex_cli; reserved/future: claude_code"
+        execution_adapter: "codex_cli | claude_code"
         orchestration_locus: "external_worker"
         context_cost: "independent"
         billing_source: "subscription_account"
-        notes: "Current operational example: oauth + openai + model_id + codex_cli. Reserved/future: oauth + anthropic + model_id + claude_code. Worker route is not Codex-specific."
+        notes: "Operational adapters: oauth + openai + model_id + codex_cli, and oauth + anthropic + model_id + claude_code. Worker route is not Codex-specific; the brand lives only in execution_adapter. The claude_code worker reuses the same structured-output submit contract as codex_cli and projects legacy host_runtime=anthropic (no separate claude host enum)."
       direct_model_call:
         execution_realization: "direct-call"
         execution_route: "direct_model_call"
@@ -715,7 +715,9 @@ entities:
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"
-      external_worker_adapter_current: "src/core-runtime/cli/codex-review-unit-executor.ts"
+      external_worker_adapter_codex_cli: "src/core-runtime/cli/codex-review-unit-executor.ts"
+      external_worker_adapter_claude_code: "src/core-runtime/cli/claude-code-review-unit-executor.ts"
+      external_worker_shared_structured_output: "src/core-runtime/cli/worker-structured-output.ts"
       direct_call_executor: "src/core-runtime/cli/inline-http-review-unit-executor.ts"
     notes:
       - "Previous agent-spawn naming was too narrow because direct-call is not agent spawn and worker routes are not Codex-specific."
