@@ -751,8 +751,8 @@ export function renderFindingRelationInputProjectionSection(
     "## Runtime Finding Relation Input Projection",
     "This projection is derived from `finding-ledger.yaml` and is the compact node list for this unit.",
     "Use this projection first. Read source refs only when a relation rationale needs additional local context that the projection cannot carry.",
-    "Emit only semantically accepted relations. Every `causal_analysis_finding_ids` entry not covered by an accepted relation must appear in `singleton_findings`.",
-    "`surface_only_finding_ids` are already recorded in the ledger and do not need relation coverage.",
+    "Emit only semantically accepted relations. Runtime assigns relation ids and fills singleton coverage for `causal_analysis_finding_ids` entries not covered by accepted relations.",
+    "`surface_only_finding_ids` are already recorded in the ledger and must not receive relation coverage.",
     "",
     "```yaml",
     dumpYamlDocument(projection),
@@ -1077,6 +1077,21 @@ export function renderIssueStanceInputProjectionSection(
     dumpYamlDocument(projection),
     "```",
   ].join("\n");
+}
+
+function issueStanceLensOutputPaths(args: {
+  lensId: string;
+  lensOutputPaths: string[];
+}): string[] {
+  const selected = args.lensOutputPaths.filter(
+    (outputPath) => lensIdFromRound1ArtifactPath(outputPath) === args.lensId,
+  );
+  if (selected.length === 0) {
+    throw new Error(
+      `issue-stance:${args.lensId} has no matching Round 1 lens output ref.`,
+    );
+  }
+  return selected;
 }
 
 export interface DeliberationPlanInputProjection {
@@ -1925,13 +1940,17 @@ export function buildIssueStanceResponsePrompt(args: {
   issueStanceInputProjection: string;
 }): string {
   const outputRef = toRelativePath(args.outputPath, args.projectRoot);
-  const lensRefs = relativeList(args.projectRoot, args.lensOutputPaths);
+  const requestedLensOutputPaths = issueStanceLensOutputPaths({
+    lensId: args.lensId,
+    lensOutputPaths: args.lensOutputPaths,
+  });
+  const lensRefs = relativeList(args.projectRoot, requestedLensOutputPaths);
   const readRefs = uniqueRefs([
     args.executionPlan.review_target_profile_path,
     args.executionPlan.finding_ledger_path,
     args.executionPlan.finding_relation_graph_path,
     args.executionPlan.issue_ledger_path,
-    ...args.lensOutputPaths,
+    ...requestedLensOutputPaths,
   ]);
   return `# Issue Stance Response Prompt
 
@@ -2307,7 +2326,9 @@ Relate material-candidate findings by common root, shared cause, causality, depe
 Use the runtime finding relation input projection first.
 Read Round 1 source refs only when the projection lacks enough local context to justify a relation rationale.
 Do not copy every possible pair into the output. Emit accepted semantic relations only.
-Every \`causal_analysis_finding_ids\` entry that is not covered by an accepted relation must be listed under \`singleton_findings\`.
+Submit only \`relations\` through \`submit_issue_artifact\`.
+Do not submit \`relation_id\` or \`singleton_findings\`; runtime fills them.
+Every \`causal_analysis_finding_ids\` entry that is not covered by an accepted relation will be listed under \`singleton_findings\` by runtime.
 Do not add relation coverage for \`surface_only_finding_ids\`.
 
 Allowed relation values:
@@ -2322,9 +2343,19 @@ Allowed relation values:
 For relation=shared_cause_candidate, set \`shared_cause\` to {cause_claim, from_cause_ref, to_cause_ref}.
 Use the stable \`causal_path.steps[].cause_id\` refs from the projection.
 For every other relation value, set \`shared_cause: null\`.
-Represent unrelated causal-analysis findings only under \`singleton_findings\`, not as relation rows.
+Represent only accepted semantic relations. Runtime represents unrelated causal-analysis findings under \`singleton_findings\`.
 
-## Required YAML Shape
+## Required Submit Payload Shape
+relations:
+  - from_finding_id: finding-001
+    to_finding_id: finding-002
+    relation: same_root_candidate
+    root_hypothesis: "falsifiable common-root claim"
+    shared_cause: null
+    rationale: "why this relation is supported"
+    confidence: medium
+
+## Runtime-Written YAML Shape
 schema_version: 1
 session_id: "${args.sessionId}"
 relations:

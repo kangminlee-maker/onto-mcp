@@ -21,12 +21,17 @@ export interface RuntimeSubmitState {
   sessionId: string;
   unitId: string;
   outputFormat: RuntimeSubmitOutputFormat;
+  findingRelationGraphContext?: RuntimeSubmitFindingRelationGraphContext;
   problemFramingContext?: RuntimeSubmitProblemFramingContext;
   issueLedgerDependencyContext?: RuntimeSubmitIssueLedgerDependencyContext;
   issueStanceSchemaContext?: RuntimeSubmitIssueStanceSchemaContext;
   issueDeliberationSchemaContext?: RuntimeSubmitIssueDeliberationSchemaContext;
   issueSynthesisSchemaContext?: RuntimeSubmitIssueSynthesisSchemaContext;
   artifact?: Record<string, unknown>;
+}
+
+export interface RuntimeSubmitFindingRelationGraphContext {
+  causal_analysis_finding_ids: string[];
 }
 
 export interface RuntimeSubmitProblemFramingContext {
@@ -332,9 +337,8 @@ function findingRelationSharedCauseField(): OntoToolPropertySchema {
   );
 }
 
-function findingRelationRowField(): OntoToolPropertySchema {
-  return objectField("One accepted finding relation row.", {
-    relation_id: stringField("Stable relation id."),
+function findingRelationSemanticRowField(): OntoToolPropertySchema {
+  return objectField("One accepted finding relation semantic row.", {
     from_finding_id: stringField("First finding id."),
     to_finding_id: stringField("Second finding id."),
     relation: enumField("Relation kind.", RELATION_VALUES),
@@ -342,13 +346,6 @@ function findingRelationRowField(): OntoToolPropertySchema {
     shared_cause: findingRelationSharedCauseField(),
     rationale: stringField("Why this relation is supported."),
     confidence: enumField("Relation confidence.", CONFIDENCE_VALUES),
-  });
-}
-
-function findingRelationSingletonField(): OntoToolPropertySchema {
-  return objectField("One finding intentionally left as a singleton.", {
-    finding_id: stringField("Finding id not covered by an accepted relation."),
-    reason: stringField("Why no relation was accepted."),
   });
 }
 
@@ -606,6 +603,116 @@ function normalizeFindingLedgerSubmitArgs(
           objectValue(item, `submit_issue_artifact.findings[${index}]`),
         ),
     ),
+  };
+}
+
+function normalizeRelationSharedCause(
+  value: unknown,
+  relationValue: string,
+  label: string,
+): Record<string, string> | null {
+  if (relationValue !== "shared_cause_candidate") {
+    if (value !== null) {
+      throw new Error(`${label} must be null unless relation=shared_cause_candidate.`);
+    }
+    return null;
+  }
+  const sharedCause = objectValue(value, label);
+  rejectUnknownFields(sharedCause, label, [
+    "cause_claim",
+    "from_cause_ref",
+    "to_cause_ref",
+  ]);
+  return {
+    cause_claim: stringValue(sharedCause.cause_claim, `${label}.cause_claim`),
+    from_cause_ref: stringValue(sharedCause.from_cause_ref, `${label}.from_cause_ref`),
+    to_cause_ref: stringValue(sharedCause.to_cause_ref, `${label}.to_cause_ref`),
+  };
+}
+
+function normalizeFindingRelationGraphSubmitArgs(
+  args: Record<string, unknown>,
+  context: RuntimeSubmitFindingRelationGraphContext | undefined,
+): Record<string, unknown> {
+  if (!context) {
+    throw new Error("submit_issue_artifact for finding-relation-graph is missing runtime relation graph context.");
+  }
+  rejectUnknownFields(args, "submit_issue_artifact", ["relations"]);
+  const coverageFindingIds = new Set(context.causal_analysis_finding_ids);
+  const coveredFindingIds = new Set<string>();
+  const relations = arrayValue(args.relations, "submit_issue_artifact.relations").map(
+    (item, index) => {
+      const relation = objectValue(item, `submit_issue_artifact.relations[${index}]`);
+      rejectUnknownFields(relation, `submit_issue_artifact.relations[${index}]`, [
+        "from_finding_id",
+        "to_finding_id",
+        "relation",
+        "root_hypothesis",
+        "shared_cause",
+        "rationale",
+        "confidence",
+      ]);
+      const fromFindingId = stringValue(
+        relation.from_finding_id,
+        `submit_issue_artifact.relations[${index}].from_finding_id`,
+      );
+      const toFindingId = stringValue(
+        relation.to_finding_id,
+        `submit_issue_artifact.relations[${index}].to_finding_id`,
+      );
+      if (!coverageFindingIds.has(fromFindingId)) {
+        throw new Error(
+          `submit_issue_artifact.relations[${index}].from_finding_id must be in causal_analysis_finding_ids: ${fromFindingId}`,
+        );
+      }
+      if (!coverageFindingIds.has(toFindingId)) {
+        throw new Error(
+          `submit_issue_artifact.relations[${index}].to_finding_id must be in causal_analysis_finding_ids: ${toFindingId}`,
+        );
+      }
+      coveredFindingIds.add(fromFindingId);
+      coveredFindingIds.add(toFindingId);
+      const relationValue = enumStringValue(
+        relation.relation,
+        RELATION_VALUES,
+        `submit_issue_artifact.relations[${index}].relation`,
+      );
+      return {
+        relation_id: `rel-${String(index + 1).padStart(3, "0")}`,
+        from_finding_id: fromFindingId,
+        to_finding_id: toFindingId,
+        relation: relationValue,
+        root_hypothesis: stringValue(
+          relation.root_hypothesis,
+          `submit_issue_artifact.relations[${index}].root_hypothesis`,
+        ),
+        shared_cause: normalizeRelationSharedCause(
+          relation.shared_cause,
+          relationValue,
+          `submit_issue_artifact.relations[${index}].shared_cause`,
+        ),
+        rationale: stringValue(
+          relation.rationale,
+          `submit_issue_artifact.relations[${index}].rationale`,
+        ),
+        confidence: enumStringValue(
+          relation.confidence,
+          CONFIDENCE_VALUES,
+          `submit_issue_artifact.relations[${index}].confidence`,
+        ),
+      };
+    },
+  );
+  const singletonFindings = context.causal_analysis_finding_ids
+    .filter((findingId) => !coveredFindingIds.has(findingId))
+    .map((findingId) => ({
+      finding_id: findingId,
+      reason:
+        "Runtime projection: no accepted semantic relation covered this causal-analysis finding.",
+    }));
+  return {
+    relations,
+    singleton_findings: singletonFindings,
   };
 }
 
@@ -981,15 +1088,11 @@ function issueArtifactToolSchema(unitId: string): OntoTool["input_schema"] {
       return {
         type: "object",
         additionalProperties: false,
-        required: ["relations", "singleton_findings"],
+        required: ["relations"],
         properties: {
           relations: arrayField(
-            "Accepted finding relation rows.",
-            findingRelationRowField(),
-          ),
-          singleton_findings: arrayField(
-            "Findings intentionally left as singleton rows.",
-            findingRelationSingletonField(),
+            "Accepted finding relation semantic rows. The runtime writes relation ids and singleton coverage.",
+            findingRelationSemanticRowField(),
           ),
         },
       };
@@ -1148,6 +1251,16 @@ function createIssueArtifactSubmitTool(state: RuntimeSubmitState): OntoTool {
           schema_version: 1,
           session_id: state.sessionId,
           ...normalizeFindingLedgerSubmitArgs(args),
+        });
+      }
+      if (state.unitId === "finding-relation-graph") {
+        return submitOnce(state, {
+          schema_version: 1,
+          session_id: state.sessionId,
+          ...normalizeFindingRelationGraphSubmitArgs(
+            args,
+            state.findingRelationGraphContext,
+          ),
         });
       }
       if (state.unitId === "issue-ledger") {

@@ -103,7 +103,7 @@ issue-stance deliberation target path의 canonical seats:
 | Artifact | Owner | 목적 |
 |---|---|---|
 | `finding-ledger.yaml` | teamlead/runtime-assisted LLM | Round 1 lens outputs에서 surface finding을 안정 식별자로 등록 |
-| `finding-relation-graph.yaml` | teamlead semantic judgment + runtime submit/write/validation | finding 간 same-root, causal, duplicate, conflict, dependency 관계 기록 |
+| `finding-relation-graph.yaml` | teamlead semantic judgment + runtime submit/complete/write/validation | finding 간 same-root, causal, duplicate, conflict, dependency 관계 기록; runtime owns relation ids and singleton coverage |
 | `issue-ledger.yaml` | teamlead semantic judgment + runtime submit/write/validation | finding graph에서 root-cause issue cluster를 도출 |
 | `stance-responses/{lens_id}.yaml` | fresh lens stance actor + runtime submit/write/validation | issue-ledger 이후 해당 lens 관점의 모든 issue stance 작성 |
 | `issue-stance-matrix.yaml` | lens stance actors + runtime aggregation | 모든 root-cause issue × 모든 lens 입장과 이유 기록 |
@@ -178,7 +178,20 @@ Allowed relation values:
 | `duplicates` | 동일 문제의 중복 보고 |
 | `conflicts_with` | 두 finding의 claim/action/severity가 충돌 |
 
-최소 shape:
+LLM submit payload shape:
+
+```yaml
+relations:
+  - from_finding_id: finding-001
+    to_finding_id: finding-004
+    relation: same_root_candidate
+    root_hypothesis: "source/package boundary is not canonically assigned."
+    shared_cause: null
+    rationale: "Both findings point to disagreement between source-time scripts and package/runtime surface."
+    confidence: medium
+```
+
+Runtime-written canonical shape:
 
 ```yaml
 schema_version: 1
@@ -201,9 +214,10 @@ Rules:
 1. The graph must consider cross-lens and cross-artifact relations, not only same-locator relations.
 2. Root hypotheses must be stated as falsifiable claims, not vague themes.
 3. Low-confidence same-root candidates may still form provisional clusters, but the confidence must be preserved.
-4. If a finding remains singleton, the graph must include why no relation was accepted.
-5. Unrelated causal-analysis findings must be represented under `singleton_findings`, not as relation rows.
-6. The graph must not collapse unrelated findings merely because they share severity or the same lens.
+4. LLM submit must include only accepted semantic `relations`; it must not submit `relation_id` or `singleton_findings`.
+5. Runtime assigns stable `relation_id` values and writes `singleton_findings` for causal-analysis findings that are not covered by accepted relations.
+6. Unrelated causal-analysis findings must be represented under runtime-written `singleton_findings`, not as relation rows.
+7. The graph must not collapse unrelated findings merely because they share severity or the same lens.
 
 Root-cause grouping signals:
 
@@ -291,9 +305,11 @@ Stances are collected after `issue-ledger.yaml` exists; Round 1 lens workers do
 not stay alive and hidden context is not used. Runtime creates one fresh
 `issue-stance:{lens_id}` stance worker per participating lens. Each stance
 worker consumes a runtime issue-stance input projection derived from the finding
-ledger, relation graph, and issue ledger first. Round 1 lens outputs remain
-bounded supplemental refs and should be read only when the projection lacks
-lens-specific context needed for a stance rationale.
+ledger, relation graph, and issue ledger first. Each worker may receive only
+its requested lens's Round 1 output as a bounded supplemental ref. Other lens
+Round 1 outputs are not opened to that worker. The supplemental ref should be
+read only when the projection lacks lens-specific context needed for a stance
+rationale.
 The projection must preserve issue action judgment context (`issue_statement`,
 `proposed_action`, severity fields, `domain_threshold_used`, and
 `singleton_reason`) plus compact `shared_cause` relation and `issue_dependencies`

@@ -153,6 +153,164 @@ describe("runtime submit structured output tools", () => {
     ).rejects.toThrow(/unsupported field issue_dependencies/);
   });
 
+  it("lets runtime complete finding-relation-graph relation ids and singleton coverage", async () => {
+    const state = {
+      sessionId: "session-001",
+      unitId: "finding-relation-graph",
+      outputFormat: "issue-artifact",
+      findingRelationGraphContext: {
+        causal_analysis_finding_ids: [
+          "finding-001",
+          "finding-002",
+          "finding-003",
+        ],
+      },
+    } as const;
+    const [tool] = createRuntimeSubmitTools(state);
+    if (!tool) throw new Error("missing submit tool");
+
+    const schema = tool.input_schema as {
+      required: string[];
+      properties: {
+        relations: {
+          items: {
+            properties: Record<string, unknown>;
+          };
+        };
+        singleton_findings?: unknown;
+      };
+    };
+
+    expect(schema.required).toEqual(["relations"]);
+    expect(schema.properties.singleton_findings).toBeUndefined();
+    expect(schema.properties.relations.items.properties.relation_id).toBeUndefined();
+
+    await tool.execute(
+      {
+        relations: [
+          {
+            from_finding_id: "finding-001",
+            to_finding_id: "finding-002",
+            relation: "same_root_candidate",
+            root_hypothesis: "Both findings share one starting cause.",
+            shared_cause: null,
+            rationale: "The causal paths start from the same evidence-backed cause.",
+            confidence: "medium",
+          },
+        ],
+      },
+      {
+        projectRoot: "/repo",
+        ontoHome: "/repo/.onto",
+        allowedReadRefs: [],
+      },
+    );
+
+    expect(state.artifact).toMatchObject({
+      schema_version: 1,
+      session_id: "session-001",
+      relations: [
+        {
+          relation_id: "rel-001",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+        },
+      ],
+      singleton_findings: [
+        {
+          finding_id: "finding-003",
+          reason:
+            "Runtime projection: no accepted semantic relation covered this causal-analysis finding.",
+        },
+      ],
+    });
+  });
+
+  it("rejects finding-relation-graph runtime-owned submit fields", async () => {
+    const [tool] = createRuntimeSubmitTools({
+      sessionId: "session-001",
+      unitId: "finding-relation-graph",
+      outputFormat: "issue-artifact",
+      findingRelationGraphContext: {
+        causal_analysis_finding_ids: ["finding-001", "finding-002"],
+      },
+    });
+    if (!tool) throw new Error("missing submit tool");
+
+    await expect(
+      tool.execute(
+        {
+          relations: [
+            {
+              relation_id: "rel-user",
+              from_finding_id: "finding-001",
+              to_finding_id: "finding-002",
+              relation: "same_root_candidate",
+              root_hypothesis: "Both findings share one starting cause.",
+              shared_cause: null,
+              rationale: "The causal paths start from the same evidence-backed cause.",
+              confidence: "medium",
+            },
+          ],
+        },
+        {
+          projectRoot: "/repo",
+          ontoHome: "/repo/.onto",
+          allowedReadRefs: [],
+        },
+      ),
+    ).rejects.toThrow(/unsupported field relation_id/);
+
+    await expect(
+      tool.execute(
+        {
+          relations: [],
+          singleton_findings: [],
+        },
+        {
+          projectRoot: "/repo",
+          ontoHome: "/repo/.onto",
+          allowedReadRefs: [],
+        },
+      ),
+    ).rejects.toThrow(/unsupported field singleton_findings/);
+  });
+
+  it("rejects finding-relation-graph relations outside causal-analysis coverage", async () => {
+    const [tool] = createRuntimeSubmitTools({
+      sessionId: "session-001",
+      unitId: "finding-relation-graph",
+      outputFormat: "issue-artifact",
+      findingRelationGraphContext: {
+        causal_analysis_finding_ids: ["finding-001", "finding-002"],
+      },
+    });
+    if (!tool) throw new Error("missing submit tool");
+
+    await expect(
+      tool.execute(
+        {
+          relations: [
+            {
+              from_finding_id: "finding-001",
+              to_finding_id: "finding-999",
+              relation: "same_root_candidate",
+              root_hypothesis: "Invalid endpoint.",
+              shared_cause: null,
+              rationale: "The endpoint is outside the causal-analysis set.",
+              confidence: "medium",
+            },
+          ],
+        },
+        {
+          projectRoot: "/repo",
+          ontoHome: "/repo/.onto",
+          allowedReadRefs: [],
+        },
+      ),
+    ).rejects.toThrow(/to_finding_id must be in causal_analysis_finding_ids/);
+  });
+
   it("keeps issue stance evidence refs out of provider enum schemas", () => {
     const [tool] = createRuntimeSubmitTools({
       sessionId: "session-001",
@@ -300,6 +458,94 @@ issue_dependencies: []
         ".onto/review/session-001/finding-ledger.yaml#finding-005",
       ]),
     );
+  });
+
+  it("allows issue stance evidence refs for relation graph refs touching assigned findings", () => {
+    const context = parseRuntimeSubmitContextForOutputFormat({
+      unitId: "issue-stance:dependency",
+      outputFormat: "issue-stance-response",
+      rawPacketText: `# Issue Stance Response Prompt
+
+requested_lens_id: dependency
+
+## Lens Source Refs
+- .onto/review/session-001/round1/dependency.findings.yaml
+
+## Runtime Issue Stance Input Projection
+\`\`\`yaml
+source_artifact_refs:
+  finding_ledger: .onto/review/session-001/finding-ledger.yaml
+  finding_relation_graph: .onto/review/session-001/finding-relation-graph.yaml
+  issue_ledger: .onto/review/session-001/issue-ledger.yaml
+issues:
+  - issue_id: issue-001
+    evidence_refs: []
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+finding_summaries:
+  - finding_id: finding-001
+    lens_id: logic
+    evidence_refs: []
+  - finding_id: finding-002
+    lens_id: dependency
+    evidence_refs:
+      - .onto/review/session-001/round1/dependency.findings.yaml#dependency-candidate-001
+relation_summaries:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-002
+    relation: duplicates
+singleton_findings: []
+issue_dependencies:
+  - dependency_id: dep-001
+    issue_ids:
+      - issue-001
+      - issue-002
+    relation_refs:
+      - rel-004
+\`\`\`
+`,
+    });
+
+    expect(
+      context.issueStanceSchemaContext?.issue_evidence_refs["issue-001"],
+    ).toEqual(
+      expect.arrayContaining([
+        ".onto/review/session-001/finding-relation-graph.yaml#rel-001",
+        ".onto/review/session-001/finding-relation-graph.yaml#rel-004",
+      ]),
+    );
+  });
+
+  it("parses finding-relation-graph causal-analysis coverage context", () => {
+    const context = parseRuntimeSubmitContextForOutputFormat({
+      unitId: "finding-relation-graph",
+      outputFormat: "issue-artifact",
+      rawPacketText: `# Issue-Stance Artifact Prompt
+
+## Runtime Finding Relation Input Projection
+\`\`\`yaml
+schema_version: 1
+session_id: session-001
+source_artifact_ref: .onto/review/session-001/finding-ledger.yaml
+finding_nodes: []
+causal_analysis_finding_ids:
+  - finding-001
+  - finding-002
+surface_only_finding_ids:
+  - finding-003
+output_policy:
+  accepted_relation_only: true
+  singleton_required_for_unrelated_findings: true
+  coverage_scope: causal_analysis_finding_ids
+\`\`\`
+`,
+    });
+
+    expect(
+      context.findingRelationGraphContext?.causal_analysis_finding_ids,
+    ).toEqual(["finding-001", "finding-002"]);
   });
 
   it("rejects unknown problem-framing classification row fields", async () => {

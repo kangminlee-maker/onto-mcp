@@ -1,6 +1,7 @@
 import path from "node:path";
 import YAML from "yaml";
 import type {
+  RuntimeSubmitFindingRelationGraphContext,
   RuntimeSubmitIssueDeliberationSchemaContext,
   RuntimeSubmitIssueLedgerDependencyContext,
   RuntimeSubmitIssueStanceSchemaContext,
@@ -12,6 +13,7 @@ import type {
 
 type RuntimeSubmitContextFields = Pick<
   RuntimeSubmitState,
+  | "findingRelationGraphContext"
   | "problemFramingContext"
   | "issueLedgerDependencyContext"
   | "issueStanceSchemaContext"
@@ -135,6 +137,22 @@ export function parseRuntimeIssueLedgerDependencyContext(
   return { shared_cause_relations: relations };
 }
 
+export function parseRuntimeFindingRelationGraphContext(
+  rawPacketText: string,
+): RuntimeSubmitFindingRelationGraphContext {
+  const parsed = parseYamlSection({
+    rawPacketText,
+    heading: "## Runtime Finding Relation Input Projection",
+    label: "Runtime Finding Relation Input Projection",
+  });
+  return {
+    causal_analysis_finding_ids: stringArray(
+      parsed.causal_analysis_finding_ids,
+      "Runtime Finding Relation Input Projection.causal_analysis_finding_ids",
+    ),
+  };
+}
+
 function addPromptRefVariants(args: {
   refs: Set<string>;
   artifactRef: string;
@@ -224,6 +242,55 @@ export function parseRuntimeIssueStanceSchemaContext(
       requestedLensFindingRefs.add(evidenceRef);
     }
   }
+  const relationRefsByFindingId = new Map<string, Set<string>>();
+  for (const [index, item] of arrayValue(
+    projection.relation_summaries,
+    "Runtime Issue Stance Input Projection.relation_summaries",
+  ).entries()) {
+    const relation = requireRecord(
+      item,
+      `Runtime Issue Stance Input Projection.relation_summaries[${index}]`,
+    );
+    const relationId = requireStringValue(
+      relation.relation_id,
+      `Runtime Issue Stance Input Projection.relation_summaries[${index}].relation_id`,
+    );
+    const fromFindingId = requireStringValue(
+      relation.from_finding_id,
+      `Runtime Issue Stance Input Projection.relation_summaries[${index}].from_finding_id`,
+    );
+    const toFindingId = requireStringValue(
+      relation.to_finding_id,
+      `Runtime Issue Stance Input Projection.relation_summaries[${index}].to_finding_id`,
+    );
+    for (const findingId of [fromFindingId, toFindingId]) {
+      const refs = relationRefsByFindingId.get(findingId) ?? new Set<string>();
+      refs.add(relationId);
+      relationRefsByFindingId.set(findingId, refs);
+    }
+  }
+  const dependencyRelationRefsByIssueId = new Map<string, Set<string>>();
+  for (const [index, item] of arrayValue(
+    projection.issue_dependencies,
+    "Runtime Issue Stance Input Projection.issue_dependencies",
+  ).entries()) {
+    const dependency = requireRecord(
+      item,
+      `Runtime Issue Stance Input Projection.issue_dependencies[${index}]`,
+    );
+    const relationRefs = stringArray(
+      dependency.relation_refs,
+      `Runtime Issue Stance Input Projection.issue_dependencies[${index}].relation_refs`,
+    );
+    for (const issueId of stringArray(
+      dependency.issue_ids,
+      `Runtime Issue Stance Input Projection.issue_dependencies[${index}].issue_ids`,
+    )) {
+      const refs = dependencyRelationRefsByIssueId.get(issueId) ?? new Set<string>();
+      for (const relationRef of relationRefs) refs.add(relationRef);
+      dependencyRelationRefsByIssueId.set(issueId, refs);
+    }
+  }
   const issueEvidenceRefs: Record<string, string[]> = {};
   for (const [index, item] of arrayValue(
     projection.issues,
@@ -253,12 +320,26 @@ export function parseRuntimeIssueStanceSchemaContext(
       `Runtime Issue Stance Input Projection.issues[${index}].surface_finding_ids`,
     )) {
       addPromptRefVariants({ refs, artifactRef: findingLedgerRef, anchor: findingId });
+      for (const relationId of relationRefsByFindingId.get(findingId) ?? []) {
+        addPromptRefVariants({
+          refs,
+          artifactRef: relationGraphRef,
+          anchor: relationId,
+        });
+      }
     }
     for (const relationId of stringArray(
       issue.relation_refs,
       `Runtime Issue Stance Input Projection.issues[${index}].relation_refs`,
     )) {
       refs.add(relationId);
+      addPromptRefVariants({
+        refs,
+        artifactRef: relationGraphRef,
+        anchor: relationId,
+      });
+    }
+    for (const relationId of dependencyRelationRefsByIssueId.get(issueId) ?? []) {
       addPromptRefVariants({
         refs,
         artifactRef: relationGraphRef,
@@ -402,6 +483,13 @@ export function parseRuntimeSubmitContextForOutputFormat(args: {
   outputFormat: RuntimeSubmitOutputFormat;
 }): Partial<RuntimeSubmitContextFields> {
   if (args.outputFormat === "issue-artifact") {
+    if (args.unitId === "finding-relation-graph") {
+      return {
+        findingRelationGraphContext: parseRuntimeFindingRelationGraphContext(
+          args.rawPacketText,
+        ),
+      };
+    }
     if (args.unitId === "problem-framing") {
       return {
         problemFramingContext: parseRuntimeProblemFramingContext(args.rawPacketText),

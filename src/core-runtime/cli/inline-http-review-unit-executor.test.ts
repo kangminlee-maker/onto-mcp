@@ -320,6 +320,90 @@ describe("runInlineHttpReviewUnitExecutorCli — basic execution", () => {
     expect(result.output_format).toBe("issue-artifact");
     expect(result.tool_calls).toBe(1);
   });
+
+  it("lets semantic_mock relation graph submit only relations while runtime completes singleton coverage", async () => {
+    const outputPath = path.join(sessionRoot, "finding-relation-graph.yaml");
+    const packetPath = writePacket(
+      "finding-relation-graph.packet.md",
+      [
+        "# Finding Relation Graph Prompt Packet",
+        "",
+        "## Runtime Finding Relation Input Projection",
+        "```yaml",
+        "schema_version: 1",
+        `session_id: ${path.basename(sessionRoot)}`,
+        "source_artifact_ref: finding-ledger.yaml",
+        "finding_nodes: []",
+        "causal_analysis_finding_ids:",
+        "  - finding-001",
+        "  - finding-002",
+        "surface_only_finding_ids: []",
+        "output_policy:",
+        "  accepted_relation_only: true",
+        "  singleton_required_for_unrelated_findings: true",
+        "  coverage_scope: causal_analysis_finding_ids",
+        "```",
+        "",
+        "## Boundary Policy",
+        "- Filesystem: read-only",
+        "- Network: denied",
+        "",
+        "## Unit Boundary Details",
+        "```json",
+        JSON.stringify({
+          unit_boundary: {
+            unit_id: "issue-artifact:finding-relation-graph",
+            read_authority: {
+              allowed_read_refs: [sessionRoot],
+            },
+            output_seat: {
+              output_path: outputPath,
+              allowed_output_refs: [outputPath],
+            },
+          },
+        }),
+        "```",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "finding-relation-graph",
+      "--unit-kind", "issue_artifact",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--output-format", "issue-artifact",
+      "--tool-mode", "native",
+      "--provider", "openai",
+      "--model", "mock-model",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const parsed = YAML.parse(readFileSync(outputPath, "utf8"));
+    expect(parsed).toMatchObject({
+      schema_version: 1,
+      session_id: path.basename(sessionRoot),
+      relations: [],
+      singleton_findings: [
+        {
+          finding_id: "finding-001",
+          reason:
+            "Runtime projection: no accepted semantic relation covered this causal-analysis finding.",
+        },
+        {
+          finding_id: "finding-002",
+          reason:
+            "Runtime projection: no accepted semantic relation covered this causal-analysis finding.",
+        },
+      ],
+    });
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.output_format).toBe("issue-artifact");
+    expect(result.tool_calls).toBe(1);
+  });
 });
 
 describe("runInlineHttpReviewUnitExecutorCli — error cases", () => {
