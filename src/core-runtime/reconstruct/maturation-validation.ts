@@ -1621,12 +1621,6 @@ export function validateAnswerSupportLedger(args: {
   const violations: ReconstructMaturationValidationViolation[] = [];
   const questions = questionMap(args.maturationQuestionFrontier);
   const evidenceIndex = evidenceRefIndex(args.sourceObservations);
-  const fallbackDeltaObservationIds = new Set(
-    args.sourceObservationDelta?.added_observation_ids ?? [],
-  );
-  const fallbackReenteredObservationIds = new Set(
-    args.sourceObservationReentryValidation?.reentered_observation_ids ?? [],
-  );
   const lineageObservationIds = new Set(
     args.sourceObservationLineageIndex?.lineage_rows.flatMap((row) =>
       row.added_observation_ids
@@ -1674,6 +1668,12 @@ export function validateAnswerSupportLedger(args: {
         observation.observation_batch_id ||
         observation.triggering_frontier_validation_ref,
     )
+  );
+  const hasDeltaOrReentryAuthority = Boolean(
+    args.sourceObservationDelta ||
+      args.sourceObservationDeltaRef ||
+      args.sourceObservationReentryValidation ||
+      args.sourceObservationReentryValidationRef,
   );
   if (ledger.session_id !== args.maturationQuestionFrontier.session_id) {
     violations.push(violation({
@@ -1751,6 +1751,17 @@ export function validateAnswerSupportLedger(args: {
       message:
         "lineage-marked source-backed evidence requires source observation lineage index authority before answer support consumption",
       subjectId: args.answerSupportLedgerRef ?? null,
+    }));
+  }
+  if (hasDeltaOrReentryAuthority && !args.sourceObservationLineageIndex) {
+    violations.push(violation({
+      code: "missing_required_ref",
+      message:
+        "answer support ledger requires source observation lineage index authority when delta or re-entry authority is present",
+      subjectId: args.sourceObservationDeltaRef ??
+        args.sourceObservationReentryValidationRef ??
+        args.answerSupportLedgerRef ??
+        null,
     }));
   }
   if (
@@ -1923,22 +1934,38 @@ export function validateAnswerSupportLedger(args: {
           subjectId: cluster.evidence_cluster_id,
         }));
       }
+      const observation = sourceObservationsById.get(ref.observation_id);
       const lineageRow = args.sourceObservationLineageIndex?.lineage_rows.find((
         row,
       ) => row.added_observation_ids.includes(ref.observation_id)) ?? null;
+      const refCarriesLineage = Boolean(
+        observation?.round_id ||
+          observation?.observation_batch_id ||
+          observation?.triggering_frontier_validation_ref,
+      );
+      if (
+        refCarriesLineage &&
+        args.sourceObservationLineageIndex &&
+        !lineageRow
+      ) {
+        violations.push(violation({
+          code: "missing_required_ref",
+          message:
+            "lineage-marked source evidence must resolve through the source observation lineage index",
+          subjectId: ref.observation_id,
+        }));
+      }
       const isFrontierTriggeredObservation =
-        args.sourceObservationLineageIndex
-          ? lineageObservationIds.has(ref.observation_id)
-          : fallbackDeltaObservationIds.has(ref.observation_id);
+        lineageObservationIds.has(ref.observation_id);
       if (isFrontierTriggeredObservation) {
         const reentryValidation = lineageRow
           ? reentryValidationsByRef.get(
             lineageRow.source_observation_reentry_validation_ref,
           )
-          : args.sourceObservationReentryValidation ?? null;
-        const reenteredObservationIds = lineageRow
-          ? new Set(reentryValidation?.reentered_observation_ids ?? [])
-          : fallbackReenteredObservationIds;
+          : null;
+        const reenteredObservationIds = new Set(
+          reentryValidation?.reentered_observation_ids ?? [],
+        );
         if (
           !reentryValidation ||
           reentryValidation.validation_status !== "valid" ||
@@ -1953,7 +1980,6 @@ export function validateAnswerSupportLedger(args: {
         }
       }
       if (args.sourceSafetyLedger) {
-        const observation = sourceObservationsById.get(ref.observation_id);
         const expectedSafetyRowId = observation
           ? sourceSafetyRowIdForObservation(observation, "evidence_support")
           : null;

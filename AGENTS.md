@@ -5,6 +5,41 @@
 
 ---
 
+## 0. 비협상 규칙 (INVARIANTS)
+
+1. **매 작업·루프 시작 시 `INVARIANTS.md`를 다시 읽고**, 지금 만들려는 변경이 어떤 불변식에
+   닿는지 먼저 점검한다. 닿는다면 멈추고 사용자에게 확인한다.
+
+2. **다음 변경은 자동 반영하지 않는다. 멈추고 사용자 확인을 받는다.**
+   - 인증 방식 또는 그 기본값
+   - `.onto/settings.json` 스키마
+   - 파이프라인 단계의 출력 계약/스키마
+   - material issue의 정의·판정 기준
+
+3. **기본값·인증·보안 값을 "편의상" 바꾸지 않는다.** 벤치마크·테스트 편의도 사유가 되지 않는다.
+   필요하면 명시적 옵션(`--auth api_key` 등)으로만 노출한다.
+
+4. **테스트 기대값을 바꿀 때는 "명세가 이렇게 바뀌어서"를 근거로 명시한다.**
+   "코드가 지금 이렇게 동작하니까"는 사유로 인정하지 않는다.
+
+5. **비교 실험은 한 번에 한 변수만 바꾼다.** 결정 근거 수치에는 반복 횟수·fixture 수·분산을
+   반드시 병기한다. 표본 1회는 "예비 관찰"이며 결정 근거로 쓰지 않는다.
+
+6. **mock은 검증 realization이지 제품 의미 경로가 아니다.** wiring, schema, artifact
+   contract, deterministic projection, retry/failure, harness 안정성 검증에는 명시적
+   selector로 사용할 수 있다. materiality 판단, causal reasoning, semantic quality,
+   제품 완료 증거는 실제 semantic path로만 검증한다. mock/fixture payload는 지정
+   test-fixture boundary에 두고, 운영 코드는 그 boundary를 import하지 않는다. 생성된
+   artifact는 `artifact_generation_realization`과 semantic quality evidence를 provenance로
+   기록한다.
+
+7. **무인 루프는 상한(턴/시간/파일 수)에 도달하면 멈추고**, 변경 요약과 INVARIANTS 대조 결과를
+   보고한 뒤 다음 지시를 기다린다.
+
+8. **최적화가 재설계로 커지면**, 원래 성공기준("품질 손상 없음")을 새 스코프에서 다시 측정한다.
+
+---
+
 ## 1. Position
 
 이 레포는 `onto` 프로토타입을 보존하면서 `ontology as code` 기준으로 서비스화하는 전환 레포다. 현재 제품 방향은 TS core를 유지하고 Codex/Claude/기타 host가 호출할 수 있는 MCP-native tool surface를 추가하는 것이다.
@@ -34,6 +69,9 @@
 | `.onto/authority/` | canonical data — 개념 SSOT + 런타임 설정 + 온보딩 보조 | 포함 |
 | `.onto/principles/` | 개발 규범 — 설계·구현 원칙 (rank 2~4) | 제외 |
 | `development-records/` | 개발 이력 — 감사, 설계, 추적, handoff 기록 | 제외 |
+
+`.onto/review/*`는 실행 세션 산출물이다. 세션 artifact 자체를 조사하는 작업이 아니라면
+runtime naming, code audit, docs audit, migration 대상 검색에서 항상 제외한다.
 
 target material 관련 작업 시 추가로 읽을 문서:
 
@@ -132,12 +170,14 @@ DO:
 3. 계약된 출력만 낸다
 4. 독립적으로 판단한다
 
-현재 wired execution profile:
+현재 active execution profile:
 
 - `main-workers` + Codex worker
 - `main-workers` + direct-call provider
-- `main-workers` + mock executor
-- `nested-workers` + Codex worker bridge
+
+`nested-workers` + Codex worker bridge는 profile concept로 남아 있지만 active
+product path에서는 sidecar structured output, read-only lens execution,
+bounded dispatch 계약을 강제하지 못하므로 pre-dispatch에서 fail-loud한다.
 
 기준 문서:
 
@@ -188,12 +228,15 @@ issue-stance deliberation target artifact:
 
 core 제품화 계층은 TypeScript다.
 
-주요 entrypoint:
+현재 host-facing review entrypoint는 MCP tool call이다.
 
-- `npm run review:invoke -- ...` (preferred)
-- `npm run review:start-session -- ...`
-- `npm run review:run-prompt-execution -- ...`
-- `npm run review:complete-session -- ...`
+- `onto_review` — review 실행
+- `onto_prepare_review` — 실행 전 session과 prompt packet 준비
+- `onto_review_status` — 진행/상태 조회
+- `onto_review_result` — 완료 결과 조회
+
+`onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
+`src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter와 live E2E 검증 entry로만 취급한다.
 
 관련 설정: [package.json](/Users/kangmin/cowork/onto-mcp/package.json), [tsconfig.json](/Users/kangmin/cowork/onto-mcp/tsconfig.json)
 
@@ -216,7 +259,26 @@ core 제품화 계층은 TypeScript다.
 - `src/core-api/`는 기존 runtime을 library처럼 부르는 facade다.
 - `src/mcp/`는 tool schema와 server surface만 소유한다.
 - Provider execution은 현재 `src/core-runtime/cli`와 `src/core-runtime/llm`의 bounded adapters가 소유한다.
-- External host integration은 evidence 또는 conformance harness로만 취급한다.
+- External host integration은 실제 runtime/provider 경로로 검증한다.
+
+---
+
+## 9.1 Actual Environment And Mock Realization Testing
+
+onto의 테스트는 evidence class를 분리한다.
+
+- LLM/provider 호출이 제품 경로에 포함되면 제품 behavior, materiality judgment,
+  causal reasoning, semantic quality는 실제 semantic path에서 검증한다.
+- mock, fake, stub, fixture, prepare-only dispatch는 wiring, schema, artifact
+  contract, deterministic projection, retry/failure, harness 안정성 검증에 사용할 수
+  있다.
+- mock-backed check는 verification support evidence로 보고하고, product completion,
+  E2E completion, semantic quality evidence와 분리한다.
+- fixture는 입력 데이터와 expected invariant를 제공할 수 있지만, semantic 판단이나
+  provider integration 완료 증거를 대체하지 않는다.
+- review artifact는 `review.execution.artifact_generation_realization`으로 생성 경로를
+  명시하고, mock/fixture 계열의 semantic quality는 `not_applicable`로 기록한다.
+- 실제 호출이 불가능하면 product-path evidence는 blocked/degraded로 기록한다.
 
 기준 문서:
 

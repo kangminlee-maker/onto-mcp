@@ -32,8 +32,8 @@ describe("loadCoreLensRegistry — core-axis composition contract (v0.2.1)", () 
   // These assertions lock the v0.2.1 cost-constrained Pareto-optimal
   // composition into a test so that any future registry edit that changes
   // the core-axis set must also update this test (intentional checkpoint).
-  // SSOT: .onto/authority/core-lens-registry.yaml; empirical basis:
-  // development-records/benchmark/20260419-lens-contribution-analysis.md.
+  // SSOT: .onto/authority/core-lens-registry.yaml. Historical recomposition
+  // evidence is not a runtime test dependency.
   const registry = loadCoreLensRegistry();
 
   it("core_axis_lens_ids contains exactly the v0.2.1 6-lens set", () => {

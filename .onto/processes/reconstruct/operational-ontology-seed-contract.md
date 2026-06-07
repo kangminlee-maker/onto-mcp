@@ -683,7 +683,7 @@ Allowed `dynamic_boundaries[].boundary_kind` values:
 | `runtime_context` | environment, tenant, session, config, time, or runtime condition |
 | `external_dependency` | external system, provider, standard, or authority changes the answer |
 | `unresolved_decision` | user/product/domain decision is needed before the ontology may claim closure |
-| `failure_mode` | failure, timeout, fallback, or degradation behavior changes the answer |
+| `failure_mode` | failure, timeout, recovery, or degradation behavior changes the answer |
 
 ## 10. Data Binding Layer
 

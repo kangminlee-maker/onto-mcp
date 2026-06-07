@@ -1,7 +1,7 @@
 name: Knowledge Graph
 version: 1
 description: Simple graph-structured knowledge graph ontology. Classifies entities by entity_type, expresses relationships with Relations, and auxiliary attributes such as actors/policies with Properties.
-golden_reference: golden/c-knowledge-graph.yaml
+golden_reference: c-knowledge-graph.yaml
 sections:
   - name: entities
     description: "Domain entity definition. Types distinguished by entity_type (domain_object, enum, state_machine, etc.)"

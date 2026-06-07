@@ -5,8 +5,8 @@
 - Existing TS `onto` runtime is preserved.
 - `.onto` YAML/MD assets remain the language-neutral contract.
 - New repo direction is TS core + MCP-native tool surface.
-- External adapter experiments are evidence and conformance input, not the main
-  product path.
+- External adapter experiments are development input only; product evidence
+  comes from the actual runtime/provider path.
 
 ## Stage 1 — Core API Facade
 
@@ -24,15 +24,15 @@ Done when:
 
 - `src/mcp/` exposes stable tool schemas.
 - A local MCP server can list tools and route calls into the core API.
-- `onto.review`, `onto.review_status`, and `onto.review_result` work with a
-  mock/local provider.
+- `onto_review`, `onto_review_status`, and `onto_review_result` work with
+  Codex OAuth and configured local/API direct-call providers.
 
 ## Stage 3 — Execution Profiles
 
 Done when:
 
-- `settings.json` resolves to worker, direct-call, or mock execution.
-- Local/mock and Codex worker paths have conformance tests.
+- `settings.json` resolves to Codex worker or direct-call execution.
+- Local/API direct-call and Codex worker paths have live environment tests.
 - Additional provider guarantees are documented before implementation.
 
 ## Stage 4 — Controlled Deliberation
@@ -51,10 +51,10 @@ Done when:
 - The shared `PipelineExecutionLedger` contract is implemented as a derived
   trust/provenance projection for `review`, with the same shape reserved for
   `reconstruct`, future `evolve`, and later onto pipelines.
-- `onto.review_status` exposes a derived pipeline execution ledger that marks
+- `onto_review_status` exposes a derived pipeline execution ledger that marks
   artifact trust boundaries and feeds the continuation plan for prepared and
   halted review sessions.
-- `onto.review_continue` continues a session from existing artifacts by running
+- `onto_review_continue` continues a session from existing artifacts by running
   only failed or missing review units.
 - Completed unit outputs are reused and completed unit overwrite attempts are
   rejected.
@@ -76,18 +76,18 @@ Done when:
 - Runtime validates claim realization, confirmation-derived claim sets,
   competency-question assessment, failure classification, revision proposal, and
   final-output provenance without authoring ontology meaning.
-- `onto.reconstruct_status` and `onto.reconstruct_result` expose bounded facts,
+- `onto_reconstruct_status` and `onto_reconstruct_result` expose bounded facts,
   counts, liveness, and artifact refs for host-rendered progress and final
   output.
-- A fixture run produces the full post-Seed artifact set and validates
+- A live provider run produces the full post-Seed artifact set and validates
   `reconstruct-record.yaml`.
 
 ## Stage 5 — Migration And Cleanup
 
 Done when:
 
-- External parity prototype code is either archived, converted into
-  conformance fixtures, or replaced by provider tests.
+- External parity prototype code is either archived or replaced by live
+  provider tests.
 - User-facing docs describe MCP tool usage as the primary integration path.
 - Any new remote repository is configured intentionally; old local repos remain
   as references until migration is complete.

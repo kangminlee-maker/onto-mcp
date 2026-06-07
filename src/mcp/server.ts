@@ -67,6 +67,9 @@ interface JsonRpcRequest {
 
 type McpProgressToken = string | number;
 
+const MCP_COMPACT_SIGNAL_MAX_CHARS = 360;
+const MCP_COMPACT_ID_MAX_CHARS = 120;
+
 interface ToolDefinition {
   [key: string]: JsonValue;
   name: OntoToolName;
@@ -144,10 +147,11 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       enum: ["controlled_lens_deliberation"],
       description: "Controlled lens-to-lens deliberation under teamlead authority. This is the default review path.",
     },
-    executorRealization: {
+    executionRoute: {
       type: "string",
-      enum: ["codex", "mock", "ts_inline_http"],
-      description: "Debug/testing override. Normal callers should omit this and use project config.",
+      enum: ["external_oauth_worker", "direct_model_call"],
+      description:
+        "Optional canonical review execution route override. Normal callers should omit this and use project settings.",
     },
     confirmValueAlignment: {
       type: "boolean",
@@ -208,11 +212,15 @@ const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
     },
     domain: {
       type: "string",
-      description: "Optional latest-session canonical or alias domain filter.",
+      description: "Optional latest-session canonical domain filter.",
     },
     requestHash: {
       type: "string",
       description: "Optional latest-session request hash filter returned by a run handle.",
+    },
+    createdAfter: {
+      type: "string",
+      description: "Optional latest-session lower bound ISO timestamp.",
     },
     limit: {
       type: "number",
@@ -222,7 +230,7 @@ const REVIEW_STATUS_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Status payload size. Default full returns the complete status and can be large (tens of KB); pass compact for a small status (session id, status, run control, artifact refs, route summary) suited to token-limited hosts, or standard to also keep a trimmed pipeline ledger and continuation summary. For final results prefer onto_review_result.",
+        "Status payload size. Default standard keeps a trimmed pipeline ledger and continuation summary. Pass compact for a smaller polling payload, or full only when complete status internals are required. For final results prefer onto_review_result.",
     },
   },
 };
@@ -237,7 +245,7 @@ const REVIEW_RESULT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["compact", "standard", "full"],
       description:
-        "Result projection size. compact omits final output text and ReviewRecord; full includes complete artifacts.",
+        "Result projection size. compact and standard omit final output text and ReviewRecord; full includes complete artifacts.",
     },
   },
 };
@@ -260,18 +268,18 @@ const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
       type: "array",
       items: { type: "string" },
       description:
-        "Optional current frontier unit ids or public aliases such as lens:logic and deliberation:logic. Omit to use the full ledger-derived first untrusted frontier.",
+        "Optional exact current frontier unit ids from the pipeline execution ledger. Omit to use the full ledger-derived first untrusted frontier.",
     },
     requestText: {
       type: "string",
       description:
         "Optional original request text for final ReviewRecord assembly when the session was only prepared.",
     },
-    executorRealization: {
+    executionRoute: {
       type: "string",
-      enum: ["codex", "mock", "ts_inline_http"],
+      enum: ["external_oauth_worker", "direct_model_call"],
       description:
-        "Executor realization for resumed units. Required for prepared sessions that have no prior review-run-manifest.",
+        "Canonical route for resumed units. Required only for prepared sessions that have no prior review-run-manifest.",
     },
   },
 };
@@ -404,19 +412,19 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
       type: "string",
       enum: ["fresh", "reuse_existing_authored_artifacts"],
       description:
-        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove compatibility.",
+        "Optional promoted resume mode. fresh rejects same-session duplicate starts; reuse_existing_authored_artifacts admits a same-request resume attempt only when authored-artifact provenance can prove a current match.",
     },
     semanticAuthorRealization: {
       type: "string",
-      enum: ["mock", "direct_call"],
+      enum: ["direct_call"],
       description:
-        "Explicit semantic author realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
+        "Explicit semantic author realization. direct_call uses configured llm provider.",
     },
     confirmationProviderRealization: {
       type: "string",
-      enum: ["mock", "direct_call"],
+      enum: ["direct_call"],
       description:
-        "Explicit confirmation provider realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
+        "Explicit confirmation provider realization. direct_call uses configured llm provider.",
     },
   },
 };
@@ -528,13 +536,13 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: "onto_review_status",
     description:
-      "Read structured status and artifact refs for a review session, or recover the latest matching session. The default payload is complete and can be large; pass projectionLevel=compact for a small status in token-limited hosts.",
+      "Read structured status and artifact refs for a review session, or recover the latest matching session. The default payload is bounded; pass projectionLevel=full only when complete status internals are required.",
     inputSchema: REVIEW_STATUS_INPUT_SCHEMA,
   },
   {
     name: "onto_review_result",
     description:
-      "Read the ReviewRecord and rendered final output for a completed review session with compact/standard/full projections.",
+      "Read bounded result projections for a completed review session. compact and standard omit final output text and ReviewRecord; full includes complete artifacts.",
     inputSchema: REVIEW_RESULT_INPUT_SCHEMA,
   },
   {
@@ -605,15 +613,16 @@ configured. For review, set full actor \`llm\` blocks in
           "actors": {
             "teamlead": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
             "lens": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5" } },
-            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "xhigh" } }
+            "synthesize": { "llm": { "auth": "oauth", "provider": "openai", "model": "gpt-5.5", "effort": "medium" } }
           }
         }
       }
     }
 
-Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
-that API; local+lmstudio -> local endpoint. Review execution may be pinned with
-\`review.execution.executor\` or left as \`auto\`. Listing tools needs no provider.
+Switcher axes: auth oauth+openai -> external OAuth worker; api_key+openai|anthropic|grok ->
+that provider API. local+lmstudio+model_id is reserved/future and not advertised
+as a current MCP review path. Review execution may be left as \`auto\` and is
+reported through canonical route visibility. Listing tools needs no provider.
 
 ## Review — happy path
 
@@ -621,10 +630,11 @@ that API; local+lmstudio -> local endpoint. Review execution may be pinned with
    reviewMode ("core-axis" cheaper, "full"), domain or noDomain=true, lensIds.
 2. review is long-running. If the result status is "running", it returns a run
    handle; poll \`onto_review_status\` (same sessionRoot, or latest=true) until
-   status="completed". onto_review_status default payload is large — pass
-   projectionLevel="compact" in token-limited hosts.
+   status="completed". Default status is bounded; pass projectionLevel="compact"
+   for the smallest polling payload.
 3. Read \`onto_review_result\` (projectionLevel compact|standard|full) for the
-   ReviewRecord + final output. Present using the result's llmPresentation prompts.
+   bounded result. Use \`full\` only when you need the ReviewRecord and final
+   output text. Present using the result's llmPresentation prompts.
 
 Other review tools: \`onto_prepare_review\` (materialize without executing) then
 \`onto_review_continue\`; \`onto_review_cancel\` to stop a running session.
@@ -760,8 +770,8 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
     ...(parsed.noDomain !== undefined ? { noDomain: parsed.noDomain } : {}),
     ...(parsed.reviewMode !== undefined ? { reviewMode: parsed.reviewMode } : {}),
     ...(parsed.lensIds !== undefined ? { lensIds: parsed.lensIds } : {}),
-    ...(parsed.executorRealization !== undefined
-      ? { executorRealization: parsed.executorRealization }
+    ...(parsed.executionRoute !== undefined
+      ? { executionRoute: parsed.executionRoute }
       : {}),
     ...(parsed.confirmValueAlignment !== undefined
       ? { confirmValueAlignment: parsed.confirmValueAlignment }
@@ -784,12 +794,11 @@ function formatToolResult(data: unknown): JsonValue {
 type ReviewStatusProjection = "compact" | "standard" | "full";
 
 /**
- * Trim an onto_review_status payload for token-limited hosts. `full` (default)
- * returns the status unchanged. `compact` keeps only small top-level facts;
- * `standard` additionally keeps a trimmed pipeline ledger (unit id/kind/status/
- * trust) and a continuation summary (ids only). The largest fields
- * (`llmPresentation`, full ledger refs/hashes, full continuation objects) are
- * dropped below `full`. For final results use onto_review_result.
+ * Trim an onto_review_status payload for token-limited hosts. `standard`
+ * is the default and keeps a trimmed pipeline ledger plus continuation summary.
+ * `compact` keeps only small top-level facts. `full` returns the status
+ * unchanged and should be requested only when complete internals are required.
+ * For final results use onto_review_result.
  */
 function projectReviewStatus(status: unknown, level: ReviewStatusProjection): unknown {
   if (level === "full") return status;
@@ -809,6 +818,7 @@ function projectReviewStatus(status: unknown, level: ReviewStatusProjection): un
     "runControl",
     "targetMaterialSupport",
     "environmentWarnings",
+    "unitProgress",
     "latestSessionMatches",
   ];
   for (const key of keepKeys) {
@@ -932,6 +942,49 @@ function structuredFailureFromError(error: unknown): {
   return null;
 }
 
+function compactText(value: string, maxChars = MCP_COMPACT_SIGNAL_MAX_CHARS): string {
+  const oneLine = value.replace(/\s+/g, " ").trim();
+  if (oneLine.length <= maxChars) return oneLine;
+  return `${oneLine.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+}
+
+function compactFailureDetails(details: unknown): string {
+  try {
+    return compactText(JSON.stringify(details ?? {}));
+  } catch {
+    return "[unserializable failure details]";
+  }
+}
+
+function compactArtifactRefs(
+  artifactRefs: Record<string, string>,
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(artifactRefs).map(([key, value]) => [
+      compactText(key, MCP_COMPACT_ID_MAX_CHARS),
+      compactText(value),
+    ]),
+  );
+}
+
+function projectStructuredFailureForError(
+  failure: ReviewStructuredFailureRecord,
+): JsonValue {
+  return {
+    failure_id: compactText(failure.failure_id, MCP_COMPACT_ID_MAX_CHARS),
+    phase: compactText(failure.phase, MCP_COMPACT_ID_MAX_CHARS),
+    reason_code: compactText(failure.reason_code, MCP_COMPACT_ID_MAX_CHARS),
+    human_message: compactText(failure.human_message),
+    required_user_action: compactText(failure.required_user_action),
+    retry_safety: failure.retry_safety,
+    dispatch_state: failure.dispatch_state,
+    mcp_error_code: compactText(failure.mcp_error_code, MCP_COMPACT_ID_MAX_CHARS),
+    details_kind: failure.details_kind,
+    details_signal: compactFailureDetails(failure.details),
+    artifact_refs: compactArtifactRefs(failure.artifact_refs),
+  };
+}
+
 async function formatToolError(error: unknown): Promise<JsonValue> {
   const message = error instanceof Error ? error.message : String(error);
   if (error instanceof ReviewContinuationError) {
@@ -956,7 +1009,7 @@ async function formatToolError(error: unknown): Promise<JsonValue> {
     ...(structuredFailure
       ? {
           structuredContent: {
-            failure: structuredFailure.failure as unknown as JsonValue,
+            failure: projectStructuredFailureForError(structuredFailure.failure),
             failureRecordPath: structuredFailure.failureRecordPath,
             ...(routeVisibility
               ? { routeVisibility: routeVisibility as unknown as JsonValue }
@@ -1343,8 +1396,8 @@ async function callTool(
           ...(parsed.requestText !== undefined
             ? { requestText: parsed.requestText }
             : {}),
-          ...(parsed.executorRealization !== undefined
-            ? { executorRealization: parsed.executorRealization }
+          ...(parsed.executionRoute !== undefined
+            ? { executionRoute: parsed.executionRoute }
             : {}),
         });
         return formatToolResult(result);
@@ -1366,7 +1419,7 @@ async function callTool(
       }
       case "onto_review_status": {
         const parsed = OntoReviewStatusInputSchema.parse(args);
-        const statusProjection = parsed.projectionLevel ?? "full";
+        const statusProjection = parsed.projectionLevel ?? "standard";
         const projectRoot = resolveProjectRoot(parsed.projectRoot);
         if (parsed.sessionRoot) {
           const sessionRoot = await resolveAllowedSessionRoot({
@@ -1375,7 +1428,9 @@ async function callTool(
           });
           return formatToolResult(
             projectReviewStatus(
-              await reviewApi.getReviewStatus(sessionRoot),
+              await reviewApi.getReviewStatus(sessionRoot, {
+                projectionLevel: statusProjection,
+              }),
               statusProjection,
             ),
           );
@@ -1386,6 +1441,9 @@ async function callTool(
           ...(parsed.domain !== undefined ? { domain: parsed.domain } : {}),
           ...(parsed.requestHash !== undefined
             ? { requestHash: parsed.requestHash }
+            : {}),
+          ...(parsed.createdAfter !== undefined
+            ? { createdAfter: parsed.createdAfter }
             : {}),
           ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
         });
@@ -1408,7 +1466,9 @@ async function callTool(
         return formatToolResult(
           projectReviewStatus(
             {
-              ...(await reviewApi.getReviewStatus(sessionRoot)),
+              ...(await reviewApi.getReviewStatus(sessionRoot, {
+                projectionLevel: statusProjection,
+              })),
               latestSessionMatches,
             },
             statusProjection,

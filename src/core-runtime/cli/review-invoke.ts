@@ -33,18 +33,36 @@ import {
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
 import { isOntoRoot, resolveOntoHome } from "../discovery/onto-home.js";
 import { resolveInstallationPath } from "../discovery/installation-paths.js";
-import { resolveSettingsChain, type OntoConfig } from "../discovery/settings-chain.js";
+import {
+  REVIEW_EXECUTION_UNIT_IDS,
+  resolveSettingsChain,
+  type OntoConfig,
+  type ReviewExecutionUnitId,
+} from "../discovery/settings-chain.js";
 import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   isPathInsideRoot,
   isPathInsideRootRealpathAwareSync,
 } from "../path-boundary.js";
-import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
 import {
+  isDirectModelCallSelection,
+  isExternalOauthWorkerSelection,
+  normalizeLlmModelSwitcher,
+  type LlmBillingMode,
+  type LlmExecutionAdapter,
+  type LlmExecutionRoute,
+  type LlmProviderName,
+  type LlmWireFormat,
+} from "../llm/model-switcher.js";
+import {
+  effectiveReviewUnitLlmRef,
   resolveReviewExecutionProfile,
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
-import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
+import {
+  buildReviewExecutionRoute,
+  buildReviewRuntimeRouteArtifactProjection,
+} from "../review/review-execution-route.js";
 import {
   prepareReviewInvocationArgv,
   runReviewInvocationArgv,
@@ -59,16 +77,13 @@ import {
 import { assessComplexity, selectLenses } from "./complexity-assessment.js";
 
 /**
- * Executor realization for review unit execution.
+ * Debug-only legacy executor realization for review unit execution.
  *
- * - "codex":           Codex worker executor (codex-review-unit-executor.ts)
- * - "mock":            in-process deterministic stub (mock-review-unit-executor.ts)
- * - "ts_inline_http":  TS process directly calls LLM HTTP endpoint (Phase 2 of host
- *                      runtime decoupling). Selected automatically when
- *                      OntoConfig.llm selects an API-key/local provider.
- *                      See `inline-http-review-unit-executor.ts`.
+ * Product callers should use actor-owned LLM settings and canonical
+ * execution_route projections. This remains as a CLI/debug adapter switch until
+ * the argv harness is retired.
  */
-export type ExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ExecutorRealization = "codex" | "ts_inline_http";
 type ReviewTargetScopeKind = "file" | "directory" | "bundle";
 type ReviewMode = "core-axis" | "full";
 type BoundaryDecisionAction = "approve_external_boundary" | "rerun_target" | "cancel";
@@ -122,6 +137,13 @@ export interface ReviewInvokeRouteSummary {
     worker_executor: ReviewExecutionProfile["worker_executor"];
     deliberation: ReviewExecutionProfile["deliberation"];
     runtime_route: {
+      execution_route: LlmExecutionRoute;
+      execution_adapter: LlmExecutionAdapter;
+      model_provider: LlmProviderName | null;
+      model_id?: string;
+      base_url?: string;
+      wire_format?: LlmWireFormat;
+      billing_mode: LlmBillingMode;
       execution_realization: "worker" | "direct-call";
       host_runtime: ReviewInvokeRouteSummary["host_runtime"];
       worker_executor: ReviewExecutionProfile["worker_executor"];
@@ -131,10 +153,11 @@ export interface ReviewInvokeRouteSummary {
     model?: string;
     effort?: string;
     service_tier?: string;
+    retry?: ReviewExecutionProfile["retry"];
   };
   review_mode: ReviewMode;
   max_concurrent_lenses: number;
-  concurrency_strategy: "all_lenses_parallel";
+  concurrency_strategy: "all_lenses_parallel" | "bounded_lens_parallel";
   synthesize_waits_for_all_lenses: true;
 }
 
@@ -159,7 +182,9 @@ export interface ReviewResultClosureSummary {
 
 export interface ReviewResultExplanationSummary {
   final_review_result: string;
+  boundary_notes: string;
   screen_lines: string[];
+  boundary_screen_lines: string[];
 }
 
 // Lens IDs derived from .onto/authority/core-lens-registry.yaml (single source of truth)
@@ -247,7 +272,6 @@ function requireString(
 
 const EXECUTOR_SCRIPT_FILENAMES: Record<ExecutorRealization, string> = {
   codex: "codex-review-unit-executor",
-  mock: "mock-review-unit-executor",
   ts_inline_http: "inline-http-review-unit-executor",
 };
 
@@ -326,20 +350,15 @@ function applyExecutorOverrideToProfile(
     argv,
     "executor-realization",
   );
-  if (explicitRealization === "mock") {
-    return {
-      ...profile,
-      worker_executor: "mock",
-      host: "standalone",
-      trace: [...profile.trace, "worker executor overridden by --executor-realization=mock"],
-    };
-  }
   if (explicitRealization === "codex") {
     return {
       ...profile,
       worker_executor: "codex",
       host: "codex",
-      trace: [...profile.trace, "worker executor overridden by --executor-realization=codex"],
+      trace: [
+        ...profile.trace,
+        "debug worker executor overridden by --executor-realization=codex",
+      ],
     };
   }
   if (explicitRealization === "ts_inline_http") {
@@ -349,7 +368,7 @@ function applyExecutorOverrideToProfile(
       host: profile.provider ?? profile.host,
       trace: [
         ...profile.trace,
-        "worker executor overridden by --executor-realization=ts_inline_http",
+        "debug worker executor overridden by --executor-realization=ts_inline_http",
       ],
     };
   }
@@ -375,7 +394,7 @@ function displaySettingValue(value: string | undefined | null): string {
 function displayActorLlmRef(
   value: ReviewExecutionProfile["teamlead"]["llm"],
 ): string {
-  if (value === "inherit") return "inherit";
+  if (!value) return "(unset)";
   return [
     `auth=${displaySettingValue(value.auth)}`,
     `provider=${displaySettingValue(value.provider)}`,
@@ -453,7 +472,7 @@ function renderReviewStartPreview(args: {
     `  teamlead_seat: ${reviewExecutionProfile.teamlead.seat}`,
     `  lens_seat: ${reviewExecutionProfile.lens.seat}`,
     `  deliberation: ${reviewExecutionProfile.deliberation}`,
-    `  max_concurrent_lenses: ${setup.maxConcurrentLenses} (all selected lenses)`,
+    `  max_concurrent_lenses: ${setup.maxConcurrentLenses}`,
     "model:",
     `  auth: ${displaySettingValue(reviewExecutionProfile.auth)}`,
     `  provider: ${displaySettingValue(reviewExecutionProfile.provider)}`,
@@ -473,10 +492,10 @@ function renderReviewStartPreview(args: {
   ].join("\n");
 }
 
-function stringValue(value: unknown, fallback = "unknown"): string {
+function stringValue(value: unknown, defaultValue = "unknown"): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
-    : fallback;
+    : defaultValue;
 }
 
 function countStringValues(values: string[]): Record<string, number> {
@@ -555,7 +574,9 @@ export async function readReviewResultExplanationSummary(
     const unavailable = "- final output unavailable";
     return {
       final_review_result: unavailable,
+      boundary_notes: unavailable,
       screen_lines: renderScreenBoundedLines(unavailable),
+      boundary_screen_lines: renderScreenBoundedLines(unavailable),
     };
   }
 
@@ -567,10 +588,18 @@ export async function readReviewResultExplanationSummary(
       "Overall Result Explanation",
       "Review Result Explanation",
     ]) ?? "- final review result section unavailable";
+  const boundaryNotes =
+    extractMarkdownSectionByHeadings(finalOutputText, [
+      "Boundary Notes",
+      "Boundary Limitations",
+      "Evidence Gaps",
+    ]) ?? "- boundary notes section unavailable";
 
   return {
     final_review_result: finalReviewResult,
+    boundary_notes: boundaryNotes,
     screen_lines: renderScreenBoundedLines(finalReviewResult),
+    boundary_screen_lines: renderScreenBoundedLines(boundaryNotes, 5),
   };
 }
 
@@ -675,6 +704,8 @@ function renderReviewResultOverview(args: {
     "result_explanation:",
     "  final_review_result:",
     ...args.explanationSummary.screen_lines,
+    "  boundary_notes:",
+    ...args.explanationSummary.boundary_screen_lines,
     "issues:",
     `  count: ${args.closureSummary.issue_count}`,
     `  highest_severity: ${args.closureSummary.highest_severity ?? "none"}`,
@@ -817,18 +848,8 @@ function appendExecutorModelArgs(
   ontoConfig?: OntoConfig,
   llmRef?: ReviewExecutionProfile["synthesize"]["llm"],
 ): ReviewUnitExecutorConfig {
-  // Mock executor does not accept --model/--reasoning-effort flags.
-  // Skip model/effort args when the executor targets the mock script.
-  // Note: with the direct-executor path strategy, bin is "node" / "tsx" and
-  // the mock filename lives in args[0] (the script path), so we have to
-  // probe both fields.
-  const isMock =
-    config.bin.includes("mock-review-unit-executor") ||
-    config.args.some((arg) => arg.includes("mock-review-unit-executor"));
-  if (isMock) return config;
-
   const args = [...config.args];
-  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const llmSettings = llmRef;
   const llmSelection = normalizeLlmModelSwitcher(llmSettings);
   const model = readSingleOptionValueFromArgv(argv, "model") ?? llmSelection?.model_id;
   if (typeof model === "string" && model.length > 0) {
@@ -855,11 +876,14 @@ function appendDirectCallLlmArgs(
   llmRef?: ReviewExecutionProfile["synthesize"]["llm"],
 ): ReviewUnitExecutorConfig {
   const args = [...config.args];
-  const llmSettings = llmRef && llmRef !== "inherit" ? llmRef : ontoConfig?.llm;
+  const llmSettings = llmRef;
   const selection = normalizeLlmModelSwitcher(llmSettings);
 
-  if (selection && selection.provider !== "codex") {
-    args.push("--provider", selection.provider);
+  if (isDirectModelCallSelection(selection)) {
+    args.push("--provider", selection.model_provider);
+  }
+  if (selection?.auth) {
+    args.push("--auth", selection.auth);
   }
 
   if (selection?.model_id) {
@@ -896,12 +920,10 @@ export type ExecutionRealizationHandoff =
 export function resolveExecutionProfile(args: {
   explicitCodex: boolean;
   ontoConfig: OntoConfig;
-  forceMock?: boolean;
 }): ExecutionProfileResolution {
   const resolution = resolveReviewExecutionProfile({
     explicitCodex: args.explicitCodex,
     settings: args.ontoConfig,
-    ...(args.forceMock ? { env: { ...process.env, ONTO_LLM_MOCK: "1" } } : {}),
   });
   if (resolution.type === "no_host") {
     return { type: "no_host" };
@@ -939,9 +961,9 @@ function buildNoHostDetectedError(): Error {
       "",
       "다음 중 한 가지로 해결하세요:",
       "  1. `.onto/settings.json` 의 review.execution.actors.*.llm 에 auth/provider/model 설정",
-      "  2. local 실행은 각 actor llm 에 auth=local + provider=lmstudio 로 설정",
+      "  2. API key 실행은 각 actor llm 에 auth=api_key + provider=openai|anthropic|grok 로 설정",
       "  3. OpenAI OAuth는 Codex worker가 필요하므로 codex 설치와 로그인을 확인",
-      "  4. 테스트 실행은 --executor-realization mock 사용",
+      "  4. local+lmstudio+model_id 는 reserved/future 경로이므로 현재 review dispatch 해결책이 아닙니다.",
     ].join("\n"),
   );
 }
@@ -979,7 +1001,7 @@ export function resolveExecutorConfig(
     (optionPrefixLabel.length > 0
       ? readSingleOptionValueFromArgv(argv, "executor-realization")
       : undefined);
-  if (explicitRealization === "codex" || explicitRealization === "mock" || explicitRealization === "ts_inline_http") {
+  if (explicitRealization === "codex" || explicitRealization === "ts_inline_http") {
     return appendExecutorModelArgs(
       buildExecutorConfigFromRealization(explicitRealization, ontoHome),
       argv,
@@ -992,15 +1014,12 @@ export function resolveExecutorConfig(
     explicitRealization.length > 0
   ) {
     throw new Error(
-      `Unsupported --${optionPrefixLabel}executor-realization: ${explicitRealization}. ` +
-        "Supported values: codex, mock, ts_inline_http.",
+      `Unsupported debug --${optionPrefixLabel}executor-realization: ${explicitRealization}. ` +
+        "Supported values: codex, ts_inline_http.",
     );
   }
 
   const profile = reviewExecutionProfile;
-  if (profile?.worker_executor === "mock") {
-    return buildExecutorConfigFromRealization("mock", ontoHome);
-  }
   if (profile?.worker_executor === "direct_call") {
     return appendDirectCallLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
@@ -1020,9 +1039,7 @@ export function resolveExecutorConfig(
   // Auto-select ts_inline_http executor when the canonical llm switcher
   // selects an API-key or local provider.
   const selection = normalizeLlmModelSwitcher(ontoConfig?.llm);
-  const hasExternalProvider =
-    selection !== null && selection !== undefined && selection.provider !== "codex";
-  if (hasExternalProvider) {
+  if (isDirectModelCallSelection(selection)) {
     return appendDirectCallLlmArgs(
       buildExecutorConfigFromRealization("ts_inline_http", ontoHome),
       ontoConfig,
@@ -1046,23 +1063,53 @@ function defaultCredentialEnvNames(provider: string): string[] {
 }
 
 function visibleCredentialEnvNames(selection: {
-  provider: string;
+  model_provider: string;
   api_key_env?: string;
 }): string[] {
   return selection.api_key_env
     ? [selection.api_key_env]
-    : defaultCredentialEnvNames(selection.provider);
+    : defaultCredentialEnvNames(selection.model_provider);
 }
 
 function hasCredentialEnv(selection: {
-  provider: string;
+  model_provider: string;
   api_key_env?: string;
 }): boolean {
-  return visibleCredentialEnvNames(selection).some(
-    (envName) =>
-      typeof process.env[envName] === "string" &&
-      process.env[envName]!.length > 0,
-  );
+  if (selection.api_key_env) {
+    const value = process.env[selection.api_key_env];
+    return (
+      typeof value === "string" &&
+      value.trim().length > 0
+    );
+  }
+  if (
+    visibleCredentialEnvNames(selection).some(
+      (envName) =>
+        typeof process.env[envName] === "string" &&
+        process.env[envName]!.trim().length > 0,
+    )
+  ) {
+    return true;
+  }
+  if (selection.model_provider === "openai") {
+    return readCodexOpenAiApiKey() !== null;
+  }
+  return false;
+}
+
+function readCodexOpenAiApiKey(): string | null {
+  const codexAuthPath = path.join(os.homedir(), ".codex", "auth.json");
+  if (!fsSync.existsSync(codexAuthPath)) return null;
+  try {
+    const auth = JSON.parse(fsSync.readFileSync(codexAuthPath, "utf8")) as unknown;
+    if (!auth || typeof auth !== "object" || Array.isArray(auth)) return null;
+    const value = (auth as Record<string, unknown>).OPENAI_API_KEY;
+    return typeof value === "string" && value.trim().length > 0
+      ? value.trim()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function assertValidLocalBaseUrl(baseUrl: string | undefined): void {
@@ -1083,40 +1130,43 @@ export async function ensureProviderRouteReadyForDispatch(args: {
   reviewExecutionProfile: ReviewExecutionProfile;
 }): Promise<void> {
   const profile = args.reviewExecutionProfile;
-  if (profile.worker_executor === "mock") {
-    return;
-  }
+  const profileUnits = profile.units ?? {};
 
   const actorRefs: Array<{
-    actor: "teamlead" | "lens" | "synthesize";
+    ref: "teamlead" | "lens" | "synthesize" | `unit:${ReviewExecutionUnitId}`;
     llm: ReviewExecutionProfile["teamlead"]["llm"];
   }> = [
-    { actor: "teamlead", llm: profile.teamlead.llm },
-    { actor: "lens", llm: profile.lens.llm },
-    { actor: "synthesize", llm: profile.synthesize.llm },
+    { ref: "teamlead", llm: profile.teamlead.llm },
+    { ref: "lens", llm: profile.lens.llm },
+    { ref: "synthesize", llm: profile.synthesize.llm },
+    ...REVIEW_EXECUTION_UNIT_IDS
+      .filter((unitId) => profileUnits[unitId]?.llm !== undefined)
+      .map((unitId) => ({
+        ref: `unit:${unitId}` as const,
+        llm: effectiveReviewUnitLlmRef(profile, unitId),
+      })),
   ];
 
   if (profile.worker_executor === "codex") {
     for (const actorRef of actorRefs) {
-      const selection =
-        actorRef.llm === "inherit"
-          ? null
-          : normalizeLlmModelSwitcher(actorRef.llm);
-      const selectsCodexOauth =
-        selection?.auth === "oauth" &&
-        (selection.provider === "codex" || selection.provider === "openai");
+      const selection = actorRef.llm
+        ? normalizeLlmModelSwitcher(actorRef.llm)
+        : null;
       if (
         selection !== null &&
-        !selectsCodexOauth
+        !(
+          isExternalOauthWorkerSelection(selection) &&
+          selection.execution_adapter === "codex_cli"
+        )
       ) {
         await writeAndThrowStructuredFailureRecord({
           sessionRoot: args.sessionRoot,
           phase: "pre_dispatch.actor_route",
           reasonCode: "codex_actor_route_mismatch",
           humanMessage:
-            "Review Codex worker route cannot dispatch because an actor selects a non-Codex provider route.",
+            "Review Codex worker route cannot dispatch because an actor/unit selects a non-Codex provider route.",
           requiredUserAction:
-            "Use actor OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
+            "Use OAuth OpenAI settings for the Codex worker route, or select a direct-call route for API/local providers.",
           retrySafety: "safe_after_input_change",
           artifactTrust: "manifest_artifacts_trusted",
           dispatchState: "dispatch_blocked",
@@ -1126,7 +1176,10 @@ export async function ensureProviderRouteReadyForDispatch(args: {
           mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
           detailsKind: "actor_route",
           details: {
-            actor: actorRef.actor,
+            actor: actorRef.ref,
+            execution_route: selection.execution_route,
+            execution_adapter: selection.execution_adapter,
+            model_provider: selection.model_provider,
             worker_executor: profile.worker_executor,
             host: profile.host,
             provider: selection.provider,
@@ -1143,19 +1196,18 @@ export async function ensureProviderRouteReadyForDispatch(args: {
   }
 
   for (const actorRef of actorRefs) {
-    const selection =
-      actorRef.llm === "inherit"
-        ? null
-        : normalizeLlmModelSwitcher(actorRef.llm);
-    if (selection === null || selection.provider === "codex") {
+    const selection = actorRef.llm
+      ? normalizeLlmModelSwitcher(actorRef.llm)
+      : null;
+    if (!isDirectModelCallSelection(selection)) {
       await writeAndThrowStructuredFailureRecord({
         sessionRoot: args.sessionRoot,
         phase: "pre_dispatch.actor_route",
         reasonCode: "direct_call_actor_provider_unresolved",
         humanMessage:
-          "Review direct-call route cannot dispatch because an actor does not resolve to an API/local provider.",
+          "Review direct-call route cannot dispatch because an actor/unit does not resolve to an API/local provider.",
         requiredUserAction:
-          "Set each review.execution.actors.*.llm to api_key/local provider settings, or use the Codex OAuth worker route.",
+          "Set each review execution actor/unit llm to api_key/local provider settings, or use the Codex OAuth worker route.",
         retrySafety: "safe_after_input_change",
         artifactTrust: "manifest_artifacts_trusted",
         dispatchState: "dispatch_blocked",
@@ -1165,7 +1217,10 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
         detailsKind: "actor_route",
         details: {
-          actor: actorRef.actor,
+          actor: actorRef.ref,
+          execution_route: selection?.execution_route ?? null,
+          execution_adapter: selection?.execution_adapter ?? null,
+          model_provider: selection?.model_provider ?? null,
           worker_executor: profile.worker_executor,
           host: profile.host,
           provider: selection?.provider ?? null,
@@ -1180,9 +1235,9 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         phase: "pre_dispatch.actor_route",
         reasonCode: "direct_call_actor_model_missing",
         humanMessage:
-          "Review direct-call route cannot dispatch because an actor model is missing.",
+          "Review direct-call route cannot dispatch because an actor/unit model is missing.",
         requiredUserAction:
-          "Set model in the actor-specific review.execution.actors.*.llm block.",
+          "Set model in the actor-specific llm block or the overriding review.execution.units.*.llm block.",
         retrySafety: "safe_after_input_change",
         artifactTrust: "manifest_artifacts_trusted",
         dispatchState: "dispatch_blocked",
@@ -1192,7 +1247,10 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
         detailsKind: "actor_route",
         details: {
-          actor: actorRef.actor,
+          actor: actorRef.ref,
+          execution_route: selection.execution_route,
+          execution_adapter: selection.execution_adapter,
+          model_provider: selection.model_provider,
           provider: selection.provider,
           auth: selection.auth,
         },
@@ -1217,7 +1275,10 @@ export async function ensureProviderRouteReadyForDispatch(args: {
         mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
         detailsKind: "actor_route",
         details: {
-          actor: actorRef.actor,
+          actor: actorRef.ref,
+          execution_route: selection.execution_route,
+          execution_adapter: selection.execution_adapter,
+          model_provider: selection.model_provider,
           provider: selection.provider,
           auth: selection.auth,
           credential_env_names: visibleCredentialEnvNames(selection),
@@ -1246,7 +1307,10 @@ export async function ensureProviderRouteReadyForDispatch(args: {
           mcpErrorCode: "ONTO_REVIEW_ACTOR_ROUTE_UNAVAILABLE",
           detailsKind: "actor_route",
           details: {
-            actor: actorRef.actor,
+            actor: actorRef.ref,
+            execution_route: selection.execution_route,
+            execution_adapter: selection.execution_adapter,
+            model_provider: selection.model_provider,
             provider: selection.provider,
             auth: selection.auth,
             base_url: selection.base_url ?? null,
@@ -2383,8 +2447,7 @@ async function resolveReviewInvokeInputs(
     envHostRuntime === "openai" ||
     envHostRuntime === "grok" ||
     envHostRuntime === "lmstudio" ||
-    (normalizeLlmModelSwitcher(ontoConfig.llm)?.provider !== "codex" &&
-      normalizeLlmModelSwitcher(ontoConfig.llm) !== null);
+    isDirectModelCallSelection(normalizeLlmModelSwitcher(ontoConfig.llm));
   const noExplicitMode = !readSingleOptionValueFromArgv(argv, "review-mode");
   const noExplicitLens = explicitLensIds.length === 0;
 
@@ -2864,6 +2927,26 @@ export interface ReviewInvokeSetup {
   executionProfile: ResolvedExecutionProfile;
 }
 
+function resolveMaxConcurrentLenses(args: {
+  plannedLensCount: number;
+  reviewExecutionProfile: ReviewExecutionProfile;
+}): number {
+  const configured = args.reviewExecutionProfile.max_concurrent_lenses;
+  const bounded = configured === undefined
+    ? args.plannedLensCount
+    : Math.min(configured, args.plannedLensCount);
+  return Math.max(1, bounded);
+}
+
+function concurrencyStrategyFor(args: {
+  plannedLensCount: number;
+  maxConcurrentLenses: number;
+}): "all_lenses_parallel" | "bounded_lens_parallel" {
+  return args.maxConcurrentLenses >= args.plannedLensCount
+    ? "all_lenses_parallel"
+    : "bounded_lens_parallel";
+}
+
 export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewInvokeSetup> {
   rejectRemovedFlags(argv);
   const argvWithSessionId = ensureSessionIdArg(argv);
@@ -2886,7 +2969,6 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
     sessionId,
     ontoHome,
   );
-  const maxConcurrentLenses = Math.max(1, resolvedInvokeInputs.resolvedLensIds.length);
 
   const { optionTokens: argvWithoutPositionals } = splitArgvIntoOptionsAndPositionals(
     argvWithSessionId,
@@ -2908,7 +2990,6 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
   const profileResolution = resolveExecutionProfile({
     explicitCodex,
     ontoConfig,
-    forceMock: readSingleOptionValueFromArgv(argv, "executor-realization") === "mock",
   });
   if (profileResolution.type === "no_host") {
     throw buildNoHostDetectedError();
@@ -2923,6 +3004,10 @@ export async function resolveReviewInvokeSetup(argv: string[]): Promise<ReviewIn
     host_runtime: effectiveRoute.artifact_host_runtime,
     review_execution_profile: effectiveReviewExecutionProfile,
   };
+  const maxConcurrentLenses = resolveMaxConcurrentLenses({
+    plannedLensCount: resolvedInvokeInputs.resolvedLensIds.length,
+    reviewExecutionProfile: effectiveReviewExecutionProfile,
+  });
   const startArgvWithProfile = appendCanonicalExecutionProfileArgs(
     normalizedStartArgv,
     executionProfile,
@@ -2971,10 +3056,8 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
   const resolvedOntoHome = rawOntoHome ? path.resolve(rawOntoHome) : undefined;
 
   const noWatch = hasOptionFlag(argv, "no-watch");
-  const hasExplicitExecutorOverride =
-    readSingleOptionValueFromArgv(argv, "executor-realization") !== undefined ||
+  const hasExplicitExecutorBinOverride =
     readSingleOptionValueFromArgv(argv, "executor-bin") !== undefined ||
-    readSingleOptionValueFromArgv(argv, "synthesize-executor-realization") !== undefined ||
     readSingleOptionValueFromArgv(argv, "synthesize-executor-bin") !== undefined;
   const effectiveReviewExecutionProfile =
     setup.executionProfile.review_execution_profile;
@@ -3062,7 +3145,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "lens",
@@ -3072,7 +3155,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "teamlead",
@@ -3082,7 +3165,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     "synthesize-",
     setup.ontoConfig,
     setup.ontoHome,
-    hasExplicitExecutorOverride
+    hasExplicitExecutorBinOverride
       ? undefined
       : setup.executionProfile.review_execution_profile,
     "synthesize",
@@ -3142,13 +3225,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
-      runtime_route: {
-        execution_realization: finalRoute.execution_realization,
-        host_runtime: finalRoute.artifact_host_runtime,
-        worker_executor: finalRoute.executor,
-        runtime_provider: finalRoute.resolved_provider,
-        auth_mode: finalRoute.auth_mode,
-      },
+      runtime_route: buildReviewRuntimeRouteArtifactProjection(finalRoute),
       ...(routeProfile.review_execution_profile.model
         ? { model: routeProfile.review_execution_profile.model }
         : {}),
@@ -3158,10 +3235,16 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       ...(routeProfile.review_execution_profile.service_tier
         ? { service_tier: routeProfile.review_execution_profile.service_tier }
         : {}),
+      ...(routeProfile.review_execution_profile.retry
+        ? { retry: routeProfile.review_execution_profile.retry }
+        : {}),
     },
     review_mode: setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: setup.maxConcurrentLenses,
-    concurrency_strategy: "all_lenses_parallel",
+    concurrency_strategy: concurrencyStrategyFor({
+      plannedLensCount: setup.resolvedInvokeInputs.resolvedLensIds.length,
+      maxConcurrentLenses: setup.maxConcurrentLenses,
+    }),
     synthesize_waits_for_all_lenses: true,
   };
   const finalOutputPath =
@@ -3223,7 +3306,10 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     },
     executor: {
       max_concurrent_lenses: setup.maxConcurrentLenses,
-      concurrency_strategy: "all_lenses_parallel",
+      concurrency_strategy: concurrencyStrategyFor({
+        plannedLensCount: setup.resolvedInvokeInputs.resolvedLensIds.length,
+        maxConcurrentLenses: setup.maxConcurrentLenses,
+      }),
       realization: inferExecutorRealization(defaultExecutorConfig),
       profile: routeSummary.review_execution_profile,
     },
@@ -3260,6 +3346,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
     },
     explanation: {
       final_review_result: explanationSummary.final_review_result,
+      boundary_notes: explanationSummary.boundary_notes,
     },
     issues: closureSummary,
     artifacts: artifactRefs,

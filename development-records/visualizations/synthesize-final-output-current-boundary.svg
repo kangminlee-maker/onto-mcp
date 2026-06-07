@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="820" viewBox="0 0 1360 820" role="img" aria-labelledby="title desc">
+  <title id="title">Current synthesize and final-output boundary</title>
+  <desc id="desc">Shows current review pipeline inputs into synthesize, synthesis markdown output, runtime final-output rendering, and ReviewRecord assembly.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155" />
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .panel { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 8; }
+      .llm { fill: #eef2ff; stroke: #4f46e5; stroke-width: 1.8; rx: 8; }
+      .runtime { fill: #ecfdf5; stroke: #059669; stroke-width: 1.8; rx: 8; }
+      .artifact { fill: #fff7ed; stroke: #ea580c; stroke-width: 1.5; rx: 8; }
+      .risk { fill: #fef2f2; stroke: #dc2626; stroke-width: 1.5; rx: 8; }
+      .title { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 24px; font-weight: 700; fill: #0f172a; }
+      .h { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .t { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; fill: #334155; }
+      .small { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; fill: #475569; }
+      .tag { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 11px; font-weight: 700; fill: #0f172a; }
+      .line { stroke: #334155; stroke-width: 1.6; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke: #64748b; stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; marker-end: url(#arrow); }
+      .warn { stroke: #dc2626; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1360" height="820" />
+  <text class="title" x="40" y="44">Current Boundary: synthesize -> final-output -> ReviewRecord</text>
+  <text class="t" x="40" y="72">Legend: blue = LLM work, green = runtime deterministic work, orange = artifact truth, red = oversized or mixed authority still present.</text>
+
+  <rect class="panel" x="40" y="110" width="310" height="570" />
+  <text class="h" x="62" y="140">Upstream artifact truth</text>
+  <text class="small" x="62" y="162">mostly optimized before synthesize</text>
+
+  <rect class="artifact" x="70" y="190" width="250" height="58" />
+  <text class="h" x="88" y="216">round1/*.findings.yaml</text>
+  <text class="small" x="88" y="236">lens sidecars; optional markdown</text>
+
+  <rect class="artifact" x="70" y="266" width="250" height="82" />
+  <text class="h" x="88" y="292">issue artifacts</text>
+  <text class="small" x="88" y="314">finding-ledger, relation graph</text>
+  <text class="small" x="88" y="332">issue-ledger, stance matrix</text>
+
+  <rect class="artifact" x="70" y="366" width="250" height="82" />
+  <text class="h" x="88" y="392">deliberation artifacts</text>
+  <text class="small" x="88" y="414">deliberation-plan</text>
+  <text class="small" x="88" y="432">resolution YAML + md projection</text>
+
+  <rect class="artifact" x="70" y="466" width="250" height="76" />
+  <text class="h" x="88" y="492">problem-framing.yaml</text>
+  <text class="small" x="88" y="514">LLM classifications only</text>
+  <text class="small" x="88" y="532">runtime fills context/coverage</text>
+
+  <rect class="artifact" x="70" y="560" width="250" height="70" />
+  <text class="h" x="88" y="586">target + run refs</text>
+  <text class="small" x="88" y="608">binding, session metadata</text>
+  <text class="small" x="88" y="626">target profile, manifest</text>
+
+  <rect class="risk" x="386" y="122" width="278" height="190" />
+  <text class="h" x="406" y="150">Current synthesize read authority</text>
+  <text class="small" x="406" y="176">Includes optimized artifacts, but also:</text>
+  <text class="small" x="424" y="202">- participating lens outputs</text>
+  <text class="small" x="424" y="222">- issue-scoped response YAMLs</text>
+  <text class="small" x="424" y="242">- materialized input / optional refs</text>
+  <text class="small" x="406" y="272">Risk: final LLM step can reopen too much context.</text>
+
+  <rect class="llm" x="414" y="370" width="220" height="130" />
+  <text class="tag" x="438" y="398">LLM</text>
+  <text class="h" x="438" y="422">synthesize</text>
+  <text class="small" x="438" y="448">preserve consensus, disagreement,</text>
+  <text class="small" x="438" y="466">actions, boundary notes, final result</text>
+  <text class="small" x="438" y="486">writes markdown sections</text>
+
+  <rect class="artifact" x="728" y="370" width="230" height="130" />
+  <text class="h" x="752" y="398">synthesis.md</text>
+  <text class="small" x="752" y="424">YAML frontmatter</text>
+  <text class="small" x="752" y="444">11 required headings</text>
+  <text class="small" x="752" y="464">LLM-authored prose + tags</text>
+  <text class="small" x="752" y="484">source for renderer/record/audit</text>
+
+  <rect class="runtime" x="1034" y="150" width="250" height="168" />
+  <text class="tag" x="1058" y="178">RUNTIME</text>
+  <text class="h" x="1058" y="202">render final-output.md</text>
+  <text class="small" x="1058" y="228">reads synthesis sections</text>
+  <text class="small" x="1058" y="248">adds classification summary</text>
+  <text class="small" x="1058" y="268">adds material/non-material lists</text>
+  <text class="small" x="1058" y="288">may scan lens text for boundary notes</text>
+
+  <rect class="artifact" x="1034" y="366" width="250" height="112" />
+  <text class="h" x="1058" y="394">final-output.md</text>
+  <text class="small" x="1058" y="420">principal-facing markdown</text>
+  <text class="small" x="1058" y="440">mixes synthesis prose and runtime</text>
+  <text class="small" x="1058" y="460">classification projection</text>
+
+  <rect class="runtime" x="1034" y="548" width="250" height="122" />
+  <text class="tag" x="1058" y="576">RUNTIME</text>
+  <text class="h" x="1058" y="600">assemble ReviewRecord</text>
+  <text class="small" x="1058" y="626">refs issue artifacts + synthesis</text>
+  <text class="small" x="1058" y="646">parses shared phenomenon from md</text>
+
+  <rect class="artifact" x="728" y="570" width="230" height="88" />
+  <text class="h" x="752" y="598">review-record.yaml</text>
+  <text class="small" x="752" y="624">primary artifact</text>
+  <text class="small" x="752" y="644">contains refs and projections</text>
+
+  <path class="line" d="M320 220 C360 220, 372 220, 386 220" />
+  <path class="line" d="M320 306 C360 306, 372 278, 386 260" />
+  <path class="line" d="M320 406 C370 406, 386 414, 414 426" />
+  <path class="line" d="M320 504 C370 504, 386 470, 414 456" />
+  <path class="dashed" d="M320 594 C360 594, 382 522, 414 486" />
+  <path class="warn" d="M664 217 C705 260, 678 347, 728 405" />
+  <path class="line" d="M634 435 C674 435, 690 435, 728 435" />
+  <path class="line" d="M958 435 C996 372, 1010 260, 1034 238" />
+  <path class="line" d="M1159 318 L1159 366" />
+  <path class="line" d="M1159 478 L1159 548" />
+  <path class="line" d="M1034 609 C1000 620, 986 620, 958 620" />
+  <path class="dashed" d="M320 220 C700 100, 910 86, 1050 178" />
+
+  <rect class="risk" x="390" y="580" width="274" height="92" />
+  <text class="h" x="410" y="608">Main optimization opportunity</text>
+  <text class="small" x="410" y="634">synthesis.md is still both semantic prose</text>
+  <text class="small" x="410" y="652">and downstream machine/audit source.</text>
+
+  <text class="small" x="42" y="736">Current consequence: the last LLM stage is late, serial, broad, and prose-shaped. It can be correct, but latency and output drift risk remain higher than necessary.</text>
+</svg>

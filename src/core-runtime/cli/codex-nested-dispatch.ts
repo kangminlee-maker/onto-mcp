@@ -8,7 +8,7 @@
  * It reads the execution plan, constructs the
  * `NestedLensDispatchInput`, invokes `runCodexNestedTeamlead`, and
  * classifies per-lens outcomes into the
- * `ReviewPromptExecutionResult`-compatible shape used downstream by
+ * `ReviewPromptExecutionResult`-shaped value used downstream by
  * `completeReviewSession`.
  *
  * # Why it exists
@@ -44,14 +44,18 @@
  *
  * # Design reference
  *
- * - Nested Codex validation notes under `development-records/`
+ * Current execution contract is owned by this bridge and the nested teamlead
+ * executor. Historical validation notes are not runtime references.
  */
 
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { OntoConfig } from "../discovery/settings-chain.js";
 import type { ReviewLlmRef } from "../discovery/settings-chain.js";
-import { normalizeLlmModelSwitcher } from "../llm/model-switcher.js";
+import {
+  isExternalOauthWorkerSelection,
+  normalizeLlmModelSwitcher,
+} from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
 import {
@@ -94,9 +98,9 @@ export interface CodexNestedDispatchArgs {
 }
 
 /**
- * Shape compatible with `ReviewPromptExecutionResult` for drop-in use
- * by downstream pipeline (`completeReviewSession`). `synthesis_executed`
- * is always `false`; synthesize runs in the main review runner.
+ * Result shape consumed as `ReviewPromptExecutionResult` by the downstream
+ * pipeline (`completeReviewSession`). `synthesis_executed` is always `false`;
+ * synthesize runs in the main review runner.
  */
 export interface CodexNestedDispatchResult {
   session_root: string;
@@ -181,20 +185,22 @@ export function resolveCodexSpawnConfig(
   config: OntoConfig,
 ): CodexNestedSpawnConfig {
   const execution = config.review?.execution;
-  const inherited = config.llm;
   return {
-    teamlead: codexConfigFromRef(execution?.teamlead?.llm, inherited) ?? {},
-    lens: codexConfigFromRef(execution?.lens?.llm, inherited) ?? {},
+    teamlead: codexConfigFromRef(execution?.teamlead?.llm) ?? {},
+    lens: codexConfigFromRef(execution?.lens?.llm) ?? {},
   };
 }
 
 function codexConfigFromRef(
   ref: ReviewLlmRef | undefined,
-  inherited: OntoConfig["llm"],
 ): CodexSpawnConfig | null {
-  const llm = ref === undefined || ref === "inherit" ? inherited : ref;
-  const selection = normalizeLlmModelSwitcher(llm);
-  if (selection?.provider !== "codex") return null;
+  const selection = normalizeLlmModelSwitcher(ref);
+  if (
+    !isExternalOauthWorkerSelection(selection) ||
+    selection.execution_adapter !== "codex_cli"
+  ) {
+    return null;
+  }
   return {
     ...(selection.model_id ? { model: selection.model_id } : {}),
     ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),

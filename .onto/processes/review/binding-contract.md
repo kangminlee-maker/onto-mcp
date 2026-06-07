@@ -240,7 +240,7 @@ bounded signal을 비교해 `domain_final_selection`을 자동 materialize할 �
 
 현재 MCP-native runtime에서 이 단계가 뜻하는 바는 아래다.
 
-1. `onto.review` 또는 `onto.prepare_review` 호출은 interpretation 결과를 받은 뒤
+1. `onto_review` 또는 `onto_prepare_review` 호출은 interpretation 결과를 받은 뒤
    - target scope를 검증하고
    - domain/context를 고정하고
    - review mode와 lens set을 materialize하고

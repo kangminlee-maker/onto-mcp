@@ -15,6 +15,7 @@ import type {
   SharedPhenomenonClaimRelation,
   SharedPhenomenonSummaryEntry,
 } from "../review/artifact-types.js";
+import { fileSha256IfPresent } from "../pipeline-execution-ledger.js";
 import {
   fileExists,
   isoFromTimestamp,
@@ -26,6 +27,12 @@ import {
 import { validateReviewRecordObject } from "../review/review-record-validation.js";
 import { readReviewResultClassification } from "../review/review-result-classification.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
+import {
+  isLensSidecarArtifactPath,
+  lensIdFromRound1ArtifactPath,
+  readValidatedLensSidecarArtifact,
+} from "../review/lens-sidecar-artifact.js";
+import type { ReviewSynthesisLedgerArtifact } from "../review/synthesis-map-reduce.js";
 
 const LENS_OUTPUT_SCHEMA_VERSION = 2;
 
@@ -215,7 +222,7 @@ export function parseStringList(
     return (yamlParsed as string[]).map((item) => item.trim());
   }
 
-  // Fallback: treat markdown bullet lines as literal strings.
+  // Otherwise, treat markdown bullet lines as literal strings.
   const bullets = source
     .split(/\r?\n/u)
     .map((line) => /^\s*[-*]\s+(.*\S)\s*$/u.exec(line)?.[1]?.trim())
@@ -230,12 +237,25 @@ export function parseStringList(
 async function deriveLensProvenance(
   lensResultPathsById: Record<string, string>,
   participatingLensIds: string[],
+  sessionId: string,
 ): Promise<Record<string, ReviewLensProvenance>> {
   const perLensProvenance: Record<string, ReviewLensProvenance> = {};
   for (const lensId of participatingLensIds) {
     const lensResultPath = lensResultPathsById[lensId];
     if (!lensResultPath) {
       throw new Error(`Missing lens result path for participating lens: ${lensId}`);
+    }
+    if (isLensSidecarArtifactPath(lensResultPath)) {
+      const sidecar = await readValidatedLensSidecarArtifact({
+        sidecarPath: lensResultPath,
+        sessionId,
+        lensId,
+      });
+      perLensProvenance[lensId] = {
+        domain_constraints_used: sidecar.domain_constraints_used,
+        domain_context_assumptions: sidecar.domain_context_assumptions,
+      };
+      continue;
     }
     const lensText = await fs.readFile(lensResultPath, "utf8");
     const constraintsSection = extractMarkdownSection(lensText, [
@@ -307,17 +327,18 @@ function parseSharedPhenomenonSummaryItem(
   };
 }
 
-async function deriveSharedPhenomenonSummary(
-  synthesisPath: string,
+async function deriveSharedPhenomenonSummaryFromLedger(
+  synthesisLedgerPath: string,
 ): Promise<SharedPhenomenonSummaryEntry[]> {
-  const synthesisText = await fs.readFile(synthesisPath, "utf8");
-  const section = extractMarkdownSection(synthesisText, [
-    "Shared Phenomenon Summary",
-    "Shared Phenomenon Classification",
-    "Shared Phenomena",
-  ]);
-  if (section === null) return [];
-  return parseYamlList(section, "synthesis Shared Phenomenon Summary").map(
+  const ledger = await readYamlDocument<ReviewSynthesisLedgerArtifact>(
+    synthesisLedgerPath,
+  );
+  if (!Array.isArray(ledger.shared_phenomenon_summary)) {
+    throw new Error(
+      `synthesis-ledger.yaml must contain shared_phenomenon_summary list: ${synthesisLedgerPath}`,
+    );
+  }
+  return ledger.shared_phenomenon_summary.map(
     parseSharedPhenomenonSummaryItem,
   );
 }
@@ -447,12 +468,17 @@ export async function runAssembleReviewRecordCli(
     "context-candidate-assembly.yaml",
   );
   const synthesisPath = path.join(sessionRoot, "synthesis.md");
+  const synthesisLedgerPath = path.join(sessionRoot, "synthesis-ledger.yaml");
   const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
   const findingRelationGraphPath = path.join(sessionRoot, "finding-relation-graph.yaml");
   const issueLedgerPath = path.join(sessionRoot, "issue-ledger.yaml");
   const issueStanceMatrixPath = path.join(sessionRoot, "issue-stance-matrix.yaml");
   const deliberationPlanPath = path.join(sessionRoot, "deliberation-plan.yaml");
   const problemFramingPath = path.join(sessionRoot, "problem-framing.yaml");
+  const deliberationResolutionPath = path.join(
+    sessionRoot,
+    "deliberation-resolution.yaml",
+  );
   const deliberationPath = path.join(sessionRoot, "deliberation.md");
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
   const executionResultPath = path.join(sessionRoot, "execution-result.yaml");
@@ -491,8 +517,10 @@ export async function runAssembleReviewRecordCli(
       ["issue stance matrix", issueStanceMatrixPath],
       ["deliberation plan", deliberationPlanPath],
       ["problem framing", problemFramingPath],
-      ["controlled deliberation", deliberationPath],
-      ["synthesis", synthesisPath],
+      ["controlled deliberation resolution", deliberationResolutionPath],
+      ["controlled deliberation projection", deliberationPath],
+      ["synthesis ledger", synthesisLedgerPath],
+      ["synthesis projection", synthesisPath],
     ] as const;
     for (const [label, artifactPath] of requiredCompletedArtifacts) {
       if (!(await fileExists(artifactPath))) {
@@ -526,10 +554,10 @@ export async function runAssembleReviewRecordCli(
   } else if (await fileExists(round1Root)) {
     const round1FilePaths = await fs.readdir(round1Root);
     for (const entryName of round1FilePaths.sort()) {
-      if (!entryName.endsWith(".md")) {
+      if (!entryName.endsWith(".md") && !entryName.endsWith(".findings.yaml")) {
         continue;
       }
-      const lensId = entryName.replace(/\.md$/u, "");
+      const lensId = lensIdFromRound1ArtifactPath(entryName);
       const lensResultPath = path.join(round1Root, entryName);
       lensResultRefs[lensId] = toRelativePath(lensResultPath, projectRoot);
       lensResultPathsById[lensId] = lensResultPath;
@@ -555,9 +583,10 @@ export async function runAssembleReviewRecordCli(
   const perLensProvenance = await deriveLensProvenance(
     lensResultPathsById,
     participatingLensIds,
+    sessionId,
   );
   const sharedPhenomenonSummary = synthesisExecuted
-    ? await deriveSharedPhenomenonSummary(synthesisPath)
+    ? await deriveSharedPhenomenonSummaryFromLedger(synthesisLedgerPath)
     : [];
   const problemFraming = synthesisExecuted
     ? await readYamlDocument<Record<string, unknown>>(problemFramingPath)
@@ -574,12 +603,39 @@ export async function runAssembleReviewRecordCli(
   const issueStanceMatrixRef = await optionalArtifactRef(issueStanceMatrixPath);
   const deliberationPlanRef = await optionalArtifactRef(deliberationPlanPath);
   const problemFramingRef = await optionalArtifactRef(problemFramingPath);
-  const synthesisResultRef = (await fileExists(synthesisPath))
-    ? toRelativePath(synthesisPath, projectRoot)
+  const synthesisResultRef = (await fileExists(synthesisLedgerPath))
+    ? toRelativePath(synthesisLedgerPath, projectRoot)
     : null;
-  const deliberationResultRef = (await fileExists(deliberationPath))
-    ? toRelativePath(deliberationPath, projectRoot)
+  const deliberationResultRef = (await fileExists(deliberationResolutionPath))
+    ? toRelativePath(deliberationResolutionPath, projectRoot)
     : null;
+  const producedArtifactSha256 = async (
+    artifactPath: string,
+    label: string,
+  ): Promise<string | null> => {
+    if (!(await fileExists(artifactPath))) return null;
+    const hash = await fileSha256IfPresent(artifactPath);
+    if (!hash) {
+      throw new Error(`Missing ${label} digest source: ${artifactPath}`);
+    }
+    return hash;
+  };
+  const synthesisResultSha256 = await producedArtifactSha256(
+    synthesisLedgerPath,
+    "synthesis result",
+  );
+  const synthesisOutputSha256 = await producedArtifactSha256(
+    synthesisPath,
+    "synthesis output",
+  );
+  const deliberationResultSha256 = await producedArtifactSha256(
+    deliberationResolutionPath,
+    "deliberation result",
+  );
+  const finalOutputSha256 = await fileSha256IfPresent(finalOutputPath);
+  if (!finalOutputSha256) {
+    throw new Error(`Missing final output digest source: ${finalOutputPath}`);
+  }
   if (
     synthesisExecuted &&
     !Array.isArray(problemFraming?.classifications)
@@ -610,6 +666,12 @@ export async function runAssembleReviewRecordCli(
     resolved_execution_realization:
       invocationBindingArtifact.resolved_execution_realization,
     resolved_host_runtime: invocationBindingArtifact.resolved_host_runtime,
+    resolved_artifact_generation_realization:
+      executionResult.artifact_generation_realization ??
+      invocationBindingArtifact.resolved_artifact_generation_realization,
+    semantic_quality_evidence:
+      executionResult.semantic_quality_evidence ??
+      invocationBindingArtifact.semantic_quality_evidence,
     resolved_lens_ids: invocationBindingArtifact.resolved_lens_set,
     execution_result_ref: toRelativePath(executionResultPath, projectRoot),
     session_metadata_ref: toRelativePath(sessionMetadataPath, projectRoot),
@@ -647,9 +709,13 @@ export async function runAssembleReviewRecordCli(
       : [],
     result_classification_summary: resultClassificationSummary,
     synthesis_result_ref: synthesisResultRef,
+    synthesis_result_sha256: synthesisResultSha256,
+    synthesis_output_sha256: synthesisOutputSha256,
     deliberation_status: await detectDeliberationStatus(executionResult),
     deliberation_result_ref: deliberationResultRef,
+    deliberation_result_sha256: deliberationResultSha256,
     final_output_ref: toRelativePath(finalOutputPath, projectRoot),
+    final_output_sha256: finalOutputSha256,
     shared_phenomenon_summary: sharedPhenomenonSummary,
   };
 

@@ -1,7 +1,7 @@
 name: Domain-Driven
 version: 1
 description: DDD-based ontology structure. Divides domain boundaries with Bounded Context, manages lifecycle with Aggregate, and expresses actions and flows with Domain Event/Command/Query/Saga.
-golden_reference: golden/d-domain-driven.yaml
+golden_reference: d-domain-driven.yaml
 sections:
   - name: bounded_contexts
     description: Domain boundary definition. Groups related domains into one context

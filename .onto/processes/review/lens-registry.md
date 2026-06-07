@@ -47,8 +47,8 @@
 
 | Stage ID | 한글 설명 | 책임 |
 |---|---|---|
-| `controlled-lens-deliberation` | 통제된 lens 숙의 | root-cause issue별 lens stance를 확인하고 material conflict resolution을 `deliberation.md`에 기록 |
-| `synthesize` | 종합 단계 | lens 결과와 `deliberation.md`를 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
+| `controlled-lens-deliberation` | 통제된 lens 숙의 | root-cause issue별 lens stance를 확인하고 material conflict resolution을 `deliberation-resolution.yaml`에 기록 |
+| `synthesize` | 종합 단계 | issue artifact truth와 `deliberation-resolution.yaml`을 읽고 consensus, disagreement, overlooked premises, final review output을 구성 |
 
 중요한 구분:
 
@@ -89,7 +89,7 @@ authority가 아니다. domain은 concern을 lens-usable 원칙, 사례, CQ, 관
 
 ### 4.2 `synthesize`
 
-- lens set 전체와 `deliberation.md`를 읽어 final review output을 만든다
+- issue artifact truth와 `deliberation-resolution.yaml`을 읽어 final review output을 만든다
 - 새로운 독립 관점 행세를 하면 안 된다
 - unresolved disagreement를 묵살하지 않고 보존해야 한다
 
@@ -113,7 +113,7 @@ authority가 아니다. domain은 concern을 lens-usable 원칙, 사례, CQ, 관
 1. 각 lens는 자기 전용 맥락에서 실행된다
 2. Round 1에서는 다른 lens의 결과를 보지 않는다
 3. controlled lens deliberation은 Round 1 lens finding 이후 실행된다
-4. `synthesize`는 `deliberation.md`가 나온 뒤에만 실행된다
+4. `synthesize`는 `deliberation-resolution.yaml`이 나온 뒤에만 실행된다
 5. 메인 `LLM` 콘텍스트는 lens별 세부 reasoning을 직접 모두 담지 않는다
 
 ---

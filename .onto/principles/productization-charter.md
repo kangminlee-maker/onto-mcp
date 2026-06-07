@@ -31,7 +31,7 @@
 
 를 동시에 가진 전환 레포다.
 
-**어휘 경계 (framework v1.0 sync, 2026-04-20)**: 본 레포는 knowledge framework v1.0 (`development-records/evolve/20260419-knowledge-framework.md`) §2.1 의 product 정의 — Principal 이 시간·비용 투입해 만든 작동 실체 — 하의 **단일 product instance** 다. 본 문서가 말하는 '제품화 (productization)' 는 이 product 의 **productization trajectory** (prototype → productized live path → productized runtime) 를 가리킨다. framework 의 scope value `product` 와 본 문서의 productization 어휘는 같은 단어를 두 layer 로 사용 — 전자는 instance 분류 (path/authority 의 scope 축), 후자는 그 instance 가 따라가는 개발 궤적. 두 layer 는 서로를 참조하되 의미가 다름을 유의.
+**어휘 경계 (framework v1.0 sync, 2026-04-20)**: 본 레포는 Principal 이 시간·비용 투입해 만든 작동 실체인 **단일 product instance** 다. 본 문서가 말하는 '제품화 (productization)' 는 이 product 의 **productization trajectory** (prototype → productized live path → productized runtime) 를 가리킨다. framework 의 scope value `product` 와 본 문서의 productization 어휘는 같은 단어를 두 layer 로 사용 — 전자는 instance 분류 (path/authority 의 scope 축), 후자는 그 instance 가 따라가는 개발 궤적. 두 layer 는 서로를 참조하되 의미가 다름을 유의.
 
 ---
 
@@ -101,7 +101,7 @@ prompt-backed reference path에서는 prose 문서가 reference execution source
 2. typed artifact
 3. typed contract
 
-즉 prose `development-records/`는 설명과 source material일 수는 있어도,
+즉 isolated historical prose는 설명과 source material일 수는 있어도,
 hardened runtime의 최종 input authority가 되면 안 된다.
 
 ### 4.3 reference path는 comparison path이지 authoritative core가 아니다
@@ -116,7 +116,10 @@ prototype path, reference path, comparison path는 기준과 회귀 비교의 �
 
 ### 4.4 Canonical Pointers
 
-→ §17 Migration Crosswalk 참조. 원칙 이동 이력은 §17이 단일 소유한다.
+현재 개념 SSOT는 `.onto/authority/core-lexicon.yaml`이고, lens 설정은
+`.onto/authority/core-lens-registry.yaml`이다. 개발 원칙은
+`.onto/principles/`가 소유한다. 이동 이력은 current runtime authority가
+아니다.
 
 ---
 
@@ -378,7 +381,8 @@ canonical execution profile은 아래 두 축으로 표현한다.
 
 원칙:
 
-- `round1/*.md`와 `synthesis.md`는 human-readable source layer
+- `round1/*.findings.yaml`와 `synthesis-ledger.yaml`은 machine source layer
+- `round1/*.md`와 `synthesis.md`는 optional/deterministic human-readable projection layer
 - canonical primary artifact는 `review-record.yaml`
 - later `learn/govern`는 `ReviewRecord`를 읽어야 한다
 
@@ -476,100 +480,3 @@ canonical execution profile은 아래 두 축으로 표현한다.
 - artifact truth 기준
 
 세부 실행 계약은 하위 문서들이 가진다.
-
----
-
-## 17. Migration Crosswalk (2026-04-06 reshuffle)
-
-이 표는 2026-04-06 authority 재배치에서 삭제/이동된 파일과 섹션이 어디로 갔는지 추적한다. "누락/삭제 없음"을 repo 자체가 증명할 수 있도록 한다.
-
-**Reshuffle convention**: 후속 reshuffle이 발생하면 본 §17을 덮어쓰지 말고 새 dated section(`### Reshuffle 2026-MM-DD`)을 append한다. 본 표는 2026-04-06 시점의 결정 기록이며, 시간 순서대로 누적되어야 reshuffle 이력을 잃지 않는다.
-
-**Drift risk 알림**: enhancement tracking seat의 active 경로는 `development-records/`의 dated plan/handoff 문서가 소유한다. Active runtime contracts에는 현재 실행 규칙만 남긴다.
-
-### 삭제된 authority 파일
-
-| 삭제된 파일 | 처리 | 후계 seat |
-|---|---|---|
-| `.onto/authority/development-methodology.md` | 흡수 | §4.2 (Interface Design Priority) → `llm-runtime-interface-principles.md` §6; §5 (First Migration Priority) → `productization-charter.md` §13 Bootstrap Sequence; §4.1 (CIRU 보존) → `llm-native-development-guideline.md` §맥락 격리 추론 단위; 나머지 원칙은 `llm-native-development-guideline.md`와 `productization-charter.md` 기존 섹션과 중복이라 흡수 불필요 |
-| `.onto/authority/ontology-as-code-korean-terminology-guide.md` | 흡수 | 21개 한글 대응어 모두 `core-lexicon.yaml`에 `korean_label`로 존재. naming 규칙은 `ontology-as-code-naming-charter.md`가 담당 |
-| `.onto/authority/principles-criteria-decisions-inventory.md` | 삭제 | 감사 인덱스. 모든 내용이 `productization-charter.md` §5 Decision Criteria + §6 Current Decisions에 있음. 별도 인덱스가 두 곳을 흐리게 만들어 삭제 |
-
-### 이동된 파일
-
-| 이전 위치 | 새 위치 | 이유 |
-|---|---|---|
-| `.onto/authority/philosophical-foundations-of-ontology.md` | `development-records/reference/20260327-philosophical-foundations-of-ontology.md` | 설계 배경 이론 (Gomez-Perez, Obrst, OntoClean 등 ontology evaluation framework). 개발 원칙이 아니라 historical reference. authority 내에 후계 seat 없음 — 이는 의도적 de-scope (review-first productization은 lens semantic grounding을 외부 표준 매핑이 아니라 `core-lens-registry.yaml`과 `core-lexicon.yaml`로 한정함) |
-| `.onto/authority/discovered-enhancements.md` | `development-records/tracking/20260406-discovered-enhancements.md` | 백로그/추적 문서. authority 원칙이 아님. enhancement-record seat 역할 유지 |
-
-### authority 내 잔류 파일 (위계 외 참조 데이터)
-
-| 파일 | 역할 |
-|---|---|
-| `.onto/authority/core-lens-registry.yaml` | lens 설정. 런타임 전용 |
-| archived legacy translation aid | legacy/prototype 용어 번역 보조. **NON-AUTHORITATIVE**. current runtime authority 아님 |
-
-### 의도적 de-scope (재배치 아님)
-
-| 영역 | 결정 | 이유 |
-|---|---|---|
-| Lens semantic grounding (Obrst L1, OntoClean Rigidity/Identity, Gomez-Perez 등) | authority 외 (`development-records/reference/`) | review-first productization은 lens 의미 근거를 외부 ontology 평가 framework가 아니라 `core-lens-registry.yaml` (lens 설정)과 `core-lexicon.yaml` (개념 SSOT)로 한정한다. 외부 framework 매핑이 다시 필요해지면 별도 reference seat를 추가한다 |
-| 비-`review` 프로세스/시스템 authority surface (team review, ontology build, learning promotion 등의 deep authority) | 당분간 de-scope | 현재 productization은 `review-first` 단계이며 `reconstruct/learn/govern`은 same methodology로 확장 가능함을 §14 Success Criteria 항목 5에서 선언하지만 authority deep coverage는 review가 닫힌 후로 미룬다. 비정본 설명 스냅샷은 archive에 격리한다 |
-| prototype coordinator model | de-canonicalized | §10에서 명시. historical reference는 `development-records/archive/`에만 둔다 |
-
-### Reshuffle 2026-04-07
-
-배포 보안 + OaC 의미 기반 폴더 분리.
-
-**이동된 파일 (.onto/authority/ → .onto/principles/)**
-
-| 이전 위치 | 새 위치 | 이유 |
-|---|---|---|
-| `.onto/authority/ontology-as-code-guideline.md` | `.onto/principles/ontology-as-code-guideline.md` | 개발 규범 문서. 런타임이 소비하지 않음. 배포 제외 대상 |
-| `.onto/authority/llm-native-development-guideline.md` | `.onto/principles/llm-native-development-guideline.md` | 동일 |
-| `.onto/authority/productization-charter.md` | `.onto/principles/productization-charter.md` | 동일 |
-| `.onto/authority/llm-runtime-interface-principles.md` | `.onto/principles/llm-runtime-interface-principles.md` | 동일 |
-| `.onto/authority/ontology-as-code-naming-charter.md` | `.onto/principles/ontology-as-code-naming-charter.md` | 동일 |
-
-**이름 변경된 디렉토리**
-
-| 이전 이름 | 새 이름 | 이유 |
-|---|---|---|
-| `dev-docs/` | `development-records/` | OaC 의미 기반 이름. "개발 이력을 기록한다"는 역할을 반영. 배포 제외 대상 |
-
-**폴더 분류 기준 (OaC §5 axis 분리)**
-
-| 폴더 | conceptual axis | 역할 | 배포 |
-|---|---|---|---|
-| `.onto/authority/` | canonical data | define (정의) | 포함 |
-| `.onto/principles/` | development governance | prescribe (규정) | 제외 |
-| `development-records/` | development history | record (기록) | 제외 |
-
-### Reshuffle 2026-04-08
-
-Agent ID onto_ prefix 제거. Canonical lens/role ID가 bare form으로 변경됨.
-
-**ID 치환 (10쌍)**
-
-| 이전 ID | 새 ID |
-|---|---|
-| `onto_logic` | `logic` |
-| `onto_structure` | `structure` |
-| `onto_dependency` | `dependency` |
-| `onto_semantics` | `semantics` |
-| `onto_pragmatics` | `pragmatics` |
-| `onto_evolution` | `evolution` |
-| `onto_coverage` | `coverage` |
-| `onto_conciseness` | `conciseness` |
-| `onto_axiology` | `axiology` |
-| `onto_synthesize` | `synthesize` |
-
-**파일 리네임 (roles/ ×10)**
-
-| 이전 | 새 |
-|---|---|
-| `roles/onto_{id}.md` | `roles/{id}.md` |
-
-**보존 대상**: historical material은 `development-records/archive/`에 격리한다.
-
-**runtime rule**: active runtime accepts canonical lens IDs only.

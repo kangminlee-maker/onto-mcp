@@ -255,7 +255,7 @@ and appends/upserts the generated packet ref before invoking the unit.
 ### 5.3 Freshness And Continuation
 
 Current MCP review/status/result can read halted session artifacts. The planned
-explicit continuation surface is `onto.review_continue`; its design lives in
+explicit continuation surface is `onto_review_continue`; its design lives in
 `docs/architecture/review-continuation-surface.md`.
 
 The public concept is review continuation, not subagent management. A
@@ -296,7 +296,7 @@ Continuation must not change inputs, settings, target scope, provider route,
 domain, review mode, selected lens set, or manifest-governed artifacts. If any
 of those must change, the caller must start a new review session.
 
-Until `onto.review_continue` is implemented, MCP callers must still start a new
+Until `onto_review_continue` is implemented, MCP callers must still start a new
 review session when they need execution to proceed. Runtime status/result tools
 may read existing session artifacts, but they do not resume execution.
 
@@ -389,7 +389,7 @@ Runtime authority enters through:
 
 - `.onto/settings.json`
 - MCP tool arguments
-- canonical `review:invoke` arguments
+- session-local runtime artifacts
 - session artifacts written by the runtime
 
 Retired entry points and retired user inputs do not become runtime authority.
@@ -401,9 +401,9 @@ The runtime rejects:
 - `.onto/config.yml`
 - `.onto/config.yaml`
 - `--max-concurrent-lenses`
-- `--host-runtime` at `review:invoke`
-- `--execution-realization` at `review:invoke`
-- `--execution-mode` at `review:invoke`
+- `--host-runtime` from retired argv entrypoints
+- `--execution-realization` from retired argv entrypoints
+- `--execution-mode` from retired argv entrypoints
 - host-specific shortcuts that bypass resolved execution profile authority
 
 ### 7.2 Runtime-Derived Coordination

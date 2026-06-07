@@ -38,20 +38,22 @@ prompt-backed reference path에서 실제로 생성되는 산출물은 대부분
 5. `execution-preparation/target-snapshot-manifest.yaml`
 6. `execution-preparation/materialized-input.md`
 7. `execution-preparation/context-candidate-assembly.yaml`
-8. `round1/{lens-id}.md`
-9. `deliberation.md`
-10. `synthesis.md`
-11. `final-output.md`
-12. `error-log.md` optional
+8. `round1/{lens-id}.findings.yaml` in sidecar mode, or `round1/{lens-id}.md` in markdown mode
+9. `deliberation-resolution.yaml`
+10. `deliberation.md`
+11. `synthesis-ledger.yaml`
+12. `synthesis.md`
+13. `final-output.md`
+14. `error-log.md` optional
 
 Issue-stance deliberation target source artifacts:
 
-13. `finding-ledger.yaml`
-14. `finding-relation-graph.yaml`
-15. `issue-ledger.yaml`
-16. `issue-stance-matrix.yaml`
-17. `deliberation-plan.yaml`
-18. `problem-framing.yaml`
+15. `finding-ledger.yaml`
+16. `finding-relation-graph.yaml`
+17. `issue-ledger.yaml`
+18. `issue-stance-matrix.yaml`
+19. `deliberation-plan.yaml`
+20. `problem-framing.yaml`
 
 ---
 
@@ -60,19 +62,20 @@ Issue-stance deliberation target source artifacts:
 | Source artifact | ReviewRecord field |
 |---|---|
 | `interpretation.yaml` | `interpretation_ref` |
-| `binding.yaml` | `binding_ref`, `review_target_scope_ref`, `domain_final_selection_ref`, `resolved_review_mode`, `resolved_execution_realization`, `resolved_host_runtime`, `resolved_lens_ids` |
+| `binding.yaml` | `binding_ref`, `review_target_scope_ref`, `domain_final_selection_ref`, `resolved_review_mode`, `resolved_execution_realization`, `resolved_host_runtime`, `resolved_artifact_generation_realization`, `semantic_quality_evidence`, `resolved_lens_ids` |
 | `session-metadata.yaml` | `session_metadata_ref` |
 | `execution-preparation/target-snapshot.md` | `target_snapshot_ref` |
 | `execution-preparation/materialized-input.md` | `materialized_input_ref` |
 | `execution-preparation/review-target-profile.yaml` | `review_target_profile_ref` |
 | `execution-preparation/context-candidate-assembly.yaml` | `context_candidate_assembly_ref` |
-| `round1/{lens-id}.md` | `lens_result_refs.{lens-id}` |
-| `round1/{lens-id}.md` → `Domain Constraints Used` section | `per_lens_provenance.{lens-id}.domain_constraints_used` |
-| `round1/{lens-id}.md` → `Domain Context Assumptions` section | `per_lens_provenance.{lens-id}.domain_context_assumptions` |
-| `synthesis.md` if produced, otherwise `null` | `synthesis_result_ref` |
-| `synthesis.md` → shared phenomenon classification | `shared_phenomenon_summary` |
-| `deliberation.md` if produced, otherwise `null` | `deliberation_result_ref` |
-| `final-output.md` | `final_output_ref` |
+| `execution-result.yaml.lens_execution_results[*].output_path` (`round1/{lens-id}.findings.yaml` in sidecar mode, `round1/{lens-id}.md` in markdown mode) | `lens_result_refs.{lens-id}` |
+| lens sidecar/projection → `domain_constraints_used` | `per_lens_provenance.{lens-id}.domain_constraints_used` |
+| lens sidecar/projection → `domain_context_assumptions` | `per_lens_provenance.{lens-id}.domain_context_assumptions` |
+| `synthesis-ledger.yaml` if produced, otherwise `null` | `synthesis_result_ref`, `synthesis_result_sha256` |
+| `synthesis.md` if produced, otherwise `null` | `synthesis_output_sha256` |
+| `synthesis-ledger.yaml` → `shared_phenomenon_summary` | `shared_phenomenon_summary` |
+| `deliberation-resolution.yaml` if produced, otherwise `null` | `deliberation_result_ref`, `deliberation_result_sha256` |
+| `final-output.md` | `final_output_ref`, `final_output_sha256` |
 | `degradation-summary.yaml` if produced, otherwise `null` | `degradation_notes_ref` |
 
 Issue-stance deliberation target mapping:
@@ -84,7 +87,7 @@ Issue-stance deliberation target mapping:
 | `issue-ledger.yaml` if produced, otherwise `null` | `issue_ledger_ref` |
 | `issue-stance-matrix.yaml` if produced, otherwise `null` | `issue_stance_matrix_ref` |
 | `deliberation-plan.yaml` if produced, otherwise `null` | `deliberation_plan_ref` |
-| `deliberation.md` → issue status entries | `issue_resolution_summary` |
+| `deliberation-resolution.yaml` → issue status entries | `issue_resolution_summary` |
 | `problem-framing.yaml` if produced, otherwise `null` | `problem_framing_ref` |
 | `problem-framing.yaml` → common spine classification | `issue_resolution_summary.*.issue_role`, `issue_resolution_summary.*.judgment_state`, `issue_resolution_summary.*.impact_kind`, `issue_resolution_summary.*.timing_class`, `issue_resolution_summary.*.closure_class` |
 | `problem-framing.yaml` → domain axes classification | `issue_resolution_summary.*.domain_axes` |
@@ -106,11 +109,16 @@ Issue-stance deliberation target mapping:
 - `resolved_review_mode`
 - `resolved_execution_realization`
 - `resolved_host_runtime`
+- `resolved_artifact_generation_realization`
+- `semantic_quality_evidence`
 - `resolved_lens_ids`
 
-### 4.2 From `round1/*.md`
+### 4.2 From lens outputs
 
-아래는 `round1/*.md` 집합에서 derive된다.
+아래는 `execution-result.yaml.lens_execution_results[*].output_path`가 가리키는
+lens output 집합에서 derive된다. sidecar mode에서는
+`round1/{lens-id}.findings.yaml`이 machine source이고, markdown mode에서는
+`round1/{lens-id}.md`가 source다.
 
 - `participating_lens_ids`
 - `excluded_lens_ids`
@@ -128,17 +136,17 @@ degraded case rule:
 - `resolved_lens_ids`에는 있었지만 결과 파일이 없고 `error-log.md` 또는 synthesize 전달 메시지에 제외 사실이 남은 lens는 `degraded_lens_ids`로 분류한다
 - `excluded_lens_ids`는 원래 실행 대상에서 빠진 lens만 뜻한다
 
-per_lens_provenance derive rule (schema_version 2 이후):
+per_lens_provenance derive rule:
 
-- `per_lens_provenance.{lens-id}.domain_constraints_used`: 각 lens round1 output에서 `### Domain Constraints Used` 섹션에서 추출. durable provenance 형식 `{source_doc, source_version_or_snapshot_id, anchor}`
-- `per_lens_provenance.{lens-id}.domain_context_assumptions`: 각 lens round1 output에서 `### Domain Context Assumptions` 섹션에서 추출
-- pre-v2 artifact에서 해당 필드가 없으면 `null`로 기록
+- `per_lens_provenance.{lens-id}.domain_constraints_used`: 각 lens output의 `domain_constraints_used`에서 추출. durable provenance 형식 `{source_doc, source_version_or_snapshot_id, anchor}`
+- `per_lens_provenance.{lens-id}.domain_context_assumptions`: 각 lens output의 `domain_context_assumptions`에서 추출
+- 해당 provenance section이 없으면 해당 필드를 `null`로 기록
 
 lens_output_schema_version derive rule:
 
 - `.onto/processes/review/lens-prompt-contract.md` §8 Output Schema의 `schema_version`이 단일 canonical source이다
 - 현재 값은 `2`로 고정되어 있으며, prompt-backed assembly 시 assembler가 `lens-prompt-contract.md`의 이 값을 직접 기록한다
-- 각 `round1/{lens-id}.md`가 독자적으로 declare할 필요는 없다
+- 각 lens output artifact가 독자적으로 declare할 필요는 없다
 - future schema bump 시 `lens-prompt-contract.md` §8만 수정하면 mapping이 자동 전파된다
 
 ### 4.3 From issue-stage artifacts
@@ -157,36 +165,36 @@ lens_output_schema_version derive rule:
 
 derive rule:
 
-- `finding-ledger.yaml`는 finding-level severity count와 finding-only fallback projection의 source다.
+- `finding-ledger.yaml`는 finding-level severity count와 finding-level-only projection의 source다.
 - `issue-ledger.yaml`가 있으면 issue-level severity가 final result classification의 primary severity source다.
 - `problem-framing.yaml`는 action candidate derivation의 primary source다. `timing_class`, `closure_class`, `closure_obligation`, `judgment_state`가 action candidates로 project된다.
 - `execution-result.yaml`가 `halted_partial`이면 runtime-level `retry_execution`/`continue_review` action candidate가 추가된다.
-- `material_issue` 여부는 severity에서 파생한다. `blocker`, `high`, `medium`은 material issue이고 `low`, `info`는 non-material finding이다.
+- `material_issue` 여부는 severity와 `problem-framing.yaml` admission fields에서 파생한다. `blocker`, `high`, `medium`은 material-severity candidates이며, `issue_role: evidence_gap`, `judgment_state: insufficient_evidence|outside_boundary`, `closure_class: needs_evidence|watch`, 또는 `closure_obligation: out_of_scope`이면 non-material finding으로 보존한다. `low`, `info`는 non-material finding이다.
 - `domain_threshold_used`는 severity를 설명하는 보조 값이며, 별도 materiality 축을 만들지 않는다.
 
-### 4.4 From `execution-result.yaml`, `deliberation.md`, and `synthesis.md`
+### 4.4 From `execution-result.yaml`, `deliberation-resolution.yaml`, and `synthesis-ledger.yaml`
 
 아래는 종합 단계 artifact에서 derive된다.
 
 - `deliberation_status`
 - `deliberation_result_ref`
-- `shared_phenomenon_summary` (schema_version 2 이후: synthesis output에서 shared phenomenon 식별 및 claim relation 분류 결과를 구조화하여 추출. 분류가 없으면 빈 배열)
+- `shared_phenomenon_summary` (schema_version 2 이후: `synthesis-ledger.yaml`에서 shared phenomenon 식별 및 claim relation 분류 결과를 구조화하여 추출. 분류가 없으면 빈 배열)
 
 검증 순서:
 
 1. `execution-result.yaml.deliberation_status`
-2. `synthesis.md` frontmatter `deliberation_status`
+2. `synthesis-ledger.yaml` participation and source artifact refs
 3. fail-loud validation
 
-완료된 review record의 값은 `performed`여야 한다.
-`deliberation.md`가 없거나 `synthesis.md`가 `performed`를 선언하지 않으면 assemble은 실패한다.
+`completed`와 `completed_with_degradation` review record의 값은 `performed`여야 한다.
+`deliberation-resolution.yaml`이나 `synthesis-ledger.yaml`이 없으면 assemble은 실패한다.
 
 `halted_partial` review에서 controlled deliberation이 완료되지 않았으면 값은
 `not_performed`다. 이 경우 `execution-result.yaml`이 source authority이며
-`synthesis.md` frontmatter 검증은 실행되지 않는다. Runtime은
+`synthesis-ledger.yaml` 검증은 실행되지 않는다. Runtime은
 `halt_phase`, `halt_unit_id`, `halt_unit_kind`, `halt_lens_id`와
 `deliberation_execution_results[*].failure_message`로 실패한 deliberation unit을
-구조화해 남겨야 한다. 생성되지 않은 `synthesis.md` 또는 `deliberation.md`는
+구조화해 남겨야 한다. 생성되지 않은 `synthesis-ledger.yaml` 또는 `deliberation-resolution.yaml`는
 ReviewRecord에서 required-looking ref로 노출하지 않고 `null`로 둔다.
 Issue-stage artifact refs도 현재 run의 파일 존재 여부를 source authority로
 삼는다. synthesize가 실행되지 않아도 이미 생성된 finding/issue/deliberation-plan
@@ -248,10 +256,10 @@ team lead는 아래 순서로 `review-record.yaml`을 assemble한다.
 1. `interpretation.yaml`의 ref를 기록
 2. `binding.yaml`의 ref와 resolved fields를 기록
 3. execution-preparation artifact ref를 기록
-4. 실제 존재하는 `round1/*.md`를 lens id별로 매핑
-5. 각 lens output의 schema v2 provenance section을 `per_lens_provenance`로 구조화한다
-6. `deliberation.md`와 `synthesis.md`를 기록한다
-7. `synthesis.md`의 shared phenomenon section이 있으면 `shared_phenomenon_summary`로 구조화한다
+4. `execution-result.yaml.lens_execution_results[*].output_path`를 lens id별로 매핑
+5. 각 lens output의 current provenance section을 `per_lens_provenance`로 구조화한다
+6. `deliberation-resolution.yaml`와 `synthesis-ledger.yaml`를 기록한다
+7. `synthesis-ledger.yaml.shared_phenomenon_summary`를 구조화한다
 8. `final-output.md` ref를 기록
 9. `error-log.md`가 있으면 degraded/deliberation status를 조정한다
 
@@ -281,6 +289,11 @@ domain_final_selection_ref: .onto/review/20260404-a1b2c3d4/binding.yaml
 resolved_review_mode: full
 resolved_execution_realization: worker
 resolved_host_runtime: codex
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate before quality is claimed
 resolved_lens_ids:
   - logic
   - structure
@@ -299,15 +312,15 @@ review_target_profile_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/
 context_candidate_assembly_ref: .onto/review/20260404-a1b2c3d4/execution-preparation/context-candidate-assembly.yaml
 
 lens_result_refs:
-  logic: .onto/review/20260404-a1b2c3d4/round1/logic.md
-  structure: .onto/review/20260404-a1b2c3d4/round1/structure.md
-  dependency: .onto/review/20260404-a1b2c3d4/round1/dependency.md
-  semantics: .onto/review/20260404-a1b2c3d4/round1/semantics.md
-  pragmatics: .onto/review/20260404-a1b2c3d4/round1/pragmatics.md
-  evolution: .onto/review/20260404-a1b2c3d4/round1/evolution.md
-  coverage: .onto/review/20260404-a1b2c3d4/round1/coverage.md
-  conciseness: .onto/review/20260404-a1b2c3d4/round1/conciseness.md
-  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.md
+  logic: .onto/review/20260404-a1b2c3d4/round1/logic.findings.yaml
+  structure: .onto/review/20260404-a1b2c3d4/round1/structure.findings.yaml
+  dependency: .onto/review/20260404-a1b2c3d4/round1/dependency.findings.yaml
+  semantics: .onto/review/20260404-a1b2c3d4/round1/semantics.findings.yaml
+  pragmatics: .onto/review/20260404-a1b2c3d4/round1/pragmatics.findings.yaml
+  evolution: .onto/review/20260404-a1b2c3d4/round1/evolution.findings.yaml
+  coverage: .onto/review/20260404-a1b2c3d4/round1/coverage.findings.yaml
+  conciseness: .onto/review/20260404-a1b2c3d4/round1/conciseness.findings.yaml
+  axiology: .onto/review/20260404-a1b2c3d4/round1/axiology.findings.yaml
 participating_lens_ids:
   - logic
   - structure
@@ -322,10 +335,14 @@ excluded_lens_ids: []
 degraded_lens_ids: []
 degradation_notes_ref: null
 
-synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis.md
+synthesis_result_ref: .onto/review/20260404-a1b2c3d4/synthesis-ledger.yaml
+synthesis_result_sha256: 1d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
+synthesis_output_sha256: 2d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 deliberation_status: performed
-deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation.md
+deliberation_result_ref: .onto/review/20260404-a1b2c3d4/deliberation-resolution.yaml
+deliberation_result_sha256: 3d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
+final_output_sha256: 0d4a1185a5d2f6a9f2e4c7b8d9e0a1b2c3d4e5f60718293a4b5c6d7e8f901234
 ```
 
 ---
@@ -334,4 +351,4 @@ final_output_ref: .onto/review/20260404-a1b2c3d4/final-output.md
 
 다음 단계는 아래다.
 
-1. real provider path가 schema v2 lens provenance sections를 안정적으로 산출하게 한다
+1. real provider path가 current lens provenance sections를 안정적으로 산출하게 한다

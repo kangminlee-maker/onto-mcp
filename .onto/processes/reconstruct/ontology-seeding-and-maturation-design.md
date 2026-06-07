@@ -283,9 +283,9 @@ artifact authorities with runtime validators. `ontology-seed.yaml` may carry
 only a bounded projection of the selected validated source-purpose authority and
 confirmation result.
 
-The first implementation must not create compatibility projections for legacy
-seed names. If an old artifact shape remains in tests or docs, migrate or remove
-the old reference instead of projecting it into the new runtime path.
+The first implementation must not create alias projections for retired seed
+names. If an old artifact shape remains in tests or docs, migrate or remove the
+old reference instead of projecting it into the new runtime path.
 
 #### Purpose Authority Split
 
@@ -647,7 +647,7 @@ Implementation order for seeding gates:
 
 | Order | Runtime change | First passing evidence |
 |---|---|---|
-| S1 | add artifact types for source-purpose candidates and purpose confirmation | parser/fixture tests reject missing candidate ids, bad evidence refs, and unsupported status values |
+| S1 | add artifact types for source-purpose candidates and purpose confirmation | targeted contract tests reject missing candidate ids, bad evidence refs, and unsupported status values |
 | S2 | add source-purpose candidate author prompt after source observation and before candidate inventory | direct-call run writes `source-purpose-candidates.yaml` with ranked candidates from existing observations |
 | S3 | add purpose candidate validator and registry gate | invalid P5-only purpose and dangling evidence refs fail before seed authoring |
 | S4 | add purpose confirmation artifact and validator | inferred purpose blocks seed readiness until confirmation is valid |
@@ -658,8 +658,8 @@ Implementation order for seeding gates:
 
 The narrow release target for seeding is one real-source run that reaches
 `ready` or `limited` honestly, or fails at the first invalid gate with a concrete
-validation artifact. A mock-backed run may verify test coverage, but it does not
-count as product completion.
+validation artifact. Schema, parser, or fixture checks are development signals
+only; they do not count as product completion.
 
 #### Seeding Revision Completion Criteria
 
@@ -1146,7 +1146,7 @@ projection_rows:
         selected_source_profile_definition_sha256:
         member_source_refs: []
         validation_ref:
-        support_claim: unsupported | profile_supported | fixture_validated | golden_source_validated | real_source_validated | release_supported
+        support_claim: unsupported | profile_supported | golden_source_validated | real_source_validated | release_supported
         readiness_effect: supported | limited | blocked
         next_action:
         limitation_refs: []
@@ -2354,7 +2354,7 @@ seed, which profile was selected, or what next action is required.
 The registry predicate catalog should contain only executable predicates,
 predicate-family instances that have current consumers, or explicitly reserved
 predicates with a named future consumer. Unused executable-looking predicate
-rows are removed rather than kept as compatibility aliases.
+rows are removed rather than kept as alias rows.
 
 ## 10. Maturation Convergence Strategy
 
@@ -2448,7 +2448,7 @@ handoff, final output, run manifest, and reconstruct record.
 `claim-realization-map.yaml` is the per-seed-claim realization stance authority
 registered in `reconstruct-contract-registry.yaml`; it records exactly one
 realization row per seed claim and closes realization evidence refs against
-`source-observations.yaml`. It is not a legacy compatibility projection.
+`source-observations.yaml`. It is the current claim-realization projection.
 `competency-questions.yaml` is the question authority.
 `competency-question-assessment.yaml` is the answerability-result authority.
 `reconstruct-contract-registry.yaml` is the active runtime authority graph.
@@ -3098,10 +3098,10 @@ projection is active for `actionable_limited` or `actionable_ready` continuation
 states and is validated as a runtime projection of existing seed, expansion,
 matrix, convergence, continuation, and proof boundary authorities.
 Promoted same-request resume is active for authored artifacts only when reuse
-provenance compatibility matches the current request, source/profile/domain
+provenance matches the current request, source/profile/domain
 snapshot, source-safety/scout/lineage validation, and seed-authoring readiness
 validation once those upstream authorities exist. Run-control resume rows record
-the compatibility policy and check refs; semantic quality remains revalidated by
+the provenance match policy and check refs; semantic quality remains revalidated by
 the downstream artifact validators.
 `seed-authoring-readiness-validation.yaml` now also records
 `deterministic_gate_scope: pre_seed_closure_only` and fails when the readiness
@@ -3142,7 +3142,7 @@ the seed handoff. Runtime closes the later lifecycle boundary with
 `source_scout_pack_post_maturation_gate` from the post-maturation snapshot refs
 before final-output and record consumption. That projection also requires the
 post-maturation validation artifact and SourceScoutPack snapshot to be concrete
-same-session siblings, not only phase-compatible basenames.
+same-session siblings, not only same-phase basenames.
 Prompt payloads now compact `exploration-synthesis.yaml` before source-frontier,
 source-purpose, and candidate-inventory authoring. The projection preserves gap
 ids, lens ids, descriptions, requested source refs, and evidence observation ids,
@@ -3185,7 +3185,6 @@ Material-kind support claims require material-specific evidence:
 |---|---|---|
 | `unsupported` | runtime recognizes the material kind but cannot run it | fail-loud unsupported or clarify halt |
 | `profile_supported` | a source profile can be selected and validated | profile parser and material-profile validation tests |
-| `fixture_validated` | deterministic fixtures prove structural observation and validation | fixture tests for source observations, purpose adequacy, and failure cases |
 | `golden_source_validated` | a curated non-trivial target proves expected semantic artifacts | golden-source run with checked artifact refs and limitations |
 | `real_source_validated` | an external real target proves the path under realistic source noise | real-source E2E with artifacts, validation results, and first-failure visibility |
 | `release_supported` | the material kind can be claimed in user-facing docs/API | golden or real-source validation plus fail-loud unsupported/mixed-member behavior |
@@ -3196,9 +3195,9 @@ evidence. `mixed` can be release-supported only when every member kind has a
 verified path or a limitation-backed unsupported member state.
 
 Current public projection is constrained to `unsupported` and
-`profile_supported`. `fixture_validated`, `golden_source_validated`,
-`real_source_validated`, and `release_supported` remain taxonomy states until
-their material-specific evidence artifacts and validators are wired.
+`profile_supported`. `golden_source_validated`, `real_source_validated`, and
+`release_supported` remain taxonomy states until their material-specific evidence
+artifacts and validators are wired.
 
 Per-kind release evidence requirements:
 

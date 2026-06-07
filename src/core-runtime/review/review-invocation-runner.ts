@@ -12,19 +12,23 @@ import {
 } from "../cli/review-invoke.js";
 import { executeReviewPromptExecution } from "../cli/run-review-prompt-execution.js";
 import { startReviewSession } from "../cli/start-review-session.js";
-import { buildReviewExecutionRoute } from "./review-execution-route.js";
+import {
+  buildReviewExecutionRoute,
+  buildReviewRuntimeRouteArtifactProjection,
+} from "./review-execution-route.js";
 import type {
   PrepareOnlyResult,
   ReviewMode,
   ReviewTargetScopeKind,
 } from "./artifact-types.js";
+import type { LlmExecutionRoute } from "../llm/model-switcher.js";
 import {
   fileExists,
   normalizeDomainValue,
   readSingleOptionValueFromArgv,
 } from "./review-artifact-utils.js";
 
-export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
+export type ReviewExecutorRealization = "codex" | "ts_inline_http";
 
 export interface ReviewInvocationRequest {
   projectRoot: string;
@@ -40,6 +44,8 @@ export interface ReviewInvocationRequest {
   reviewMode?: ReviewMode;
   lensIds?: string[];
   confirmValueAlignment?: boolean;
+  executionRoute?: LlmExecutionRoute;
+  /** Debug-only legacy executor override. Prefer executionRoute. */
   executorRealization?: ReviewExecutorRealization;
 }
 
@@ -75,7 +81,7 @@ export type ReviewInvocationProgressObserver = (
   event: ReviewInvocationProgressEvent,
 ) => void | Promise<void>;
 
-export interface LegacyReviewInvocationOutput {
+export interface ReviewInvocationCliOutput {
   summary?: unknown;
   review_result: {
     session_root: string;
@@ -102,7 +108,7 @@ export interface LegacyReviewInvocationOutput {
   completion?: unknown;
 }
 
-type LegacyReviewInvocationRecordStatus =
+type ReviewInvocationRecordStatus =
   | "completed"
   | "completed_with_degradation"
   | "halted_partial"
@@ -115,13 +121,13 @@ export interface RunReviewInvocationOptions {
 }
 
 export interface RunReviewInvocationResult {
-  output: LegacyReviewInvocationOutput;
+  output: ReviewInvocationCliOutput;
   stdout: string[];
   stderr: string[];
 }
 
 export interface ReviewInvocationEquivalenceProjection {
-  recordStatus: LegacyReviewInvocationRecordStatus;
+  recordStatus: ReviewInvocationRecordStatus;
   deliberationStatus: string | null;
   domainFinalValue: string | null;
   domainSelectionMode: string | null;
@@ -177,8 +183,9 @@ export function appendReviewInvocationRequestArgs(
   if (request.diffRange) {
     result.push("--diff-range", request.diffRange);
   }
-  if (request.executorRealization) {
-    result.push("--executor-realization", request.executorRealization);
+  const executorRealization = executorRealizationFromRequest(request);
+  if (executorRealization) {
+    result.push("--executor-realization", executorRealization);
   }
   for (const lensId of request.lensIds ?? []) {
     result.push("--lens-id", lensId);
@@ -187,6 +194,27 @@ export function appendReviewInvocationRequestArgs(
     result.push("--confirm-value-alignment");
   }
   return result;
+}
+
+function executorRealizationFromRequest(
+  request: Pick<ReviewInvocationRequest, "executionRoute" | "executorRealization">,
+): ReviewExecutorRealization | undefined {
+  const routeRealization =
+    request.executionRoute === "external_oauth_worker"
+      ? "codex"
+      : request.executionRoute === "direct_model_call"
+        ? "ts_inline_http"
+        : undefined;
+  if (
+    request.executorRealization !== undefined &&
+    routeRealization !== undefined &&
+    request.executorRealization !== routeRealization
+  ) {
+    throw new Error(
+      `Conflicting review execution overrides: executionRoute=${request.executionRoute} maps to ${routeRealization}, but debug executorRealization=${request.executorRealization}.`,
+    );
+  }
+  return request.executorRealization ?? routeRealization;
 }
 
 export async function prepareReviewInvocationRequest(
@@ -278,6 +306,9 @@ export async function collectReviewInvocationArtifactRefs(
     deliberation_plan: path.join(sessionRoot, "deliberation-plan.yaml"),
     problem_framing: path.join(sessionRoot, "problem-framing.yaml"),
     deliberation_output: path.join(sessionRoot, "deliberation.md"),
+    deliberation_resolution: path.join(sessionRoot, "deliberation-resolution.yaml"),
+    synthesis_work_items: path.join(sessionRoot, "synthesis-work-items.yaml"),
+    synthesis_ledger: path.join(sessionRoot, "synthesis-ledger.yaml"),
     synthesis_output: path.join(sessionRoot, "synthesis.md"),
     review_run_manifest: path.join(sessionRoot, "review-run-manifest.yaml"),
     degradation_summary: path.join(sessionRoot, "degradation-summary.yaml"),
@@ -297,15 +328,15 @@ export async function collectReviewInvocationArtifactRefs(
   return Object.fromEntries(entries);
 }
 
-export function parseLegacyReviewInvocationOutput(
+export function parseReviewInvocationCliOutput(
   stdout: string[],
-): LegacyReviewInvocationOutput {
+): ReviewInvocationCliOutput {
   for (const line of [...stdout].reverse()) {
     const trimmed = line.trim();
     if (!trimmed.startsWith("{")) continue;
     try {
       const parsed = JSON.parse(trimmed) as unknown;
-      if (isLegacyReviewInvocationOutput(parsed)) return parsed;
+      if (isReviewInvocationCliOutput(parsed)) return parsed;
     } catch {
       // Keep looking: progress messages may contain braces or partial JSON.
     }
@@ -314,7 +345,7 @@ export function parseLegacyReviewInvocationOutput(
 }
 
 export function projectReviewInvocationEquivalence(
-  output: LegacyReviewInvocationOutput,
+  output: ReviewInvocationCliOutput,
 ): ReviewInvocationEquivalenceProjection {
   const entrypointPlan = isRecord(output.entrypoint_plan)
     ? output.entrypoint_plan
@@ -343,9 +374,9 @@ export function projectReviewInvocationEquivalence(
   };
 }
 
-function isLegacyReviewInvocationOutput(
+function isReviewInvocationCliOutput(
   value: unknown,
-): value is LegacyReviewInvocationOutput {
+): value is ReviewInvocationCliOutput {
   if (value === null || typeof value !== "object") return false;
   const reviewResult = (value as { review_result?: unknown }).review_result;
   return reviewResult !== null && typeof reviewResult === "object";
@@ -435,9 +466,9 @@ function sessionIdFromRoot(sessionRoot: string | null): string | null {
   return sessionRoot ? path.basename(path.resolve(sessionRoot)) : null;
 }
 
-function normalizeLegacyRecordStatus(
+function normalizeReviewInvocationRecordStatus(
   status: string | null | undefined,
-): LegacyReviewInvocationRecordStatus {
+): ReviewInvocationRecordStatus {
   if (
     status === "completed" ||
     status === "completed_with_degradation" ||
@@ -509,7 +540,7 @@ export async function prepareReviewInvocationArgv(
 export async function runReviewInvocationArgv(
   argv: string[],
   observer?: ReviewInvocationProgressObserver,
-): Promise<LegacyReviewInvocationOutput> {
+): Promise<ReviewInvocationCliOutput> {
   const setup = await resolveReviewInvokeSetup(argv);
   const resolvedProjectRoot = path.resolve(
     readSingleOptionValueFromArgv(setup.startArgv, "project-root") ?? ".",
@@ -646,7 +677,7 @@ export async function runReviewInvocationArgv(
     message: "Review record assembled.",
   });
 
-  const output = await projectLegacyReviewInvocationOutput({
+  const output = await projectReviewInvocationCliOutput({
     setup,
     sessionRoot,
     resolvedProjectRoot,
@@ -666,13 +697,13 @@ export async function runReviewInvocationArgv(
   return output;
 }
 
-async function projectLegacyReviewInvocationOutput(args: {
+async function projectReviewInvocationCliOutput(args: {
   setup: Awaited<ReturnType<typeof resolveReviewInvokeSetup>>;
   sessionRoot: string;
   resolvedProjectRoot: string;
   promptExecutionResult: Awaited<ReturnType<typeof executeReviewPromptExecution>>;
   defaultExecutorConfig: ReturnType<typeof resolveExecutorConfig>;
-}): Promise<LegacyReviewInvocationOutput> {
+}): Promise<ReviewInvocationCliOutput> {
   const reviewSummary = await readOptionalReviewSummary(args.sessionRoot);
   const boundedInvokeSteps = [
     "start_review_session",
@@ -700,13 +731,7 @@ async function projectLegacyReviewInvocationOutput(args: {
       synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
-      runtime_route: {
-        execution_realization: finalRoute.execution_realization,
-        host_runtime: finalRoute.artifact_host_runtime,
-        worker_executor: finalRoute.executor,
-        runtime_provider: finalRoute.resolved_provider,
-        auth_mode: finalRoute.auth_mode,
-      },
+      runtime_route: buildReviewRuntimeRouteArtifactProjection(finalRoute),
       ...(routeProfile.review_execution_profile.model
         ? { model: routeProfile.review_execution_profile.model }
         : {}),
@@ -716,10 +741,17 @@ async function projectLegacyReviewInvocationOutput(args: {
       ...(routeProfile.review_execution_profile.service_tier
         ? { service_tier: routeProfile.review_execution_profile.service_tier }
         : {}),
+      ...(routeProfile.review_execution_profile.retry
+        ? { retry: routeProfile.review_execution_profile.retry }
+        : {}),
     },
     review_mode: args.setup.resolvedInvokeInputs.reviewMode,
     max_concurrent_lenses: args.setup.maxConcurrentLenses,
-    concurrency_strategy: "all_lenses_parallel",
+    concurrency_strategy:
+      args.setup.maxConcurrentLenses >=
+      args.setup.resolvedInvokeInputs.resolvedLensIds.length
+        ? "all_lenses_parallel"
+        : "bounded_lens_parallel",
     synthesize_waits_for_all_lenses: true,
   };
   const finalOutputPath =
@@ -738,7 +770,7 @@ async function projectLegacyReviewInvocationOutput(args: {
   const degradedLensIds =
     reviewSummary.reviewRecord?.degraded_lens_ids ??
     args.promptExecutionResult.degraded_lens_ids;
-  const recordStatus = normalizeLegacyRecordStatus(
+  const recordStatus = normalizeReviewInvocationRecordStatus(
     reviewSummary.reviewRecord?.record_status ??
       reviewSummary.executionResult?.execution_status ??
       null,
@@ -785,7 +817,11 @@ async function projectLegacyReviewInvocationOutput(args: {
     },
     executor: {
       max_concurrent_lenses: args.setup.maxConcurrentLenses,
-      concurrency_strategy: "all_lenses_parallel",
+      concurrency_strategy:
+        args.setup.maxConcurrentLenses >=
+        args.setup.resolvedInvokeInputs.resolvedLensIds.length
+          ? "all_lenses_parallel"
+          : "bounded_lens_parallel",
       realization: inferExecutorRealization(args.defaultExecutorConfig),
       profile: routeSummary.review_execution_profile,
     },
@@ -823,6 +859,7 @@ async function projectLegacyReviewInvocationOutput(args: {
     },
     explanation: {
       final_review_result: explanationSummary.final_review_result,
+      boundary_notes: explanationSummary.boundary_notes,
     },
     issues: closureSummary,
     artifacts: artifactRefs,

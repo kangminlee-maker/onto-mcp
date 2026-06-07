@@ -13,7 +13,7 @@ import { isCommandOnPath } from "./path-scan.js";
 /**
  * Hosts registered through their own official CLI (`claude mcp …`,
  * `codex mcp …`). The CLI owns the config format/schema, which keeps us
- * dependency-free (no TOML parser) and forward-compatible.
+ * dependency-free (no TOML parser) while host CLIs own schema changes.
  *
  * Two robustness measures handle hosts whose CLI name or config location
  * varies (e.g. Claude Code multi-profile via `CLAUDE_CONFIG_DIR`, or a `claude`
@@ -31,7 +31,7 @@ export interface CommandRun {
   stderr: string;
 }
 
-/** Injectable command runner (defaults to real process execution; mocked in tests). */
+/** Injectable command runner (defaults to real process execution; replaced by test doubles in tests). */
 export interface CommandRunner {
   exists(command: string): boolean;
   run(command: string, args: string[], env?: Record<string, string>): CommandRun;
@@ -73,7 +73,7 @@ export interface CliHostSpec {
   removeArgs: (entry: RegistrationEntry) => string[];
   /** Build the `mcp list` argv used to probe for an existing entry. */
   listArgs: () => string[];
-  /** Manual fallback instructions shown when the CLI is absent. */
+  /** Manual instructions shown when the CLI is absent. */
   manualInstructions: (entry: RegistrationEntry) => string;
   /** Environment pinned onto every CLI call (e.g. `CLAUDE_CONFIG_DIR`). */
   commandEnv?: Record<string, string>;

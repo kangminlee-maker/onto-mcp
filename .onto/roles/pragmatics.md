@@ -29,4 +29,4 @@
 
 `.onto/domains/{domain}/competency_qs.md` (`session_domain`이 설정된 경우).
 
-`session_domain`이 `none`이면 `.onto/processes/review/lens-prompt-contract.md` §9.3 Domain-None Fallback Rule에 따라 domain document 없이 실행한다.
+`session_domain`이 `none`이면 `.onto/processes/review/lens-prompt-contract.md` §9.3 Domain-None Self-Contained Rule에 따라 domain document 없이 실행한다.

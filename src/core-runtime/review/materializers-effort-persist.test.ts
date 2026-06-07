@@ -2,8 +2,8 @@
  * Effort persist (Option A) — bootstrap 시점에 OntoConfig 로부터 resolved_llm_plan
  * 을 session-metadata.yaml 에 durable 기록하는 동작 검증.
  *
- * Source authority: development-records/plan (없음 — memory
- * project_framework_v1_session_20260420.md backlog [4]).
+ * Current contract: actor-owned settings.json/v3 LLM blocks are persisted into
+ * session metadata and actor invocation artifacts.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import fs from "node:fs/promises";
@@ -14,6 +14,7 @@ import type {
   InvocationBindingArtifact,
   ReviewActorConsumerBindingsArtifact,
   ReviewActorInvocationProfilesArtifact,
+  ReviewExecutionPlan,
   ReviewSessionMetadata,
 } from "./artifact-types.js";
 import { bootstrapInvocationBindingArtifacts } from "./materializers.js";
@@ -58,27 +59,87 @@ function commonParams(projectRoot: string) {
 
 describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence", () => {
   let tmp: string;
+  let originalHome: string | undefined;
 
   beforeEach(async () => {
     tmp = await makeTmpProject();
+    originalHome = process.env.HOME;
+    process.env.HOME = path.join(tmp, "home");
+    await fs.mkdir(process.env.HOME, { recursive: true });
   });
 
   afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME;
+    else process.env.HOME = originalHome;
     await fs.rm(tmp, { recursive: true, force: true });
   });
+
+  function openAiOauthLlm(effort = "medium") {
+    return {
+      auth: "oauth",
+      provider: "openai",
+      model: "gpt-5.5",
+      effort,
+      service_tier: "fast",
+    };
+  }
+
+  function openAiApiLlm(effort = "medium") {
+    return {
+      auth: "api_key",
+      provider: "openai",
+      model: "gpt-5.5",
+      effort,
+    };
+  }
+
+  function anthropicApiLlm(effort?: string) {
+    return {
+      auth: "api_key",
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      ...(effort ? { effort } : {}),
+    };
+  }
+
+  function v3ReviewSettings(args: {
+    teamlead: unknown;
+    lens: unknown;
+    synthesize: unknown;
+    topology?: "main-workers" | "nested-workers";
+    executor?: "auto" | "codex" | "direct_call";
+    artifacts?: Record<string, unknown>;
+    maxConcurrentLenses?: number;
+  }) {
+    return {
+      schema_version: "settings.json/v3",
+      review: {
+        ...(args.artifacts ? { artifacts: args.artifacts } : {}),
+        execution: {
+          topology: args.topology ?? "main-workers",
+          executor: args.executor ?? "auto",
+          deliberation: "controlled-lens-deliberation",
+          ...(args.maxConcurrentLenses !== undefined
+            ? { max_concurrent_lenses: args.maxConcurrentLenses }
+            : {}),
+          actors: {
+            teamlead: { seat: "main", llm: args.teamlead },
+            lens: { seat: "worker", llm: args.lens },
+            synthesize: { seat: "worker", llm: args.synthesize },
+          },
+        },
+      },
+    };
+  }
 
   it("persists resolved_llm_plan from canonical OpenAI OAuth llm config", async () => {
     await writeConfig(
       tmp,
-      {
-        llm: {
-          auth: "oauth",
-          provider: "openai",
-          model: "gpt-5.5",
-          effort: "medium",
-          service_tier: "fast",
-        },
-      },
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("medium"),
+      }),
     );
 
     const { sessionMetadataPath } =
@@ -87,21 +148,46 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan).toBeDefined();
     expect(md.resolved_llm_plan?.provider).toBe("codex");
+    expect(md.resolved_llm_plan?.execution_route).toBe("external_oauth_worker");
+    expect(md.resolved_llm_plan?.execution_adapter).toBe("codex_cli");
+    expect(md.resolved_llm_plan?.model_provider).toBe("openai");
+    expect(md.resolved_llm_plan?.auth_mode).toBe("oauth");
+    expect(md.resolved_llm_plan?.billing_mode).toBe("subscription");
     expect(md.resolved_llm_plan?.model).toBe("gpt-5.5");
     expect(md.resolved_llm_plan?.reasoning_effort).toBe("medium");
     expect(md.resolved_llm_plan?.service_tier).toBe("fast");
   });
 
+  it("persists effective max_concurrent_lenses in the execution plan", async () => {
+    await writeConfig(
+      tmp,
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("medium"),
+        maxConcurrentLenses: 2,
+      }),
+    );
+
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      resolvedLensIds: ["structure", "logic", "axiology"],
+    });
+
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const plan = await readYaml<ReviewExecutionPlan>(binding.execution_plan_path);
+    expect(plan.max_concurrent_lenses).toBe(2);
+    expect(plan.minimum_participating_lenses).toBe(3);
+  });
+
   it("persists provider when canonical Anthropic API-key llm config is set", async () => {
     await writeConfig(
       tmp,
-      {
-        llm: {
-          auth: "api_key",
-          provider: "anthropic",
-          model: "claude-sonnet-4-6",
-        },
-      },
+      v3ReviewSettings({
+        teamlead: anthropicApiLlm(),
+        lens: anthropicApiLlm(),
+        synthesize: anthropicApiLlm(),
+      }),
     );
 
     const { sessionMetadataPath } =
@@ -109,6 +195,12 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
 
     const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
     expect(md.resolved_llm_plan?.provider).toBe("anthropic");
+    expect(md.resolved_llm_plan?.execution_route).toBe("direct_model_call");
+    expect(md.resolved_llm_plan?.execution_adapter).toBe("anthropic_sdk");
+    expect(md.resolved_llm_plan?.model_provider).toBe("anthropic");
+    expect(md.resolved_llm_plan?.auth_mode).toBe("api_key");
+    expect(md.resolved_llm_plan?.billing_mode).toBe("per_token");
+    expect(md.resolved_llm_plan?.wire_format).toBe("native_sdk");
     expect(md.resolved_llm_plan?.model).toBe("claude-sonnet-4-6");
   });
 
@@ -137,27 +229,11 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
   it("writes resolved actor invocation profiles and consumer bindings", async () => {
     await writeConfig(
       tmp,
-      {
-        llm: {
-          auth: "oauth",
-          provider: "openai",
-          model: "gpt-5.5",
-          effort: "medium",
-          service_tier: "fast",
-        },
-        review: {
-          execution: {
-            mode: "main-workers",
-            teamlead: { seat: "main", llm: "inherit" },
-            lens: { seat: "worker", llm: "inherit" },
-            synthesize: {
-              seat: "worker",
-              llm: { effort: "xhigh" },
-            },
-            deliberation: "controlled-lens-deliberation",
-          },
-        },
-      },
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("xhigh"),
+      }),
     );
 
     const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
@@ -188,6 +264,10 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       (profile) => profile.actor_kind === "synthesize",
     );
     expect(synthesize?.runtime_provider).toBe("codex");
+    expect(synthesize?.execution_route).toBe("external_oauth_worker");
+    expect(synthesize?.execution_adapter).toBe("codex_cli");
+    expect(synthesize?.model_provider).toBe("openai");
+    expect(synthesize?.billing_mode).toBe("subscription");
     expect(synthesize?.auth_mode).toBe("oauth");
     expect(synthesize?.effective_worker_executor).toBe("codex");
     expect(synthesize?.model).toBe("gpt-5.5");
@@ -219,34 +299,49 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     ).toBe(true);
   });
 
+  it("records sidecar lens output seats from review artifact settings", async () => {
+    await writeConfig(
+      tmp,
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("medium"),
+        artifacts: {
+          lens_output_format: "sidecar",
+          write_lens_markdown: false,
+        },
+      }),
+    );
+
+    const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
+      ...commonParams(tmp),
+      resolvedLensIds: ["logic", "coverage"],
+    });
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const plan = await readYaml<ReviewExecutionPlan>(binding.execution_plan_path);
+
+    expect(plan.lens_output_format).toBe("sidecar");
+    expect(plan.write_lens_markdown).toBe(false);
+    expect(plan.lens_execution_seats.map((seat) => seat.sidecar_output_path)).toEqual([
+      path.join(binding.round1_root, "logic.findings.yaml"),
+      path.join(binding.round1_root, "coverage.findings.yaml"),
+    ]);
+    expect(
+      binding.boundary_policy.write_policy.allowed_output_refs,
+    ).toContain(path.join(binding.round1_root, "logic.findings.yaml"));
+    expect(
+      binding.boundary_policy.write_policy.allowed_output_refs,
+    ).not.toContain(path.join(binding.round1_root, "logic.md"));
+  });
+
   it("derives direct-call actor routes from each actor LLM selection", async () => {
     await writeConfig(
       tmp,
-      {
-        llm: {
-          auth: "api_key",
-          provider: "openai",
-          model: "gpt-5.5",
-          effort: "medium",
-        },
-        review: {
-          execution: {
-            mode: "main-workers",
-            teamlead: { seat: "main", llm: "inherit" },
-            lens: { seat: "worker", llm: "inherit" },
-            synthesize: {
-              seat: "worker",
-              llm: {
-                auth: "api_key",
-                provider: "anthropic",
-                model: "claude-sonnet-4-6",
-                effort: "xhigh",
-              },
-            },
-            deliberation: "controlled-lens-deliberation",
-          },
-        },
-      },
+      v3ReviewSettings({
+        teamlead: openAiApiLlm("medium"),
+        lens: openAiApiLlm("medium"),
+        synthesize: anthropicApiLlm("xhigh"),
+      }),
     );
 
     const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
@@ -271,28 +366,38 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     );
 
     expect(teamlead?.runtime_provider).toBe("openai");
+    expect(teamlead?.execution_route).toBe("direct_model_call");
+    expect(teamlead?.execution_adapter).toBe("openai_sdk");
+    expect(teamlead?.model_provider).toBe("openai");
+    expect(teamlead?.billing_mode).toBe("per_token");
+    expect(teamlead?.wire_format).toBe("native_sdk");
     expect(teamlead?.auth_mode).toBe("api_key");
     expect(teamlead?.effective_worker_executor).toBe("direct_call");
     expect(lens?.runtime_provider).toBe("openai");
+    expect(lens?.execution_route).toBe("direct_model_call");
+    expect(lens?.model_provider).toBe("openai");
     expect(lens?.auth_mode).toBe("api_key");
     expect(lens?.effective_worker_executor).toBe("direct_call");
     expect(synthesize?.runtime_provider).toBe("anthropic");
+    expect(synthesize?.execution_route).toBe("direct_model_call");
+    expect(synthesize?.execution_adapter).toBe("anthropic_sdk");
+    expect(synthesize?.model_provider).toBe("anthropic");
+    expect(synthesize?.billing_mode).toBe("per_token");
+    expect(synthesize?.wire_format).toBe("native_sdk");
     expect(synthesize?.auth_mode).toBe("api_key");
     expect(synthesize?.effective_worker_executor).toBe("direct_call");
     expect(synthesize?.model).toBe("claude-sonnet-4-6");
     expect(synthesize?.effort).toBe("xhigh");
   });
 
-  it("records mock actor route from executor without accepting provider/auth inputs", async () => {
+  it("records standalone direct-call actor route from actor LLM selection", async () => {
     await writeConfig(
       tmp,
-      {
-        llm: {
-          auth: "api_key",
-          provider: "openai",
-          model: "gpt-5.5",
-        },
-      },
+      v3ReviewSettings({
+        teamlead: openAiApiLlm(),
+        lens: openAiApiLlm(),
+        synthesize: openAiApiLlm(),
+      }),
     );
 
     const { bindingOutputPath } = await bootstrapInvocationBindingArtifacts({
@@ -308,9 +413,14 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
       );
 
     for (const profile of profiles.profiles) {
-      expect(profile.runtime_provider).toBe("mock");
-      expect(profile.auth_mode).toBeNull();
-      expect(profile.effective_worker_executor).toBe("mock");
+      expect(profile.runtime_provider).toBe("openai");
+      expect(profile.execution_route).toBe("direct_model_call");
+      expect(profile.execution_adapter).toBe("openai_sdk");
+      expect(profile.model_provider).toBe("openai");
+      expect(profile.billing_mode).toBe("per_token");
+      expect(profile.wire_format).toBe("native_sdk");
+      expect(profile.auth_mode).toBe("api_key");
+      expect(profile.effective_worker_executor).toBe("direct_call");
       expect(profile.credential_ref).toBeNull();
     }
   });

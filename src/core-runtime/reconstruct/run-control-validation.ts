@@ -69,7 +69,7 @@ async function readYamlDocumentIfPresent<T>(filePath: string): Promise<T | null>
   }
 }
 
-const RESUME_COMPATIBILITY_FILENAMES = new Set([
+const RESUME_PROVENANCE_MATCH_FILENAMES = new Set([
   "reconstruct-run-control-validation.yaml",
   "target-material-profile-validation.yaml",
   "source-safety-ledger-validation.yaml",
@@ -90,7 +90,7 @@ async function readValidationStatusIfPresent(
   return typeof status === "string" ? status : null;
 }
 
-async function collectResumeCompatibilityRefs(sessionRoot: string): Promise<string[]> {
+async function collectResumeProvenanceMatchRefs(sessionRoot: string): Promise<string[]> {
   const refs: string[] = [];
   async function visit(dirPath: string): Promise<void> {
     let entries: Array<import("node:fs").Dirent>;
@@ -107,7 +107,7 @@ async function collectResumeCompatibilityRefs(sessionRoot: string): Promise<stri
         continue;
       }
       if (
-        RESUME_COMPATIBILITY_FILENAMES.has(entry.name) ||
+        RESUME_PROVENANCE_MATCH_FILENAMES.has(entry.name) ||
         entry.name.endsWith(".reuse-provenance.yaml")
       ) {
         refs.push(entryPath);
@@ -347,29 +347,41 @@ export function validateReconstructRunControl(args: {
       row.resume_decision === "resume_allowed" ||
       row.resume_decision === "resume_pending_provenance"
     ) {
-      if (row.compatibility_policy !== "authored_artifact_provenance:v1") {
+      const rowRecord = row as unknown as Record<string, unknown>;
+      if (
+        "compatibility_policy" in rowRecord ||
+        "compatibility_check_refs" in rowRecord
+      ) {
         violations.push(violation({
           code: "invalid_resume",
-          message: "resume rows must record the authored artifact compatibility policy",
+          message:
+            "resume rows use retired compatibility_* fields; run npm run migrate:reconstruct-artifact-fields before reuse",
           subjectId: row.resume_id,
         }));
       }
-      if ((row.compatibility_check_refs ?? []).length === 0) {
+      if (row.provenance_match_policy !== "authored_artifact_reuse_match:v1") {
         violations.push(violation({
           code: "invalid_resume",
-          message: "resume rows must record compatibility check refs",
+          message: "resume rows must record the authored artifact provenance match policy",
+          subjectId: row.resume_id,
+        }));
+      }
+      if ((row.provenance_match_check_refs ?? []).length === 0) {
+        violations.push(violation({
+          code: "invalid_resume",
+          message: "resume rows must record provenance match refs",
           subjectId: row.resume_id,
         }));
       }
       const checkpointRefs = new Set(row.checkpoint_refs.map((ref) =>
         path.resolve(ref)
       ));
-      for (const checkRef of row.compatibility_check_refs ?? []) {
+      for (const checkRef of row.provenance_match_check_refs ?? []) {
         if (!checkpointRefs.has(path.resolve(checkRef))) {
           violations.push(violation({
             code: "invalid_resume",
             message:
-              "resume compatibility check refs must be included in checkpoint refs",
+              "resume provenance match refs must be included in checkpoint refs",
             subjectId: checkRef,
           }));
         }
@@ -577,12 +589,12 @@ export async function initializeReconstructRunControl(args: {
           )
           .map((row) => row.artifact_ref)
           .sort();
-        const compatibilityCheckRefs =
-          await collectResumeCompatibilityRefs(args.sessionRoot);
+        const provenanceMatchRefs =
+          await collectResumeProvenanceMatchRefs(args.sessionRoot);
         const checkpointRefs = [
           args.outputPath,
           args.validationOutputPath,
-          ...compatibilityCheckRefs,
+          ...provenanceMatchRefs,
           ...trustedArtifactRefs,
         ];
         existing.updated_at = now;
@@ -590,14 +602,14 @@ export async function initializeReconstructRunControl(args: {
           resume_id: resumeId,
           resume_token_hash: sha256(`resume:${resumeId}:${requestFingerprint}`),
           source_attempt_id: sourceAttempt?.attempt_id ?? attemptId,
-          compatibility_policy: "authored_artifact_provenance:v1",
-          compatibility_check_refs: compatibilityCheckRefs,
+          provenance_match_policy: "authored_artifact_reuse_match:v1",
+          provenance_match_check_refs: provenanceMatchRefs,
           checkpoint_refs: [...new Set(checkpointRefs)].sort(),
           trusted_artifact_refs: trustedArtifactRefs,
           stale_artifact_refs: [],
           required_revalidation_refs: [
             args.validationOutputPath,
-            ...compatibilityCheckRefs,
+            ...provenanceMatchRefs,
             ...trustedArtifactRefs,
           ].sort(),
           resume_decision: "resume_pending_provenance",

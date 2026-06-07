@@ -3,15 +3,22 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { detectCodexBinaryAvailable } from "../discovery/host-detection.js";
+import { defaultReviewExecution } from "../discovery/settings-chain.js";
 import type {
   InvocationBindingArtifact,
   InvocationInterpretationArtifact,
 } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
 import {
+  ensureProviderRouteReadyForDispatch,
   resolveExecutionRealizationHandoff,
   reviewPrepareOnly,
 } from "./review-invoke.js";
+import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
+import {
+  REVIEW_MOCK_REALIZATION_ENV,
+  setTemporaryEnv,
+} from "../review/test-fixtures/mock-realization.js";
 
 const originalEnv = { ...process.env };
 
@@ -55,7 +62,7 @@ describe("review invoke execution auto-resolution", () => {
     process.env.HOME = tmp.home;
     process.env.PATH = "/tmp/onto-missing-bin";
     delete process.env.ONTO_HOST_RUNTIME;
-    delete process.env.ONTO_LLM_MOCK;
+    delete process.env[REVIEW_MOCK_REALIZATION_ENV];
     delete process.env.CLAUDECODE;
   });
 
@@ -70,13 +77,40 @@ describe("review invoke execution auto-resolution", () => {
   });
 
   it("uses API-key settings as direct-call self execution", () => {
+    const execution = defaultReviewExecution();
+    process.env.ANTHROPIC_API_KEY = "test-anthropic-key";
     const out = resolveExecutionRealizationHandoff({
       explicitCodex: false,
       ontoConfig: {
-        llm: {
-          auth: "api_key",
-          provider: "anthropic",
-          model: "claude-sonnet-4-6",
+        review: {
+          execution: {
+            ...execution,
+            executor: "direct_call",
+            teamlead: {
+              seat: "main",
+              llm: {
+                auth: "api_key",
+                provider: "anthropic",
+                model: "claude-sonnet-4-6",
+              },
+            },
+            lens: {
+              seat: "worker",
+              llm: {
+                auth: "api_key",
+                provider: "anthropic",
+                model: "claude-sonnet-4-6",
+              },
+            },
+            synthesize: {
+              seat: "worker",
+              llm: {
+                auth: "api_key",
+                provider: "anthropic",
+                model: "claude-sonnet-4-6",
+              },
+            },
+          },
         },
       },
     });
@@ -88,15 +122,202 @@ describe("review invoke execution auto-resolution", () => {
     }
   });
 
+  it("accepts Codex auth OPENAI_API_KEY during direct-call pre-dispatch checks", async () => {
+    delete process.env.OPENAI_API_KEY;
+    fs.writeFileSync(
+      path.join(tmp!.home, ".codex", "auth.json"),
+      JSON.stringify({ OPENAI_API_KEY: "codex-auth-key" }),
+      "utf8",
+    );
+    const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-route-ready-"));
+    const profile: ReviewExecutionProfile = {
+      mode: "main-workers",
+      teamlead: {
+        seat: "main",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      lens: {
+        seat: "worker",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      synthesize: {
+        seat: "worker",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      deliberation: "controlled-lens-deliberation",
+      worker_executor: "direct_call",
+      host: "openai",
+      auth: "api_key",
+      provider: "openai",
+      model: "gpt-5.5",
+      trace: [],
+    };
+
+    try {
+      await expect(
+        ensureProviderRouteReadyForDispatch({
+          sessionRoot,
+          executionPlanPath: path.join(sessionRoot, "execution-plan.yaml"),
+          reviewExecutionProfile: profile,
+        }),
+      ).resolves.toBeUndefined();
+    } finally {
+      fs.rmSync(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores blank Codex auth OPENAI_API_KEY during direct-call pre-dispatch checks", async () => {
+    delete process.env.OPENAI_API_KEY;
+    fs.writeFileSync(
+      path.join(tmp!.home, ".codex", "auth.json"),
+      JSON.stringify({ OPENAI_API_KEY: "   " }),
+      "utf8",
+    );
+    const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-route-ready-"));
+    const profile: ReviewExecutionProfile = {
+      mode: "main-workers",
+      teamlead: {
+        seat: "main",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      lens: {
+        seat: "worker",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      synthesize: {
+        seat: "worker",
+        llm: { auth: "api_key", provider: "openai", model: "gpt-5.5" },
+      },
+      deliberation: "controlled-lens-deliberation",
+      worker_executor: "direct_call",
+      host: "openai",
+      auth: "api_key",
+      provider: "openai",
+      model: "gpt-5.5",
+      trace: [],
+    };
+
+    try {
+      await expect(
+        ensureProviderRouteReadyForDispatch({
+          sessionRoot,
+          executionPlanPath: path.join(sessionRoot, "execution-plan.yaml"),
+          reviewExecutionProfile: profile,
+        }),
+      ).rejects.toThrow(
+        "Review direct-call route cannot dispatch because the provider credential environment variable is missing.",
+      );
+    } finally {
+      fs.rmSync(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("requires exact custom api_key_env during direct-call pre-dispatch checks", async () => {
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.CUSTOM_OPENAI_API_KEY;
+    fs.writeFileSync(
+      path.join(tmp!.home, ".codex", "auth.json"),
+      JSON.stringify({ OPENAI_API_KEY: "codex-auth-key" }),
+      "utf8",
+    );
+    const sessionRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-route-ready-"));
+    const profile: ReviewExecutionProfile = {
+      mode: "main-workers",
+      teamlead: {
+        seat: "main",
+        llm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+          api_key_env: "CUSTOM_OPENAI_API_KEY",
+        },
+      },
+      lens: {
+        seat: "worker",
+        llm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+          api_key_env: "CUSTOM_OPENAI_API_KEY",
+        },
+      },
+      synthesize: {
+        seat: "worker",
+        llm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+          api_key_env: "CUSTOM_OPENAI_API_KEY",
+        },
+      },
+      deliberation: "controlled-lens-deliberation",
+      worker_executor: "direct_call",
+      host: "openai",
+      auth: "api_key",
+      provider: "openai",
+      model: "gpt-5.5",
+      trace: [],
+    };
+
+    try {
+      await expect(
+        ensureProviderRouteReadyForDispatch({
+          sessionRoot,
+          executionPlanPath: path.join(sessionRoot, "execution-plan.yaml"),
+          reviewExecutionProfile: profile,
+        }),
+      ).rejects.toThrow(
+        "Review direct-call route cannot dispatch because the provider credential environment variable is missing.",
+      );
+      const failureFiles = fs.readdirSync(path.join(sessionRoot, "failures"));
+      const failure = await readYamlDocument<Record<string, unknown>>(
+        path.join(sessionRoot, "failures", failureFiles[0]!),
+      );
+      expect(failure.details).toMatchObject({
+        credential_env_names: ["CUSTOM_OPENAI_API_KEY"],
+      });
+    } finally {
+      fs.rmSync(sessionRoot, { recursive: true, force: true });
+    }
+  });
+
   it("uses local LM Studio settings as direct-call self execution", () => {
+    const execution = defaultReviewExecution();
     const out = resolveExecutionRealizationHandoff({
       explicitCodex: false,
       ontoConfig: {
-        llm: {
-          auth: "local",
-          provider: "lmstudio",
-          model: "llama-8b",
-          base_url: "http://127.0.0.1:1234/v1",
+        review: {
+          execution: {
+            ...execution,
+            executor: "direct_call",
+            teamlead: {
+              seat: "main",
+              llm: {
+                auth: "local",
+                provider: "lmstudio",
+                model: "llama-8b",
+                base_url: "http://127.0.0.1:1234/v1",
+              },
+            },
+            lens: {
+              seat: "worker",
+              llm: {
+                auth: "local",
+                provider: "lmstudio",
+                model: "llama-8b",
+                base_url: "http://127.0.0.1:1234/v1",
+              },
+            },
+            synthesize: {
+              seat: "worker",
+              llm: {
+                auth: "local",
+                provider: "lmstudio",
+                model: "llama-8b",
+                base_url: "http://127.0.0.1:1234/v1",
+              },
+            },
+          },
         },
       },
     });
@@ -152,33 +373,83 @@ describe("review invoke execution auto-resolution", () => {
       ].join("\n"),
     );
     try {
-      const result = await reviewPrepareOnly([
-        ".onto/processes/review/auto-domain.md",
-        "Review the ontology runtime contract domain selection behavior.",
-        "--project-root",
-        project.projectRoot,
-        "--onto-home",
-        path.resolve("."),
-        "--executor-realization",
-        "mock",
-        "--review-mode",
-        "core-axis",
-        "--lens-id",
-        "logic",
-      ]);
-      const binding = await readYamlDocument<InvocationBindingArtifact>(
-        path.join(result.session_root, "binding.yaml"),
+      fs.mkdirSync(path.join(project.projectRoot, ".onto"), { recursive: true });
+      fs.writeFileSync(
+        path.join(project.projectRoot, ".onto", "settings.json"),
+        JSON.stringify(
+          {
+            schema_version: "settings.json/v3",
+            review: {
+              execution: {
+                topology: "main-workers",
+                executor: "direct_call",
+                deliberation: "controlled-lens-deliberation",
+                actors: {
+                  teamlead: {
+                    seat: "main",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                  lens: {
+                    seat: "worker",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                  synthesize: {
+                    seat: "worker",
+                    llm: {
+                      auth: "api_key",
+                      provider: "openai",
+                      model: "mock-model",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2,
+        ),
+        "utf8",
       );
-      const interpretation =
-        await readYamlDocument<InvocationInterpretationArtifact>(
-          path.join(result.session_root, "interpretation.yaml"),
+      const restoreRouteEnv = setTemporaryEnv({
+        OPENAI_API_KEY: "test-openai-key",
+      });
+      try {
+        const result = await reviewPrepareOnly([
+          ".onto/processes/review/auto-domain.md",
+          "Review the ontology runtime contract domain selection behavior.",
+          "--project-root",
+          project.projectRoot,
+          "--onto-home",
+          path.resolve("."),
+          "--review-mode",
+          "core-axis",
+          "--lens-id",
+          "logic",
+        ]);
+        const binding = await readYamlDocument<InvocationBindingArtifact>(
+          path.join(result.session_root, "binding.yaml"),
         );
+        const interpretation =
+          await readYamlDocument<InvocationInterpretationArtifact>(
+            path.join(result.session_root, "interpretation.yaml"),
+          );
 
-      expect(binding.resolved_session_domain).toBe("ontology");
-      expect(binding.domain_final_selection.selection_mode).toBe("target_inferred");
-      expect(binding.binding_notes.join("\n")).toContain("Selected @ontology");
-      expect(interpretation.domain_recommendation).toBe("@ontology");
-      expect(interpretation.domain_selection_required).toBe(false);
+        expect(binding.resolved_session_domain).toBe("ontology");
+        expect(binding.domain_final_selection.selection_mode).toBe("target_inferred");
+        expect(binding.binding_notes.join("\n")).toContain("Selected @ontology");
+        expect(interpretation.domain_recommendation).toBe("@ontology");
+        expect(interpretation.domain_selection_required).toBe(false);
+      } finally {
+        restoreRouteEnv();
+      }
     } finally {
       project.cleanup();
     }

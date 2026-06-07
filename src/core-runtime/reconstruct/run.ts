@@ -204,7 +204,7 @@ import type { ReconstructSourceObservation } from "./source-observations.js";
 
 export interface ReconstructDirectiveAuthor {
   readonly authorId: string;
-  readonly owner: "host_llm" | "mock";
+  readonly owner: "host_llm";
   writeSourceObservationDirective(
     input: ReconstructSourceObservationDirectiveAuthorInput,
   ): Promise<ReconstructSourceObservationDirectiveArtifact>;
@@ -265,12 +265,12 @@ export interface ReconstructDirectiveAuthor {
   writeFinalOutput(input: ReconstructFinalOutputAuthorInput): Promise<string>;
 }
 
-export type ReconstructSemanticAuthorRealization = "mock" | "direct_call";
-export type ReconstructConfirmationProviderRealization = "mock" | "direct_call";
+export type ReconstructSemanticAuthorRealization = "direct_call";
+export type ReconstructConfirmationProviderRealization = "direct_call";
 
 export interface ReconstructConfirmationProvider {
   readonly providerId: string;
-  readonly owner: "host_or_user" | "mock";
+  readonly owner: "host_or_user";
   confirmPurpose(
     input: ReconstructPurposeConfirmationInput,
   ): Promise<ReconstructPurposeConfirmationArtifact>;
@@ -623,10 +623,12 @@ export interface RunReconstructParams {
   confirmationProvider: ReconstructConfirmationProvider;
 }
 
-interface AuthoredArtifactCompatibility {
+interface AuthoredArtifactReuseMatch {
   session_id: string;
   intent_sha256: string;
   target_refs_sha256: string;
+  competency_question_assessment_projection_contract_version: string;
+  competency_question_assessment_projection_contract_sha256: string;
   target_material_profile_sha256: string;
   target_material_profile_validation_sha256: string | null;
   source_inventory_sha256: string;
@@ -652,8 +654,8 @@ interface AuthoredArtifactReuseProvenance {
   artifact_ref: string;
   artifact_sha256: string;
   created_at: string;
-  compatibility_hash: string;
-  compatibility: AuthoredArtifactCompatibility;
+  reuse_match_hash: string;
+  reuse_match: AuthoredArtifactReuseMatch;
 }
 
 export interface ReconstructRunResult {
@@ -695,6 +697,79 @@ function stableJson(value: unknown): string {
 
 function sha256Text(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
+}
+
+const COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION =
+  "competency_question_assessment_compact_projection:v2";
+const COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT = 50_000;
+const COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS = 1000;
+
+function competencyQuestionAssessmentProjectionContract(): Record<string, unknown> {
+  return {
+    projection_kind: "competency_question_assessment_compact_projection",
+    projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    semantic_authority:
+      "host_llm_assesses_answer_status_and_explanation_fields",
+    prompt_char_limit: COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
+    question_projection:
+      "full question text is included without truncation; runtime keeps the full artifact authority",
+    evidence_projection:
+      "evidence_observation_ids and evidence_source_basenames are prompt-visible; full evidence_refs remain runtime authority",
+    validation_projection:
+      "validation status, counts, required evidence scope count, validation results, and invalid prompt-visible violations are prompt-visible",
+    claim_realization_projection:
+      "claim_id, stance, evidence observation ids, evidence source basenames, and compact rationale are prompt-visible",
+    runtime_derivations: [
+      "required_seed_refs",
+      "linked_claim_ids",
+      "evidence_refs",
+      "downstream_effect",
+    ],
+    batching_policy: {
+      mode: "deterministic_prompt_budget",
+      order: "canonical_competency_question_order",
+      build_budget_reserve_chars:
+        COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS,
+      single_question_overflow: "fail_loud_before_dispatch",
+    },
+    fail_loud_policy:
+      "runtime fails before provider dispatch when any final batch exceeds prompt_char_limit",
+  };
+}
+
+function competencyQuestionAssessmentProjectionContractSha256(): string {
+  return sha256Text(stableJson(competencyQuestionAssessmentProjectionContract()));
+}
+
+function competencyQuestionAssessmentPromptPolicy(): Record<string, unknown> {
+  const projectionContract = competencyQuestionAssessmentProjectionContract();
+  return {
+    ...projectionContract,
+    projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    projection_contract_sha256:
+      competencyQuestionAssessmentProjectionContractSha256(),
+    projection_contract: projectionContract,
+  };
+}
+
+function assertPromptPayloadCharLimit(args: {
+  artifactName: string;
+  systemPrompt: string;
+  userPayload: unknown;
+  charLimit: number;
+}): void {
+  const totalChars = promptPayloadCharCount(args.systemPrompt, args.userPayload);
+  if (totalChars > args.charLimit) {
+    throw new Error(
+      `${args.artifactName} compact prompt exceeds deterministic prompt budget: ${totalChars} > ${args.charLimit}. Split or reduce the runtime projection before dispatch.`,
+    );
+  }
+}
+
+function promptPayloadCharCount(systemPrompt: string, userPayload: unknown): number {
+  return systemPrompt.length + JSON.stringify(userPayload, null, 2).length;
 }
 
 async function sha256File(filePath: string): Promise<string> {
@@ -882,8 +957,28 @@ function authoredArtifactProvenancePath(filePath: string): string {
   return `${filePath}.reuse-provenance.yaml`;
 }
 
-function compatibilityHash(compatibility: AuthoredArtifactCompatibility): string {
-  return sha256Text(stableJson(compatibility));
+function assertCurrentReuseProvenance(
+  provenance: AuthoredArtifactReuseProvenance,
+  provenancePath: string,
+): void {
+  const record = provenance as unknown as Record<string, unknown>;
+  if ("compatibility_hash" in record || "compatibility" in record) {
+    throw new Error(
+      `${provenancePath} uses retired compatibility fields; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+  if (
+    typeof provenance.reuse_match_hash !== "string" ||
+    !isRecord(provenance.reuse_match)
+  ) {
+    throw new Error(
+      `${provenancePath} is missing reuse_match_hash or reuse_match; run npm run migrate:reconstruct-artifact-fields before explicit resume.`,
+    );
+  }
+}
+
+function reuseMatchHash(reuseMatch: AuthoredArtifactReuseMatch): string {
+  return sha256Text(stableJson(reuseMatch));
 }
 
 function stripVolatileArtifactFields(value: unknown): unknown {
@@ -905,11 +1000,11 @@ function stripVolatileArtifactFields(value: unknown): unknown {
   return value;
 }
 
-function compatibilityArtifactHash(value: unknown): string {
+function reuseMatchArtifactHash(value: unknown): string {
   return sha256Text(stableJson(stripVolatileArtifactFields(value)));
 }
 
-function authoredArtifactCompatibility(args: {
+function authoredArtifactReuseMatch(args: {
   sessionId: string;
   intent: string;
   targetRefs: string[];
@@ -932,11 +1027,15 @@ function authoredArtifactCompatibility(args: {
   confirmationProviderRealization: ReconstructConfirmationProviderRealization;
   directiveAuthor: ReconstructDirectiveAuthor;
   confirmationProvider: ReconstructConfirmationProvider;
-}): AuthoredArtifactCompatibility {
+}): AuthoredArtifactReuseMatch {
   return {
     session_id: args.sessionId,
     intent_sha256: sha256Text(args.intent),
     target_refs_sha256: sha256Text(stableJson(args.targetRefs.map((ref) => path.resolve(ref)).sort())),
+    competency_question_assessment_projection_contract_version:
+      COMPETENCY_QUESTION_ASSESSMENT_PROJECTION_CONTRACT_VERSION,
+    competency_question_assessment_projection_contract_sha256:
+      competencyQuestionAssessmentProjectionContractSha256(),
     target_material_profile_sha256: sha256Text(stableJson({
       target_refs: args.targetMaterialProfile.target_refs.map((ref) => path.resolve(ref)).sort(),
       target_material_kind: args.targetMaterialProfile.target_material_kind,
@@ -952,7 +1051,7 @@ function authoredArtifactCompatibility(args: {
       })),
     })),
     target_material_profile_validation_sha256: args.targetMaterialProfileValidation
-      ? compatibilityArtifactHash(args.targetMaterialProfileValidation)
+      ? reuseMatchArtifactHash(args.targetMaterialProfileValidation)
       : null,
     source_inventory_sha256: sha256Text(stableJson(
       args.sourceInventory.inventory_units.map((unit) => ({
@@ -988,24 +1087,24 @@ function authoredArtifactCompatibility(args: {
       })),
     })),
     source_safety_ledger_sha256: args.sourceSafetyLedger
-      ? compatibilityArtifactHash(args.sourceSafetyLedger)
+      ? reuseMatchArtifactHash(args.sourceSafetyLedger)
       : null,
     source_safety_ledger_validation_sha256: args.sourceSafetyLedgerValidation
-      ? compatibilityArtifactHash(args.sourceSafetyLedgerValidation)
+      ? reuseMatchArtifactHash(args.sourceSafetyLedgerValidation)
       : null,
     source_scout_pack_sha256: args.sourceScoutPack
-      ? compatibilityArtifactHash(args.sourceScoutPack)
+      ? reuseMatchArtifactHash(args.sourceScoutPack)
       : null,
     source_scout_pack_validation_sha256: args.sourceScoutPackValidation
-      ? compatibilityArtifactHash(args.sourceScoutPackValidation)
+      ? reuseMatchArtifactHash(args.sourceScoutPackValidation)
       : null,
     source_observation_lineage_index_validation_sha256:
       args.sourceObservationLineageIndexValidation
-        ? compatibilityArtifactHash(args.sourceObservationLineageIndexValidation)
+        ? reuseMatchArtifactHash(args.sourceObservationLineageIndexValidation)
         : null,
     seed_authoring_readiness_validation_sha256:
       args.seedAuthoringReadinessValidation
-        ? compatibilityArtifactHash(args.seedAuthoringReadinessValidation)
+        ? reuseMatchArtifactHash(args.seedAuthoringReadinessValidation)
         : null,
     seed_authoring_readiness_taxonomy_version:
       args.seedAuthoringReadinessValidation?.readiness_classification
@@ -1026,11 +1125,11 @@ async function writeFreshAuthoredYamlDocument<T>(
   create: () => Promise<T>,
   options: {
     reuseExisting?: boolean;
-    compatibility?: AuthoredArtifactCompatibility;
+    reuseMatch?: AuthoredArtifactReuseMatch;
   } = {},
 ): Promise<T> {
-  const currentCompatibilityHash = options.compatibility
-    ? compatibilityHash(options.compatibility)
+  const currentReuseMatchHash = options.reuseMatch
+    ? reuseMatchHash(options.reuseMatch)
     : null;
   if (await exists(filePath)) {
     if (options.reuseExisting) {
@@ -1041,15 +1140,16 @@ async function writeFreshAuthoredYamlDocument<T>(
         );
       if (!provenance) {
         throw new Error(
-          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove authored artifact compatibility.`,
+          `${artifactName} already exists at ${filePath}, but ${provenancePath} is missing; explicit resume cannot prove the authored artifact reuse match.`,
         );
       }
+      assertCurrentReuseProvenance(provenance, provenancePath);
       if (
-        currentCompatibilityHash &&
-        provenance.compatibility_hash !== currentCompatibilityHash
+        currentReuseMatchHash &&
+        provenance.reuse_match_hash !== currentReuseMatchHash
       ) {
         throw new Error(
-          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for compatibility_hash=${provenance.compatibility_hash}, current compatibility_hash=${currentCompatibilityHash}.`,
+          `${artifactName} resume provenance mismatch at ${provenancePath}; existing authored artifact was produced for reuse_match_hash=${provenance.reuse_match_hash}, current reuse_match_hash=${currentReuseMatchHash}.`,
         );
       }
       const currentArtifactSha256 = await sha256File(filePath);
@@ -1066,12 +1166,12 @@ async function writeFreshAuthoredYamlDocument<T>(
   }
   const created = await create();
   await writeYamlDocument(filePath, created);
-  if (options.compatibility && currentCompatibilityHash) {
+  if (options.reuseMatch && currentReuseMatchHash) {
     await writeAuthoredArtifactReuseProvenance({
       filePath,
       artifactName,
-      compatibility: options.compatibility,
-      compatibilityHash: currentCompatibilityHash,
+      reuseMatch: options.reuseMatch,
+      reuseMatchHash: currentReuseMatchHash,
     });
   }
   return created;
@@ -1080,8 +1180,8 @@ async function writeFreshAuthoredYamlDocument<T>(
 async function writeAuthoredArtifactReuseProvenance(args: {
   filePath: string;
   artifactName: string;
-  compatibility: AuthoredArtifactCompatibility;
-  compatibilityHash?: string | null;
+  reuseMatch: AuthoredArtifactReuseMatch;
+  reuseMatchHash?: string | null;
 }): Promise<void> {
   await writeYamlDocument(authoredArtifactProvenancePath(args.filePath), {
     schema_version: "1",
@@ -1089,9 +1189,9 @@ async function writeAuthoredArtifactReuseProvenance(args: {
     artifact_ref: args.filePath,
     artifact_sha256: await sha256File(args.filePath),
     created_at: isoNow(),
-    compatibility_hash:
-      args.compatibilityHash ?? compatibilityHash(args.compatibility),
-    compatibility: args.compatibility,
+    reuse_match_hash:
+      args.reuseMatchHash ?? reuseMatchHash(args.reuseMatch),
+    reuse_match: args.reuseMatch,
   } satisfies AuthoredArtifactReuseProvenance);
 }
 
@@ -1108,6 +1208,39 @@ function compactStatement(statement: string): string {
 
 function sourceBasename(sourceRef: string): string {
   return path.basename(sourceRef) || sourceRef;
+}
+
+function evidenceSourceBasenamesFromEvidenceRefs(
+  refs: ReconstructEvidenceRef[],
+): string[] {
+  return [...new Set(refs.map((ref) => sourceBasename(ref.source_ref)))];
+}
+
+function compactPromptSlice<T, U>(args: {
+  items: T[];
+  limit: number;
+  itemId: (item: T) => string;
+  mapItem: (item: T) => U;
+}): {
+  total_count: number;
+  included_count: number;
+  omitted_count: number;
+  projection_limit: number;
+  partial_projection: boolean;
+  omitted_id_samples: string[];
+  items: U[];
+} {
+  const included = args.items.slice(0, args.limit);
+  const omitted = args.items.slice(args.limit);
+  return {
+    total_count: args.items.length,
+    included_count: included.length,
+    omitted_count: omitted.length,
+    projection_limit: args.limit,
+    partial_projection: omitted.length > 0,
+    omitted_id_samples: omitted.slice(0, 8).map(args.itemId),
+    items: included.map(args.mapItem),
+  };
 }
 
 function claimRealizationTargets(
@@ -1184,7 +1317,6 @@ const CLAIM_REALIZATION_STANCES = [
   "observed_runtime_behavior",
   "declared_design_intent",
   "schema_or_contract_presence",
-  "test_or_fixture_only",
   "deferred_or_non_goal",
   "unknown",
 ] as const satisfies readonly ReconstructClaimRealizationStance[];
@@ -1584,7 +1716,7 @@ function directiveAuthorPerformer(
 ): ReconstructRunManifestStep["performed_by"] {
   return {
     authority: "host_llm",
-    realization: directiveAuthor.owner === "mock" ? "mock" : "direct_call",
+    realization: "direct_call",
     actor_id: directiveAuthor.authorId,
   };
 }
@@ -1594,7 +1726,7 @@ function confirmationProviderPerformer(
 ): ReconstructRunManifestStep["performed_by"] {
   return {
     authority: "host_or_user",
-    realization: confirmationProvider.owner === "mock" ? "mock" : "direct_call",
+    realization: "direct_call",
     actor_id: confirmationProvider.providerId,
   };
 }
@@ -1658,22 +1790,14 @@ function createRunManifest(args: {
     target_refs: args.targetRefs,
     intent: args.intent,
     execution_profile: {
-      profile_kind:
-        args.semanticAuthorRealization === "mock"
-          ? "mock_semantic_slice"
-          : "full_integral_exploration",
-      runner:
-        args.semanticAuthorRealization === "mock"
-          ? "material-aware-purpose-adequacy"
-          : "integral-exploration-direct-call",
+      profile_kind: "full_integral_exploration",
+      runner: "integral-exploration-direct-call",
       semantic_author_realization: args.semanticAuthorRealization,
       confirmation_provider_realization: args.confirmationProviderRealization,
       directive_author_id: args.directiveAuthor.authorId,
       confirmation_provider_id: args.confirmationProvider.providerId,
       allowed_completion_claim:
-        args.semanticAuthorRealization === "mock"
-          ? "Runtime exercised the post-Seed artifact flow with mock authorship; live semantic reconstruction is not claimed."
-          : "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
+        "Runtime completed the live integral reconstruct path for the produced and explicitly skipped artifacts.",
     },
     artifact_refs: {
       ...artifactRefs,
@@ -2618,7 +2742,7 @@ function createRunManifest(args: {
     ],
     runtime_boundary: {
       semantic_generation: "not_performed",
-      semantic_authority: "host_llm_or_mock_author",
+      semantic_authority: "host_llm_author",
     },
   };
 }
@@ -3167,6 +3291,115 @@ function observedSourceRefsForObservationIds(
   return [...new Set(sourceRefs)].slice(0, ONTOLOGY_SEED_OBSERVATION_LIMIT);
 }
 
+function sourceRefsFromMaturationQuestionHints(
+  questionFrontier: ReconstructMaturationQuestionFrontierArtifact,
+): string[] {
+  return [
+    ...new Set(
+      questionFrontier.questions.flatMap((question) =>
+        question.closure_frontier_hint_refs.flatMap((hintRef) =>
+          hintRef.startsWith("source:") ? [hintRef.slice("source:".length)] : []
+        )
+      ).filter((sourceRef) => sourceRef.length > 0),
+    ),
+  ];
+}
+
+function categoryOrderedAnswerSupportSourceRefs(args: {
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+}): string[] {
+  return [
+    ...new Set([
+      ...sourceRefsFromMaturationQuestionHints(args.maturationQuestionFrontier),
+      ...args.maturationClosureFrontier.source_requests.map((request) =>
+        request.requested_source_ref
+      ),
+      ...args.maturationClosureFrontier.source_requests.flatMap((request) =>
+        request.member_source_refs
+      ),
+      ...args.maturationClosureFrontier.source_requests.flatMap((request) =>
+        request.cross_material_ref_refs
+      ),
+    ].filter((sourceRef) => sourceRef.length > 0)),
+  ];
+}
+
+interface MaturationAnswerSupportPromptCatalog {
+  prioritizedObservationIds: string[];
+  promptObservationIds: string[];
+  promptVisiblePrioritizedObservationIds: string[];
+  promptVisibleSupplementalObservationIds: string[];
+  omittedPrioritizedObservationIds: string[];
+}
+
+function maturationAnswerSupportPromptCatalog(args: {
+  sourceObservations: ReconstructSourceObservationsArtifact;
+  maturationQuestionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+  maturationClosureFrontier: ReconstructMaturationClosureFrontierArtifact;
+}): MaturationAnswerSupportPromptCatalog {
+  const observationsBySourceRef = new Map<
+    string,
+    ReconstructSourceObservationsArtifact["observations"]
+  >();
+  for (const observation of args.sourceObservations.observations) {
+    const observations = observationsBySourceRef.get(observation.source_ref) ??
+      [];
+    observations.push(observation);
+    observationsBySourceRef.set(observation.source_ref, observations);
+  }
+  const prioritizedObservationIds = [
+    ...new Set(
+      categoryOrderedAnswerSupportSourceRefs(args).flatMap((sourceRef) =>
+        (observationsBySourceRef.get(sourceRef) ?? []).map((observation) =>
+          observation.observation_id
+        )
+      ),
+    ),
+  ];
+  const prioritizedObservationIdSet = new Set(prioritizedObservationIds);
+  const supplementalObservationIds = args.sourceObservations.observations
+    .filter((observation) =>
+      !prioritizedObservationIdSet.has(observation.observation_id)
+    )
+    .map((observation) => observation.observation_id);
+  const promptObservationIds = [
+    ...new Set([...prioritizedObservationIds, ...supplementalObservationIds]),
+  ].slice(0, ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT);
+  const promptObservationIdSet = new Set(promptObservationIds);
+  return {
+    prioritizedObservationIds,
+    promptObservationIds,
+    promptVisiblePrioritizedObservationIds: prioritizedObservationIds.filter((
+      observationId,
+    ) => promptObservationIdSet.has(observationId)),
+    promptVisibleSupplementalObservationIds: supplementalObservationIds.filter((
+      observationId,
+    ) => promptObservationIdSet.has(observationId)),
+    omittedPrioritizedObservationIds: prioritizedObservationIds.filter((
+      observationId,
+    ) => !promptObservationIdSet.has(observationId)),
+  };
+}
+
+function assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(
+  catalog: MaturationAnswerSupportPromptCatalog,
+): void {
+  if (catalog.omittedPrioritizedObservationIds.length === 0) return;
+  const sample = catalog.omittedPrioritizedObservationIds.slice(0, 10).join(", ");
+  const suffix = catalog.omittedPrioritizedObservationIds.length > 10
+    ? ", ..."
+    : "";
+  throw new Error(
+    [
+      "AnswerSupportLedger prompt catalog overflow:",
+      `${catalog.prioritizedObservationIds.length} closure-prioritized observation ids exceed the prompt catalog limit ${ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT}.`,
+      `Omitted prioritized observation ids: ${sample}${suffix}.`,
+      "Split the closure frontier or batch answer-support authoring before creating answer support.",
+    ].join(" "),
+  );
+}
+
 function compactCandidateInventoryForPrompt(
   candidateInventory: ReconstructCandidateInventoryArtifact,
 ): unknown {
@@ -3434,6 +3667,571 @@ function compactTargetMaterialProfileForPrompt(
   };
 }
 
+function compactCompetencyQuestionsForAssessmentPrompt(
+  competencyQuestions: ReconstructCompetencyQuestionsArtifact,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"] =
+    competencyQuestions.questions,
+): unknown {
+  return {
+    schema_version: competencyQuestions.schema_version,
+    session_id: competencyQuestions.session_id,
+    seed_confirmation_ref: competencyQuestions.seed_confirmation_ref,
+    ontology_seed_ref: competencyQuestions.ontology_seed_ref ?? null,
+    artifact_question_count: competencyQuestions.questions.length,
+    question_count: questions.length,
+    questions: questions.map((question) => ({
+      question_id: question.question_id,
+      question: question.question,
+      linked_claim_ids: question.linked_claim_ids,
+      seed_ref_refs: question.seed_ref_refs,
+      limitation_refs: question.limitation_refs,
+      coverage_axis_refs: question.coverage_axis_refs,
+      ontology_handoff_axis_refs: question.ontology_handoff_axis_refs,
+      domain_competency_trace_refs: question.domain_competency_trace_refs,
+      domain_competency_semantic_assessments:
+        question.domain_competency_semantic_assessments.map((assessment) => ({
+          competency_id: assessment.competency_id,
+          source_anchor: assessment.source_anchor,
+          applicability_verdict: assessment.applicability_verdict,
+          semantic_alignment: assessment.semantic_alignment,
+          evidence_observation_ids:
+            evidenceObservationIdsFromEvidenceRefs(assessment.evidence_refs),
+          evidence_source_basenames:
+            evidenceSourceBasenamesFromEvidenceRefs(assessment.evidence_refs),
+          rationale: compactStatement(assessment.rationale),
+        })),
+      coverage_disposition: question.coverage_disposition,
+      expected_answer_kind: question.expected_answer_kind,
+      handoff_relevance: question.handoff_relevance,
+      lifecycle_status: question.lifecycle_status,
+      rationale: compactStatement(question.rationale),
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(question.evidence_refs),
+      evidence_source_basenames:
+        evidenceSourceBasenamesFromEvidenceRefs(question.evidence_refs),
+    })),
+    open_questions: competencyQuestions.open_questions.map(compactStatement),
+  };
+}
+
+function compactCompetencyQuestionsValidationForAssessmentPrompt(
+  validation: ReconstructCompetencyQuestionsValidationArtifact,
+): unknown {
+  return {
+    schema_version: validation.schema_version,
+    session_id: validation.session_id,
+    competency_questions_ref: validation.competency_questions_ref,
+    reconstruct_run_manifest_ref: validation.reconstruct_run_manifest_ref ?? null,
+    seed_confirmation_validation_ref:
+      validation.seed_confirmation_validation_ref,
+    ontology_seed_ref: validation.ontology_seed_ref ?? null,
+    ontology_seed_validation_ref: validation.ontology_seed_validation_ref ?? null,
+    source_observations_ref: validation.source_observations_ref,
+    admitted_domain_competency_refs:
+      validation.admitted_domain_competency_refs ?? [],
+    admitted_domain_competency_source_refs:
+      validation.admitted_domain_competency_source_refs ?? [],
+    required_admitted_competency_ids:
+      validation.required_admitted_competency_ids ?? [],
+    validation_status: validation.validation_status,
+    competency_question_count: validation.competency_question_count,
+    required_evidence_scope_projection_count:
+      validation.required_evidence_scope_projection.length,
+    validation_results: validation.validation_results,
+    violation_count: validation.violations.length,
+    prompt_visible_violations: validation.validation_status === "invalid"
+      ? validation.violations.slice(0, 20).map((violation) => ({
+        code: violation.code,
+        subject_id: violation.subject_id,
+        message: compactStatement(violation.message),
+      }))
+      : [],
+  };
+}
+
+function compactClaimRealizationMapForAssessmentPrompt(
+  claimRealizationMap: ReconstructClaimRealizationMapArtifact,
+): unknown {
+  return {
+    schema_version: claimRealizationMap.schema_version,
+    session_id: claimRealizationMap.session_id,
+    ontology_seed_ref: claimRealizationMap.ontology_seed_ref,
+    claim_realization_count: claimRealizationMap.claim_realizations.length,
+    claim_realizations: claimRealizationMap.claim_realizations.map((realization) => ({
+      claim_id: realization.claim_id,
+      stance: realization.stance,
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(realization.evidence_refs),
+      evidence_source_basenames:
+        evidenceSourceBasenamesFromEvidenceRefs(realization.evidence_refs),
+      rationale: compactStatement(realization.rationale),
+    })),
+  };
+}
+
+function competencyQuestionAssessmentUserPayload(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  questions: ReconstructCompetencyQuestionsArtifact["questions"],
+  batch?: {
+    batch_index: number;
+    batch_count: number;
+  },
+): Record<string, unknown> {
+  return {
+    competency_questions_ref: input.competencyQuestionsRef,
+    competency_questions_validation_ref:
+      input.competencyQuestionsValidationRef,
+    ...(batch
+      ? {
+        competency_question_assessment_batch: {
+          mode: "deterministic_prompt_budget",
+          batch_index: batch.batch_index,
+          batch_count: batch.batch_count,
+          full_question_count: input.competencyQuestions.questions.length,
+          batch_question_count: questions.length,
+        },
+      }
+      : {}),
+    competency_question_prompt_policy:
+      competencyQuestionAssessmentPromptPolicy(),
+    competency_questions:
+      compactCompetencyQuestionsForAssessmentPrompt(
+        input.competencyQuestions,
+        questions,
+      ),
+    competency_questions_validation:
+      compactCompetencyQuestionsValidationForAssessmentPrompt(
+        input.competencyQuestionsValidation,
+      ),
+    claim_realization_map:
+      compactClaimRealizationMapForAssessmentPrompt(
+        input.claimRealizationMap,
+      ),
+  };
+}
+
+function competencyQuestionAssessmentPromptBatches(
+  input: ReconstructCompetencyQuestionAssessmentAuthorInput,
+  systemPrompt: string,
+): ReconstructCompetencyQuestionsArtifact["questions"][] {
+  const batches: ReconstructCompetencyQuestionsArtifact["questions"][] = [];
+  let current: ReconstructCompetencyQuestionsArtifact["questions"] = [];
+  const batchBuildBudget =
+    COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT -
+    COMPETENCY_QUESTION_ASSESSMENT_BATCH_BUILD_BUDGET_RESERVE_CHARS;
+  for (const question of input.competencyQuestions.questions) {
+    const candidate = [...current, question];
+    const candidatePayload = competencyQuestionAssessmentUserPayload(
+      input,
+      candidate,
+      { batch_index: 9999, batch_count: 9999 },
+    );
+    if (
+      candidate.length === 1 ||
+      promptPayloadCharCount(systemPrompt, candidatePayload) <= batchBuildBudget
+    ) {
+      current = candidate;
+      continue;
+    }
+    batches.push(current);
+    current = [question];
+  }
+  if (current.length > 0) {
+    batches.push(current);
+  }
+  return batches;
+}
+
+function compactFinalOutputPromptPayload(
+  input: ReconstructFinalOutputAuthorInput,
+): unknown {
+  const seedClaims = ontologyClaims(input.ontologySeed);
+  const unresolvedAssessments = input.competencyQuestionAssessment.assessments
+    .filter((assessment) =>
+      assessment.answer_status !== "answerable" &&
+      assessment.answer_status !== "not_applicable"
+    );
+  const materialFailures = input.failureClassification.failures
+    .filter((failure) => failure.materiality === "material");
+  const candidateProjection = compactPromptSlice({
+    items: input.candidateInventory.candidates,
+    limit: 40,
+    itemId: (candidate) => candidate.candidate_id,
+    mapItem: (candidate) => ({
+      candidate_id: candidate.candidate_id,
+      candidate_kind: candidate.candidate_kind,
+      name: candidate.name,
+      salience: candidate.salience,
+    }),
+  });
+  const seedClaimProjection = compactPromptSlice({
+    items: seedClaims,
+    limit: 80,
+    itemId: (claim) => claim.claim_id,
+    mapItem: (claim) => ({
+      claim_id: claim.claim_id,
+      projection_source: claim.projection_source,
+      name: claim.name,
+      statement: compactStatement(claim.statement),
+      evidence_observation_ids:
+        evidenceObservationIdsFromEvidenceRefs(claim.evidence_refs),
+    }),
+  });
+  const competencyQuestionProjection = compactPromptSlice({
+    items: input.competencyQuestions.questions,
+    limit: 80,
+    itemId: (question) => question.question_id,
+    mapItem: (question) => ({
+      question_id: question.question_id,
+      question: compactStatement(question.question),
+      linked_claim_ids: question.linked_claim_ids,
+      limitation_refs: question.limitation_refs,
+      domain_competency_trace_refs: question.domain_competency_trace_refs,
+      coverage_disposition: question.coverage_disposition,
+      handoff_relevance: question.handoff_relevance,
+    }),
+  });
+  const unresolvedAssessmentProjection = compactPromptSlice({
+    items: unresolvedAssessments,
+    limit: 60,
+    itemId: (assessment) => assessment.question_id,
+    mapItem: (assessment) => ({
+      question_id: assessment.question_id,
+      answer_status: assessment.answer_status,
+      downstream_effect: assessment.downstream_effect,
+      linked_claim_ids: assessment.linked_claim_ids,
+      missing_source_or_confirmation:
+        assessment.missing_source_or_confirmation,
+      answer_summary: compactStatement(assessment.answer_summary),
+    }),
+  });
+  const materialFailureProjection = compactPromptSlice({
+    items: materialFailures,
+    limit: 60,
+    itemId: (failure) => failure.failure_id,
+    mapItem: (failure) => ({
+      failure_id: failure.failure_id,
+      failure_kind: failure.failure_kind,
+      question_id: failure.question_id,
+      claim_id: failure.claim_id,
+      recommended_action: failure.recommended_action,
+      rationale: compactStatement(failure.rationale),
+    }),
+  });
+  const revisionProposalProjection = compactPromptSlice({
+    items: input.revisionProposal.proposals,
+    limit: 60,
+    itemId: (proposal) => proposal.proposal_id,
+    mapItem: (proposal) => ({
+      proposal_id: proposal.proposal_id,
+      target_type: proposal.target_type,
+      target_id: proposal.target_id,
+      action: proposal.action,
+      expected_effect: compactStatement(proposal.expected_effect),
+      rationale: compactStatement(proposal.rationale),
+    }),
+  });
+  const actionabilityClaimCounts = input.claimProjection.projection_rows.reduce(
+    (counts, row) => {
+      counts[row.actionability_claim] =
+        (counts[row.actionability_claim] ?? 0) + 1;
+      return counts;
+    },
+    {} as Record<string, number>,
+  );
+  return {
+    session_id: input.sessionId,
+    intent: input.intent,
+    final_output_prompt_policy: {
+      projection_kind: "final_output_compact_summary_projection",
+      partial_projection_policy:
+        "When any *_partial_projection field is true, prose must say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
+      deterministic_runtime_append_sections: [
+        "seed_answerability",
+        "claim_projection",
+        "artifact_truth",
+        "provenance_footer",
+        "provenance_bindings",
+      ],
+      semantic_authority:
+        "host_llm_writes_user_facing_summary_without_upgrading_runtime_claims",
+    },
+    execution_profile: input.reconstructRunManifest.execution_profile,
+    execution_summary: {
+      record_stage_at_authoring: input.record.record_stage,
+      completed_step_count: input.reconstructRunManifest.steps.filter((step) =>
+        step.status === "completed"
+      ).length,
+      skipped_step_ids: input.reconstructRunManifest.steps
+        .filter((step) => step.status === "skipped")
+        .map((step) => step.step_id),
+    },
+    target_material_profile:
+      compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
+    candidate_inventory_summary: {
+      candidate_count: candidateProjection.total_count,
+      candidate_projection_limit: candidateProjection.projection_limit,
+      candidate_included_count: candidateProjection.included_count,
+      candidate_omitted_count: candidateProjection.omitted_count,
+      candidate_partial_projection: candidateProjection.partial_projection,
+      omitted_candidate_id_samples: candidateProjection.omitted_id_samples,
+      candidates: candidateProjection.items,
+    },
+    candidate_disposition_summary: {
+      disposition_count: input.candidateDisposition.dispositions.length,
+      validation_status: input.candidateDispositionValidation.validation_status,
+      promoted_count: input.candidateDisposition.dispositions.filter((disposition) =>
+        disposition.disposition_id === "promoted_to_seed_layer"
+      ).length,
+      deferred_count: input.candidateDisposition.dispositions.filter((disposition) =>
+        disposition.disposition_id === "deferred_to_maturation" ||
+        disposition.disposition_id === "deferred_by_source_gap"
+      ).length,
+    },
+    ontology_seed_summary: {
+      summary_lines: ontologySeedSummaryLines(input.ontologySeed),
+      validation_status: input.ontologySeedValidation.validation_status,
+      seed_ref_count: input.ontologySeedValidation.seed_ref_count,
+      evidence_ref_count: input.ontologySeedValidation.evidence_ref_count,
+      limitation_count: input.ontologySeedValidation.limitation_count,
+      claim_count: seedClaimProjection.total_count,
+      claim_projection_limit: seedClaimProjection.projection_limit,
+      claim_included_count: seedClaimProjection.included_count,
+      claim_omitted_count: seedClaimProjection.omitted_count,
+      claim_partial_projection: seedClaimProjection.partial_projection,
+      omitted_claim_id_samples: seedClaimProjection.omitted_id_samples,
+      claims: seedClaimProjection.items,
+    },
+    claim_realization_summary: {
+      validation_status: input.claimRealizationMapValidation.validation_status,
+      stance_counts: input.claimRealizationMapValidation.stance_counts,
+      realized_claim_count:
+        input.claimRealizationMapValidation.realized_claim_count,
+    },
+    seed_confirmation_summary: {
+      confirmation_status: input.seedConfirmation.confirmation_status,
+      accepted_claim_count:
+        input.seedConfirmationValidation.accepted_claim_ids.length,
+      rejected_claim_count:
+        input.seedConfirmationValidation.rejected_claim_ids.length,
+      partial_claim_count:
+        input.seedConfirmationValidation.partial_claim_ids.length,
+      deferred_claim_count:
+        input.seedConfirmationValidation.deferred_claim_ids.length,
+      cq_eligible_claim_count:
+        input.seedConfirmationValidation.cq_eligible_claim_ids.length,
+    },
+    competency_question_summary: {
+      question_count: competencyQuestionProjection.total_count,
+      question_projection_limit: competencyQuestionProjection.projection_limit,
+      question_included_count: competencyQuestionProjection.included_count,
+      question_omitted_count: competencyQuestionProjection.omitted_count,
+      question_partial_projection:
+        competencyQuestionProjection.partial_projection,
+      omitted_question_id_samples:
+        competencyQuestionProjection.omitted_id_samples,
+      validation_status: input.competencyQuestionsValidation.validation_status,
+      required_domain_competency_ids:
+        input.competencyQuestionsValidation.required_admitted_competency_ids,
+      questions: competencyQuestionProjection.items,
+    },
+    competency_question_assessment_summary: {
+      validation_status:
+        input.competencyQuestionAssessmentValidation.validation_status,
+      answer_status_counts:
+        input.competencyQuestionAssessmentValidation.answer_status_counts,
+      assessment_count: input.competencyQuestionAssessment.assessments.length,
+      unresolved_assessment_count: unresolvedAssessmentProjection.total_count,
+      unresolved_assessment_projection_limit:
+        unresolvedAssessmentProjection.projection_limit,
+      unresolved_assessment_included_count:
+        unresolvedAssessmentProjection.included_count,
+      unresolved_assessment_omitted_count:
+        unresolvedAssessmentProjection.omitted_count,
+      unresolved_assessment_partial_projection:
+        unresolvedAssessmentProjection.partial_projection,
+      omitted_unresolved_assessment_id_samples:
+        unresolvedAssessmentProjection.omitted_id_samples,
+      unresolved_assessments: unresolvedAssessmentProjection.items,
+    },
+    failure_classification_summary: {
+      validation_status:
+        input.failureClassificationValidation.validation_status,
+      failure_count: input.failureClassificationValidation.failure_count,
+      material_failure_count:
+        input.failureClassificationValidation.material_failure_count,
+      failure_kind_counts:
+        input.failureClassificationValidation.failure_kind_counts,
+      material_failure_projection_limit:
+        materialFailureProjection.projection_limit,
+      material_failure_included_count: materialFailureProjection.included_count,
+      material_failure_omitted_count: materialFailureProjection.omitted_count,
+      material_failure_partial_projection:
+        materialFailureProjection.partial_projection,
+      omitted_material_failure_id_samples:
+        materialFailureProjection.omitted_id_samples,
+      material_failures: materialFailureProjection.items,
+    },
+    revision_proposal_summary: {
+      validation_status: input.revisionProposalValidation.validation_status,
+      proposal_count: revisionProposalProjection.total_count,
+      proposal_projection_limit: revisionProposalProjection.projection_limit,
+      proposal_included_count: revisionProposalProjection.included_count,
+      proposal_omitted_count: revisionProposalProjection.omitted_count,
+      proposal_partial_projection:
+        revisionProposalProjection.partial_projection,
+      omitted_proposal_id_samples:
+        revisionProposalProjection.omitted_id_samples,
+      proposals: revisionProposalProjection.items,
+    },
+    metrics_summary: {
+      source_observation_count: input.metrics.source_observation_count,
+      selected_observation_count: input.metrics.selected_observation_count,
+      semantic_claim_count: input.metrics.semantic_claim_count,
+      evidence_ref_count: input.metrics.evidence_ref_count,
+      competency_question_count: input.metrics.competency_question_count,
+      competency_question_assessment_count:
+        input.metrics.competency_question_assessment_count,
+      unresolved_question_count: input.metrics.unresolved_question_count,
+      deferred_count: input.metrics.deferred_count,
+      answerability_summary: input.metrics.answerability_summary,
+      validation_status: input.metrics.validation_status,
+    },
+    stop_decision: {
+      decision: input.stopDecision.decision,
+      rationale: compactStatement(input.stopDecision.rationale),
+      next_actions: input.stopDecision.next_actions.map(compactStatement),
+    },
+    pre_handoff_run_manifest_validation: {
+      validation_status:
+        input.preHandoffRunManifestValidation.validation_status,
+      completed_step_count:
+        input.preHandoffRunManifestValidation.completed_step_count,
+      skipped_step_count:
+        input.preHandoffRunManifestValidation.skipped_step_count,
+    },
+    handoff_decision_summary: {
+      validation_status: input.handoffDecisionValidation.validation_status,
+      readiness_projection: input.handoffDecisionValidation.readiness_projection,
+      readiness_projection_source:
+        input.handoffDecisionValidation.readiness_projection_source,
+      gate_projection_count:
+        input.handoffDecisionValidation.gate_projection.length,
+      gate_projection_status_counts:
+        input.handoffDecisionValidation.gate_projection.reduce(
+          (counts, gate) => ({
+            ...counts,
+            [gate.validation_status]:
+              (counts[gate.validation_status] ?? 0) + 1,
+          }),
+          {} as Record<string, number>,
+        ),
+      non_valid_or_inapplicable_gate_projection:
+        input.handoffDecisionValidation.gate_projection
+          .filter((gate) =>
+            gate.validation_status !== "valid" ||
+            gate.applicability !== "applicable"
+          )
+          .map((gate) => ({
+            gate_id: gate.gate_id,
+            applicability: gate.applicability,
+            validation_status: gate.validation_status,
+          })),
+    },
+    claim_projection_summary: {
+      claim_projection_ref: input.artifactRefs.claim_projection,
+      claim_projection_validation_ref:
+        input.artifactRefs.claim_projection_validation,
+      validation_status:
+        input.claimProjectionValidation.validation_status,
+      strongest_claim_level:
+        input.claimProjectionValidation.strongest_claim_level,
+      decision_state_counts:
+        input.claimProjectionValidation.decision_state_counts,
+      actionability_claim_counts: actionabilityClaimCounts,
+      projection_rows: input.claimProjection.projection_rows.map((row) => ({
+        projection_surface: row.projection_surface,
+        claim_level: row.claim_level,
+        decision_state: row.decision_state,
+        actionability_claim: row.actionability_claim,
+        machine_status: row.machine_status,
+        included_row_count: row.included_row_refs.length,
+        excluded_row_count: row.excluded_row_refs.length,
+        limitation_ref_count: row.limitation_refs.length,
+        required_validation_ref_count: row.required_validation_refs.length,
+      })),
+      authority_note:
+        "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose may summarize this validated artifact but must not upgrade it.",
+    },
+    maturation_summary: {
+      baseline_rows: input.maturationBaseline.baseline_rows.length,
+      baseline_validation:
+        input.maturationBaselineValidation.validation_status,
+      matrix_rows: input.actionabilityMatrix.rows.length,
+      matrix_validation: input.actionabilityMatrixValidation.validation_status,
+      frontier_questions:
+        input.maturationQuestionFrontier.questions.length,
+      frontier_validation:
+        input.maturationQuestionFrontierValidation.validation_status,
+      closure_source_requests:
+        input.maturationClosureFrontier.source_requests.length,
+      closure_authority_requests:
+        input.maturationClosureFrontier.authority_requests.length,
+      closure_validation:
+        input.maturationClosureFrontierValidation.validation_status,
+      evidence_clusters:
+        input.answerSupportLedger.evidence_clusters.length,
+      answer_support_validation:
+        input.answerSupportLedgerValidation.validation_status,
+      answer_claims:
+        input.maturationAnswerClaims.answer_claims.length,
+      answer_claims_validation:
+        input.maturationAnswerClaimsValidation.validation_status,
+      ontology_expansions:
+        input.ontologyExpansion.expansions.length,
+      ontology_expansion_validation:
+        input.ontologyExpansionValidation.validation_status,
+      continuation_decision:
+        input.maturationContinuationDecision.decision_state,
+      continuation_validation:
+        input.maturationContinuationDecisionValidation.validation_status,
+      blocking_row_count:
+        input.maturationContinuationDecision.blocking_row_refs.length,
+      included_row_count:
+        input.maturationContinuationDecision.claim_scope.included_row_refs.length,
+      excluded_row_count:
+        input.maturationContinuationDecision.claim_scope.excluded_row_refs.length,
+      actionable_ontology_ref: input.artifactRefs.actionable_ontology,
+      actionable_ontology_validation_ref:
+        input.artifactRefs.actionable_ontology_validation,
+      state_rationale:
+        compactStatement(input.maturationContinuationDecision.state_rationale),
+    },
+    artifact_refs: {
+      ontology_seed: input.artifactRefs.ontology_seed,
+      ontology_seed_validation: input.artifactRefs.ontology_seed_validation,
+      claim_realization_map: input.artifactRefs.claim_realization_map,
+      seed_confirmation_validation:
+        input.artifactRefs.seed_confirmation_validation,
+      competency_question_assessment:
+        input.artifactRefs.competency_question_assessment,
+      failure_classification: input.artifactRefs.failure_classification,
+      revision_proposal: input.artifactRefs.revision_proposal,
+      handoff_decision_validation:
+        input.artifactRefs.handoff_decision_validation,
+      maturation_continuation_decision:
+        input.artifactRefs.maturation_continuation_decision,
+      maturation_continuation_decision_validation:
+        input.artifactRefs.maturation_continuation_decision_validation,
+      claim_projection: input.artifactRefs.claim_projection,
+      claim_projection_validation:
+        input.artifactRefs.claim_projection_validation,
+    },
+    reconstruct_record_path: input.reconstructRecordPath,
+    reconstruct_run_manifest_path: input.reconstructRunManifestPath,
+  };
+}
+
 function skippedSourceRefPromptSummary(args: {
   targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
   sourceObservations: ReconstructSourceObservationsArtifact;
@@ -3529,127 +4327,6 @@ function firstEvidenceRef(sourceObservations: ReconstructSourceObservationsArtif
   return evidenceRefFromObservation(requireFirstObservation(sourceObservations));
 }
 
-function mockSourcePurposeCandidates(args: {
-  sessionId: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  sourceObservationsRef: string;
-  authorId: string;
-}): ReconstructSourcePurposeCandidatesArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  const mixedMemberScopeRefs =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? args.sourceObservations.observations.map((observation) =>
-        observation.observation_id
-      )
-      : [];
-  const mixedMemberSourceRefs =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? [...new Set(args.sourceObservations.observations.map((observation) =>
-        observation.source_ref
-      ))]
-      : [];
-  const mixedMemberTargetKind =
-    args.targetMaterialProfile.target_material_kind === "mixed"
-      ? evidence.target_material_kind
-      : null;
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    target_material_kind: args.targetMaterialProfile.target_material_kind,
-    source_observations_ref: args.sourceObservationsRef,
-    selected_source_profile_refs: args.targetMaterialProfile.selected_source_profiles,
-    purpose_candidates: [
-      {
-        purpose_candidate_id: "purpose-explain-observed-material",
-        statement:
-          "Explain the observed source material as an ontology seed that can support the next maturation iteration.",
-        rank: "primary",
-        purpose_source_status: "explicit_source_declared",
-        evidence_kind_refs: ["P1", "P2"],
-        supporting_evidence_refs: [evidence],
-        contradicting_source_refs: [],
-        adequacy_frame: {
-          frame_id: "frame-observed-material-maturation",
-          frame_kind: "operational_ontology_seed",
-          frame_status: "source_declared",
-          adequacy_claim:
-            "The seed must preserve observable objects, actors, actions, data bindings, and limitations needed for maturation.",
-          material_kind_requirements: {
-            target_material_kind: args.targetMaterialProfile.target_material_kind,
-            required_facets: ["object", "actor", "action", "data_source", "limitation"],
-            optional_facets: ["permission", "workflow"],
-            rationale:
-              "The mock path needs a compact but actionability-aware purpose frame.",
-          },
-          required_elements: [
-            {
-              element_id: "purpose-element-static-observed-material",
-              element_kind: "object",
-              material_facet_kind: "object",
-              description: "Represent the observed material and its evidence source.",
-              actionability_surface_refs: ["static_surface"],
-              maturity_dimension_refs: ["structure", "evidence"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["semantic_layer.object_types"],
-              closure_expectation: "model_or_limit",
-            },
-            {
-              element_id: "purpose-element-kinetic-explain-seed",
-              element_kind: "action",
-              material_facet_kind: "action",
-              description: "Represent the action of explaining the seed.",
-              actionability_surface_refs: ["kinetic_surface"],
-              maturity_dimension_refs: ["intent", "relation"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["kinetic_layer.action_types"],
-              closure_expectation: "model_or_limit",
-            },
-            {
-              element_id: "purpose-element-dynamic-boundary",
-              element_kind: "limitation",
-              material_facet_kind: "limitation",
-              description: "Represent uncertainty and runtime boundaries for maturation.",
-              actionability_surface_refs: ["dynamic_surface"],
-              maturity_dimension_refs: ["context", "external"],
-              member_scope_refs: mixedMemberScopeRefs,
-              member_target_material_kind: mixedMemberTargetKind,
-              member_source_refs: mixedMemberSourceRefs,
-              cross_material_ref_refs: mixedMemberSourceRefs,
-              supporting_evidence_refs: [evidence],
-              expected_seed_ref_families: ["handoff_limitations"],
-              closure_expectation: "model_or_limit",
-            },
-          ],
-        },
-        ranking_rationale:
-          "The mock path uses the observed material and declared reconstruct intent as direct source-purpose evidence.",
-        limitation_refs: [],
-      },
-    ],
-    selection: {
-      primary_purpose_candidate_id: "purpose-explain-observed-material",
-      selection_basis: "Mock selected the only source-backed purpose candidate.",
-      confirmation_policy_hint:
-        "Direct source-declared purpose does not require separate user confirmation.",
-      unresolved_reason: null,
-    },
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
 function slugId(value: string): string {
   return value
     .toLowerCase()
@@ -3674,7 +4351,7 @@ function derivedMaturationQuestionFrontier(args: {
   actionabilityMatrix: ReconstructActionabilityMatrixArtifact;
   actionabilityMatrixRef: string;
   actionabilityMatrixValidationRef: string;
-  owner: "host_llm" | "mock";
+  owner: "host_llm";
   authorId: string;
 }): ReconstructMaturationQuestionFrontierArtifact {
   const rows = maturationQuestionFrontierRows(args.actionabilityMatrix);
@@ -3722,92 +4399,7 @@ function derivedMaturationQuestionFrontier(args: {
   };
 }
 
-function mockCandidateInventory(args: {
-  sessionId: string;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  authorId: string;
-}): ReconstructCandidateInventoryArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    source_observations_ref: "source-observations.yaml",
-    required_coverage_observation_ids: [evidence.observation_id],
-    candidates: [
-      {
-        candidate_id: "candidate-observed-material",
-        candidate_kind: "object",
-        name: "Observed Material",
-        description: "The observed source material represented as a seed object.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-reconstruct-user",
-        candidate_kind: "actor",
-        name: "Reconstruct User",
-        description: "The user who will consume the reconstructed seed.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-explain-seed",
-        candidate_kind: "action",
-        name: "Explain Seed",
-        description: "The action of explaining the observed material through the seed.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-      {
-        candidate_id: "candidate-observed-source",
-        candidate_kind: "data_source",
-        name: "Observed Source",
-        description: "The runtime-observed source ref used as evidence.",
-        salience: "high",
-        evidence_refs: [evidence],
-      },
-    ],
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
-function mockCandidateDisposition(args: {
-  sessionId: string;
-  candidateInventory: ReconstructCandidateInventoryArtifact;
-  authorId: string;
-}): ReconstructCandidateDispositionArtifact {
-  const targetByCandidateId = new Map<string, string>([
-    ["candidate-observed-material", "object-observed-material"],
-    ["candidate-reconstruct-user", "actor-reconstruct-user"],
-    ["candidate-explain-seed", "action-explain-seed"],
-    ["candidate-observed-source", "binding-observed-source"],
-  ]);
-  return {
-    schema_version: "1",
-    session_id: args.sessionId,
-    created_at: isoNow(),
-    candidate_inventory_ref: "candidate-inventory.yaml",
-    dispositions: args.candidateInventory.candidates.map((candidate) => ({
-      candidate_id: candidate.candidate_id,
-      disposition_id: "promoted_to_seed_layer",
-      target_seed_refs: [
-        targetByCandidateId.get(candidate.candidate_id) ?? `seed-ref-${candidate.candidate_id}`,
-      ],
-      rationale: `${candidate.name} is promoted into the mock ontology seed surface.`,
-      evidence_refs: candidate.evidence_refs,
-    })),
-    directive_author: {
-      owner: "mock",
-      author_id: args.authorId,
-    },
-  };
-}
-
-function mockOntologyHandoff(): Record<string, unknown> {
+function runtimeOntologyHandoffScaffold(): Record<string, unknown> {
   return {
     readiness_claim: "ready",
     classification_mapping: {
@@ -3851,8 +4443,8 @@ function mockOntologyHandoff(): Record<string, unknown> {
       canonical_label_policy: "seed names are canonical labels",
       alias_policy: "aliases are not asserted",
       hidden_label_policy: "hidden labels are not asserted",
-      homonym_policy: "not assessed in mock path",
-      multilingual_label_policy: "single-language mock labels",
+      homonym_policy: "not assessed in runtime scaffold",
+      multilingual_label_policy: "single-language runtime labels",
       language_tag_policy: "und",
       limitation_refs: [],
     },
@@ -3942,7 +4534,7 @@ function mockOntologyHandoff(): Record<string, unknown> {
         {
           concern_id: "instance_assertion_coverage",
           applies: false,
-          applicability_predicate_ref: "mock path has no separate instance catalog",
+          applicability_predicate_ref: "runtime scaffold has no separate instance catalog",
           trace_refs: ["object-observed-material"],
           limitation_refs: [],
         },
@@ -3971,302 +4563,6 @@ function mockOntologyHandoff(): Record<string, unknown> {
       isolation_rationale_refs: [],
     },
     limitation_refs: [],
-  };
-}
-
-function mockOntologySeed(args: {
-  sessionId: string;
-  intent: string;
-  targetMaterialProfile: ReconstructTargetMaterialProfileArtifact;
-  sourceObservations: ReconstructSourceObservationsArtifact;
-  authorId: string;
-}): ReconstructOntologySeedArtifact {
-  const evidence = firstEvidenceRef(args.sourceObservations);
-  const sourceRef = evidence.source_ref;
-  return {
-    seed_identity: {
-      schema_version: "1",
-      seed_id: `seed-${args.sessionId}`,
-      title: "Mock Actionable Ontology Seed",
-      target_refs: args.targetMaterialProfile.target_refs,
-      generated_at: isoNow(),
-      authoring_profile: args.authorId,
-    },
-    purpose: {
-      reconstruct_intent: args.intent,
-      declared_purpose: args.intent,
-      purpose_source_status: "convergent_inferred",
-      purpose_evidence_policy: {
-        accepted_evidence_kind: "P3 observable purpose support",
-        acceptance_basis: "Mock path uses the first runtime source observation as bounded evidence.",
-      },
-      purpose_confirmation: {
-        required: false,
-        status: "not_required",
-        confirmed_purpose_candidate_id: "purpose-candidate-observed-material",
-        prompt_summary: "Mock confirmation is not required for fixture authorship.",
-        user_response_summary: "Not required for fixture authorship.",
-        source_conflict_policy: "no conflict observed in fixture source",
-        limitation_refs: [],
-      },
-      purpose_candidates: [
-        {
-          purpose_candidate_id: "purpose-candidate-observed-material",
-          statement: args.intent,
-          rank: "primary",
-          purpose_source_status: "convergent_inferred",
-          evidence_kind_refs: ["P3", "P4"],
-          supporting_source_refs: [sourceRef],
-          contradicting_source_refs: [],
-          adequacy_signal_coverage: {
-            material_kind: args.targetMaterialProfile.target_material_kind,
-            required_facets: ["object", "actor", "action", "evidence"],
-            covered_facets: ["object", "actor", "action", "evidence"],
-            missing_facets: [],
-          },
-          ranking_rationale: "Fixture source has one observed material unit used for bounded seed handoff.",
-          limitation_refs: [],
-        },
-      ],
-      purpose_adequacy_frame: {
-        frame_id: "purpose-frame-observed-material",
-        name: "Observed Material Purpose Adequacy",
-        frame_kind: "mixed_material",
-        frame_status: "evidence_inferred",
-        adequacy_claim:
-          "The seed is adequate when it names the observed material, the reconstruct user, the explanation action, and the evidence binding.",
-        ranking_rationale:
-          "The frame is derived from the material-aware observation and bounded mock handoff purpose.",
-        material_kind_requirements: {
-          target_material_kind: args.targetMaterialProfile.target_material_kind,
-          required_facets: ["object", "actor", "action", "evidence"],
-          optional_facets: ["policy", "state"],
-          rationale:
-            "A bounded fixture seed needs enough structure to support the next maturation iteration.",
-        },
-        required_elements: [
-          {
-            element_id: "purpose-element-observed-material",
-            element_kind: "object",
-            description: "Observed material is represented as a seed object.",
-            seed_ref_refs: ["object-observed-material"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-          {
-            element_id: "purpose-element-reconstruct-user",
-            element_kind: "actor",
-            description: "The reconstruct user is represented as the actor for seed explanation.",
-            seed_ref_refs: ["actor-reconstruct-user"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-          {
-            element_id: "purpose-element-explain-seed",
-            element_kind: "action",
-            description: "The explanation action is represented for bounded seed handoff.",
-            seed_ref_refs: ["action-explain-seed"],
-            evidence_refs: [evidence],
-            limitation_refs: [],
-          },
-        ],
-        source_refs: [sourceRef],
-        evidence_refs: [evidence],
-        limitation_refs: [],
-      },
-      secondary_purpose_frames: [],
-      intended_decisions: ["Decide whether the observed material can be handed off as a bounded seed."],
-      intended_actions: ["Explain the observed material from validated evidence."],
-      non_goals: ["Full formal ontology generation is outside this mock path."],
-      evidence_refs: [evidence],
-    },
-    decision_context: {
-      principal_user: "Reconstruct user",
-      downstream_use: "bounded_seed_handoff",
-      decision_boundary: "Observed runtime evidence only.",
-      risk_notes: [],
-    },
-    conceptual_frame: {
-      concepts: [
-        {
-          concept_id: "concept-observed-material",
-          name: "Observed Material",
-          definition: "The source material observed by reconstruct runtime.",
-          purpose_role: "orients the seed around the declared purpose",
-          evidence_refs: [evidence],
-          confidence: "confirmed",
-        },
-      ],
-      associations: [],
-    },
-    semantic_layer: {
-      object_types: [
-        {
-          object_type_id: "object-observed-material",
-          name: "Observed Material",
-          object_kind: "document",
-          description: "A bounded object representing the observed source material.",
-          primary_key: {
-            property_id: "property-observed-material-ref",
-            name: "source ref",
-            value_type: "string",
-            evidence_refs: [evidence],
-          },
-          properties: [],
-          backing_source_refs: [sourceRef],
-          evidence_refs: [evidence],
-          status: "confirmed",
-        },
-      ],
-      link_types: [],
-      value_types: [],
-      constraints: [],
-    },
-    kinetic_layer: {
-      action_types: [
-        {
-          action_type_id: "action-explain-seed",
-          name: "Explain Seed",
-          description: "Explain the observed material as a bounded seed.",
-          actor_type_ids: ["actor-reconstruct-user"],
-          target_object_type_ids: ["object-observed-material"],
-          affected_object_type_ids: [],
-          parameters: [],
-          preconditions: [],
-          postconditions: [],
-          side_effects: [],
-          writeback_behavior: {
-            writes: false,
-            writeback_source_refs: [],
-            rationale: "The action is explanatory and does not write source material.",
-          },
-          evidence_refs: [evidence],
-          status: "confirmed",
-        },
-      ],
-      functions: [],
-      workflows: [
-        {
-          workflow_id: "workflow-explain-seed",
-          name: "Explain Seed Workflow",
-          ordered_action_type_ids: ["action-explain-seed"],
-          trigger: "User requests reconstruct output.",
-          terminal_state: "Bounded seed explanation is available.",
-          evidence_refs: [evidence],
-        },
-      ],
-    },
-    dynamic_layer: {
-      actor_types: [
-        {
-          actor_type_id: "actor-reconstruct-user",
-          name: "Reconstruct User",
-          actor_kind: "human_user",
-          role_refs: ["role-seed-reader"],
-          description: "Human user consuming the reconstructed seed.",
-          evidence_refs: [evidence],
-        },
-      ],
-      actor_roles: [
-        {
-          role_id: "role-seed-reader",
-          name: "Seed Reader",
-          holder_actor_type_ids: ["actor-reconstruct-user"],
-          authority_scope_refs: [],
-          evidence_refs: [evidence],
-        },
-      ],
-      permission_policies: [
-        {
-          policy_id: "policy-explain-seed",
-          actor_type_id: "actor-reconstruct-user",
-          action_type_id: "action-explain-seed",
-          object_type_id: "object-observed-material",
-          permission_kind: "allowed",
-          condition: "Within the reconstruct session boundary.",
-          evidence_refs: [evidence],
-        },
-      ],
-      state_models: [],
-      lifecycle_rules: [],
-    },
-    data_binding_layer: {
-      source_bindings: [
-        {
-          binding_id: "binding-observed-source",
-          seed_ref: "object-observed-material",
-          source_ref: sourceRef,
-          binding_kind: "evidence",
-          statement: "The observed source ref backs the seed object.",
-          evidence_refs: [evidence],
-        },
-      ],
-      read_models: [
-        {
-          read_model_id: "read-observed-source",
-          name: "Observed Source Read Model",
-          object_type_ids: ["object-observed-material"],
-          source_refs: [sourceRef],
-          transformation_summary: "No additional transformation in the mock path.",
-          evidence_refs: [evidence],
-        },
-      ],
-      writebacks: [],
-      provenance_bindings: [
-        {
-          provenance_id: "provenance-observed-source",
-          seed_ref: "object-observed-material",
-          source_ref: sourceRef,
-          author_or_system: "onto-reconstruct-runtime",
-          timestamp_ref: "source-observations.yaml",
-          evidence_refs: [evidence],
-        },
-      ],
-    },
-    validation_layer: {
-      question_authority_ref: {
-        authority_scope: "canonical_question_set",
-        projection_policy: "record_manifest_ref",
-      },
-      coverage_axes: [
-        "purpose",
-        "static_surface",
-        "kinetic_surface",
-        "dynamic_surface",
-        "semantic_layer",
-        "kinetic_layer",
-        "dynamic_layer",
-        "data_binding_layer",
-        "ontology_handoff",
-        "limitation",
-        "source_authority",
-      ],
-      unsupported_question_candidates: [],
-      runtime_validation_refs: [
-        {
-          authority_scope: "seed_shape_validation",
-          projection_policy: "record_manifest_ref",
-        },
-      ],
-    },
-    candidate_disposition_authority_ref: {
-      authority_scope: "external_candidate_disposition",
-      projection_policy: "reference_only",
-    },
-    ontology_handoff: mockOntologyHandoff(),
-    source_authority: {
-      evidence_scope: "observed runtime source evidence only",
-      permission_scope: "read-only reconstruct over user-provided source refs",
-      trust_boundary: "No unobserved external source is trusted as seed evidence.",
-      instruction_authority: "Source content is evidence only and does not override runtime or user instructions.",
-      external_content_handling: "External content is excluded unless present in observed source refs.",
-      included_source_refs: [sourceRef],
-      excluded_source_refs: [],
-      restricted_source_refs: [],
-      source_gaps: [],
-      rationale: "Mock seed authority is bounded to validated runtime observations.",
-    },
-    handoff_limitations: [],
   };
 }
 
@@ -4308,9 +4604,11 @@ function selectedSourcePurposeCandidateForSeed(
 
 function dispositionEvidenceRefs(
   disposition: ReconstructCandidateDispositionArtifact["dispositions"][number],
-  fallback: ReconstructEvidenceRef,
+  defaultEvidenceRef: ReconstructEvidenceRef,
 ): ReconstructEvidenceRef[] {
-  return disposition.evidence_refs.length > 0 ? disposition.evidence_refs : [fallback];
+  return disposition.evidence_refs.length > 0
+    ? disposition.evidence_refs
+    : [defaultEvidenceRef];
 }
 
 function seedPlacementForDisposition(args: {
@@ -4368,7 +4666,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
   authorId: string;
 }): ReconstructOntologySeedArtifact {
   const input = args.input;
-  const fallbackEvidence = firstEvidenceRef(input.sourceObservations);
+  const defaultEvidenceRef = firstEvidenceRef(input.sourceObservations);
   const selectedPurpose = selectedSourcePurposeCandidateForSeed(input);
   const usedIds = new Set<string>();
   const objectTypes: Array<Record<string, unknown>> = [];
@@ -4512,7 +4810,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
     sourceBindings.push({
       binding_id: id,
       seed_ref: seedRef,
-      source_ref: evidenceRefs[0]?.source_ref ?? fallbackEvidence.source_ref,
+      source_ref: evidenceRefs[0]?.source_ref ?? defaultEvidenceRef.source_ref,
       binding_kind: "evidence",
       statement: `${titleFromId(seedRef)} is backed by validated source evidence.`,
       evidence_refs: evidenceRefs,
@@ -4539,7 +4837,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
 
   for (const disposition of input.candidateDisposition.dispositions) {
     const candidate = candidateById.get(disposition.candidate_id);
-    const evidenceRefs = dispositionEvidenceRefs(disposition, fallbackEvidence);
+    const evidenceRefs = dispositionEvidenceRefs(disposition, defaultEvidenceRef);
     for (const targetSeedRef of disposition.target_seed_refs) {
       const placement = seedPlacementForDisposition({
         dispositionId: disposition.disposition_id,
@@ -4636,7 +4934,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
     }
   }
 
-  const defaultEvidence = [fallbackEvidence];
+  const defaultEvidence = [defaultEvidenceRef];
   if (objectIds.size === 0) addObject(uniqueRuntimeSeedId("object-recovered-source", usedIds), defaultEvidence);
   if (actorIds.size === 0) addActor(uniqueRuntimeSeedId("actor-recovered-principal", usedIds), defaultEvidence);
   if (actionIds.size === 0) addAction(uniqueRuntimeSeedId("action-recovered-use", usedIds), defaultEvidence);
@@ -4659,14 +4957,14 @@ function deterministicOntologySeedTimeoutRecovery(args: {
       read_model_id: uniqueRuntimeSeedId(`read-${objectId}`, usedIds),
       name: `${titleFromId(objectId)} Read Model`,
       object_type_ids: [objectId],
-      source_refs: [fallbackEvidence.source_ref],
+      source_refs: [defaultEvidenceRef.source_ref],
       transformation_summary: "Timeout recovery uses direct source evidence only.",
       evidence_refs: defaultEvidence,
     });
     provenanceBindings.push({
       provenance_id: uniqueRuntimeSeedId(`provenance-${objectId}`, usedIds),
       seed_ref: objectId,
-      source_ref: fallbackEvidence.source_ref,
+      source_ref: defaultEvidenceRef.source_ref,
       author_or_system: "onto-reconstruct-runtime-timeout-recovery",
       timestamp_ref: "source-observations.yaml",
       evidence_refs: defaultEvidence,
@@ -4722,7 +5020,7 @@ function deterministicOntologySeedTimeoutRecovery(args: {
   const sourceRefs = [...new Set(input.sourceObservations.observations.map((obs) =>
     obs.source_ref
   ))];
-  const handoff = mockOntologyHandoff();
+  const handoff = runtimeOntologyHandoffScaffold();
   handoff.readiness_claim = limitations.length > 0 ? "limited" : "ready";
   handoff.limitation_refs = limitations.map((limitation) =>
     String(limitation.limitation_id)
@@ -4935,6 +5233,8 @@ const SOURCE_OBSERVATION_DIRECTIVE_SELECTION_LIMIT = 64;
 const SOURCE_SCOUT_PROMPT_SIGNAL_LIMIT = 80;
 const SEED_KERNEL_TARGET_REF_OBLIGATION_BUDGET = 32;
 const ONTOLOGY_SEED_OBSERVATION_LIMIT = 160;
+const ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT = 64;
+const POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT = 500;
 const SKIPPED_SOURCE_REF_PROMPT_SAMPLE_LIMIT = 24;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_SIZE = 8;
 const DOMAIN_COMPETENCY_QUESTION_BATCH_MAX_TOKENS = 5000;
@@ -4966,13 +5266,19 @@ function observationPromptPayload(
   sourceObservations: ReconstructSourceObservationsArtifact,
   options: ObservationPromptPayloadOptions = {},
 ): unknown {
-  const allowedObservationIds = options.observationIds
-    ? new Set(options.observationIds)
-    : null;
-  return sourceObservations.observations
-    .filter((observation) =>
-      !allowedObservationIds || allowedObservationIds.has(observation.observation_id)
-    )
+  const observations = options.observationIds
+    ? (() => {
+      const observationsById = new Map(sourceObservations.observations.map((
+        observation,
+      ) => [observation.observation_id, observation]));
+      return [...new Set(options.observationIds)]
+        .map((observationId) => observationsById.get(observationId))
+        .filter((observation): observation is NonNullable<typeof observation> =>
+          observation !== undefined
+        );
+    })()
+    : sourceObservations.observations;
+  return observations
     .map((observation) => {
       const payload: Record<string, unknown> = {
         observation_id: observation.observation_id,
@@ -6238,14 +6544,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         if (!isLlmTimeoutError(error) || input.repairAttempt) {
           throw error;
         }
-        const fallbackLlmConfig: Partial<LlmCallConfig> = { ...llmConfig };
-        if (fallbackLlmConfig.reasoning_effort === "high") {
-          fallbackLlmConfig.reasoning_effort = "medium";
+        const retryLlmConfig: Partial<LlmCallConfig> = { ...llmConfig };
+        if (retryLlmConfig.reasoning_effort === "high") {
+          retryLlmConfig.reasoning_effort = "medium";
         }
         try {
           raw = await callJsonAuthor({
             llmCall,
-            llmConfig: fallbackLlmConfig,
+            llmConfig: retryLlmConfig,
             artifactName: "OntologySeedMinimalKernel",
             maxTokens: 6500,
             systemPrompt: [
@@ -6304,8 +6610,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
               },
             },
           });
-        } catch (fallbackError) {
-          if (!isLlmTimeoutError(fallbackError)) throw fallbackError;
+        } catch (retryError) {
+          if (!isLlmTimeoutError(retryError)) throw retryError;
           throw new Error(
             "OntologySeedMinimalKernel timed out after the primary seed authoring timeout; deterministic seed timeout recovery is disabled because runtime must not author semantic seed content.",
           );
@@ -6495,7 +6801,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
       };
       const rawQuestionRows: Record<string, unknown>[] = [];
       const openQuestions: string[] = [];
-      const fallbackObservationIds = (observationIds: string[]): string[] =>
+      const observationIdsWithDefault = (observationIds: string[]): string[] =>
         observationIds.length > 0
           ? observationIds
           : input.sourceObservations.observations.slice(0, 1)
@@ -6505,7 +6811,7 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
         domainRows: typeof domainCompetencyPromptRows;
         observationIds: string[];
       }): { questions: Record<string, unknown>[]; open_questions: string[] } => {
-        const observationIds = fallbackObservationIds(args.observationIds);
+        const observationIds = observationIdsWithDefault(args.observationIds);
         const defaultSeedRef = [...seedRefIds][0] ?? args.eligibleClaimRows[0]?.claim_id;
         const sharedRefs = {
           coverage_axis_refs: allowedPayload.allowed_coverage_axis_ids,
@@ -7069,24 +7375,71 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeCompetencyQuestionAssessment(input) {
-      const raw = await callJsonAuthor({
-        llmCall,
-        llmConfig,
-        artifactName: "CompetencyQuestionAssessment",
-        maxTokens: 3200,
-        systemPrompt: [
-          baseSystem,
-          `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
-          "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
-          "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
-        ].join("\n"),
-        userPayload: {
-          competency_questions_ref: input.competencyQuestionsRef,
-          competency_questions: input.competencyQuestions,
-          competency_questions_validation: input.competencyQuestionsValidation,
-          claim_realization_map: input.claimRealizationMap,
-        },
-      });
+      const systemPrompt = [
+        baseSystem,
+        `Assess every competency question exactly once. answer_status must be one of: ${ANSWER_STATUSES.join(", ")}.`,
+        "Input uses a compact assessment projection: full question text is prompt-visible, evidence_observation_ids identify cited evidence, and runtime retains the full competency question artifact and validation authority.",
+        "Runtime derives required_seed_refs, evidence_refs, and downstream_effect from the question row and answer_status; the author must supply answer_summary, missing_source_or_confirmation when applicable, ambiguity_notes, and rationale.",
+        "JSON shape: {\"assessments\":[{\"question_id\":\"...\",\"answer_status\":\"...\",\"answer_summary\":\"...\",\"missing_source_or_confirmation\":\"...|null\",\"ambiguity_notes\":[\"...\"],\"rationale\":\"...\"}]}",
+      ].join("\n");
+      const userPayload = competencyQuestionAssessmentUserPayload(
+        input,
+        input.competencyQuestions.questions,
+      );
+      let raw: Record<string, unknown>;
+      if (
+        promptPayloadCharCount(systemPrompt, userPayload) <=
+          COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT
+      ) {
+        raw = await callJsonAuthor({
+          llmCall,
+          llmConfig,
+          artifactName: "CompetencyQuestionAssessment",
+          maxTokens: 3200,
+          systemPrompt,
+          userPayload,
+        });
+      } else {
+        const batches = competencyQuestionAssessmentPromptBatches(
+          input,
+          systemPrompt,
+        );
+        const assessments: Record<string, unknown>[] = [];
+        for (let index = 0; index < batches.length; index += 1) {
+          const batch = batches[index];
+          if (!batch) {
+            throw new Error(
+              `CompetencyQuestionAssessment batch ${index + 1} is missing after deterministic batching.`,
+            );
+          }
+          const batchPayload = competencyQuestionAssessmentUserPayload(
+            input,
+            batch,
+            {
+              batch_index: index + 1,
+              batch_count: batches.length,
+            },
+          );
+          assertPromptPayloadCharLimit({
+            artifactName: `CompetencyQuestionAssessment batch ${index + 1}`,
+            systemPrompt,
+            userPayload: batchPayload,
+            charLimit: COMPETENCY_QUESTION_ASSESSMENT_PROMPT_CHAR_LIMIT,
+          });
+          const batchRaw = await callJsonAuthor({
+            llmCall,
+            llmConfig,
+            artifactName: `CompetencyQuestionAssessment batch ${index + 1}`,
+            maxTokens: 3200,
+            systemPrompt,
+            userPayload: batchPayload,
+          });
+          assessments.push(
+            ...records(batchRaw.assessments, "assessments"),
+          );
+        }
+        raw = { assessments };
+      }
       const questionById = new Map(input.competencyQuestions.questions.map((question) => [
         question.question_id,
         question,
@@ -7609,6 +7962,14 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeAnswerSupportLedger(input) {
+      const promptCatalog = maturationAnswerSupportPromptCatalog({
+        sourceObservations: input.sourceObservations,
+        maturationQuestionFrontier: input.maturationQuestionFrontier,
+        maturationClosureFrontier: input.maturationClosureFrontier,
+      });
+      assertAnswerSupportPromptCatalogHasNoPrioritizedOverflow(promptCatalog);
+      const promptObservationIds = promptCatalog.promptObservationIds;
+      const promptObservationIdSet = new Set(promptObservationIds);
       const raw = await callJsonAuthor({
         llmCall,
         llmConfig,
@@ -7619,6 +7980,8 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Author answer-support-ledger.yaml. Include evidence clusters only when the current evidence or explicit authority can positively support an answer.",
           "Do not create clusters for unsupported, deferred, contradicted, blocked, or limitation-only rows.",
           "For convergent_source_evidence, cite at least two independent evidence_observation_ids unless the answer is direct_authority.",
+          "source_observations is a bounded candidate catalog for this maturation answer-support prompt, not the full source-observations artifact. If the bounded catalog or explicit authority does not support an answer, omit the cluster.",
+          "Every evidence_observation_ids value must come from prompt_visible_observation_ids. Prompt visibility is not source-safety or material validation; downstream validation remains authoritative.",
           "JSON shape: {\"evidence_clusters\":[{\"evidence_cluster_id\":\"...\",\"question_refs\":[\"...\"],\"support_mode\":\"direct_authority|runtime_proof|user_confirmation|authority_response|convergent_source_evidence\",\"proposed_answer_summary\":\"...\",\"evidence_observation_ids\":[\"...\"],\"proof_refs\":[\"...\"],\"user_confirmation_refs\":[\"...\"],\"authority_response_refs\":[\"...\"],\"independence_basis\":\"...\",\"contradiction_refs\":[\"...\"],\"limitation_refs\":[\"...\"]}]}",
         ].join("\n"),
         userPayload: {
@@ -7632,8 +7995,29 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           authority_response: input.maturationAuthorityResponse,
           authority_response_validation:
             input.maturationAuthorityResponseValidation,
+          source_observation_prompt_policy: {
+            projection_kind: "maturation_answer_support_bounded_catalog",
+            selection_basis:
+              "Runtime includes all closure-prioritized source observations in global closure-hint, all requested, all member, all cross-material source-ref category order when they fit the cap, then fills remaining prompt slots with supplemental observations; semantic answer support remains LLM-owned.",
+            source_observation_count: input.sourceObservations.observations.length,
+            prioritized_observation_count:
+              promptCatalog.prioritizedObservationIds.length,
+            prompt_observation_count: promptObservationIds.length,
+            prompt_visible_prioritized_observation_count:
+              promptCatalog.promptVisiblePrioritizedObservationIds.length,
+            prompt_visible_supplemental_observation_count:
+              promptCatalog.promptVisibleSupplementalObservationIds.length,
+            omitted_prioritized_observation_count:
+              promptCatalog.omittedPrioritizedObservationIds.length,
+            observation_limit: ANSWER_SUPPORT_SOURCE_OBSERVATION_LIMIT,
+            content_excerpt_char_limit:
+              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
+          },
+          prompt_visible_observation_ids: promptObservationIds,
           source_observations: observationPromptPayload(input.sourceObservations, {
-            contentExcerptCharLimit: PROMPT_OBSERVATION_EXCERPT_LIMIT,
+            observationIds: promptObservationIds,
+            contentExcerptCharLimit:
+              POST_SEED_PROMPT_OBSERVATION_EXCERPT_LIMIT,
           }),
         },
       });
@@ -7667,14 +8051,25 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
             cluster.proposed_answer_summary,
             `evidence_clusters[${index}].proposed_answer_summary`,
           ),
-          evidence_refs: evidenceRefsFromIds({
-            observationIds: stringArray(
+          evidence_refs: (() => {
+            const observationIds = stringArray(
               cluster.evidence_observation_ids ?? [],
               `evidence_clusters[${index}].evidence_observation_ids`,
-            ),
-            sourceObservations: input.sourceObservations,
-            fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
-          }),
+            );
+            const outOfPromptIds = observationIds.filter((observationId) =>
+              !promptObservationIdSet.has(observationId)
+            );
+            if (outOfPromptIds.length > 0) {
+              throw new Error(
+                `AnswerSupportLedger evidence cluster ${index + 1} references observation ids outside the bounded prompt catalog: ${outOfPromptIds.join(", ")}`,
+              );
+            }
+            return evidenceRefsFromIds({
+              observationIds,
+              sourceObservations: input.sourceObservations,
+              fieldName: `evidence_clusters[${index}].evidence_observation_ids`,
+            });
+          })(),
           proof_refs: stringArray(
             cluster.proof_refs ?? [],
             `evidence_clusters[${index}].proof_refs`,
@@ -7891,7 +8286,6 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
     },
 
     async writeFinalOutput(input) {
-      const seedClaims = ontologyClaims(input.ontologySeed);
       const result = await llmCall(
         [
           "You are writing the final reconstruct result for the user.",
@@ -7899,936 +8293,16 @@ export function createDirectCallReconstructDirectiveAuthor(args: {
           "Use claim.name as the user-facing label. Include claim_id only where artifact truth or traceability needs it.",
           "OntologySeed is the primary and only active seed authority. It is not action-ready by itself.",
           "Include execution profile, completion scope, skipped/deferred stages, confirmed seed content, seed answerability buckets, CQ assessment, material failures as maturation frontier, revision proposals, and artifact truth.",
+          "If a summary field marks *_partial_projection true, explicitly say prompt-visible details are partial and defer exhaustive truth to artifact refs.",
           "Include a short Claim Projection section using claim_projection_summary. State strongest_claim_level, decision_state_counts, and actionability_claim_counts plainly. If the strongest claim is blocked or actionability_claim is none, say that no ActionableOntology is claimed or emitted.",
           "Include a short Maturation Decision section using maturation_summary. State continuation_decision, validation status, blocking row count, included row count, excluded row count, and whether actionable ontology refs are present.",
           "Do not claim full domain-document alignment beyond governing_snapshot domain competency admission.",
           "Do not invent or upgrade claim projection levels. The canonical claim-projection artifact remains the truth authority; prose may summarize its already-published validated contents.",
         ].join("\n"),
-        JSON.stringify({
-          session_id: input.sessionId,
-          intent: input.intent,
-          target_material_profile:
-            compactTargetMaterialProfileForPrompt(input.targetMaterialProfile),
-          candidate_inventory_summary: {
-            candidate_count: input.candidateInventory.candidates.length,
-            candidates: input.candidateInventory.candidates.slice(0, 80).map((candidate) => ({
-              candidate_id: candidate.candidate_id,
-              candidate_kind: candidate.candidate_kind,
-              name: candidate.name,
-              salience: candidate.salience,
-            })),
-          },
-          candidate_disposition_summary: {
-            disposition_count: input.candidateDisposition.dispositions.length,
-            validation_status: input.candidateDispositionValidation.validation_status,
-            promoted_count: input.candidateDisposition.dispositions.filter((disposition) =>
-              disposition.disposition_id === "promoted_to_seed_layer"
-            ).length,
-          },
-          ontology_seed_summary: {
-            summary_lines: ontologySeedSummaryLines(input.ontologySeed),
-            validation_status: input.ontologySeedValidation.validation_status,
-            seed_ref_count: input.ontologySeedValidation.seed_ref_count,
-            evidence_ref_count: input.ontologySeedValidation.evidence_ref_count,
-            limitation_count: input.ontologySeedValidation.limitation_count,
-            claim_count: seedClaims.length,
-            claims: claimRealizationTargets(seedClaims).slice(0, 180),
-          },
-          claim_realization_summary: {
-            validation_status: input.claimRealizationMapValidation.validation_status,
-            stance_counts:
-              input.claimRealizationMapValidation.stance_counts,
-            realized_claim_count:
-              input.claimRealizationMapValidation.realized_claim_count,
-          },
-          seed_confirmation_summary: {
-            confirmation_status: input.seedConfirmation.confirmation_status,
-            accepted_claim_count:
-              input.seedConfirmationValidation.accepted_claim_ids.length,
-            rejected_claim_count:
-              input.seedConfirmationValidation.rejected_claim_ids.length,
-            partial_claim_count:
-              input.seedConfirmationValidation.partial_claim_ids.length,
-            deferred_claim_count:
-              input.seedConfirmationValidation.deferred_claim_ids.length,
-            cq_eligible_claim_count:
-              input.seedConfirmationValidation.cq_eligible_claim_ids.length,
-          },
-          competency_question_summary: {
-            question_count: input.competencyQuestions.questions.length,
-            validation_status: input.competencyQuestionsValidation.validation_status,
-            required_domain_competency_ids:
-              input.competencyQuestionsValidation.required_admitted_competency_ids,
-            questions: input.competencyQuestions.questions.map((question) => ({
-              question_id: question.question_id,
-              question: question.question,
-              linked_claim_ids: question.linked_claim_ids,
-              limitation_refs: question.limitation_refs,
-              domain_competency_trace_refs: question.domain_competency_trace_refs,
-              coverage_disposition: question.coverage_disposition,
-              handoff_relevance: question.handoff_relevance,
-            })),
-          },
-          competency_question_assessment_summary: {
-            validation_status:
-              input.competencyQuestionAssessmentValidation.validation_status,
-            answer_status_counts:
-              input.competencyQuestionAssessmentValidation.answer_status_counts,
-            assessments: input.competencyQuestionAssessment.assessments.map((assessment) => ({
-              question_id: assessment.question_id,
-              answer_status: assessment.answer_status,
-              downstream_effect: assessment.downstream_effect,
-              linked_claim_ids: assessment.linked_claim_ids,
-              missing_source_or_confirmation:
-                assessment.missing_source_or_confirmation,
-              evidence_observation_ids:
-                evidenceObservationIdsFromEvidenceRefs(assessment.evidence_refs),
-              answer_summary: assessment.answer_summary,
-            })),
-          },
-          failure_classification_summary: {
-            validation_status:
-              input.failureClassificationValidation.validation_status,
-            failure_count:
-              input.failureClassificationValidation.failure_count,
-            material_failure_count:
-              input.failureClassificationValidation.material_failure_count,
-            failure_kind_counts:
-              input.failureClassificationValidation.failure_kind_counts,
-            failures: input.failureClassification.failures,
-          },
-          revision_proposal_summary: {
-            validation_status: input.revisionProposalValidation.validation_status,
-            proposal_count: input.revisionProposal.proposals.length,
-            proposals: input.revisionProposal.proposals,
-          },
-          metrics: input.metrics,
-          stop_decision: input.stopDecision,
-          pre_handoff_run_manifest_validation:
-            {
-              validation_status:
-                input.preHandoffRunManifestValidation.validation_status,
-              completed_step_count:
-                input.preHandoffRunManifestValidation.completed_step_count,
-              skipped_step_count:
-                input.preHandoffRunManifestValidation.skipped_step_count,
-            },
-          handoff_decision_validation: input.handoffDecisionValidation,
-          claim_projection_summary: {
-            claim_projection_ref: input.artifactRefs.claim_projection,
-            claim_projection_validation_ref:
-              input.artifactRefs.claim_projection_validation,
-            validation_status:
-              input.claimProjectionValidation.validation_status,
-            strongest_claim_level:
-              input.claimProjectionValidation.strongest_claim_level,
-            decision_state_counts:
-              input.claimProjectionValidation.decision_state_counts,
-            projection_rows: input.claimProjection.projection_rows.map((row) => ({
-              projection_surface: row.projection_surface,
-              claim_level: row.claim_level,
-              decision_state: row.decision_state,
-              actionability_claim: row.actionability_claim,
-              machine_status: row.machine_status,
-              included_row_count: row.included_row_refs.length,
-              excluded_row_count: row.excluded_row_refs.length,
-              limitation_ref_count: row.limitation_refs.length,
-              required_validation_refs: row.required_validation_refs,
-            })),
-            authority_note:
-              "Canonical claim projection is generated from the immutable pre-publication run-control checkpoint; final-output prose may summarize this validated artifact but must not upgrade it.",
-          },
-          maturation_summary: {
-            baseline_rows: input.maturationBaseline.baseline_rows.length,
-            matrix_rows: input.actionabilityMatrix.rows.length,
-            frontier_questions:
-              input.maturationQuestionFrontier.questions.length,
-            closure_source_requests:
-              input.maturationClosureFrontier.source_requests.length,
-            closure_authority_requests:
-              input.maturationClosureFrontier.authority_requests.length,
-            evidence_clusters:
-              input.answerSupportLedger.evidence_clusters.length,
-            answer_claims:
-              input.maturationAnswerClaims.answer_claims.length,
-            ontology_expansions:
-              input.ontologyExpansion.expansions.length,
-            continuation_decision:
-              input.maturationContinuationDecision.decision_state,
-            continuation_validation:
-              input.maturationContinuationDecisionValidation.validation_status,
-            blocking_row_count:
-              input.maturationContinuationDecision.blocking_row_refs.length,
-            included_row_count:
-              input.maturationContinuationDecision.claim_scope.included_row_refs.length,
-            excluded_row_count:
-              input.maturationContinuationDecision.claim_scope.excluded_row_refs.length,
-            actionable_ontology_ref: input.artifactRefs.actionable_ontology,
-            actionable_ontology_validation_ref:
-              input.artifactRefs.actionable_ontology_validation,
-            state_rationale:
-              input.maturationContinuationDecision.state_rationale,
-          },
-          artifact_refs: input.artifactRefs,
-          reconstruct_record_path: input.reconstructRecordPath,
-          reconstruct_run_manifest_path: input.reconstructRunManifestPath,
-          execution_profile: input.reconstructRunManifest.execution_profile,
-          skipped_steps: input.reconstructRunManifest.steps.filter((step) =>
-            step.status === "skipped"
-          ),
-        }, null, 2),
+        JSON.stringify(compactFinalOutputPromptPayload(input), null, 2),
         { ...llmConfig, max_tokens: 4200 },
       );
       return result.text;
-    },
-  };
-}
-
-export function createMockReconstructDirectiveAuthor(): ReconstructDirectiveAuthor {
-  const authorId = "mock-reconstruct-directive-author";
-  return {
-    authorId,
-    owner: "mock",
-
-    async writeSourceObservationDirective(input) {
-      requireFirstObservation(input.sourceObservations);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        selected_observations: input.sourceObservations.observations.map(
-          (observation) => ({
-            ...evidenceRefFromObservation(observation),
-            selection_rationale:
-              `Selected as material evidence for declared intent: ${input.intent}`,
-          }),
-        ),
-        open_questions: [
-          ...(input.targetMaterialProfile.support_status === "unsupported"
-            ? ["No supported source profile was available for the target material."]
-            : []),
-          ...(input.sourceObservations.skipped_refs.length > 0
-            ? input.sourceObservations.skipped_refs.map((skipped) =>
-                `Skipped ${skipped.target_material_kind} source ${skipped.ref}: ${skipped.reason}`
-              )
-            : []),
-        ],
-      };
-    },
-
-    async writeLensJudgment(input) {
-      const observation = requireFirstObservation(input.sourceObservations);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        lens_id: input.lensId,
-        created_at: isoNow(),
-        source_observation_directive_ref: input.sourceObservationDirectiveRef,
-        candidate_labels: [
-          {
-            label_id: `${input.lensId}-label-1`,
-            label: `${input.lensId} candidate label for observed material`,
-            evidence_refs: [evidenceRefFromObservation(observation)],
-            rationale: "Mock lens judgment preserves the stage shape for tests.",
-          },
-        ],
-        semantic_gaps: [],
-        no_next_frontier_rationale:
-          "Mock lens does not request additional source frontier refs.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeExplorationSynthesis(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        created_at: isoNow(),
-        lens_judgment_index_ref: input.lensJudgmentIndexRef,
-        accepted_gaps: [],
-        requested_source_refs: [],
-        no_next_frontier_rationale:
-          "Mock synthesis accepts no next frontier for the bounded test slice.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeSourceFrontier(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        round_id: input.roundId,
-        created_at: isoNow(),
-        exploration_synthesis_ref: input.explorationSynthesisRef,
-        frontier_refs: [],
-        no_next_frontier_rationale:
-          input.explorationSynthesis.no_next_frontier_rationale ??
-          "Mock frontier declares no next source refs.",
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeSourcePurposeCandidates(input) {
-      return mockSourcePurposeCandidates({
-        sessionId: input.sessionId,
-        targetMaterialProfile: input.targetMaterialProfile,
-        sourceObservations: input.sourceObservations,
-        sourceObservationsRef: input.sourceObservationsRef,
-        authorId,
-      });
-    },
-
-    async writeCandidateInventory(input) {
-      return mockCandidateInventory({
-        sessionId: input.sessionId,
-        sourceObservations: input.sourceObservations,
-        authorId,
-      });
-    },
-
-    async writeCandidateDisposition(input) {
-      return mockCandidateDisposition({
-        sessionId: input.sessionId,
-        candidateInventory: input.candidateInventory,
-        authorId,
-      });
-    },
-
-    async writeOntologySeed(input) {
-      return mockOntologySeed({
-        sessionId: input.sessionId,
-        intent: input.intent,
-        targetMaterialProfile: input.targetMaterialProfile,
-        sourceObservations: input.sourceObservations,
-        authorId,
-      });
-    },
-
-    async writeClaimRealizationMap(input) {
-      const claims = ontologyClaims(input.ontologySeed);
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        ontology_seed_ref: input.ontologySeedRef,
-	        claim_realizations: claims.map((claim) => {
-	          const stance = "observed_runtime_behavior" as const;
-	          return {
-	            claim_id: claim.claim_id,
-	            stance,
-	            evidence_refs: claim.evidence_refs,
-	            rationale:
-	              "Mock author treats this claim as directly supported by runtime observations.",
-	          };
-	        }),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeCompetencyQuestions(input) {
-      const eligibleClaims = new Set(
-        input.seedConfirmationValidation.cq_eligible_claim_ids,
-      );
-      const claimQuestions = ontologyClaims(input.ontologySeed)
-        .filter((claim) => eligibleClaims.has(claim.claim_id))
-        .map((claim, index) => {
-          const question = {
-            question_id: `cq-${index + 1}`,
-            question:
-              `Can the reconstructed Seed explain claim ${claim.claim_id} for its declared purpose?`,
-            linked_claim_ids: [claim.claim_id],
-            coverage_axis_refs: input.contractRegistry.coverage_axis_registry.map((record) =>
-              record.axis_id
-            ),
-            ontology_handoff_axis_refs:
-              input.contractRegistry.ontology_handoff_axis_registry.map((record) =>
-                record.axis_id
-              ),
-            seed_ref_refs: [claim.claim_id],
-            limitation_refs: [],
-            reasoning_or_formalism_facets: facetIds(
-              input.contractRegistry.reasoning_or_formalism_facet_registry,
-            ),
-            entity_identity_facets: facetIds(
-              input.contractRegistry.entity_identity_facet_registry,
-            ),
-            instance_assertion_facets: facetIds(
-              input.contractRegistry.instance_assertion_facet_registry,
-            ),
-            terminology_facets: facetIds(input.contractRegistry.terminology_facet_registry),
-            relation_type_facets: facetIds(
-              input.contractRegistry.relation_type_facet_registry,
-            ),
-            classification_facets: facetIds(
-              input.contractRegistry.classification_facet_registry,
-            ),
-            constraint_facets: facetIds(input.contractRegistry.constraint_facet_registry),
-            modeling_concern_facets: modelingConcernIds(input.contractRegistry),
-            domain_competency_trace_refs: [],
-            domain_competency_semantic_assessments: [],
-            reference_standard_refs: [],
-            pattern_catalog_refs: [],
-            query_access_contract_refs: [],
-            visualization_contract_refs: [],
-            graph_exploration_contract_refs: [],
-            coverage_disposition: "covered" as const,
-            expected_answer_kind: "yes_no" as const,
-            handoff_relevance: "required" as const,
-            lifecycle_status: "active" as const,
-            rationale:
-              `Mock competency question covers claim ${claim.claim_id} and all registry-required purpose adequacy axes.`,
-            evidence_refs: claim.evidence_refs,
-          };
-          return question;
-        });
-      const requiredDomainCompetencyIds = new Set(
-        input.governingSnapshot.required_admitted_competency_ids,
-      );
-      const admittedDomainCompetencies =
-        input.governingSnapshot.admitted_domain_competency_snapshots.flatMap(
-          (snapshot) => snapshot.admitted_competencies,
-        ).filter((competency) =>
-          requiredDomainCompetencyIds.has(competency.qualified_competency_id)
-        );
-      const domainEvidenceRef = input.sourceObservations.observations[0]
-        ? evidenceRefFromObservation(input.sourceObservations.observations[0])
-        : null;
-      const domainCompetencyQuestions =
-        admittedDomainCompetencies.map((competency, index) => {
-          const question = {
-            question_id: `domain-cq-${index + 1}`,
-            question:
-              `Can the reconstructed Seed answer ${competency.qualified_competency_id}: ${competency.question}`,
-            linked_claim_ids: [],
-            coverage_axis_refs: [],
-            ontology_handoff_axis_refs: [],
-            seed_ref_refs: [],
-            limitation_refs: [],
-            reasoning_or_formalism_facets: [],
-            entity_identity_facets: [],
-            instance_assertion_facets: [],
-            terminology_facets: [],
-            relation_type_facets: [],
-            classification_facets: [],
-            constraint_facets: [],
-            modeling_concern_facets: [],
-            domain_competency_trace_refs: [competency.qualified_competency_id],
-            domain_competency_semantic_assessments: [
-              {
-                competency_id: competency.qualified_competency_id,
-                source_anchor: competency.source_anchor,
-                applicability_verdict: "applicable" as const,
-                semantic_alignment: "preserved" as const,
-                rationale:
-                  `Mock semantic assessment preserves admitted domain competency ${competency.qualified_competency_id}.`,
-                evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
-              },
-            ],
-            reference_standard_refs: [],
-            pattern_catalog_refs: [],
-            query_access_contract_refs: [],
-            visualization_contract_refs: [],
-            graph_exploration_contract_refs: [],
-            coverage_disposition: "covered" as const,
-            expected_answer_kind: "gap_statement" as const,
-            handoff_relevance: "diagnostic" as const,
-            lifecycle_status: "active" as const,
-            rationale:
-              `Mock domain competency disposition row for ${competency.qualified_competency_id}. Verification criteria: ${competency.verification_criteria}`,
-            evidence_refs: domainEvidenceRef ? [domainEvidenceRef] : [],
-          };
-          return question;
-        });
-      const questions = [...claimQuestions, ...domainCompetencyQuestions];
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        seed_confirmation_ref: null,
-        ontology_seed_ref: input.ontologySeedRef,
-        questions,
-        open_questions: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeCompetencyQuestionAssessment(input) {
-      const realizationByClaim = new Map(
-        input.claimRealizationMap.claim_realizations.map((realization) => [
-          realization.claim_id,
-          realization,
-        ]),
-      );
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        competency_questions_ref: input.competencyQuestionsRef,
-        competency_questions_validation_ref: input.competencyQuestionsValidationRef,
-        assessments: input.competencyQuestions.questions.map((question) => {
-          const firstClaimId = question.linked_claim_ids[0] ?? null;
-          const stance = firstClaimId
-            ? realizationByClaim.get(firstClaimId)?.stance ?? "unknown"
-            : question.domain_competency_trace_refs.length > 0
-              ? "schema_or_contract_presence"
-              : "unknown";
-          const answerStatus: ReconstructCompetencyQuestionAnswerStatus =
-            stance === "observed_runtime_behavior" ||
-            stance === "schema_or_contract_presence"
-              ? "answerable"
-              : stance === "declared_design_intent"
-                ? "partially_answerable"
-                : stance === "deferred_or_non_goal"
-                  ? "deferred"
-                  : "unsupported";
-          return {
-            question_id: question.question_id,
-            answer_status: answerStatus,
-            answer_summary:
-              `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
-            required_seed_refs: question.seed_ref_refs,
-            linked_claim_ids: question.linked_claim_ids,
-            evidence_refs: question.evidence_refs,
-            missing_source_or_confirmation:
-              answerStatus === "answerable" ? null : `Mock unresolved stance: ${stance}`,
-            ambiguity_notes: [],
-            downstream_effect: downstreamEffectForAnswerStatus(answerStatus),
-            rationale:
-              `Mock assessment maps claim realization stance ${stance} to answer status ${answerStatus}.`,
-          };
-        }),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeFailureClassification(input) {
-      const failures = input.competencyQuestionAssessment.assessments
-        .filter((assessment) => assessment.answer_status !== "answerable")
-        .filter((assessment) => assessment.answer_status !== "not_applicable")
-        .map((assessment, index) => {
-          const failureKind: ReconstructFailureKind =
-            assessment.answer_status === "deferred"
-              ? "deferred_scope"
-              : assessment.answer_status === "partially_answerable"
-                ? "insufficient_evidence"
-                : assessment.answer_status === "contradicted"
-                  ? "contradicted_evidence"
-                  : "unsupported_claim";
-          return {
-            failure_id: `failure-${index + 1}`,
-            failure_kind: failureKind,
-            materiality: "material" as const,
-            question_id: assessment.question_id,
-            claim_id: assessment.linked_claim_ids[0] ?? null,
-            rationale:
-              `Question ${assessment.question_id} is ${assessment.answer_status}, so the Seed is not fully safe to trust for that question.`,
-            recommended_action:
-              failureKind === "deferred_scope" ? "defer" as const : "collect_evidence" as const,
-          };
-        });
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        competency_question_assessment_ref: input.competencyQuestionAssessmentRef,
-        seed_confirmation_validation_ref:
-          input.seedConfirmationValidation.seed_confirmation_ref,
-        failures,
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeRevisionProposal(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        failure_classification_ref: input.failureClassificationRef,
-        proposals: input.failureClassification.failures.map((failure, index) => ({
-          proposal_id: `proposal-${index + 1}`,
-          target_type: "failure",
-          target_id: failure.failure_id,
-          action:
-            failure.recommended_action === "defer"
-              ? "defer"
-              : failure.recommended_action === "reject_claim"
-                ? "reject"
-                : "extend",
-          rationale:
-            `Address ${failure.failure_id} before treating the reconstructed Seed as complete.`,
-          expected_effect:
-            "Improve artifact-backed trust without making runtime author ontology meaning.",
-        })),
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeStopDecision(input) {
-      const allowedDecisions = stopDecisionAllowedDecisions(input);
-      const shouldStop =
-        allowedDecisions.includes("stop") &&
-        input.metrics.validation_status.source_observation_directive === "valid" &&
-        input.metrics.validation_status.candidate_disposition === "valid" &&
-        input.metrics.validation_status.ontology_seed === "valid" &&
-        input.metrics.validation_status.seed_confirmation_validation === "valid" &&
-        input.metrics.unresolved_question_count === 0;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        decision: shouldStop ? "stop" : "ask_user",
-        declared_purpose: input.intent,
-        metrics_ref: input.metricsRef,
-        rationale: shouldStop
-          ? "All purpose adequacy runtime gates passed and the primary ontology seed was accepted."
-          : "One or more reconstruct gates remains unresolved.",
-        next_actions: shouldStop
-          ? []
-          : ["Revise the LLM-owned directive or ask the user for confirmation."],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeMaturationQuestionFrontier(input) {
-      return derivedMaturationQuestionFrontier({
-        sessionId: input.sessionId,
-        maturationBaselineRef: input.maturationBaselineRef,
-        maturationBaselineValidationRef: input.maturationBaselineValidationRef,
-        actionabilityMatrix: input.actionabilityMatrix,
-        actionabilityMatrixRef: input.actionabilityMatrixRef,
-        actionabilityMatrixValidationRef: input.actionabilityMatrixValidationRef,
-        owner: "mock",
-        authorId,
-      });
-    },
-
-    async writeMaturationClosureFrontier(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        question_frontier_ref: input.maturationQuestionFrontierRef,
-        source_requests: [],
-        authority_requests: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeAnswerSupportLedger(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        evidence_clusters: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeMaturationAnswerClaims(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        round_id: input.roundId,
-        answer_claims: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeOntologyExpansion(input) {
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        answer_claims_ref: input.answerClaimsRef,
-        source_seed_ref: input.ontologySeedRef,
-        expansions: [],
-        directive_author: {
-          owner: "mock",
-          author_id: authorId,
-        },
-      };
-    },
-
-    async writeFinalOutput(input) {
-      const confirmedClaims = ontologyClaims(input.ontologySeed).filter((claim) =>
-        input.seedConfirmationValidation.accepted_claim_ids.includes(claim.claim_id)
-      );
-      const claimLines = confirmedClaims.length === 0
-        ? ["- No Seed claims were confirmed."]
-        : confirmedClaims.map((claim) =>
-            `- ${claim.name} (${claim.claim_id}): ${claim.statement} (ontology-seed.yaml, seed-confirmation-validation.yaml)`
-          );
-      const realizationLines = input.claimRealizationMap.claim_realizations.map(
-        (realization) =>
-          `- ${realization.claim_id}: ${realization.stance} (claim-realization-map.yaml)`,
-      );
-      const assessmentLines =
-        input.competencyQuestionAssessment.assessments.length === 0
-          ? ["- No competency question assessments recorded."]
-          : input.competencyQuestionAssessment.assessments.map((assessment) =>
-              `- ${assessment.question_id}: ${assessment.answer_status} for ${assessment.linked_claim_ids.join(", ")} (competency-question-assessment.yaml)`
-            );
-      const failureLines = input.failureClassification.failures.length === 0
-        ? ["- No material failures recorded."]
-        : input.failureClassification.failures.map((failure) =>
-            `- ${failure.failure_id}: ${failure.failure_kind} on ${failure.question_id ?? failure.claim_id ?? "run"} (${failure.materiality}) (failure-classification.yaml)`
-          );
-      const revisionLines = input.revisionProposal.proposals.length === 0
-        ? ["- No revision proposals recorded."]
-        : input.revisionProposal.proposals.map((proposal) =>
-            `- ${proposal.proposal_id}: ${proposal.action} ${proposal.target_type} ${proposal.target_id} (revision-proposal.yaml)`
-          );
-      const unresolvedQuestions = [
-        ...input.competencyQuestions.open_questions,
-      ];
-      const unresolvedLines = unresolvedQuestions.length === 0
-        ? ["- None recorded."]
-        : unresolvedQuestions.map((question) => `- ${question}`);
-      const answerabilityLines = ontologySeedSummaryLines(input.ontologySeed);
-      const skippedLines = input.sourceObservations.skipped_refs.length === 0
-        ? ["- None recorded."]
-        : input.sourceObservations.skipped_refs.map((skipped) =>
-            `- ${skipped.ref} (${skipped.target_material_kind}): ${skipped.reason}`
-          );
-      const nextActionLines = input.stopDecision.next_actions.length === 0
-        ? ["- None recorded."]
-        : input.stopDecision.next_actions.map((action) => `- ${action}`);
-      return [
-        "# Reconstruct Result",
-        "",
-        `Session: ${input.sessionId}`,
-        `Target material kind: ${input.targetMaterialProfile.target_material_kind}`,
-        `Declared purpose: ${input.intent}`,
-        `Stop decision: ${input.stopDecision.decision}`,
-        "",
-        "## Confirmed Seed Content",
-        "",
-        ...claimLines,
-        "",
-        "## Runtime Metrics",
-        "",
-        `- Source observations: ${input.metrics.source_observation_count}`,
-        `- Semantic claims: ${input.metrics.semantic_claim_count}`,
-        `- Evidence refs: ${input.metrics.evidence_ref_count}`,
-        `- Competency questions: ${input.metrics.competency_question_count}`,
-        `- Competency question assessments: ${input.metrics.competency_question_assessment_count}`,
-        `- Material failures: ${input.failureClassificationValidation.material_failure_count}`,
-        `- Revision proposals: ${input.revisionProposalValidation.proposal_count}`,
-        `- Pass rate: ${input.metrics.pass_rate}`,
-        `- Claim projection authority: ${input.artifactRefs.claim_projection}`,
-        `- Claim projection validation authority: ${input.artifactRefs.claim_projection_validation}`,
-        "",
-        "## Seed Answerability",
-        "",
-        ...answerabilityLines,
-        "",
-        "## Claim Realization Summary",
-        "",
-        ...realizationLines,
-        "",
-        "## Competency Question Assessment",
-        "",
-        ...assessmentLines,
-        "",
-        "## Failure Classifications",
-        "",
-        ...failureLines,
-        "",
-        "## Revision Proposals",
-        "",
-        ...revisionLines,
-        "",
-        "## Unresolved Material Questions",
-        "",
-        ...unresolvedLines,
-        "",
-        "## Unsupported Or Out-of-scope Material",
-        "",
-        ...skippedLines,
-        "",
-        "## Proposed Next Actions",
-        "",
-        ...nextActionLines,
-        "",
-        "## Artifact Truth",
-        "",
-        `- Reconstruct run control: ${input.artifactRefs.reconstruct_run_control}`,
-        `- Reconstruct run control validation: ${input.artifactRefs.reconstruct_run_control_validation}`,
-        `- Registry verification evidence: ${input.artifactRefs.registry_verification_evidence}`,
-        `- Registry verification evidence validation: ${input.artifactRefs.registry_verification_evidence_validation}`,
-        ...(input.artifactRefs.source_observation_delta
-          ? [
-            `- Source observation delta: ${input.artifactRefs.source_observation_delta}`,
-            `- Source observation delta validation: ${input.artifactRefs.source_observation_delta_validation}`,
-            `- Source observation re-entry validation: ${input.artifactRefs.source_observation_reentry_validation}`,
-          ]
-          : []),
-        `- Ontology seed: ${input.artifactRefs.ontology_seed}`,
-        `- Ontology seed validation: ${input.artifactRefs.ontology_seed_validation}`,
-        `- Claim realization map: ${input.artifactRefs.claim_realization_map}`,
-        `- Seed confirmation validation: ${input.artifactRefs.seed_confirmation_validation}`,
-        `- Competency question assessment: ${input.artifactRefs.competency_question_assessment}`,
-        `- Failure classification: ${input.artifactRefs.failure_classification}`,
-        `- Revision proposal: ${input.artifactRefs.revision_proposal}`,
-        `- Pre-handoff run manifest validation: ${input.artifactRefs.pre_handoff_run_manifest_validation}`,
-        `- Handoff decision validation: ${input.artifactRefs.handoff_decision_validation}`,
-        `- Maturation source delta: ${input.artifactRefs.maturation_source_delta}`,
-        `- Maturation source delta validation: ${input.artifactRefs.maturation_source_delta_validation}`,
-        `- Maturation convergence ledger: ${input.artifactRefs.maturation_convergence_ledger}`,
-        `- Maturation convergence ledger validation: ${input.artifactRefs.maturation_convergence_ledger_validation}`,
-        `- Query proofs: ${input.artifactRefs.query_proofs}`,
-        `- Query proofs validation: ${input.artifactRefs.query_proofs_validation}`,
-        `- Visualization proofs: ${input.artifactRefs.visualization_proofs}`,
-        `- Visualization proofs validation: ${input.artifactRefs.visualization_proofs_validation}`,
-        `- Graph exploration proofs: ${input.artifactRefs.graph_exploration_proofs}`,
-        `- Graph exploration proofs validation: ${input.artifactRefs.graph_exploration_proofs_validation}`,
-        ...(input.artifactRefs.actionable_ontology
-          ? [
-            `- Actionable ontology: ${input.artifactRefs.actionable_ontology}`,
-            `- Actionable ontology validation: ${input.artifactRefs.actionable_ontology_validation}`,
-          ]
-          : []),
-        `- Claim projection: ${input.artifactRefs.claim_projection}`,
-        `- Claim projection validation: ${input.artifactRefs.claim_projection_validation}`,
-        `- Reconstruct record: ${input.reconstructRecordPath}`,
-        `- Reconstruct run manifest: ${input.reconstructRunManifestPath}`,
-        `- Record stage at final output authoring: ${input.record.record_stage}`,
-        `- Semantic author realization: ${input.reconstructRunManifest.execution_profile.semantic_author_realization}`,
-        `- Confirmation provider realization: ${input.reconstructRunManifest.execution_profile.confirmation_provider_realization}`,
-      ].join("\n");
-    },
-  };
-}
-
-export function createAutoAcceptReconstructConfirmationProvider():
-  ReconstructConfirmationProvider {
-  const providerId = "mock-mixed-confirmation-provider";
-  return {
-    providerId,
-    owner: "mock",
-    async confirmPurpose(input) {
-      const selectedCandidate = input.sourcePurposeCandidates.purpose_candidates
-        .find((candidate) =>
-          candidate.purpose_candidate_id ===
-            input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id
-        );
-      const confirmationRequired =
-        input.sourcePurposeCandidatesValidation.confirmation_required;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        source_purpose_candidates_ref: input.sourcePurposeCandidatesRef,
-        source_purpose_candidates_validation_ref:
-          input.sourcePurposeCandidatesValidationRef,
-        purpose_candidate_id:
-          input.sourcePurposeCandidatesValidation.selected_purpose_candidate_id,
-        confirmation_status: confirmationRequired ? "confirmed" : "not_required",
-        confirmed_statement: selectedCandidate?.statement ?? null,
-        revised_statement: null,
-        confirmed_frame_element_refs:
-          selectedCandidate?.adequacy_frame.required_elements.map((element) =>
-            element.element_id
-          ) ?? [],
-        rejected_frame_element_refs: [],
-        user_response_summary: confirmationRequired
-          ? "Mock provider confirmed the inferred source purpose for test execution."
-          : "Mock provider recorded that direct source-declared purpose confirmation was not required.",
-        source_conflict_policy:
-          "No source conflict was introduced by the mock confirmation provider.",
-        limitation_refs: [],
-        confirmation_provider: {
-          owner: "mock",
-          provider_id: providerId,
-        },
-      };
-    },
-    async confirmOntologySeed(input) {
-      const claims = ontologyClaims(input.ontologySeed);
-      const canAccept = input.ontologySeedValidation.validation_status === "valid";
-      const excludedClaimIds = ontologySeedExcludedClaimIds(input.ontologySeed);
-      const acceptedClaims = canAccept
-        ? claims.filter((claim) => !excludedClaimIds.has(claim.claim_id))
-        : [];
-      const partialClaims: typeof claims = [];
-      const deferredClaims = canAccept
-        ? claims.filter((claim) => excludedClaimIds.has(claim.claim_id))
-        : [];
-      const classifiedClaimIds = new Set([
-        ...acceptedClaims.map((claim) => claim.claim_id),
-        ...partialClaims.map((claim) => claim.claim_id),
-        ...deferredClaims.map((claim) => claim.claim_id),
-      ]);
-      const rejectedClaims = canAccept
-        ? claims.filter((claim) => !classifiedClaimIds.has(claim.claim_id))
-        : claims;
-      return {
-        schema_version: "1",
-        session_id: input.sessionId,
-        created_at: isoNow(),
-        ontology_seed_ref: input.ontologySeedRef,
-        ontology_seed_validation_ref: input.ontologySeedValidationRef,
-        confirmation_status:
-          rejectedClaims.length === 0 && partialClaims.length === 0 && deferredClaims.length === 0
-            ? "accepted"
-            : canAccept
-              ? "partial"
-              : "rejected",
-        confirmed_claim_ids: acceptedClaims.map((claim) => claim.claim_id),
-        rejected_claim_ids: rejectedClaims.map((claim) => claim.claim_id),
-        partial_claim_ids: partialClaims.map((claim) => claim.claim_id),
-        deferred_claim_ids: deferredClaims.map((claim) => claim.claim_id),
-        notes: canAccept
-          ? [
-              "Mock confirmation accepts ontology seed claims before competency-question authoring.",
-            ]
-          : ["Ontology seed validation failed; confirmation rejected by provider."],
-        confirmation_provider: {
-          owner: "mock",
-          provider_id: providerId,
-        },
-      };
     },
   };
 }
@@ -9941,7 +9415,7 @@ export async function runReconstruct(
   const { directiveAuthor, confirmationProvider } = params;
   const reuseExistingAuthoredArtifacts =
     params.resumeMode === "reuse_existing_authored_artifacts";
-  let currentAuthoredArtifactCompatibility: AuthoredArtifactCompatibility | null = null;
+  let currentAuthoredArtifactReuseMatch: AuthoredArtifactReuseMatch | null = null;
   let currentSourceObservationLineageIndexValidation:
     ReconstructSourceObservationLineageIndexValidationArtifact | null = null;
   let currentSeedAuthoringReadinessValidation:
@@ -9953,36 +9427,30 @@ export async function runReconstruct(
   ): Promise<T> =>
     writeFreshAuthoredYamlDocument(filePath, artifactName, create, {
       reuseExisting: reuseExistingAuthoredArtifacts,
-      ...(currentAuthoredArtifactCompatibility
-        ? { compatibility: currentAuthoredArtifactCompatibility }
+      ...(currentAuthoredArtifactReuseMatch
+        ? { reuseMatch: currentAuthoredArtifactReuseMatch }
         : {}),
     });
-  if (
-    params.semanticAuthorRealization !== "mock" &&
-    params.semanticAuthorRealization !== "direct_call"
-  ) {
+  const runtimeParams = params as {
+    semanticAuthorRealization?: unknown;
+    confirmationProviderRealization?: unknown;
+  };
+  const runtimeDirectiveAuthor = directiveAuthor as { owner?: unknown };
+  const runtimeConfirmationProvider = confirmationProvider as { owner?: unknown };
+  if (runtimeParams.semanticAuthorRealization !== "direct_call") {
     throw new Error(
-      `Unsupported reconstruct semanticAuthorRealization: ${params.semanticAuthorRealization}`,
+      `Unsupported reconstruct semanticAuthorRealization: ${String(runtimeParams.semanticAuthorRealization)}. Reconstruct runs require direct_call.`,
     );
   }
-  if (
-    params.confirmationProviderRealization !== "mock" &&
-    params.confirmationProviderRealization !== "direct_call"
-  ) {
+  if (runtimeParams.confirmationProviderRealization !== "direct_call") {
     throw new Error(
-      `Unsupported reconstruct confirmationProviderRealization: ${params.confirmationProviderRealization}`,
+      `Unsupported reconstruct confirmationProviderRealization: ${String(runtimeParams.confirmationProviderRealization)}. Reconstruct runs require direct_call.`,
     );
   }
-  if (
-    params.semanticAuthorRealization === "direct_call" &&
-    directiveAuthor.owner !== "host_llm"
-  ) {
+  if (runtimeDirectiveAuthor.owner !== "host_llm") {
     throw new Error("direct_call semantic author realization requires a host_llm directive author.");
   }
-  if (
-    params.confirmationProviderRealization === "direct_call" &&
-    confirmationProvider.owner !== "host_or_user"
-  ) {
+  if (runtimeConfirmationProvider.owner !== "host_or_user") {
     throw new Error("direct_call confirmation provider realization requires a host_or_user provider.");
   }
 
@@ -10214,8 +9682,8 @@ export async function runReconstruct(
     lensIds,
     admittedDomainIds: params.domain ? [params.domain] : [],
   });
-  const refreshAuthoredArtifactCompatibility = (): void => {
-    currentAuthoredArtifactCompatibility = authoredArtifactCompatibility({
+  const refreshAuthoredArtifactReuseMatch = (): void => {
+    currentAuthoredArtifactReuseMatch = authoredArtifactReuseMatch({
       sessionId,
       intent: params.intent,
       targetRefs,
@@ -10238,7 +9706,7 @@ export async function runReconstruct(
       confirmationProvider,
     });
   };
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
   let sourceObservationDirectivePath = path.join(
     sessionRoot,
     "source-observation-directive.yaml",
@@ -10557,7 +10025,7 @@ export async function runReconstruct(
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
     });
-    refreshAuthoredArtifactCompatibility();
+    refreshAuthoredArtifactReuseMatch();
   }
 
   if (
@@ -10606,7 +10074,7 @@ export async function runReconstruct(
     sourceScoutPackPreSeedValidationPath;
   sourceScoutPack = preSeedSourceScoutPack;
   sourceScoutPackValidation = preSeedSourceScoutPackValidation;
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
 
   const sourcePurposeCandidatesPath = path.join(
     sessionRoot,
@@ -10819,7 +10287,7 @@ export async function runReconstruct(
     validation: seedAuthoringReadinessValidation,
   });
   currentSeedAuthoringReadinessValidation = seedAuthoringReadinessValidation;
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
 
   const ontologySeedPath = path.join(sessionRoot, "ontology-seed.yaml");
   const ontologySeedAuthorInput: ReconstructOntologySeedAuthorInput = {
@@ -10885,11 +10353,11 @@ export async function runReconstruct(
       },
     });
     await writeYamlDocument(ontologySeedPath, ontologySeed);
-    if (currentAuthoredArtifactCompatibility) {
+    if (currentAuthoredArtifactReuseMatch) {
       await writeAuthoredArtifactReuseProvenance({
         filePath: ontologySeedPath,
         artifactName: "ontology-seed.yaml",
-        compatibility: currentAuthoredArtifactCompatibility,
+        reuseMatch: currentAuthoredArtifactReuseMatch,
       });
     }
     ontologySeedValidation = await writeOntologySeedValidationArtifact({
@@ -11755,7 +11223,7 @@ export async function runReconstruct(
       sourceObservationDeltaValidationPath,
       sourceObservationReentryValidationPath,
     });
-    refreshAuthoredArtifactCompatibility();
+    refreshAuthoredArtifactReuseMatch();
   }
   await writeSourceObservationLineageIndexArtifact({
     sessionId,
@@ -11805,7 +11273,7 @@ export async function runReconstruct(
     artifactRef: postMaturationGateProjectionValidationPath,
     validation: postMaturationGateProjectionValidation,
   });
-  refreshAuthoredArtifactCompatibility();
+  refreshAuthoredArtifactReuseMatch();
   const maturationAuthorityResponse =
     await writeMaturationAuthorityResponseArtifact({
       sessionId,

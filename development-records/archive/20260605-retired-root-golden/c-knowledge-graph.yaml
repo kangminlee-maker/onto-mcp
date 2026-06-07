@@ -7,7 +7,7 @@ meta:
   schema: Knowledge Graph
   domain: EduConnect
   version: 1
-  source: golden/canonical.yaml
+  source: canonical.yaml
   created: 2026-03-26
 
 # ============================================================

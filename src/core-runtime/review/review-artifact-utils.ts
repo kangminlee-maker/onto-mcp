@@ -148,10 +148,10 @@ export function toRelativePath(targetPath: string, projectRoot: string): string 
   return normalized.split(path.sep).join(path.posix.sep);
 }
 
-const DOMAIN_ALIAS_TO_CANONICAL: Record<string, string> = {
-  "llm-native-development": "software-engineering",
-  "software-development": "software-engineering",
-};
+const DEPRECATED_DOMAIN_ALIASES = new Set([
+  "llm-native-development",
+  "software-development",
+]);
 
 function stripDomainSigil(domainValue: string): string {
   const trimmed = domainValue.trim();
@@ -163,12 +163,12 @@ export function normalizeDomainValue(domainValue: string): string {
   if (["", "-", "none"].includes(stripped)) {
     return "none";
   }
-  return DOMAIN_ALIAS_TO_CANONICAL[stripped] ?? stripped;
+  return stripped;
 }
 
 export function isDeprecatedDomainAlias(domainValue: string): boolean {
   const stripped = stripDomainSigil(domainValue);
-  return Object.prototype.hasOwnProperty.call(DOMAIN_ALIAS_TO_CANONICAL, stripped);
+  return DEPRECATED_DOMAIN_ALIASES.has(stripped);
 }
 
 export function parseBooleanFlag(

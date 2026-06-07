@@ -25,6 +25,7 @@ describe("readReviewResultClassification", () => {
           target: "target",
           evidence_anchor: "anchor-blocker",
           claim: "blocker finding",
+          lens_rationale_summary: "Fixture lens rationale summary.",
           proposed_action: "fix",
           affected_purpose: "primary happy path",
           failure_condition: "any intended user",
@@ -40,6 +41,7 @@ describe("readReviewResultClassification", () => {
           target: "target",
           evidence_anchor: "anchor-high",
           claim: "high finding",
+          lens_rationale_summary: "Fixture lens rationale summary.",
           proposed_action: "fix",
           affected_purpose: "supported environment",
           failure_condition: "supported runtime path",
@@ -55,6 +57,7 @@ describe("readReviewResultClassification", () => {
           target: "target",
           evidence_anchor: "anchor-medium",
           claim: "medium finding",
+          lens_rationale_summary: "Fixture lens rationale summary.",
           proposed_action: "review",
           affected_purpose: "auditability",
           failure_condition: "handoff path",
@@ -70,6 +73,7 @@ describe("readReviewResultClassification", () => {
           target: "target",
           evidence_anchor: "anchor-low",
           claim: "low finding",
+          lens_rationale_summary: "Fixture lens rationale summary.",
           proposed_action: "follow up",
           affected_purpose: "polish",
           failure_condition: "nice-to-have path",
@@ -85,6 +89,7 @@ describe("readReviewResultClassification", () => {
           target: "target",
           evidence_anchor: "anchor-info",
           claim: "info finding",
+          lens_rationale_summary: "Fixture lens rationale summary.",
           proposed_action: "gather evidence",
           affected_purpose: "unknown",
           failure_condition: "evidence gap",
@@ -188,6 +193,7 @@ describe("readReviewResultClassification", () => {
           singleton_reason: "fixture",
         },
       ],
+      issue_dependencies: [],
       validation: {
         unclustered_finding_ids: [],
       },
@@ -323,6 +329,107 @@ describe("readReviewResultClassification", () => {
     });
   });
 
+  it("uses problem-framing admission gates before promoting medium issues to material", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "finding-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-admission-test",
+      findings: [
+        {
+          finding_id: "finding-conditional",
+          lens_id: "coverage",
+          source_ref: "round1/coverage.findings.yaml#conditional",
+          target: "target",
+          evidence_anchor: "target.ts:lensId",
+          claim: "lens identity may be missing from a summary.",
+          lens_rationale_summary: "The claim depends on unresolved public API intent.",
+          proposed_action: "gather API intent evidence",
+          affected_purpose: "review coverage verification",
+          failure_condition: "callers expect lens participation coverage",
+          impact: "coverage trust may be weakened",
+          evidence_refs: ["round1/coverage.findings.yaml#conditional"],
+          severity: "medium",
+          domain_threshold_used: null,
+        },
+      ],
+      validation: {
+        unaddressable_findings: [],
+      },
+    });
+    await writeYamlDocument(path.join(sessionRoot, "issue-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-admission-test",
+      issues: [
+        {
+          issue_id: "issue-conditional",
+          root_cause_hypothesis: "summary semantics are unresolved",
+          root_confidence: "medium",
+          surface_finding_ids: ["finding-conditional"],
+          relation_refs: [],
+          raised_by_lens_ids: ["coverage"],
+          issue_statement: "lens identity may be missing from the summary",
+          proposed_action: "gather evidence",
+          affected_purpose: "review coverage verification",
+          failure_condition: "callers expect lens participation coverage",
+          impact: "coverage trust may be weakened",
+          evidence_refs: ["round1/coverage.findings.yaml#conditional"],
+          severity: "medium",
+          domain_threshold_used: null,
+          singleton_reason: "fixture",
+        },
+      ],
+      issue_dependencies: [],
+      validation: {
+        unclustered_finding_ids: [],
+      },
+    });
+    await writeYamlDocument(path.join(sessionRoot, "problem-framing.yaml"), {
+      schema_version: 1,
+      session_id: "classification-admission-test",
+      classification_context: {
+        common_spine_version: 1,
+        session_domain: "none",
+        domain_profile_ref: "",
+        domain_profile_doc_type: "custom:problem_framing_profile",
+        domain_profile_status: "not_requested",
+      },
+      classifications: [
+        {
+          issue_id: "issue-conditional",
+          problem_definition: "conditional summary semantics",
+          issue_role: "conflicting_interpretation",
+          judgment_state: "insufficient_evidence",
+          impact_kind: "completeness",
+          timing_class: "next_step_blocker",
+          closure_class: "needs_evidence",
+          closure_obligation: "must_close_before_next_stage",
+          domain_axes: {},
+          rationale: "intent evidence is required before calling this material",
+          related_surface_finding_ids: ["finding-conditional"],
+        },
+      ],
+    });
+
+    const summary = await readReviewResultClassification(sessionRoot);
+
+    expect(summary.severity_counts.medium).toBe(1);
+    expect(summary.material_issue_count).toBe(0);
+    expect(summary.non_material_finding_count).toBe(1);
+    expect(summary.non_material_findings[0]).toMatchObject({
+      issue_id: "issue-conditional",
+      severity: "medium",
+      material: false,
+      issue_role: "conflicting_interpretation",
+      judgment_state: "insufficient_evidence",
+      closure_class: "needs_evidence",
+    });
+    expect(
+      summary.action_candidates.find(
+        (candidate) => candidate.issue_id === "issue-conditional",
+      )?.candidates,
+    ).toEqual(["needs_evidence"]);
+  });
+
   it("preserves domain threshold explanations without creating a second materiality axis", async () => {
     const cases = [
       {
@@ -362,6 +469,7 @@ describe("readReviewResultClassification", () => {
             target: "target",
             evidence_anchor: "threshold-anchor",
             claim: `${testCase.domain} threshold finding`,
+            lens_rationale_summary: "Fixture lens rationale summary.",
             proposed_action: "fix",
             affected_purpose: "declared domain review purpose",
             failure_condition: "domain threshold is crossed",
@@ -397,6 +505,7 @@ describe("readReviewResultClassification", () => {
             singleton_reason: "fixture",
           },
         ],
+        issue_dependencies: [],
         validation: {
           unclustered_finding_ids: [],
         },
@@ -455,5 +564,95 @@ describe("readReviewResultClassification", () => {
         )?.derivation_refs,
       ).toContain("problem-framing.yaml");
     }
+  });
+
+  it("rejects malformed finding-ledger severities", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "finding-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-test",
+      findings: [
+        {
+          finding_id: "finding-invalid",
+          lens_id: "logic",
+          source_ref: "round1/logic.findings.yaml#finding-invalid",
+          target: "target",
+          evidence_anchor: "anchor",
+          claim: "invalid severity finding",
+          affected_purpose: "purpose",
+          failure_condition: "condition",
+          impact: "impact",
+          evidence_refs: ["round1/logic.findings.yaml#finding-invalid"],
+          severity: "critical",
+        },
+      ],
+    });
+
+    await expect(readReviewResultClassification(sessionRoot)).rejects.toThrow(
+      /finding-ledger\.findings\[0\]\.severity/,
+    );
+  });
+
+  it("rejects malformed finding-ledger list shape", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "finding-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-test",
+      findings: { finding_id: "not-a-list" },
+    });
+
+    await expect(readReviewResultClassification(sessionRoot)).rejects.toThrow(
+      /finding-ledger\.findings must be a YAML list/,
+    );
+  });
+
+  it("rejects malformed issue-ledger severities", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "issue-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-test",
+      issues: [
+        {
+          issue_id: "issue-invalid",
+          issue_statement: "invalid severity issue",
+          affected_purpose: "purpose",
+          failure_condition: "condition",
+          impact: "impact",
+          evidence_refs: ["issue-ledger.yaml#issue-invalid"],
+          raised_by_lens_ids: ["logic"],
+          severity: "unknown",
+        },
+      ],
+    });
+
+    await expect(readReviewResultClassification(sessionRoot)).rejects.toThrow(
+      /issue-ledger\.issues\[0\]\.severity/,
+    );
+  });
+
+  it("rejects malformed issue-ledger item shape", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "issue-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-test",
+      issues: ["not-a-mapping"],
+    });
+
+    await expect(readReviewResultClassification(sessionRoot)).rejects.toThrow(
+      /issue-ledger\.issues\[0\] must be a YAML mapping/,
+    );
+  });
+
+  it("rejects malformed problem-framing classification list shape", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "problem-framing.yaml"), {
+      schema_version: 1,
+      session_id: "classification-test",
+      classifications: "not-a-list",
+    });
+
+    await expect(readReviewResultClassification(sessionRoot)).rejects.toThrow(
+      /problem-framing\.classifications must be a YAML list/,
+    );
   });
 });

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   appendReviewInvocationRequestArgs,
   collectReviewInvocationArtifactRefs,
-  parseLegacyReviewInvocationOutput,
+  parseReviewInvocationCliOutput,
   projectReviewInvocationEquivalence,
 } from "./review-invocation-runner.js";
 
@@ -28,7 +28,7 @@ afterEach(async () => {
 });
 
 describe("appendReviewInvocationRequestArgs", () => {
-  it("maps a typed request to the legacy review invoke argv shape", () => {
+  it("maps a typed request to the review invoke argv adapter shape", () => {
     const projectRoot = path.resolve("/tmp/onto-project");
     const argv = appendReviewInvocationRequestArgs(
       ["--no-watch"],
@@ -43,7 +43,7 @@ describe("appendReviewInvocationRequestArgs", () => {
         memberRefs: ["src/a.ts", "src/b.ts"],
         bundleKind: "implementation_change_bundle",
         diffRange: "HEAD~1..HEAD",
-        executorRealization: "mock",
+        executionRoute: "direct_model_call",
         lensIds: ["logic", "structure"],
         confirmValueAlignment: true,
       },
@@ -59,7 +59,7 @@ describe("appendReviewInvocationRequestArgs", () => {
       "--onto-home",
       "/tmp/onto-home",
       "--domain",
-      "software-engineering",
+      "software-development",
       "--requested-domain-token",
       "software-development",
       "--review-mode",
@@ -77,7 +77,7 @@ describe("appendReviewInvocationRequestArgs", () => {
       "--diff-range",
       "HEAD~1..HEAD",
       "--executor-realization",
-      "mock",
+      "ts_inline_http",
       "--lens-id",
       "logic",
       "--lens-id",
@@ -117,6 +117,22 @@ describe("appendReviewInvocationRequestArgs", () => {
       ),
     ).toThrow("Use either domain or noDomain, not both.");
   });
+
+  it("rejects conflicting canonical route and debug executor overrides", () => {
+    expect(() =>
+      appendReviewInvocationRequestArgs(
+        [],
+        {
+          projectRoot: ".",
+          target: "README.md",
+          intent: "Review docs",
+          executionRoute: "direct_model_call",
+          executorRealization: "codex",
+        },
+        { ontoHome: "/tmp/onto-home" },
+      ),
+    ).toThrow("Conflicting review execution overrides");
+  });
 });
 
 describe("collectReviewInvocationArtifactRefs", () => {
@@ -139,6 +155,16 @@ describe("collectReviewInvocationArtifactRefs", () => {
       "schema_version: '1'\n",
       "utf8",
     );
+    await fs.writeFile(
+      path.join(sessionRoot, "synthesis-ledger.yaml"),
+      "schema_version: '1'\n",
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(sessionRoot, "synthesis-work-items.yaml"),
+      "schema_version: '1'\n",
+      "utf8",
+    );
 
     await expect(collectReviewInvocationArtifactRefs(sessionRoot)).resolves.toEqual({
       binding: path.join(sessionRoot, "binding.yaml"),
@@ -147,13 +173,15 @@ describe("collectReviewInvocationArtifactRefs", () => {
         "execution-preparation",
         "review-target-profile.yaml",
       ),
+      synthesis_ledger: path.join(sessionRoot, "synthesis-ledger.yaml"),
+      synthesis_work_items: path.join(sessionRoot, "synthesis-work-items.yaml"),
     });
   });
 });
 
-describe("parseLegacyReviewInvocationOutput", () => {
-  it("parses the trailing legacy JSON result from captured stdout", () => {
-    const parsed = parseLegacyReviewInvocationOutput([
+describe("parseReviewInvocationCliOutput", () => {
+  it("parses the trailing adapter JSON result from captured stdout", () => {
+    const parsed = parseReviewInvocationCliOutput([
       "[review invoke] step 1/3 start session",
       "{ not json",
       JSON.stringify(
@@ -187,9 +215,9 @@ describe("parseLegacyReviewInvocationOutput", () => {
     ]);
   });
 
-  it("rejects output without the legacy review result shape", () => {
+  it("rejects output without the review result adapter shape", () => {
     expect(() =>
-      parseLegacyReviewInvocationOutput([
+      parseReviewInvocationCliOutput([
         "[review invoke] completed",
         JSON.stringify({ ok: true }),
       ]),

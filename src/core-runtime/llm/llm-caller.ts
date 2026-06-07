@@ -5,9 +5,8 @@
  *   1. Caller-explicit: callLlm(..., { provider }) — one provider only.
  *   2. Actor/root `auth=oauth + provider=openai` — Codex worker.
  *   3. Actor/root `auth=api_key` — OpenAI / Anthropic / Grok API key from env.
- *   4. Actor/root `auth=local + provider=lmstudio` — local OpenAI-style endpoint.
- *
- *   Priority 0 (special): ONTO_LLM_MOCK=1 → in-process mock (test only)
+ *   4. Reserved/future: actor/root `auth=local + provider=lmstudio` with an
+ *      explicit local model id.
  *
  * Runtime config must reach this module through the canonical `llm` switcher
  * or an explicit call-site override. Missing provider/model/credentials fail
@@ -18,10 +17,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { loadCoreLensRegistry } from "../discovery/lens-registry.js";
 import {
   DEFAULT_GROK_BASE_URL,
   DEFAULT_LMSTUDIO_BASE_URL,
+  isExternalOauthWorkerSelection,
   normalizeLlmModelSwitcher,
   type LlmModelSwitcherConfig,
 } from "./model-switcher.js";
@@ -29,6 +28,11 @@ import {
   appendRuntimeModelCallLogFromCurrentContext,
   appendRuntimeStreamChunkFromCurrentContextSync,
 } from "../observability/runtime-stream-observation.js";
+import {
+  callReviewMockLlm,
+  isReviewMockLlmRealizationEnabled,
+} from "./mock-llm-realization.js";
+import type { ReviewArtifactGenerationRealization } from "../review/artifact-types.js";
 
 /**
  * Structural subset of ExecutionPlan that callLlm reads. Accepts either the
@@ -38,7 +42,12 @@ import {
  * task seat) → review (lens seat).
  */
 export interface ResolvedPlanLike {
-  provider_identity: "anthropic" | "openai" | "grok" | "lmstudio" | "codex" | "mock";
+  provider_identity:
+    | "anthropic"
+    | "openai"
+    | "grok"
+    | "lmstudio"
+    | "codex";
   model_id?: string;
   base_url?: string;
 }
@@ -51,7 +60,7 @@ export interface LlmCallConfig {
   base_url?: string;
   /** Optional environment variable name that contains the API key. */
   api_key_env?: string;
-  /** codex-only: reasoning effort passed as `model_reasoning_effort`. Ignored by other providers. */
+  /** Reasoning effort. Codex maps it to `model_reasoning_effort`; OpenAI API maps it to `reasoning_effort`. */
   reasoning_effort?: string;
   /** codex-only: service tier passed as `service_tier`. Ignored by other providers. */
   service_tier?: string;
@@ -60,8 +69,9 @@ export interface LlmCallConfig {
    *
    * When set, callLlm dispatches directly using the plan's
    * `provider_identity` / `model_id` / `base_url`.
-   */
+  */
   plan?: ResolvedPlanLike;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization;
   /**
    * Per-provider model overrides. Consumed by dispatch AFTER resolveProvider
    * determines the actual provider, so these apply to both explicit and
@@ -132,8 +142,10 @@ export function resolveLlmProviderConfig(args: {
     cli.base_url ?? envBaseUrl ?? selection?.base_url;
 
   const reasoning_effort = cli.reasoning_effort ?? selection?.reasoning_effort;
-  const service_tier = selection?.provider === "codex" ? selection.service_tier : undefined;
-  const api_key_env = selection?.api_key_env;
+  const service_tier = isExternalOauthWorkerSelection(selection)
+    ? selection.service_tier
+    : undefined;
+  const api_key_env = cli.api_key_env ?? selection?.api_key_env;
   const models_per_provider: NonNullable<LlmCallConfig["models_per_provider"]> = {};
   if (provider && model_id) models_per_provider[provider] = model_id;
 
@@ -155,6 +167,7 @@ export interface LlmCallResult {
   input_tokens: number;
   output_tokens: number;
   model_id: string;
+  artifact_generation_realization?: ReviewArtifactGenerationRealization;
   /** Actual endpoint hit (audit trail). SDK and worker providers each fill their own sentinel. */
   effective_base_url?: string;
   /** Declarative billing classification for audit output. */
@@ -209,8 +222,9 @@ function readCodexAuthState(): CodexAuthState {
       auth.auth_mode === "chatgpt" ||
       (auth.tokens && typeof auth.tokens.access_token === "string");
     const openaiKey =
-      typeof auth.OPENAI_API_KEY === "string" && auth.OPENAI_API_KEY.length > 0
-        ? auth.OPENAI_API_KEY
+      typeof auth.OPENAI_API_KEY === "string" &&
+      auth.OPENAI_API_KEY.trim().length > 0
+        ? auth.OPENAI_API_KEY.trim()
         : null;
     return { chatgptOAuth: Boolean(oauth), openaiApiKey: openaiKey };
   } catch {
@@ -221,9 +235,16 @@ function readCodexAuthState(): CodexAuthState {
 function readEnvApiKey(envNames: string[]): string | null {
   for (const envName of envNames) {
     const value = process.env[envName];
-    if (typeof value === "string" && value.length > 0) return value;
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
   }
   return null;
+}
+
+function readOpenAiApiKey(apiKeyEnv?: string): string | null {
+  if (apiKeyEnv) return readEnvApiKey([apiKeyEnv]);
+  return readEnvApiKey(["OPENAI_API_KEY"]) ?? readCodexAuthState().openaiApiKey;
 }
 
 function resolveProvider(
@@ -239,18 +260,14 @@ function resolveProvider(
     if (apiKey) {
       return { provider: "anthropic", apiKey };
     }
-    throw new Error(explicitProviderMissingCredentialError("anthropic"));
+    throw new Error(explicitProviderMissingCredentialError("anthropic", apiKeyEnv));
   }
   if (preferred === "openai") {
-    const envKey = readEnvApiKey(apiKeyEnv ? [apiKeyEnv] : ["OPENAI_API_KEY"]);
-    if (envKey) {
-      return { provider: "openai", apiKey: envKey };
+    const apiKey = readOpenAiApiKey(apiKeyEnv);
+    if (apiKey) {
+      return { provider: "openai", apiKey };
     }
-    const codexAuth = readCodexAuthState();
-    if (codexAuth.openaiApiKey) {
-      return { provider: "openai", apiKey: codexAuth.openaiApiKey };
-    }
-    throw new Error(explicitProviderMissingCredentialError("openai"));
+    throw new Error(explicitProviderMissingCredentialError("openai", apiKeyEnv));
   }
   if (preferred === "grok") {
     const apiKey = readEnvApiKey(
@@ -263,7 +280,7 @@ function resolveProvider(
         baseUrl: configBaseUrl ?? DEFAULT_GROK_BASE_URL,
       };
     }
-    throw new Error(explicitProviderMissingCredentialError("grok"));
+    throw new Error(explicitProviderMissingCredentialError("grok", apiKeyEnv));
   }
   if (preferred === "lmstudio") {
     return {
@@ -280,20 +297,22 @@ function resolveProvider(
 
 function explicitProviderMissingCredentialError(
   provider: "anthropic" | "openai" | "grok",
+  configuredEnv?: string,
 ): string {
   const envVar =
-    provider === "anthropic"
+    configuredEnv ??
+    (provider === "anthropic"
       ? "ANTHROPIC_API_KEY"
       : provider === "openai"
         ? "OPENAI_API_KEY"
-        : "XAI_API_KEY or GROK_API_KEY";
+        : "XAI_API_KEY or GROK_API_KEY");
   return [
     `LLM provider=${provider} 명시적으로 선택되었으나 ${envVar}가 환경변수에 없습니다.`,
-    ...(provider === "openai"
+    ...(provider === "openai" && configuredEnv === undefined
       ? ["(~/.codex/auth.json의 OPENAI_API_KEY 필드도 비어 있거나 없음)"]
       : []),
     `명시적 provider override를 사용하려면 ${envVar}를 export하세요.`,
-    "또는 .onto/settings.json 의 actor/root llm 설정을 현재 credential에 맞게 수정하세요.",
+    "또는 .onto/settings.json 의 actor별 llm 설정을 현재 credential에 맞게 수정하세요.",
   ].join("\n");
 }
 
@@ -310,8 +329,9 @@ function missingProviderSelectionError(): string {
 
 /**
  * Construct a fail-fast error for api-key providers when no model is specified.
- * Used by anthropic / openai / grok / lmstudio dispatch branches. codex is exempt because
- * the codex CLI picks its own default when `-m` is omitted.
+ * Used by anthropic / openai / grok / reserved-future lmstudio dispatch
+ * branches. codex is exempt because the codex CLI picks its own default when
+ * `-m` is omitted.
  *
  * Hardcoded DEFAULT_ANTHROPIC_MODEL / DEFAULT_OPENAI_MODEL constants were removed
  * from this module (2026-04-15): model choice is a user decision (cost / quality /
@@ -324,11 +344,26 @@ function missingModelError(provider: "anthropic" | "openai" | "grok" | "lmstudio
     [
       `provider=${provider} 경로는 model 지정이 필요합니다. 하드코딩된 기본 모델은 제거되었습니다.`,
       "다음 중 한 가지로 설정하세요:",
-      "  1. .onto/settings.json 의 actor/root `llm.model: <model-id>`",
+      "  1. .onto/settings.json 의 actor별 `llm.model: <model-id>`",
       "  3. 호출부에서 LlmCallConfig.model_id 인자 전달 (런타임 override)",
       "(codex provider는 model 미지정 시 codex CLI가 자체 기본값을 사용하므로 이 메시지의 대상이 아닙니다.)",
     ].join("\n"),
   );
+}
+
+function unsupportedReasoningEffortError(provider: "anthropic" | "grok" | "lmstudio"): Error {
+  return new Error(
+    `provider=${provider} cannot honor reasoning_effort; remove effort from this actor or switch to provider=openai/codex.`,
+  );
+}
+
+function assertNoUnsupportedReasoningEffort(
+  provider: "anthropic" | "grok" | "lmstudio",
+  reasoningEffort: string | undefined,
+): void {
+  if (reasoningEffort) {
+    throw unsupportedReasoningEffortError(provider);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +439,7 @@ async function callOpenAI(
   maxTokens: number,
   baseUrl?: string,
   providerLabel: "openai" | "grok" | "lmstudio" = "openai",
+  reasoningEffort?: string,
 ): Promise<LlmCallResult> {
   const { default: OpenAI } = await import("openai");
   const client = new OpenAI({
@@ -414,7 +450,7 @@ async function callOpenAI(
   });
 
   emitModelCallLog(
-    `${providerLabel} call: model="${modelId}" max_tokens=${maxTokens}${baseUrl ? ` base_url=${baseUrl}` : ""}`,
+    `${providerLabel} call: model="${modelId}" max_tokens=${maxTokens} effort=${reasoningEffort ?? "(unset)"}${baseUrl ? ` base_url=${baseUrl}` : ""}`,
   );
 
   let response;
@@ -422,11 +458,12 @@ async function callOpenAI(
     response = await client.chat.completions.create({
       model: modelId,
       max_tokens: maxTokens,
+      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-    });
+    } as never);
   } catch (err) {
     const e = err as {
       status?: number;
@@ -583,7 +620,7 @@ async function callCodexCli(
           "",
           `지정된 모델 "${requested}"이 현재 ChatGPT 계정의 codex allowlist에 없습니다.`,
           "다음 중 한 가지로 해결하세요:",
-          "  1. .onto/settings.json 의 actor/root llm.model 값을 현재 계정에서 허용되는 모델로 변경",
+          "  1. .onto/settings.json 의 actor별 llm.model 값을 현재 계정에서 허용되는 모델로 변경",
           "  2. 터미널에서 `codex` 를 직접 실행해 현재 계정에서 선택 가능한 모델 확인",
           "  3. `codex login` 으로 API-key 모드로 전환 (per-token 과금, 더 넓은 모델 범위)",
         ].join("\n"),
@@ -639,9 +676,6 @@ async function dispatchByPlan(
   const { plan } = config;
   const maxTokens = config.max_tokens ?? 1024;
 
-  if (plan.provider_identity === "mock") {
-    return callMockProvider(systemPrompt, userPrompt);
-  }
   if (plan.provider_identity === "codex") {
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.codex;
     return callCodexCli(
@@ -653,35 +687,48 @@ async function dispatchByPlan(
     );
   }
   if (plan.provider_identity === "anthropic") {
+    assertNoUnsupportedReasoningEffort("anthropic", config.reasoning_effort);
     const apiKey = readEnvApiKey(
       config.api_key_env ? [config.api_key_env] : ["ANTHROPIC_API_KEY"],
     );
     if (!apiKey) {
-      throw new Error(explicitProviderMissingCredentialError("anthropic"));
+      throw new Error(
+        explicitProviderMissingCredentialError("anthropic", config.api_key_env),
+      );
     }
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.anthropic;
     if (!modelId) throw missingModelError("anthropic");
     return callAnthropic(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
   }
   if (plan.provider_identity === "openai") {
-    const envKey = readEnvApiKey(
-      config.api_key_env ? [config.api_key_env] : ["OPENAI_API_KEY"],
-    );
-    const codexAuth = readCodexAuthState();
-    const apiKey = envKey ?? codexAuth.openaiApiKey ?? null;
+    const apiKey = readOpenAiApiKey(config.api_key_env);
     if (!apiKey) {
-      throw new Error(explicitProviderMissingCredentialError("openai"));
+      throw new Error(
+        explicitProviderMissingCredentialError("openai", config.api_key_env),
+      );
     }
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.openai;
     if (!modelId) throw missingModelError("openai");
-    return callOpenAI(systemPrompt, userPrompt, apiKey, modelId, maxTokens);
+    return callOpenAI(
+      systemPrompt,
+      userPrompt,
+      apiKey,
+      modelId,
+      maxTokens,
+      undefined,
+      "openai",
+      config.reasoning_effort,
+    );
   }
   if (plan.provider_identity === "grok") {
+    assertNoUnsupportedReasoningEffort("grok", config.reasoning_effort);
     const apiKey = readEnvApiKey(
       config.api_key_env ? [config.api_key_env] : ["XAI_API_KEY", "GROK_API_KEY"],
     );
     if (!apiKey) {
-      throw new Error(explicitProviderMissingCredentialError("grok"));
+      throw new Error(
+        explicitProviderMissingCredentialError("grok", config.api_key_env),
+      );
     }
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.grok;
     if (!modelId) throw missingModelError("grok");
@@ -696,6 +743,7 @@ async function dispatchByPlan(
     );
   }
   if (plan.provider_identity === "lmstudio") {
+    assertNoUnsupportedReasoningEffort("lmstudio", config.reasoning_effort);
     const modelId = config.model_id ?? plan.model_id ?? config.models_per_provider?.lmstudio;
     if (!modelId) throw missingModelError("lmstudio");
     return callOpenAI(
@@ -717,15 +765,33 @@ async function dispatchByPlan(
 // Public API
 // ---------------------------------------------------------------------------
 
+function isLegacyCodexCliProvider(
+  config?: Partial<LlmCallConfig>,
+): config is Partial<LlmCallConfig> & { provider: "codex" } {
+  // Compatibility dispatch key for the Codex CLI adapter. Review route truth is
+  // execution_route + execution_adapter + model_provider, not provider=codex.
+  return config?.provider === "codex";
+}
+
 /** Call an LLM through the explicitly selected provider path. */
 export async function callLlm(
   systemPrompt: string,
   userPrompt: string,
   config?: Partial<LlmCallConfig>,
 ): Promise<LlmCallResult> {
-  // Test-only mock provider — gated by ONTO_LLM_MOCK=1.
-  if (process.env.ONTO_LLM_MOCK === "1") {
-    return callMockProvider(systemPrompt, userPrompt);
+  if (
+    isReviewMockLlmRealizationEnabled() &&
+    config?.artifact_generation_realization !== "semantic_mock"
+  ) {
+    throw new Error(
+      "ONTO_LLM_MOCK requires review.execution.artifact_generation_realization=semantic_mock.",
+    );
+  }
+  if (
+    isReviewMockLlmRealizationEnabled() ||
+    config?.artifact_generation_realization === "semantic_mock"
+  ) {
+    return callReviewMockLlm(systemPrompt, userPrompt, config);
   }
 
   if (config?.plan) {
@@ -736,7 +802,7 @@ export async function callLlm(
     );
   }
 
-  if (config?.provider === "codex") {
+  if (isLegacyCodexCliProvider(config)) {
     return callCodexCli(
       systemPrompt,
       userPrompt,
@@ -746,13 +812,22 @@ export async function callLlm(
     );
   }
 
+  if (config?.provider === "anthropic") {
+    assertNoUnsupportedReasoningEffort("anthropic", config.reasoning_effort);
+  }
+
   if (config?.provider === "grok") {
+    assertNoUnsupportedReasoningEffort("grok", config.reasoning_effort);
     const modelId = config.model_id ?? config.models_per_provider?.grok;
     if (!modelId) throw missingModelError("grok");
     const apiKey = readEnvApiKey(
       config.api_key_env ? [config.api_key_env] : ["XAI_API_KEY", "GROK_API_KEY"],
     );
-    if (!apiKey) throw new Error(explicitProviderMissingCredentialError("grok"));
+    if (!apiKey) {
+      throw new Error(
+        explicitProviderMissingCredentialError("grok", config.api_key_env),
+      );
+    }
     const maxTokens = config.max_tokens ?? 1024;
     return callOpenAI(
       systemPrompt,
@@ -766,6 +841,7 @@ export async function callLlm(
   }
 
   if (config?.provider === "lmstudio") {
+    assertNoUnsupportedReasoningEffort("lmstudio", config.reasoning_effort);
     const modelId = config.model_id ?? config.models_per_provider?.lmstudio;
     if (!modelId) throw missingModelError("lmstudio");
     const maxTokens = config.max_tokens ?? 1024;
@@ -800,6 +876,7 @@ export async function callLlm(
       );
     }
     case "anthropic": {
+      assertNoUnsupportedReasoningEffort("anthropic", config?.reasoning_effort);
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("anthropic");
       return callAnthropic(systemPrompt, userPrompt, resolved.apiKey, modelId, maxTokens);
@@ -807,9 +884,19 @@ export async function callLlm(
     case "openai": {
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("openai");
-      return callOpenAI(systemPrompt, userPrompt, resolved.apiKey, modelId, maxTokens);
+      return callOpenAI(
+        systemPrompt,
+        userPrompt,
+        resolved.apiKey,
+        modelId,
+        maxTokens,
+        undefined,
+        "openai",
+        config?.reasoning_effort,
+      );
     }
     case "grok": {
+      assertNoUnsupportedReasoningEffort("grok", config?.reasoning_effort);
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("grok");
       return callOpenAI(
@@ -823,6 +910,7 @@ export async function callLlm(
       );
     }
     case "lmstudio": {
+      assertNoUnsupportedReasoningEffort("lmstudio", config?.reasoning_effort);
       const modelId = config?.model_id ?? perProviderModel;
       if (!modelId) throw missingModelError("lmstudio");
       return callOpenAI(
@@ -836,149 +924,6 @@ export async function callLlm(
       );
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Mock provider — test only, gated by ONTO_LLM_MOCK=1
-// ---------------------------------------------------------------------------
-
-const MOCK_MODEL_ID = "mock-llm-deterministic";
-
-/**
- * Pattern-match review prompt headers and return deterministic test output.
- * Unknown prompts fail immediately so prompt drift is visible at the mock layer.
- */
-function callMockProvider(
-  systemPrompt: string,
-  userPrompt: string,
-): Promise<LlmCallResult> {
-  let text: string;
-
-  if (
-    systemPrompt.startsWith("You are a review complexity assessor")
-  ) {
-    // Phase 3: Step 1.5 complexity assessment mock — defaults to full review
-    text = JSON.stringify({
-      q2_cross_verification_secondary: false,
-      q2_rationale: "mock — defaulting to full review (cross-verification critical)",
-      q3_miss_risk_acceptable: false,
-      q3_rationale: "mock — defaulting to full review (risk not acceptable)",
-      suggest_core_axis: false,
-    });
-  } else if (
-    systemPrompt.startsWith("You are a review lens selector")
-  ) {
-    // Phase 3: Step 1.5 lens selection mock — default core-axis set.
-    // SSOT: .onto/authority/core-lens-registry.yaml (v0.2.1: cost-constrained
-    // Pareto-optimal lenses). Imported at module init (see top of file).
-    text = JSON.stringify({
-      selected_lens_ids: loadCoreLensRegistry().core_axis_lens_ids,
-      rationale: "mock — default core-axis review lens set",
-    });
-  } else if (
-    systemPrompt.startsWith("You are executing a single bounded review unit")
-  ) {
-    // Phase 2 host-decoupling: ts_inline_http review unit executor (lens
-    // variant). The mock returns a minimal lens-output-shaped markdown so
-    // executor tests can verify the full call → write → JSON-print path
-    // without needing a real LLM endpoint. Real lens output comes from a real
-    // LLM; this mock only exercises the executor wiring.
-    text = [
-      "# Mock Lens Output (ts_inline_http executor mock)",
-      "",
-      "## Structural Inspection",
-      "- Mock checklist item: PASS",
-      "",
-      "## Findings",
-      "(none — mock executor)",
-      "",
-      "## Domain Constraints Used",
-      "[]",
-      "",
-      "## Domain Context Assumptions",
-      '- "Mock executor returned this output for test purposes via ONTO_LLM_MOCK=1."',
-      "",
-    ].join("\n");
-  } else if (
-    systemPrompt.startsWith("You are the synthesize actor for a 9-lens review")
-  ) {
-    // Phase 3-3: synthesize-variant executor mock. Returns a minimal
-    // synthesize-shaped markdown with the 8 required sections + YAML
-    // frontmatter so downstream consumers can verify the structure.
-    //
-    // Phase 3-4 A2 negative-path hook: ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE=1
-    // makes the mock wrap its entire response in a ```yaml fence, simulating
-    // the 30B-A3B behavior that violates the "Do not wrap" prompt rule. This
-    // exercises the executor's stripWrappingCodeFence post-processor without
-    // needing a real LLM call.
-    //
-    // Phase 3-4 A5 negative-path hook: ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE=1
-    // injects a fabricated quote (a phrase that won't appear in any lens
-    // pool content) into the Disagreement section, simulating the
-    // hallucination observed in the A3 benchmark. This exercises the
-    // citation audit layer. Both hooks are test-only and gated on the
-    // ONTO_LLM_MOCK=1 envelope already checked above.
-    const disagreementSection =
-      process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE === "1"
-        ? 'Axiology said "A fabricated quote that is definitely nowhere in the lens pool for this mock test run".'
-        : "(none — mock executor)";
-    const synthesizeBody = [
-      "---",
-      "deliberation_status: performed",
-      "---",
-      "",
-      "# Mock Synthesize Output (ts_inline_http executor mock, synthesize variant)",
-      "",
-      "## Consensus",
-      "(none — mock executor)",
-      "",
-      "## Conditional Consensus",
-      "(none — mock executor)",
-      "",
-      "## Disagreement",
-      disagreementSection,
-      "",
-      "## Deliberation Decision",
-      "Mock synthesize consumed the controlled deliberation artifact via ONTO_LLM_MOCK=1.",
-      "",
-      "## Unique Finding Tagging",
-      "(none — mock executor)",
-      "",
-      "## Axiology Integration",
-      "(none — mock executor)",
-      "",
-      "## Degraded Lens Failures",
-      "(none — mock executor)",
-      "",
-    ].join("\n");
-    text =
-      process.env.ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE === "1"
-        ? "```yaml\n" + synthesizeBody + "```"
-        : synthesizeBody;
-  } else {
-    // Unknown prompt → throw with the prefix so tests point at the drifted prompt.
-    const prefix = systemPrompt.slice(0, 80).replace(/\n/g, " ");
-    return Promise.reject(
-      new Error(
-        `mock LLM provider: no pattern matched system prompt prefix "${prefix}". ` +
-          `If this is a new Phase 3 prompt, add a matching branch in callMockProvider. ` +
-          `If this is an old prompt that changed, update the matching prefix.`,
-      ),
-    );
-  }
-
-  return Promise.resolve({
-    text,
-    input_tokens: estimateMockTokens(systemPrompt + userPrompt),
-    output_tokens: estimateMockTokens(text),
-    model_id: MOCK_MODEL_ID,
-    effective_base_url: "mock://deterministic",
-    declared_billing_mode: "per_token",
-  });
-}
-
-function estimateMockTokens(text: string): number {
-  return Math.max(1, Math.ceil(text.length / 4));
 }
 
 /**

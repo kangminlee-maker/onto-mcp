@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1900" height="1120" viewBox="0 0 1900 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Current onto review pipeline: runtime and LLM stages</title>
+  <desc id="desc">A left-to-right process diagram showing runtime stages, LLM stages, parallel fan-out sections, serial chains, validation, and final review outputs.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 1 1 L 11 6 L 1 11 z" fill="#334155"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 30px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .subtitle { font: 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .label { font: 700 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #0f172a; }
+      .small { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475569; }
+      .tiny { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #64748b; }
+      .runtime { fill: #dbeafe; stroke: #2563eb; stroke-width: 2; }
+      .llm { fill: #f3e8ff; stroke: #9333ea; stroke-width: 2; }
+      .artifact { fill: #dcfce7; stroke: #16a34a; stroke-width: 2; }
+      .mixed { fill: #fff7ed; stroke: #f97316; stroke-width: 2; }
+      .group-runtime { fill: #eff6ff; stroke: #60a5fa; stroke-width: 2; stroke-dasharray: 8 6; }
+      .group-llm { fill: #faf5ff; stroke: #c084fc; stroke-width: 2; stroke-dasharray: 8 6; }
+      .group-mixed { fill: #fff7ed; stroke: #fdba74; stroke-width: 2; stroke-dasharray: 8 6; }
+      .line { fill: none; stroke: #334155; stroke-width: 2.3; marker-end: url(#arrow); }
+      .thin { fill: none; stroke: #64748b; stroke-width: 1.6; marker-end: url(#arrow); }
+      .dash { stroke-dasharray: 6 5; }
+      .note { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1900" height="1120"/>
+
+  <text class="title" x="42" y="48">Current Review Pipeline</text>
+  <text class="subtitle" x="42" y="74">Runtime stages are deterministic TS/MCP orchestration. LLM stages are bounded worker/teamlead calls with contracted inputs and outputs.</text>
+
+  <g transform="translate(1410 35)">
+    <rect class="runtime" x="0" y="0" width="120" height="34" rx="8"/>
+    <text class="small" x="16" y="22">Runtime</text>
+    <rect class="llm" x="135" y="0" width="120" height="34" rx="8"/>
+    <text class="small" x="164" y="22">LLM</text>
+    <rect class="artifact" x="270" y="0" width="120" height="34" rx="8"/>
+    <text class="small" x="291" y="22">Artifact</text>
+  </g>
+
+  <!-- Row 1: invocation, preparation, lens fan-out, issue artifacts -->
+  <g id="entry">
+    <rect class="runtime" x="40" y="120" width="210" height="88" rx="10"/>
+    <text class="label" x="62" y="147">1. Entry</text>
+    <text class="small" x="62" y="170">MCP onto_review</text>
+    <text class="small" x="62" y="188">or review:invoke CLI</text>
+  </g>
+
+  <g id="prep">
+    <rect class="runtime" x="300" y="120" width="270" height="88" rx="10"/>
+    <text class="label" x="322" y="147">2. Session Preparation</text>
+    <text class="small" x="322" y="170">settings.json route/model/effort</text>
+    <text class="small" x="322" y="188">interpretation, binding, plan</text>
+  </g>
+
+  <path class="line" d="M250 164 H300"/>
+
+  <g id="lens-group">
+    <rect class="group-llm" x="620" y="92" width="360" height="250" rx="14"/>
+    <text class="label" x="642" y="120">3. Parallel Lens Dispatch</text>
+    <text class="tiny" x="642" y="140">LLM workers; context-isolated; max_concurrent = lens count</text>
+    <rect class="llm" x="645" y="160" width="135" height="52" rx="8"/>
+    <text class="small" x="668" y="190">axiology</text>
+    <rect class="llm" x="815" y="160" width="135" height="52" rx="8"/>
+    <text class="small" x="840" y="190">coverage</text>
+    <rect class="llm" x="645" y="225" width="135" height="52" rx="8"/>
+    <text class="small" x="668" y="255">evolution</text>
+    <rect class="llm" x="815" y="225" width="135" height="52" rx="8"/>
+    <text class="small" x="852" y="255">logic</text>
+    <rect class="llm" x="645" y="290" width="135" height="52" rx="8"/>
+    <text class="small" x="664" y="320">semantics</text>
+    <rect class="llm" x="815" y="290" width="135" height="52" rx="8"/>
+    <text class="small" x="846" y="320">structure</text>
+    <text class="tiny" x="642" y="364">core-axis = 6 lenses; full mode can add more lenses</text>
+  </g>
+
+  <path class="line" d="M570 164 C590 164 600 217 620 217"/>
+
+  <g id="barrier">
+    <rect class="runtime" x="1030" y="120" width="220" height="88" rx="10"/>
+    <text class="label" x="1052" y="147">4. Lens Barrier</text>
+    <text class="small" x="1052" y="170">collect successful lenses</text>
+    <text class="small" x="1052" y="188">record degraded/excluded</text>
+  </g>
+
+  <path class="line" d="M980 217 C1005 217 1000 164 1030 164"/>
+
+  <g id="issue-chain">
+    <rect class="group-llm" x="1310" y="82" width="360" height="338" rx="14"/>
+    <text class="label" x="1332" y="112">5. Issue Artifact Chain</text>
+    <text class="tiny" x="1332" y="132">Serial LLM teamlead calls; each output feeds the next</text>
+    <rect class="llm" x="1340" y="152" width="300" height="42" rx="8"/>
+    <text class="small" x="1362" y="178">finding-ledger.yaml</text>
+    <rect class="llm" x="1340" y="205" width="300" height="42" rx="8"/>
+    <text class="small" x="1362" y="231">finding-relation-graph.yaml</text>
+    <rect class="llm" x="1340" y="258" width="300" height="42" rx="8"/>
+    <text class="small" x="1362" y="284">issue-ledger.yaml</text>
+    <rect class="llm" x="1340" y="311" width="300" height="42" rx="8"/>
+    <text class="small" x="1362" y="337">issue-stance-matrix.yaml</text>
+    <rect class="llm" x="1340" y="364" width="300" height="42" rx="8"/>
+    <text class="small" x="1362" y="390">deliberation-plan.yaml</text>
+  </g>
+
+  <path class="line" d="M1250 164 H1310"/>
+  <path class="thin" d="M1490 194 V205"/>
+  <path class="thin" d="M1490 247 V258"/>
+  <path class="thin" d="M1490 300 V311"/>
+  <path class="thin" d="M1490 353 V364"/>
+
+  <!-- Row 2: controlled deliberation, problem framing, synthesis -->
+  <g id="lens-delib">
+    <rect class="group-llm" x="80" y="505" width="405" height="235" rx="14"/>
+    <text class="label" x="104" y="532">6. Parallel Lens Deliberation</text>
+    <text class="tiny" x="104" y="552">LLM worker per participating lens</text>
+    <rect class="llm" x="112" y="578" width="138" height="52" rx="8"/>
+    <text class="small" x="136" y="608">lens response</text>
+    <rect class="llm" x="285" y="578" width="138" height="52" rx="8"/>
+    <text class="small" x="309" y="608">lens response</text>
+    <rect class="llm" x="112" y="648" width="138" height="52" rx="8"/>
+    <text class="small" x="136" y="678">lens response</text>
+    <rect class="llm" x="285" y="648" width="138" height="52" rx="8"/>
+    <text class="small" x="320" y="678">...</text>
+    <text class="tiny" x="104" y="724">writes deliberation/round1/*-deliberation.md</text>
+  </g>
+
+  <path class="line" d="M1490 420 C1490 470 280 455 280 505"/>
+
+  <g id="teamlead-delib">
+    <rect class="llm" x="545" y="585" width="260" height="90" rx="10"/>
+    <text class="label" x="570" y="613">7. Teamlead</text>
+    <text class="small" x="570" y="636">controlled deliberation</text>
+    <text class="small" x="570" y="654">writes deliberation.md</text>
+  </g>
+
+  <path class="line" d="M485 622 H545"/>
+
+  <g id="problem-framing">
+    <rect class="llm" x="855" y="585" width="230" height="90" rx="10"/>
+    <text class="label" x="880" y="613">8. Problem Framing</text>
+    <text class="small" x="880" y="636">LLM issue artifact</text>
+    <text class="small" x="880" y="654">problem-framing.yaml</text>
+  </g>
+
+  <path class="line" d="M805 630 H855"/>
+
+  <g id="synth-packet">
+    <rect class="runtime" x="1135" y="585" width="255" height="90" rx="10"/>
+    <text class="label" x="1158" y="613">9. Runtime Packet Enrich</text>
+    <text class="small" x="1158" y="636">append lens + closure refs</text>
+    <text class="small" x="1158" y="654">bounded read/output refs</text>
+  </g>
+
+  <path class="line" d="M1085 630 H1135"/>
+
+  <g id="synthesize">
+    <rect class="llm" x="1440" y="585" width="230" height="90" rx="10"/>
+    <text class="label" x="1465" y="613">10. Synthesize</text>
+    <text class="small" x="1465" y="636">LLM worker</text>
+    <text class="small" x="1465" y="654">writes synthesis.md</text>
+  </g>
+
+  <path class="line" d="M1390 630 H1440"/>
+
+  <!-- Row 3: deterministic finalization -->
+  <g id="validation">
+    <rect class="runtime" x="300" y="840" width="290" height="92" rx="10"/>
+    <text class="label" x="324" y="868">11. Contract Validation</text>
+    <text class="small" x="324" y="891">frontmatter, participation truth</text>
+    <text class="small" x="324" y="909">writes execution-result.yaml</text>
+  </g>
+
+  <path class="line" d="M1555 675 C1555 800 445 800 445 840"/>
+
+  <g id="render-output">
+    <rect class="runtime" x="670" y="840" width="310" height="92" rx="10"/>
+    <text class="label" x="694" y="868">12. Render Final Output</text>
+    <text class="small" x="694" y="891">deterministic section projection</text>
+    <text class="small" x="694" y="909">compact Boundary Notes fallback</text>
+  </g>
+
+  <path class="line" d="M590 886 H670"/>
+
+  <g id="record">
+    <rect class="runtime" x="1060" y="840" width="300" height="92" rx="10"/>
+    <text class="label" x="1084" y="868">13. Assemble ReviewRecord</text>
+    <text class="small" x="1084" y="891">primary artifact</text>
+    <text class="small" x="1084" y="909">review-record.yaml</text>
+  </g>
+
+  <path class="line" d="M980 886 H1060"/>
+
+  <g id="mcp-result">
+    <rect class="runtime" x="1435" y="840" width="280" height="92" rx="10"/>
+    <text class="label" x="1459" y="868">14. Result Projection</text>
+    <text class="small" x="1459" y="891">compact / standard / full</text>
+    <text class="small" x="1459" y="909">MCP onto_review_result</text>
+  </g>
+
+  <path class="line" d="M1360 886 H1435"/>
+
+  <!-- Artifact strip -->
+  <g id="outputs">
+    <rect class="artifact" x="130" y="1000" width="250" height="64" rx="10"/>
+    <text class="label" x="154" y="1027">final-output.md</text>
+    <text class="tiny" x="154" y="1046">human-readable result</text>
+
+    <rect class="artifact" x="440" y="1000" width="270" height="64" rx="10"/>
+    <text class="label" x="464" y="1027">review-record.yaml</text>
+    <text class="tiny" x="464" y="1046">primary artifact truth</text>
+
+    <rect class="artifact" x="770" y="1000" width="285" height="64" rx="10"/>
+    <text class="label" x="794" y="1027">execution artifacts</text>
+    <text class="tiny" x="794" y="1046">lens, issue, deliberation, synthesis</text>
+
+    <rect class="artifact" x="1115" y="1000" width="285" height="64" rx="10"/>
+    <text class="label" x="1139" y="1027">status projection</text>
+    <text class="tiny" x="1139" y="1046">progress, unitProgress, activeUnits</text>
+
+    <rect class="artifact" x="1460" y="1000" width="260" height="64" rx="10"/>
+    <text class="label" x="1484" y="1027">result projection</text>
+    <text class="tiny" x="1484" y="1046">bounded standard, full artifacts</text>
+  </g>
+
+  <path class="thin dash" d="M825 932 C825 975 255 975 255 1000"/>
+  <path class="thin dash" d="M1210 932 C1210 975 575 975 575 1000"/>
+  <path class="thin dash" d="M1210 932 C1210 975 912 975 912 1000"/>
+  <path class="thin dash" d="M1575 932 C1575 975 1252 975 1252 1000"/>
+  <path class="thin dash" d="M1575 932 V1000"/>
+
+  <!-- IO notes -->
+  <g id="notes">
+    <rect class="mixed" x="40" y="790" width="220" height="110" rx="10"/>
+    <text class="label" x="62" y="820">IO Control Points</text>
+    <text class="small" x="62" y="844">- allowed read refs</text>
+    <text class="small" x="62" y="864">- allowed output refs</text>
+    <text class="small" x="62" y="884">- output contract checks</text>
+
+    <rect class="mixed" x="1700" y="482" width="230" height="154" rx="10" transform="translate(-40 0)"/>
+    <text class="label" x="1682" y="512">Current Bottlenecks</text>
+    <text class="small" x="1682" y="536">1. serial issue artifacts</text>
+    <text class="small" x="1682" y="556">2. problem-framing</text>
+    <text class="small" x="1682" y="576">3. teamlead deliberation</text>
+    <text class="small" x="1682" y="596">4. synthesize output</text>
+  </g>
+</svg>

@@ -69,7 +69,6 @@ export async function assertReviewExecutionPlanSessionBoundary(args: {
       label: "teamlead_deliberation_prompt_packet_path",
       ref: executionPlan.teamlead_deliberation_prompt_packet_path,
     },
-    { label: "synthesize_prompt_packet_path", ref: executionPlan.synthesize_prompt_packet_path },
     { label: "actor_invocation_profiles_path", ref: executionPlan.actor_invocation_profiles_path },
     { label: "actor_consumer_bindings_path", ref: executionPlan.actor_consumer_bindings_path },
     { label: "domain_binding_path", ref: executionPlan.domain_binding_path },
@@ -100,6 +99,10 @@ export async function assertReviewExecutionPlanSessionBoundary(args: {
       label: `lens_execution_seats.${seat.lens_id}.output_path`,
       ref: seat.output_path,
     })),
+    ...executionPlan.lens_execution_seats.map((seat) => ({
+      label: `lens_execution_seats.${seat.lens_id}.sidecar_output_path`,
+      ref: seat.sidecar_output_path,
+    })),
     ...executionPlan.lens_prompt_packet_seats.flatMap((seat) => [
       {
         label: `lens_prompt_packet_seats.${seat.lens_id}.packet_path`,
@@ -109,6 +112,10 @@ export async function assertReviewExecutionPlanSessionBoundary(args: {
         label: `lens_prompt_packet_seats.${seat.lens_id}.output_path`,
         ref: seat.output_path,
       },
+      {
+        label: `lens_prompt_packet_seats.${seat.lens_id}.sidecar_output_path`,
+        ref: seat.sidecar_output_path,
+      },
     ]),
     ...executionPlan.issue_artifact_prompt_packet_seats.flatMap((seat) => [
       {
@@ -117,16 +124,6 @@ export async function assertReviewExecutionPlanSessionBoundary(args: {
       },
       {
         label: `issue_artifact_prompt_packet_seats.${seat.artifact_id}.output_path`,
-        ref: seat.output_path,
-      },
-    ]),
-    ...executionPlan.lens_deliberation_prompt_packet_seats.flatMap((seat) => [
-      {
-        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.packet_path`,
-        ref: seat.packet_path,
-      },
-      {
-        label: `lens_deliberation_prompt_packet_seats.${seat.lens_id}.output_path`,
         ref: seat.output_path,
       },
     ]),

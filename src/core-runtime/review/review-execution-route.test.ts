@@ -7,9 +7,9 @@ function profile(
 ): ReviewExecutionProfile {
   return {
     mode: "main-workers",
-    teamlead: { seat: "main", llm: "inherit" },
-    lens: { seat: "worker", llm: "inherit" },
-    synthesize: { seat: "worker", llm: "inherit" },
+    teamlead: { seat: "main" },
+    lens: { seat: "worker" },
+    synthesize: { seat: "worker" },
     deliberation: "controlled-lens-deliberation",
     worker_executor: "codex",
     host: "codex",
@@ -33,6 +33,11 @@ describe("buildReviewExecutionRoute", () => {
         }),
       ),
     ).toMatchObject({
+      execution_route: "external_oauth_worker",
+      execution_adapter: "codex_cli",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      billing_mode: "subscription",
       host: "codex",
       executor: "codex",
       resolved_provider: "codex",
@@ -53,11 +58,34 @@ describe("buildReviewExecutionRoute", () => {
         }),
       ),
     ).toMatchObject({
+      execution_route: "direct_model_call",
+      execution_adapter: "openai_sdk",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      wire_format: "native_sdk",
+      billing_mode: "per_token",
       host: "standalone",
       executor: "direct_call",
       resolved_provider: "openai",
       auth_mode: "api_key",
       execution_realization: "direct-call",
+      artifact_host_runtime: "openai",
+    });
+  });
+
+  it("does not invent API-key auth for direct-call OpenAI when auth is omitted", () => {
+    expect(
+      buildReviewExecutionRoute(
+        profile({
+          worker_executor: "direct_call",
+          host: "openai",
+          auth: undefined,
+          provider: "openai",
+        }),
+      ),
+    ).toMatchObject({
+      resolved_provider: "openai",
+      auth_mode: null,
       artifact_host_runtime: "openai",
     });
   });
@@ -75,38 +103,33 @@ describe("buildReviewExecutionRoute", () => {
     ).toBe("anthropic");
   });
 
-  it("maps LM Studio local direct-call to resolved provider lmstudio", () => {
+  it.todo(
+    "maps reserved/future LM Studio local direct-call after the local route patch",
+  );
+
+  it("maps standalone provider direct-call to direct model route", () => {
     expect(
       buildReviewExecutionRoute(
         profile({
           worker_executor: "direct_call",
-          host: "lmstudio",
-          auth: "local",
-          provider: "lmstudio",
-        }),
-      ),
-    ).toMatchObject({
-      resolved_provider: "lmstudio",
-      auth_mode: "local",
-      artifact_host_runtime: "lmstudio",
-    });
-  });
-
-  it("maps mock execution to resolved provider mock", () => {
-    expect(
-      buildReviewExecutionRoute(
-        profile({
-          worker_executor: "mock",
           host: "standalone",
+          auth: "api_key",
+          provider: "openai",
         }),
       ),
     ).toMatchObject({
+      execution_route: "direct_model_call",
+      execution_adapter: "openai_sdk",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      wire_format: "native_sdk",
+      billing_mode: "per_token",
       host: "standalone",
-      executor: "mock",
-      resolved_provider: "mock",
-      auth_mode: null,
+      executor: "direct_call",
+      resolved_provider: "openai",
+      auth_mode: "api_key",
       execution_realization: "direct-call",
-      artifact_host_runtime: "standalone",
+      artifact_host_runtime: "openai",
     });
   });
 
@@ -122,7 +145,7 @@ describe("buildReviewExecutionRoute", () => {
     ).toThrow("Review direct-call route requires an API/local provider host");
   });
 
-  it("fails loud when direct-call host and inherited provider conflict", () => {
+  it("fails loud when direct-call host and provider authority conflict", () => {
     expect(() =>
       buildReviewExecutionRoute(
         profile({
@@ -135,7 +158,7 @@ describe("buildReviewExecutionRoute", () => {
     ).toThrow("Review direct-call route has conflicting provider authority");
   });
 
-  it("fails loud when direct-call inherits OAuth auth", () => {
+  it("fails loud when direct-call uses OAuth auth", () => {
     expect(() =>
       buildReviewExecutionRoute(
         profile({
@@ -143,6 +166,19 @@ describe("buildReviewExecutionRoute", () => {
           host: "anthropic",
           auth: "oauth",
           provider: undefined,
+        }),
+      ),
+    ).toThrow("Review direct-call route requires API-key/local auth");
+  });
+
+  it("fails loud when standalone direct-call provider uses OAuth auth", () => {
+    expect(() =>
+      buildReviewExecutionRoute(
+        profile({
+          worker_executor: "direct_call",
+          host: "standalone",
+          provider: "openai",
+          auth: "oauth",
         }),
       ),
     ).toThrow("Review direct-call route requires API-key/local auth");

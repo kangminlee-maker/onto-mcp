@@ -55,7 +55,7 @@ finding 간 연결관계를 먼저 파악해 공통 원인을 가진 문제끼�
 
 `shared phenomenon`은 같은 위치를 보는 claim을 묶는다.
 `root-cause issue`는 서로 다른 위치의 finding이라도 같은 근본 원인에서 비롯되었다면 묶을 수 있다.
-`material issue` 여부는 별도 필드가 아니라 severity에서 파생된다.
+`material issue` 여부는 별도 materiality enum이 아니라 severity와 problem-framing admission에서 파생된다.
 
 Severity values are:
 
@@ -67,7 +67,7 @@ Severity values are:
 | `low` | Improvement opportunity that does not make the reviewed result unsafe for its declared purpose. |
 | `info` | Observation, question, or evidence gap that is not yet an issue. |
 
-`blocker`, `high`, and `medium` are material issues. `low` and `info` are non-material findings. Every material severity claim must include `affected_purpose`, `failure_condition`, `impact`, and concrete `evidence_refs`.
+`blocker`, `high`, and `medium` are material-severity candidates. They are admitted as material issues only when problem framing does not mark the issue as an evidence gap, outside the review boundary, or evidence-insufficient. `low` and `info` are non-material findings. Every admitted material issue must include `affected_purpose`, `failure_condition`, `impact`, and concrete `evidence_refs`.
 
 예:
 
@@ -85,12 +85,15 @@ issue-stance deliberation target path의 canonical seats:
   finding-ledger.yaml
   finding-relation-graph.yaml
   issue-ledger.yaml
+  stance-responses/
+    {lens_id}.yaml
   issue-stance-matrix.yaml
   deliberation-plan.yaml
   deliberation/
     responses/
       {issue_id}/
         {lens_id}.yaml
+  deliberation-resolution.yaml
   deliberation.md
   problem-framing.yaml
 ```
@@ -100,15 +103,19 @@ issue-stance deliberation target path의 canonical seats:
 | Artifact | Owner | 목적 |
 |---|---|---|
 | `finding-ledger.yaml` | teamlead/runtime-assisted LLM | Round 1 lens outputs에서 surface finding을 안정 식별자로 등록 |
-| `finding-relation-graph.yaml` | teamlead/runtime-assisted LLM | finding 간 same-root, causal, duplicate, conflict, dependency 관계 기록 |
-| `issue-ledger.yaml` | teamlead/runtime-assisted LLM | finding graph에서 root-cause issue cluster를 도출 |
+| `finding-relation-graph.yaml` | teamlead semantic judgment + runtime submit/write/validation | finding 간 same-root, causal, duplicate, conflict, dependency 관계 기록 |
+| `issue-ledger.yaml` | teamlead semantic judgment + runtime submit/write/validation | finding graph에서 root-cause issue cluster를 도출 |
+| `stance-responses/{lens_id}.yaml` | fresh lens stance actor + runtime submit/write/validation | issue-ledger 이후 해당 lens 관점의 모든 issue stance 작성 |
 | `issue-stance-matrix.yaml` | lens stance actors + runtime aggregation | 모든 root-cause issue × 모든 lens 입장과 이유 기록 |
-| `deliberation-plan.yaml` | teamlead/runtime-assisted LLM | material conflict가 있는 root-cause issue와 참여 lens, 처리 순서 고정 |
-| `deliberation/responses/{issue_id}/{lens_id}.yaml` | participating deliberation lens | issue-scoped deliberation 응답 |
-| `deliberation.md` | teamlead | issue별 최종 status와 이유 기록 |
-| `problem-framing.yaml` | review closure actor | root-cause issue의 공통 spine 분류와 domain profile 기반 분류 |
+| `deliberation-plan.yaml` | LLM decision + runtime projection/submit/write/validation | material conflict가 있는 root-cause issue와 참여 lens, 처리 순서 고정 |
+| `deliberation/responses/{issue_id}/{lens_id}.yaml` | participating deliberation lens + runtime submit/write/validation | issue-scoped deliberation 응답 |
+| `deliberation-resolution.yaml` | controlled deliberation resolver + runtime submit/write/validation | issue별 최종 status, root-cause claim, remaining disagreement 기록 |
+| `deliberation.md` | runtime projection | `deliberation-resolution.yaml`의 human-readable markdown projection |
+| `problem-framing.yaml` | review closure actor + runtime submit/write/validation | root-cause issue의 공통 spine 분류와 domain profile 기반 분류 |
 
 runtime은 file seat, schema validation, missing-field fail-loud를 소유한다.
+Structured YAML artifact output에 한해 runtime은 submit tool admission과 YAML serialization/write를 함께 소유한다.
+Free-form markdown/prose output은 runtime submit tool 전환 대상이 아니며 LLM-authored output으로 남는다.
 LLM은 finding relation 해석, root-cause hypothesis 도출, stance 판단, conflict 해석, resolution 설명, review closure classification을 소유한다.
 Domain-specific classification axes are owned by domain documents, not by this contract.
 
@@ -127,15 +134,16 @@ session_id: "{session_id}"
 findings:
   - finding_id: finding-001
     lens_id: logic
-    source_ref: round1/logic.md#finding-1
+    source_ref: round1/logic.findings.yaml#finding-001
     target: "package.json"
     evidence_anchor: "package.json:scripts.mcp:server"
     claim: "mcp:server points at a source-only path while package execution expects built output."
+    lens_rationale_summary: "Why the originating lens considered this finding relevant to the review contract."
     proposed_action: "Align MCP entrypoint with package/build boundary."
     affected_purpose: "MCP server can be invoked from the packaged runtime surface."
     failure_condition: "Package consumers run the declared MCP command after build/package installation."
     impact: "The command can look trustworthy but fail at runtime because the source/package boundary is unresolved."
-    evidence_refs: [round1/logic.md#finding-1]
+    evidence_refs: [round1/logic.findings.yaml#finding-001]
     severity: medium
     domain_threshold_used: null
 ```
@@ -145,10 +153,11 @@ Rules:
 1. Every Round 1 issue/finding claim that may affect final output must receive a stable `finding_id`.
 2. `finding_id` is session-local and stable across downstream artifacts.
 3. A finding is not a root-cause issue by itself.
-4. `severity` must use `blocker`, `high`, `medium`, `low`, or `info`; legacy `critical` is not a valid output value.
+4. `severity` must use `blocker`, `high`, `medium`, `low`, or `info`; retired `critical` is not a valid output value.
 5. Every material finding must explain the affected purpose, failure condition, impact, and evidence refs.
 6. If a lens output lacks enough evidence for a material severity, use `severity: info` and record the evidence gap instead of inventing a material issue.
 7. If a lens output lacks a stable anchor, ledger construction must fail loudly or mark the finding as unaddressable with a reason in a validation section.
+8. `lens_rationale_summary` is a compact semantic carrier from the originating lens. It preserves the lens-specific reason without requiring downstream stages to reopen raw lens prose by default.
 
 ---
 
@@ -162,12 +171,12 @@ Allowed relation values:
 | Relation | 의미 |
 |---|---|
 | `same_root_candidate` | 두 finding이 같은 root-cause hypothesis를 공유할 수 있음 |
+| `shared_cause_candidate` | 두 finding의 root는 다르지만 인과사슬 중간 cause를 공유할 수 있음 |
 | `causes` | 한 finding이 다른 finding을 직접 유발함 |
 | `symptom_of` | 한 finding이 다른 root/cause finding의 증상임 |
 | `enables` | 한 finding이 다른 finding의 발생 조건을 제공함 |
 | `duplicates` | 동일 문제의 중복 보고 |
 | `conflicts_with` | 두 finding의 claim/action/severity가 충돌 |
-| `independent` | 관계 검토 후 독립으로 판단 |
 
 최소 shape:
 
@@ -182,6 +191,9 @@ relations:
     root_hypothesis: "source/package boundary is not canonically assigned."
     rationale: "Both findings point to disagreement between source-time scripts and package/runtime surface."
     confidence: medium
+singleton_findings:
+  - finding_id: finding-009
+    reason: "No accepted semantic relation is supported by available evidence."
 ```
 
 Rules:
@@ -190,7 +202,8 @@ Rules:
 2. Root hypotheses must be stated as falsifiable claims, not vague themes.
 3. Low-confidence same-root candidates may still form provisional clusters, but the confidence must be preserved.
 4. If a finding remains singleton, the graph must include why no relation was accepted.
-5. The graph must not collapse unrelated findings merely because they share severity or the same lens.
+5. Unrelated causal-analysis findings must be represented under `singleton_findings`, not as relation rows.
+6. The graph must not collapse unrelated findings merely because they share severity or the same lens.
 
 Root-cause grouping signals:
 
@@ -209,6 +222,8 @@ Root-cause grouping signals:
 
 `issue-ledger.yaml` is generated from `finding-ledger.yaml` and `finding-relation-graph.yaml`.
 It contains root-cause issue clusters, not raw finding rows.
+This unit consumes the finding ledger, relation graph, and review target profile;
+it must not read Round 1 lens outputs directly.
 
 Minimum shape:
 
@@ -227,7 +242,7 @@ issues:
     affected_purpose: "MCP-native review runtime can be invoked through its declared package surface."
     failure_condition: "Users or hosts invoke the packaged command instead of a repo-local source path."
     impact: "The system may appear deployable while the declared runtime path cannot be trusted."
-    evidence_refs: [round1/logic.md#finding-1, round1/dependency.md#finding-2]
+    evidence_refs: [round1/logic.findings.yaml#finding-001, round1/dependency.findings.yaml#finding-002]
     severity: high
     domain_threshold_used: null
     singleton_reason: null
@@ -237,17 +252,17 @@ Singleton issue shape:
 
 ```yaml
   - issue_id: issue-002
-    root_cause_hypothesis: "The finding appears independent after relation-graph review."
+    root_cause_hypothesis: "The finding remains singleton after relation-graph review."
     root_confidence: low
     surface_finding_ids: [finding-009]
     relation_refs: []
     raised_by_lens_ids: [structure]
-    issue_statement: "The finding remains an independent issue after relation-graph review."
+    issue_statement: "The finding remains a singleton issue after relation-graph review."
     proposed_action: "Preserve the issue for final classification."
     affected_purpose: "Declared review purpose"
     failure_condition: "Boundary condition from finding-009"
     impact: "Impact carried from finding-009"
-    evidence_refs: [round1/structure.md#finding-9]
+    evidence_refs: [round1/structure.findings.yaml#finding-009]
     severity: low
     domain_threshold_used: null
     singleton_reason: "No causal, dependency, ownership, or same-root relation was supported by the available evidence."
@@ -257,18 +272,40 @@ Rules:
 
 1. Every issue must cite at least one `finding_id`.
 2. Teamlead must not invent an issue that no finding supports.
-3. A finding may belong to more than one issue only when the graph records different plausible root hypotheses; this must be marked `multi_cluster: true` on the finding or issue entry.
-4. Singleton issues are allowed only after relation-graph review and must include `singleton_reason`.
-5. The issue statement should describe the root, not merely restate a surface symptom.
-6. If the root hypothesis is uncertain, keep the uncertainty rather than flattening it into a confident issue.
-7. Every issue must carry the severity contract fields: `affected_purpose`, `failure_condition`, `impact`, `evidence_refs`, `severity`, and optional `domain_threshold_used`.
-8. `material issue` is derived from severity. Do not add a second materiality enum.
+3. Each relation-graph-covered finding must belong to exactly one issue.
+4. An issue with multiple `surface_finding_ids` must cite relation refs that connect those findings through `same_root_candidate`.
+5. `shared_cause_candidate` must be preserved as cross-issue dependency context, not used as merge evidence.
+6. Issue `evidence_refs` and `raised_by_lens_ids` must be projected from the assigned `finding-ledger.yaml` findings.
+7. Singleton issues are allowed only after relation-graph review and must include `singleton_reason`.
+8. The issue statement should describe the root, not merely restate a surface symptom.
+9. If the root hypothesis is uncertain, keep the uncertainty rather than flattening it into a confident issue.
+10. Every issue must carry the severity contract fields: `affected_purpose`, `failure_condition`, `impact`, `evidence_refs`, `severity`, and optional `domain_threshold_used`.
+11. `material issue` is derived from severity plus problem-framing admission. Do not add a second materiality enum.
 
 ---
 
 ## 7. Stance Matrix
 
-Every participating lens must write a stance for every root-cause issue.
+Every participating lens must submit a structured stance for every root-cause issue.
+Stances are collected after `issue-ledger.yaml` exists; Round 1 lens workers do
+not stay alive and hidden context is not used. Runtime creates one fresh
+`issue-stance:{lens_id}` stance worker per participating lens. Each stance
+worker consumes a runtime issue-stance input projection derived from the finding
+ledger, relation graph, and issue ledger first. Round 1 lens outputs remain
+bounded supplemental refs and should be read only when the projection lacks
+lens-specific context needed for a stance rationale.
+The projection must preserve issue action judgment context (`issue_statement`,
+`proposed_action`, severity fields, `domain_threshold_used`, and
+`singleton_reason`) plus compact `shared_cause` relation and `issue_dependencies`
+summaries, so stance values can judge both root hypothesis and action without
+re-reading raw Round 1 output by default.
+The projection must also carry finding-level `lens_rationale_summary` values so
+fresh stance workers can reconstruct the originating lens perspective from
+artifact truth instead of hidden worker state.
+Because stance responses are structured YAML artifact outputs, each stance worker submits semantic stance rows through the runtime submit tool;
+runtime writes and validates each `stance-responses/{lens_id}.yaml`, then merges responses
+into `issue-stance-matrix.yaml`. Runtime must not infer or rewrite lens stance
+semantics during the merge.
 
 Allowed stance values:
 
@@ -308,6 +345,25 @@ Allowed `severity_position` values:
 
 Minimum shape:
 
+Per-lens response:
+
+```yaml
+schema_version: 1
+session_id: "{session_id}"
+lens_id: logic
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "The same unresolved boundary explains the script/runtime mismatch and export ambiguity."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [round1/logic.findings.yaml#finding-001, finding-ledger.yaml#finding-001, finding-relation-graph.yaml#rel-001]
+validation:
+  missing_issues: []
+```
+
+Runtime-merged matrix:
+
 ```yaml
 schema_version: 1
 session_id: "{session_id}"
@@ -319,19 +375,19 @@ issues:
       rationale: "The same unresolved boundary explains the script/runtime mismatch and export ambiguity."
       root_hypothesis_position: accepts
       severity_position: keeps
-      evidence_refs: [round1/logic.md, finding-ledger.yaml#finding-001, finding-relation-graph.yaml#rel-001]
+      evidence_refs: [round1/logic.findings.yaml#finding-001, finding-ledger.yaml#finding-001, finding-relation-graph.yaml#rel-001]
     - lens_id: structure
       stance: narrow
       rationale: "The cluster is valid only for package/runtime seats, not for all source references."
       root_hypothesis_position: narrows
       severity_position: keeps
-      evidence_refs: [round1/structure.md, finding-ledger.yaml#finding-004]
+      evidence_refs: [round1/structure.findings.yaml#finding-004, finding-ledger.yaml#finding-004]
     - lens_id: semantics
       stance: alternative_root
       rationale: "The stronger root is not packaging but ambiguous naming of runtime seats."
       root_hypothesis_position: replaces
       severity_position: keeps
-      evidence_refs: [round1/semantics.md, finding-ledger.yaml#finding-006]
+      evidence_refs: [round1/semantics.findings.yaml#finding-006, finding-ledger.yaml#finding-006]
 validation:
   missing_stances: []
 ```
@@ -339,11 +395,14 @@ validation:
 Rules:
 
 1. Missing stance is invalid.
-2. `not_applicable` is still an opinion and must explain why the lens does not apply.
-3. `insufficient_evidence` must name the missing evidence or boundary limitation.
-4. `alternative_root` must provide an alternative root hypothesis.
-5. A lens may disagree with its own Round 1 silence; it must explain the new stance from its lens perspective.
-6. Stance collection happens before deliberation and does not consume other lenses' stance rationales unless the stance actor is explicitly in deliberation.
+2. A stance from a non-participating lens is invalid.
+3. Stance `evidence_refs` must be string refs within the issue/lens provenance set: issue refs, assigned finding refs, relation/dependency refs, or the stance lens's bounded Round 1 ref.
+4. `not_applicable` is still an opinion and must explain why the lens does not apply.
+5. `insufficient_evidence` must name the missing evidence or boundary limitation.
+6. `alternative_root` must provide an alternative root hypothesis.
+7. A lens may disagree with its own Round 1 silence; it must explain the new stance from its lens perspective.
+8. Stance collection happens before deliberation and does not consume other lenses' stance rationales.
+9. `issue-stance-matrix.yaml` is a runtime aggregation of validated per-lens response artifacts, not a teamlead-authored stance inference artifact.
 
 ---
 
@@ -357,7 +416,7 @@ Material conflict exists when at least one condition holds:
 2. `alternative_root` appears for the issue.
 3. `surface_only` contests the cluster's root-cause grouping.
 4. A `narrow` stance changes the issue's action, severity, scope, or root hypothesis in a way other applicable stances do not accept.
-5. Two or more `narrow` stances impose incompatible conditions.
+5. Two or more `narrow` stances impose conflicting conditions.
 6. Lenses disagree on whether a cited domain constraint applies.
 7. Axiology limits or reverses another lens's proposed action on purpose/value grounds.
 8. `insufficient_evidence` contests the actionability of the root-cause issue, not merely confidence wording.
@@ -374,7 +433,14 @@ Not material conflict:
 
 ## 9. Deliberation Plan
 
-`deliberation-plan.yaml` is generated after material conflict detection.
+`deliberation-plan.yaml` is generated after stance collection. Runtime first
+builds a compact deliberation-plan input projection from `issue-ledger.yaml`,
+`issue-stance-matrix.yaml`, and `finding-relation-graph.yaml`. The projection
+marks deterministic conflict signals and suggested participants, but it is not
+the final material-conflict decision. The LLM decides whether a candidate is a
+real material conflict, chooses the conflict type, submits the resolution
+question, and explains skipped issues. Because `deliberation-plan.yaml` is a structured YAML artifact output, runtime writes the YAML artifact and validates coverage,
+participant refs, material severity, and stance-ref consistency.
 
 Minimum shape:
 
@@ -392,6 +458,11 @@ planned_issues:
       - issue-stance-matrix.yaml#stances.issue-001.structure
       - issue-stance-matrix.yaml#stances.issue-001.semantics
       - issue-stance-matrix.yaml#stances.issue-001.axiology
+    conflict_summary: "The stances disagree on whether the package boundary is the root or a symptom of a deeper runtime-seat naming gap."
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: non_material_issue
+    reason: "The issue is recorded for traceability but its severity is low, so it does not require material conflict deliberation."
 ```
 
 Priority order:
@@ -409,6 +480,21 @@ Participant rule:
 - Include at least one lens that raised each contested surface finding in the cluster.
 - Exclude `not_applicable` lenses unless their non-applicability is itself contested.
 - Deliberation is issue-scoped. A lens that has no material role in the issue is not invited to that issue's deliberation.
+- `source_stance_refs` must exactly match `participating_lens_ids` using
+  `issue-stance-matrix.yaml#stances.{issue_id}.{lens_id}` refs.
+- `planned_issues` may contain only `blocker`, `high`, or `medium` material-severity issue candidates.
+- Every issue must appear exactly once in either `planned_issues` or
+  `skipped_issues`.
+
+Skipped reason codes:
+
+| Code | Meaning |
+|---|---|
+| `non_material_issue` | Severity is `low` or `info`; record but do not deliberate. |
+| `consistent_stances` | Material issue exists but applicable stances do not conflict. |
+| `no_material_conflict` | A runtime candidate was reviewed and judged not to require material deliberation. |
+| `outside_deliberation_scope` | The issue is valid but the disagreement cannot be resolved inside current review boundary. |
+| `insufficient_participation` | A material conflict candidate lacks enough valid participant stances to deliberate. |
 
 ---
 
@@ -422,8 +508,9 @@ For each planned issue, participating lens actors receive bounded context:
 4. the relevant stance matrix entries,
 5. the source claim refs,
 6. the materialized target/evidence refs needed to understand the issue.
+7. compact `related_issue_context` for issue dependencies that affect this issue.
 
-They must write to `deliberation/responses/{issue_id}/{lens_id}.yaml`:
+Because issue-scoped deliberation responses are structured YAML artifact outputs, participants submit response payloads and runtime writes them to `deliberation/responses/{issue_id}/{lens_id}.yaml`:
 
 ```yaml
 schema_version: 1
@@ -454,10 +541,10 @@ Every root-cause issue must end in exactly one status.
 
 | Status | Condition |
 |---|---|
-| `no-deliberation-needed` | Stance matrix is complete and no material conflict exists. Applicable stances are compatible on root hypothesis, action, severity, scope, and domain applicability. |
+| `no-deliberation-needed` | Stance matrix is complete and no material conflict exists. Applicable stances are consistent on root hypothesis, action, severity, scope, and domain applicability. |
 | `resolved` | After deliberation, all material-conflict participants explicitly converge on one root hypothesis and one claim/action/severity. Prior opposition or alternative-root claims are withdrawn, accepted, or declared non-blocking with rationale. |
 | `narrowed` | After deliberation, participants converge only under explicit conditions, reduced scope, changed severity, modified action, or a narrower root hypothesis. The narrowed form must be accepted by all material-conflict participants. |
-| `unresolved-with-reason` | At least one material-conflict participant maintains an incompatible root/action/severity stance, required evidence is outside boundary, or a participant fails to provide a required updated stance. |
+| `unresolved-with-reason` | At least one material-conflict participant maintains a conflicting root/action/severity stance, required evidence is outside boundary, or a participant fails to provide a required updated stance. |
 
 Global invariant:
 
@@ -466,7 +553,7 @@ Global invariant:
 - `unresolved-with-reason` is a valid completed outcome, not a degraded execution state.
 - Surface findings inside an issue inherit the issue status but remain individually traceable.
 
-Teamlead `deliberation.md` must record for each issue:
+Teamlead `deliberation-resolution.yaml` must record for each issue:
 
 ```yaml
 issue_id: issue-001
@@ -484,7 +571,7 @@ required_follow_up_evidence: ["package install smoke"]
 
 ## 12. Review Closure Problem Framing
 
-`problem-framing.yaml` is generated after `deliberation.md` and before synthesize.
+`problem-framing.yaml` is generated after `deliberation-resolution.yaml`/`deliberation.md` and before synthesize.
 This step does not propose fixes. It reframes and classifies the root-cause issues so the final review explains what kind of problem each issue is and when it should matter.
 
 Problem framing has two layers:
@@ -496,11 +583,27 @@ Problem framing has two layers:
 The domain profile document is a `domain_document` with `doc_type: custom:problem_framing_profile`.
 It may add domain-specific axes, but it must not redefine common spine values.
 
-This step may use the main/teamlead context more directly than lens review does.
-Reason: timing and closure classification depends on current development intent, roadmap timing, risk tolerance, and whether an issue blocks the present artifact or a later implementation step.
-It still must consume immutable review artifacts and must not rewrite lens stance or deliberation outcomes.
+Runtime builds a compact problem-framing input projection from `issue-ledger.yaml`,
+`issue-stance-matrix.yaml`, `deliberation-plan.yaml`,
+`deliberation-resolution.yaml`, `review-target-profile.yaml`, and the selected
+domain profile's axis catalog and profile Rules. The LLM uses this projection
+first and does not read raw Round 1 lens outputs, issue-scoped deliberation
+responses, or raw domain profile documents by default. The projection must
+preserve issue purpose/condition/impact, stance context, deliberation
+plan/resolution context, target-profile closure context, domain-axis values,
+and domain profile value-application rules needed for semantic classification.
 
-Minimum shape:
+Because `problem-framing.yaml` is a structured YAML artifact output, the LLM
+submits only the semantic `classifications` rows through `submit_issue_artifact`.
+Runtime owns `classification_context`, `related_surface_finding_ids`, envelope
+fields, YAML serialization/write, and validation. `related_surface_finding_ids`
+must exactly match the `surface_finding_ids` for that issue in
+`issue-ledger.yaml`. `classification_context` must match `review-target-profile.yaml`
+and the selected `problem_framing_profile.md` ref. `domain_axes` may use only
+axis names and values declared by the selected profile; when no profile is
+applied, `domain_axes` must be empty.
+
+Durable artifact shape:
 
 ```yaml
 schema_version: 1
@@ -524,8 +627,6 @@ classifications:
       implementation_surface: review_runtime
       defect_kind: contract_gap
     rationale: "This does not invalidate the design direction, but it blocks the next TS implementation step."
-    blocks_current_review_completion: false
-    blocks_next_development_step: true
     related_surface_finding_ids: [finding-001, finding-004]
 ```
 
@@ -654,6 +755,10 @@ Rules:
 5. `problem-framing.yaml` must not propose implementation steps beyond the classification/rationale level.
 6. If classification depends on user intent or roadmap unknowns, set `closure_class: needs_decision`.
 7. If a stale authority expression does not affect runtime behavior, represent that in domain axes or rationale rather than upgrading it to `current_blocker`.
+8. The problem-framing actor submits only `classifications`; runtime fills `classification_context` and `related_surface_finding_ids`.
+9. `related_surface_finding_ids` is an issue-ledger projection and must not be narrowed, expanded, or reordered by semantic classification.
+10. Runtime validation rejects `domain_axes` names or values that are not declared in the selected problem-framing profile.
+11. Runtime validation rejects `classification_context` drift from review-target profile domain or selected profile ref/status.
 
 ---
 
@@ -693,7 +798,14 @@ finding_relation_graph_ref: .onto/review/{session_id}/finding-relation-graph.yam
 issue_ledger_ref: .onto/review/{session_id}/issue-ledger.yaml
 issue_stance_matrix_ref: .onto/review/{session_id}/issue-stance-matrix.yaml
 deliberation_plan_ref: .onto/review/{session_id}/deliberation-plan.yaml
+deliberation_result_ref: .onto/review/{session_id}/deliberation-resolution.yaml
+deliberation_result_sha256: "{sha256(deliberation-resolution.yaml)}"
 problem_framing_ref: .onto/review/{session_id}/problem-framing.yaml
+synthesis_result_ref: .onto/review/{session_id}/synthesis-ledger.yaml
+synthesis_result_sha256: "{sha256(synthesis-ledger.yaml)}"
+synthesis_output_sha256: "{sha256(synthesis.md)}"
+final_output_ref: .onto/review/{session_id}/final-output.md
+final_output_sha256: "{sha256(final-output.md)}"
 issue_resolution_summary:
   - issue_id: issue-001
     status: narrowed
@@ -731,12 +843,12 @@ times out or fails:
 - `execution-result.yaml.halt_unit_id` and `halt_unit_kind` MUST identify the
   failed deliberation unit
 - lens-bound deliberation failures SHOULD expose `halt_lens_id` as the
-  lens id derived from `deliberation-{lens_id}`
+  lens id derived from `deliberation:{issue_id}:{lens_id}`
 - `deliberation_execution_results` MUST preserve completed and failed
   deliberation unit results, including timeout `failure_message`
 - `review-run-manifest.yaml` MUST mirror the halt phase, unit, lens, and reason
 - `review-record.yaml` MUST NOT expose produced-artifact refs for
-  `synthesis.md` or `deliberation.md` when those files were not produced
+  `synthesis.md` or `deliberation-resolution.yaml` when those files were not produced
 - `review-record.yaml` MUST preserve refs for issue-stage artifacts that were
   produced before the halt, independent of whether synthesize ran
 
@@ -752,10 +864,13 @@ Recommended TS implementation sequence:
 3. Build finding relation graph and root-cause issue ledger.
 4. Dispatch stance actors so every lens covers every root-cause issue.
 5. Validate stance matrix completeness.
-6. Generate deliberation plan from material conflicts.
+6. Project deliberation conflict candidates in runtime, then generate
+   `deliberation-plan.yaml` through LLM material-conflict decision and runtime
+   validation.
 7. Dispatch issue-scoped deliberation only for planned issues.
-8. Write teamlead `deliberation.md` with issue statuses and final root-cause hypotheses.
-9. Resolve selected domain `problem_framing_profile.md` when present and validate it fail-loud.
-10. Generate `problem-framing.yaml` with common spine plus domain axes.
-11. Update synthesize prompt to consume finding/issue/problem-framing artifacts.
-12. Extend `ReviewRecord` refs and conformance tests.
+8. Resolve planned issues through `submit_deliberation_resolution`; because the resolution is a structured YAML artifact output, runtime writes validated `deliberation-resolution.yaml` with issue statuses and final root-cause hypotheses.
+9. Render `deliberation.md` as a deterministic human-readable projection.
+10. Resolve selected domain `problem_framing_profile.md` when present and validate it fail-loud.
+11. Generate `problem-framing.yaml` with common spine plus domain axes.
+12. Update synthesize prompt to consume finding/issue/problem-framing artifacts.
+13. Extend `ReviewRecord` refs and conformance tests.

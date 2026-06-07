@@ -84,7 +84,7 @@ Canonical shape:
 schema_version: "1"
 producer: onto-review-runtime
 producer_version: "..."
-settings_schema_version: settings.json/v1
+settings_schema_version: settings.json/v3
 domain_registry_version: domain-docs/v1
 alignment_contract_version: review-value-alignment-criteria/v1
 lifecycle_state: validated

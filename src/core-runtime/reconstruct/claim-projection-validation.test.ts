@@ -716,7 +716,7 @@ describe("claim projection validation", () => {
       .toContain("derived_claim_mismatch");
   });
 
-  it("rejects actionable completion claims backed by mock execution", () => {
+  it("accepts actionable completion claims backed by direct-call execution", () => {
     const artifact = projection();
     const validation = validateClaimProjection({
       claimProjection: artifact,
@@ -727,14 +727,13 @@ describe("claim projection validation", () => {
       })),
       executionProfileTruth: {
         reconstructRunManifestRef: "reconstruct-run-manifest.yaml",
-        semanticAuthorRealization: "mock",
+        semanticAuthorRealization: "direct_call",
         confirmationProviderRealization: "direct_call",
       },
     });
 
-    expect(validation.validation_status).toBe("invalid");
-    expect(validation.violations.map((violation) => violation.code))
-      .toContain("mock_backed_completion_claim");
+    expect(validation.validation_status).toBe("valid");
+    expect(validation.violations).toEqual([]);
   });
 
   it("rejects claim projection without execution profile authority", () => {

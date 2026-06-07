@@ -102,45 +102,103 @@ describe("buildReviewContinuationPlan", () => {
     ]);
   });
 
-  it("recomputes every deliberation response downstream of a rerun lens", () => {
+  it("recomputes issue-scoped deliberation responses downstream of a rerun lens", () => {
     const plan = buildReviewContinuationPlan({
       ledger: ledger([
         trusted("logic"),
         unit("coverage", {
           status: "failed",
           trustStatus: "untrusted",
-          downstreamUnitIds: ["finding-ledger", "deliberation-logic", "deliberation-coverage"],
+          downstreamUnitIds: ["finding-ledger"],
         }),
         unit("finding-ledger", {
           unitKind: "issue_artifact",
           status: "not_reached",
           trustStatus: "blocked_by_upstream",
           upstreamUnitIds: ["logic", "coverage"],
-          downstreamUnitIds: ["deliberation-logic", "deliberation-coverage"],
+          downstreamUnitIds: ["deliberation-plan"],
         }),
-        unit("deliberation-logic", {
+        unit("deliberation-plan", {
+          unitKind: "issue_artifact",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["finding-ledger"],
+          downstreamUnitIds: [
+            "deliberation:issue-001:logic",
+            "deliberation:issue-001:coverage",
+          ],
+        }),
+        unit("deliberation:issue-001:logic", {
           unitKind: "deliberation",
           status: "not_reached",
           trustStatus: "blocked_by_upstream",
-          upstreamUnitIds: ["finding-ledger", "logic", "coverage"],
+          upstreamUnitIds: ["deliberation-plan"],
         }),
-        unit("deliberation-coverage", {
+        unit("deliberation:issue-001:coverage", {
           unitKind: "deliberation",
           status: "not_reached",
           trustStatus: "blocked_by_upstream",
-          upstreamUnitIds: ["finding-ledger", "logic", "coverage"],
+          upstreamUnitIds: ["deliberation-plan"],
         }),
       ]),
-      targetUnits: ["lens:coverage"],
+      targetUnits: ["coverage"],
     });
 
     expect(plan.eligible).toBe(true);
     expect(plan.frontierUnits.map((unit) => unit.unitId)).toEqual(["coverage"]);
     expect(plan.downstreamUnits.map((unit) => unit.unitId)).toEqual([
       "finding-ledger",
-      "deliberation-logic",
-      "deliberation-coverage",
+      "deliberation-plan",
+      "deliberation:issue-001:logic",
+      "deliberation:issue-001:coverage",
     ]);
+  });
+
+  it("accepts exact issue-scoped deliberation unit ids as continuation targets", () => {
+    const plan = buildReviewContinuationPlan({
+      ledger: ledger([
+        trusted("deliberation-plan"),
+        unit("deliberation:issue-001:logic", {
+          unitKind: "deliberation",
+          status: "failed",
+          trustStatus: "untrusted",
+          upstreamUnitIds: ["deliberation-plan"],
+          downstreamUnitIds: ["controlled-deliberation"],
+        }),
+        unit("controlled-deliberation", {
+          unitKind: "deliberation",
+          status: "not_reached",
+          trustStatus: "blocked_by_upstream",
+          upstreamUnitIds: ["deliberation:issue-001:logic"],
+        }),
+      ]),
+      targetUnits: ["deliberation:issue-001:logic"],
+    });
+
+    expect(plan.eligible).toBe(true);
+    expect(plan.frontierUnits).toMatchObject([
+      {
+        unitId: "deliberation:issue-001:logic",
+        dispatchDecision: "run",
+      },
+    ]);
+    expect(plan.downstreamUnits.map((unit) => unit.unitId)).toEqual([
+      "controlled-deliberation",
+    ]);
+  });
+
+  it("rejects public target aliases instead of rewriting them", () => {
+    const plan = buildReviewContinuationPlan({
+      ledger: ledger([unit("logic")]),
+      targetUnits: ["lens:logic"],
+    });
+
+    expect(plan.eligible).toBe(false);
+    expect(plan.frontierUnits[0]).toMatchObject({
+      unitId: "lens:logic",
+      dispatchDecision: "reject",
+      reason: "Target unit is not present in the pipeline execution ledger.",
+    });
   });
 
   it("rejects target units that are already trusted", () => {

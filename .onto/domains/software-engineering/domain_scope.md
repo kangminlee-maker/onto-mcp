@@ -11,9 +11,9 @@ This document is the coverage and axiology entrypoint for the `software-engineer
 domain. It defines what a software review must be able to notice.
 
 `software-engineering` is the canonical domain for conventional software engineering,
-AI-assisted development, and LLM-powered product/runtime behavior. The former
-`llm-native-development` domain is a compatibility alias only. A reviewer should not
-run a second domain review to cover AI behavior; this domain activates AI-era concerns
+AI-assisted development, and LLM-powered product/runtime behavior. Retired domain
+tokens are not canonical inputs. A reviewer should not run a second domain review
+to cover AI behavior; this domain activates AI-era concerns
 when the target uses LLMs, agents, model providers, prompt/context contracts, retrieval,
 semantic evaluation, AI-assisted workflows, or tool-call boundaries.
 

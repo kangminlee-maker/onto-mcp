@@ -136,7 +136,7 @@ artifact seat를 중심으로 구성한다.
   - `interpretation.yaml`
   - `binding.yaml`
 - output:
-  - `round1/logic.md`
+  - `round1/logic.findings.yaml`
 
 ### 3.4 declared boundary elements
 
@@ -188,8 +188,8 @@ artifact seat를 중심으로 구성한다.
 
 예:
 
-- `round1/logic.md`
-- `synthesis.md`
+- `round1/logic.findings.yaml`
+- `synthesis-ledger.yaml`
 
 #### exploration boundary
 
@@ -256,9 +256,9 @@ boundary_policy:
   filesystem_scope:
     allowed_roots:
       - /repo-a
-  write_policy:
-    allowed_outputs:
-      - round1/logic.md
+	  write_policy:
+	    allowed_outputs:
+	      - round1/logic.findings.yaml
 ```
 
 #### `BoundaryPresentation`
@@ -373,7 +373,7 @@ declared boundary는 아래 방식으로 제시할 수 있다.
 
 - `materialized input` -> embed
 - `binding.yaml` -> ref
-- `round1/logic.md` -> output seat
+- `round1/logic.findings.yaml` -> output seat
 - `repo 내부 탐색 허용, web 금지` -> bounded policy statement
 
 ### 3.10 embed vs ref criteria
@@ -404,7 +404,7 @@ declared boundary는 아래 방식으로 제시할 수 있다.
 - `interpretation.yaml`
 - `binding.yaml`
 - `context-candidate-assembly.yaml`
-- `round1/{lens}.md`
+- `round1/{lens}.findings.yaml`
 
 #### embed하면 안 되는 것
 
@@ -458,21 +458,22 @@ packet이 가리키는 파일 집합이 interface boundary다.
 
 예:
 
-- `logic` -> `round1/logic.md`
-- `axiology` -> `round1/axiology.md`
-- `synthesize` -> `synthesis.md`
+- `logic` -> `round1/logic.findings.yaml`
+- `axiology` -> `round1/axiology.findings.yaml`
+- `synthesize` -> `synthesis-ledger.yaml`
 
 runtime은 이 output seat의 존재/비어있지 않음을 검사할 수는 있지만,
 그 의미를 다시 써서는 안 된다.
 
-### 3.14 human-readable source layer와 primary artifact를 분리
+### 3.14 machine source layer와 human-readable projection을 분리
 
-`LLM` output은 우선 human-readable/source layer로 남을 수 있다.
+Structured output이 필요한 단계에서는 `LLM` output이 machine source layer로
+고정되고, human-readable 문서는 runtime projection으로 남는다.
 
 예:
 
-- `round1/*.md`
-- `synthesis.md`
+- `round1/*.findings.yaml` -> optional `round1/*.md` projection
+- `synthesis-ledger.yaml` -> `synthesis.md` projection
 
 그 다음 runtime이 deterministic하게 아래를 조립한다.
 
@@ -592,14 +593,14 @@ input:
 
 output:
 
-1. `round1/{lens}.md`
+1. `round1/{lens}.findings.yaml`
 
 ### 5.2 runtime -> synthesize
 
 input:
 
 1. `materialized input`
-2. participating `round1/{lens}.md` refs
+2. participating `round1/{lens}.findings.yaml` refs
 3. optional refs:
    - `interpretation.yaml`
    - `binding.yaml`
@@ -614,13 +615,14 @@ input:
 
 output:
 
-1. `synthesis.md`
+1. `synthesis-ledger.yaml`
+2. optional deterministic `synthesis.md` projection
 
 ### 5.3 runtime after LLM
 
 input:
 
-1. `synthesis.md`
+1. `synthesis-ledger.yaml`
 2. `binding.yaml`
 3. `session-metadata.yaml`
 

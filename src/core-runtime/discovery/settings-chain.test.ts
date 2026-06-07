@@ -32,6 +32,47 @@ function fullOauthLlm(effort: string): Record<string, string> {
   };
 }
 
+function v3ReviewSettings(args?: {
+  effort?: string;
+  topology?: "main-workers" | "nested-workers";
+  teamleadSeat?: "main" | "worker";
+  synthesizeLlm?: unknown;
+}): Record<string, any> {
+  const effort = args?.effort ?? "medium";
+  return {
+    schema_version: "settings.json/v3",
+    review: {
+      mode: "core-axis",
+      domains: ["software-engineering"],
+      context: {
+        excluded_names: [".turbo"],
+        max_listing_depth: 4,
+        max_listing_entries: 250,
+        max_embed_lines: 120,
+      },
+      execution: {
+        executor: "auto",
+        topology: args?.topology ?? "main-workers",
+        deliberation: "controlled-lens-deliberation",
+        actors: {
+          teamlead: {
+            seat: args?.teamleadSeat ?? "main",
+            llm: fullOauthLlm(effort),
+          },
+          lens: {
+            seat: "worker",
+            llm: fullOauthLlm(effort),
+          },
+          synthesize: {
+            seat: "worker",
+            llm: args?.synthesizeLlm ?? fullOauthLlm("xhigh"),
+          },
+        },
+      },
+    },
+  };
+}
+
 describe("resolveSettingsChain", () => {
   beforeEach(() => {
     scratchRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-settings-"));
@@ -46,168 +87,125 @@ describe("resolveSettingsChain", () => {
     fs.rmSync(scratchRoot, { recursive: true, force: true });
   });
 
-  it("merges user defaults and project settings", async () => {
+  it("merges v3 user defaults and project actor-owned settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(userSettingsPath(), {
-      domains: ["software-engineering"],
-      llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "gpt-5.5",
-        effort: "medium",
-      },
-    });
+    writeJson(userSettingsPath(), v3ReviewSettings({ effort: "low" }));
     writeJson(projectSettingsPath(projectRoot), {
-      domains: ["ontology"],
-      review_mode: "full",
-      llm: {
-        service_tier: "fast",
-      },
+      ...v3ReviewSettings({ effort: "high" }),
       review: {
-        execution: {
-          mode: "main-workers",
+        ...v3ReviewSettings({ effort: "high" }).review,
+        mode: "full",
+        domains: ["ontology"],
+        artifacts: {
+          lens_output_format: "sidecar",
+          write_lens_markdown: false,
         },
       },
     });
 
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
-    expect(settings.domains).toEqual(["ontology"]);
+    expect(settings.schema_version).toBe("settings.json/v3");
+    expect(settings.llm).toBeUndefined();
     expect(settings.review_mode).toBe("full");
-    expect(settings.llm?.model).toBe("gpt-5.5");
-    expect(settings.llm?.effort).toBe("medium");
-    expect(settings.llm?.service_tier).toBe("fast");
-    expect(settings.review?.execution?.mode).toBe("main-workers");
+    expect(settings.domains).toEqual(["ontology"]);
+    expect(settings.max_listing_depth).toBe(4);
+    expect(settings.review?.execution?.executor).toBe("auto");
     expect(settings.review?.execution?.teamlead?.seat).toBe("main");
     expect(settings.review?.execution?.lens?.seat).toBe("worker");
-    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
-    expect(settings.review?.execution?.synthesize?.llm).toBe("inherit");
+    expect(settings.review?.execution?.teamlead?.llm).toEqual(fullOauthLlm("high"));
+    expect(settings.review?.execution?.synthesize?.llm).toEqual(
+      fullOauthLlm("xhigh"),
+    );
+    expect(settings.review?.artifacts).toEqual({
+      lens_output_format: "sidecar",
+      write_lens_markdown: false,
+    });
   });
 
-  it("normalizes v2 settings into the runtime projection", async () => {
+  it("accepts v3 review actor llm settings that omit auth and default to OAuth", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v2",
-      llm: {
-        default: {
-          auth: "oauth",
-          provider: "openai",
-          model: "gpt-5.5",
-          effort: "medium",
-          service_tier: "fast",
-        },
-      },
+      ...v3ReviewSettings(),
       review: {
-        mode: "core-axis",
-        domains: ["software-engineering"],
-        context: {
-          excluded_names: [".turbo"],
-          max_listing_depth: 4,
-          max_listing_entries: 250,
-          max_embed_lines: 120,
-        },
+        ...v3ReviewSettings().review,
         execution: {
-          executor: "codex",
-          topology: "main-workers",
+          ...v3ReviewSettings().review.execution,
           actors: {
-            teamlead: { seat: "main" },
-            lens: { seat: "worker" },
+            teamlead: {
+              seat: "main",
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "medium",
+                service_tier: "fast",
+              },
+            },
+            lens: {
+              seat: "worker",
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "medium",
+                service_tier: "fast",
+              },
+            },
             synthesize: {
               seat: "worker",
-              llm: { effort: "xhigh" },
+              llm: {
+                provider: "openai",
+                model: "gpt-5.5",
+                effort: "xhigh",
+                service_tier: "fast",
+              },
             },
           },
-          deliberation: "controlled-lens-deliberation",
         },
       },
     });
 
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
-    expect(settings.schema_version).toBe("settings.json/v2");
-    expect(settings.llm?.model).toBe("gpt-5.5");
-    expect(settings.review_mode).toBe("core-axis");
-    expect(settings.domains).toEqual(["software-engineering"]);
-    expect(settings.max_listing_depth).toBe(4);
-    expect(settings.review?.mode).toBe("core-axis");
-    expect(settings.review?.context?.excluded_names).toEqual([".turbo"]);
-    expect(settings.review?.execution?.executor).toBe("codex");
-    expect(settings.review?.execution?.mode).toBe("main-workers");
-    expect(settings.review?.execution?.synthesize?.llm).toEqual({
-      effort: "xhigh",
-    });
+    expect(settings.review?.execution?.teamlead?.llm?.auth).toBeUndefined();
+    expect(settings.review?.execution?.teamlead?.llm?.provider).toBe("openai");
   });
 
-  it("parses commented v3 settings with actor-owned full llm blocks", async () => {
+  it("parses commented v3 settings with reconstruct actor llm blocks", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeText(
       projectSettingsPath(projectRoot),
       `# Project-local onto settings.
 {
-  # v3 keeps model settings inside each actor.
   "schema_version": "settings.json/v3",
   "review": {
-    # Use the cheaper review mode for this fixture.
-    "mode": "core-axis",
     "execution": {
-      # Let runtime choose Codex vs direct-call.
-      "executor": "auto",
-      "topology": "main-workers",
       "actors": {
-        "teamlead": {
-          "seat": "main",
-          "llm": {
-            "auth": "oauth",
-            "provider": "openai",
-            "model": "gpt-5.5",
-            "effort": "medium",
-            "service_tier": "fast"
-          }
-        },
-        "lens": {
-          "seat": "worker",
-          "llm": {
-            "auth": "oauth",
-            "provider": "openai",
-            "model": "gpt-5.5",
-            "effort": "medium",
-            "service_tier": "fast"
-          }
-        },
-        "synthesize": {
-          "seat": "worker",
-          "llm": {
-            "auth": "oauth",
-            "provider": "openai",
-            "model": "gpt-5.5",
-            "effort": "xhigh",
-            "service_tier": "fast"
-          }
-        }
+        "teamlead": { "seat": "main", "llm": {
+          "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
+          "effort": "medium", "service_tier": "fast"
+        } },
+        "lens": { "seat": "worker", "llm": {
+          "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
+          "effort": "medium", "service_tier": "fast"
+        } },
+        "synthesize": { "seat": "worker", "llm": {
+          "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
+          "effort": "medium", "service_tier": "fast"
+        } }
       }
     }
   },
   "reconstruct": {
     "execution": {
       "actors": {
-        "semantic_author": {
-          "llm": {
-            "auth": "oauth",
-            "provider": "openai",
-            "model": "gpt-5.5",
-            "effort": "high",
-            "service_tier": "fast"
-          }
-        },
-        "confirmation_provider": {
-          "llm": {
-            "auth": "oauth",
-            "provider": "openai",
-            "model": "gpt-5.5",
-            "effort": "medium",
-            "service_tier": "fast"
-          }
-        }
+        "semantic_author": { "llm": {
+          "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
+          "effort": "medium", "service_tier": "fast"
+        } },
+        "confirmation_provider": { "llm": {
+          "auth": "oauth", "provider": "openai", "model": "gpt-5.5",
+          "effort": "medium", "service_tier": "fast"
+        } }
       }
     }
   }
@@ -218,146 +216,170 @@ describe("resolveSettingsChain", () => {
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
     expect(settings.schema_version).toBe("settings.json/v3");
-    expect(settings.llm).toBeUndefined();
-    expect(settings.review_mode).toBe("core-axis");
     expect(settings.review?.execution?.teamlead?.llm).toEqual(
       fullOauthLlm("medium"),
     );
-    expect(settings.review?.execution?.lens?.llm).toEqual(fullOauthLlm("medium"));
-    expect(settings.review?.execution?.synthesize?.llm).toEqual(
-      fullOauthLlm("xhigh"),
-    );
-    expect(settings.reconstruct?.execution?.actors?.semantic_author?.llm)
-      .toEqual(fullOauthLlm("high"));
-    expect(settings.reconstruct?.execution?.actors?.confirmation_provider?.llm)
-      .toEqual(fullOauthLlm("medium"));
-  });
-
-  it("resolves reconstruct v3 actor llm settings without using a root llm", async () => {
-    const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v3",
-      reconstruct: {
-        execution: {
-          actors: {
-            semantic_author: { llm: fullOauthLlm("high") },
-            confirmation_provider: { llm: fullOauthLlm("medium") },
-          },
-        },
-      },
-    });
-
-    const settings = await resolveSettingsChain("/unused", projectRoot);
-
-    expect(settings.llm).toBeUndefined();
     expect(resolveReconstructActorLlmSettings(settings, "semantic_author"))
-      .toEqual(fullOauthLlm("high"));
+      .toEqual(fullOauthLlm("medium"));
     expect(resolveReconstructActorLlmSettings(settings, "confirmation_provider"))
       .toEqual(fullOauthLlm("medium"));
   });
 
-  it("drops legacy root llm when project settings select v3 actor-owned llm", async () => {
+  it("parses review execution retry settings from v3 settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(userSettingsPath(), {
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      lens_max_retries: 7,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 5,
+      synthesis_max_retries: 1,
+      retry_initial_delay_ms: 250,
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry).toEqual({
+      lens_max_retries: 7,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 5,
+      synthesis_max_retries: 1,
+      retry_initial_delay_ms: 250,
+    });
+  });
+
+  it("materializes partial review retry settings into an effective policy", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.retry = {
+      lens_max_retries: 3,
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.retry).toEqual({
+      lens_max_retries: 3,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 2,
+      synthesis_max_retries: 2,
+      retry_initial_delay_ms: 3000,
+    });
+  });
+
+  it("parses review max_concurrent_lenses from project settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.max_concurrent_lenses = 3;
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.max_concurrent_lenses).toBe(3);
+  });
+
+  it("parses and merges review unit execution settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const userSettings = v3ReviewSettings();
+    userSettings.review.execution.units = {
+      lens: {
+        llm: { effort: "high" },
+        max_tokens: 9000,
+        tool_mode: "auto",
+        timeout_ms: 300000,
+        max_retries: 2,
+        retry_initial_delay_ms: 1000,
+        max_output_bytes: 262144,
+      },
+    };
+    const projectSettings = v3ReviewSettings();
+    projectSettings.review.execution.units = {
+      lens: {
+        llm: { model: "gpt-5.5-review", effort: "xhigh" },
+        max_tokens: 12000,
+      },
+      issue_stance_matrix: {
+        timeout_ms: 120000,
+        max_output_bytes: 65536,
+      },
+    };
+    writeJson(userSettingsPath(), userSettings);
+    writeJson(projectSettingsPath(projectRoot), projectSettings);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.units?.lens).toEqual({
       llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "legacy-root-model",
-        effort: "low",
+        effort: "xhigh",
+        model: "gpt-5.5-review",
       },
+      max_tokens: 12000,
+      tool_mode: "auto",
+      timeout_ms: 300000,
+      max_retries: 2,
+      retry_initial_delay_ms: 1000,
+      max_output_bytes: 262144,
     });
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v3",
-      reconstruct: {
-        execution: {
-          actors: {
-            semantic_author: { llm: fullOauthLlm("high") },
-          },
-        },
-      },
+    expect(settings.review?.execution?.units?.issue_stance_matrix).toEqual({
+      timeout_ms: 120000,
+      max_output_bytes: 65536,
     });
-
-    const settings = await resolveSettingsChain("/unused", projectRoot);
-
-    expect(settings.schema_version).toBe("settings.json/v3");
-    expect(settings.llm).toBeUndefined();
-    expect(resolveReconstructActorLlmSettings(settings, "semantic_author"))
-      .toEqual(fullOauthLlm("high"));
   });
 
-  it("fails loudly when reconstruct direct-call asks for missing v3 actor llm settings", async () => {
+  it("allows absent settings files without manufacturing legacy defaults", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v3",
-      review: {
-        execution: {
-          actors: {
-            teamlead: { seat: "main", llm: fullOauthLlm("medium") },
-          },
-        },
-      },
-    });
 
     const settings = await resolveSettingsChain("/unused", projectRoot);
 
-    expect(settings.llm).toBeUndefined();
-    expect(() => resolveReconstructActorLlmSettings(settings, "semantic_author"))
-      .toThrow("reconstruct.execution.actors.semantic_author.llm is required");
+    expect(settings).toEqual({});
   });
 
-  it("replaces v3 actor llm blocks instead of overlaying them", async () => {
+  it("fails loudly when settings.json omits the v3 schema version", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(userSettingsPath(), {
-      schema_version: "settings.json/v3",
-      review: {
-        execution: {
-          actors: {
-            synthesize: {
-              seat: "worker",
-              llm: fullOauthLlm("xhigh"),
-            },
-          },
-        },
-      },
-    });
     writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v3",
-      review: {
-        execution: {
-          actors: {
-            synthesize: {
-              llm: {
-                auth: "api_key",
-                provider: "anthropic",
-                model: "claude-sonnet-4-6",
-                effort: "high",
-              },
-            },
-          },
-        },
-      },
+      review_mode: "full",
+      llm: fullOauthLlm("medium"),
     });
 
-    const settings = await resolveSettingsChain("/unused", projectRoot);
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Retired onto settings schema detected",
+    );
+  });
 
-    expect(settings.llm).toBeUndefined();
-    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
-    expect(settings.review?.execution?.synthesize?.llm).toEqual({
-      auth: "api_key",
-      provider: "anthropic",
-      model: "claude-sonnet-4-6",
-      effort: "high",
+  it("fails loudly when settings.json declares v2", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v2",
+      llm: { default: fullOauthLlm("medium") },
     });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Expected schema_version: settings.json/v3",
+    );
   });
 
   it("rejects root llm in v3 settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
       schema_version: "settings.json/v3",
-      llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "gpt-5.5",
+      llm: fullOauthLlm("medium"),
+    });
+
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Invalid onto settings",
+    );
+  });
+
+  it("rejects actor llm inheritance in v3 settings", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), {
+      schema_version: "settings.json/v3",
+      review: {
+        execution: {
+          actors: {
+            teamlead: { seat: "main", llm: "inherit" },
+          },
+        },
       },
     });
 
@@ -366,204 +388,101 @@ describe("resolveSettingsChain", () => {
     );
   });
 
-  it("keeps user execution settings when project v2 only changes review mode", async () => {
+  it("rejects partial actor llm blocks in v3 settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(userSettingsPath(), {
-      schema_version: "settings.json/v2",
-      llm: {
-        default: {
-          auth: "oauth",
-          provider: "openai",
-          model: "gpt-5.5",
-        },
-      },
-      review: {
-        execution: {
-          executor: "codex",
-          topology: "nested-workers",
-          actors: {
-            teamlead: {
-              seat: "worker",
-              llm: { effort: "high" },
-            },
-            lens: { seat: "worker" },
-            synthesize: {
-              seat: "worker",
-              llm: { effort: "xhigh" },
-            },
-          },
-        },
-      },
-    });
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v2",
-      review: {
-        mode: "core-axis",
-      },
-    });
+    writeJson(
+      projectSettingsPath(projectRoot),
+      v3ReviewSettings({ synthesizeLlm: { effort: "xhigh" } }),
+    );
 
-    const settings = await resolveSettingsChain("/unused", projectRoot);
-
-    expect(settings.review_mode).toBe("core-axis");
-    expect(settings.review?.execution?.executor).toBe("codex");
-    expect(settings.review?.execution?.mode).toBe("nested-workers");
-    expect(settings.review?.execution?.teamlead?.seat).toBe("worker");
-    expect(settings.review?.execution?.teamlead?.llm).toEqual({
-      effort: "high",
-    });
-    expect(settings.review?.execution?.synthesize?.llm).toEqual({
-      effort: "xhigh",
-    });
+    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
+      "Invalid onto settings",
+    );
   });
 
   it("fails loudly when unsupported YAML config exists", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     fs.mkdirSync(path.join(projectRoot, ".onto"), { recursive: true });
-    fs.writeFileSync(path.join(projectRoot, ".onto", `config.${"yml"}`), "review_mode: full\n");
+    fs.writeFileSync(
+      path.join(projectRoot, ".onto", `config.${"yml"}`),
+      "review_mode: full\n",
+    );
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
       "Unsupported onto config file detected",
     );
   });
 
-  it("rejects old review axis keys in settings.json", async () => {
-    const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      review: {
-        teamlead: { model: "main" },
-      },
-    });
-
-    await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "Invalid onto settings",
-    );
-  });
-
   it("validates nested-workers seat constraints", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v2",
-      review: {
-        execution: {
-          topology: "nested-workers",
-          actors: {
-            teamlead: { seat: "main" },
-            lens: { seat: "worker" },
-          },
-        },
-      },
-    });
+    writeJson(
+      projectSettingsPath(projectRoot),
+      v3ReviewSettings({ topology: "nested-workers", teamleadSeat: "main" }),
+    );
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
       "nested-workers requires review.execution.actors.teamlead.seat=worker",
     );
   });
 
-  it("merges synthesize actor settings independently", async () => {
-    const projectRoot = path.join(scratchRoot, "project");
-    writeJson(userSettingsPath(), {
-      llm: {
-        auth: "oauth",
-        provider: "openai",
-        model: "gpt-5.5",
-        effort: "medium",
-      },
-      review: {
-        execution: {
-          mode: "main-workers",
-          synthesize: {
-            seat: "worker",
-            llm: {
-              auth: "oauth",
-              provider: "openai",
-              model: "gpt-5.5",
-              effort: "xhigh",
-              service_tier: "fast",
-            },
-          },
-        },
-      },
-    });
-    writeJson(projectSettingsPath(projectRoot), {
-      review: {
-        execution: {
-          synthesize: {
-            seat: "worker",
-            llm: {
-              effort: "high",
-            },
-          },
-        },
-      },
-    });
-
-    const settings = await resolveSettingsChain("/unused", projectRoot);
-
-    expect(settings.review?.execution?.synthesize?.seat).toBe("worker");
-    expect(settings.review?.execution?.synthesize?.llm).toEqual({
-      auth: "oauth",
-      provider: "openai",
-      model: "gpt-5.5",
-      effort: "high",
-      service_tier: "fast",
-    });
-  });
-
-  it("requires synthesize seat to stay worker", async () => {
+  it("rejects disabling lens markdown outside sidecar artifact mode", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v2",
+      ...v3ReviewSettings(),
       review: {
-        execution: {
-          actors: {
-            synthesize: { seat: "main" },
-          },
+        ...v3ReviewSettings().review,
+        artifacts: {
+          lens_output_format: "markdown",
+          write_lens_markdown: false,
         },
       },
     });
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "review.execution.actors.synthesize.seat must be worker",
+      "write_lens_markdown=false requires lens_output_format=sidecar",
     );
   });
 
-  it("requires legacy actor llm partials to inherit from a legacy root llm", async () => {
+  it("rejects service_tier outside codex OAuth actor settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      schema_version: "settings.json/v2",
-      review: {
-        execution: {
-          actors: {
-            synthesize: {
-              seat: "worker",
-              llm: {
-                effort: "xhigh",
-              },
-            },
-          },
+    writeJson(
+      projectSettingsPath(projectRoot),
+      v3ReviewSettings({
+        synthesizeLlm: {
+          auth: "api_key",
+          provider: "openai",
+          model: "gpt-5.5",
+          effort: "medium",
+          service_tier: "fast",
         },
-      },
-    });
+      }),
+    );
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "review.execution.actors.synthesize.llm must provide provider/auth fields or use a legacy inherited llm setting",
+      "service_tier requires the external OAuth worker route",
     );
   });
 
-  it("rejects service_tier outside codex OAuth settings", async () => {
+  it("validates unit llm overrides against their effective actor route", async () => {
     const projectRoot = path.join(scratchRoot, "project");
-    writeJson(projectSettingsPath(projectRoot), {
-      llm: {
+    const settingsDoc = v3ReviewSettings({
+      synthesizeLlm: {
         auth: "api_key",
         provider: "openai",
         model: "gpt-5.5",
-        effort: "medium",
-        service_tier: "fast",
       },
     });
+    settingsDoc.review.execution.units = {
+      synthesis_response: {
+        llm: {
+          service_tier: "fast",
+        },
+      },
+    };
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
 
     await expect(resolveSettingsChain("/unused", projectRoot)).rejects.toThrow(
-      "service_tier is codex-only",
+      "review.execution.units.synthesis_response.llm is invalid",
     );
   });
 });

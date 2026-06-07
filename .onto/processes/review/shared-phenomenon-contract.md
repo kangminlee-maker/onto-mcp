@@ -71,7 +71,7 @@ co-located claim들은 의미적으로 `corroboration`, `disagreement`, `partial
 
 | 필드 | 설명 | producer | consumer |
 |---|---|---|---|
-| `target` | 검토 대상의 식별자 | lens output (round1/*.md) | synthesize, ReviewRecord |
+| `target` | 검토 대상의 식별자 | lens output (`round1/*.findings.yaml` in sidecar mode) | synthesize, ReviewRecord |
 | `evidence_anchor` | evidence locus의 직렬화 형식 (파일경로:라인, §번호 등) | lens output | synthesize, ReviewRecord |
 | `claim` | what + severity + direction | lens output | synthesize, ReviewRecord |
 | `lens_id` | claim을 제기한 lens | lens output (자동 부여) | synthesize, ReviewRecord |

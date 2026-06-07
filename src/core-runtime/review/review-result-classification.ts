@@ -30,6 +30,13 @@ const MATERIAL_SEVERITIES = new Set<ReviewFindingSeverity>([
   "medium",
 ]);
 
+export interface ReviewMaterialAdmissionContext {
+  issue_role?: unknown;
+  judgment_state?: unknown;
+  closure_class?: unknown;
+  closure_obligation?: unknown;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 export function isReviewFindingSeverity(
@@ -38,16 +45,39 @@ export function isReviewFindingSeverity(
   return typeof value === "string" && REVIEW_SEVERITY_VALUES.has(value as ReviewFindingSeverity);
 }
 
-export function normalizeReviewFindingSeverity(
+export function requireReviewFindingSeverity(
   value: unknown,
+  label: string,
 ): ReviewFindingSeverity {
   if (isReviewFindingSeverity(value)) return value;
-  if (value === "critical") return "blocker";
-  return "info";
+  throw new Error(`${label} must be one of: ${REVIEW_SEVERITY_ORDER.join(", ")}.`);
 }
 
 export function isMaterialSeverity(severity: ReviewFindingSeverity): boolean {
   return MATERIAL_SEVERITIES.has(severity);
+}
+
+export function isReviewMaterialAdmissionDisqualified(
+  context: ReviewMaterialAdmissionContext | null | undefined,
+): boolean {
+  const issueRole = stringValue(context?.issue_role);
+  const judgmentState = stringValue(context?.judgment_state);
+  const closureClass = stringValue(context?.closure_class);
+  const closureObligation = stringValue(context?.closure_obligation);
+  return issueRole === "evidence_gap" ||
+    judgmentState === "insufficient_evidence" ||
+    judgmentState === "outside_boundary" ||
+    closureClass === "needs_evidence" ||
+    closureClass === "watch" ||
+    closureObligation === "out_of_scope";
+}
+
+export function isAdmittedReviewMaterialIssue(
+  severity: ReviewFindingSeverity,
+  context: ReviewMaterialAdmissionContext | null | undefined,
+): boolean {
+  return isMaterialSeverity(severity) &&
+    !isReviewMaterialAdmissionDisqualified(context);
 }
 
 export function emptyReviewSeverityCounts(): Record<ReviewFindingSeverity, number> {
@@ -67,18 +97,31 @@ function incrementSeverityCount(
   counts[severity] += 1;
 }
 
-function records(value: unknown): UnknownRecord[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter(
-    (item): item is UnknownRecord =>
-      item !== null && typeof item === "object" && !Array.isArray(item),
-  );
+function requireRecordList(value: unknown, label: string): UnknownRecord[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a YAML list.`);
+  }
+  return value.map((item, index) => {
+    if (item !== null && typeof item === "object" && !Array.isArray(item)) {
+      return item as UnknownRecord;
+    }
+    throw new Error(`${label}[${index}] must be a YAML mapping.`);
+  });
 }
 
-function stringValue(value: unknown, fallback = ""): string {
+function artifactRecordList(
+  artifact: UnknownRecord | null,
+  fieldName: string,
+  label: string,
+): UnknownRecord[] {
+  if (!artifact) return [];
+  return requireRecordList(artifact[fieldName], label);
+}
+
+function stringValue(value: unknown, defaultValue = ""): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
-    : fallback;
+    : defaultValue;
 }
 
 function nullableStringValue(value: unknown): string | null {
@@ -115,7 +158,7 @@ function buildFindingEvidenceRefs(finding: UnknownRecord): string[] {
   return unique(refs);
 }
 
-function candidateFallbackForSeverity(
+function defaultCandidatesForSeverity(
   severity: ReviewFindingSeverity,
 ): ReviewActionCandidate[] {
   switch (severity) {
@@ -146,6 +189,25 @@ function deriveActionCandidates(args: {
 }): ReviewActionCandidate[] {
   const candidates: ReviewActionCandidate[] = [];
   const classification = args.classification;
+
+  if (stringValue(classification?.judgment_state) === "insufficient_evidence") {
+    return ["needs_evidence"];
+  }
+  if (stringValue(classification?.judgment_state) === "outside_boundary") {
+    return ["out_of_scope"];
+  }
+  if (stringValue(classification?.issue_role) === "evidence_gap") {
+    return ["needs_evidence"];
+  }
+  if (stringValue(classification?.closure_obligation) === "out_of_scope") {
+    return ["out_of_scope"];
+  }
+  if (stringValue(classification?.closure_class) === "needs_evidence") {
+    return ["needs_evidence"];
+  }
+  if (stringValue(classification?.closure_class) === "watch") {
+    return ["follow_up"];
+  }
 
   switch (classification?.timing_class) {
     case "current_blocker":
@@ -204,7 +266,7 @@ function deriveActionCandidates(args: {
 
   if (candidates.length > 0) return candidates;
   if (args.hasProblemFraming) return ["follow_up"];
-  return candidateFallbackForSeverity(args.severity);
+  return defaultCandidatesForSeverity(args.severity);
 }
 
 function actionRationale(args: {
@@ -226,7 +288,11 @@ function classificationMap(
   problemFraming: UnknownRecord | null,
 ): Map<string, UnknownRecord> {
   const map = new Map<string, UnknownRecord>();
-  for (const classification of records(problemFraming?.classifications)) {
+  for (const classification of artifactRecordList(
+    problemFraming,
+    "classifications",
+    "problem-framing.classifications",
+  )) {
     const issueId = stringValue(classification.issue_id);
     if (issueId.length > 0) map.set(issueId, classification);
   }
@@ -272,10 +338,16 @@ function sourceLensIdsForIssue(
   return unique(lensIds);
 }
 
-function severityCountsFor(recordsToCount: UnknownRecord[]): Record<ReviewFindingSeverity, number> {
+function severityCountsFor(
+  recordsToCount: UnknownRecord[],
+  label: string,
+): Record<ReviewFindingSeverity, number> {
   const counts = emptyReviewSeverityCounts();
-  for (const record of recordsToCount) {
-    incrementSeverityCount(counts, normalizeReviewFindingSeverity(record.severity));
+  for (const [index, record] of recordsToCount.entries()) {
+    incrementSeverityCount(
+      counts,
+      requireReviewFindingSeverity(record.severity, `${label}[${index}].severity`),
+    );
   }
   return counts;
 }
@@ -304,8 +376,11 @@ function projectionFromIssue(args: {
   classification: UnknownRecord | null;
   hasProblemFraming: boolean;
 }): ReviewResultIssueProjection {
-  const severity = normalizeReviewFindingSeverity(args.issue.severity);
   const issueId = stringValue(args.issue.issue_id, "issue-unknown");
+  const severity = requireReviewFindingSeverity(
+    args.issue.severity,
+    `issue-ledger issue ${issueId}.severity`,
+  );
   const issueStatement = stringValue(args.issue.issue_statement);
   const affectedPurpose = stringValue(
     args.issue.affected_purpose,
@@ -324,10 +399,19 @@ function projectionFromIssue(args: {
     classification: args.classification,
     hasProblemFraming: args.hasProblemFraming,
   });
+  const issueRole = stringValue(args.classification?.issue_role);
+  const judgmentState = stringValue(args.classification?.judgment_state);
+  const closureClass = stringValue(args.classification?.closure_class);
+  const closureObligation = stringValue(args.classification?.closure_obligation);
   const projection: ReviewResultIssueProjection = {
     issue_id: issueId,
     severity,
-    material: isMaterialSeverity(severity),
+    material: isAdmittedReviewMaterialIssue(severity, {
+      issue_role: issueRole,
+      judgment_state: judgmentState,
+      closure_class: closureClass,
+      closure_obligation: closureObligation,
+    }),
     affected_purpose: affectedPurpose,
     failure_condition: failureCondition,
     impact,
@@ -347,20 +431,21 @@ function projectionFromIssue(args: {
   const problemDefinition = stringValue(args.classification?.problem_definition);
   if (problemDefinition.length > 0) projection.problem_definition = problemDefinition;
   if (issueStatement.length > 0) projection.issue_statement = issueStatement;
+  if (issueRole.length > 0) projection.issue_role = issueRole;
   const timingClass = stringValue(args.classification?.timing_class);
   if (timingClass.length > 0) projection.timing_class = timingClass;
-  const closureClass = stringValue(args.classification?.closure_class);
   if (closureClass.length > 0) projection.closure_class = closureClass;
-  const closureObligation = stringValue(args.classification?.closure_obligation);
   if (closureObligation.length > 0) projection.closure_obligation = closureObligation;
-  const judgmentState = stringValue(args.classification?.judgment_state);
   if (judgmentState.length > 0) projection.judgment_state = judgmentState;
   return projection;
 }
 
 function projectionFromFinding(finding: UnknownRecord): ReviewResultIssueProjection {
-  const severity = normalizeReviewFindingSeverity(finding.severity);
   const findingId = stringValue(finding.finding_id, "finding-unknown");
+  const severity = requireReviewFindingSeverity(
+    finding.severity,
+    `finding-ledger finding ${findingId}.severity`,
+  );
   const claim = stringValue(finding.claim);
   const projection: ReviewResultIssueProjection = {
     issue_id: `finding:${findingId}`,
@@ -433,13 +518,17 @@ export async function readReviewResultClassification(
     path.join(sessionRoot, "execution-result.yaml"),
   );
 
-  const findings = records(findingLedger?.findings);
-  const issues = records(issueLedger?.issues);
+  const findings = artifactRecordList(
+    findingLedger,
+    "findings",
+    "finding-ledger.findings",
+  );
+  const issues = artifactRecordList(issueLedger, "issues", "issue-ledger.issues");
   const findingsById = findingMap(findings);
   const classificationsByIssueId = classificationMap(problemFraming);
   const hasProblemFraming = problemFraming !== null;
-  const findingSeverityCounts = severityCountsFor(findings);
-  const issueSeverityCounts = severityCountsFor(issues);
+  const findingSeverityCounts = severityCountsFor(findings, "finding-ledger.findings");
+  const issueSeverityCounts = severityCountsFor(issues, "issue-ledger.issues");
   const projectionSourceIsIssueLedger = issues.length > 0;
   const severityCounts = projectionSourceIsIssueLedger
     ? issueSeverityCounts

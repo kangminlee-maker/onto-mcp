@@ -6,7 +6,10 @@ import {
 
 const ReviewModeSchema = z.enum(["core-axis", "full"]);
 const ReviewTargetScopeKindSchema = z.enum(["file", "directory", "bundle"]);
-const ExecutorRealizationSchema = z.enum(["codex", "mock", "ts_inline_http"]);
+const ReviewExecutionRouteSchema = z.enum([
+  "external_oauth_worker",
+  "direct_model_call",
+]);
 const ReviewResultProjectionLevelSchema = z.enum(["compact", "standard", "full"]);
 const DeliberationModeSchema = z.enum([
   "controlled_lens_deliberation",
@@ -30,7 +33,7 @@ const OntoReviewToolInputBaseSchema = z.object({
   reviewMode: ReviewModeSchema.optional(),
   lensIds: z.array(z.string().min(1)).optional(),
   deliberation: DeliberationModeSchema.optional(),
-  executorRealization: ExecutorRealizationSchema.optional(),
+  executionRoute: ReviewExecutionRouteSchema.optional(),
   confirmValueAlignment: z.boolean().optional(),
   prepareOnly: z.boolean().optional(),
   returnRunningAfterMs: z.number().int().min(0).optional(),
@@ -59,6 +62,7 @@ export const OntoReviewStatusInputSchema = z.object({
   target: z.string().min(1).optional(),
   domain: z.string().min(1).optional(),
   requestHash: z.string().min(1).optional(),
+  createdAfter: z.string().min(1).optional(),
   limit: z.number().int().min(1).max(20).optional(),
   projectionLevel: z.enum(["compact", "standard", "full"]).optional(),
 }).strict().refine((input) => (
@@ -80,7 +84,7 @@ export const OntoReviewContinueToolInputSchema =
   OntoReviewSessionInputSchema.extend({
     targetUnits: z.array(z.string().min(1)).optional(),
     requestText: z.string().min(1).optional(),
-    executorRealization: ExecutorRealizationSchema.optional(),
+    executionRoute: ReviewExecutionRouteSchema.optional(),
   }).strict();
 
 export const OntoListDomainsToolInputSchema = z.object({
@@ -103,8 +107,8 @@ export const OntoReconstructToolInputSchema = OntoObserveSourceToolInputSchema.e
   intent: z.string().min(1),
   domain: ReconstructDomainIdSchema.optional(),
   resumeMode: z.enum(["fresh", "reuse_existing_authored_artifacts"]).optional(),
-  semanticAuthorRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
-  confirmationProviderRealization: z.enum(["mock", "direct_call"]).default("direct_call"),
+  semanticAuthorRealization: z.enum(["direct_call"]).default("direct_call"),
+  confirmationProviderRealization: z.enum(["direct_call"]).default("direct_call"),
 }).strict();
 
 export const OntoReconstructSessionInputSchema = z.object({

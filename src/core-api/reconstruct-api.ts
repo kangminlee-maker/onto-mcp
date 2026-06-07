@@ -27,10 +27,8 @@ import {
   assembleReconstructRecord,
 } from "../core-runtime/reconstruct/record.js";
 import {
-  createAutoAcceptReconstructConfirmationProvider,
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
-  createMockReconstructDirectiveAuthor,
   runReconstruct,
   type ReconstructRunResult,
 } from "../core-runtime/reconstruct/run.js";
@@ -82,8 +80,8 @@ export interface RunReconstructRequest extends PrepareReconstructRequest {
   intent: string;
   domain?: string;
   resumeMode?: "fresh" | "reuse_existing_authored_artifacts";
-  semanticAuthorRealization?: "mock" | "direct_call";
-  confirmationProviderRealization?: "mock" | "direct_call";
+  semanticAuthorRealization?: "direct_call";
+  confirmationProviderRealization?: "direct_call";
 }
 
 export interface PreparedReconstruct {
@@ -543,43 +541,35 @@ export function createOntoReconstructCoreApi(
       if (request.domain) {
         assertReconstructDomainId(request.domain, "reconstruct domain");
       }
-      const semanticAuthorLlmConfig = semanticAuthorRealization === "mock"
-        ? {}
-        : resolveLlmProviderConfig({
+      const semanticAuthorLlmConfig = resolveLlmProviderConfig({
+        config: {
+          llm: resolveReconstructActorLlmSettings(
+            settings,
+            "semantic_author",
+          ),
+        },
+      });
+      const confirmationProviderLlmConfig =
+        resolveLlmProviderConfig({
           config: {
             llm: resolveReconstructActorLlmSettings(
               settings,
-              "semantic_author",
+              "confirmation_provider",
             ),
           },
         });
-      const confirmationProviderLlmConfig =
-        confirmationProviderRealization === "mock"
-          ? {}
-          : resolveLlmProviderConfig({
-            config: {
-              llm: resolveReconstructActorLlmSettings(
-                settings,
-                "confirmation_provider",
-              ),
-            },
-          });
       const directiveAuthor =
-        semanticAuthorRealization === "mock"
-          ? createMockReconstructDirectiveAuthor()
-          : createDirectCallReconstructDirectiveAuthor({
-            llmConfig: semanticAuthorLlmConfig,
-          });
+        createDirectCallReconstructDirectiveAuthor({
+          llmConfig: semanticAuthorLlmConfig,
+        });
       const confirmationProvider =
-        confirmationProviderRealization === "mock"
-          ? createAutoAcceptReconstructConfirmationProvider()
-          : createDirectCallReconstructConfirmationProvider({
-            llmConfig: confirmationProviderLlmConfig,
-          });
+        createDirectCallReconstructConfirmationProvider({
+          llmConfig: confirmationProviderLlmConfig,
+        });
       appendRuntimeStatusEventSync({
         pipeline: "reconstruct",
         sessionRoot,
-        sourceLabel: "onto.reconstruct",
+        sourceLabel: "onto_reconstruct",
         message: "reconstruct session starting",
         stageId: "start",
       });
@@ -627,7 +617,7 @@ export function createOntoReconstructCoreApi(
         appendRuntimeStatusEventSync({
           pipeline: "reconstruct",
           sessionRoot,
-          sourceLabel: "onto.reconstruct",
+          sourceLabel: "onto_reconstruct",
           message: "reconstruct session completed",
           stageId: "complete",
         });
@@ -636,7 +626,7 @@ export function createOntoReconstructCoreApi(
         appendRuntimeStatusEventSync({
           pipeline: "reconstruct",
           sessionRoot,
-          sourceLabel: "onto.reconstruct",
+          sourceLabel: "onto_reconstruct",
           message: `reconstruct session failed: ${error instanceof Error ? error.message : String(error)}`,
           stageId: "complete",
         });

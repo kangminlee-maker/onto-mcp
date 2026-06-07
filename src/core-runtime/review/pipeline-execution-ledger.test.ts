@@ -9,7 +9,9 @@ import type {
   ReviewLensCompletionBarrierArtifact,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
+import type { ReviewRunManifestForLedger } from "./pipeline-execution-ledger.js";
 import { buildReviewPipelineExecutionLedger } from "./pipeline-execution-ledger.js";
+import { fileSha256IfPresent } from "../pipeline-execution-ledger.js";
 
 const tempRoots: string[] = [];
 
@@ -43,7 +45,6 @@ function outputName(artifactId: ReviewIssueArtifactId): string {
 function executionPlan(root: string, lensIds = ["logic", "coverage"]): ReviewExecutionPlan {
   const promptRoot = path.join(root, "prompt-packets");
   const round1Root = path.join(root, "round1");
-  const deliberationRoundRoot = path.join(root, "deliberation", "round1");
   return {
     session_id: path.basename(root),
     session_root: root,
@@ -70,16 +71,10 @@ function executionPlan(root: string, lensIds = ["logic", "coverage"]): ReviewExe
       packet_path: path.join(promptRoot, `${artifactId}.prompt.md`),
       output_path: path.join(root, outputName(artifactId)),
     })),
-    lens_deliberation_prompt_packet_seats: lensIds.map((lensId) => ({
-      lens_id: lensId,
-      packet_path: path.join(promptRoot, `deliberation-${lensId}.prompt.md`),
-      output_path: path.join(deliberationRoundRoot, `${lensId}.md`),
-    })),
     teamlead_deliberation_prompt_packet_path: path.join(
       promptRoot,
       "controlled-deliberation.prompt.md",
     ),
-    synthesize_prompt_packet_path: path.join(promptRoot, "synthesize.prompt.md"),
     review_target_profile_path: path.join(
       root,
       "execution-preparation",
@@ -162,26 +157,36 @@ function executionResult(plan: ReviewExecutionPlan): ReviewExecutionResultArtifa
         result(seat.artifact_id, "issue_artifact", seat.packet_path, seat.output_path),
       ),
     deliberation_execution_results: [
-      ...plan.lens_deliberation_prompt_packet_seats.map((seat) =>
+      ...plan.lens_prompt_packet_seats.map((seat) =>
         result(
-          `deliberation-${seat.lens_id}`,
+          `deliberation:issue-001:${seat.lens_id}`,
           "deliberation",
-          seat.packet_path,
-          seat.output_path,
+          path.join(
+            plan.prompt_packets_root,
+            "deliberation",
+            "issue-001",
+            `${seat.lens_id}.prompt.md`,
+          ),
+          path.join(
+            plan.deliberation_root_path,
+            "responses",
+            "issue-001",
+            `${seat.lens_id}.yaml`,
+          ),
         ),
       ),
       result(
         "controlled-deliberation",
         "deliberation",
         plan.teamlead_deliberation_prompt_packet_path,
-        plan.deliberation_output_path,
+        path.join(plan.session_root, "deliberation-resolution.yaml"),
       ),
     ],
     synthesize_execution_result: result(
       "synthesize",
       "synthesize",
-      plan.synthesize_prompt_packet_path,
-      plan.synthesis_output_path,
+      path.join(plan.session_root, "synthesis-work-items.yaml"),
+      path.join(plan.session_root, "synthesis-ledger.yaml"),
     ),
   };
 }
@@ -218,6 +223,7 @@ describe("buildReviewPipelineExecutionLedger", () => {
     ]) {
       if (unitResult) await writeOutput(unitResult.output_path);
     }
+    await writeOutput(plan.synthesis_output_path);
 
     const ledger = await buildReviewPipelineExecutionLedger({
       sessionRoot: root,
@@ -228,26 +234,147 @@ describe("buildReviewPipelineExecutionLedger", () => {
     expect(ledger.units.every((unit) => unit.trustStatus === "trusted"))
       .toBe(true);
     expect(ledger.units.find((unit) => unit.unitId === "synthesize")?.outputHashes[
+      path.join(plan.session_root, "synthesis-ledger.yaml")
+    ]).toMatch(/^[a-f0-9]{64}$/);
+    expect(ledger.units.find((unit) => unit.unitId === "synthesize")?.outputHashes[
       plan.synthesis_output_path
     ]).toMatch(/^[a-f0-9]{64}$/);
   });
 
-  it("makes each deliberation response depend on every participating lens output", async () => {
+  it("does not trust synthesize when its markdown projection is missing", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const runResult = executionResult(plan);
+    for (const unitResult of [
+      ...runResult.lens_execution_results,
+      ...(runResult.issue_artifact_execution_results ?? []),
+      ...(runResult.deliberation_execution_results ?? []),
+      runResult.synthesize_execution_result,
+    ]) {
+      if (unitResult) await writeOutput(unitResult.output_path);
+    }
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    const synthesize = ledger.units.find((unit) => unit.unitId === "synthesize");
+    expect(synthesize?.outputRefs).toEqual([
+      path.join(plan.session_root, "synthesis-ledger.yaml"),
+      plan.synthesis_output_path,
+    ]);
+    expect(synthesize?.trustStatus).toBe("untrusted");
+    expect(synthesize?.trustReason).toContain("missing required output refs");
+  });
+
+  it("does not trust completed units when manifest output hash is stale", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic"]);
+    const logicOutputPath = plan.lens_prompt_packet_seats[0]!.output_path;
+    await writeOutput(logicOutputPath);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      reviewRunManifest: {
+        worker_units: [
+          {
+            unit_id: "logic",
+            unit_kind: "lens",
+            output_path: logicOutputPath,
+            output_sha256: "stale-hash",
+            status: "completed",
+          },
+        ],
+      },
+    });
+
+    const logic = ledger.units.find((unit) => unit.unitId === "logic");
+    expect(logic?.trustStatus).toBe("untrusted");
+    expect(logic?.trustReason).toContain("output hash does not match");
+  });
+
+  it("does not trust synthesize when its projection hash differs from manifest provenance", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const runResult = executionResult(plan);
+    for (const unitResult of [
+      ...runResult.lens_execution_results,
+      ...(runResult.issue_artifact_execution_results ?? []),
+      ...(runResult.deliberation_execution_results ?? []),
+      runResult.synthesize_execution_result,
+    ]) {
+      if (unitResult) await writeOutput(unitResult.output_path);
+    }
+    await writeOutput(plan.synthesis_output_path);
+    const synthesisLedgerPath = path.join(plan.session_root, "synthesis-ledger.yaml");
+    const manifest: ReviewRunManifestForLedger = {
+      synthesis_provenance: {
+        synthesis_ledger_path: synthesisLedgerPath,
+        synthesis_ledger_sha256: await fileSha256IfPresent(synthesisLedgerPath),
+        synthesis_output_path: plan.synthesis_output_path,
+        synthesis_output_sha256: await fileSha256IfPresent(plan.synthesis_output_path),
+      },
+    };
+    await fs.writeFile(plan.synthesis_output_path, "# tampered synthesis projection\n", "utf8");
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+      reviewRunManifest: manifest,
+    });
+
+    const synthesize = ledger.units.find((unit) => unit.unitId === "synthesize");
+    expect(synthesize?.trustStatus).toBe("untrusted");
+    expect(synthesize?.trustReason).toContain("output hash does not match");
+  });
+
+  it("connects dynamic issue-scoped deliberation responses before teamlead resolution", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root, ["logic", "coverage", "axiology"]);
+    const runResult = executionResult(plan);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    expect(
+      ledger.units.find((unit) => unit.unitId === "deliberation:issue-001:logic")
+        ?.upstreamUnitIds,
+    ).toEqual(["deliberation-plan"]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "deliberation-plan")?.downstreamUnitIds,
+    ).toContain("deliberation:issue-001:logic");
+    expect(
+      ledger.units.find((unit) => unit.unitId === "controlled-deliberation")
+        ?.upstreamUnitIds,
+    ).toContain("deliberation:issue-001:logic");
+  });
+
+  it("records the issue stance matrix as a runtime merge of per-lens stance responses", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
 
     const ledger = await buildReviewPipelineExecutionLedger({
       sessionRoot: root,
       executionPlan: plan,
     });
 
-    expect(
-      ledger.units.find((unit) => unit.unitId === "deliberation-logic")
-        ?.upstreamUnitIds,
-    ).toEqual(["deliberation-plan", "logic", "coverage", "axiology"]);
-    expect(
-      ledger.units.find((unit) => unit.unitId === "coverage")?.downstreamUnitIds,
-    ).toContain("deliberation-logic");
+    const issueStanceMatrix = ledger.units.find(
+      (unit) => unit.unitId === "issue-stance-matrix",
+    );
+    expect(issueStanceMatrix?.owner).toBe("runtime");
+    expect(issueStanceMatrix?.consumedArtifactRefs).toContain(
+      path.join(root, "stance-responses", "logic.yaml"),
+    );
+    expect(issueStanceMatrix?.consumedArtifactRefs).toContain(
+      path.join(root, "stance-responses", "coverage.yaml"),
+    );
   });
 
   it("uses the lens completion barrier to locate failed lenses and block downstream trust", async () => {

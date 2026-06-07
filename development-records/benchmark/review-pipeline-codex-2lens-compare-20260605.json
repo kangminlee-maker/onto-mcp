@@ -1,0 +1,575 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-04T23:36:34.722Z",
+  "benchmark_kind": "review_pipeline_io_effort",
+  "git": {
+    "commit": "20213d9b3599f00cf50a198b40ca3365358284d2",
+    "branch": "feat/reconstruct-prompt-efficiency",
+    "dirty": true
+  },
+  "executor_realization": "codex",
+  "model": "gpt-5.5",
+  "provider": "openai",
+  "auth": "oauth",
+  "selected_lens_ids": [
+    "logic",
+    "structure"
+  ],
+  "runs_per_case": 1,
+  "cases": [
+    {
+      "case_id": "existing-low-effort",
+      "label": "Existing pipeline profile with low effort",
+      "intended_pipeline": "existing",
+      "effort": "low",
+      "synthesize_effort": "low"
+    },
+    {
+      "case_id": "controlled-high-effort",
+      "label": "Controlled IO profile with higher effort",
+      "intended_pipeline": "controlled",
+      "effort": "xhigh",
+      "synthesize_effort": "xhigh"
+    }
+  ],
+  "case_summaries": [
+    {
+      "case_id": "existing-low-effort",
+      "run_count": 1,
+      "completed_count": 1,
+      "failed_count": 0,
+      "completion_rate": 1,
+      "average_command_duration_ms": 495400,
+      "average_total_unit_duration_ms": 552220,
+      "average_total_packet_bytes": 102143,
+      "average_total_output_bytes": 32785,
+      "average_max_packet_bytes": 18929,
+      "average_synthesize_packet_bytes": 15876,
+      "average_synthesize_output_bytes": 6301,
+      "average_final_output_bytes": 10229,
+      "average_total_attempt_count": 12,
+      "average_failed_unit_count": 0,
+      "failure_kind_counts": {
+        "none": 12
+      }
+    },
+    {
+      "case_id": "controlled-high-effort",
+      "run_count": 1,
+      "completed_count": 1,
+      "failed_count": 0,
+      "completion_rate": 1,
+      "average_command_duration_ms": 467669,
+      "average_total_unit_duration_ms": 520420,
+      "average_total_packet_bytes": 102614,
+      "average_total_output_bytes": 28871,
+      "average_max_packet_bytes": 18979,
+      "average_synthesize_packet_bytes": 15965,
+      "average_synthesize_output_bytes": 6566,
+      "average_final_output_bytes": 9605,
+      "average_total_attempt_count": 12,
+      "average_failed_unit_count": 0,
+      "failure_kind_counts": {
+        "none": 12
+      }
+    }
+  ],
+  "comparisons": [
+    {
+      "baseline_case_id": "existing-low-effort",
+      "candidate_case_id": "controlled-high-effort",
+      "metrics": {
+        "completion_rate": {
+          "baseline": 1,
+          "candidate": 1,
+          "delta": 0,
+          "delta_pct": 0
+        },
+        "average_command_duration_ms": {
+          "baseline": 495400,
+          "candidate": 467669,
+          "delta": -27731,
+          "delta_pct": -5.6
+        },
+        "average_total_unit_duration_ms": {
+          "baseline": 552220,
+          "candidate": 520420,
+          "delta": -31800,
+          "delta_pct": -5.76
+        },
+        "average_total_packet_bytes": {
+          "baseline": 102143,
+          "candidate": 102614,
+          "delta": 471,
+          "delta_pct": 0.46
+        },
+        "average_total_output_bytes": {
+          "baseline": 32785,
+          "candidate": 28871,
+          "delta": -3914,
+          "delta_pct": -11.94
+        },
+        "average_max_packet_bytes": {
+          "baseline": 18929,
+          "candidate": 18979,
+          "delta": 50,
+          "delta_pct": 0.26
+        },
+        "average_synthesize_packet_bytes": {
+          "baseline": 15876,
+          "candidate": 15965,
+          "delta": 89,
+          "delta_pct": 0.56
+        },
+        "average_synthesize_output_bytes": {
+          "baseline": 6301,
+          "candidate": 6566,
+          "delta": 265,
+          "delta_pct": 4.21
+        },
+        "average_final_output_bytes": {
+          "baseline": 10229,
+          "candidate": 9605,
+          "delta": -624,
+          "delta_pct": -6.1
+        },
+        "average_total_attempt_count": {
+          "baseline": 12,
+          "candidate": 12,
+          "delta": 0,
+          "delta_pct": 0
+        },
+        "average_failed_unit_count": {
+          "baseline": 0,
+          "candidate": 0,
+          "delta": 0,
+          "delta_pct": null
+        }
+      }
+    }
+  ],
+  "interpretation_notes": [
+    "Mock executor runs measure runtime overhead, artifact shape, packet/output bytes, and contract stability; they do not measure model quality.",
+    "For a true old-pipeline baseline, run this script on the legacy checkout with --case existing-low-effort, then run the controlled checkout with --case controlled-high-effort and compare the JSON reports."
+  ],
+  "runs": [
+    {
+      "case_id": "existing-low-effort",
+      "run_index": 1,
+      "status": "completed",
+      "command_exit_code": 0,
+      "command_signal": null,
+      "command_duration_ms": 495400,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-existing-low-effort-5b8wpr/.onto/review/20260605-2acd64b2",
+      "temp_root_kept": false,
+      "execution_status": "completed",
+      "deliberation_status": "performed",
+      "planned_lens_count": 2,
+      "participating_lens_count": 2,
+      "degraded_lens_count": 0,
+      "max_concurrent_lenses": 2,
+      "observed_dispatch_width": 2,
+      "unit_count": 12,
+      "failed_unit_count": 0,
+      "total_unit_duration_ms": 552220,
+      "total_packet_bytes": 102143,
+      "total_output_bytes": 32785,
+      "max_packet_bytes": 18929,
+      "synthesize_packet_bytes": 15876,
+      "synthesize_output_bytes": 6301,
+      "final_output_bytes": 10229,
+      "total_attempt_count": 12,
+      "failure_kind_counts": {
+        "none": 12
+      },
+      "unit_summaries": [
+        {
+          "unit_id": "logic",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 44332,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18929,
+          "output_bytes": 2016
+        },
+        {
+          "unit_id": "structure",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 18888,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 13879,
+          "output_bytes": 1973
+        },
+        {
+          "unit_id": "finding-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 46954,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3281,
+          "output_bytes": 2254
+        },
+        {
+          "unit_id": "finding-relation-graph",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 33778,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3191,
+          "output_bytes": 1000
+        },
+        {
+          "unit_id": "issue-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 30964,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3560,
+          "output_bytes": 2747
+        },
+        {
+          "unit_id": "issue-stance-matrix",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 43572,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3469,
+          "output_bytes": 2093
+        },
+        {
+          "unit_id": "deliberation-plan",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 30122,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3300,
+          "output_bytes": 206
+        },
+        {
+          "unit_id": "problem-framing",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 99593,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 4685,
+          "output_bytes": 2527
+        },
+        {
+          "unit_id": "deliberation-logic",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 42262,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 10365,
+          "output_bytes": 3017
+        },
+        {
+          "unit_id": "deliberation-structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 38394,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 10393,
+          "output_bytes": 3314
+        },
+        {
+          "unit_id": "controlled-deliberation",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 56480,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 11215,
+          "output_bytes": 5337
+        },
+        {
+          "unit_id": "synthesize",
+          "unit_kind": "synthesize",
+          "status": "completed",
+          "duration_ms": 66881,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 15876,
+          "output_bytes": 6301
+        }
+      ],
+      "review_profile": {
+        "mode": "main-workers",
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "low",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "low",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "low",
+            "service_tier": "fast"
+          }
+        },
+        "deliberation": "controlled-lens-deliberation",
+        "runtime_route": {
+          "execution_realization": "worker",
+          "host_runtime": "codex",
+          "worker_executor": "codex",
+          "runtime_provider": "codex",
+          "auth_mode": "oauth"
+        },
+        "model": "gpt-5.5",
+        "effort": "low",
+        "service_tier": "fast",
+        "base_url": null,
+        "trace": [
+          "codex worker selected by review.execution.executor=codex",
+          "worker executor overridden by --executor-realization=codex"
+        ]
+      },
+      "quality_proxy": {
+        "record_status": "completed",
+        "issue_count": 2,
+        "material_issue_count": 2,
+        "non_material_finding_count": 0,
+        "highest_severity": "medium",
+        "action_candidate_count": 2
+      }
+    },
+    {
+      "case_id": "controlled-high-effort",
+      "run_index": 1,
+      "status": "completed",
+      "command_exit_code": 0,
+      "command_signal": null,
+      "command_duration_ms": 467669,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-controlled-high-effort-4lXHA1/.onto/review/20260605-0f1e2ebf",
+      "temp_root_kept": false,
+      "execution_status": "completed",
+      "deliberation_status": "performed",
+      "planned_lens_count": 2,
+      "participating_lens_count": 2,
+      "degraded_lens_count": 0,
+      "max_concurrent_lenses": 2,
+      "observed_dispatch_width": 2,
+      "unit_count": 12,
+      "failed_unit_count": 0,
+      "total_unit_duration_ms": 520420,
+      "total_packet_bytes": 102614,
+      "total_output_bytes": 28871,
+      "max_packet_bytes": 18979,
+      "synthesize_packet_bytes": 15965,
+      "synthesize_output_bytes": 6566,
+      "final_output_bytes": 9605,
+      "total_attempt_count": 12,
+      "failure_kind_counts": {
+        "none": 12
+      },
+      "unit_summaries": [
+        {
+          "unit_id": "logic",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 15711,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18979,
+          "output_bytes": 1094
+        },
+        {
+          "unit_id": "structure",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 17743,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 13929,
+          "output_bytes": 2007
+        },
+        {
+          "unit_id": "finding-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 47027,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3281,
+          "output_bytes": 2471
+        },
+        {
+          "unit_id": "finding-relation-graph",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 30245,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3191,
+          "output_bytes": 1038
+        },
+        {
+          "unit_id": "issue-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 35264,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3560,
+          "output_bytes": 1778
+        },
+        {
+          "unit_id": "issue-stance-matrix",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 36177,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3469,
+          "output_bytes": 1361
+        },
+        {
+          "unit_id": "deliberation-plan",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 27839,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 3300,
+          "output_bytes": 145
+        },
+        {
+          "unit_id": "problem-framing",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 94674,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 4685,
+          "output_bytes": 1719
+        },
+        {
+          "unit_id": "deliberation-logic",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 42061,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 10455,
+          "output_bytes": 3497
+        },
+        {
+          "unit_id": "deliberation-structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 38891,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 10483,
+          "output_bytes": 3217
+        },
+        {
+          "unit_id": "controlled-deliberation",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 57526,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 11317,
+          "output_bytes": 3978
+        },
+        {
+          "unit_id": "synthesize",
+          "unit_kind": "synthesize",
+          "status": "completed",
+          "duration_ms": 77262,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 15965,
+          "output_bytes": 6566
+        }
+      ],
+      "review_profile": {
+        "mode": "main-workers",
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "deliberation": "controlled-lens-deliberation",
+        "runtime_route": {
+          "execution_realization": "worker",
+          "host_runtime": "codex",
+          "worker_executor": "codex",
+          "runtime_provider": "codex",
+          "auth_mode": "oauth"
+        },
+        "model": "gpt-5.5",
+        "effort": "xhigh",
+        "service_tier": "fast",
+        "base_url": null,
+        "trace": [
+          "codex worker selected by review.execution.executor=codex",
+          "worker executor overridden by --executor-realization=codex"
+        ]
+      },
+      "quality_proxy": {
+        "record_status": "completed",
+        "issue_count": 1,
+        "material_issue_count": 1,
+        "non_material_finding_count": 0,
+        "highest_severity": "medium",
+        "action_candidate_count": 1
+      }
+    }
+  ]
+}

@@ -12,6 +12,7 @@ import type {
   ReviewResultIssueProjection,
   ReviewSessionMetadata,
 } from "../review/artifact-types.js";
+import type { ReviewSynthesisLedgerArtifact } from "../review/synthesis-map-reduce.js";
 import {
   fileExists,
   readYamlDocument,
@@ -19,6 +20,7 @@ import {
 } from "../review/review-artifact-utils.js";
 import { readReviewResultClassification } from "../review/review-result-classification.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
+import { assertPathInsideRoot } from "../path-boundary.js";
 
 function requireString(
   value: string | boolean | undefined,
@@ -30,57 +32,349 @@ function requireString(
   return value;
 }
 
-function headingLevel(line: string): number | null {
-  const match = /^(#{2,6})\s+/.exec(line.trim());
-  if (!match) {
-    return null;
-  }
-  return match[1]?.length ?? null;
+const REVIEW_EXECUTION_STATUSES = new Set([
+  "completed",
+  "completed_with_degradation",
+  "halted_partial",
+]);
+
+const REVIEW_EXECUTION_REALIZATIONS = new Set(["worker", "direct-call"]);
+const REVIEW_HOST_RUNTIMES = new Set([
+  "codex",
+  "anthropic",
+  "openai",
+  "grok",
+  "lmstudio",
+  "standalone",
+]);
+const REVIEW_MODES = new Set(["core-axis", "full"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function extractSection(markdownText: string, heading: string): string | null {
-  const lines = markdownText.split("\n");
-  const acceptedHeadingLines = [`## ${heading}`, `### ${heading}`];
-  const startIndex = lines.findIndex((line) =>
-    acceptedHeadingLines.includes(line.trim()),
+function requireArtifactString(
+  artifact: Record<string, unknown>,
+  field: string,
+  artifactPath: string,
+): string {
+  const value = artifact[field];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: ${field} must be a non-empty string.`,
+    );
+  }
+  return value;
+}
+
+function requireArtifactNumber(
+  artifact: Record<string, unknown>,
+  field: string,
+  artifactPath: string,
+): number {
+  const value = artifact[field];
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: ${field} must be a non-negative number.`,
+    );
+  }
+  return value;
+}
+
+function requireArtifactBoolean(
+  artifact: Record<string, unknown>,
+  field: string,
+  artifactPath: string,
+): boolean {
+  const value = artifact[field];
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: ${field} must be a boolean.`,
+    );
+  }
+  return value;
+}
+
+function requireArtifactStringArray(
+  artifact: Record<string, unknown>,
+  field: string,
+  artifactPath: string,
+): string[] {
+  const value = artifact[field];
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: ${field} must be a string list.`,
+    );
+  }
+  return value;
+}
+
+function requireArtifactEnum(
+  artifact: Record<string, unknown>,
+  field: string,
+  allowedValues: Set<string>,
+  artifactPath: string,
+): string {
+  const value = requireArtifactString(artifact, field, artifactPath);
+  if (!allowedValues.has(value)) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: ${field} has unsupported value ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
+}
+
+function validateReviewRetryPolicy(
+  value: unknown,
+  artifactPath: string,
+): void {
+  if (!isRecord(value)) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: retry_policy must be a YAML mapping.`,
+    );
+  }
+  for (const field of [
+    "lens_max_retries",
+    "issue_artifact_max_retries",
+    "deliberation_max_retries",
+    "synthesis_max_retries",
+    "retry_initial_delay_ms",
+  ]) {
+    requireArtifactNumber(value, field, artifactPath);
+  }
+}
+
+function validateReviewExecutionResultArtifact(
+  value: unknown,
+  artifactPath: string,
+): ReviewExecutionResultArtifact {
+  if (!isRecord(value)) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: root must be a YAML mapping.`,
+    );
+  }
+  requireArtifactString(value, "session_id", artifactPath);
+  requireArtifactString(value, "session_root", artifactPath);
+  requireArtifactEnum(
+    value,
+    "execution_realization",
+    REVIEW_EXECUTION_REALIZATIONS,
+    artifactPath,
   );
-  if (startIndex === -1) {
-    return null;
+  requireArtifactEnum(value, "host_runtime", REVIEW_HOST_RUNTIMES, artifactPath);
+  requireArtifactEnum(value, "review_mode", REVIEW_MODES, artifactPath);
+  requireArtifactEnum(
+    value,
+    "execution_status",
+    REVIEW_EXECUTION_STATUSES,
+    artifactPath,
+  );
+  requireArtifactString(value, "execution_started_at", artifactPath);
+  requireArtifactString(value, "execution_completed_at", artifactPath);
+  requireArtifactNumber(value, "total_duration_ms", artifactPath);
+  requireArtifactNumber(value, "max_concurrent_lenses", artifactPath);
+  if (value.observed_dispatch_width !== undefined) {
+    requireArtifactNumber(value, "observed_dispatch_width", artifactPath);
   }
-
-  const startLine = lines[startIndex];
-  const startHeadingLevel = typeof startLine === "string"
-    ? headingLevel(startLine)
-    : null;
-
-  const collected: string[] = [];
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line === undefined) {
-      break;
-    }
-    const currentHeadingLevel = headingLevel(line);
-    if (
-      currentHeadingLevel !== null &&
-      startHeadingLevel !== null &&
-      currentHeadingLevel <= startHeadingLevel
-    ) {
-      break;
-    }
-    collected.push(line);
+  validateReviewRetryPolicy(value.retry_policy, artifactPath);
+  requireArtifactStringArray(value, "planned_lens_ids", artifactPath);
+  requireArtifactStringArray(value, "participating_lens_ids", artifactPath);
+  requireArtifactStringArray(value, "degraded_lens_ids", artifactPath);
+  requireArtifactStringArray(value, "excluded_lens_ids", artifactPath);
+  requireArtifactNumber(value, "executed_lens_count", artifactPath);
+  requireArtifactBoolean(value, "synthesis_executed", artifactPath);
+  requireArtifactString(value, "error_log_path", artifactPath);
+  if (!Array.isArray(value.lens_execution_results)) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: lens_execution_results must be a list.`,
+    );
   }
-
-  return collected.join("\n").trim();
+  if (value.synthesis_executed === true && !isRecord(value.synthesize_execution_result)) {
+    throw new Error(
+      `Malformed execution result artifact: ${artifactPath}: synthesize_execution_result must be present when synthesis_executed=true.`,
+    );
+  }
+  return value as unknown as ReviewExecutionResultArtifact;
 }
 
-function sectionOrDefault(markdownText: string, headings: string[], defaultText = "- none"): string {
-  for (const heading of headings) {
-    const extracted = extractSection(markdownText, heading);
-    if (extracted && extracted.length > 0) {
-      return extracted;
-    }
+const EMPTY_BOUNDARY_NOTE_PATTERN =
+  /^(?:[-*]\s*)?(?:none|n\/a|not applicable|no boundary notes|no boundary limitations|없음)[.!。]?\s*$/iu;
+
+const BOUNDARY_EVIDENCE_PATTERN =
+  /(evidence gap|insufficient\b.{0,120}\bevidence|cannot\b.{0,80}\b(?:determine|decide|classify|confirm)|outside\b.{0,80}\bboundary|boundary-authorized|scope limitation|caller|public api|external consumer|external reference)/iu;
+
+const BOUNDARY_SPECIFIC_PATTERN =
+  /(lensid|orphan|unused|dead field|export(?:ed)?|caller|public api|external consumer|external reference)/iu;
+
+function compactWhitespace(value: string): string {
+  return value.replace(/\s+/gu, " ").trim();
+}
+
+function stripMarkdownListMarker(value: string): string {
+  return value.replace(/^\s*(?:[-*]|\d+[.)])\s+/u, "").trim();
+}
+
+function stripTrailingSentencePunctuation(value: string): string {
+  return value.replace(/[.!。]+$/u, "").trim();
+}
+
+function compactSentence(value: string, maxChars = 280): string {
+  const sentence = compactWhitespace(stripMarkdownListMarker(value));
+  if (sentence.length <= maxChars) return sentence;
+  return `${sentence.slice(0, maxChars - 3).trimEnd()}...`;
+}
+
+function sourceBoundaryNotesAreSubstantive(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return false;
+  return !trimmed
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .every((line) => EMPTY_BOUNDARY_NOTE_PATTERN.test(line));
+}
+
+function boundedBulletLinesFromText(value: string): string[] {
+  const lines = value
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !EMPTY_BOUNDARY_NOTE_PATTERN.test(line));
+  const bulletLines = lines
+    .filter((line) => /^[-*]\s+\S/u.test(line))
+    .map((line) => `- ${compactSentence(line)}`);
+  if (bulletLines.length > 0) return bulletLines.slice(0, 3);
+
+  const sentenceCandidates = compactWhitespace(value)
+    .split(/(?<=[.!。])\s+/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !EMPTY_BOUNDARY_NOTE_PATTERN.test(line));
+  return sentenceCandidates
+    .slice(0, 3)
+    .map((line) => `- ${compactSentence(line)}`);
+}
+
+function uniqueLines(lines: string[]): string[] {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const line of lines) {
+    const key = line.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(line);
   }
-  return defaultText;
+  return unique;
+}
+
+function boundaryNoteFromProjection(
+  projection: ReviewResultIssueProjection,
+): string {
+  const basis =
+    projection.problem_definition ??
+    projection.issue_statement ??
+    projection.failure_condition ??
+    projection.impact ??
+    projection.rationale;
+  return `- ${projection.issue_id} evidence gap: ${compactSentence(basis)}`;
+}
+
+export function extractBoundaryEvidenceNotesFromLensText(args: {
+  lensId: string;
+  text: string;
+}): string[] {
+  const lines = args.text
+    .split(/\r?\n/u)
+    .map((line) => compactWhitespace(line))
+    .filter((line) => line.length > 0);
+  const candidates = lines.filter(
+    (line) =>
+      BOUNDARY_EVIDENCE_PATTERN.test(line) &&
+      BOUNDARY_SPECIFIC_PATTERN.test(line),
+  );
+  return candidates.slice(0, 2).map((line) => {
+    const compact = stripTrailingSentencePunctuation(compactSentence(line, 320));
+    const lower = compact.toLowerCase();
+    const needsCallerApi =
+      !lower.includes("caller") &&
+      !lower.includes("public api") &&
+      (lower.includes("orphan") || lower.includes("export"));
+    const suffix = needsCallerApi
+      ? "; orphan/caller/API evidence is outside the current boundary"
+      : "";
+    return `- ${args.lensId} evidence gap: ${compact}${suffix}.`;
+  });
+}
+
+async function deriveLensBoundaryEvidenceNotes(args: {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan | null;
+  executionResult: ReviewExecutionResultArtifact | null;
+}): Promise<string[]> {
+  const seats = args.executionPlan?.lens_execution_seats ?? [];
+  if (seats.length === 0) return [];
+  const completedResultByLensId = new Map(
+    (args.executionResult?.lens_execution_results ?? [])
+      .filter((result) => result.status === "completed")
+      .map((result) => [result.unit_id, result]),
+  );
+  const notes: string[] = [];
+  for (const seat of seats) {
+    const result = completedResultByLensId.get(seat.lens_id);
+    if (args.executionResult && !result) continue;
+    const rawOutputPath = result?.output_path ?? seat.output_path;
+    const outputPathCandidates = path.isAbsolute(rawOutputPath)
+      ? [path.resolve(rawOutputPath)]
+      : [
+          path.resolve(args.sessionRoot, rawOutputPath),
+          path.resolve(args.projectRoot, rawOutputPath),
+        ];
+    let outputPath = outputPathCandidates[0];
+    for (const candidate of outputPathCandidates) {
+      if (await fileExists(candidate)) {
+        outputPath = candidate;
+        break;
+      }
+    }
+    if (!outputPath) continue;
+    try {
+      await assertPathInsideRoot({
+        root: args.sessionRoot,
+        candidate: outputPath,
+        label: `lens boundary note source ${seat.lens_id}`,
+      });
+      const text = await fs.readFile(outputPath, "utf8");
+      notes.push(
+        ...extractBoundaryEvidenceNotesFromLensText({
+          lensId: seat.lens_id,
+          text,
+        }),
+      );
+    } catch {
+      // Missing lens files are reported elsewhere; boundary-note projection is best effort.
+    }
+    if (notes.length >= 3) break;
+  }
+  return uniqueLines(notes).slice(0, 3);
+}
+
+export function renderBoundaryNotesForFinalOutput(args: {
+  sourceBoundaryNotes: string;
+  classificationSummary: ReviewResultClassificationSummary;
+  lensBoundaryEvidenceNotes: string[];
+}): string {
+  const sourceLines = sourceBoundaryNotesAreSubstantive(args.sourceBoundaryNotes)
+    ? boundedBulletLinesFromText(args.sourceBoundaryNotes)
+    : [];
+  const projectedLines = [
+    ...args.classificationSummary.non_material_findings
+      .slice(0, 3)
+      .map(boundaryNoteFromProjection),
+    ...args.lensBoundaryEvidenceNotes,
+  ];
+  const combinedLines = uniqueLines([...sourceLines, ...projectedLines]).slice(0, 3);
+  return combinedLines.length > 0
+    ? combinedLines.join("\n")
+    : "- none";
 }
 
 function renderLensFindingsRefs(
@@ -92,10 +386,19 @@ function renderLensFindingsRefs(
   if (!seats || seats.length === 0) {
     return "- lens output references unavailable";
   }
+  const resultByLensId = new Map(
+    (executionResult?.lens_execution_results ?? []).map((result) => [
+      result.unit_id,
+      result,
+    ]),
+  );
   const degradedSet = new Set(executionResult?.degraded_lens_ids ?? []);
   return seats
     .map((seat) => {
-      const relativePath = toRelativePath(seat.output_path, projectRoot);
+      const result = resultByLensId.get(seat.lens_id);
+      const outputPath =
+        result?.output_path ?? seat.sidecar_output_path ?? seat.output_path;
+      const relativePath = toRelativePath(outputPath, projectRoot);
       const marker = degradedSet.has(seat.lens_id) ? " (degraded)" : "";
       return `- ${seat.lens_id}: \`${relativePath}\`${marker}`;
     })
@@ -168,6 +471,7 @@ function renderIssueProjection(
   if (projection.timing_class || projection.closure_class) {
     lines.push(
       `  - problem framing: ${[
+        projection.issue_role,
         projection.timing_class,
         projection.closure_class,
         projection.closure_obligation,
@@ -203,6 +507,125 @@ function renderActionCandidates(
     .join("\n");
 }
 
+function renderLedgerMaterialIssues(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  if (ledger.material_issues.length === 0) return "- none";
+  return ledger.material_issues
+    .map((issue) =>
+      [
+        `- ${issue.issue_id} (${issue.severity}): ${issue.conclusion}`,
+        `  - materiality: ${issue.materiality_explanation}`,
+        `  - root cause: ${issue.root_cause_explanation}`,
+        `  - causal path: ${issue.causal_path_explanation}`,
+        `  - action: ${issue.action_explanation}`,
+        issue.unresolved_disagreement_note
+          ? `  - unresolved disagreement: ${issue.unresolved_disagreement_note}`
+          : null,
+      ].filter((line): line is string => line !== null).join("\n"),
+    )
+    .join("\n\n");
+}
+
+function renderLedgerConditionalConsensus(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  const conditionalIssues = ledger.material_issues.filter(
+    (issue) =>
+      issue.unresolved_disagreement_note ||
+      issue.deliberation_status !== "resolved",
+  );
+  if (conditionalIssues.length === 0) return "- none";
+  return conditionalIssues
+    .map((issue) =>
+      [
+        `- ${issue.issue_id} (${issue.deliberation_status}): ${issue.conclusion}`,
+        issue.unresolved_disagreement_note
+          ? `  - unresolved disagreement: ${issue.unresolved_disagreement_note}`
+          : null,
+      ].filter((line): line is string => line !== null).join("\n"),
+    )
+    .join("\n");
+}
+
+function renderLedgerActions(ledger: ReviewSynthesisLedgerArtifact | null): string {
+  if (!ledger) return "";
+  if (ledger.action_ordering.length === 0) return "- none";
+  const issueById = new Map(
+    ledger.material_issues.map((issue) => [issue.issue_id, issue]),
+  );
+  return ledger.action_ordering
+    .map((action) => {
+      const issue = issueById.get(action.issue_id);
+      return [
+        `- ${action.issue_id} (${action.severity})`,
+        issue ? `  - issue: ${issue.conclusion}` : null,
+        `  - candidates: ${action.action_candidates.join(", ") || "none"}`,
+        `  - rationale: ${action.rationale}`,
+        issue ? `  - remediation: ${issue.action_explanation}` : null,
+      ].filter((line): line is string => line !== null).join("\n");
+    })
+    .join("\n");
+}
+
+function renderLedgerBoundaryNotes(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  return ledger.boundary_notes.length > 0
+    ? ledger.boundary_notes.map((note) => `- ${note}`).join("\n")
+    : "- none";
+}
+
+function renderLedgerNonMaterialFindings(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  if (ledger.non_material_findings.length === 0) return "- none";
+  return ledger.non_material_findings
+    .map((finding) => `- ${finding.issue_id} (${finding.severity}): ${finding.issue_statement}`)
+    .join("\n");
+}
+
+function renderLedgerDisagreement(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  const notes = ledger.material_issues
+    .filter((issue) => issue.unresolved_disagreement_note)
+    .map((issue) => `- ${issue.issue_id}: ${issue.unresolved_disagreement_note}`);
+  return notes.length > 0 ? notes.join("\n") : "- none";
+}
+
+function renderLedgerAxiologyPerspectives(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  const axiologyLines = [
+    ...ledger.material_issues
+      .filter((issue) => issue.source_lens_ids.includes("axiology"))
+      .map((issue) => `- ${issue.issue_id} (${issue.severity}): ${issue.conclusion}`),
+    ...ledger.non_material_findings
+      .filter((finding) => finding.source_lens_ids.includes("axiology"))
+      .map((finding) => `- ${finding.issue_id} (${finding.severity}): ${finding.issue_statement}`),
+  ];
+  return axiologyLines.length > 0 ? axiologyLines.join("\n") : "- none";
+}
+
+function renderLedgerPurposeAlignment(
+  ledger: ReviewSynthesisLedgerArtifact | null,
+): string {
+  if (!ledger) return "";
+  if (ledger.material_issues.length === 0) {
+    return "- bounded review did not identify a material purpose-weakening issue";
+  }
+  return ledger.material_issues
+    .map((issue) => `- ${issue.issue_id}: ${issue.affected_purpose}`)
+    .join("\n");
+}
+
 export async function runRenderReviewFinalOutputCli(
   argv: string[],
 ): Promise<number> {
@@ -222,6 +645,7 @@ export async function runRenderReviewFinalOutputCli(
   const bindingPath = path.join(sessionRoot, "binding.yaml");
   const sessionMetadataPath = path.join(sessionRoot, "session-metadata.yaml");
   const synthesisPath = path.join(sessionRoot, "synthesis.md");
+  const synthesisLedgerPath = path.join(sessionRoot, "synthesis-ledger.yaml");
   const deliberationPath = path.join(sessionRoot, "deliberation.md");
   const finalOutputPath = path.join(sessionRoot, "final-output.md");
 
@@ -238,30 +662,38 @@ export async function runRenderReviewFinalOutputCli(
   const executionResultPath =
     bindingArtifact.execution_result_path ??
     path.join(sessionRoot, "execution-result.yaml");
-  const executionResult = (await fileExists(executionResultPath))
-    ? await readYamlDocument<ReviewExecutionResultArtifact>(executionResultPath)
-    : null;
+  if (!(await fileExists(executionResultPath))) {
+    throw new Error(`Missing execution result artifact: ${executionResultPath}`);
+  }
+  const executionResult = validateReviewExecutionResultArtifact(
+    await readYamlDocument<unknown>(executionResultPath),
+    executionResultPath,
+  );
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = (await fileExists(executionPlanPath))
     ? await readYamlDocument<ReviewExecutionPlan>(executionPlanPath)
     : null;
-  const synthesisExecuted = executionResult?.synthesis_executed === true;
+  const synthesisExecuted = executionResult.synthesis_executed === true;
   if (synthesisExecuted && !(await fileExists(deliberationPath))) {
     throw new Error(`Missing controlled deliberation artifact: ${deliberationPath}`);
   }
-  if (synthesisExecuted && !(await fileExists(synthesisPath))) {
-    throw new Error(`Missing synthesize result artifact: ${synthesisPath}`);
+  if (synthesisExecuted && !(await fileExists(synthesisLedgerPath))) {
+    throw new Error(`Missing synthesis ledger artifact: ${synthesisLedgerPath}`);
   }
-  const sourcePath = synthesisPath;
-  const sourceText = synthesisExecuted ? await fs.readFile(sourcePath, "utf8") : "";
+  if (synthesisExecuted && !(await fileExists(synthesisPath))) {
+    throw new Error(`Missing synthesis projection artifact: ${synthesisPath}`);
+  }
+  const sourcePath = synthesisLedgerPath;
+  const synthesisLedger = synthesisExecuted
+    ? await readYamlDocument<ReviewSynthesisLedgerArtifact>(synthesisLedgerPath)
+    : null;
   const sessionDate = (sessionMetadata.created_at ?? "").slice(0, 10);
   const participatingLensCount =
-    executionResult?.participating_lens_ids.length ??
-    bindingArtifact.resolved_lens_set.length;
+    executionResult.participating_lens_ids.length;
   const plannedLensCount =
-    executionResult?.planned_lens_ids.length ?? bindingArtifact.resolved_lens_set.length;
-  const degradedLensIds = executionResult?.degraded_lens_ids ?? [];
-  const haltReason = executionResult?.halt_reason ?? null;
+    executionResult.planned_lens_ids.length;
+  const degradedLensIds = executionResult.degraded_lens_ids;
+  const haltReason = executionResult.halt_reason ?? null;
   const haltDetailLines = [
     executionResult?.halt_phase
       ? `- halt phase: ${executionResult.halt_phase}`
@@ -273,55 +705,22 @@ export async function runRenderReviewFinalOutputCli(
       ? `- halt lens: ${executionResult.halt_lens_id}`
       : null,
   ].filter((line): line is string => line !== null);
-  const executionStatus = executionResult?.execution_status ?? "completed";
+  const executionStatus = executionResult.execution_status;
   const classificationSummary = await readReviewResultClassification(sessionRoot);
+  const lensBoundaryEvidenceNotes = await deriveLensBoundaryEvidenceNotes({
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executionResult,
+  });
 
-  const consensus = sectionOrDefault(sourceText, [
-    "Consensus",
-    "Consensus Items",
-    "Preserved Cross-Lens Consensus",
-  ]);
-  const conditionalConsensus = sectionOrDefault(sourceText, [
-    "Conditional Consensus",
-    "Unresolved Or Conditional Points",
-  ]);
-  const disagreement = sectionOrDefault(sourceText, [
-    "Disagreement",
-    "Contradicting Opinions",
-  ]);
-  const axiologyPerspectives = sectionOrDefault(
-    sourceText,
-    [
-      "Axiology-Proposed Additional Perspectives",
-      "Preserved New Perspective",
-    ],
-  );
-  const purposeAlignment = sectionOrDefault(
-    sourceText,
-    ["Purpose Alignment Verification", "Synthesis Verdict"],
-  );
-  const finalReviewResult = sectionOrDefault(
-    sourceText,
-    [
-      "Final Review Result",
-      "Comprehensive Result Explanation",
-      "Overall Result Explanation",
-      "Review Result Explanation",
-    ],
-    "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts",
-  );
-  const immediateActions = sectionOrDefault(sourceText, [
-    "Immediate Actions Required",
-    "Immediate Actions",
-  ]);
-  const recommendations = sectionOrDefault(sourceText, [
-    "Recommendations",
-    "Synthesis Conclusion",
-  ]);
-  const uniqueFindingTagging = sectionOrDefault(sourceText, [
-    "Unique Finding Tagging",
-    "Preserved Specific Issues",
-  ]);
+  const renderedBoundaryNotes = renderBoundaryNotesForFinalOutput({
+    sourceBoundaryNotes: synthesisLedger
+      ? renderLedgerBoundaryNotes(synthesisLedger)
+      : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts",
+    classificationSummary,
+    lensBoundaryEvidenceNotes,
+  });
   const degradationSummary =
     degradedLensIds.length > 0
       ? degradedLensIds.map((lensId) => `- degraded lens: ${lensId}`).join("\n")
@@ -363,11 +762,14 @@ ${renderTargetSummary(bindingArtifact, projectRoot)}
 - Review mode: ${bindingArtifact.resolved_review_mode}
 - Execution realization: ${bindingArtifact.resolved_execution_realization}
 - Host runtime: ${bindingArtifact.resolved_host_runtime}
+- Artifact generation realization: ${bindingArtifact.resolved_artifact_generation_realization}
+- Semantic quality evidence: ${bindingArtifact.semantic_quality_evidence.status} (${bindingArtifact.semantic_quality_evidence.applicability})
 - Finding ledger: \`${toRelativePath(bindingArtifact.finding_ledger_path, projectRoot)}\`
 - Issue ledger: \`${toRelativePath(bindingArtifact.issue_ledger_path, projectRoot)}\`
 - Problem framing: \`${toRelativePath(bindingArtifact.problem_framing_path, projectRoot)}\`
 - Controlled deliberation: ${synthesisExecuted ? `\`${toRelativePath(deliberationPath, projectRoot)}\`` : "not performed"}
 - Source artifact: ${synthesisExecuted ? `\`${toRelativePath(sourcePath, projectRoot)}\`` : "not produced"}
+- Synthesis projection: ${synthesisExecuted ? `\`${toRelativePath(synthesisPath, projectRoot)}\`` : "not produced"}
 - Execution status: ${executionStatus}
 
 ### Domain Selection
@@ -382,7 +784,9 @@ ${renderDomainSelectionNotes(bindingArtifact)}
 ${executionStatus === "halted_partial" ? `- Halt reason: ${haltReason ?? "unknown"}\n${haltDetailLines.join("\n") || "- halt detail: unavailable"}` : "- Halt reason: none"}
 
 #### Synthesis Summary
-${sourceText.length > 0 ? finalReviewResult : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts"}
+${synthesisLedger
+  ? synthesisLedger.final_review_result
+  : "- synthesize output unavailable; inspect execution-result.yaml and issue artifacts"}
 
 #### Classification Summary
 - Highest severity: ${classificationSummary.highest_severity ?? "none"}
@@ -395,6 +799,11 @@ ${sourceText.length > 0 ? finalReviewResult : "- synthesize output unavailable; 
 #### Material Issues
 ${renderIssueProjectionList(classificationSummary.material_issues)}
 
+#### Synthesized Material Issue Explanations
+${synthesisLedger
+  ? renderLedgerMaterialIssues(synthesisLedger)
+  : "- synthesis ledger unavailable"}
+
 #### Non-Material Findings
 ${renderIssueProjectionList(classificationSummary.non_material_findings)}
 
@@ -406,28 +815,43 @@ ${renderConsensusHeading(
     plannedLensCount,
     bindingArtifact.resolved_review_mode,
   )}
-${sourceText.length > 0 ? consensus : "- synthesize output unavailable"}
+${synthesisLedger
+  ? renderLedgerMaterialIssues(synthesisLedger)
+  : "- synthesize output unavailable"}
 
 ### Conditional Consensus
-${sourceText.length > 0 ? conditionalConsensus : defaultConditionalConsensus}
+${synthesisLedger ? renderLedgerConditionalConsensus(synthesisLedger) : defaultConditionalConsensus}
 
 ### Disagreement
-${sourceText.length > 0 ? disagreement : degradationSummary}
+${synthesisLedger
+  ? renderLedgerDisagreement(synthesisLedger)
+  : degradationSummary}
 
 ### Axiology-Proposed Additional Perspectives
-${sourceText.length > 0 ? axiologyPerspectives : "- unavailable"}
+${synthesisLedger ? renderLedgerAxiologyPerspectives(synthesisLedger) : "- unavailable"}
 
 ### Purpose Alignment Verification
-${sourceText.length > 0 ? purposeAlignment : defaultPurposeAlignment}
+${synthesisLedger
+  ? renderLedgerPurposeAlignment(synthesisLedger)
+  : defaultPurposeAlignment}
+
+### Boundary Notes
+${renderedBoundaryNotes}
 
 ### Immediate Actions Required
-${sourceText.length > 0 ? immediateActions : degradationSummary}
+${synthesisLedger
+  ? renderLedgerActions(synthesisLedger)
+  : degradationSummary}
 
 ### Recommendations
-${sourceText.length > 0 ? recommendations : "- inspect execution-result.yaml and error-log.md"}
+${synthesisLedger
+  ? renderLedgerNonMaterialFindings(synthesisLedger)
+  : "- inspect execution-result.yaml and error-log.md"}
 
 ### Unique Finding Tagging
-${sourceText.length > 0 ? uniqueFindingTagging : degradationSummary}
+${synthesisLedger
+  ? renderLedgerNonMaterialFindings(synthesisLedger)
+  : degradationSummary}
 
 ### Individual Lens Findings
 ${renderLensFindingsRefs(executionPlan, executionResult, projectRoot)}

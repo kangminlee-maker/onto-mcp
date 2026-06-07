@@ -39,6 +39,12 @@
       # controlled-lens-deliberation은 lens 의견을 모아 필요한 쟁점을 숙의하는 기본 방식입니다.
       "deliberation": "controlled-lens-deliberation",
 
+      # live는 실제 semantic path 산출물입니다. 테스트용 fixture/mock은 이 값을 명시적으로 바꿔야 합니다.
+      "artifact_generation_realization": "live",
+
+      # 한 번에 실행할 lens worker 수입니다. 값이 없으면 선택된 lens 전체를 병렬 실행합니다.
+      "max_concurrent_lenses": 3,
+
       # actors는 review 안에서 역할별로 실제 모델 설정을 소유합니다.
       # 즉 teamlead, lens, synthesize를 서로 독립적으로 바꿀 수 있습니다.
       "actors": {
@@ -100,6 +106,62 @@
             # service_tier는 Codex OAuth 경로에서 사용할 응답 속도 계층입니다.
             "service_tier": "fast"
           }
+        }
+      },
+
+      # units는 pipeline 단계별 실행 정책입니다.
+      # llm은 해당 단계의 기본 actor llm 위에 덮어씁니다.
+      # 예: lens.effort만 xhigh로 올리면 provider/auth는 actors.lens.llm에서 옵니다.
+      # 사용 가능한 unit id:
+      # lens, finding_ledger, finding_relation_graph, issue_ledger,
+      # issue_stance_matrix, deliberation_plan, problem_framing,
+      # issue_stance_response, deliberation_response,
+      # deliberation_resolution, synthesis_response
+      # max_tokens/tool_mode은 direct_call/inline HTTP executor에서만 강제 가능합니다.
+      # 기본 Codex OAuth worker 경로는 해당 knob를 강제할 수 없으므로 설정 시 fail-loud합니다.
+      "units": {
+        # lens는 9개 관점별 독립 검토입니다.
+        "lens": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "xhigh"
+          },
+          # 긴 provider 대기 때문에 전체 pipeline이 멈추지 않도록 unit timeout은 짧게 잡고
+          # 실패한 unit만 소수 재시도합니다.
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+
+        # finding_relation_graph는 finding 간 cause/dependency 관계를 정리합니다.
+        "finding_relation_graph": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "xhigh"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+
+        # issue_stance_matrix 자체는 runtime 집계지만, timeout/output 상한은 조정할 수 있습니다.
+        "issue_stance_matrix": {
+          "timeout_ms": 120000,
+          "max_output_bytes": 524288
+        },
+
+        # synthesis_response는 issue-scoped synthesis map 단계입니다.
+        "synthesis_response": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "xhigh"
+          },
+          "timeout_ms": 180000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
         }
       }
     }

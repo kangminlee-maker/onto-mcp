@@ -1,15 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type {
   ReconstructActionabilityMatrixArtifact,
   ReconstructMaturationContinuationDecisionArtifact,
+  ReconstructMaturationClosureFrontierArtifact,
+  ReconstructMaturationQuestionFrontierArtifact,
   ReconstructOntologySeedValidationArtifact,
   ReconstructOntologySeedArtifact,
   ReconstructCandidateDispositionValidationArtifact,
   ReconstructClaimProjectionValidationArtifact,
+  ReconstructClaimRealizationMapArtifact,
+  ReconstructCompetencyQuestionAssessmentArtifact,
+  ReconstructCompetencyQuestionAssessmentValidationArtifact,
   ReconstructCompetencyQuestionsArtifact,
   ReconstructLensJudgmentArtifact,
   ReconstructRecordArtifact,
@@ -32,10 +38,8 @@ import type {
   ReconstructStopDecisionArtifact,
 } from "./artifact-types.js";
 import {
-  createAutoAcceptReconstructConfirmationProvider,
   createDirectCallReconstructConfirmationProvider,
   createDirectCallReconstructDirectiveAuthor,
-  createMockReconstructDirectiveAuthor,
   runReconstruct,
 } from "./run.js";
 import type { ReconstructConfirmationProvider } from "./run.js";
@@ -76,6 +80,26 @@ afterEach(async () => {
 
 async function readYaml<T>(filePath: string): Promise<T> {
   return parseYaml(await fs.readFile(filePath, "utf8")) as T;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(",")}]`;
+  }
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) =>
+      `${JSON.stringify(key)}:${stableJson(value[key])}`
+    ).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function sha256Text(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex");
 }
 
 function ontologyHandoffFixture(args: {
@@ -334,8 +358,8 @@ describe("runReconstruct", () => {
         text,
         input_tokens: 1,
         output_tokens: 1,
-        model_id: "fake-live-model",
-        effective_base_url: "test://fake-live",
+        model_id: "reconstruct-fixture-model",
+        effective_base_url: "test://reconstruct-fixture",
         declared_billing_mode: "local",
       });
     };
@@ -480,8 +504,8 @@ describe("runReconstruct", () => {
         text,
         input_tokens: 1,
         output_tokens: 1,
-        model_id: "fake-live-model",
-        effective_base_url: "test://fake-live",
+        model_id: "reconstruct-fixture-model",
+        effective_base_url: "test://reconstruct-fixture",
         declared_billing_mode: "local",
       });
     };
@@ -551,8 +575,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         });
       },
@@ -907,8 +931,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         });
       },
@@ -1066,8 +1090,8 @@ describe("runReconstruct", () => {
           }),
           input_tokens: 1,
           output_tokens: 1,
-          model_id: "fake-live-model",
-          effective_base_url: "test://fake-live",
+          model_id: "reconstruct-fixture-model",
+          effective_base_url: "test://reconstruct-fixture",
           declared_billing_mode: "local",
         }),
     });
@@ -1484,7 +1508,7 @@ describe("runReconstruct", () => {
     expect(result.no_next_frontier_rationale).toBeNull();
   });
 
-  function fakeLiveLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
+  function reconstructFixtureLlm(systemPrompt: string, userPrompt: string): Promise<LlmCallResult> {
     const input = JSON.parse(userPrompt) as Record<string, any>;
     const observations = (input.source_observations ?? []) as Array<{
       observation_id: string;
@@ -2157,17 +2181,694 @@ describe("runReconstruct", () => {
         "The runtime footer should add exact artifact truth refs.",
       ].join("\n");
     } else {
-      throw new Error(`Unexpected fake live LLM prompt: ${systemPrompt.slice(0, 80)}`);
+      throw new Error(`Unexpected reconstruct fixture LLM prompt: ${systemPrompt.slice(0, 80)}`);
     }
     return Promise.resolve({
       text,
       input_tokens: 1,
       output_tokens: 1,
-      model_id: "fake-live-model",
-      effective_base_url: "test://fake-live",
+      model_id: "reconstruct-fixture-model",
+      effective_base_url: "test://reconstruct-fixture",
       declared_billing_mode: "local",
     });
   }
+
+  function answerSupportPromptFixture(options: {
+    supplementalObservationCount?: number;
+    priorityObservations?: Array<{
+      observationId: string;
+      sourceRef: string;
+      targetMaterialKind?: ReconstructSourceObservationsArtifact["observations"][number]["target_material_kind"];
+    }>;
+    closureHintSourceRefs?: string[];
+    sourceRequest?: {
+      requestedSourceRef: string;
+      targetMaterialKind?: ReconstructMaturationClosureFrontierArtifact["source_requests"][number]["target_material_kind"];
+      memberSourceRefs?: string[];
+      crossMaterialRefRefs?: string[];
+    } | null;
+    sourceRequests?: Array<{
+      requestedSourceRef: string;
+      targetMaterialKind?: ReconstructMaturationClosureFrontierArtifact["source_requests"][number]["target_material_kind"];
+      memberSourceRefs?: string[];
+      crossMaterialRefRefs?: string[];
+    }>;
+  } = {}): {
+    sourceObservations: ReconstructSourceObservationsArtifact;
+    questionFrontier: ReconstructMaturationQuestionFrontierArtifact;
+    closureFrontier: ReconstructMaturationClosureFrontierArtifact;
+  } {
+    const neededSourceRef = "/fixture/needed-maturation-source.md";
+    const priorityObservations = options.priorityObservations ?? [{
+      observationId: "obs-needed",
+      sourceRef: neededSourceRef,
+      targetMaterialKind: "document" as const,
+    }];
+    const closureHintSourceRefs = options.closureHintSourceRefs ??
+      [neededSourceRef];
+    const sourceRequest = options.sourceRequest === undefined
+      ? {
+        requestedSourceRef: neededSourceRef,
+        targetMaterialKind: "document" as const,
+        memberSourceRefs: [],
+        crossMaterialRefRefs: [],
+      }
+      : options.sourceRequest;
+    const sourceRequests = options.sourceRequests ??
+      (sourceRequest ? [sourceRequest] : []);
+    const sourceObservations: ReconstructSourceObservationsArtifact = {
+      schema_version: "1",
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      observations: [
+        ...Array.from({ length: options.supplementalObservationCount ?? 69 }, (_, index) => ({
+          observation_id: `obs-${index + 1}`,
+          target_material_kind: "code" as const,
+          adapter_id: "fixture",
+          source_ref: `/fixture/source-${index + 1}.ts`,
+          location: `line ${index + 1}`,
+          summary: `Fixture source observation ${index + 1}`,
+          structural_data: {
+            content_excerpt: "x".repeat(1200),
+            symbol_name: `fixture_${index + 1}`,
+          },
+        })),
+        ...priorityObservations.map((observation) => ({
+          observation_id: observation.observationId,
+          target_material_kind: observation.targetMaterialKind ?? "document",
+          adapter_id: "fixture",
+          source_ref: observation.sourceRef,
+          location: `section ${observation.observationId}`,
+          summary: `Needed maturation source observation ${observation.observationId}`,
+          structural_data: {
+            content_excerpt: "needed ".repeat(220),
+            section: observation.observationId,
+          },
+        })),
+      ],
+      skipped_refs: [],
+      validation_results: [],
+    };
+    const questionFrontier: ReconstructMaturationQuestionFrontierArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: sourceObservations.created_at,
+      maturation_baseline_ref: "maturation-baseline.yaml",
+      maturation_baseline_validation_ref: "maturation-baseline-validation.yaml",
+      actionability_matrix_ref: "baseline-actionability-matrix.yaml",
+      actionability_matrix_validation_ref:
+        "baseline-actionability-matrix-validation.yaml",
+      questions: [{
+        question_id: "maturation-question-needed-source",
+        question: "What does the needed maturation source prove?",
+        materiality: "blocker",
+        materiality_ref: "matrix-row-needed",
+        actionability_surface_refs: ["dynamic_surface"],
+        maturity_dimension_refs: ["evidence"],
+        purpose_element_refs: ["purpose-needed"],
+        baseline_row_refs: ["baseline-needed"],
+        competency_question_refs: [],
+        competency_assessment_refs: [],
+        domain_competency_trace_refs: [],
+        seed_ref_refs: ["object-needed"],
+        current_answer_status: "unsupported",
+        expected_answer_kind: "explanation",
+        evidence_needed: "Needed maturation source evidence.",
+        authority_need: {
+          authority_kind: "none",
+          authority_scope: null,
+          blocking_if_unavailable: true,
+          expected_response_kind: "unavailable_reason",
+        },
+        closure_frontier_hint_refs: closureHintSourceRefs.map((sourceRef) =>
+          `source:${sourceRef}`
+        ),
+        limitation_refs: [],
+      }],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture-author",
+      },
+    };
+    const closureFrontier: ReconstructMaturationClosureFrontierArtifact = {
+      schema_version: "1",
+      session_id: sourceObservations.session_id,
+      created_at: sourceObservations.created_at,
+      round_id: "maturation-round-1",
+      question_frontier_ref: "maturation-question-frontier.yaml",
+      source_requests: sourceRequests.map((request, index) => ({
+        source_request_id: index === 0
+          ? "source-request-needed"
+          : `source-request-needed-${index + 1}`,
+        question_refs: ["maturation-question-needed-source"],
+        member_scope_refs: [],
+        member_source_refs: request.memberSourceRefs ?? [],
+        cross_material_ref_refs: request.crossMaterialRefRefs ?? [],
+        requested_source_ref: request.requestedSourceRef,
+        requested_location: request.requestedSourceRef,
+        target_material_kind: request.targetMaterialKind ?? "document",
+        expected_evidence_kind: "needed maturation source",
+        reason: "The question needs this source.",
+      })),
+      authority_requests: [],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture-author",
+      },
+    };
+    return { sourceObservations, questionFrontier, closureFrontier };
+  }
+
+  function validQuestionFrontierValidation() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_question_frontier_ref: "maturation-question-frontier.yaml",
+      maturation_baseline_validation_ref:
+        "maturation-baseline-validation.yaml",
+      actionability_matrix_validation_ref:
+        "baseline-actionability-matrix-validation.yaml",
+      validation_status: "valid" as const,
+      question_count: 1,
+      material_frontier_question_count: 1,
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  function validClosureFrontierValidation(
+    closureFrontier?: ReconstructMaturationClosureFrontierArtifact,
+  ) {
+    const acceptedSourceRequestIds = closureFrontier?.source_requests.map((
+      sourceRequest,
+    ) => sourceRequest.source_request_id) ?? ["source-request-needed"];
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_closure_frontier_ref: "maturation-closure-frontier.yaml",
+      maturation_question_frontier_validation_ref:
+        "maturation-question-frontier-validation.yaml",
+      source_inventory_ref: "source-inventory.yaml",
+      source_observations_ref: "source-observations.yaml",
+      validation_status: "valid" as const,
+      source_request_count: acceptedSourceRequestIds.length,
+      authority_request_count: 0,
+      accepted_source_request_ids: acceptedSourceRequestIds,
+      rejected_source_requests: [],
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  function emptyAuthorityResponse() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      closure_frontier_ref: "maturation-closure-frontier.yaml",
+      responses: [],
+    };
+  }
+
+  function validAuthorityResponseValidation() {
+    return {
+      schema_version: "1" as const,
+      session_id: "answer-support-prompt-fixture",
+      created_at: "2026-06-04T00:00:00.000Z",
+      maturation_authority_response_ref:
+        "maturation-authority-response.yaml",
+      maturation_closure_frontier_validation_ref:
+        "maturation-closure-frontier-validation.yaml",
+      validation_status: "valid" as const,
+      response_count: 0,
+      provided_response_count: 0,
+      unavailable_response_count: 0,
+      validation_results: [],
+      violations: [],
+    };
+  }
+
+  async function captureAnswerSupportPromptPayload(
+    fixture = answerSupportPromptFixture(),
+  ): Promise<Record<string, any>> {
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (_systemPrompt, userPrompt) => {
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return Promise.resolve({
+          text: JSON.stringify({ evidence_clusters: [] }),
+        });
+      },
+    });
+    await author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: fixture.questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: fixture.closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(fixture.closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations: fixture.sourceObservations,
+    });
+    expect(capturedPayload).not.toBeNull();
+    return capturedPayload as Record<string, any>;
+  }
+
+  it("bounds answer-support source observations to a closure-prioritized prompt-visible catalog", async () => {
+    const {
+      sourceObservations,
+      questionFrontier,
+      closureFrontier,
+    } = answerSupportPromptFixture();
+    let capturedPayload: Record<string, any> | null = null;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: (systemPrompt, userPrompt) => {
+        expect(systemPrompt).toContain("Author answer-support-ledger.yaml");
+        capturedPayload = JSON.parse(userPrompt) as Record<string, any>;
+        return Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-needed",
+              question_refs: ["maturation-question-needed-source"],
+              support_mode: "direct_authority",
+              proposed_answer_summary:
+                "The bounded prompt catalog includes the needed source.",
+              evidence_observation_ids: ["obs-needed"],
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "The fixture cites the closure-requested source.",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        });
+      },
+    });
+
+    const result = await author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations,
+    });
+
+    expect(capturedPayload?.source_observation_prompt_policy)
+      .toMatchObject({
+        projection_kind: "maturation_answer_support_bounded_catalog",
+        source_observation_count: 70,
+        prioritized_observation_count: 1,
+        prompt_observation_count: 64,
+        prompt_visible_prioritized_observation_count: 1,
+        prompt_visible_supplemental_observation_count: 63,
+        omitted_prioritized_observation_count: 0,
+        observation_limit: 64,
+        content_excerpt_char_limit: 500,
+      });
+    expect(capturedPayload?.prompt_visible_observation_ids[0]).toBe(
+      "obs-needed",
+    );
+    expect(capturedPayload?.source_observations).toHaveLength(64);
+    expect(capturedPayload?.source_observations[0]?.observation_id).toBe(
+      "obs-needed",
+    );
+    const promptSourceObservationIds = capturedPayload?.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+    expect(promptSourceObservationIds).toEqual(
+      capturedPayload?.prompt_visible_observation_ids,
+    );
+    expect(promptSourceObservationIds).toContain("obs-needed");
+    expect(JSON.stringify(capturedPayload?.source_observations))
+      .not.toContain("obs-69");
+    const neededObservation = capturedPayload?.source_observations.find((
+      observation: { observation_id: string },
+    ) => observation.observation_id === "obs-needed");
+    expect(neededObservation.structural_data.content_excerpt.length).toBe(500);
+    expect(result.evidence_clusters[0]?.evidence_refs[0]?.observation_id)
+      .toBe("obs-needed");
+  });
+
+  it.each([
+    {
+      caseName: "question hint refs",
+      fixture: () => {
+        const sourceRef = "/fixture/hint-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [sourceRef],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+          },
+        });
+      },
+    },
+    {
+      caseName: "requested_source_ref",
+      fixture: () => {
+        const sourceRef = "/fixture/requested-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: sourceRef,
+          },
+        });
+      },
+    },
+    {
+      caseName: "member_source_refs",
+      fixture: () => {
+        const sourceRef = "/fixture/member-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [sourceRef],
+          },
+        });
+      },
+    },
+    {
+      caseName: "cross_material_ref_refs",
+      fixture: () => {
+        const sourceRef = "/fixture/cross-priority.md";
+        return answerSupportPromptFixture({
+          priorityObservations: [{
+            observationId: "obs-priority",
+            sourceRef,
+          }],
+          closureHintSourceRefs: [],
+          sourceRequest: {
+            requestedSourceRef: "/fixture/unobserved-request.md",
+            targetMaterialKind: "mixed",
+            crossMaterialRefRefs: [sourceRef],
+          },
+        });
+      },
+    },
+  ])("prioritizes answer-support source observations from $caseName", async (
+    testCase,
+  ) => {
+    const payload = await captureAnswerSupportPromptPayload(testCase.fixture());
+
+    expect(payload.prompt_visible_observation_ids[0]).toBe("obs-priority");
+    expect(payload.source_observations[0]?.observation_id).toBe("obs-priority");
+    expect(payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id)).toEqual(
+      payload.prompt_visible_observation_ids,
+    );
+    expect(payload.source_observation_prompt_policy)
+      .toMatchObject({
+        prioritized_observation_count: 1,
+        prompt_visible_prioritized_observation_count: 1,
+        omitted_prioritized_observation_count: 0,
+      });
+    expect(payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id)).toContain("obs-priority");
+  });
+
+  it("preserves full answer-support prompt catalog order across multiple priority categories before supplemental rows", async () => {
+    const hintSourceRef = "/fixture/hint-priority.md";
+    const requestedSourceRef = "/fixture/requested-priority.md";
+    const memberSourceRef = "/fixture/member-priority.md";
+    const crossSourceRef = "/fixture/cross-priority.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        supplementalObservationCount: 3,
+        priorityObservations: [
+          {
+            observationId: "obs-cross-priority",
+            sourceRef: crossSourceRef,
+          },
+          {
+            observationId: "obs-member-priority",
+            sourceRef: memberSourceRef,
+          },
+          {
+            observationId: "obs-requested-priority",
+            sourceRef: requestedSourceRef,
+          },
+          {
+            observationId: "obs-hint-priority",
+            sourceRef: hintSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [hintSourceRef],
+        sourceRequest: {
+          requestedSourceRef,
+          targetMaterialKind: "mixed",
+          memberSourceRefs: [memberSourceRef],
+          crossMaterialRefRefs: [crossSourceRef],
+        },
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 4)).toEqual([
+      "obs-hint-priority",
+      "obs-requested-priority",
+      "obs-member-priority",
+      "obs-cross-priority",
+    ]);
+    expect(sourceObservationIds.slice(4)).toEqual(["obs-1", "obs-2", "obs-3"]);
+  });
+
+  it("preserves answer-support category order globally across multiple source requests", async () => {
+    const firstRequestedSourceRef = "/fixture/requested-first.md";
+    const secondRequestedSourceRef = "/fixture/requested-second.md";
+    const firstMemberSourceRef = "/fixture/member-first.md";
+    const secondMemberSourceRef = "/fixture/member-second.md";
+    const firstCrossSourceRef = "/fixture/cross-first.md";
+    const secondCrossSourceRef = "/fixture/cross-second.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        supplementalObservationCount: 2,
+        priorityObservations: [
+          {
+            observationId: "obs-cross-second",
+            sourceRef: secondCrossSourceRef,
+          },
+          {
+            observationId: "obs-member-first",
+            sourceRef: firstMemberSourceRef,
+          },
+          {
+            observationId: "obs-requested-second",
+            sourceRef: secondRequestedSourceRef,
+          },
+          {
+            observationId: "obs-cross-first",
+            sourceRef: firstCrossSourceRef,
+          },
+          {
+            observationId: "obs-requested-first",
+            sourceRef: firstRequestedSourceRef,
+          },
+          {
+            observationId: "obs-member-second",
+            sourceRef: secondMemberSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [],
+        sourceRequest: null,
+        sourceRequests: [
+          {
+            requestedSourceRef: firstRequestedSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [firstMemberSourceRef],
+            crossMaterialRefRefs: [firstCrossSourceRef],
+          },
+          {
+            requestedSourceRef: secondRequestedSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [secondMemberSourceRef],
+            crossMaterialRefRefs: [secondCrossSourceRef],
+          },
+        ],
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 6)).toEqual([
+      "obs-requested-first",
+      "obs-requested-second",
+      "obs-member-first",
+      "obs-member-second",
+      "obs-cross-first",
+      "obs-cross-second",
+    ]);
+    expect(sourceObservationIds.slice(6)).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("dedupes duplicate answer-support source refs at the earliest priority category", async () => {
+    const duplicateSourceRef = "/fixture/duplicate-priority.md";
+    const requestedSourceRef = "/fixture/requested-after-duplicate.md";
+    const payload = await captureAnswerSupportPromptPayload(
+      answerSupportPromptFixture({
+        supplementalObservationCount: 2,
+        priorityObservations: [
+          {
+            observationId: "obs-requested-after-duplicate",
+            sourceRef: requestedSourceRef,
+          },
+          {
+            observationId: "obs-duplicate-priority",
+            sourceRef: duplicateSourceRef,
+          },
+        ],
+        closureHintSourceRefs: [duplicateSourceRef],
+        sourceRequest: null,
+        sourceRequests: [
+          {
+            requestedSourceRef: duplicateSourceRef,
+            targetMaterialKind: "mixed",
+            memberSourceRefs: [duplicateSourceRef],
+            crossMaterialRefRefs: [duplicateSourceRef],
+          },
+          {
+            requestedSourceRef,
+            targetMaterialKind: "document",
+          },
+        ],
+      }),
+    );
+    const sourceObservationIds = payload.source_observations.map((
+      observation: { observation_id: string },
+    ) => observation.observation_id);
+
+    expect(sourceObservationIds).toEqual(payload.prompt_visible_observation_ids);
+    expect(sourceObservationIds.slice(0, 2)).toEqual([
+      "obs-duplicate-priority",
+      "obs-requested-after-duplicate",
+    ]);
+    expect(sourceObservationIds.filter((observationId: string) =>
+      observationId === "obs-duplicate-priority"
+    )).toHaveLength(1);
+    expect(sourceObservationIds.slice(2)).toEqual(["obs-1", "obs-2"]);
+  });
+
+  it("fails before answer-support authoring when closure-prioritized observations exceed the prompt catalog cap", async () => {
+    const highFanoutRef = "/fixture/high-fanout-requested-source.md";
+    const competingRef = "/fixture/competing-requested-source.md";
+    const fixture = answerSupportPromptFixture({
+      supplementalObservationCount: 0,
+      priorityObservations: [
+        ...Array.from({ length: 65 }, (_, index) => ({
+          observationId: `obs-priority-${index + 1}`,
+          sourceRef: highFanoutRef,
+        })),
+        {
+          observationId: "obs-competing",
+          sourceRef: competingRef,
+        },
+      ],
+      closureHintSourceRefs: [],
+      sourceRequest: {
+        requestedSourceRef: highFanoutRef,
+        targetMaterialKind: "mixed",
+        memberSourceRefs: [competingRef],
+      },
+    });
+    let llmCalled = false;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        llmCalled = true;
+        return Promise.resolve({
+          text: JSON.stringify({ evidence_clusters: [] }),
+        });
+      },
+    });
+
+    await expect(author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: fixture.questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: fixture.closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(fixture.closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations: fixture.sourceObservations,
+    })).rejects.toThrow(/prompt catalog overflow/);
+    expect(llmCalled).toBe(false);
+  });
+
+  it("rejects answer-support evidence ids outside the bounded prompt catalog", async () => {
+    const {
+      sourceObservations,
+      questionFrontier,
+      closureFrontier,
+    } = answerSupportPromptFixture();
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () =>
+        Promise.resolve({
+          text: JSON.stringify({
+            evidence_clusters: [{
+              evidence_cluster_id: "cluster-outside-catalog",
+              question_refs: ["maturation-question-needed-source"],
+              support_mode: "direct_authority",
+              proposed_answer_summary:
+                "The fixture attempts to cite hidden prompt evidence.",
+              evidence_observation_ids: ["obs-69"],
+              proof_refs: [],
+              user_confirmation_refs: [],
+              authority_response_refs: [],
+              independence_basis: "Invalid hidden evidence citation.",
+              contradiction_refs: [],
+              limitation_refs: [],
+            }],
+          }),
+        }),
+    });
+
+    await expect(author.writeAnswerSupportLedger({
+      sessionId: "answer-support-prompt-fixture",
+      roundId: "maturation-round-1",
+      maturationQuestionFrontier: questionFrontier,
+      maturationQuestionFrontierRef: "maturation-question-frontier.yaml",
+      maturationQuestionFrontierValidation: validQuestionFrontierValidation(),
+      maturationClosureFrontier: closureFrontier,
+      maturationClosureFrontierValidation:
+        validClosureFrontierValidation(closureFrontier),
+      maturationAuthorityResponse: emptyAuthorityResponse(),
+      maturationAuthorityResponseValidation: validAuthorityResponseValidation(),
+      sourceObservations,
+    })).rejects.toThrow(/outside the bounded prompt catalog/);
+  });
 
   it("runs the material-aware purpose adequacy path for the first code fixture", async () => {
     const projectRoot = await tempProjectRoot();
@@ -2180,10 +2881,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     });
 
     expect(result.status).toBe("completed");
@@ -2205,11 +2910,11 @@ describe("runReconstruct", () => {
     expect(result.metrics.failure_kind_counts.insufficient_evidence).toBe(0);
     expect(result.metrics.revision_proposal_action_counts.extend).toBe(0);
     expect(result.stopDecision.decision).toBe("stop");
-    expect(result.finalOutputText).toContain("Confirmed Seed Content");
-    expect(result.finalOutputText).toContain("Claim Realization Summary");
-    expect(result.finalOutputText).toContain("Competency Question Assessment");
-    expect(result.finalOutputText).toContain("Failure Classifications");
-    expect(result.finalOutputText).toContain("Revision Proposals");
+    expect(result.finalOutputText).toContain("Seed Answerability");
+    expect(result.finalOutputText).toContain("Claim Projection");
+    expect(result.finalOutputText).toContain("Artifact Truth");
+    expect(result.finalOutputText).toContain("Runtime Provenance Bindings");
+    expect(result.finalOutputText).toContain("full_integral_exploration");
 
     const record = await readYaml<ReconstructRecordArtifact>(
       result.reconstructRecordPath,
@@ -2342,7 +3047,7 @@ describe("runReconstruct", () => {
     });
     expect(claimProjectionValidation.validation_status).toBe("valid");
     expect(claimProjectionValidation.strongest_claim_level)
-      .toBe("blocked");
+      .toBe("actionable_ready");
     expect(registryVerificationEvidenceValidation.validation_status)
       .toBe("valid");
     expect(registryVerificationEvidenceValidation.validation_gate_count)
@@ -2356,11 +3061,10 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain("Claim Projection");
     expect(result.finalOutputText)
       .toContain("Public claim truth is owned by the claim projection artifact");
-    expect(result.finalOutputText).toContain("Strongest claim level: blocked");
+    expect(result.finalOutputText)
+      .toContain("Strongest claim level: actionable_ready");
     expect(result.finalOutputText).toContain("Decision states:");
     expect(result.finalOutputText).toContain("Actionability claims:");
-    expect(result.finalOutputText)
-      .toContain("No ActionableOntology artifact is claimed or emitted");
     expect(result.finalOutputText).not.toContain("Claim level:");
     expect(result.finalOutputText).not.toContain("Actionability claim:");
     expect(result.finalOutputText).toContain("source-safety-ledger.yaml");
@@ -2424,18 +3128,20 @@ describe("runReconstruct", () => {
       .toContain("graph-exploration-proofs.yaml");
     expect(record.artifact_refs.graph_exploration_proofs_validation)
       .toContain("graph-exploration-proofs-validation.yaml");
-    expect(record.artifact_refs.actionable_ontology).toBeNull();
-    expect(record.artifact_refs.actionable_ontology_validation).toBeNull();
+    expect(record.artifact_refs.actionable_ontology)
+      .toContain("actionable-ontology.yaml");
+    expect(record.artifact_refs.actionable_ontology_validation)
+      .toContain("actionable-ontology-validation.yaml");
     expect(record.validation_summary.failure_count).toBe(0);
     expect(record.validation_summary.revision_proposal_count).toBe(0);
     expect(manifest.runtime_boundary).toMatchObject({
       semantic_generation: "not_performed",
-      semantic_authority: "host_llm_or_mock_author",
+      semantic_authority: "host_llm_author",
     });
     expect(manifest.execution_profile).toMatchObject({
-      profile_kind: "mock_semantic_slice",
-      semantic_author_realization: "mock",
-      confirmation_provider_realization: "mock",
+      profile_kind: "full_integral_exploration",
+      semantic_author_realization: "direct_call",
+      confirmation_provider_realization: "direct_call",
     });
     expect(manifest.purpose_adequacy_scope.deferred_artifacts).toEqual([]);
     expect(manifest.steps.find((step) => step.step_id === "seed_candidate"))
@@ -2445,8 +3151,8 @@ describe("runReconstruct", () => {
         owner: "host_or_user",
         performed_by: {
           authority: "host_or_user",
-          realization: "mock",
-          actor_id: "mock-mixed-confirmation-provider",
+          realization: "direct_call",
+          actor_id: "direct-call-reconstruct-confirmation-provider",
         },
       });
     expect(manifest.steps.find((step) => step.step_id === "final_output"))
@@ -2470,10 +3176,10 @@ describe("runReconstruct", () => {
       step.step_id === "maturation_question_frontier_validation"
     )).toMatchObject({ status: "completed" });
     expect(manifest.steps.find((step) => step.step_id === "actionable_ontology"))
-      .toMatchObject({ status: "skipped" });
+      .toMatchObject({ status: "completed" });
     expect(manifest.steps.find((step) =>
       step.step_id === "actionable_ontology_validation"
-    )).toMatchObject({ status: "skipped" });
+    )).toMatchObject({ status: "completed" });
     expect(manifest.steps.map((step) => step.step_id)).toEqual([
       "invocation_binding",
       "run_control",
@@ -2579,10 +3285,12 @@ describe("runReconstruct", () => {
   it("authors confirmation before competency questions and uses only CQ-eligible claims", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "eligibility-run");
-    const baseConfirmationProvider = createAutoAcceptReconstructConfirmationProvider();
+    const baseConfirmationProvider = createDirectCallReconstructConfirmationProvider({
+      llmCall: reconstructFixtureLlm,
+    });
     const confirmationProvider: ReconstructConfirmationProvider = {
-      providerId: "fixture-reject-first-claim-provider",
-      owner: "mock" as const,
+      providerId: "direct-call-reject-first-claim-provider",
+      owner: "host_or_user" as const,
       confirmPurpose: baseConfirmationProvider.confirmPurpose.bind(baseConfirmationProvider),
       async confirmOntologySeed(input) {
         const artifact = await baseConfirmationProvider.confirmOntologySeed(input);
@@ -2598,11 +3306,11 @@ describe("runReconstruct", () => {
           ],
           notes: [
             ...artifact.notes,
-            "Fixture rejects one claim before competency-question authoring.",
+            "Test provider rejects one claim before competency-question authoring.",
           ],
           confirmation_provider: {
-            owner: "mock" as const,
-            provider_id: "fixture-reject-first-claim-provider",
+            owner: "host_or_user" as const,
+            provider_id: "direct-call-reject-first-claim-provider",
           },
         };
       },
@@ -2615,9 +3323,11 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
       confirmationProvider,
     })).resolves.toMatchObject({
       status: "completed",
@@ -2691,10 +3401,14 @@ describe("runReconstruct", () => {
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       domain: "fixture",
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     });
 
     const competencyQuestions =
@@ -2808,10 +3522,73 @@ describe("runReconstruct", () => {
     }> = [];
     const finalOutputSystemPrompts: string[] = [];
     const finalOutputPayloads: Array<{
+      final_output_prompt_policy?: {
+        projection_kind?: string;
+        partial_projection_policy?: string;
+        deterministic_runtime_append_sections?: string[];
+      };
+      execution_summary?: {
+        skipped_step_ids?: string[];
+        skipped_steps?: unknown;
+      };
+      candidate_inventory_summary?: {
+        candidate_count?: number;
+        candidate_projection_limit?: number;
+        candidate_included_count?: number;
+        candidate_omitted_count?: number;
+        candidate_partial_projection?: boolean;
+        omitted_candidate_id_samples?: string[];
+      };
+      ontology_seed_summary?: {
+        claim_count?: number;
+        claim_projection_limit?: number;
+        claim_included_count?: number;
+        claim_omitted_count?: number;
+        claim_partial_projection?: boolean;
+        omitted_claim_id_samples?: string[];
+      };
+      competency_question_summary?: {
+        question_count?: number;
+        question_projection_limit?: number;
+        question_included_count?: number;
+        question_omitted_count?: number;
+        question_partial_projection?: boolean;
+        omitted_question_id_samples?: string[];
+      };
+      competency_question_assessment_summary?: {
+        unresolved_assessment_count?: number;
+        unresolved_assessment_projection_limit?: number;
+        unresolved_assessment_included_count?: number;
+        unresolved_assessment_omitted_count?: number;
+        unresolved_assessment_partial_projection?: boolean;
+        omitted_unresolved_assessment_id_samples?: string[];
+      };
+      failure_classification_summary?: {
+        material_failure_projection_limit?: number;
+        material_failure_included_count?: number;
+        material_failure_omitted_count?: number;
+        material_failure_partial_projection?: boolean;
+        omitted_material_failure_id_samples?: string[];
+      };
+      revision_proposal_summary?: {
+        proposal_count?: number;
+        proposal_projection_limit?: number;
+        proposal_included_count?: number;
+        proposal_omitted_count?: number;
+        proposal_partial_projection?: boolean;
+        omitted_proposal_id_samples?: string[];
+      };
+      handoff_decision_summary?: {
+        gate_projection_count?: number;
+        gate_projection?: unknown;
+      };
       claim_projection_summary?: {
         strongest_claim_level?: string;
+        actionability_claim_counts?: Record<string, number>;
         projection_rows?: Array<{
           actionability_claim?: string;
+          required_validation_ref_count?: number;
+          required_validation_refs?: unknown;
         }>;
       };
       maturation_summary?: {
@@ -2820,10 +3597,109 @@ describe("runReconstruct", () => {
         actionable_ontology_ref?: string | null;
       };
     }> = [];
+    const competencyAssessmentPayloads: Array<{
+      competency_questions_ref?: string | null;
+      competency_questions_validation_ref?: string | null;
+      competency_question_prompt_policy?: {
+        projection_kind?: string;
+        projection_contract_version?: string;
+        projection_contract_sha256?: string;
+        projection_contract?: Record<string, unknown>;
+        prompt_char_limit?: number;
+        question_projection?: string;
+        runtime_derivations?: string[];
+      };
+      competency_questions?: {
+        question_count?: number;
+        questions?: Array<{
+          question_id?: string;
+          question?: string;
+          evidence_observation_ids?: string[];
+          evidence_source_basenames?: string[];
+          evidence_refs?: unknown;
+        }>;
+      };
+      competency_questions_validation?: {
+        validation_status?: string;
+        violation_count?: number;
+        prompt_visible_violations?: unknown[];
+      };
+      claim_realization_map?: {
+        claim_realization_count?: number;
+        claim_realizations?: Array<{
+          evidence_observation_ids?: string[];
+          evidence_source_basenames?: string[];
+          evidence_refs?: unknown;
+        }>;
+      };
+    }> = [];
     const confirmationClaimSummaries: Array<
       Array<{ claim_id: string; claim_kind: string }>
     > = [];
+    const promptMeasurements: Array<{
+      label: string;
+      total_chars: number;
+      user_prompt_chars: number;
+      system_prompt_chars: number;
+    }> = [];
+    const promptLabel = (systemPrompt: string): string => {
+      if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
+        return "source-purpose-candidates";
+      }
+      if (systemPrompt.includes("Author candidate-inventory.yaml")) {
+        return "candidate-inventory";
+      }
+      if (systemPrompt.includes("Author candidate-disposition.yaml")) {
+        return "candidate-disposition";
+      }
+      if (systemPrompt.includes("Author ontology-seed.yaml")) {
+        return "ontology-seed";
+      }
+      if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
+        return "seed-confirmation";
+      }
+      if (systemPrompt.includes("Write competency questions")) {
+        return "competency-questions";
+      }
+      if (systemPrompt.includes("Assess every competency question")) {
+        return "competency-question-assessment";
+      }
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        return "failure-classification";
+      }
+      if (systemPrompt.includes("Propose bounded ontology actions")) {
+        return "revision-proposal";
+      }
+      if (systemPrompt.includes("Decide whether the current reconstructed result")) {
+        return "stop-decision";
+      }
+      if (systemPrompt.includes("Author maturation-question-frontier.yaml")) {
+        return "maturation-question-frontier";
+      }
+      if (systemPrompt.includes("Author maturation-closure-frontier.yaml")) {
+        return "maturation-closure-frontier";
+      }
+      if (systemPrompt.includes("Author answer-support-ledger.yaml")) {
+        return "answer-support-ledger";
+      }
+      if (systemPrompt.includes("Author maturation-answer-claims.yaml")) {
+        return "maturation-answer-claims";
+      }
+      if (systemPrompt.includes("Author ontology-expansion.yaml")) {
+        return "ontology-expansion";
+      }
+      if (systemPrompt.includes("writing the final reconstruct result")) {
+        return "final-output";
+      }
+      return "other";
+    };
     const llmCall = (systemPrompt: string, userPrompt: string) => {
+      promptMeasurements.push({
+        label: promptLabel(systemPrompt),
+        total_chars: systemPrompt.length + userPrompt.length,
+        user_prompt_chars: userPrompt.length,
+        system_prompt_chars: systemPrompt.length,
+      });
       if (systemPrompt.includes("Author source-purpose-candidates.yaml")) {
         sourcePurposeSystemPrompts.push(systemPrompt);
         sourcePurposePayloads.push(JSON.parse(userPrompt));
@@ -2843,13 +3719,31 @@ describe("runReconstruct", () => {
         finalOutputSystemPrompts.push(systemPrompt);
         finalOutputPayloads.push(JSON.parse(userPrompt));
       }
+      if (systemPrompt.includes("Assess every competency question")) {
+        competencyAssessmentPayloads.push(JSON.parse(userPrompt));
+      }
       if (systemPrompt.includes("mediating reconstruct Seed confirmation")) {
         const input = JSON.parse(userPrompt) as {
           claim_summaries?: Array<{ claim_id: string; claim_kind: string }>;
         };
         confirmationClaimSummaries.push(input.claim_summaries ?? []);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      if (systemPrompt.includes("Write competency questions")) {
+        return reconstructFixtureLlm(systemPrompt, userPrompt).then((llmResult) => {
+          const authored = JSON.parse(llmResult.text) as {
+            questions?: Array<{ question?: string }>;
+          };
+          if (authored.questions?.[0]) {
+            authored.questions[0].question = [
+              "Can the Seed explain the fixture claim while preserving this long decisive clause?",
+              "context ".repeat(80),
+              "DECISIVE_TAIL_SHOULD_REACH_ASSESSMENT",
+            ].join(" ");
+          }
+          return { ...llmResult, text: JSON.stringify(authored) };
+        });
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const result = await runReconstruct({
       projectRoot,
@@ -2904,21 +3798,38 @@ describe("runReconstruct", () => {
     const liveOntologySeed = await readYaml<ReconstructOntologySeedArtifact>(
       result.reconstructRunManifest.artifact_refs.ontology_seed!,
     );
+    const liveCompetencyQuestions =
+      await readYaml<ReconstructCompetencyQuestionsArtifact>(
+        result.reconstructRunManifest.artifact_refs.competency_questions!,
+      );
     const sourcePurposeReuseProvenance = await readYaml<{
-      compatibility?: {
+      reuse_match?: {
+        competency_question_assessment_projection_contract_version?: string;
+        competency_question_assessment_projection_contract_sha256?: string | null;
         source_scout_pack_sha256?: string | null;
         source_observation_lineage_index_validation_sha256?: string | null;
         seed_authoring_readiness_validation_sha256?: string | null;
       };
     }>(path.join(sessionRoot, "source-purpose-candidates.yaml.reuse-provenance.yaml"));
     const ontologySeedReuseProvenance = await readYaml<{
-      compatibility?: {
+      reuse_match?: {
+        competency_question_assessment_projection_contract_version?: string;
+        competency_question_assessment_projection_contract_sha256?: string | null;
         source_scout_pack_sha256?: string | null;
         source_observation_lineage_index_validation_sha256?: string | null;
         seed_authoring_readiness_validation_sha256?: string | null;
         seed_authoring_readiness_taxonomy_version?: string | null;
       };
     }>(path.join(sessionRoot, "ontology-seed.yaml.reuse-provenance.yaml"));
+    const competencyQuestionAssessmentReuseProvenance = await readYaml<{
+      reuse_match?: {
+        competency_question_assessment_projection_contract_version?: string;
+        competency_question_assessment_projection_contract_sha256?: string | null;
+      };
+    }>(path.join(
+      sessionRoot,
+      "competency-question-assessment.yaml.reuse-provenance.yaml",
+    ));
     const liveSourceScoutPack = await readYaml<ReconstructSourceScoutPackArtifact>(
       result.reconstructRunManifest.artifact_refs.source_scout_pack!,
     );
@@ -3027,30 +3938,46 @@ describe("runReconstruct", () => {
     expect(result.finalOutputText).toContain(postMaturationScoutPackValidationRef);
     expect(result.finalOutputText)
       .toContain(postMaturationGateProjectionValidationRef);
-    expect(sourcePurposeReuseProvenance.compatibility?.source_scout_pack_sha256)
+    expect(sourcePurposeReuseProvenance.reuse_match?.source_scout_pack_sha256)
       .toHaveLength(64);
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
+        ?.competency_question_assessment_projection_contract_version,
+    ).toBe("competency_question_assessment_compact_projection:v2");
+    expect(
+      sourcePurposeReuseProvenance.reuse_match
+        ?.competency_question_assessment_projection_contract_sha256,
+    ).toHaveLength(64);
+    expect(
+      sourcePurposeReuseProvenance.reuse_match
         ?.source_observation_lineage_index_validation_sha256,
     ).toHaveLength(64);
     expect(
-      sourcePurposeReuseProvenance.compatibility
+      sourcePurposeReuseProvenance.reuse_match
         ?.seed_authoring_readiness_validation_sha256,
     ).toBeNull();
-    expect(ontologySeedReuseProvenance.compatibility?.source_scout_pack_sha256)
+    expect(ontologySeedReuseProvenance.reuse_match?.source_scout_pack_sha256)
       .toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.source_observation_lineage_index_validation_sha256,
     ).toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.seed_authoring_readiness_validation_sha256,
     ).toHaveLength(64);
     expect(
-      ontologySeedReuseProvenance.compatibility
+      ontologySeedReuseProvenance.reuse_match
         ?.seed_authoring_readiness_taxonomy_version,
     ).toBe("seed_authoring_readiness:v1");
+    expect(
+      competencyQuestionAssessmentReuseProvenance.reuse_match
+        ?.competency_question_assessment_projection_contract_version,
+    ).toBe("competency_question_assessment_compact_projection:v2");
+    expect(
+      competencyQuestionAssessmentReuseProvenance.reuse_match
+        ?.competency_question_assessment_projection_contract_sha256,
+    ).toHaveLength(64);
 
     await expect(fs.access(path.join(sessionRoot, "seed-candidate.yaml")))
       .rejects.toMatchObject({ code: "ENOENT" });
@@ -3166,18 +4093,209 @@ describe("runReconstruct", () => {
       "For represented_as_actor_role obligations",
     );
     expect(ontologySeedSystemPrompts[0]).not.toContain("top_level_concepts");
+    if (process.env.RECONSTRUCT_PROMPT_SIZE_REPORT === "1") {
+      console.table(
+        [...promptMeasurements]
+          .sort((left, right) => right.total_chars - left.total_chars)
+          .slice(0, 12),
+      );
+    }
+    expect(promptMeasurements.some((measurement) =>
+      measurement.label === "competency-question-assessment"
+    )).toBe(true);
+    expect(promptMeasurements.some((measurement) =>
+      measurement.label === "final-output"
+    )).toBe(true);
+    expect(promptMeasurements.find((measurement) =>
+      measurement.label === "competency-question-assessment"
+    )?.total_chars).toBeLessThan(50_000);
+    expect(promptMeasurements.find((measurement) =>
+      measurement.label === "final-output"
+    )?.total_chars).toBeLessThan(50_000);
+    expect(competencyAssessmentPayloads[0]?.competency_questions_ref)
+      .toContain("competency-questions.yaml");
+    expect(competencyAssessmentPayloads[0]?.competency_questions_validation_ref)
+      .toContain("competency-questions-validation.yaml");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.projection_kind,
+    ).toBe("competency_question_assessment_compact_projection");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.projection_contract_version,
+    ).toBe("competency_question_assessment_compact_projection:v2");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.projection_contract_sha256,
+    ).toHaveLength(64);
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.prompt_char_limit,
+    ).toBe(50_000);
+    const competencyQuestionAssessmentProjectionContract =
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.projection_contract;
+    const competencyQuestionAssessmentProjectionContractSha256 =
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.projection_contract_sha256;
+    expect(competencyQuestionAssessmentProjectionContract).toBeDefined();
+    const projectionContract =
+      competencyQuestionAssessmentProjectionContract ?? {};
+    expect(projectionContract)
+      .toMatchObject({
+        projection_kind: "competency_question_assessment_compact_projection",
+        projection_contract_version:
+          "competency_question_assessment_compact_projection:v2",
+        prompt_char_limit: 50_000,
+        batching_policy: expect.objectContaining({
+          mode: "deterministic_prompt_budget",
+          single_question_overflow: "fail_loud_before_dispatch",
+        }),
+      });
+    expect(competencyQuestionAssessmentProjectionContractSha256)
+      .toBe(sha256Text(stableJson(
+        projectionContract,
+      )));
+    expect(sha256Text(stableJson({
+      ...projectionContract,
+      prompt_char_limit: 49_000,
+    }))).not.toBe(competencyQuestionAssessmentProjectionContractSha256);
+    expect(
+      competencyQuestionAssessmentReuseProvenance.reuse_match
+        ?.competency_question_assessment_projection_contract_sha256,
+    ).toBe(competencyQuestionAssessmentProjectionContractSha256);
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.question_projection,
+    ).toContain("without truncation");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_question_prompt_policy
+        ?.runtime_derivations,
+    ).toEqual(expect.arrayContaining([
+      "required_seed_refs",
+      "linked_claim_ids",
+      "evidence_refs",
+      "downstream_effect",
+    ]));
+    expect(competencyAssessmentPayloads[0]?.competency_questions?.question_count)
+      .toBe(liveCompetencyQuestions.questions.length);
+    expect(
+      competencyAssessmentPayloads[0]?.competency_questions?.questions?.[0]
+        ?.question,
+    ).toBe(liveCompetencyQuestions.questions[0]?.question);
+    expect(JSON.stringify(competencyAssessmentPayloads[0]?.competency_questions))
+      .toContain("DECISIVE_TAIL_SHOULD_REACH_ASSESSMENT");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_questions?.questions?.[0],
+    ).toHaveProperty("evidence_observation_ids");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_questions?.questions?.[0],
+    ).toHaveProperty("evidence_source_basenames");
+    expect(JSON.stringify(competencyAssessmentPayloads[0]?.competency_questions))
+      .not.toContain("evidence_refs");
+    expect(JSON.stringify(competencyAssessmentPayloads[0]?.claim_realization_map))
+      .not.toContain("evidence_refs");
+    expect(JSON.stringify(competencyAssessmentPayloads[0]?.claim_realization_map))
+      .toContain("evidence_observation_ids");
+    expect(JSON.stringify(competencyAssessmentPayloads[0]?.claim_realization_map))
+      .toContain("evidence_source_basenames");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_questions_validation
+        ?.validation_status,
+    ).toBe("valid");
+    expect(
+      competencyAssessmentPayloads[0]?.competency_questions_validation
+        ?.violation_count,
+    ).toBe(0);
+    expect(finalOutputPayloads[0]?.final_output_prompt_policy?.projection_kind)
+      .toBe("final_output_compact_summary_projection");
+    expect(
+      finalOutputPayloads[0]?.final_output_prompt_policy
+        ?.partial_projection_policy,
+    ).toContain("artifact refs");
+    expect(
+      finalOutputPayloads[0]?.final_output_prompt_policy
+        ?.deterministic_runtime_append_sections,
+    ).toEqual(expect.arrayContaining([
+      "claim_projection",
+      "artifact_truth",
+      "provenance_footer",
+    ]));
+    expect(finalOutputPayloads[0]?.execution_summary?.skipped_step_ids)
+      .toEqual(expect.any(Array));
+    expect(finalOutputPayloads[0]?.execution_summary?.skipped_steps)
+      .toBeUndefined();
+    expect(finalOutputPayloads[0]?.handoff_decision_summary)
+      .toHaveProperty("gate_projection_count");
+    expect(finalOutputPayloads[0]?.handoff_decision_summary?.gate_projection)
+      .toBeUndefined();
     expect(finalOutputSystemPrompts[0])
       .toContain("Include a short Claim Projection section");
     expect(finalOutputSystemPrompts[0])
+      .toContain("*_partial_projection");
+    expect(finalOutputSystemPrompts[0])
       .toContain("Include a short Maturation Decision section");
+    expect(finalOutputPayloads[0]?.candidate_inventory_summary)
+      .toMatchObject({
+        candidate_projection_limit: 40,
+        candidate_included_count: expect.any(Number),
+        candidate_omitted_count: expect.any(Number),
+        candidate_partial_projection: expect.any(Boolean),
+        omitted_candidate_id_samples: expect.any(Array),
+      });
+    expect(finalOutputPayloads[0]?.ontology_seed_summary)
+      .toMatchObject({
+        claim_projection_limit: 80,
+        claim_included_count: expect.any(Number),
+        claim_omitted_count: expect.any(Number),
+        claim_partial_projection: expect.any(Boolean),
+        omitted_claim_id_samples: expect.any(Array),
+      });
+    expect(finalOutputPayloads[0]?.competency_question_summary)
+      .toMatchObject({
+        question_projection_limit: 80,
+        question_included_count: expect.any(Number),
+        question_omitted_count: expect.any(Number),
+        question_partial_projection: expect.any(Boolean),
+        omitted_question_id_samples: expect.any(Array),
+      });
+    expect(finalOutputPayloads[0]?.competency_question_assessment_summary)
+      .toMatchObject({
+        unresolved_assessment_projection_limit: 60,
+        unresolved_assessment_included_count: expect.any(Number),
+        unresolved_assessment_omitted_count: expect.any(Number),
+        unresolved_assessment_partial_projection: expect.any(Boolean),
+        omitted_unresolved_assessment_id_samples: expect.any(Array),
+      });
+    expect(finalOutputPayloads[0]?.failure_classification_summary)
+      .toMatchObject({
+        material_failure_projection_limit: 60,
+        material_failure_included_count: expect.any(Number),
+        material_failure_omitted_count: expect.any(Number),
+        material_failure_partial_projection: expect.any(Boolean),
+        omitted_material_failure_id_samples: expect.any(Array),
+      });
+    expect(finalOutputPayloads[0]?.revision_proposal_summary)
+      .toMatchObject({
+        proposal_projection_limit: 60,
+        proposal_included_count: expect.any(Number),
+        proposal_omitted_count: expect.any(Number),
+        proposal_partial_projection: expect.any(Boolean),
+        omitted_proposal_id_samples: expect.any(Array),
+      });
     expect(finalOutputPayloads[0]?.claim_projection_summary?.strongest_claim_level)
       .toBeDefined();
+    expect(finalOutputPayloads[0]?.claim_projection_summary?.actionability_claim_counts)
+      .toEqual(expect.any(Object));
     expect(finalOutputPayloads[0]?.claim_projection_summary?.projection_rows)
       .toEqual(expect.arrayContaining([
         expect.objectContaining({
           actionability_claim: expect.any(String),
+          required_validation_ref_count: expect.any(Number),
         }),
       ]));
+    expect(JSON.stringify(finalOutputPayloads[0]?.claim_projection_summary))
+      .not.toContain("required_validation_refs");
     expect(finalOutputPayloads[0]?.maturation_summary?.continuation_decision)
       .toEqual(expect.any(String));
     expect(finalOutputPayloads[0]?.maturation_summary?.included_row_count)
@@ -3190,6 +4308,112 @@ describe("runReconstruct", () => {
     });
     expect(result.finalOutputText).toContain("Seed Answerability");
     expect(result.finalOutputText).toContain("Ontology seed projected claims");
+  });
+
+  it("fails loud before dispatch when competency question assessment exceeds the prompt budget", async () => {
+    let called = false;
+    const author = createDirectCallReconstructDirectiveAuthor({
+      llmCall: () => {
+        called = true;
+        return Promise.resolve({
+          text: "{\"assessments\":[]}",
+          input_tokens: 0,
+          output_tokens: 0,
+          model_id: "fixture",
+        });
+      },
+    });
+    const competencyQuestions: ReconstructCompetencyQuestionsArtifact = {
+      schema_version: "1",
+      session_id: "cq-budget-run",
+      created_at: "2026-06-04T00:00:00.000Z",
+      seed_confirmation_ref: null,
+      ontology_seed_ref: null,
+      questions: [{
+        question_id: "cq-budget-1",
+        question: [
+          "Can the seed answer this deliberately oversized competency question?",
+          "critical context ".repeat(4000),
+          "DECISIVE_BUDGET_TAIL",
+        ].join(" "),
+        linked_claim_ids: ["claim-budget"],
+        coverage_axis_refs: [],
+        ontology_handoff_axis_refs: [],
+        seed_ref_refs: ["claim-budget"],
+        limitation_refs: [],
+        reasoning_or_formalism_facets: [],
+        entity_identity_facets: [],
+        instance_assertion_facets: [],
+        terminology_facets: [],
+        relation_type_facets: [],
+        classification_facets: [],
+        constraint_facets: [],
+        modeling_concern_facets: [],
+        domain_competency_trace_refs: [],
+        reference_standard_refs: [],
+        pattern_catalog_refs: [],
+        query_access_contract_refs: [],
+        visualization_contract_refs: [],
+        graph_exploration_contract_refs: [],
+        domain_competency_semantic_assessments: [],
+        coverage_disposition: "covered",
+        expected_answer_kind: "yes_no",
+        handoff_relevance: "required",
+        lifecycle_status: "active",
+        rationale: "Budget fixture question.",
+        evidence_refs: [],
+      }],
+      open_questions: [],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture",
+      },
+    };
+    const competencyQuestionsValidation: ReconstructCompetencyQuestionsValidationArtifact = {
+      schema_version: "1",
+      session_id: "cq-budget-run",
+      created_at: "2026-06-04T00:00:00.000Z",
+      competency_questions_ref: "/tmp/competency-questions.yaml",
+      reconstruct_run_manifest_ref: null,
+      seed_confirmation_validation_ref: null,
+      ontology_seed_ref: null,
+      ontology_seed_validation_ref: null,
+      source_observations_ref: null,
+      validation_status: "valid",
+      competency_question_count: 1,
+      required_evidence_scope_projection: [{
+        question_id: "cq-budget-1",
+        required_evidence_scope: [],
+      }],
+      validation_results: ["valid"],
+      violations: [],
+    };
+    const claimRealizationMap: ReconstructClaimRealizationMapArtifact = {
+      schema_version: "1",
+      session_id: "cq-budget-run",
+      created_at: "2026-06-04T00:00:00.000Z",
+      ontology_seed_ref: null,
+      claim_realizations: [{
+        claim_id: "claim-budget",
+        stance: "observed_runtime_behavior",
+        evidence_refs: [],
+        rationale: "Fixture claim realization.",
+      }],
+      directive_author: {
+        owner: "host_llm",
+        author_id: "fixture",
+      },
+    };
+
+    await expect(author.writeCompetencyQuestionAssessment({
+      sessionId: "cq-budget-run",
+      competencyQuestions,
+      competencyQuestionsRef: "/tmp/competency-questions.yaml",
+      competencyQuestionsValidation,
+      competencyQuestionsValidationRef: "/tmp/competency-questions-validation.yaml",
+      claimRealizationMap,
+    })).rejects.toThrow(/compact prompt exceeds deterministic prompt budget/);
+    expect(called).toBe(false);
   });
 
   it("repairs an invalid ontology seed with focused validation context", async () => {
@@ -3218,7 +4442,7 @@ describe("runReconstruct", () => {
       }
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         ontologySeedCallCount += 1;
-        const result = await fakeLiveLlm(systemPrompt, userPrompt);
+        const result = await reconstructFixtureLlm(systemPrompt, userPrompt);
         if (ontologySeedCallCount === 1) {
           const seed = JSON.parse(result.text) as Record<string, any>;
           seed.kinetic_layer = {
@@ -3232,7 +4456,7 @@ describe("runReconstruct", () => {
         }
         return result;
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -3282,7 +4506,7 @@ describe("runReconstruct", () => {
       "seed-timeout-retry-run",
     );
     let primarySeedTimedOut = false;
-    let fallbackSeedPromptSeen = false;
+    let retrySeedPromptSeen = false;
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (
         systemPrompt.includes("Author ontology-seed.yaml as an OntologySeed") &&
@@ -3298,10 +4522,10 @@ describe("runReconstruct", () => {
           "smallest valid operational seed kernel after the full seed authoring call timed out",
         )
       ) {
-        fallbackSeedPromptSeen = true;
-        return fakeLiveLlm("Author ontology-seed.yaml", userPrompt);
+        retrySeedPromptSeen = true;
+        return reconstructFixtureLlm("Author ontology-seed.yaml", userPrompt);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -3323,7 +4547,7 @@ describe("runReconstruct", () => {
 
     expect(result.status).toBe("completed");
     expect(primarySeedTimedOut).toBe(true);
-    expect(fallbackSeedPromptSeen).toBe(true);
+    expect(retrySeedPromptSeen).toBe(true);
     const ontologySeedValidation =
       await readYaml<ReconstructOntologySeedValidationArtifact>(
         result.reconstructRunManifest.artifact_refs.ontology_seed_validation!,
@@ -3362,7 +4586,7 @@ describe("runReconstruct", () => {
           new Error("codex CLI call timed out after 120000ms"),
         );
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -3398,7 +4622,7 @@ describe("runReconstruct", () => {
       "source-purpose-timeout-retry-run",
     );
     let primarySourcePurposeTimedOut = false;
-    let fallbackSourcePurposePromptSeen = false;
+    let retrySourcePurposePromptSeen = false;
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (
         systemPrompt.includes(
@@ -3416,10 +4640,10 @@ describe("runReconstruct", () => {
           "minimal source-purpose frame after the full source-purpose call timed out",
         )
       ) {
-        fallbackSourcePurposePromptSeen = true;
-        return fakeLiveLlm("Author source-purpose-candidates.yaml", userPrompt);
+        retrySourcePurposePromptSeen = true;
+        return reconstructFixtureLlm("Author source-purpose-candidates.yaml", userPrompt);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -3442,7 +4666,7 @@ describe("runReconstruct", () => {
 
     expect(result.status).toBe("completed");
     expect(primarySourcePurposeTimedOut).toBe(true);
-    expect(fallbackSourcePurposePromptSeen).toBe(true);
+    expect(retrySourcePurposePromptSeen).toBe(true);
     const sourcePurposeValidation =
       await readYaml<ReconstructSourcePurposeCandidatesValidationArtifact>(
         path.join(sessionRoot, "source-purpose-candidates-validation.yaml"),
@@ -3469,7 +4693,7 @@ describe("runReconstruct", () => {
           new Error("codex CLI call timed out after 120000ms"),
         );
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -3580,7 +4804,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const result = await runReconstruct({
       projectRoot,
@@ -3781,7 +5005,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     const baseDirectiveAuthor = createDirectCallReconstructDirectiveAuthor({
       llmCall,
@@ -4059,7 +5283,7 @@ describe("runReconstruct", () => {
           }),
         } satisfies LlmCallResult);
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4097,7 +5321,7 @@ describe("runReconstruct", () => {
     );
   });
 
-  it("batches direct-call required domain competency dispositions", async () => {
+  it("successfully aggregates multi-batch direct-call competency question assessment", async () => {
     const projectRoot = await tempProjectRoot();
     const sessionRoot = path.join(projectRoot, ".onto", "reconstruct", "large-domain-run");
     const domainRoot = path.join(projectRoot, ".onto", "domains", "fixture-large");
@@ -4127,11 +5351,32 @@ describe("runReconstruct", () => {
         competency_id: string;
       }>;
     }> = [];
+    const competencyAssessmentPayloads: Array<{
+      competency_question_assessment_batch?: {
+        mode?: string;
+        batch_index?: number;
+        batch_count?: number;
+        full_question_count?: number;
+        batch_question_count?: number;
+      };
+      competency_questions?: {
+        artifact_question_count?: number;
+        question_count?: number;
+        questions?: Array<{
+          question_id?: string;
+        }>;
+      };
+    }> = [];
+    const competencyAssessmentPromptSizes: number[] = [];
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       if (systemPrompt.includes("Write competency questions")) {
         competencyQuestionPayloads.push(JSON.parse(userPrompt));
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      if (systemPrompt.includes("Assess every competency question")) {
+        competencyAssessmentPayloads.push(JSON.parse(userPrompt));
+        competencyAssessmentPromptSizes.push(systemPrompt.length + userPrompt.length);
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4159,8 +5404,27 @@ describe("runReconstruct", () => {
       await readYaml<ReconstructCompetencyQuestionsValidationArtifact>(
         path.join(sessionRoot, "competency-questions-validation.yaml"),
       );
+    const competencyQuestionAssessment =
+      await readYaml<ReconstructCompetencyQuestionAssessmentArtifact>(
+        path.join(sessionRoot, "competency-question-assessment.yaml"),
+      );
+    const competencyQuestionAssessmentValidation =
+      await readYaml<ReconstructCompetencyQuestionAssessmentValidationArtifact>(
+        path.join(sessionRoot, "competency-question-assessment-validation.yaml"),
+      );
     const domainBatches = competencyQuestionPayloads.filter((payload) =>
       (payload.required_domain_competency_question_rows ?? []).length > 0
+    );
+    const canonicalQuestionIds = competencyQuestions.questions.map((question) =>
+      question.question_id
+    );
+    const batchQuestionIds = competencyAssessmentPayloads.flatMap((payload) =>
+      payload.competency_questions?.questions?.map((question) =>
+        question.question_id ?? ""
+      ) ?? []
+    );
+    const assessmentQuestionIds = competencyQuestionAssessment.assessments.map(
+      (assessment) => assessment.question_id,
     );
 
     expect(result.status).toBe("completed");
@@ -4170,6 +5434,42 @@ describe("runReconstruct", () => {
     expect(domainBatches.map((payload) =>
       payload.required_domain_competency_question_rows?.length
     )).toEqual([8, 8, 1]);
+    expect(competencyAssessmentPayloads.length).toBeGreaterThan(1);
+    expect(competencyAssessmentPromptSizes.every((size) => size < 50_000))
+      .toBe(true);
+    expect(competencyAssessmentPayloads.map((payload) =>
+      payload.competency_question_assessment_batch?.batch_index
+    )).toEqual(
+      Array.from({ length: competencyAssessmentPayloads.length }, (_, index) =>
+        index + 1
+      ),
+    );
+    expect(competencyAssessmentPayloads.map((payload) =>
+      payload.competency_question_assessment_batch?.batch_count
+    )).toEqual(
+      Array.from(
+        { length: competencyAssessmentPayloads.length },
+        () => competencyAssessmentPayloads.length,
+      ),
+    );
+    expect(competencyAssessmentPayloads.map((payload) =>
+      payload.competency_question_assessment_batch?.mode
+    )).toEqual(expect.arrayContaining(["deterministic_prompt_budget"]));
+    expect(competencyAssessmentPayloads.map((payload) =>
+      payload.competency_questions?.question_count
+    ).reduce((total, count) => total + (count ?? 0), 0))
+      .toBe(competencyQuestions.questions.length);
+    expect(competencyAssessmentPayloads[0]?.competency_questions?.artifact_question_count)
+      .toBe(competencyQuestions.questions.length);
+    expect(batchQuestionIds).toHaveLength(canonicalQuestionIds.length);
+    expect(new Set(batchQuestionIds).size).toBe(canonicalQuestionIds.length);
+    expect(batchQuestionIds.sort()).toEqual([...canonicalQuestionIds].sort());
+    expect(competencyQuestionAssessment.assessments).toHaveLength(
+      canonicalQuestionIds.length,
+    );
+    expect(new Set(assessmentQuestionIds).size).toBe(canonicalQuestionIds.length);
+    expect(assessmentQuestionIds.sort()).toEqual([...canonicalQuestionIds].sort());
+    expect(competencyQuestionAssessmentValidation.validation_status).toBe("valid");
     expect(competencyQuestionsValidation.validation_status).toBe("valid");
     expect(competencyQuestionsValidation.required_admitted_competency_ids)
       .toHaveLength(17);
@@ -4197,7 +5497,7 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         throw new Error("ontology seed author timed out");
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -4232,7 +5532,7 @@ describe("runReconstruct", () => {
     const retryPrompts: string[] = [];
     const retryLlmCall = (systemPrompt: string, userPrompt: string) => {
       retryPrompts.push(systemPrompt);
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
     await expect(runReconstruct({
       projectRoot,
@@ -4267,13 +5567,13 @@ describe("runReconstruct", () => {
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
@@ -4293,7 +5593,7 @@ describe("runReconstruct", () => {
       if (systemPrompt.includes("Author ontology-seed.yaml")) {
         throw new Error("ontology seed author timed out");
       }
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     await expect(runReconstruct({
@@ -4332,13 +5632,87 @@ describe("runReconstruct", () => {
       directiveAuthor: createDirectCallReconstructDirectiveAuthor({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
       confirmationProvider: createDirectCallReconstructConfirmationProvider({
         llmCall: (systemPrompt, userPrompt) => {
           resumePrompts.push(systemPrompt);
-          return fakeLiveLlm(systemPrompt, userPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+    })).rejects.toThrow(/resume provenance mismatch/);
+    expect(resumePrompts).toHaveLength(0);
+  });
+
+  it("rejects stale authored provenance before resume reuse after projection contract hash mismatch", async () => {
+    const projectRoot = await tempProjectRoot();
+    const sessionRoot = path.join(
+      projectRoot,
+      ".onto",
+      "reconstruct",
+      "stale-cq-assessment-run",
+    );
+    const targetRef = path.join(projectRoot, "src", "feature.ts");
+    const firstAttemptLlmCall = (systemPrompt: string, userPrompt: string) => {
+      if (systemPrompt.includes("Classify unsafe or incomplete assessments")) {
+        throw new Error("failure classification timed out");
+      }
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
+    };
+
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with CQ provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: firstAttemptLlmCall,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: firstAttemptLlmCall,
+      }),
+    })).rejects.toThrow(/failure classification timed out/);
+
+    const provenancePath = path.join(
+      sessionRoot,
+      "competency-question-assessment.yaml.reuse-provenance.yaml",
+    );
+    const provenance = await readYaml<Record<string, unknown>>(provenancePath);
+    await fs.writeFile(
+      provenancePath,
+      stringifyYaml({
+        ...provenance,
+        reuse_match_hash: "0".repeat(64),
+      }),
+      "utf8",
+    );
+
+    const resumePrompts: string[] = [];
+    await expect(runReconstruct({
+      projectRoot,
+      targetRefs: [targetRef],
+      intent: "Create a live reconstruct Seed with CQ provenance protection.",
+      sessionRoot,
+      profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
+      filesystemAllowedRoots: [projectRoot],
+      resumeMode: "reuse_existing_authored_artifacts",
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
+        },
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: (systemPrompt, userPrompt) => {
+          resumePrompts.push(systemPrompt);
+          return reconstructFixtureLlm(systemPrompt, userPrompt);
         },
       }),
     })).rejects.toThrow(/resume provenance mismatch/);
@@ -4356,7 +5730,7 @@ describe("runReconstruct", () => {
     const prompts: string[] = [];
     const llmCall = (systemPrompt: string, userPrompt: string) => {
       prompts.push(systemPrompt);
-      return fakeLiveLlm(systemPrompt, userPrompt);
+      return reconstructFixtureLlm(systemPrompt, userPrompt);
     };
 
     const result = await runReconstruct({
@@ -4406,10 +5780,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     })).rejects.toThrow(/runtime_implementation_status=planned/);
   });
 
@@ -4432,10 +5810,14 @@ describe("runReconstruct", () => {
       sessionRoot,
       profilesRoot: path.resolve(".onto/processes/reconstruct/source-profiles"),
       filesystemAllowedRoots: [projectRoot],
-      semanticAuthorRealization: "mock",
-      confirmationProviderRealization: "mock",
-      directiveAuthor: createMockReconstructDirectiveAuthor(),
-      confirmationProvider: createAutoAcceptReconstructConfirmationProvider(),
+      semanticAuthorRealization: "direct_call",
+      confirmationProviderRealization: "direct_call",
+      directiveAuthor: createDirectCallReconstructDirectiveAuthor({
+        llmCall: reconstructFixtureLlm,
+      }),
+      confirmationProvider: createDirectCallReconstructConfirmationProvider({
+        llmCall: reconstructFixtureLlm,
+      }),
     })).resolves.toMatchObject({
       status: "completed",
     });
@@ -4468,7 +5850,7 @@ describe("runReconstruct", () => {
     expect(metrics.source_observation_count).toBe(1);
     expect(metrics.selected_observation_count).toBe(1);
     expect(metrics.unresolved_question_count).toBeGreaterThan(0);
-    expect(stopDecision.decision).toBe("ask_user");
+    expect(stopDecision.decision).toBe("continue");
     expect(preHandoffManifestValidation.validation_status).toBe("valid");
     expect(handoffDecisionValidation.validation_status).toBe("valid");
     expect(handoffDecisionValidation.readiness_projection).toBe("not_ready");

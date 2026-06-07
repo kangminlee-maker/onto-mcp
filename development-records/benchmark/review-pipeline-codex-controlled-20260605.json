@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-06-04T22:07:47.646Z",
+  "benchmark_kind": "review_pipeline_io_effort",
+  "git": {
+    "commit": "20213d9b3599f00cf50a198b40ca3365358284d2",
+    "branch": "feat/reconstruct-prompt-efficiency",
+    "dirty": true
+  },
+  "executor_realization": "codex",
+  "model": "gpt-5.5",
+  "provider": "openai",
+  "auth": "oauth",
+  "selected_lens_ids": [
+    "logic",
+    "structure"
+  ],
+  "runs_per_case": 1,
+  "cases": [
+    {
+      "case_id": "controlled-high-effort",
+      "label": "Controlled IO profile with higher effort",
+      "intended_pipeline": "controlled",
+      "effort": "xhigh",
+      "synthesize_effort": "xhigh"
+    }
+  ],
+  "case_summaries": [
+    {
+      "case_id": "controlled-high-effort",
+      "run_count": 1,
+      "completed_count": 1,
+      "failed_count": 0,
+      "completion_rate": 1,
+      "average_command_duration_ms": 601063,
+      "average_total_unit_duration_ms": 654518,
+      "average_total_packet_bytes": 102614,
+      "average_total_output_bytes": 33990,
+      "average_max_packet_bytes": 18979,
+      "average_synthesize_packet_bytes": 15965,
+      "average_synthesize_output_bytes": 6217,
+      "average_final_output_bytes": 10625,
+      "average_total_attempt_count": 12,
+      "average_failed_unit_count": 0,
+      "failure_kind_counts": {
+        "none": 12
+      }
+    }
+  ],
+  "comparisons": [],
+  "interpretation_notes": [
+    "Mock executor runs measure runtime overhead, artifact shape, packet/output bytes, and contract stability; they do not measure model quality.",
+    "For a true old-pipeline baseline, run this script on the legacy checkout with --case existing-low-effort, then run the controlled checkout with --case controlled-high-effort and compare the JSON reports."
+  ],
+  "runs": [
+    {
+      "case_id": "controlled-high-effort",
+      "run_index": 1,
+      "status": "completed",
+      "command_exit_code": 0,
+      "command_signal": null,
+      "command_duration_ms": 601063,
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-controlled-high-effort-fomDOM/.onto/review/20260605-03482443",
+      "temp_root_kept": false,
+      "execution_status": "completed",
+      "deliberation_status": "performed",
+      "planned_lens_count": 2,
+      "participating_lens_count": 2,
+      "degraded_lens_count": 0,
+      "max_concurrent_lenses": 2,
+      "observed_dispatch_width": 2,
+      "unit_count": 12,
+      "failed_unit_count": 0,
+      "total_unit_duration_ms": 654518,
+      "total_packet_bytes": 102614,
+      "total_output_bytes": 33990,
+      "max_packet_bytes": 18979,
+      "synthesize_packet_bytes": 15965,
+      "synthesize_output_bytes": 6217,
+      "final_output_bytes": 10625,
+      "total_attempt_count": 12,
+      "failure_kind_counts": {
+        "none": 12
+      },
+      "review_profile": {
+        "mode": "main-workers",
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "xhigh",
+            "service_tier": "fast"
+          }
+        },
+        "deliberation": "controlled-lens-deliberation",
+        "runtime_route": {
+          "execution_realization": "worker",
+          "host_runtime": "codex",
+          "worker_executor": "codex",
+          "runtime_provider": "codex",
+          "auth_mode": "oauth"
+        },
+        "model": "gpt-5.5",
+        "effort": "xhigh",
+        "service_tier": "fast",
+        "base_url": null,
+        "trace": [
+          "codex worker selected by review.execution.executor=codex",
+          "worker executor overridden by --executor-realization=codex"
+        ]
+      },
+      "quality_proxy": {
+        "record_status": "completed",
+        "issue_count": 2,
+        "material_issue_count": 2,
+        "non_material_finding_count": 0,
+        "highest_severity": "medium",
+        "action_candidate_count": 2
+      }
+    }
+  ]
+}

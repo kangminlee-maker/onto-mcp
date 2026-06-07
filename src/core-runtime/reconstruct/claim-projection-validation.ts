@@ -862,22 +862,6 @@ export function validateClaimProjection(args: {
         projectionId: row.projection_id,
       }));
     }
-    if (
-      args.executionProfileTruth &&
-      (row.claim_level === "actionable_ready" ||
-        row.claim_level === "actionable_limited") &&
-      (
-        args.executionProfileTruth.semanticAuthorRealization === "mock" ||
-        args.executionProfileTruth.confirmationProviderRealization === "mock"
-      )
-    ) {
-      violations.push(violation({
-        code: "mock_backed_completion_claim",
-        message:
-          "mock-backed reconstruct runs cannot validate actionable completion claim rows",
-        projectionId: row.projection_id,
-      }));
-    }
     if (row.required_validation_refs.length === 0) {
       violations.push(violation({
         code: "required_validation_ref_missing",

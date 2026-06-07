@@ -1,15 +1,28 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import YAML from "yaml";
 import { runInlineHttpReviewUnitExecutorCli } from "./inline-http-review-unit-executor.js";
+import {
+  enableReviewMockRealizationEnv,
+  setReviewMockHookEnv,
+} from "../review/test-fixtures/mock-realization.js";
 
 let scratchDir: string;
 let projectRoot: string;
 let sessionRoot: string;
 let ontoHome: string;
 let savedHome: string | undefined;
-let savedMock: string | undefined;
+let restoreMockRealizationEnv: (() => void) | undefined;
 let consoleLogSpy: { restore: () => void; getOutput: () => string[] };
 
 function captureConsoleLog(): typeof consoleLogSpy {
@@ -39,11 +52,40 @@ beforeEach(() => {
     path.join(projectRoot, ".onto", "settings.json"),
     JSON.stringify(
       {
-        llm: {
-          auth: "oauth",
-          provider: "openai",
-          model: "gpt-5.4",
-          effort: "high",
+        schema_version: "settings.json/v3",
+        review: {
+          execution: {
+            artifact_generation_realization: "semantic_mock",
+            actors: {
+              teamlead: {
+                seat: "main",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.4",
+                  effort: "high",
+                },
+              },
+              lens: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.4",
+                  effort: "high",
+                },
+              },
+              synthesize: {
+                seat: "worker",
+                llm: {
+                  auth: "oauth",
+                  provider: "openai",
+                  model: "gpt-5.4",
+                  effort: "high",
+                },
+              },
+            },
+          },
         },
       },
       null,
@@ -54,8 +96,7 @@ beforeEach(() => {
 
   savedHome = process.env.HOME;
   process.env.HOME = scratchDir;
-  savedMock = process.env.ONTO_LLM_MOCK;
-  process.env.ONTO_LLM_MOCK = "1";
+  restoreMockRealizationEnv = enableReviewMockRealizationEnv();
 
   consoleLogSpy = captureConsoleLog();
 });
@@ -67,11 +108,8 @@ afterEach(() => {
   } else {
     process.env.HOME = savedHome;
   }
-  if (savedMock === undefined) {
-    delete process.env.ONTO_LLM_MOCK;
-  } else {
-    process.env.ONTO_LLM_MOCK = savedMock;
-  }
+  restoreMockRealizationEnv?.();
+  restoreMockRealizationEnv = undefined;
   rmSync(scratchDir, { recursive: true, force: true });
 });
 
@@ -129,6 +167,8 @@ describe("runInlineHttpReviewUnitExecutorCli — basic execution", () => {
     expect(result.unit_id).toBe("logic");
     expect(result.unit_kind).toBe("lens");
     expect(result.realization).toBe("ts_inline_http");
+    expect(result.artifact_generation_realization).toBe("semantic_mock");
+    expect(result.semantic_quality_evidence.status).toBe("not_applicable");
     expect(result.output_path).toBe(outputPath);
   });
 
@@ -193,10 +233,92 @@ describe("runInlineHttpReviewUnitExecutorCli — basic execution", () => {
       "--tool-mode", "inline",
     ]);
 
-    // Note: with mock, host_runtime reports per --provider flag, not actual mock target
+    // host_runtime reports the provider flag; artifact_generation_realization
+    // carries the mock/live provenance.
     expect(exitCode).toBe(0);
     const result = JSON.parse(consoleLogSpy.getOutput().join(""));
     expect(result.host_runtime).toBe("lmstudio");
+    expect(result.artifact_generation_realization).toBe("semantic_mock");
+  });
+
+  it("fills problem-framing runtime-owned fields through submit_issue_artifact", async () => {
+    const outputPath = path.join(sessionRoot, "problem-framing.yaml");
+    const packetPath = writePacket(
+      "problem-framing.packet.md",
+      [
+        "# Problem Framing Prompt Packet",
+        "",
+        "## Runtime Problem Framing Submit Context",
+        "```yaml",
+        "classification_context:",
+        "  common_spine_version: 1",
+        "  session_domain: none",
+        "  domain_profile_ref: \"\"",
+        "  domain_profile_doc_type: custom:problem_framing_profile",
+        "  domain_profile_status: not_requested",
+        "issue_surface_finding_ids:",
+        "  issue-001: [finding-001]",
+        "```",
+        "",
+        "## Boundary Policy",
+        "- Filesystem: read-only",
+        "- Network: denied",
+        "",
+        "## Unit Boundary Details",
+        "```json",
+        JSON.stringify({
+          unit_boundary: {
+            unit_id: "issue-artifact:problem-framing",
+            read_authority: {
+              allowed_read_refs: [sessionRoot],
+            },
+            output_seat: {
+              output_path: outputPath,
+              allowed_output_refs: [outputPath],
+            },
+          },
+        }),
+        "```",
+        "",
+      ].join("\n"),
+    );
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "problem-framing",
+      "--unit-kind", "issue_artifact",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--output-format", "issue-artifact",
+      "--tool-mode", "native",
+      "--provider", "openai",
+      "--model", "mock-model",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const parsed = YAML.parse(readFileSync(outputPath, "utf8"));
+    expect(parsed).toMatchObject({
+      schema_version: 1,
+      session_id: path.basename(sessionRoot),
+      classification_context: {
+        common_spine_version: 1,
+        session_domain: "none",
+        domain_profile_ref: "",
+        domain_profile_doc_type: "custom:problem_framing_profile",
+        domain_profile_status: "not_requested",
+      },
+      classifications: [
+        {
+          issue_id: "issue-001",
+          related_surface_finding_ids: ["finding-001"],
+        },
+      ],
+    });
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.output_format).toBe("issue-artifact");
+    expect(result.tool_calls).toBe(1);
   });
 });
 
@@ -245,9 +367,13 @@ You are the synthesize actor. Consolidate lens outputs.
 - Conditional Consensus
 - Disagreement
 - Deliberation Decision
+- Axiology-Proposed Additional Perspectives
+- Purpose Alignment Verification
+- Final Review Result
+- Boundary Notes
+- Immediate Actions Required
+- Recommendations
 - Unique Finding Tagging
-- Axiology Integration
-- Degraded Lens Failures
 `;
 
   it("baseline: synthesize output has no wrapping code fence", async () => {
@@ -273,8 +399,9 @@ You are the synthesize actor. Consolidate lens outputs.
   });
 
   it("strips ```yaml wrapping fence when the mock returns a wrapped synthesize response", async () => {
-    const savedWrapHook = process.env.ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE;
-    process.env.ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE = "1";
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE: "1",
+    });
     try {
       const packetPath = writePacket("synthesize.packet.md", SYNTHESIZE_PACKET);
       const outputPath = path.join(sessionRoot, "synthesize.md");
@@ -300,13 +427,9 @@ You are the synthesize actor. Consolidate lens outputs.
       // The required section headings must still be present — strip must not
       // have damaged the markdown body.
       expect(output).toContain("## Consensus");
-      expect(output).toContain("## Degraded Lens Failures");
+      expect(output).toContain("## Boundary Notes");
     } finally {
-      if (savedWrapHook === undefined) {
-        delete process.env.ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE;
-      } else {
-        process.env.ONTO_LLM_MOCK_SYNTHESIZE_WRAP_FENCE = savedWrapHook;
-      }
+      restoreMockHookEnv();
     }
   });
 });
@@ -358,7 +481,15 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
     return round1;
   }
 
-  function buildSynthesizePacket(lensPaths: string[]): string {
+  function buildSynthesizePacket(
+    lensPaths: string[],
+    boundary?: {
+      unitId?: string;
+      outputPath: string;
+      allowedReadRefs: string[];
+      allowedOutputRefs?: string[];
+    },
+  ): string {
     return [
       "# Synthesize Prompt Packet (A5 audit test)",
       "",
@@ -371,25 +502,55 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
       "## Participating Lens Outputs",
       ...lensPaths.map((p, i) => `- lens${i}: ${p}`),
       "",
+      ...(boundary
+        ? [
+            "## Unit Boundary Details",
+            "```json",
+            JSON.stringify({
+              unit_boundary: {
+                unit_id: boundary.unitId ?? "synthesize",
+                read_authority: {
+                  allowed_read_refs: boundary.allowedReadRefs,
+                },
+                output_seat: {
+                  output_path: boundary.outputPath,
+                  allowed_output_refs: boundary.allowedOutputRefs ?? [
+                    boundary.outputPath,
+                  ],
+                },
+              },
+            }),
+            "```",
+            "",
+          ]
+        : []),
       "## Required Output Sections",
       "- Consensus",
       "- Conditional Consensus",
       "- Disagreement",
       "- Deliberation Decision",
+      "- Axiology-Proposed Additional Perspectives",
+      "- Purpose Alignment Verification",
+      "- Final Review Result",
+      "- Boundary Notes",
+      "- Immediate Actions Required",
+      "- Recommendations",
       "- Unique Finding Tagging",
-      "- Axiology Integration",
-      "- Degraded Lens Failures",
       "",
     ].join("\n");
   }
 
   it("attaches citation_audit with 0 unmatched when synthesize quotes match lens pool", async () => {
     const round1 = writeLensPool({
-      "axiology.md": "axiology content with the phrase (none — mock executor) inline.",
+      "axiology.md": "axiology content with the phrase (none - mock fixture) inline.",
     });
-    const packet = buildSynthesizePacket([path.join(round1, "axiology.md")]);
-    const packetPath = writePacket("synthesize.packet.md", packet);
     const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "axiology.md");
+    const packet = buildSynthesizePacket([lensPath], {
+      outputPath,
+      allowedReadRefs: [lensPath],
+    });
+    const packetPath = writePacket("synthesize.packet.md", packet);
 
     const exitCode = await runInlineHttpReviewUnitExecutorCli([
       "--project-root", projectRoot,
@@ -405,13 +566,205 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
     expect(exitCode).toBe(0);
     const result = JSON.parse(consoleLogSpy.getOutput().join(""));
     expect(result.citation_audit).toBeDefined();
+    expect(result.citation_audit.status).toBe("completed");
+    expect(result.citation_audit.coverage_status).toBe("complete");
     expect(result.citation_audit.quotes_unmatched).toEqual([]);
     expect(result.citation_audit.min_quote_length).toBe(20);
   });
 
+  it("audits synthesize citations against sidecar lens refs", async () => {
+    const round1 = writeLensPool({
+      "axiology.findings.yaml": [
+        "schema_version: 1",
+        "lens_id: axiology",
+        "findings:",
+        "  - claim: phrase (none - mock fixture) inline.",
+        "",
+      ].join("\n"),
+    });
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "axiology.findings.yaml");
+    const packet = buildSynthesizePacket([lensPath], {
+      outputPath,
+      allowedReadRefs: [lensPath],
+    });
+    const packetPath = writePacket("synthesize.sidecar-audit.packet.md", packet);
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "synthesize",
+      "--unit-kind", "synthesize",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--tool-mode", "inline",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.citation_audit).toMatchObject({
+      status: "completed",
+      coverage_status: "complete",
+      quotes_unmatched: [],
+    });
+  });
+
+  it("keeps citation_audit when embedded target text contains a participating-lens heading", async () => {
+    const round1 = writeLensPool({
+      "logic.md": "logic content with the phrase (none - mock fixture) inline.",
+    });
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "logic.md");
+    const packet = buildSynthesizePacket([lensPath], {
+      outputPath,
+      allowedReadRefs: [lensPath],
+    }).replace(
+      "## Boundary Policy",
+      [
+        "## Embedded Materialized Input",
+        "<!-- onto:embedded-materialized-input:start lines=2 -->",
+        "## Participating Lens Outputs",
+        "- fake: target-body.md",
+        "<!-- onto:embedded-materialized-input:end -->",
+        "",
+        "## Boundary Policy",
+      ].join("\n"),
+    );
+    const packetPath = writePacket("synthesize.embedded-heading.packet.md", packet);
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "synthesize",
+      "--unit-kind", "synthesize",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--tool-mode", "inline",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.citation_audit).toMatchObject({
+      status: "completed",
+      coverage_status: "complete",
+    });
+    expect(result.citation_audit.failed_refs).toBeUndefined();
+  });
+
+  it("preserves partial citation_audit coverage when some lens refs are unreadable", async () => {
+    const round1 = writeLensPool({
+      "logic.md": "logic content with the phrase (none - mock fixture) inline.",
+    });
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "logic.md");
+    const missingLensPath = path.join(round1, "missing.md");
+    const packet = buildSynthesizePacket([lensPath, missingLensPath], {
+      outputPath,
+      allowedReadRefs: [round1],
+    });
+    const packetPath = writePacket("synthesize.partial-audit.packet.md", packet);
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "synthesize",
+      "--unit-kind", "synthesize",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--tool-mode", "inline",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.citation_audit).toMatchObject({
+      status: "completed",
+      coverage_status: "partial",
+      failed_refs: [expect.stringContaining("missing.md: unreadable or missing")],
+    });
+  });
+
+  it("keeps citation_audit partial when an exact allowed_read_refs entry is missing", async () => {
+    const round1 = writeLensPool({
+      "logic.md": "logic content with the phrase (none - mock fixture) inline.",
+    });
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "logic.md");
+    const missingLensPath = path.join(round1, "missing.md");
+    const packet = buildSynthesizePacket([lensPath, missingLensPath], {
+      outputPath,
+      allowedReadRefs: [lensPath, missingLensPath],
+    });
+    const packetPath = writePacket(
+      "synthesize.partial-audit-exact-refs.packet.md",
+      packet,
+    );
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "synthesize",
+      "--unit-kind", "synthesize",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--tool-mode", "inline",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.citation_audit).toMatchObject({
+      status: "completed",
+      coverage_status: "partial",
+      failed_refs: [expect.stringContaining("missing.md: unreadable or missing")],
+    });
+  });
+
+  it("mock synthesize derives expected lenses from degraded failures when directive is absent", async () => {
+    const round1 = writeLensPool({
+      "logic.md": "logic lens content with the phrase (none - mock fixture) inline.",
+    });
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const lensPath = path.join(round1, "logic.md");
+    const packet = [
+      buildSynthesizePacket([lensPath], {
+        outputPath,
+        allowedReadRefs: [lensPath],
+      }),
+      "",
+      "## Degraded Lens Failures",
+      "- pragmatics: simulated failure",
+      "",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.degraded.packet.md", packet);
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "synthesize",
+      "--unit-kind", "synthesize",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--tool-mode", "inline",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const output = readFileSync(outputPath, "utf8");
+    expect(output).toContain("expected_lenses:");
+    expect(output).toContain('- "lens0"');
+    expect(output).toContain('- "pragmatics"');
+    expect(output).toContain("missing_or_failed_lenses:");
+    expect(output).toContain('lens_id: "pragmatics"');
+    expect(output).toContain("run_status: degraded");
+  });
+
   it("flags fabricated quote via ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE=1", async () => {
-    const savedHook = process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE;
-    process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE = "1";
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE: "1",
+    });
 
     const originalWrite = process.stderr.write.bind(process.stderr);
     const stderrChunks: string[] = [];
@@ -424,9 +777,13 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
       const round1 = writeLensPool({
         "axiology.md": "axiology content with legitimate findings about value alignment.",
       });
-      const packet = buildSynthesizePacket([path.join(round1, "axiology.md")]);
-      const packetPath = writePacket("synthesize.packet.md", packet);
       const outputPath = path.join(sessionRoot, "synthesize.md");
+      const lensPath = path.join(round1, "axiology.md");
+      const packet = buildSynthesizePacket([lensPath], {
+        outputPath,
+        allowedReadRefs: [lensPath],
+      });
+      const packetPath = writePacket("synthesize.packet.md", packet);
 
       const exitCode = await runInlineHttpReviewUnitExecutorCli([
         "--project-root", projectRoot,
@@ -449,11 +806,109 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
       expect(stderrText).toMatch(/may indicate fabrication/);
     } finally {
       process.stderr.write = originalWrite;
-      if (savedHook === undefined) {
-        delete process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE;
-      } else {
-        process.env.ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE = savedHook;
-      }
+      restoreMockHookEnv();
+    }
+  });
+
+  it("audits issue-scoped synthesis structured fields against source_refs_used", async () => {
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_SYNTHESIZE_FABRICATE: "1",
+    });
+
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const findingLedgerPath = path.join(sessionRoot, "finding-ledger.yaml");
+      writeFileSync(
+        findingLedgerPath,
+        [
+          "schema_version: 1",
+          "session_id: test-session",
+          "findings:",
+          "  - finding_id: finding-001",
+          "    claim: legitimate upstream issue truth from the finding ledger",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      const outputPath = path.join(
+        sessionRoot,
+        "synthesis",
+        "responses",
+        "issue-001.yaml",
+      );
+      const packet = [
+        "# Issue-Scoped Review Synthesis Prompt",
+        "",
+        "## Boundary Policy",
+        "- Filesystem: read-only",
+        "- Network: denied",
+        "- Tools: required",
+        "",
+        "## Unit Boundary Details",
+        "```json",
+        JSON.stringify({
+          unit_boundary: {
+            unit_id: "synthesis:issue-001",
+            read_authority: {
+              allowed_read_refs: [findingLedgerPath],
+            },
+            output_seat: {
+              output_path: outputPath,
+              allowed_output_refs: [outputPath],
+            },
+          },
+        }),
+        "```",
+        "",
+        "## Runtime Work Item",
+        "```yaml",
+        "work_item_id: synthesis:issue-001",
+        "issue_id: issue-001",
+        "allowed_source_refs:",
+        "  - finding-ledger.yaml#finding-001",
+        "```",
+        "",
+      ].join("\n");
+      const packetPath = writePacket("issue-synthesis.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesis:issue-001",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--output-format", "issue-synthesis-response",
+        "--tool-mode", "native",
+        "--provider", "openai",
+        "--model", "mock-model",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.output_format).toBe("issue-synthesis-response");
+      expect(result.citation_audit).toMatchObject({
+        status: "completed",
+        coverage_status: "complete",
+      });
+      expect(result.citation_audit.quotes_unmatched).toContain(
+        "A fabricated quote that is definitely nowhere in the lens pool for this mock test run",
+      );
+      const output = YAML.parse(readFileSync(outputPath, "utf8"));
+      expect(output.source_refs_used).toEqual(["finding-ledger.yaml#finding-001"]);
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit WARNING/);
+      expect(stderrText).toMatch(/may indicate fabrication/);
+    } finally {
+      process.stderr.write = originalWrite;
+      restoreMockHookEnv();
     }
   });
 
@@ -478,7 +933,7 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
     expect(result.citation_audit).toBeUndefined();
   });
 
-  it("skips audit (with STDERR notice) when every referenced lens file is unreadable", async () => {
+  it("skips citation audit when Unit Boundary Details are missing even if lens path is readable", async () => {
     const originalWrite = process.stderr.write.bind(process.stderr);
     const stderrChunks: string[] = [];
     process.stderr.write = ((chunk: string | Uint8Array) => {
@@ -487,10 +942,11 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
     }) as typeof process.stderr.write;
 
     try {
-      const packet = buildSynthesizePacket([
-        path.join(sessionRoot, "round1", "does-not-exist.md"),
-      ]);
-      const packetPath = writePacket("synthesize.packet.md", packet);
+      const round1 = writeLensPool({
+        "logic.md": "logic lens content with the phrase (none - mock fixture) inline.",
+      });
+      const packet = buildSynthesizePacket([path.join(round1, "logic.md")]);
+      const packetPath = writePacket("synthesize.missing-boundary.packet.md", packet);
       const outputPath = path.join(sessionRoot, "synthesize.md");
 
       const exitCode = await runInlineHttpReviewUnitExecutorCli([
@@ -506,8 +962,260 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
 
       expect(exitCode).toBe(0);
       const result = JSON.parse(consoleLogSpy.getOutput().join(""));
-      expect(result.citation_audit).toBeUndefined();
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("missing Unit Boundary Details"),
+      });
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit skipped/);
+      expect(stderrText).toMatch(/missing Unit Boundary Details/);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("skips citation audit when Unit Boundary Details are malformed", async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const round1 = writeLensPool({
+        "logic.md": "logic lens content with the phrase (none - mock fixture) inline.",
+      });
+      const outputPath = path.join(sessionRoot, "synthesize.md");
+      const packet = [
+        buildSynthesizePacket([path.join(round1, "logic.md")]),
+        "",
+        "## Unit Boundary Details",
+        "```json",
+        "{nope",
+        "```",
+      ].join("\n");
+      const packetPath = writePacket("synthesize.malformed-boundary.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--tool-mode", "inline",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("malformed unit_boundary"),
+      });
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit skipped/);
+      expect(stderrText).toMatch(/malformed unit_boundary/);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("skips audit (with STDERR notice) when every referenced lens file is unreadable", async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const outputPath = path.join(sessionRoot, "synthesize.md");
+      const missingLensPath = path.join(sessionRoot, "round1", "does-not-exist.md");
+      const packet = buildSynthesizePacket([missingLensPath], {
+        outputPath,
+        allowedReadRefs: [sessionRoot],
+      });
+      const packetPath = writePacket("synthesize.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--tool-mode", "inline",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("no lens outputs readable"),
+      });
       expect(stderrChunks.join("")).toMatch(/citation audit skipped/);
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("does not read citation-audit lens paths outside the project root", async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    let outsideDir: string | null = null;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      outsideDir = mkdtempSync(path.join(tmpdir(), "onto-outside-lens-"));
+      const outsidePath = path.join(outsideDir, "outside.md");
+      writeFileSync(
+        outsidePath,
+        "outside lens content with the phrase (none - mock fixture) inline.",
+        "utf8",
+      );
+      const outputPath = path.join(sessionRoot, "synthesize.md");
+      const packet = buildSynthesizePacket(
+        [outsidePath, path.join("..", path.basename(outsideDir), "outside.md")],
+        {
+          outputPath,
+          allowedReadRefs: [sessionRoot],
+        },
+      );
+      const packetPath = writePacket("synthesize.outside.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--tool-mode", "inline",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("no lens outputs readable"),
+      });
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit skipped/);
+      expect(stderrText).toMatch(/outside allowed root/);
+    } finally {
+      process.stderr.write = originalWrite;
+      if (outsideDir) rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not follow citation-audit symlinks that realpath outside the project root", async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    let outsideDir: string | null = null;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      outsideDir = mkdtempSync(path.join(tmpdir(), "onto-outside-lens-"));
+      const outsidePath = path.join(outsideDir, "outside.md");
+      writeFileSync(
+        outsidePath,
+        "outside lens content with the phrase (none - mock fixture) inline.",
+        "utf8",
+      );
+      const round1 = path.join(sessionRoot, "round1");
+      mkdirSync(round1, { recursive: true });
+      const linkedPath = path.join(round1, "linked.md");
+      symlinkSync(outsidePath, linkedPath);
+      const outputPath = path.join(sessionRoot, "synthesize.md");
+      const packet = buildSynthesizePacket([linkedPath], {
+        outputPath,
+        allowedReadRefs: [round1],
+      });
+      const packetPath = writePacket("synthesize.symlink.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--tool-mode", "inline",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("no lens outputs readable"),
+      });
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit skipped/);
+      expect(stderrText).toMatch(/outside allowed root/);
+    } finally {
+      process.stderr.write = originalWrite;
+      if (outsideDir) rmSync(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips citation-audit lens paths outside unit allowed_read_refs", async () => {
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const round1 = writeLensPool({
+        "logic.md": "logic lens content with the phrase (none - mock fixture) inline.",
+      });
+      const lensPath = path.join(round1, "logic.md");
+      const outputPath = path.join(sessionRoot, "synthesize.md");
+      const authorityPath = path.join(projectRoot, ".onto", "settings.json");
+      const packet = buildSynthesizePacket([lensPath], {
+        outputPath,
+        allowedReadRefs: [authorityPath],
+      });
+      const packetPath = writePacket("synthesize.disallowed-audit.packet.md", packet);
+
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--tool-mode", "inline",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.citation_audit).toMatchObject({
+        status: "skipped",
+        coverage_status: "none",
+        skip_reason: expect.stringContaining("no lens outputs readable"),
+      });
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/citation audit skipped/);
+      expect(stderrText).toMatch(/outside allowed_read_refs/);
     } finally {
       process.stderr.write = originalWrite;
     }
@@ -535,7 +1243,10 @@ describe("runInlineHttpReviewUnitExecutorCli — citation audit (Phase 3-4 A5)",
 });
 
 describe("runInlineHttpReviewUnitExecutorCli — Tools: required precedence (Phase 3-4 A4)", () => {
-  const TOOLS_REQUIRED_PACKET = `# Synthesize Prompt Packet (path-only)
+  function toolsRequiredPacket(
+    outputPath = path.join(sessionRoot, "synthesize.md"),
+  ): string {
+    return `# Synthesize Prompt Packet (path-only)
 
 You are the synthesize actor. Lens outputs live on disk.
 
@@ -547,19 +1258,183 @@ You are the synthesize actor. Lens outputs live on disk.
 ## Participating Lens Outputs
 - axiology: .onto/review/session/round1/axiology.md
 
+## Unit Boundary Details
+\`\`\`json
+${JSON.stringify({
+  unit_boundary: {
+    unit_id: "synthesize",
+    read_authority: {
+      allowed_read_refs: [".onto/review/session/round1/axiology.md"],
+    },
+    output_seat: {
+      output_path: outputPath,
+      allowed_output_refs: [outputPath],
+    },
+  },
+})}
+\`\`\`
+
 ## Required Output Sections
 - Consensus
 - Conditional Consensus
 - Disagreement
 - Deliberation Decision
+- Axiology-Proposed Additional Perspectives
+- Purpose Alignment Verification
+- Final Review Result
+- Boundary Notes
+- Immediate Actions Required
+- Recommendations
 - Unique Finding Tagging
-- Axiology Integration
-- Degraded Lens Failures
+`;
+  }
+
+  function toolsRequiredPacketWithoutReadAuthority(outputPath: string): string {
+    return toolsRequiredPacket(outputPath).replace(
+      /\n## Unit Boundary Details\n```json\n[\s\S]*?\n```\n/,
+      "\n",
+    );
+  }
+
+  const TOOLS_DENIED_PACKET = `# Lens Prompt Packet (inline-only)
+
+You are a review lens. Everything needed is embedded in this packet.
+
+## Boundary Policy
+- Filesystem: read-only
+- Network: denied
+- Tools: denied
+
+## Materialized Input
+\`\`\`
+export const value = 1;
+\`\`\`
+
+## Required Output Sections
+- Findings
 `;
 
+  function toolsOptionalWithReadAuthorityPacket(
+    outputPath = path.join(sessionRoot, "logic.md"),
+  ): string {
+    return `# Lens Prompt Packet (auto-native eligible)
+
+You are a review lens. Use tools if helpful.
+
+## Boundary Policy
+- Filesystem: read-only
+- Network: denied
+- Tools: optional
+
+## Unit Boundary Details
+\`\`\`json
+${JSON.stringify({
+  unit_boundary: {
+    unit_id: "logic",
+    read_authority: {
+      allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+    },
+    output_seat: {
+      output_path: outputPath,
+      allowed_output_refs: [outputPath],
+    },
+  },
+})}
+\`\`\`
+
+## Materialized Input
+\`\`\`
+export const value = 1;
+\`\`\`
+
+## Required Output Sections
+- Findings
+`;
+  }
+
+  function lensSidecarPacket(outputPath: string): string {
+    return `# Lens Sidecar Prompt Packet
+
+You are the coverage lens. Submit structured findings through the available tool.
+
+## Boundary Policy
+- Filesystem: read-only
+- Network: denied
+- Tools: required
+
+## Unit Boundary Details
+\`\`\`json
+${JSON.stringify({
+  unit_boundary: {
+    unit_id: "coverage",
+    read_authority: {
+      allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+    },
+    output_seat: {
+      output_path: outputPath,
+      allowed_output_refs: [outputPath],
+    },
+  },
+})}
+\`\`\`
+
+## Materialized Input
+\`\`\`
+export const value = 1;
+\`\`\`
+`;
+  }
+
+  function runtimeSubmitPacket(unitId: string, outputPath: string): string {
+    return `# Runtime Submit Prompt Packet
+
+Submit the structured response through the runtime tool.
+
+## Boundary Policy
+- Filesystem: read-only
+- Network: denied
+- Tools: required
+
+## Unit Boundary Details
+\`\`\`json
+${JSON.stringify({
+  unit_boundary: {
+    unit_id: unitId,
+    read_authority: {
+      allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+    },
+    output_seat: {
+      output_path: outputPath,
+      allowed_output_refs: [outputPath],
+    },
+  },
+})}
+\`\`\`
+
+## Runtime Projection
+\`\`\`yaml
+issue:
+  issue_id: issue-001
+  surface_finding_ids:
+    - finding-001
+  relation_refs: []
+  evidence_refs:
+    - finding-ledger.yaml#finding-001
+own_stance:
+  lens_id: logic
+  evidence_refs:
+    - issue-stance-matrix.yaml#stances.issue-001.logic
+peer_stances: []
+\`\`\`
+`;
+  }
+
   it("rejects --tool-mode=inline with a clear fail-fast message", async () => {
-    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
     const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
 
     await expect(
       runInlineHttpReviewUnitExecutorCli([
@@ -575,9 +1450,184 @@ You are the synthesize actor. Lens outputs live on disk.
     ).rejects.toThrow(/Tools: required|fabricated citations/);
   });
 
+  it("writes a runtime lens sidecar from batched tool submission", async () => {
+    const outputPath = path.join(
+      sessionRoot,
+      "round1",
+      "coverage.findings.yaml",
+    );
+    const packetPath = writePacket(
+      "coverage.sidecar.prompt.md",
+      lensSidecarPacket(outputPath),
+    );
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "coverage",
+      "--unit-kind", "lens",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--provider", "openai",
+      "--model", "mock-model",
+      "--tool-mode", "native",
+      "--output-format", "lens-sidecar",
+      "--human-output-ref", "round1/coverage.md",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const sidecar = YAML.parse(readFileSync(outputPath, "utf8"));
+    expect(sidecar.session_id).toBe(path.basename(sessionRoot));
+    expect(sidecar.lens_id).toBe("coverage");
+    expect(sidecar.human_output_ref).toBe("round1/coverage.md");
+    expect(sidecar.findings).toHaveLength(1);
+    expect(sidecar.findings[0].candidate_id).toBe("coverage-candidate-001");
+    expect(sidecar.findings[0].severity_hint).toBe("low");
+
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.output_format).toBe("lens-sidecar");
+    expect(result.tool_mode).toBe("native");
+    expect(result.sidecar_findings).toBe(1);
+  });
+
+  it("writes an issue deliberation response from runtime submit tool output", async () => {
+    const outputPath = path.join(
+      sessionRoot,
+      "deliberation",
+      "responses",
+      "issue-001",
+      "logic.yaml",
+    );
+    const packetPath = writePacket(
+      "issue-deliberation.prompt.md",
+      runtimeSubmitPacket("deliberation:issue-001:logic", outputPath),
+    );
+
+    const exitCode = await runInlineHttpReviewUnitExecutorCli([
+      "--project-root", projectRoot,
+      "--session-root", sessionRoot,
+      "--onto-home", ontoHome,
+      "--unit-id", "deliberation:issue-001:logic",
+      "--unit-kind", "deliberation",
+      "--packet-path", packetPath,
+      "--output-path", outputPath,
+      "--provider", "openai",
+      "--model", "mock-model",
+      "--tool-mode", "native",
+      "--output-format", "issue-deliberation-response",
+    ]);
+
+    expect(exitCode).toBe(0);
+    const response = YAML.parse(readFileSync(outputPath, "utf8"));
+    expect(response.schema_version).toBe(1);
+    expect(response.session_id).toBe(path.basename(sessionRoot));
+    expect(response.issue_id).toBe("issue-001");
+    expect(response.lens_id).toBe("logic");
+    expect(response.validation.source_stance_ref).toBe(
+      "issue-stance-matrix.yaml#stances.issue-001.logic",
+    );
+
+    const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+    expect(result.output_format).toBe("issue-deliberation-response");
+    expect(result.tool_mode).toBe("native");
+  });
+
+  it("rejects inline mode for runtime submit output formats", async () => {
+    const outputPath = path.join(
+      sessionRoot,
+      "deliberation",
+      "responses",
+      "issue-001",
+      "logic.yaml",
+    );
+    const packetPath = writePacket(
+      "issue-deliberation-inline.prompt.md",
+      runtimeSubmitPacket("deliberation:issue-001:logic", outputPath),
+    );
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "deliberation:issue-001:logic",
+        "--unit-kind", "deliberation",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "inline",
+        "--output-format", "issue-deliberation-response",
+      ]),
+    ).rejects.toThrow(/requires --tool-mode=native or --tool-mode=auto/);
+  });
+
+  it("rejects --tool-mode=native when packet declares Tools: denied", async () => {
+    const packetPath = writePacket("lens.packet.md", TOOLS_DENIED_PACKET);
+    const outputPath = path.join(sessionRoot, "logic.md");
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "native",
+      ]),
+    ).rejects.toThrow(/Tools: denied|no tool access/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("downgrades --tool-mode=auto to inline when packet declares Tools: denied", async () => {
+    const packetPath = writePacket("lens.packet.md", TOOLS_DENIED_PACKET);
+    const outputPath = path.join(sessionRoot, "logic.md");
+
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const stderrText = stderrChunks.join("");
+      expect(stderrText).toMatch(/downgraded to inline/);
+      expect(stderrText).toMatch(/Tools: denied/);
+
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.packet_policy_downgrade).toBe(true);
+      expect(result.tool_mode).toBe("inline");
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
   it("auto-promotes --tool-mode=auto to native when a tool-loop provider is available", async () => {
-    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
     const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
 
     // Capture STDERR to verify the promotion notice is emitted.
     const originalWrite = process.stderr.write.bind(process.stderr);
@@ -614,11 +1664,564 @@ You are the synthesize actor. Lens outputs live on disk.
     }
   });
 
-  it("keeps packet-forced native as fail-loud when native auto execution fails", async () => {
-    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
+  it("passes actor api_key_env through tool-native config", async () => {
     const outputPath = path.join(sessionRoot, "synthesize.md");
-    const savedHook = process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW;
-    process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW = "1";
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_TOOL_LOOP_ECHO_CONFIG: "1",
+    });
+
+    try {
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--api-key-env", "CUSTOM_OPENAI_API_KEY",
+        "--tool-mode", "auto",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.tool_mode).toBe("native");
+      expect(readFileSync(outputPath, "utf8")).toContain(
+        "api_key_env: CUSTOM_OPENAI_API_KEY",
+      );
+    } finally {
+      restoreMockHookEnv();
+    }
+  });
+
+  it("preserves attempted-native boundary skips when auto-native falls back to inline", async () => {
+    const outputPath = path.join(sessionRoot, "logic.md");
+    const packetPath = writePacket(
+      "lens.packet.md",
+      toolsOptionalWithReadAuthorityPacket(outputPath),
+    );
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_TOOL_LOOP_EMPTY: "1",
+      ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP: "1",
+    });
+
+    try {
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.tool_mode).toBe("inline");
+      expect(result.tool_boundary_skips).toBeUndefined();
+      expect(result.native_admission).toMatchObject({
+        requested_tool_mode: "auto",
+        effective_tool_mode: "inline",
+        decision: "native_downgraded_inline",
+        attempted_native_tool_boundary_skips: {
+          boundary_skips: 1,
+          unreadable_skips: 0,
+          oversized_skips: 0,
+        },
+      });
+    } finally {
+      restoreMockHookEnv();
+    }
+  });
+
+  it("preserves attempted-native boundary skips when auto-native throws before inline downgrade", async () => {
+    const outputPath = path.join(sessionRoot, "logic.md");
+    const packetPath = writePacket(
+      "lens.packet.md",
+      toolsOptionalWithReadAuthorityPacket(outputPath),
+    );
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_TOOL_LOOP_THROW: "1",
+      ONTO_LLM_MOCK_TOOL_LOOP_BOUNDARY_SKIP: "1",
+    });
+
+    try {
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]);
+
+      expect(exitCode).toBe(0);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.tool_mode).toBe("inline");
+      expect(result.tool_boundary_skips).toBeUndefined();
+      expect(result.native_admission).toMatchObject({
+        requested_tool_mode: "auto",
+        effective_tool_mode: "inline",
+        decision: "native_downgraded_inline",
+        reason: "mock tool-loop failure",
+        attempted_native_tool_boundary_skips: {
+          boundary_skips: 1,
+          unreadable_skips: 0,
+          oversized_skips: 0,
+        },
+      });
+    } finally {
+      restoreMockHookEnv();
+    }
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details are missing", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacketWithoutReadAuthority(outputPath),
+    );
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/Unit Boundary Details|allowed_read_refs/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when allowed_read_refs are malformed", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const malformedPacket = toolsRequiredPacket(outputPath).replace(
+      /```json\n[\s\S]*?\n```/,
+      "```json\n{nope\n```",
+    );
+    const packetPath = writePacket("synthesize.packet.md", malformedPacket);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/malformed|allowed_read_refs/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when allowed_read_refs are empty", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const emptyRefsPacket = toolsRequiredPacket(outputPath).replace(
+      '"allowed_read_refs":[".onto/review/session/round1/axiology.md"]',
+      '"allowed_read_refs":[]',
+    );
+    const packetPath = writePacket("synthesize.packet.md", emptyRefsPacket);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/empty|allowed_read_refs/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when allowed_read_refs mix valid and invalid entries", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const mixedRefsPacket = toolsRequiredPacket(outputPath).replace(
+      '"allowed_read_refs":[".onto/review/session/round1/axiology.md"]',
+      '"allowed_read_refs":[".onto/review/session/round1/axiology.md",42]',
+    );
+    const packetPath = writePacket("synthesize.packet.md", mixedRefsPacket);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/malformed|allowed_read_refs/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details are duplicated", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const duplicatePacket = [
+      toolsRequiredPacket(outputPath),
+      "",
+      "## Runtime Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          read_authority: {
+            allowed_read_refs: [".onto/review/session/round1/logic.md"],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.packet.md", duplicatePacket);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/multiple Unit Boundary Details/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details omit unit_id", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packet = [
+      "# Synthesize Prompt Packet",
+      "",
+      "## Boundary Policy",
+      "- Filesystem: read-only",
+      "- Network: denied",
+      "- Tools: required",
+      "",
+      "## Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          read_authority: {
+            allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+          },
+          output_seat: {
+            output_path: outputPath,
+            allowed_output_refs: [outputPath],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.missing-unit-id.packet.md", packet);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/missing unit_boundary\.unit_id/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details omit output_path", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packet = [
+      "# Synthesize Prompt Packet",
+      "",
+      "## Boundary Policy",
+      "- Filesystem: read-only",
+      "- Network: denied",
+      "- Tools: required",
+      "",
+      "## Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          unit_id: "synthesize",
+          read_authority: {
+            allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+          },
+          output_seat: {
+            allowed_output_refs: [outputPath],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.missing-output-path.packet.md", packet);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/missing unit_boundary\.output_seat\.output_path/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details belong to another unit", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packet = [
+      "# Synthesize Prompt Packet",
+      "",
+      "## Boundary Policy",
+      "- Filesystem: read-only",
+      "- Network: denied",
+      "- Tools: required",
+      "",
+      "## Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          unit_id: "other-unit",
+          read_authority: {
+            allowed_read_refs: ["README.md"],
+          },
+          output_seat: {
+            output_path: outputPath,
+            allowed_output_refs: [outputPath],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.wrong-unit.packet.md", packet);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/unit_boundary\.unit_id mismatch/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when Unit Boundary Details declare another output path", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const otherOutputPath = path.join(sessionRoot, "other-synthesize.md");
+    const packet = [
+      "# Synthesize Prompt Packet",
+      "",
+      "## Boundary Policy",
+      "- Filesystem: read-only",
+      "- Network: denied",
+      "- Tools: required",
+      "",
+      "## Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          unit_id: "synthesize",
+          read_authority: {
+            allowed_read_refs: ["README.md"],
+          },
+          output_seat: {
+            output_path: otherOutputPath,
+            allowed_output_refs: [otherOutputPath],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.wrong-output.packet.md", packet);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/unit_boundary\.output_seat\.output_path mismatch/);
+    expect(existsSync(outputPath)).toBe(false);
+    expect(existsSync(otherOutputPath)).toBe(false);
+  });
+
+  it("rejects packet-forced native when allowed_output_refs omit the output path", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const otherOutputPath = path.join(sessionRoot, "other-synthesize.md");
+    const packet = [
+      "# Synthesize Prompt Packet",
+      "",
+      "## Boundary Policy",
+      "- Filesystem: read-only",
+      "- Network: denied",
+      "- Tools: required",
+      "",
+      "## Unit Boundary Details",
+      "```json",
+      JSON.stringify({
+        unit_boundary: {
+          unit_id: "synthesize",
+          read_authority: {
+            allowed_read_refs: [path.join(projectRoot, ".onto", "settings.json")],
+          },
+          output_seat: {
+            output_path: outputPath,
+            allowed_output_refs: [otherOutputPath],
+          },
+        },
+      }),
+      "```",
+    ].join("\n");
+    const packetPath = writePacket("synthesize.wrong-output-ref.packet.md", packet);
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "synthesize",
+        "--unit-kind", "synthesize",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]),
+    ).rejects.toThrow(/allowed_output_refs does not include output path/);
+    expect(existsSync(outputPath)).toBe(false);
+    expect(existsSync(otherOutputPath)).toBe(false);
+  });
+
+  it("rejects explicit native mode when Unit Boundary Details are missing", async () => {
+    const packetPath = writePacket("lens.packet.md", PANEL_REVIEW_PACKET);
+    const outputPath = path.join(sessionRoot, "logic.md");
+
+    await expect(
+      runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "native",
+      ]),
+    ).rejects.toThrow(/Unit Boundary Details|allowed_read_refs/);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("downgrades opportunistic auto-native to inline when read authority is missing", async () => {
+    const packetPath = writePacket("lens.packet.md", PANEL_REVIEW_PACKET);
+    const outputPath = path.join(sessionRoot, "logic.md");
+
+    const originalWrite = process.stderr.write.bind(process.stderr);
+    const stderrChunks: string[] = [];
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      stderrChunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      const exitCode = await runInlineHttpReviewUnitExecutorCli([
+        "--project-root", projectRoot,
+        "--session-root", sessionRoot,
+        "--onto-home", ontoHome,
+        "--unit-id", "logic",
+        "--unit-kind", "lens",
+        "--packet-path", packetPath,
+        "--output-path", outputPath,
+        "--provider", "openai",
+        "--model", "mock-model",
+        "--tool-mode", "auto",
+      ]);
+
+      expect(exitCode).toBe(0);
+      expect(stderrChunks.join("")).toMatch(/allowed_read_refs|read authority/);
+      const result = JSON.parse(consoleLogSpy.getOutput().join(""));
+      expect(result.tool_mode).toBe("inline");
+      expect(result.packet_policy_downgrade).toBeUndefined();
+      expect(result.native_admission).toMatchObject({
+        requested_tool_mode: "auto",
+        effective_tool_mode: "inline",
+        decision: "read_authority_forced_inline",
+        read_authority_declared: false,
+        read_authority_malformed: false,
+      });
+    } finally {
+      process.stderr.write = originalWrite;
+    }
+  });
+
+  it("keeps packet-forced native as fail-loud when native auto execution fails", async () => {
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_TOOL_LOOP_THROW: "1",
+    });
 
     try {
       await expect(
@@ -638,19 +2241,19 @@ You are the synthesize actor. Lens outputs live on disk.
       expect(existsSync(outputPath)).toBe(false);
       expect(consoleLogSpy.getOutput().join("")).not.toContain('"tool_mode":"inline"');
     } finally {
-      if (savedHook === undefined) {
-        delete process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW;
-      } else {
-        process.env.ONTO_LLM_MOCK_TOOL_LOOP_THROW = savedHook;
-      }
+      restoreMockHookEnv();
     }
   });
 
   it("keeps packet-forced native as fail-loud when native auto returns empty output", async () => {
-    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
     const outputPath = path.join(sessionRoot, "synthesize.md");
-    const savedHook = process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY;
-    process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY = "1";
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
+    const restoreMockHookEnv = setReviewMockHookEnv({
+      ONTO_LLM_MOCK_TOOL_LOOP_EMPTY: "1",
+    });
 
     try {
       await expect(
@@ -670,17 +2273,16 @@ You are the synthesize actor. Lens outputs live on disk.
       expect(existsSync(outputPath)).toBe(false);
       expect(consoleLogSpy.getOutput().join("")).not.toContain('"tool_mode":"inline"');
     } finally {
-      if (savedHook === undefined) {
-        delete process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY;
-      } else {
-        process.env.ONTO_LLM_MOCK_TOOL_LOOP_EMPTY = savedHook;
-      }
+      restoreMockHookEnv();
     }
   });
 
   it("rejects --tool-mode=auto when the resolved provider has no tool-loop support", async () => {
-    const packetPath = writePacket("synthesize.packet.md", TOOLS_REQUIRED_PACKET);
     const outputPath = path.join(sessionRoot, "synthesize.md");
+    const packetPath = writePacket(
+      "synthesize.packet.md",
+      toolsRequiredPacket(outputPath),
+    );
 
     await expect(
       runInlineHttpReviewUnitExecutorCli([
@@ -698,12 +2300,12 @@ You are the synthesize actor. Lens outputs live on disk.
   });
 
   it("rejects a packet that simultaneously denies filesystem and requires tools", async () => {
-    const conflictingPacket = TOOLS_REQUIRED_PACKET.replace(
+    const outputPath = path.join(sessionRoot, "synthesize.md");
+    const conflictingPacket = toolsRequiredPacket(outputPath).replace(
       "- Filesystem: read-only inside round1/",
       "- Filesystem: denied",
     );
     const packetPath = writePacket("synthesize.packet.md", conflictingPacket);
-    const outputPath = path.join(sessionRoot, "synthesize.md");
 
     await expect(
       runInlineHttpReviewUnitExecutorCli([

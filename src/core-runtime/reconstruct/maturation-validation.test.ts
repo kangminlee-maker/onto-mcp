@@ -1540,6 +1540,18 @@ describe("maturation validation", () => {
       sourceObservations: observations,
       sourceObservationDelta: sourceObservationDelta(["obs-code-1"]),
       sourceObservationDeltaRef: "source-observation-delta.yaml",
+      sourceObservationLineageIndex: sourceObservationLineageIndex([
+        "obs-code-1",
+      ]),
+      sourceObservationLineageIndexRef: "source-observation-lineage-index.yaml",
+      sourceObservationLineageIndexValidation:
+        sourceObservationLineageIndexValidation("valid"),
+      sourceObservationLineageIndexValidationRef:
+        "source-observation-lineage-index-validation.yaml",
+      sourceObservationReentryValidations: [{
+        ref: "source-observation-reentry-validation.yaml",
+        validation: sourceObservationReentryValidation("valid", ["obs-code-2"]),
+      }],
       sourceObservationReentryValidation:
         sourceObservationReentryValidation("valid", ["obs-code-2"]),
       sourceObservationReentryValidationRef:

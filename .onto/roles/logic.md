@@ -96,9 +96,9 @@ target 이 schema / model artifact 가 아닌 prose 계약 문서인 경우 clai
 
 `.onto/domains/{domain}/logic_rules.md` (`session_domain`이 설정된 경우).
 
-`session_domain` 이 `none` 이면 `.onto/processes/review/lens-prompt-contract.md` §9.3 Domain-None Fallback Rule 에 따라 domain document 없이 실행한다. 이때 logic lens 는 아래 generic check 를 수행한다.
+`session_domain` 이 `none` 이면 `.onto/processes/review/lens-prompt-contract.md` §9.3 Domain-None Self-Contained Rule 에 따라 domain document 없이 실행한다. 이때 logic lens 는 아래 generic check 를 수행한다.
 
 - **Intra-claim 모순** — 동일 문서 내 단일 claim 이 자기 모순적인 경우 (예: "X 는 필수이다" 와 "X 는 금지된다" 가 동일 문서 내 공존)
 - **명시된 claim 집합의 형식적 양립 가능성** — domain rule 참조 없이 claim 자체 구조만으로 unsatisfiability 판정 가능한 경우
 
-domain rule 기반 judgment 가 필요한 finding 은 `insufficient evidence` + `upstream_evidence_required=true` 로 명시한다. 4요소 (symptom / evidence / remediation / ownership) 의 fallback mode 처리는 §9.3.2 를 따르며, 본 role 은 §9.3 의 canonical 기술을 재진술하지 않는다.
+domain rule 기반 judgment 가 필요한 finding 은 `insufficient evidence` + `upstream_evidence_required=true` 로 명시한다. 4요소 (symptom / evidence / remediation / ownership) 의 domain-none mode 처리는 §9.3.2 를 따르며, 본 role 은 §9.3 의 canonical 기술을 재진술하지 않는다.

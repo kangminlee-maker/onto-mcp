@@ -27,6 +27,43 @@ describe("parseParticipatingLensPaths", () => {
     expect(paths.map((p) => p.lensId)).toEqual(["axiology", "logic"]);
   });
 
+  it("prefers runtime lens outputs over planned lens outputs", () => {
+    const packet = [
+      "## Participating Lens Outputs",
+      "- axiology: .onto/review/session/round1/axiology.md",
+      "",
+      "## Runtime Participating Lens Outputs",
+      "- logic: .onto/review/session/round1/logic.md",
+    ].join("\n");
+    const paths = parseParticipatingLensPaths(packet);
+    expect(paths).toEqual([
+      { lensId: "logic", path: ".onto/review/session/round1/logic.md" },
+    ]);
+  });
+
+  it("ignores embedded materialized input headings before runtime lens outputs", () => {
+    const packet = [
+      "# Synthesize Packet",
+      "",
+      "## Embedded Materialized Input",
+      "<!-- onto:embedded-materialized-input:start lines=2 -->",
+      "## Runtime Participating Lens Outputs",
+      "- fake: target-body.md",
+      "<!-- onto:embedded-materialized-input:end -->",
+      "",
+      "## Runtime Participating Lens Outputs",
+      "- logic: .onto/review/session/round1/logic.md",
+      "- structure: .onto/review/session/round1/structure.md",
+    ].join("\n");
+
+    const paths = parseParticipatingLensPaths(packet);
+
+    expect(paths).toEqual([
+      { lensId: "logic", path: ".onto/review/session/round1/logic.md" },
+      { lensId: "structure", path: ".onto/review/session/round1/structure.md" },
+    ]);
+  });
+
   it("tolerates paths without backtick wrappers", () => {
     const packet = [
       "## Participating Lens Outputs",
@@ -34,6 +71,30 @@ describe("parseParticipatingLensPaths", () => {
     ].join("\n");
     const paths = parseParticipatingLensPaths(packet);
     expect(paths[0]?.path).toBe(".onto/review/x/round1/axiology.md");
+  });
+
+  it("strips comment suffixes from unbackticked paths", () => {
+    const packet = [
+      "## Runtime Participating Lens Outputs",
+      "- logic: .onto/review/x/round1/logic.md # completed lens output",
+      "- structure: .onto/review/x/round1/structure.md // completed lens output",
+    ].join("\n");
+    const paths = parseParticipatingLensPaths(packet);
+    expect(paths).toEqual([
+      { lensId: "logic", path: ".onto/review/x/round1/logic.md" },
+      { lensId: "structure", path: ".onto/review/x/round1/structure.md" },
+    ]);
+  });
+
+  it("strips comment suffixes from backticked paths", () => {
+    const packet = [
+      "## Runtime Participating Lens Outputs",
+      "- logic: `.onto/review/x/round1/logic.md` # completed lens output",
+    ].join("\n");
+    const paths = parseParticipatingLensPaths(packet);
+    expect(paths).toEqual([
+      { lensId: "logic", path: ".onto/review/x/round1/logic.md" },
+    ]);
   });
 
   it("stops at the next heading", () => {

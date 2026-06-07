@@ -31,15 +31,15 @@ recommended next poll interval, last observed artifact, elapsed time since that
 artifact, and a concise waiting/stale summary.
 
 MCP hosts that support native progress can also pass `_meta.progressToken` on
-`onto.review`. The MCP server emits `notifications/progress` with versioned
+`onto_review`. The MCP server emits `notifications/progress` with versioned
 `ontoReviewProgress` metadata while the long-running call is active. This is a
-transport projection only; `onto.review_status` remains the canonical
+transport projection only; `onto_review_status` remains the canonical
 artifact-backed read surface.
 
 Progress step ids, labels, and total count come from the shared review progress
 contract used by both runtime manifests and Core API status projection.
 
-`continueReview` is the Core API counterpart to `onto.review_continue`: it
+`continueReview` is the Core API counterpart to `onto_review_continue`: it
 builds the review continuation plan from the PipelineExecutionLedger, stores an
 attempt manifest, validates session-owned execution-plan paths, backs up
 superseded unit and session-level artifacts that already exist, dispatches only
@@ -56,7 +56,7 @@ When an active attempt already owns the requested frontier, it returns
 `decision="already_running"` with active attempt facts instead of dispatching a
 duplicate run.
 
-`cancelReview` is the Core API counterpart to `onto.review_cancel`. It writes a
+`cancelReview` is the Core API counterpart to `onto_review_cancel`. It writes a
 session-local `review-cancel-request.yaml` for a non-terminal review. The runner
 checks for that request at runtime cancellation checkpoints and records a
 structured halted result with `halt_phase="cancellation"` when the request is
@@ -85,8 +85,8 @@ same lexical and realpath-aware semantics while preserving surface-specific
 errors. Review execution-plan refs are validated through
 `src/core-runtime/review/execution-plan-boundary.ts` before continuation or
 direct prompt-runner execution consumes plan-owned output paths.
-Explicit domain tokens are preflighted before dispatch: exact and alias matches
-proceed, while unknown tokens return a `ReviewDomainResolutionError` with either
+Explicit domain tokens are preflighted before dispatch: exact canonical matches
+proceed, while retired aliases and unknown tokens return a `ReviewDomainResolutionError` with either
 `resolution="suggestion"` and candidate ids or `resolution="unknown"`.
 
 `reconstruct-api.ts` is the bounded facade for the reconstruct MCP surface. It
@@ -100,5 +100,5 @@ ids, refs, enums, coverage, metrics, stage state, and final-output provenance.
 The public run path defaults to `semanticAuthorRealization="direct_call"` and
 `confirmationProviderRealization="direct_call"`, using the configured `llm`
 provider and failing loud when provider, model, credentials, or returned
-artifact shape are invalid. Test-only mock helpers remain internal fixtures and
-must not be treated as product completion evidence.
+artifact shape are invalid. Fixed input artifacts may support local checks, but
+product completion evidence requires the actual runtime/provider path.

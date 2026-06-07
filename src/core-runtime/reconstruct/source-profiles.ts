@@ -78,7 +78,7 @@ export function parseReconstructSourceProfile(args: {
     );
   }
 
-  const fallbackRecord: ReconstructSourceProfileRecord = args.record ?? {
+  const profileFileRecord: ReconstructSourceProfileRecord = args.record ?? {
     profile_id: `${rawKind}-source-profile`,
     target_material_kind: rawKind,
     is_default_for_kind: true,
@@ -98,7 +98,7 @@ export function parseReconstructSourceProfile(args: {
   };
 
   return {
-    ...fallbackRecord,
+    ...profileFileRecord,
     profile_path: path.resolve(args.profilePath),
     title: firstMarkdownHeading(args.markdown),
     support_summary: args.record
