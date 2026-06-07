@@ -101,3 +101,27 @@ no material issues. The only low/info follow-up was additional
   `synthesis-global.yaml` remains deferred because the latest live E2E passed
   fixture-specific semantic quality without a global pass. Tighter issue-stance
   supplemental reads should wait until relation-graph ownership is settled.
+- Relation-graph runtime-owned completion completed on 2026-06-08. The
+  canonical `finding-relation-graph.yaml` shape remains stable for downstream
+  consumers while the LLM submit payload is limited to accepted semantic
+  relation rows. Runtime owns `relation_id` minting, singleton coverage
+  completion over `causal_analysis_finding_ids`, and fail-loud rejection of
+  relation endpoints outside that coverage scope.
+- Tighter issue-stance supplemental reads completed on 2026-06-08. Each fresh
+  `issue-stance:{lens}` worker receives the compact runtime stance projection
+  plus only that lens's Round 1 output ref as supplemental read authority. Other
+  lens Round 1 outputs remain represented through issue/finding/relation
+  projection fields and are not opened to the stance worker. Verification:
+  focused prompt-boundary tests, TypeScript check, live E2E, and a prompt scan
+  of the E2E canonical session showing each of the nine stance packets had
+  exactly one Round 1 allowed read ref matching its requested lens.
+- Latest live verification after the two Order 6 tuning slices completed on
+  2026-06-08: `npm run test:e2e` passed for canonical session
+  `/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-mcp-live-e2e-mCClrk/.onto/review/20260608-3e880756`,
+  with `execution_status=completed`, `total_duration_ms=323704`,
+  `max_concurrent_lenses=3`, `observed_dispatch_width=3`, no degraded lenses,
+  and fixture-specific semantic quality `passed`.
+- Remaining optional tuning is deferred rather than active: deterministic
+  relation-pair hints can be considered later as supplemental hints only, and
+  `synthesis-global.yaml` remains unnecessary while the live fixture-specific
+  semantic gate continues to pass without a global pass.

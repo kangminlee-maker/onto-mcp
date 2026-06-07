@@ -313,16 +313,6 @@ function primaryLensIdFromPrompt(packetText: string): string {
   return markdownRef?.[1] ?? "logic";
 }
 
-function stringListFromYamlKey(packetText: string, key: string): string[] {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = packetText.match(new RegExp(`^${escaped}:\\s*\\n((?:\\s+-\\s+.+\\n?)+)`, "m"));
-  if (!match?.[1]) return [];
-  return match[1]
-    .split("\n")
-    .map((line) => line.match(/^\s+-\s+(.+?)\s*$/)?.[1]?.trim())
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
-}
-
 function priorArtifactRef(packetText: string, artifactId: string): string | null {
   const escaped = artifactId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = packetText.match(new RegExp(`^- ${escaped}:\\s*(.+?)\\s*$`, "m"));
@@ -458,13 +448,6 @@ function issueArtifactArgs(
     case "finding-relation-graph":
       return {
         relations: [],
-        singleton_findings: stringListFromYamlKey(
-          packetText,
-          "causal_analysis_finding_ids",
-        ).map((findingId) => ({
-          finding_id: findingId,
-          reason: "No validated shared cause was needed for this mock realization.",
-        })),
       };
     case "issue-ledger":
       return {

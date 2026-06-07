@@ -449,7 +449,7 @@ Planned artifact flow by result:
 | `round1/{lens}.findings.yaml` | lens worker + runtime sidecar tool | LLM submits surface finding fields; for material candidates it also submits `materiality_basis` and causal step claims/evidence; runtime assigns candidate-local ids and writes YAML |
 | `finding-ledger.yaml` | runtime deterministic projection | runtime copies all findings, assigns stable `finding_id`, rewrites causal step refs to ledger-stable `finding-xxx.cause-yyy`, mirrors current top-level materiality fields, and preserves all evidence refs |
 | relation input projection | runtime deterministic projection | runtime includes full nodes only for material findings with causal paths and lists surface-only ids separately |
-| `finding-relation-graph.yaml` | LLM semantic relation unit + runtime validation | LLM compares causal paths for same-root/shared-cause/dependency/conflict; runtime validates ids, cause refs, enums, and causal-analysis coverage |
+| `finding-relation-graph.yaml` | LLM semantic relation unit + runtime completion/validation | LLM compares causal paths for same-root/shared-cause/dependency/conflict; runtime assigns relation ids, completes singleton coverage, and validates cause refs, enums, and causal-analysis coverage |
 | `issue-ledger.yaml` | LLM issue clustering unit + runtime validation | LLM merges same-root material findings into issues and records shared-cause dependencies without forcing unrelated root causes into one issue |
 
 Redesign triggers:
@@ -1220,6 +1220,16 @@ Unrelated causal-analysis findings are represented only through
 relation list to accepted semantic links only and prevents N² "no relation"
 output growth.
 
+Runtime-owned completion update:
+
+- LLM submit payload now contains only accepted semantic `relations`.
+- LLM does not submit `relation_id` or `singleton_findings`.
+- Runtime assigns stable `rel-001`, `rel-002`, ... ids in accepted relation
+  order and writes canonical singleton rows for causal-analysis findings that
+  are not relation endpoints.
+- The canonical `finding-relation-graph.yaml` shape remains unchanged for
+  downstream `issue-ledger`, semantic-quality, and synthesis consumers.
+
 `shared_cause_candidate` is a deliberate concept split from
 `same_root_candidate`: it preserves solution dependency without claiming that
 two issues have the same root cause.
@@ -1269,6 +1279,18 @@ Implemented on 2026-06-06:
   now requires each issue's `evidence_refs` and `raised_by_lens_ids` to be
   projected from its assigned `finding-ledger.yaml` findings.
 
+Implemented on 2026-06-08:
+
+- `finding-relation-graph` submit schema accepts only semantic relation rows.
+- `relation_id` minting and `singleton_findings` coverage completion are
+  runtime-owned.
+- submit-time normalization rejects relation endpoints outside
+  `causal_analysis_finding_ids`, so `surface_only_finding_ids` cannot be pulled
+  into relation coverage.
+- canonical artifact validation remains unchanged: downstream consumers still
+  read stable relation refs and singleton coverage from
+  `finding-relation-graph.yaml`.
+
 ### Meaning Preservation
 
 This slice does not ask runtime to decide relations. It only changes the input
@@ -1284,17 +1306,27 @@ surface and output completeness guarantees:
   `finding-ledger.yaml` rows;
   through `issue_dependencies` while leaving relation semantics LLM-owned.
 
-### Next Tuning Questions
+### Current Tuning Status
 
-1. Should relation graph output move to a tool-submitted sidecar shape so
-   relation ids and singleton coverage can be runtime-written rather than
-   LLM-authored YAML?
-2. Should runtime propose deterministic candidate pair hints from matching
-   causal path node text/anchors, or would that risk suppressing cross-lens
-   shared-cause relations?
-3. Done for `issue-ledger`: it now consumes only relation graph + finding
-   ledger artifacts and stops reading lens outputs. The next equivalent target
-   is `issue-stance-matrix`.
+Completed:
+
+1. `finding-relation-graph` uses a tool-submitted semantic relation payload.
+   Runtime writes relation ids and singleton coverage while preserving the
+   canonical artifact shape.
+2. `issue-ledger` consumes only relation graph + finding ledger artifacts and
+   stops reading lens outputs.
+3. `issue-stance-matrix` is runtime-merged from per-lens stance response
+   artifacts. Each `issue-stance:{lens}` worker now receives the compact stance
+   projection plus only its own Round 1 output ref as supplemental read
+   authority.
+
+Deferred:
+
+1. Runtime deterministic relation-pair hints may be added later only as
+   supplemental hints. They must not become a hard filter that suppresses
+   cross-lens shared-cause relations.
+2. `synthesis-global.yaml` remains deferred while fixture-specific semantic
+   quality passes without a global pass.
 
 Implemented for `issue-stance-matrix`:
 
@@ -1302,8 +1334,9 @@ Implemented for `issue-stance-matrix`:
   `finding-ledger.yaml`, `finding-relation-graph.yaml`, and
   `issue-ledger.yaml`;
 - prompt packets embed the compact projection and tell the LLM to use it first;
-- Round 1 lens refs remain bounded supplemental reads because lens-specific
-  stance rationale can still require raw lens context;
+- each per-lens stance response prompt opens only the requested lens's Round 1
+  output ref as a bounded supplemental read because lens-specific stance
+  rationale can still require raw lens context;
 - runtime validation rejects stances from non-participating lenses;
 - stance `evidence_refs` are string-only and, on the real on-disk path, must
   stay within the issue/lens provenance set derived from issue refs, assigned

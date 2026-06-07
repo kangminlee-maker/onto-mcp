@@ -1497,14 +1497,33 @@ describe("issue-stance-matrix runtime projection", () => {
     expect(prompt).toContain("output_path: .onto/review/session/stance-responses/logic.yaml");
     expect(parsePacketBoundaryPolicy(prompt).tools).toBe("required");
     expect(prompt).toContain("repo exploration: denied");
-    expect(parsePacketAllowedReadAuthority(prompt).refs).toEqual(
-      expect.arrayContaining([
-        ".onto/review/session/finding-ledger.yaml",
-        ".onto/review/session/finding-relation-graph.yaml",
-        ".onto/review/session/issue-ledger.yaml",
-        ".onto/review/session/round1/logic.findings.yaml",
-      ]),
-    );
+    expect(parsePacketAllowedReadAuthority(prompt).refs).toEqual([
+      ".onto/review/session/execution-preparation/review-target-profile.yaml",
+      ".onto/review/session/finding-ledger.yaml",
+      ".onto/review/session/finding-relation-graph.yaml",
+      ".onto/review/session/issue-ledger.yaml",
+      ".onto/review/session/round1/logic.findings.yaml",
+    ]);
+    expect(prompt).not.toContain(".onto/review/session/round1/pragmatics.findings.yaml");
+  });
+
+  it("fails loudly when a per-lens stance packet lacks its own Round 1 source ref", () => {
+    const executionPlan = minimalExecutionPlan("/repo");
+
+    expect(() =>
+      buildIssueStanceResponsePrompt({
+        sessionId: "session-001",
+        projectRoot: "/repo",
+        executionPlan,
+        lensId: "logic",
+        outputPath: "/repo/.onto/review/session/stance-responses/logic.yaml",
+        lensOutputPaths: [
+          "/repo/.onto/review/session/round1/pragmatics.findings.yaml",
+        ],
+        issueStanceInputProjection:
+          "## Runtime Issue Stance Input Projection\nschema_version: 1",
+      }),
+    ).toThrow("issue-stance:logic has no matching Round 1 lens output ref.");
   });
 
   it("validates per-lens stance response coverage and evidence provenance", () => {

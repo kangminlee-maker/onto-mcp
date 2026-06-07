@@ -38,13 +38,19 @@
 
 8. **최적화가 재설계로 커지면**, 원래 성공기준("품질 손상 없음")을 새 스코프에서 다시 측정한다.
 
+> 위 규칙들의 구조적 강제(가드)는 [docs/architecture/structural-guardrails-enforcement.md](docs/architecture/structural-guardrails-enforcement.md)를 따른다. 아직 미구현 가드(G1~G6)는 우선 구현 대상이다.
+
 ---
 
 ## 1. Position
 
-이 레포는 `onto` 프로토타입을 보존하면서 `ontology as code` 기준으로 서비스화하는 전환 레포다. 현재 제품 방향은 TS core를 유지하고 Codex/Claude/기타 host가 호출할 수 있는 MCP-native tool surface를 추가하는 것이다.
+이 레포는 `onto`의 TS-first MCP-native 제품 런타임이다. `.onto` YAML/MD 계약이
+언어 중립 의미와 프로세스 계약을 소유하고, `src/core-runtime/`이 실행 의미론을
+구현하며, `src/core-api/`와 `src/mcp/`가 host-facing surface를 얇게 투영한다.
 
-- reference prototype + prompt-backed reference execution source + TS product core + MCP tool surface
+- `.onto` contracts + TS core runtime + Core API facade + MCP tool surface
+- product evidence는 실제 runtime/provider path에서 얻는다
+- external host integration은 canonical implementation이 아니라 provider evidence다
 
 ---
 
@@ -57,18 +63,31 @@
 | 1 | [core-lexicon.yaml](/Users/kangmin/cowork/onto-mcp/.onto/authority/core-lexicon.yaml) | .onto/authority/ |
 | 2 | [ontology-as-code-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-guideline.md) | .onto/principles/ |
 | 2 | [llm-native-development-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-native-development-guideline.md) | .onto/principles/ |
+| 2 | [non-specialist-communication-guideline.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/non-specialist-communication-guideline.md) | .onto/principles/ |
 | 2 | [product-locality-principle.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/product-locality-principle.md) | .onto/principles/ |
 | 3 | [productization-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/productization-charter.md) | .onto/principles/ |
 | 4 | [llm-runtime-interface-principles.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/llm-runtime-interface-principles.md) | .onto/principles/ |
 | 4 | [ontology-as-code-naming-charter.md](/Users/kangmin/cowork/onto-mcp/.onto/principles/ontology-as-code-naming-charter.md) | .onto/principles/ |
+| 5 | 기능별 계약 | .onto/processes/{feature}/*.md |
+| 6 | 타입·구현 | src/core-runtime/ |
+| 7 | 기능 프로세스·역할 정의 | .onto/processes/review/*.md, .onto/roles/*.md |
+| 8 | 개발 기록 | development-records/ |
 
 ### 폴더 구조
 
-| 폴더 | 역할 | 배포 |
-|---|---|---|
-| `.onto/authority/` | canonical data — 개념 SSOT + 런타임 설정 + 온보딩 보조 | 포함 |
-| `.onto/principles/` | 개발 규범 — 설계·구현 원칙 (rank 2~4) | 제외 |
-| `development-records/` | 개발 이력 — 감사, 설계, 추적, handoff 기록 | 제외 |
+| 폴더 | 역할 |
+|---|---|
+| `.onto/authority/` | 개념 SSOT, runtime-facing lens registry, diagnostic code registry |
+| `.onto/principles/` | rank 2~4 개발 규범 |
+| `.onto/domains/` | 선택 가능한 domain 문서와 domain-specific profile |
+| `.onto/processes/` | shared/review/reconstruct/future process contracts |
+| `.onto/roles/` | review lens와 synthesize role definition |
+| `src/core-runtime/` | executable review/reconstruct runtime |
+| `src/core-api/` | MCP와 harness가 호출하는 Core API facade |
+| `src/mcp/` | MCP tool schema와 server entrypoint |
+| `docs/architecture/` | 현재 architecture, continuation, operational notes |
+| `docs/decisions/` | accepted direction과 architecture decision |
+| `development-records/` | 개발 이력, 감사, 설계, handoff 기록 |
 
 `.onto/review/*`는 실행 세션 산출물이다. 세션 artifact 자체를 조사하는 작업이 아니라면
 runtime naming, code audit, docs audit, migration 대상 검색에서 항상 제외한다.
@@ -87,13 +106,18 @@ target material 관련 작업 시 추가로 읽을 문서:
 6. [lens-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/lens-prompt-contract.md)
 7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
 8. [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
-9. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
-10. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-11. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
-12. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-13. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
-14. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-15. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+9. [shared-phenomenon-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/shared-phenomenon-contract.md)
+10. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
+11. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
+12. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
+13. [review-context-manifest-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-context-manifest-contract.md)
+14. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
+15. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
+16. [pipeline-execution-ledger-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/pipeline-execution-ledger-contract.md)
+17. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+18. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+19. [review-continuation-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/review-continuation-surface.md)
+20. [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
 
 `reconstruct` 작업 시 추가로 읽을 문서:
 
@@ -109,11 +133,15 @@ target material 관련 작업 시 추가로 읽을 문서:
 
 ## 3. Core Principles
 
-원칙은 .onto/principles/ 문서에 정의되어 있다. 재서술하지 않는다.
+원칙은 아래 문서에 정의되어 있다. 재서술하지 않는다.
 
-- **LLM/runtime 소유 분리**: READ `.onto/principles/llm-native-development-guideline.md`
+- **LLM/runtime capability boundary**: READ `/Users/kangmin/.codex/guides/llm-capability-boundary.md`
+- **onto-mcp LLM/runtime 적용 규칙**: READ `.onto/principles/llm-native-development-guideline.md`
+- **인터페이스 seat와 boundary state**: READ `.onto/principles/llm-runtime-interface-principles.md`
 - **Ontology as Code 규칙**: READ `.onto/principles/ontology-as-code-guideline.md`
-- **인터페이스 원칙**: READ `.onto/principles/llm-runtime-interface-principles.md`
+- **Concept economy / naming**: READ `.onto/principles/ontology-as-code-naming-charter.md`
+- **비전문가 소통**: READ `.onto/principles/non-specialist-communication-guideline.md`
+- **product locality**: READ `.onto/principles/product-locality-principle.md`
 - **제품 방향·결정**: READ `.onto/principles/productization-charter.md`
 
 ---
@@ -136,26 +164,32 @@ target material 관련 작업 시 추가로 읽을 문서:
 
 ## 5. Review Canonical Direction
 
-현재 1순위 제품화 대상은 `검토 (review)`다.
+`검토 (review)`는 현재 가장 성숙한 제품화 경로다. Review 실행 truth는
+`productized-live-path.md`와 하위 review contracts가 소유한다.
 
 canonical review 구조:
 
-1. `호출 해석 (InvocationInterpretation)`
-2. 주체자 확인 / 선택 확정
-3. `호출 고정 (InvocationBinding)`
-4. execution preparation artifacts
-5. `9개 lens`
-6. controlled lens deliberation
-7. `종합 단계 (synthesize)`
-8. `리뷰 기록 (ReviewRecord)`
-9. human-readable final output
+1. user request
+2. `호출 해석 (InvocationInterpretation)`
+3. 주체자 확인 / 선택 확정
+4. `호출 고정 (InvocationBinding)`
+5. execution preparation artifacts
+6. 선택된 lens set 독립 실행 (`full`은 9개, `core-axis`는 6개, explicit lens set 가능)
+7. issue artifact construction
+8. controlled lens deliberation
+9. `종합 단계 (synthesize)`
+10. human-readable final output
+11. `리뷰 기록 (ReviewRecord)` aggregate
 
 DO:
-- `9개 lens → controlled lens deliberation → synthesize` 구조를 따른다
+- 선택된 lens 전체를 context-isolated reasoning unit으로 실행하고, full review에서는 9개 lens를 실행한다
 - issue-stance target에서는 surface finding을 root-cause issue cluster로 묶은 뒤 모든 lens stance를 기록하고 material conflict issue만 숙의한다
 - `New Perspectives`는 `axiology`에서 제안한다
-- `deliberation.md`가 contested lens position의 resolution authority다
-- `synthesize`는 lens 결과와 `deliberation.md`를 보존적으로 종합한다
+- `deliberation-resolution.yaml`이 contested lens position의 conflict-resolution authority다
+- `deliberation.md`는 `deliberation-resolution.yaml`의 human-readable projection이다
+- `synthesis-ledger.yaml`이 synthesize source layer이고 `synthesis.md`는 projection이다
+- `synthesize`는 issue artifact truth와 `deliberation-resolution.yaml`을 보존적으로 렌더링하며 새 resolution을 만들지 않는다
+- material issue는 별도 enum이 아니라 severity와 `problem-framing.yaml` admission에서 파생한다. canonical 기준은 review contracts가 소유한다
 
 ---
 
@@ -170,12 +204,14 @@ DO:
 3. 계약된 출력만 낸다
 4. 독립적으로 판단한다
 
-현재 active execution profile:
+현재 active execution path:
 
-- `main-workers` + Codex worker
-- `main-workers` + direct-call provider
+- `ReviewExecutionProfile.mode=main-workers`
+- worker executor `codex`: host-bound OAuth 또는 Codex worker path
+- worker executor `direct_call`: API/local provider path
+- `synthesize.llm`: deliberation 이후 별도 synthesize unit actor seat
 
-`nested-workers` + Codex worker bridge는 profile concept로 남아 있지만 active
+`nested-workers`는 profile concept로 남아 있지만 active
 product path에서는 sidecar structured output, read-only lens execution,
 bounded dispatch 계약을 강제하지 못하므로 pre-dispatch에서 fail-loud한다.
 
@@ -197,22 +233,39 @@ bounded dispatch 계약을 강제하지 못하므로 pre-dispatch에서 fail-lou
 - `binding.yaml`
 - `session-metadata.yaml`
 - `execution-plan.yaml`
-- `execution-preparation/*`
-- `degradation-summary.yaml` when execution is degraded or halted
-- `deliberation/round1/*`
-- `deliberation.md`
-- `final-output.md`
-- `review-record.yaml` ← primary artifact
-
-issue-stance deliberation target artifact:
-
+- `execution-result.yaml`
+- `review-run-manifest.yaml`
+- `lens-completion-barrier.yaml`
+- `failures/*.yaml` for structured pre-manifest or surface-specific failures
+- `execution-preparation/actor-invocation-profiles.yaml`
+- `execution-preparation/actor-consumer-bindings.yaml`
+- `execution-preparation/domain-binding.yaml`
+- `execution-preparation/review-target-profile.yaml`
+- `execution-preparation/review-value-alignment-criteria.yaml`
+- `execution-preparation/review-context-manifest.yaml`
+- `execution-preparation/target-snapshot.md`
+- `execution-preparation/target-snapshot-manifest.yaml`
+- `execution-preparation/materialized-input.md`
+- `execution-preparation/context-candidate-assembly.yaml`
+- `round1/{lens}.findings.yaml` as lens machine source layer
+- optional `round1/{lens}.md` when markdown projection is enabled
 - `finding-ledger.yaml`
 - `finding-relation-graph.yaml`
 - `issue-ledger.yaml`
+- `stance-responses/{lens_id}.yaml`
 - `issue-stance-matrix.yaml`
 - `deliberation-plan.yaml`
+- `deliberation/responses/{issue_id}/{lens_id}.yaml`
+- `deliberation-resolution.yaml`
+- `deliberation.md` projection
 - `problem-framing.yaml`
-- `review-target-profile.yaml`
+- `synthesis-work-items.yaml`
+- `synthesis-ledger.yaml`
+- `synthesis.md` projection
+- `degradation-summary.yaml` when execution is degraded or halted
+- `environment-warnings.yaml` when non-fatal worker warnings are captured
+- `final-output.md`
+- `review-record.yaml` ← primary artifact
 
 `problem-framing.yaml` uses a common spine owned by the review contract and optional domain axes owned by `.onto/domains/{domain}/problem_framing_profile.md`.
 
@@ -230,10 +283,25 @@ core 제품화 계층은 TypeScript다.
 
 현재 host-facing review entrypoint는 MCP tool call이다.
 
+review tools:
+
 - `onto_review` — review 실행
 - `onto_prepare_review` — 실행 전 session과 prompt packet 준비
+- `onto_review_continue` — 기존 session artifact에서 eligible frontier를 계속 실행
+- `onto_review_cancel` — 실행 중 review의 cooperative cancellation 요청
 - `onto_review_status` — 진행/상태 조회
 - `onto_review_result` — 완료 결과 조회
+- `onto_list_lenses` — canonical lens set 조회
+- `onto_list_domains` — 사용 가능한 domain 조회
+
+reconstruct tools:
+
+- `onto_list_source_profiles` — target material kind별 source profile 조회
+- `onto_observe_source` — reconstruct source observation materialize
+- `onto_validate_reconstruct_directive` — LLM-authored reconstruct directive 검증
+- `onto_reconstruct` — material-aware reconstruct 실행
+- `onto_reconstruct_status` — reconstruct 진행/상태 조회
+- `onto_reconstruct_result` — reconstruct 결과 조회
 
 `onto mcp`는 stdio MCP 서버 시작 명령이며 단발성 review 실행 명령이 아니다.
 `src/core-runtime/cli/review-invoke.ts`는 내부 argv adapter와 live E2E 검증 entry로만 취급한다.
@@ -290,12 +358,13 @@ onto의 테스트는 evidence class를 분리한다.
 
 ## 10. Current Priority
 
-1. `검토 (review)`의 `제품화된 실시간 경로`를 canonical execution truth로 정착
-2. `9개 lens + controlled lens deliberation + synthesize` 구조를 실제 실행 truth로 유지하면서, issue-stance deliberation target을 구현한다
-3. `맥락 격리 추론 단위`를 유지
-4. `리뷰 기록 (ReviewRecord)`를 actual primary artifact로 도입
-5. TS core API를 정리한 뒤 MCP tool surface로 노출
-6. provider contract로 Codex / Claude / local / future host 실행 차이를 흡수
+1. `review`의 productized live path를 artifact-backed canonical truth로 유지한다.
+2. `selected lens set → issue artifacts → controlled deliberation → synthesize → final-output → ReviewRecord` 경로를 보존한다.
+3. `ReviewRecord`를 primary artifact로 유지하고, markdown은 projection/rendering layer로 취급한다.
+4. MCP tool surface는 `src/mcp/`에서 얇게 유지하고, 의미론은 `.onto/` contracts와 `src/core-runtime/`에 둔다.
+5. `onto_review_status`, `onto_review_continue`, `onto_review_cancel`은 run-control, continuation, cancellation의 bounded host-facing surface다.
+6. `reconstruct`는 active bounded MCP/Core API surface이며, runtime은 구조 관찰·검증·artifact persistence를 소유하고 LLM-authored ontology meaning은 submit/validation 경계 안에서만 받는다.
+7. provider contract로 Codex / Claude / local / future host 실행 차이를 흡수하되, product completion과 semantic quality evidence는 실제 runtime/provider path에서만 주장한다.
 
 새 작업은 항상 아래 질문으로 시작한다.
 
@@ -303,5 +372,7 @@ onto의 테스트는 evidence class를 분리한다.
 2. canonical seat가 어디인가
 3. 대상물 형식(`target_material_kind`)이 무엇이며 처리 방식이 달라지는가
 4. `LLM` 소유인가, runtime 소유인가
-5. 먼저 prompt-backed path에서 작동시킬 수 있는가
-6. 이후 어떤 bounded TS runtime step으로 치환할 것인가
+5. source layer와 projection layer가 무엇인가
+6. 기존 contract, validator, submit tool, MCP/Core API surface 중 무엇을 재사용해야 하는가
+7. verification evidence가 product-path/live evidence인지 mock/fixture support evidence인지 무엇인가
+8. 변경이 INVARIANTS 보호 항목에 닿는가

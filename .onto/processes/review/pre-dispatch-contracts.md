@@ -254,9 +254,10 @@ and appends/upserts the generated packet ref before invoking the unit.
 
 ### 5.3 Freshness And Continuation
 
-Current MCP review/status/result can read halted session artifacts. The planned
-explicit continuation surface is `onto_review_continue`; its design lives in
-`docs/architecture/review-continuation-surface.md`.
+Current MCP review/status/result can read halted session artifacts. The explicit
+continuation surface is `onto_review_continue`; its design lives in
+`docs/architecture/review-continuation-surface.md`, and the MCP/Core API surface
+is active.
 
 The public concept is review continuation, not subagent management. A
 continuation may re-dispatch failed or missing review execution units while
@@ -296,9 +297,9 @@ Continuation must not change inputs, settings, target scope, provider route,
 domain, review mode, selected lens set, or manifest-governed artifacts. If any
 of those must change, the caller must start a new review session.
 
-Until `onto_review_continue` is implemented, MCP callers must still start a new
-review session when they need execution to proceed. Runtime status/result tools
-may read existing session artifacts, but they do not resume execution.
+When execution must proceed from an existing eligible session, MCP callers use
+`onto_review_continue`. Runtime status/result tools remain read surfaces; they
+may expose continuation availability and plans, but they do not resume execution.
 
 ### 5.4 Synthesize Context
 
