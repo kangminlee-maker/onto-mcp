@@ -18,7 +18,7 @@ small set of tools with a stable MCP surface.
 | `onto_list_source_profiles` | Show reconstruct source profiles | source profile refs keyed by `target_material_kind` |
 | `onto_observe_source` | Materialize reconstruct source observations | `target-material-profile.yaml`, `source-inventory.yaml`, `source-observations.yaml`, initial `reconstruct-record.yaml` |
 | `onto_validate_reconstruct_directive` | Validate LLM-authored reconstruct directive files | validation artifact with status and violations |
-| `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with explicit mock semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
+| `onto_reconstruct` | Run the material-aware reconstruct post-Seed artifact loop with direct-call semantic/confirmation realization | post-Seed artifacts, `final-output.md`, `reconstruct-run-manifest.yaml`, `reconstruct-record.yaml` |
 | `onto_reconstruct_status` | Read reconstruct progress/result state | record stage, stage progress, liveness, count summary, and artifact refs |
 | `onto_reconstruct_result` | Read reconstruct result artifacts | record, run manifest, progress projection, and final output text |
 
@@ -137,7 +137,7 @@ not make the runtime an ontology meaning author:
 | `onto_list_source_profiles` | list reconstruct source profiles by `target_material_kind` and support status |
 | `onto_observe_source` | return deterministic material-structure observations |
 | `onto_validate_reconstruct_directive` | validate LLM-authored reconstruct directives |
-| `onto_reconstruct` | orchestrate the post-Seed artifact loop through explicit `semanticAuthorRealization` and `confirmationProviderRealization`; only `mock` is wired today |
+| `onto_reconstruct` | orchestrate the post-Seed artifact loop through direct-call `semanticAuthorRealization` and `confirmationProviderRealization` |
 | `onto_reconstruct_status` | read the current `reconstruct-record.yaml` plus stage progress, liveness, and count summary projection |
 | `onto_reconstruct_result` | return the record, run manifest, progress projection, and final output text |
 
@@ -156,12 +156,9 @@ Reconstruct MCP schemas must keep `target_material_kind` separate from domain,
 medium, target input kind, and review context `source_kind`. The shared goal
 contract is `.onto/processes/shared/target-material-kind-contract.md`.
 
-`onto_reconstruct` requires callers to pass
-`semanticAuthorRealization="mock"` and `confirmationProviderRealization="mock"`
-until a real host/direct-call semantic author and user-mediated confirmation
-provider are exposed. This keeps the public route honest: a completed run is a
-bounded mock-author post-Seed loop, not proof that runtime authored ontology
-meaning or that live host confirmation occurred.
+`onto_reconstruct` exposes only the `direct_call` realization for semantic
+authoring and confirmation-provider execution. Test-double realizations are not
+part of the public MCP workflow surface.
 
 The run manifest records `happy_path_scope.implemented_artifacts` and
 `happy_path_scope.deferred_artifacts`. Domain competency admission is active
@@ -222,11 +219,15 @@ In `settings.json/v3`, each actor owns a complete LLM block. Review actors use
 canonical settings shape. Review execution route selection belongs to
 `review.execution.executor`: `auto` derives the route from the actor LLM
 selections, auth mode, host availability, and execution topology, while
-`codex`, `direct_call`, and `mock` pin the executor.
-Route-derived fields such as executor, resolved provider, and auth mode are reported
-for observability. The TS route projection helper is an internal derivation
-point; MCP and CLI entrypoints accept the parent execution profile inputs, then
-report route visibility after derivation.
+non-auto settings remain compatibility controls behind the resolved execution
+profile. Public route visibility is expressed with canonical fields such as
+`execution_route`, `execution_adapter`, `model_provider`, `auth_mode`,
+`billing_mode`, `wire_format`, and `model_id`.
+Legacy fields such as executor and resolved provider may still be reported for
+observability, but they are compatibility projections. The TS route projection
+helper is an internal derivation point; MCP entrypoints accept canonical
+`executionRoute` only as a bounded override and otherwise report route
+visibility after settings-driven derivation.
 
 ```text
 review requested
@@ -258,5 +259,5 @@ artifacts only after freshness and eligibility gates pass.
 1. Export a TS core API facade from `src/core-api/`.
 2. Keep repository-local npm harnesses available for verification.
 3. Add MCP schemas from `src/mcp/tool-schemas.ts`.
-4. Keep mock and direct-call execution inside bounded runtime adapters.
+4. Keep Codex and direct-call execution inside bounded runtime adapters.
 5. Write conformance tests against generated review artifacts.

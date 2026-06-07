@@ -144,10 +144,11 @@ const REVIEW_INPUT_SCHEMA: JsonValue = {
       enum: ["controlled_lens_deliberation"],
       description: "Controlled lens-to-lens deliberation under teamlead authority. This is the default review path.",
     },
-    executorRealization: {
+    executionRoute: {
       type: "string",
-      enum: ["codex", "mock", "ts_inline_http"],
-      description: "Debug/testing override. Normal callers should omit this and use project config.",
+      enum: ["external_oauth_worker", "direct_model_call"],
+      description:
+        "Optional canonical review execution route override. Normal callers should omit this and use project settings.",
     },
     confirmValueAlignment: {
       type: "boolean",
@@ -267,11 +268,11 @@ const REVIEW_CONTINUE_INPUT_SCHEMA: JsonValue = {
       description:
         "Optional original request text for final ReviewRecord assembly when the session was only prepared.",
     },
-    executorRealization: {
+    executionRoute: {
       type: "string",
-      enum: ["codex", "mock", "ts_inline_http"],
+      enum: ["external_oauth_worker", "direct_model_call"],
       description:
-        "Executor realization for resumed units. Required for prepared sessions that have no prior review-run-manifest.",
+        "Canonical route for resumed units. Required only for prepared sessions that have no prior review-run-manifest.",
     },
   },
 };
@@ -408,15 +409,15 @@ const RECONSTRUCT_INPUT_SCHEMA: JsonValue = {
     },
     semanticAuthorRealization: {
       type: "string",
-      enum: ["mock", "direct_call"],
+      enum: ["direct_call"],
       description:
-        "Explicit semantic author realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
+        "Explicit semantic author realization. direct_call uses configured llm provider.",
     },
     confirmationProviderRealization: {
       type: "string",
-      enum: ["mock", "direct_call"],
+      enum: ["direct_call"],
       description:
-        "Explicit confirmation provider realization. direct_call uses configured llm provider; mock is a test/fixture realization.",
+        "Explicit confirmation provider realization. direct_call uses configured llm provider.",
     },
   },
 };
@@ -611,9 +612,10 @@ configured. For review, set full actor \`llm\` blocks in
       }
     }
 
-Switcher axes: auth oauth+openai -> Codex worker; api_key+openai|anthropic|grok ->
-that API; local+lmstudio -> local endpoint. Review execution may be pinned with
-\`review.execution.executor\` or left as \`auto\`. Listing tools needs no provider.
+Switcher axes: auth oauth+openai -> external OAuth worker; api_key+openai|anthropic|grok ->
+that provider API. local+lmstudio+model_id is reserved/future and not advertised
+as a current MCP review path. Review execution may be left as \`auto\` and is
+reported through canonical route visibility. Listing tools needs no provider.
 
 ## Review — happy path
 
@@ -761,8 +763,8 @@ function toReviewRequest(input: unknown): PrepareReviewRequest {
     ...(parsed.noDomain !== undefined ? { noDomain: parsed.noDomain } : {}),
     ...(parsed.reviewMode !== undefined ? { reviewMode: parsed.reviewMode } : {}),
     ...(parsed.lensIds !== undefined ? { lensIds: parsed.lensIds } : {}),
-    ...(parsed.executorRealization !== undefined
-      ? { executorRealization: parsed.executorRealization }
+    ...(parsed.executionRoute !== undefined
+      ? { executionRoute: parsed.executionRoute }
       : {}),
     ...(parsed.confirmValueAlignment !== undefined
       ? { confirmValueAlignment: parsed.confirmValueAlignment }
@@ -1343,8 +1345,8 @@ async function callTool(
           ...(parsed.requestText !== undefined
             ? { requestText: parsed.requestText }
             : {}),
-          ...(parsed.executorRealization !== undefined
-            ? { executorRealization: parsed.executorRealization }
+          ...(parsed.executionRoute !== undefined
+            ? { executionRoute: parsed.executionRoute }
             : {}),
         });
         return formatToolResult(result);

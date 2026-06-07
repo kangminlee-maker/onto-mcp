@@ -43,7 +43,7 @@ describe("appendReviewInvocationRequestArgs", () => {
         memberRefs: ["src/a.ts", "src/b.ts"],
         bundleKind: "implementation_change_bundle",
         diffRange: "HEAD~1..HEAD",
-        executorRealization: "mock",
+        executionRoute: "direct_model_call",
         lensIds: ["logic", "structure"],
         confirmValueAlignment: true,
       },
@@ -77,7 +77,7 @@ describe("appendReviewInvocationRequestArgs", () => {
       "--diff-range",
       "HEAD~1..HEAD",
       "--executor-realization",
-      "mock",
+      "ts_inline_http",
       "--lens-id",
       "logic",
       "--lens-id",
@@ -116,6 +116,22 @@ describe("appendReviewInvocationRequestArgs", () => {
         { ontoHome: "/tmp/onto-home" },
       ),
     ).toThrow("Use either domain or noDomain, not both.");
+  });
+
+  it("rejects conflicting canonical route and debug executor overrides", () => {
+    expect(() =>
+      appendReviewInvocationRequestArgs(
+        [],
+        {
+          projectRoot: ".",
+          target: "README.md",
+          intent: "Review docs",
+          executionRoute: "direct_model_call",
+          executorRealization: "codex",
+        },
+        { ontoHome: "/tmp/onto-home" },
+      ),
+    ).toThrow("Conflicting review execution overrides");
   });
 });
 

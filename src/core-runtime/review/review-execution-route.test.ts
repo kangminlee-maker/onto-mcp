@@ -33,6 +33,11 @@ describe("buildReviewExecutionRoute", () => {
         }),
       ),
     ).toMatchObject({
+      execution_route: "external_oauth_worker",
+      execution_adapter: "codex_cli",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      billing_mode: "subscription",
       host: "codex",
       executor: "codex",
       resolved_provider: "codex",
@@ -53,6 +58,12 @@ describe("buildReviewExecutionRoute", () => {
         }),
       ),
     ).toMatchObject({
+      execution_route: "direct_model_call",
+      execution_adapter: "openai_sdk",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      wire_format: "native_sdk",
+      billing_mode: "per_token",
       host: "standalone",
       executor: "direct_call",
       resolved_provider: "openai",
@@ -62,7 +73,7 @@ describe("buildReviewExecutionRoute", () => {
     });
   });
 
-  it("defaults direct-call OpenAI auth mode to api_key when omitted", () => {
+  it("does not invent API-key auth for direct-call OpenAI when auth is omitted", () => {
     expect(
       buildReviewExecutionRoute(
         profile({
@@ -74,7 +85,7 @@ describe("buildReviewExecutionRoute", () => {
       ),
     ).toMatchObject({
       resolved_provider: "openai",
-      auth_mode: "api_key",
+      auth_mode: null,
       artifact_host_runtime: "openai",
     });
   });
@@ -92,55 +103,33 @@ describe("buildReviewExecutionRoute", () => {
     ).toBe("anthropic");
   });
 
-  it("maps LM Studio local direct-call to resolved provider lmstudio", () => {
+  it.todo(
+    "maps reserved/future LM Studio local direct-call after the local route patch",
+  );
+
+  it("maps standalone provider direct-call to direct model route", () => {
     expect(
       buildReviewExecutionRoute(
         profile({
           worker_executor: "direct_call",
-          host: "lmstudio",
-          auth: "local",
-          provider: "lmstudio",
-        }),
-      ),
-    ).toMatchObject({
-      resolved_provider: "lmstudio",
-      auth_mode: "local",
-      artifact_host_runtime: "lmstudio",
-    });
-  });
-
-  it("defaults direct-call LM Studio auth mode to local when omitted", () => {
-    expect(
-      buildReviewExecutionRoute(
-        profile({
-          worker_executor: "direct_call",
-          host: "lmstudio",
-          auth: undefined,
-          provider: "lmstudio",
-        }),
-      ),
-    ).toMatchObject({
-      resolved_provider: "lmstudio",
-      auth_mode: "local",
-      artifact_host_runtime: "lmstudio",
-    });
-  });
-
-  it("maps mock execution to resolved provider mock", () => {
-    expect(
-      buildReviewExecutionRoute(
-        profile({
-          worker_executor: "mock",
           host: "standalone",
+          auth: "api_key",
+          provider: "openai",
         }),
       ),
     ).toMatchObject({
+      execution_route: "direct_model_call",
+      execution_adapter: "openai_sdk",
+      model_provider: "openai",
+      model_id: "gpt-5.5",
+      wire_format: "native_sdk",
+      billing_mode: "per_token",
       host: "standalone",
-      executor: "mock",
-      resolved_provider: "mock",
-      auth_mode: null,
+      executor: "direct_call",
+      resolved_provider: "openai",
+      auth_mode: "api_key",
       execution_realization: "direct-call",
-      artifact_host_runtime: "standalone",
+      artifact_host_runtime: "openai",
     });
   });
 

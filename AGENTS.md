@@ -35,6 +35,9 @@
 | `.onto/principles/` | 개발 규범 — 설계·구현 원칙 (rank 2~4) | 제외 |
 | `development-records/` | 개발 이력 — 감사, 설계, 추적, handoff 기록 | 제외 |
 
+`.onto/review/*`는 실행 세션 산출물이다. 세션 artifact 자체를 조사하는 작업이 아니라면
+runtime naming, code audit, docs audit, migration 대상 검색에서 항상 제외한다.
+
 target material 관련 작업 시 추가로 읽을 문서:
 
 1. [target-material-kind-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/target-material-kind-contract.md)

@@ -307,14 +307,17 @@ provisional_terms:
       registered_by: "Phase 1 host-decoupling (2026-04-17)"
       registered_date: "2026-04-17"
       definition_draft: >
-        onto-mcp runtime이 Codex worker를 사용할 수 있는지 판정하는 detection 절차.
-        canonical seat: src/core-runtime/discovery/host-detection.ts.
-        현재 runtime은 Codex worker availability와 Codex session signal만 판정한다.
-        API key / local provider는 host detection이 아니라 settings-driven LLM switcher가 판정한다.
+        onto-mcp runtime이 host-bound external worker adapter를 사용할 수 있는지
+        판정하는 detection 절차. canonical seat: src/core-runtime/discovery/host-detection.ts.
+        현재 TS seat는 Codex worker availability와 Codex session signal을 판정한다.
+        API key / local provider / model_id 선택은 host detection이 아니라
+        settings-driven LLM switcher가 판정한다.
       evidence:
         - "src/core-runtime/discovery/host-detection.ts (canonical seat)"
       notes:
-        - "Host/team capability matrix는 canonical runtime path에서 제거했다. 현재 execution route는 worker, direct-call, mock 세 경로로 닫는다."
+        - "Host/team capability matrix는 canonical runtime path에서 제거했다. Review route는 auth_mode + model_provider + model_id + execution_adapter 축으로 표현해야 하며, 특정 brand host_runtime이 route 이름을 점유하면 안 된다."
+        - "현재 operational external-worker adapter 예시는 oauth+openai+codex_cli 이다. oauth+anthropic+claude_code 는 reserved/future 경로로 두며, 별도 패치에서 wire-up 한다."
+        - "api_key+openai/anthropic 는 settings-driven target capability로 분류한다. local+lmstudio+model_id 는 reserved/future 경로로 두며 이번 runtime naming migration 의 필수 구현·검증 범위에서 제외한다."
 
     main_worker_llm_axis:
       term_id: main_worker_llm_axis
@@ -322,21 +325,23 @@ provisional_terms:
       registered_by: "Phase 1 host-decoupling (2026-04-17)"
       registered_date: "2026-04-17"
       definition_draft: >
-        review 실행에서 LLM 역할을 두 축으로 분리하는 모델.
+        review 실행에서 LLM 역할과 model routing 축을 분리하는 모델.
           - main LLM (orchestrator): 세션을 진행하고 lens 선택·synthesize 같은 메타 추론 수행
           - worker LLM (per-lens executor): 9개 lens 의 실제 reasoning 수행
-        두 LLM 은 같을 수도, 다를 수도 있다. Phase 1 에서는 두 축 모두 host_runtime 에 묶여 있으나
-        (main = host LLM, worker = host 가 spawn하는 instance), Phase 2 에서 독립 configurable
-        로 wire 한다.
-        예: OpenAI OAuth main path + Codex worker / Anthropic API direct call /
-        LM Studio local endpoint.
-        없으면 host_runtime 단일 축이 main 과 worker 결정을 모두 묶어버려, cross-host 조합이
-        type 차원에서 표현 불가능.
+        두 LLM 은 같을 수도, 다를 수도 있다. 각 LLM 선택은 auth_mode,
+        model_provider, model_id, base_url, execution_adapter를 분리해 표현한다.
+        예: oauth + openai + model_id + codex_cli external worker,
+        api_key + openai/anthropic + model_id direct model call.
+        oauth + anthropic + model_id + claude_code 및
+        local + lmstudio + Qwen3_30B_A3B_Thinking_2507 + base_url local endpoint 는
+        reserved/future 경로로 두고 별도 패치에서 wire-up 한다.
+        없으면 host_runtime 단일 축이 main/worker, auth, provider, model, adapter 결정을
+        모두 묶어버려 cross-host·cross-model 조합이 type 차원에서 표현 불가능.
       evidence:
         - "src/core-runtime/discovery/settings-chain.ts (settings contract)"
         - "src/core-runtime/llm/model-switcher.ts (LLM provider/auth normalization)"
       notes:
-        - "Phase 1: schema + 문서화만. Phase 2: worker_llm 직접 호출 (direct-call) 구현."
+        - "Route naming은 brand-agnostic이어야 한다. Codex/Claude Code 같은 brand는 execution_adapter 값으로만 등장한다."
         - "Phase 2 결정 1 (inline content vs function-calling loop): inline content mode 우선 — 8B 모델은 function-calling 신뢰도 낮음. function-calling loop 는 Phase 3."
         - "Phase 2 결정 2 (standalone main 시 LLM 호출 여부): TS process 가 별도 LLM 호출하여 lens 선택 + synthesize 수행 — 단순 dispatcher 가 아닌 별도 main LLM 사용."
 
@@ -492,16 +497,24 @@ entities:
   review_record:
     canonical_label: "ReviewRecord"
     korean_label: "리뷰 기록"
-    definition: "review 활동의 canonical 산출물. 검증 결과의 구조화된 계보(lineage) 기록. 이후 learning 생성 및 governance의 입력"
+    definition: "review 활동의 canonical 산출물. 검증 결과의 구조화된 계보(lineage) 기록. later learn/govern가 소비할 수 있는 primary review artifact 이지만, ReviewRecord 자체는 learning lifecycle 항목이 아니다."
     core_value: "이 개념이 없으면 검증 결과가 비구조적으로 흩어져, 학습 축적과 거버넌스 추적이 불가능하다"
     attributes:
-      shared: [lifecycle_status]
+      shared: []
+      local:
+        record_status:
+          definition: "review runtime artifact의 완료/저하/중단 상태. shared lifecycle_status(seed/candidate/provisional/promoted)와 별도 축이다."
+          values:
+            completed: "review process가 필수 산출물을 완료"
+            completed_with_degradation: "review process가 완료됐지만 일부 degraded 경로 또는 경고를 기록"
+            halted_partial: "review process가 중단되어 부분 산출물만 신뢰 가능"
     execution_rules_ref:
       record_contract: ".onto/processes/review/record-contract.md"
-      lifecycle_transition: "review_process 완료 시 seed → promote pipeline 진입"
+      status_validation: "src/core-runtime/review/review-record-validation.ts"
     notes:
-      - "W-A-63에서 term → entity 승격. lifecycle_status 부여."
+      - "W-A-63에서 term → entity 승격."
       - "review_process.relations의 produces → creates 전환 완료."
+      - "기존 `seed → promote` 언급은 learn/framework promotion 흔적이다. promote 전이는 Experience → Learning 또는 learning_to_principle_promotion 계열에서 다루며, ReviewRecord에는 적용하지 않는다."
 
   principle:
     canonical_label: "principle"
@@ -577,9 +590,10 @@ entities:
     core_value: "이 개념이 없으면 주체자의 의도와 시스템 프로세스 사이에 해석 공백이 생긴다"
     notes:
       - >
-        현재 review instance만 dispatch target relation을 보유한다.
-        나머지 instance는 자체 notes에 deferred 상태를 명시하며, 이는 모델링 누락이 아니라 의도적 지연이다.
-        각 instance의 Stage 3 dispatch target relation 도입은 `project_principal_stage3_backlog.md` 참조.
+        review instance는 productized dispatch target relation을 보유한다.
+        reconstruct는 active experimental build surface와 MCP/direct-call 도구를 보유하지만
+        production publish 전이므로 canonical production dispatch/process relation은 아직 고정하지 않는다.
+        learn/evolve는 자체 notes에 deferred 상태를 명시하며, 이는 모델링 누락이 아니라 의도적 지연이다.
     instances:
       review:
         definition: "9-lens 구조로 검증"
@@ -588,7 +602,8 @@ entities:
       reconstruct:
         definition: "product로부터 ontology를 역설계하여 구축"
         notes:
-          - "dispatch target: deferred to Stage 3 (intentional, not modeling omission)"
+          - "status: active experimental build surface; production publish 전."
+          - "MCP/direct-call reconstruct tools and contracts exist, but production dispatch target relation remains pending until reconstruct is promoted from experimental to published."
       learn:
         definition: "학습 축적·승격·큐레이션·감사"
         notes: ["dispatch target: deferred to Stage 3 (intentional, not modeling omission)"]
@@ -621,12 +636,12 @@ entities:
       config_schema: "src/core-runtime/discovery/settings-chain.ts:OntoConfig"
     notes:
       - "구현 인스턴스 예: LM Studio local endpoint (openai wire-format). 벤더 이름은 lexicon에 직접 넣지 않는다"
-      - "codex CLI OAuth 경로와 구별됨 — OAuth 토큰은 chatgpt.com 백엔드 전용이라 프록시 wire-format으로 접근 불가. Codex worker 실행이 필요하며 이는 LlmBillingMode=subscription 경로로 별도 분류된다"
+      - "OAuth external-worker adapter 경로와 구별됨 — OAuth 토큰은 provider/backend별 host adapter가 소유하므로 단순 프록시 wire-format으로 접근 가능한 provider API key가 아니다. Codex CLI, Claude Code 같은 brand는 execution_adapter 값으로만 분류한다."
 
   LlmBillingMode:
     canonical_label: "LlmBillingMode"
     korean_label: "LLM 과금 모드"
-    definition: "provider 호출당 한계비용 구조의 분류. 구독제·토큰당 과금·variable 등 billing 속성 자체만 다룸. 호출 경로의 선호 순위는 이 개념이 아니라 resolver 정책 층에서 관리된다."
+    definition: "provider 호출당 한계비용 구조의 분류. 구독제·토큰당 과금·local 실행 등 billing 속성 자체만 다룸. 호출 경로의 선호 순위는 이 개념이 아니라 resolver 정책 층에서 관리된다."
     core_value: "이 개념이 없으면 provider 목록이 단순 열거로만 남아 '구독제와 per-token 과금의 비용 구조가 왜 다른지'가 코드에서만 설명되고 개념 공간에서 사라진다. 과금 특성을 rank-1에 박제해 두면 운영·감사·회계가 일관된 용어로 논의 가능."
     attributes:
       shared: []
@@ -636,7 +651,7 @@ entities:
           values:
             subscription: "사전 정액제. 호출당 한계비용이 0에 수렴 (rate limit까지). 예: codex CLI의 chatgpt OAuth"
             per_token: "입출력 토큰 수 기반 과금. 호출량과 비용이 선형. 예: Anthropic API, OpenAI API"
-            variable: "경로별로 0 또는 per-token일 수 있음. 로컬 엔드포인트 뒤의 실제 backend가 외부 비용을 만들 수 있을 때 사용"
+            local: "로컬 또는 자체 호스팅 모델 실행. Review 경로 예시 local + lmstudio + Qwen3_30B_A3B_Thinking_2507 는 reserved/future"
         # cost_order_rank removed (2026-04-15): ranking은 사용자 상황(보유 구독·API
         # 예산·context 여유·로컬 하드웨어 등) 의존적이므로 authority rank-1에 고정하지
         # 않는다. 기본 정책(stay-in-host 등)은 resolver 정책 층이 제공하고, 사용자가
@@ -646,12 +661,12 @@ entities:
       classification_consumer: "src/core-runtime/llm/llm-caller.ts (provider 해소 정책에서 billing mode 분류를 참조)"
     notes:
       - "이 entry는 billing 속성 분류만 담는다. Provider 해소·선호 순서는 resolver 정책 층(llm-caller.ts resolveProvider)이 관리하며 사용자 상황에 따라 달라진다."
-      - "local provider를 variable로 분류하는 이유: 로컬 endpoint 뒤의 실제 backend가 로컬 모델이면 0, 유료 API backend면 per-token일 수 있다. 감사 관점에서는 보수적으로 per-token 신호를 기록(LlmCallResult.declared_billing_mode)"
+      - "현재 runtime audit 값은 LlmCallResult.declared_billing_mode = subscription | per_token | local 이다. 로컬 프록시 뒤의 실제 비용 구조가 더 복잡한 경우 별도 cost metadata로 확장하며, provider/route 이름에 섞지 않는다."
 
-  LlmAgentSpawnRealization:
-    canonical_label: "LlmAgentSpawnRealization"
-    korean_label: "LLM 에이전트 생성 실현"
-    definition: "review 작업에서 lens reasoning unit을 어떤 실행 경로로 호출하는가를 규정하는 축. 현재 onto-mcp canonical route는 worker_codex, direct_call_provider, mock 세 instance로 닫는다."
+  ReviewReasoningUnitExecutionRoute:
+    canonical_label: "ReviewReasoningUnitExecutionRoute"
+    korean_label: "리뷰 추론 단위 실행 경로"
+    definition: "review 작업에서 lens reasoning unit을 어떤 실행 경로로 호출하는가를 규정하는 brand-agnostic 축. route 이름은 external_oauth_worker, direct_model_call 처럼 일반 경로를 표현하고, Codex/Claude Code 같은 brand는 execution_adapter 값으로만 표현한다."
     core_value: "이 개념이 없으면 execution_realization과 provider/auth 설정이 단순 문자열 조합으로 흩어져, 어떤 경로가 독립 context를 제공하고 어떤 경로가 direct HTTP 호출인지 판단하기 어렵다."
     attributes:
       shared: []
@@ -670,40 +685,44 @@ entities:
         billing_source:
           definition: "실행 비용이 청구되는 자원 rail (누가·어떤 계정이 지불하느냐). 과금 방식(subscription vs per-token 등) 자체의 분류는 별도 개념 `LlmBillingMode`가 담당 — 이 필드는 rail 식별만 한다."
           values:
-            chatgpt_account: "~/.codex/auth.json OAuth mode 경유 chatgpt 계정이 지불"
+            subscription_account: "OAuth external-worker adapter가 사용하는 구독/host 계정이 지불"
             api_provider_account: "OPENAI/ANTHROPIC/XAI 등 provider API key 계정이 지불"
             local_or_self_hosted: "로컬 모델 또는 자체 호스팅 (외부 지불 없음)"
     instances:
-      worker_codex:
+      external_oauth_worker:
         execution_realization: "worker"
-        host_runtime: "codex"
+        execution_route: "external_oauth_worker"
+        auth_mode: "oauth"
+        model_provider: "openai; reserved/future: anthropic"
+        model_id: "required"
+        execution_adapter: "codex_cli; reserved/future: claude_code"
         orchestration_locus: "external_worker"
         context_cost: "independent"
-        billing_source: "chatgpt_account"
-        notes: "Canonical v3 경로는 actor별 `review.execution.actors.*.llm.auth=oauth` + `provider=openai`. codex CLI가 chatgpt.com 백엔드 사용. 과금 모드 분류는 LlmBillingMode.subscription 참조."
-      direct_call_provider:
+        billing_source: "subscription_account"
+        notes: "Current operational example: oauth + openai + model_id + codex_cli. Reserved/future: oauth + anthropic + model_id + claude_code. Worker route is not Codex-specific."
+      direct_model_call:
         execution_realization: "direct-call"
-        host_runtime: "openai | anthropic | grok | lmstudio"
+        execution_route: "direct_model_call"
+        auth_mode: "api_key | local"
+        model_provider: "openai | anthropic | grok; reserved/future: lmstudio"
+        model_id: "required; reserved/future example: Qwen3_30B_A3B_Thinking_2507 for local+lmstudio"
+        base_url: "optional for hosted providers, required or defaulted for local/proxy providers"
+        wire_format: "native_sdk | openai_compatible"
         orchestration_locus: "direct_runtime_call"
         context_cost: "bounded_direct_call"
         billing_source: "api_provider_account | local_or_self_hosted"
-        notes: "Canonical v3 경로는 actor별 `review.execution.actors.*.llm.auth=api_key` 또는 `auth=local`. Provider/model/base_url은 settings switcher가 해소한다."
-      mock:
-        execution_realization: "direct-call"
-        host_runtime: "standalone"
-        orchestration_locus: "direct_runtime_call"
-        context_cost: "bounded_direct_call"
-        billing_source: "local_or_self_hosted"
-        notes: "테스트 전용 deterministic executor."
+        notes: "Current target capability includes api_key+openai/anthropic/grok. local+lmstudio+model_id is reserved/future for this migration scope. Provider, model_id, base_url, and wire_format are settings-driven LLM switcher outputs, not route names."
     execution_rules_ref:
       resolution_profile: "src/core-runtime/cli/review-invoke.ts:resolveExecutionProfile"
       resolution_handoff: "src/core-runtime/cli/review-invoke.ts:resolveExecutionRealizationHandoff"
-      codex_executor: "src/core-runtime/cli/codex-review-unit-executor.ts"
+      external_worker_adapter_current: "src/core-runtime/cli/codex-review-unit-executor.ts"
       direct_call_executor: "src/core-runtime/cli/inline-http-review-unit-executor.ts"
     notes:
+      - "Previous agent-spawn naming was too narrow because direct-call is not agent spawn and worker routes are not Codex-specific."
+      - "Compatibility artifact fields may still contain `codex`, `host_runtime`, or `runtime_provider` until the runtime migration catches up; this entity defines the canonical target classification."
       - "Priority(선호 순서)는 사용자 상황 의존적이므로 이 entry에 고정하지 않는다. Override 수단: `.onto/settings.json` 의 `review.execution` actor-owned LLM settings."
       - "Provider resolution 축(LlmBillingMode, LlmCompatibleProxy)과 직교 — background task의 단일-턴 API call 경로와 review의 agentic 실행 경로는 서로 영향 주지 않음"
-      - "Local model access is represented by actor-owned `llm.auth: local` + `llm.provider: lmstudio`. Review orchestration remains selected by the `review:` block."
+      - "Reserved/future local model access will be represented by actor-owned `llm.auth: local` + `llm.provider: lmstudio` + explicit `llm.model`. Review orchestration remains selected by the `review:` block."
 
   # -------------------------------------------------------------------------
   # Framework v1.0 entities (§8.1, §8.6) — scope axis + Tier 1/2 types
@@ -1047,13 +1066,23 @@ terms:
       - "actors.synthesize.seat"
       - "actors.synthesize.llm"
       - "deliberation"
+      - "retry"
+      - "units"
+      - "units.*.llm"
+      - "units.*.max_tokens"
+      - "units.*.tool_mode"
+      - "units.*.timeout_ms"
+      - "units.*.max_retries"
+      - "units.*.retry_initial_delay_ms"
+      - "units.*.max_output_bytes"
     notes:
       - "Type source: `src/core-runtime/discovery/settings-chain.ts`."
       - "Unknown keys fail settings loading."
       - "`settings.json/v3` canonical structure uses full actor-owned `review.execution.actors.*.llm` objects; missing schema and v1/v2 settings fail settings loading."
-      - "`executor: auto` lets runtime derive Codex/direct-call/mock route; `codex`, `direct_call`, and `mock` pin the executor."
+      - "`executor: auto` lets runtime derive the external-worker/direct-call route. Current compatibility values `codex` and `direct_call` pin executor behavior, but canonical route naming is owned by ReviewReasoningUnitExecutionRoute."
       - "`deliberation` is `controlled-lens-deliberation`."
       - "`deliberation` selects a process mode; it is not an actor invocation profile."
+      - "`retry` owns global retry defaults; `units` owns per-unit overrides for LLM, token, tool-mode, timeout, retry, and output-byte settings."
       - "In `nested-workers`, `actors.teamlead.llm` and `actors.lens.llm` are independent actor seats."
       - "`actors.synthesize.llm` is an independent post-deliberation actor seat."
       - "Canonical v3 actor `llm` objects are full replacement settings, not partial overlays."

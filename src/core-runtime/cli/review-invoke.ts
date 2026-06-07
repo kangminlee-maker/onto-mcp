@@ -44,7 +44,10 @@ import {
   resolveReviewExecutionProfile,
   type ReviewExecutionProfile,
 } from "../review/review-execution-profile.js";
-import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
+import {
+  buildReviewExecutionRoute,
+  buildReviewRuntimeRouteArtifactProjection,
+} from "../review/review-execution-route.js";
 import {
   prepareReviewInvocationArgv,
   runReviewInvocationArgv,
@@ -3182,13 +3185,7 @@ export async function runReviewInvokeCli(argv: string[]): Promise<number> {
       synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
-      runtime_route: {
-        execution_realization: finalRoute.execution_realization,
-        host_runtime: finalRoute.artifact_host_runtime,
-        worker_executor: finalRoute.executor,
-        runtime_provider: finalRoute.resolved_provider,
-        auth_mode: finalRoute.auth_mode,
-      },
+      runtime_route: buildReviewRuntimeRouteArtifactProjection(finalRoute),
       ...(routeProfile.review_execution_profile.model
         ? { model: routeProfile.review_execution_profile.model }
         : {}),

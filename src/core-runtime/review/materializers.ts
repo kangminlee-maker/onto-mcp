@@ -166,10 +166,34 @@ function derivePlanTimeLlmResolution(config: OntoSettings): ResolvedLlmPlan | un
     selections.map((selection) => selection.service_tier),
   );
   const provider = commonDefinedField(selections.map((selection) => selection.provider));
+  const executionRoute = commonDefinedField(
+    selections.map((selection) => selection.execution_route),
+  );
+  const executionAdapter = commonDefinedField(
+    selections.map((selection) => selection.execution_adapter),
+  );
+  const modelProvider = commonDefinedField(
+    selections.map((selection) => selection.model_provider),
+  );
+  const authMode = commonDefinedField(selections.map((selection) => selection.auth));
+  const billingMode = commonDefinedField(
+    selections.map((selection) => selection.billing_mode),
+  );
+  const wireFormat = commonDefinedField(
+    selections.map((selection) => selection.wire_format),
+  );
+  const baseUrl = commonDefinedField(selections.map((selection) => selection.base_url));
   if (model) plan.model = model;
   if (reasoningEffort) plan.reasoning_effort = reasoningEffort;
   if (serviceTier) plan.service_tier = serviceTier;
   if (provider) plan.provider = provider;
+  if (executionRoute) plan.execution_route = executionRoute;
+  if (executionAdapter) plan.execution_adapter = executionAdapter;
+  if (modelProvider) plan.model_provider = modelProvider;
+  if (authMode) plan.auth_mode = authMode;
+  if (billingMode) plan.billing_mode = billingMode;
+  if (wireFormat) plan.wire_format = wireFormat;
+  if (baseUrl) plan.base_url = baseUrl;
   return Object.keys(plan).length > 0 ? plan : undefined;
 }
 
@@ -268,6 +292,21 @@ function buildActorInvocationProfile(args: {
     seat: args.seat,
     execution_realization: args.executionRealization,
     host_runtime: args.hostRuntime,
+    ...(normalized?.execution_route
+      ? { execution_route: normalized.execution_route }
+      : {}),
+    ...(normalized?.execution_adapter
+      ? { execution_adapter: normalized.execution_adapter }
+      : {}),
+    ...(normalized?.model_provider
+      ? { model_provider: normalized.model_provider }
+      : {}),
+    ...(normalized?.billing_mode
+      ? { billing_mode: normalized.billing_mode }
+      : {}),
+    ...(normalized?.wire_format
+      ? { wire_format: normalized.wire_format }
+      : {}),
     runtime_provider: runtimeProvider,
     auth_mode: authMode,
     model: normalized?.model_id ?? resolvedLlm?.model ?? null,

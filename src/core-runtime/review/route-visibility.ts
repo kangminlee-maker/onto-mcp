@@ -6,6 +6,13 @@ import type {
   ReviewHostRuntime,
   ReviewStructuredFailureRecord,
 } from "./artifact-types.js";
+import type {
+  LlmBillingMode,
+  LlmExecutionAdapter,
+  LlmExecutionRoute,
+  LlmProviderName,
+  LlmWireFormat,
+} from "../llm/model-switcher.js";
 import { fileExists, readYamlDocument } from "./review-artifact-utils.js";
 
 export interface ReviewRouteVisibility {
@@ -16,9 +23,20 @@ export interface ReviewRouteVisibility {
     | "failure-record";
   sessionId: string | null;
   sessionRoot: string | null;
+  executionRoute: LlmExecutionRoute | null;
+  executionAdapter: LlmExecutionAdapter | null;
+  modelProvider: LlmProviderName | null;
+  modelId: string | null;
+  baseUrl: string | null;
+  wireFormat: LlmWireFormat | null;
+  billingMode: LlmBillingMode | null;
+  /** Legacy compatibility projection. Prefer executionRoute/executionAdapter/modelProvider. */
   executionRealization: ReviewExecutionRealization | null;
+  /** Legacy compatibility projection. Prefer executionRoute/executionAdapter/modelProvider. */
   hostRuntime: ReviewHostRuntime | null;
+  /** Legacy compatibility projection. Prefer executionRoute/executionAdapter/modelProvider. */
   workerExecutor: string | null;
+  /** Legacy compatibility projection. Prefer modelProvider. */
   runtimeProvider: string | null;
   authMode: string | null;
   actualHostRuntimes: ReviewHostRuntime[];
@@ -32,18 +50,28 @@ export interface ReviewRouteVisibility {
     actorCount: number;
     hostRuntimes: string[];
     runtimeProviders: string[];
+    executionRoutes: string[];
+    executionAdapters: string[];
+    modelProviders: string[];
+    billingModes: string[];
     authModes: string[];
     workerExecutors: string[];
   };
   actorProfiles: Array<{
     actorProfileId: string;
     actorKind: string;
+    executionRoute: LlmExecutionRoute | null;
+    executionAdapter: LlmExecutionAdapter | null;
+    modelProvider: LlmProviderName | null;
+    billingMode: LlmBillingMode | null;
+    wireFormat: LlmWireFormat | null;
     executionRealization: ReviewExecutionRealization;
     hostRuntime: ReviewHostRuntime;
     runtimeProvider: string | null;
     authMode: string | null;
     effectiveWorkerExecutor: string;
     model: string | null;
+    baseUrl: string | null;
     effort: string | null;
     serviceTier: string | null;
   }>;
@@ -60,6 +88,13 @@ interface ReviewRunManifestRouteProjection {
   session_id?: string;
   review_execution_profile?: {
     runtime_route?: {
+      execution_route?: unknown;
+      execution_adapter?: unknown;
+      model_provider?: unknown;
+      model_id?: unknown;
+      base_url?: unknown;
+      wire_format?: unknown;
+      billing_mode?: unknown;
       execution_realization?: ReviewExecutionRealization;
       host_runtime?: ReviewHostRuntime;
       worker_executor?: string;
@@ -72,8 +107,16 @@ interface ReviewRunManifestRouteProjection {
     actor_invocation_profiles?: string | null;
   };
   worker_units?: Array<{
+    unit_id?: string | null;
+    unit_kind?: string | null;
     executor_host_runtime?: ReviewHostRuntime | null;
   }>;
+}
+
+interface ReviewRunManifestWorkerRouteUnit {
+  unitId: string | null;
+  unitKind: string | null;
+  executorHostRuntime: ReviewHostRuntime;
 }
 
 interface ActorProfileReadResult {
@@ -90,6 +133,11 @@ function toActorProfiles(
   return (artifact?.profiles ?? []).map((profile) => ({
     actorProfileId: requireString(profile.actor_profile_id, "actor_profile_id"),
     actorKind: requireString(profile.actor_kind, "actor_kind"),
+    executionRoute: optionalExecutionRoute(profile.execution_route),
+    executionAdapter: optionalExecutionAdapter(profile.execution_adapter),
+    modelProvider: optionalModelProvider(profile.model_provider),
+    billingMode: optionalBillingMode(profile.billing_mode),
+    wireFormat: optionalWireFormat(profile.wire_format),
     executionRealization: requireExecutionRealization(profile.execution_realization),
     hostRuntime: requireHostRuntime(profile.host_runtime),
     runtimeProvider: optionalString(profile.runtime_provider),
@@ -99,6 +147,7 @@ function toActorProfiles(
       "effective_worker_executor",
     ),
     model: optionalString(profile.model),
+    baseUrl: optionalString(profile.base_url),
     effort: optionalString(profile.effort),
     serviceTier: optionalString(profile.service_tier),
   }));
@@ -113,6 +162,50 @@ function requireString(value: unknown, label: string): string {
 
 function optionalString(value: unknown): string | null {
   return typeof value === "string" ? value : null;
+}
+
+function optionalExecutionRoute(value: unknown): LlmExecutionRoute | null {
+  if (value === "external_oauth_worker" || value === "direct_model_call") {
+    return value;
+  }
+  return null;
+}
+
+function optionalExecutionAdapter(value: unknown): LlmExecutionAdapter | null {
+  if (
+    value === "codex_cli" ||
+    value === "claude_code" ||
+    value === "openai_sdk" ||
+    value === "anthropic_sdk" ||
+    value === "openai_compatible_http"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function optionalModelProvider(value: unknown): LlmProviderName | null {
+  if (
+    value === "openai" ||
+    value === "anthropic" ||
+    value === "grok" ||
+    value === "lmstudio"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function optionalWireFormat(value: unknown): LlmWireFormat | null {
+  if (value === "native_sdk" || value === "openai_compatible") return value;
+  return null;
+}
+
+function optionalBillingMode(value: unknown): LlmBillingMode | null {
+  if (value === "subscription" || value === "per_token" || value === "local") {
+    return value;
+  }
+  return null;
 }
 
 function requireExecutionRealization(value: unknown): ReviewExecutionRealization {
@@ -160,6 +253,10 @@ function buildActorRouteSummary(
       actorCount: 0,
       hostRuntimes: [],
       runtimeProviders: [],
+      executionRoutes: [],
+      executionAdapters: [],
+      modelProviders: [],
+      billingModes: [],
       authModes: [],
       workerExecutors: [],
     };
@@ -167,6 +264,18 @@ function buildActorRouteSummary(
   const hostRuntimes = uniqueStrings(profiles.map((profile) => profile.hostRuntime));
   const runtimeProviders = uniqueStrings(
     profiles.map((profile) => profile.runtimeProvider),
+  );
+  const executionRoutes = uniqueStrings(
+    profiles.map((profile) => profile.executionRoute),
+  );
+  const executionAdapters = uniqueStrings(
+    profiles.map((profile) => profile.executionAdapter),
+  );
+  const modelProviders = uniqueStrings(
+    profiles.map((profile) => profile.modelProvider),
+  );
+  const billingModes = uniqueStrings(
+    profiles.map((profile) => profile.billingMode),
   );
   const authModes = uniqueStrings(profiles.map((profile) => profile.authMode));
   const workerExecutors = uniqueStrings(
@@ -176,6 +285,10 @@ function buildActorRouteSummary(
     mode:
       hostRuntimes.length <= 1 &&
       runtimeProviders.length <= 1 &&
+      executionRoutes.length <= 1 &&
+      executionAdapters.length <= 1 &&
+      modelProviders.length <= 1 &&
+      billingModes.length <= 1 &&
       authModes.length <= 1 &&
       workerExecutors.length <= 1
         ? "single"
@@ -183,6 +296,10 @@ function buildActorRouteSummary(
     actorCount: profiles.length,
     hostRuntimes,
     runtimeProviders,
+    executionRoutes,
+    executionAdapters,
+    modelProviders,
+    billingModes,
     authModes,
     workerExecutors,
   };
@@ -204,7 +321,7 @@ function providerCompatibleWithActualHost(
 ): boolean {
   if (runtimeProvider === null) return true;
   if (actualHostRuntime === "codex") return runtimeProvider === "codex";
-  if (actualHostRuntime === "standalone") return runtimeProvider === "mock";
+  if (actualHostRuntime === "standalone") return false;
   return runtimeProvider === actualHostRuntime;
 }
 
@@ -243,27 +360,87 @@ async function readActorProfiles(
   }
 }
 
-function manifestActualHostRuntimes(
+function manifestActualWorkerRouteUnits(
   manifest: ReviewRunManifestRouteProjection,
+): ReviewRunManifestWorkerRouteUnit[] {
+  return (manifest.worker_units ?? [])
+    .map((unit) => ({
+      unitId: optionalString(unit.unit_id),
+      unitKind: optionalString(unit.unit_kind),
+      executorHostRuntime: unit.executor_host_runtime,
+    }))
+    .filter(
+      (unit): unit is ReviewRunManifestWorkerRouteUnit =>
+        typeof unit.executorHostRuntime === "string",
+    );
+}
+
+function uniqueActualHostRuntimes(
+  units: ReviewRunManifestWorkerRouteUnit[],
 ): ReviewHostRuntime[] {
   return [
     ...new Set(
-      (manifest.worker_units ?? [])
-        .map((unit) => unit.executor_host_runtime)
-        .filter((value): value is ReviewHostRuntime => typeof value === "string"),
+      units.map((unit) => unit.executorHostRuntime),
     ),
   ].sort();
+}
+
+function actorKindForWorkerUnit(
+  unit: ReviewRunManifestWorkerRouteUnit,
+): string | null {
+  if (unit.unitKind === "lens") return "lens";
+  if (unit.unitKind === "synthesize") return "synthesize";
+  if (unit.unitKind === "issue_artifact") return "teamlead";
+  if (unit.unitKind === "deliberation") {
+    return unit.unitId === "controlled-deliberation" ? "teamlead" : "lens";
+  }
+  return null;
+}
+
+function actualMixedConsistency(args: {
+  actualWorkerUnits: ReviewRunManifestWorkerRouteUnit[];
+  actorProfiles: ReviewRouteVisibility["actorProfiles"];
+}): ReviewRouteVisibility["routeConsistency"] {
+  if (args.actorProfiles.length === 0) return "actual_mixed";
+  for (const unit of args.actualWorkerUnits) {
+    const actorKind = actorKindForWorkerUnit(unit);
+    if (!actorKind) return "actual_mixed";
+    const profile = args.actorProfiles.find(
+      (candidate) => candidate.actorKind === actorKind,
+    );
+    if (!profile) return "actual_mixed";
+    if (profile.hostRuntime !== unit.executorHostRuntime) {
+      return "profile_actual_conflict";
+    }
+    if (
+      !providerCompatibleWithActualHost(
+        unit.executorHostRuntime,
+        profile.runtimeProvider,
+      ) ||
+      !authCompatibleWithActualHost(unit.executorHostRuntime, profile.authMode)
+    ) {
+      return "profile_actual_conflict";
+    }
+  }
+  return "consistent";
 }
 
 function routeConsistency(args: {
   actorRoute: ReviewRouteVisibility["actorRoute"];
   actualHostRuntimes: ReviewHostRuntime[];
+  actualWorkerUnits: ReviewRunManifestWorkerRouteUnit[];
+  actorProfiles: ReviewRouteVisibility["actorProfiles"];
   manifestHostRuntime?: ReviewHostRuntime | null;
   runtimeProviders: string[];
   authModes: string[];
 }): ReviewRouteVisibility["routeConsistency"] {
   if (args.actualHostRuntimes.length === 0) return "unknown";
-  if (args.actualHostRuntimes.length > 1) return "actual_mixed";
+  if (args.actualHostRuntimes.length > 1) {
+    return actualMixedConsistency({
+      actualWorkerUnits: args.actualWorkerUnits,
+      actorProfiles: args.actorProfiles,
+    });
+  }
   const [actualHostRuntime] = args.actualHostRuntimes;
   if (
     actualHostRuntime &&
@@ -337,7 +514,8 @@ export async function buildReviewRouteVisibilityFromSession(
       actorProfileStatus = "unreadable";
     }
     const actorRoute = buildActorRouteSummary(actorProfiles);
-    const actualHostRuntimes = manifestActualHostRuntimes(manifest);
+    const actualWorkerUnits = manifestActualWorkerRouteUnits(manifest);
+    const actualHostRuntimes = uniqueActualHostRuntimes(actualWorkerUnits);
     const profiledManifestHostRuntime = route?.host_runtime ?? null;
     const manifestHostRuntime =
       actualHostRuntimes.length === 1
@@ -360,6 +538,41 @@ export async function buildReviewRouteVisibilityFromSession(
       route?.runtime_provider,
       (profile) => profile.runtimeProvider,
     );
+    const candidateExecutionRoute = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalExecutionRoute(route?.execution_route),
+      (profile) => profile.executionRoute,
+    ) as LlmExecutionRoute | null;
+    const candidateExecutionAdapter = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalExecutionAdapter(route?.execution_adapter),
+      (profile) => profile.executionAdapter,
+    ) as LlmExecutionAdapter | null;
+    const candidateModelProvider = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalModelProvider(route?.model_provider),
+      (profile) => profile.modelProvider,
+    ) as LlmProviderName | null;
+    const candidateModelId = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalString(route?.model_id),
+      (profile) => profile.model,
+    );
+    const candidateBaseUrl = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalString(route?.base_url),
+      (profile) => profile.baseUrl,
+    );
+    const candidateWireFormat = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalWireFormat(route?.wire_format),
+      (profile) => profile.wireFormat,
+    ) as LlmWireFormat | null;
+    const candidateBillingMode = actorProfilesOrManifestRouteString(
+      actorProfiles,
+      optionalBillingMode(route?.billing_mode),
+      (profile) => profile.billingMode,
+    ) as LlmBillingMode | null;
     const candidateAuthMode = actorProfilesOrManifestRouteString(
       actorProfiles,
       route?.auth_mode,
@@ -376,6 +589,8 @@ export async function buildReviewRouteVisibilityFromSession(
     const consistency = routeConsistency({
       actorRoute,
       actualHostRuntimes,
+      actualWorkerUnits,
+      actorProfiles,
       manifestHostRuntime: profiledManifestHostRuntime,
       runtimeProviders: runtimeProvidersToValidate,
       authModes: authModesToValidate,
@@ -388,6 +603,13 @@ export async function buildReviewRouteVisibilityFromSession(
       source: "review-run-manifest",
       sessionId: manifest.session_id ?? path.basename(resolvedSessionRoot),
       sessionRoot: resolvedSessionRoot,
+      executionRoute: suppressProfileRouteFields ? null : candidateExecutionRoute,
+      executionAdapter: suppressProfileRouteFields ? null : candidateExecutionAdapter,
+      modelProvider: suppressProfileRouteFields ? null : candidateModelProvider,
+      modelId: suppressProfileRouteFields ? null : candidateModelId,
+      baseUrl: suppressProfileRouteFields ? null : candidateBaseUrl,
+      wireFormat: suppressProfileRouteFields ? null : candidateWireFormat,
+      billingMode: suppressProfileRouteFields ? null : candidateBillingMode,
       executionRealization: route?.execution_realization ?? null,
       hostRuntime: topLevelHostRuntime,
       workerExecutor: actorProfilesOrManifestRouteString(
@@ -437,6 +659,34 @@ export async function buildReviewRouteVisibilityFromSession(
       source: "execution-plan",
       sessionId: executionPlan.session_id,
       sessionRoot: resolvedSessionRoot,
+      executionRoute: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.executionRoute,
+      ) as LlmExecutionRoute | null,
+      executionAdapter: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.executionAdapter,
+      ) as LlmExecutionAdapter | null,
+      modelProvider: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.modelProvider,
+      ) as LlmProviderName | null,
+      modelId: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.model,
+      ),
+      baseUrl: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.baseUrl,
+      ),
+      wireFormat: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.wireFormat,
+      ) as LlmWireFormat | null,
+      billingMode: sharedActorProfileString(
+        actorProfiles,
+        (profile) => profile.billingMode,
+      ) as LlmBillingMode | null,
       executionRealization: executionPlan.execution_realization,
       hostRuntime: actorRoute.mode === "mixed" ? null : executionPlan.host_runtime,
       workerExecutor: sharedActorProfileString(
@@ -491,6 +741,13 @@ export async function buildReviewRouteVisibilityFromFailure(
     source: "failure-record",
     sessionId: null,
     sessionRoot: null,
+    executionRoute: null,
+    executionAdapter: null,
+    modelProvider: null,
+    modelId: null,
+    baseUrl: null,
+    wireFormat: null,
+    billingMode: null,
     executionRealization: null,
     hostRuntime: null,
     workerExecutor: null,

@@ -2,6 +2,14 @@ import type {
   TargetMaterialKind,
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
+import type {
+  LlmAuthMode,
+  LlmBillingMode,
+  LlmExecutionAdapter,
+  LlmExecutionRoute,
+  LlmProviderName,
+  LlmWireFormat,
+} from "../llm/model-switcher.js";
 
 export type ReviewEntrypoint = "review";
 export type ReviewTargetScopeKind = "file" | "directory" | "bundle";
@@ -12,7 +20,7 @@ export type ReviewExecutionRealization = "worker" | "direct-call";
  * - "anthropic":  Anthropic SDK direct call from TS process.
  * - "openai":     OpenAI SDK direct call.
  * - "grok":       xAI/Grok OpenAI-style API via TS process direct HTTP.
- * - "lmstudio":   Local LM Studio OpenAI-style endpoint.
+ * - "lmstudio":   Reserved/future local OpenAI-style endpoint.
  * - "standalone": TS process orchestrates with no host LLM.
  */
 export type ReviewHostRuntime =
@@ -354,7 +362,7 @@ export interface ReviewExecutionPlan {
 /**
  * Plan-time resolved LLM values for executor (effort persist Option A).
  *
- * Bootstrap 시점에 OntoConfig 로부터 도출된 model · reasoning_effort · provider.
+ * Bootstrap 시점에 OntoConfig 로부터 도출된 model · reasoning_effort · route.
  * Session-level override is applied at executor dispatch when present, so
  * 본 필드는 **project-level 의도** 를 기록한다 (세션별 override 와 별개).
  *
@@ -366,7 +374,15 @@ export interface ResolvedLlmPlan {
   model?: string;
   reasoning_effort?: string;
   service_tier?: string;
+  /** Legacy dispatch/provider alias. Use model_provider + execution_adapter for canonical routing. */
   provider?: string;
+  execution_route?: LlmExecutionRoute;
+  execution_adapter?: LlmExecutionAdapter;
+  model_provider?: LlmProviderName;
+  auth_mode?: LlmAuthMode;
+  billing_mode?: LlmBillingMode;
+  wire_format?: LlmWireFormat;
+  base_url?: string;
 }
 
 export interface ReviewResolvedActorInvocationProfile {
@@ -375,6 +391,11 @@ export interface ReviewResolvedActorInvocationProfile {
   seat: ReviewActorSeat;
   execution_realization: ReviewExecutionRealization;
   host_runtime: ReviewHostRuntime;
+  execution_route?: LlmExecutionRoute;
+  execution_adapter?: LlmExecutionAdapter;
+  model_provider?: LlmProviderName | null;
+  billing_mode?: LlmBillingMode | null;
+  wire_format?: LlmWireFormat | null;
   runtime_provider: string | null;
   auth_mode: string | null;
   model: string | null;

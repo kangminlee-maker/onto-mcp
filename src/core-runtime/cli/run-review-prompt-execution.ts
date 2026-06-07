@@ -52,7 +52,10 @@ import {
 } from "../review/issue-artifact-runtime.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import type { ReviewContinuationPlan } from "../review/continuation-plan.js";
-import { buildReviewExecutionRoute } from "../review/review-execution-route.js";
+import {
+  buildReviewExecutionRoute,
+  buildReviewRuntimeRouteArtifactProjection,
+} from "../review/review-execution-route.js";
 import {
   buildLensControlledDeliberationPrompt,
   buildTeamleadControlledDeliberationPrompt,
@@ -2539,13 +2542,7 @@ async function writeReviewRunManifest(
             lens: reviewExecutionProfile.lens,
             synthesize: reviewExecutionProfile.synthesize,
             deliberation: reviewExecutionProfile.deliberation,
-            runtime_route: {
-              execution_realization: route.execution_realization,
-              host_runtime: route.artifact_host_runtime,
-              worker_executor: route.executor,
-              runtime_provider: route.resolved_provider,
-              auth_mode: route.auth_mode,
-            },
+            runtime_route: buildReviewRuntimeRouteArtifactProjection(route),
             model: reviewExecutionProfile.model ?? null,
             effort: reviewExecutionProfile.effort ?? null,
             service_tier: reviewExecutionProfile.service_tier ?? null,

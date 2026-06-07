@@ -91,6 +91,7 @@ import type {
   ReviewExecutionProfile,
   ReviewWorkerExecutor,
 } from "../core-runtime/review/review-execution-profile.js";
+import type { LlmExecutionRoute } from "../core-runtime/llm/model-switcher.js";
 
 export type ReviewExecutorRealization = "codex" | "mock" | "ts_inline_http";
 
@@ -109,9 +110,11 @@ export interface PrepareReviewRequest {
   lensIds?: string[];
   confirmValueAlignment?: boolean;
   /**
-   * Debug/testing escape hatch. Normal MCP callers should let project config
-   * choose the provider so the tool remains model/host independent.
+   * Optional canonical route override. Normal callers should let
+   * `.onto/settings.json` actor LLM settings select the route.
    */
+  executionRoute?: LlmExecutionRoute;
+  /** Debug-only legacy executor override. MCP callers must use executionRoute. */
   executorRealization?: "codex" | "mock" | "ts_inline_http";
 }
 
@@ -300,6 +303,8 @@ export interface ContinueReviewRequest {
   projectRoot?: string;
   targetUnits?: string[];
   requestText?: string;
+  executionRoute?: LlmExecutionRoute;
+  /** Debug-only legacy executor override. MCP callers must use executionRoute. */
   executorRealization?: ReviewExecutorRealization;
 }
 
@@ -2832,6 +2837,14 @@ function workerExecutorFromRealization(
   return "direct_call";
 }
 
+function executorRealizationFromExecutionRoute(
+  executionRoute: LlmExecutionRoute | undefined,
+): ReviewExecutorRealization | undefined {
+  if (executionRoute === "external_oauth_worker") return "codex";
+  if (executionRoute === "direct_model_call") return "ts_inline_http";
+  return undefined;
+}
+
 function reviewExecutionHostFromRuntime(
   hostRuntime: unknown,
   workerExecutor: ReviewWorkerExecutor,
@@ -3688,12 +3701,15 @@ export function createOntoReviewCoreApi(
         await readOptionalYaml<ReviewRunManifestForContinue>(
           path.join(resolvedSessionRoot, "review-run-manifest.yaml"),
         );
+      const requestedExecutorRealization =
+        executorRealizationFromExecutionRoute(request.executionRoute) ??
+        request.executorRealization;
       const executorRealization =
-        request.executorRealization ??
+        requestedExecutorRealization ??
         executorRealizationFromManifest(reviewRunManifest);
       if (!executorRealization) {
         throw new Error(
-          "Review continuation requires executorRealization when the prior review-run-manifest does not expose a worker executor.",
+          "Review continuation requires executionRoute when the prior review-run-manifest does not expose a worker executor.",
         );
       }
       const actorProfiles = await readOptionalYaml<ReviewActorInvocationProfilesArtifact>(
@@ -3705,7 +3721,7 @@ export function createOntoReviewCoreApi(
           ),
       );
       const manifestReviewExecutionProfile =
-        request.executorRealization === undefined
+        requestedExecutorRealization === undefined
           ? reviewExecutionProfileFromManifest(reviewRunManifest)
           : undefined;
       const actorProfileReviewExecutionProfile = manifestReviewExecutionProfile
@@ -3828,8 +3844,10 @@ export function createOntoReviewCoreApi(
           superseded_artifact_backups: supersededArtifactBackups,
           execution_route_provenance: {
             executor_realization: executorRealization,
+            execution_route: request.executionRoute ?? null,
             review_execution_profile_source: reviewExecutionProfileSource,
             requested_executor_realization: request.executorRealization ?? null,
+            requested_execution_route: request.executionRoute ?? null,
             previous_execution_realization: executionPlan.execution_realization,
             previous_host_runtime: executionPlan.host_runtime,
           },

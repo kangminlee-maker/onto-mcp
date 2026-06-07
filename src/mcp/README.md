@@ -34,6 +34,10 @@ frontier when `targetUnits` is provided, reruns the frontier and downstream
 units, validates session-owned execution-plan paths, backs up/restores
 superseded artifacts around the attempt, and writes continuation attempt
 provenance inside the review session.
+When a prepared session has no prior run manifest, callers use canonical
+`executionRoute` (`external_oauth_worker` or `direct_model_call`) to choose the
+continuation route. Brand-specific executor switches are kept out of the MCP
+schema and remain CLI/debug compatibility only.
 If the requested frontier is already owned by an active attempt, the tool
 returns `decision="already_running"` instead of dispatching duplicate work.
 The MCP result is a projection over Core API `ReviewContinueResult`: it
@@ -71,4 +75,5 @@ decisions.
 `onto_reconstruct` defaults to direct-call semantic authoring and direct-call
 host-mediated confirmation through the configured `llm` provider. Missing
 provider/model/credentials and invalid LLM-authored artifact shapes fail loud;
-test-only mock helpers are not exposed as product completion evidence.
+fixed input artifacts may support local checks, but product completion evidence
+requires the actual runtime/provider path.

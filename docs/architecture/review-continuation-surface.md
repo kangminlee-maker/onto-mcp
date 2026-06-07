@@ -304,7 +304,11 @@ superseded_artifact_backups:
   - sourceRef: .onto/review/.../execution-result.yaml
     backupRef: .onto/review/.../superseded-artifacts/001-execution-result.yaml
 execution_route_provenance:
-  executor_realization: mock
+  execution_route: external_oauth_worker
+  requested_execution_route: external_oauth_worker
+  # Compatibility/debug projection; consumers should prefer execution_route.
+  executor_realization: codex
+  requested_executor_realization: null
   review_execution_profile_source: review-run-manifest
 ```
 

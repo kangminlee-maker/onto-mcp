@@ -16,10 +16,10 @@ environment warning projection, and cooperative cancellation through
 
 ## 1. Rechecked Basis
 
-This design is based on the completed review session
-`.onto/review/20260527-9e0a2667`, which reviewed
-`docs/architecture/review-invocation-runner.md` with the
-`software-engineering` domain.
+This design is based on a completed historical review session that reviewed
+the invocation-runner design note with the `software-engineering` domain. The
+reviewed note has since been isolated under `development-records/debug/` because
+CLI runner details are not active runtime reference material.
 
 Verified facts:
 
@@ -498,9 +498,11 @@ findings.
 Required checks:
 
 - TypeScript check for any API/schema changes: `npm run check:ts-core`.
-- MCP conformance: `npm run test:mcp:review`.
-- Review runtime hardening: `npm run test:review:hardening`.
-- Focused fixtures:
+- Live review E2E with real LLM/provider dispatch: `npm run test:e2e`.
+- MCP schema/route development check: `npm run check:mcp:review`.
+- Review route development check: `npm run check:review:route`.
+- Focused implementation checks may use fixed input artifacts, but they are
+  not completion evidence unless they call the same runtime/provider path:
   - long-running review returns handle before host timeout;
   - status remains responsive while worker units run;
   - continue returns `already_running` during active dispatch;

@@ -12,7 +12,11 @@ import {
 } from "../cli/review-invoke.js";
 import { executeReviewPromptExecution } from "../cli/run-review-prompt-execution.js";
 import { startReviewSession } from "../cli/start-review-session.js";
-import { buildReviewExecutionRoute } from "./review-execution-route.js";
+import {
+  buildReviewExecutionRoute,
+  buildReviewRuntimeRouteArtifactProjection,
+} from "./review-execution-route.js";
+import type { LlmExecutionRoute } from "../llm/model-switcher.js";
 import type {
   PrepareOnlyResult,
   ReviewMode,
@@ -40,6 +44,8 @@ export interface ReviewInvocationRequest {
   reviewMode?: ReviewMode;
   lensIds?: string[];
   confirmValueAlignment?: boolean;
+  executionRoute?: LlmExecutionRoute;
+  /** Debug-only legacy executor override. Prefer executionRoute. */
   executorRealization?: ReviewExecutorRealization;
 }
 
@@ -177,8 +183,9 @@ export function appendReviewInvocationRequestArgs(
   if (request.diffRange) {
     result.push("--diff-range", request.diffRange);
   }
-  if (request.executorRealization) {
-    result.push("--executor-realization", request.executorRealization);
+  const executorRealization = executorRealizationFromRequest(request);
+  if (executorRealization) {
+    result.push("--executor-realization", executorRealization);
   }
   for (const lensId of request.lensIds ?? []) {
     result.push("--lens-id", lensId);
@@ -187,6 +194,27 @@ export function appendReviewInvocationRequestArgs(
     result.push("--confirm-value-alignment");
   }
   return result;
+}
+
+function executorRealizationFromRequest(
+  request: Pick<ReviewInvocationRequest, "executionRoute" | "executorRealization">,
+): ReviewExecutorRealization | undefined {
+  const routeRealization =
+    request.executionRoute === "external_oauth_worker"
+      ? "codex"
+      : request.executionRoute === "direct_model_call"
+        ? "ts_inline_http"
+        : undefined;
+  if (
+    request.executorRealization !== undefined &&
+    routeRealization !== undefined &&
+    request.executorRealization !== routeRealization
+  ) {
+    throw new Error(
+      `Conflicting review execution overrides: executionRoute=${request.executionRoute} maps to ${routeRealization}, but debug executorRealization=${request.executorRealization}.`,
+    );
+  }
+  return request.executorRealization ?? routeRealization;
 }
 
 export async function prepareReviewInvocationRequest(
@@ -700,13 +728,7 @@ async function projectReviewInvocationCliOutput(args: {
       synthesize_seat: routeProfile.review_execution_profile.synthesize.seat,
       worker_executor: routeProfile.review_execution_profile.worker_executor,
       deliberation: routeProfile.review_execution_profile.deliberation,
-      runtime_route: {
-        execution_realization: finalRoute.execution_realization,
-        host_runtime: finalRoute.artifact_host_runtime,
-        worker_executor: finalRoute.executor,
-        runtime_provider: finalRoute.resolved_provider,
-        auth_mode: finalRoute.auth_mode,
-      },
+      runtime_route: buildReviewRuntimeRouteArtifactProjection(finalRoute),
       ...(routeProfile.review_execution_profile.model
         ? { model: routeProfile.review_execution_profile.model }
         : {}),

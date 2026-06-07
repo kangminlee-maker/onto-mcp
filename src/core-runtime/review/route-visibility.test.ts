@@ -91,6 +91,10 @@ describe("buildReviewRouteVisibilityFromSession", () => {
         "profiles:",
         "  - actor_profile_id: teamlead",
         "    actor_kind: teamlead",
+        "    execution_route: external_oauth_worker",
+        "    execution_adapter: codex_cli",
+        "    model_provider: openai",
+        "    billing_mode: subscription",
         "    execution_realization: worker",
         "    host_runtime: codex",
         "    runtime_provider: codex",
@@ -101,6 +105,10 @@ describe("buildReviewRouteVisibilityFromSession", () => {
         "    service_tier: fast",
         "  - actor_profile_id: lens",
         "    actor_kind: lens",
+        "    execution_route: external_oauth_worker",
+        "    execution_adapter: codex_cli",
+        "    model_provider: openai",
+        "    billing_mode: subscription",
         "    execution_realization: worker",
         "    host_runtime: codex",
         "    runtime_provider: codex",
@@ -117,8 +125,25 @@ describe("buildReviewRouteVisibilityFromSession", () => {
 
     expect(visibility?.workerExecutor).toBe("codex");
     expect(visibility?.runtimeProvider).toBe("codex");
+    expect(visibility?.executionRoute).toBe("external_oauth_worker");
+    expect(visibility?.executionAdapter).toBe("codex_cli");
+    expect(visibility?.modelProvider).toBe("openai");
+    expect(visibility?.modelId).toBe("gpt-5.5");
+    expect(visibility?.billingMode).toBe("subscription");
     expect(visibility?.authMode).toBe("oauth");
     expect(visibility?.actorRoute.mode).toBe("single");
+    expect(visibility?.actorRoute.executionRoutes).toEqual([
+      "external_oauth_worker",
+    ]);
+    expect(visibility?.actorRoute.executionAdapters).toEqual(["codex_cli"]);
+    expect(visibility?.actorRoute.modelProviders).toEqual(["openai"]);
+    expect(visibility?.actorRoute.billingModes).toEqual(["subscription"]);
+    expect(visibility?.actorProfiles[0]).toMatchObject({
+      executionRoute: "external_oauth_worker",
+      executionAdapter: "codex_cli",
+      modelProvider: "openai",
+      billingMode: "subscription",
+    });
     expect(visibility?.actorProfileStatus).toBe("available");
   });
 
@@ -192,6 +217,50 @@ describe("buildReviewRouteVisibilityFromSession", () => {
     expect(visibility?.actorProfileStatus).toBe("available");
   });
 
+  it("reads canonical runtime route fields from manifest when actor profiles are missing", async () => {
+    const sessionRoot = await makeSessionRoot();
+    const missingActorProfilesPath = path.join(
+      sessionRoot,
+      "execution-preparation",
+      "actor-invocation-profiles.yaml",
+    );
+    await fs.writeFile(
+      path.join(sessionRoot, "review-run-manifest.yaml"),
+      [
+        "session_id: route-visibility-test",
+        "review_execution_profile:",
+        "  runtime_route:",
+        "    execution_route: direct_model_call",
+        "    execution_adapter: openai_sdk",
+        "    model_provider: openai",
+        "    model_id: gpt-5.5",
+        "    wire_format: native_sdk",
+        "    billing_mode: per_token",
+        "    execution_realization: direct-call",
+        "    host_runtime: openai",
+        "    worker_executor: direct_call",
+        "    runtime_provider: openai",
+        "    auth_mode: api_key",
+        "artifact_refs:",
+        `  actor_invocation_profiles: ${JSON.stringify(missingActorProfilesPath)}`,
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const visibility = await buildReviewRouteVisibilityFromSession(sessionRoot);
+
+    expect(visibility?.source).toBe("review-run-manifest");
+    expect(visibility?.executionRoute).toBe("direct_model_call");
+    expect(visibility?.executionAdapter).toBe("openai_sdk");
+    expect(visibility?.modelProvider).toBe("openai");
+    expect(visibility?.modelId).toBe("gpt-5.5");
+    expect(visibility?.wireFormat).toBe("native_sdk");
+    expect(visibility?.billingMode).toBe("per_token");
+    expect(visibility?.runtimeProvider).toBe("openai");
+    expect(visibility?.actorProfileStatus).toBe("missing");
+  });
+
   it("uses actual worker unit host runtimes when actor profiles are missing", async () => {
     const sessionRoot = await makeSessionRoot();
     const missingActorProfilesPath = path.join(
@@ -230,6 +299,78 @@ describe("buildReviewRouteVisibilityFromSession", () => {
     expect(visibility?.hostRuntime).toBeNull();
     expect(visibility?.actualHostRuntimes).toEqual(["anthropic", "openai"]);
     expect(visibility?.routeConsistency).toBe("actual_mixed");
+  });
+
+  it("treats mixed actual worker runtimes as consistent when actor profiles match each unit kind", async () => {
+    const sessionRoot = await makeSessionRoot();
+    const preparationRoot = path.join(sessionRoot, "execution-preparation");
+    await fs.mkdir(preparationRoot, { recursive: true });
+    const actorProfilesPath = path.join(
+      preparationRoot,
+      "actor-invocation-profiles.yaml",
+    );
+    await fs.writeFile(
+      path.join(sessionRoot, "review-run-manifest.yaml"),
+      [
+        "session_id: route-visibility-test",
+        "review_execution_profile:",
+        "  runtime_route:",
+        "    execution_realization: direct-call",
+        "    host_runtime: openai",
+        "    worker_executor: direct_call",
+        "    runtime_provider: openai",
+        "    auth_mode: api_key",
+        "artifact_refs:",
+        `  actor_invocation_profiles: ${JSON.stringify(actorProfilesPath)}`,
+        "worker_units:",
+        "  - unit_id: logic",
+        "    unit_kind: lens",
+        "    executor_host_runtime: openai",
+        "  - unit_id: synthesize",
+        "    unit_kind: synthesize",
+        "    executor_host_runtime: anthropic",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    await fs.writeFile(
+      actorProfilesPath,
+      [
+        "schema_version: 1",
+        "session_id: route-visibility-test",
+        "profiles:",
+        "  - actor_profile_id: lens",
+        "    actor_kind: lens",
+        "    execution_realization: direct-call",
+        "    host_runtime: openai",
+        "    runtime_provider: openai",
+        "    auth_mode: api_key",
+        "    effective_worker_executor: direct_call",
+        "    model: gpt-5.5",
+        "    effort: high",
+        "    service_tier: null",
+        "  - actor_profile_id: synthesize",
+        "    actor_kind: synthesize",
+        "    execution_realization: direct-call",
+        "    host_runtime: anthropic",
+        "    runtime_provider: anthropic",
+        "    auth_mode: api_key",
+        "    effective_worker_executor: direct_call",
+        "    model: claude-opus-4",
+        "    effort: high",
+        "    service_tier: null",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const visibility = await buildReviewRouteVisibilityFromSession(sessionRoot);
+
+    expect(visibility?.actualHostRuntimes).toEqual(["anthropic", "openai"]);
+    expect(visibility?.routeConsistency).toBe("consistent");
+    expect(visibility?.hostRuntime).toBeNull();
+    expect(visibility?.runtimeProvider).toBeNull();
+    expect(visibility?.authMode).toBe("api_key");
   });
 
   it("flags actual worker host conflict with manifest route when actor profiles are missing", async () => {

@@ -1,9 +1,13 @@
-# Review Invocation Runner Design
+# Review Invocation Runner Debug Design Note
 
-> Status: Design
+> Status: Debug-only historical note
 > Date: 2026-05-28
-> Purpose: keep the review runtime independent of CLI adapter shape while
-> preserving current artifact truth and MCP behavior.
+> Purpose: preserve the argv/runner migration design context without making CLI
+> flags part of the active runtime reference surface.
+>
+> Current authority: MCP callers use canonical review route vocabulary
+> (`executionRoute` / artifact `execution_route`). Legacy
+> `executorRealization` values are CLI/debug compatibility switches only.
 
 ---
 
@@ -118,7 +122,9 @@ export interface ReviewInvocationRequest {
   noDomain?: boolean;
   reviewMode?: "core-axis" | "full";
   lensIds?: string[];
-  executorRealization?: "codex" | "mock" | "ts_inline_http";
+  executionRoute?: "external_oauth_worker" | "direct_model_call";
+  /** Debug-only legacy argv adapter switch. */
+  executorRealization?: "codex" | "ts_inline_http";
   confirmValueAlignment?: boolean;
   noWatch?: boolean;
   progressObserver?: ReviewProgressObserver;
@@ -505,7 +511,8 @@ Conformance rules:
 
 - keep existing internal flags only while they are still needed by tests
 - keep current final JSON shape during migration
-- keep `npm run test:e2e` as the conformance gate
+- keep `npm run test:e2e` as the live execution gate; it must call the
+  configured runtime/provider path instead of prepare-only or replay output
 
 ### 10.2 MCP/Core API Adapter
 
@@ -573,7 +580,7 @@ execution, completion functions directly.
 
 Done when:
 
-- `runReviewInvocation(request)` can run the full mock review path
+- `runReviewInvocation(request)` can run the full review path through the selected real executor route
 - result projection matches current adapter JSON result facts
 - artifact refs are still derived from session files
 - prepare-only returns a `PreparedReviewInvocation` that can be inspected from
@@ -617,16 +624,16 @@ Minimum verification for each phase:
 
 ```text
 npm run check:ts-core
-npx vitest run src/core-runtime/cli/review-invoke-auto-resolution.test.ts
-npx vitest run src/core-api/review-api.test.ts
+npm run check:review:invocation-runner
 npm run test:e2e
 ```
 
 Before switching MCP/Core API:
 
 ```text
-npm run test:mcp:review
-npm run test:review:hardening
+npm run check:mcp:review
+npm run check:review:route
+npm run test:e2e
 ```
 
 Regression expectations:
@@ -692,5 +699,5 @@ The refactor is complete when:
    `runReviewInvocation`.
 5. CLI adapter and MCP produce equivalent review artifacts for the same typed request.
 6. boundary, progress, failure, prepare-only, projection, and equivalence
-   contracts have focused tests.
-7. static, API, E2E, hardening, and MCP conformance tests pass.
+   contracts have focused checks.
+7. static checks pass and live E2E passes through the actual LLM/provider path.
