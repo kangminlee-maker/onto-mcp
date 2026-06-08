@@ -16,6 +16,8 @@ import {
   finalizeStageGate,
   mergeUnitResultIntoExecutionResult,
   reconstructIssueArtifactPacketInputs,
+  reviewAdvance,
+  reviewRound,
   validateUnitSeatToResult,
 } from "./review-execution-steps.js";
 
@@ -418,11 +420,19 @@ function withBoundary(
 async function writeSessionMetadata(
   plan: ReviewExecutionPlan,
   projectRoot: string,
+  orchestration?: "runtime" | "host",
 ): Promise<void> {
   await writeYaml(plan.session_metadata_path, {
     session_id: plan.session_id,
     project_root: projectRoot,
+    ...(orchestration ? { orchestration } : {}),
   });
+}
+
+async function materializeLensPackets(plan: ReviewExecutionPlan): Promise<void> {
+  for (const seat of plan.lens_prompt_packet_seats) {
+    await writeOutput(seat.packet_path);
+  }
 }
 
 async function seedTrustedLensSeats(
@@ -589,6 +599,62 @@ describe("finalizeStageGate", () => {
     expect(barrier.status).toBe("failed");
     expect(barrier.completed_lens_ids).toEqual(["logic"]);
     expect(barrier.missing_lens_ids).toContain("coverage");
+  });
+});
+
+describe("reviewRound / reviewAdvance (host B engine)", () => {
+  it("reviewRound returns the lens units (packets ensured) for a fresh host session", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root, "host");
+    await materializeLensPackets(plan); // prepare materialized the lens packets
+
+    const result = await reviewRound(root);
+
+    expect(result.status).toBe("in_progress");
+    if (result.status !== "in_progress") return;
+    expect(result.ready_units.map((u) => u.unit_id)).toEqual(
+      expect.arrayContaining(["logic", "coverage"]),
+    );
+    expect(result.ready_units.every((u) => u.unit_kind === "lens")).toBe(true);
+  });
+
+  it("reviewAdvance validates lens seats and advances the frontier to issue-artifacts", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root, "host");
+    await materializeLensPackets(plan);
+    // The host executed the lenses -> their seats are on disk.
+    for (const seat of plan.lens_execution_seats) {
+      await writeOutput(seat.output_path);
+    }
+
+    const result = await reviewAdvance(root, ["logic", "coverage"], {
+      base: scaffoldExecutionResult(plan),
+    });
+
+    expect(result.status).toBe("in_progress");
+    if (result.status !== "in_progress") return;
+    // Lenses are now trusted, so the first issue artifact is the next round.
+    expect(result.ready_units.map((u) => u.unit_id)).toEqual(["finding-ledger"]);
+    expect(result.ready_units[0]?.unit_kind).toBe("issue_artifact");
+  });
+
+  it("rejects a runtime-orchestrated session for both round and advance", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root); // no orchestration stamp -> runtime
+    await materializeLensPackets(plan);
+
+    await expect(reviewRound(root)).rejects.toThrow(
+      /requires a host-orchestrated session/,
+    );
+    await expect(reviewAdvance(root, ["logic"])).rejects.toThrow(
+      /requires a host-orchestrated session/,
+    );
   });
 });
 

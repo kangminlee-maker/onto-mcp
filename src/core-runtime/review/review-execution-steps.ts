@@ -48,8 +48,11 @@ import type {
  * 4b `validateUnitSeatToResult` + `mergeUnitResultIntoExecutionResult` (seat ->
  * result -> execution-result merge); 4c `ensureUnitPacket` (frontier-unit prompt
  * packet from durable state); 4d `finalizeStageGate` (lens-completion barrier
- * from durable state, via the shared `computeLensCompletionBarrier`). The final
- * `assembleIfComplete` extraction lands here too.
+ * from durable state, via the shared `computeLensCompletionBarrier`); 4e
+ * `reviewRound` / `reviewAdvance` (the host B round engine assembled on 4a-4d,
+ * fail-closed to host-orchestrated sessions). The terminal `assembleIfComplete`
+ * step calls `completeReviewSession`, which lives in the cli layer, so the
+ * core-api wrapper runs it when reviewAdvance signals `ready_to_assemble`.
  */
 
 async function readOptionalYamlArtifact<T>(filePath: string): Promise<T | null> {
@@ -337,17 +340,48 @@ export async function mergeUnitResultIntoExecutionResult(args: {
   return merged;
 }
 
-/** Repo project root, read from the session metadata the plan points at. */
-async function loadProjectRoot(plan: ReviewExecutionPlan): Promise<string> {
+/** Session metadata the plan points at (carries project_root + orchestration). */
+async function loadSessionMetadata(
+  plan: ReviewExecutionPlan,
+): Promise<ReviewSessionMetadata> {
   const metadata = await readOptionalYamlArtifact<ReviewSessionMetadata>(
     plan.session_metadata_path,
   );
-  if (!metadata?.project_root) {
+  if (!metadata) {
+    throw new Error(
+      `review-execution-steps requires session-metadata: ${plan.session_metadata_path}`,
+    );
+  }
+  return metadata;
+}
+
+/** Repo project root, read from the session metadata the plan points at. */
+async function loadProjectRoot(plan: ReviewExecutionPlan): Promise<string> {
+  const metadata = await loadSessionMetadata(plan);
+  if (!metadata.project_root) {
     throw new Error(
       `review-execution-steps requires session-metadata project_root: ${plan.session_metadata_path}`,
     );
   }
   return metadata.project_root;
+}
+
+/**
+ * Fail-closed orchestration-owner guard (capability surface, Step 5 tie-in).
+ * The host round/advance steps run only on a host-orchestrated session; a
+ * runtime session (the default A path) is rejected so the two loci can never
+ * drive the same session.
+ */
+async function assertHostOrchestration(
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const metadata = await loadSessionMetadata(plan);
+  const owner = metadata.orchestration ?? "runtime";
+  if (owner !== "host") {
+    throw new Error(
+      `review round/advance requires a host-orchestrated session (orchestration=host); this session is orchestration=${owner}. Use onto_review for runtime-orchestrated sessions.`,
+    );
+  }
 }
 
 /** Trusted units of a given kind, in ledger order, with their seat output path. */
@@ -527,4 +561,134 @@ export async function finalizeStageGate(
     path.join(sessionRoot, "lens-completion-barrier.yaml");
   await writeYamlDocument(barrierPath, barrier);
   return barrier;
+}
+
+/** A frontier unit projected for the host to execute next. */
+export interface ReviewRoundUnit {
+  unit_id: string;
+  unit_kind: string;
+  lens_id?: string;
+  packet_path: string | null;
+  output_path: string | null;
+}
+
+/**
+ * Outcome of a host round/advance (4e):
+ * - `in_progress`: `ready_units` are ready for the host to execute now.
+ * - `ready_to_assemble`: the frontier is empty and terminal; the caller runs
+ *   `completeReviewSession` (which lives in the cli layer, so the core-api
+ *   wrapper invokes it — see Step 6).
+ * - `halted`: no ready units but downstream work remains (an upstream is not
+ *   trusted, or the lens gate is unsatisfied).
+ */
+export type ReviewRoundResult =
+  | { status: "in_progress"; ready_units: ReviewRoundUnit[] }
+  | { status: "ready_to_assemble" }
+  | { status: "halted"; reason: string };
+
+function projectRoundUnit(unit: ReviewContinuationUnit): ReviewRoundUnit {
+  return {
+    unit_id: unit.unitId,
+    unit_kind: unit.unitKind,
+    ...(unit.lensId != null ? { lens_id: unit.lensId } : {}),
+    packet_path: unit.packetPath,
+    output_path: unit.outputPath,
+  };
+}
+
+/**
+ * Compute the current round result: the frontier ready units (with their prompt
+ * packets ensured) or a terminal/halted signal. Shared by reviewRound and the
+ * tail of reviewAdvance.
+ */
+async function computeRoundResult(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<ReviewRoundResult> {
+  const frontier = await computeReviewFrontier(sessionRoot);
+  if (!frontier.eligible) {
+    return {
+      status: "halted",
+      reason: frontier.ineligibleReason ?? "review continuation is not eligible",
+    };
+  }
+  if (frontier.frontierUnits.length === 0) {
+    if (frontier.downstreamUnits.length > 0) {
+      return {
+        status: "halted",
+        reason:
+          "no ready units but downstream work remains (an upstream is not trusted or the stage gate is unsatisfied)",
+      };
+    }
+    return { status: "ready_to_assemble" };
+  }
+
+  const readyUnits: ReviewRoundUnit[] = [];
+  for (const unit of frontier.frontierUnits) {
+    await ensureUnitPacket(sessionRoot, unit, plan);
+    readyUnits.push(projectRoundUnit(unit));
+  }
+  return { status: "in_progress", ready_units: readyUnits };
+}
+
+/**
+ * Host round (B): return the units ready to execute now, with their prompt
+ * packets ensured on disk (4e). onto does NOT execute them — the host does, then
+ * calls {@link reviewAdvance}. Fail-closed to host-orchestrated sessions.
+ */
+export async function reviewRound(
+  sessionRoot: string,
+  executionPlan?: ReviewExecutionPlan,
+): Promise<ReviewRoundResult> {
+  const plan = executionPlan ?? (await loadExecutionPlan(sessionRoot));
+  await assertHostOrchestration(plan);
+  return computeRoundResult(sessionRoot, plan);
+}
+
+/**
+ * Host advance (B): validate the seats the host just wrote for `executed`
+ * units, merge them into the durable result, finalize the lens stage gate, then
+ * return the next round (4e). onto owns ledger/result/gate truth; the host owns
+ * unit execution. Fail-closed to host-orchestrated sessions.
+ *
+ * `opts.base` seeds execution-result.yaml on the first advance of a session
+ * (before any result exists); the core-api wrapper supplies the scaffold since
+ * its execution-level metadata derivation lives in the cli layer.
+ */
+export async function reviewAdvance(
+  sessionRoot: string,
+  executed: string[],
+  opts?: { base?: ReviewExecutionResultArtifact; executionPlan?: ReviewExecutionPlan },
+): Promise<ReviewRoundResult> {
+  const plan = opts?.executionPlan ?? (await loadExecutionPlan(sessionRoot));
+  await assertHostOrchestration(plan);
+
+  const frontier = await computeReviewFrontier(sessionRoot);
+  const frontierById = new Map(
+    frontier.frontierUnits.map((unit) => [unit.unitId, unit]),
+  );
+
+  let base = opts?.base;
+  for (const unitId of executed) {
+    const unit = frontierById.get(unitId);
+    if (!unit) {
+      throw new Error(
+        `reviewAdvance: ${unitId} is not in the current frontier; only frontier units can be advanced.`,
+      );
+    }
+    const result = await validateUnitSeatToResult({
+      sessionRoot,
+      unit,
+      executionPlan: plan,
+    });
+    await mergeUnitResultIntoExecutionResult({
+      sessionRoot,
+      result,
+      ...(base ? { base } : {}),
+    });
+    base = undefined;
+  }
+
+  await finalizeStageGate(sessionRoot, plan);
+  return computeRoundResult(sessionRoot, plan);
 }
