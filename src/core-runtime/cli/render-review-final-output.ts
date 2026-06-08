@@ -12,7 +12,10 @@ import type {
   ReviewResultIssueProjection,
   ReviewSessionMetadata,
 } from "../review/artifact-types.js";
-import type { ReviewSynthesisLedgerArtifact } from "../review/synthesis-map-reduce.js";
+import type {
+  ReviewSynthesisLedgerArtifact,
+  ReviewSynthesisLensPositionSummary,
+} from "../review/synthesis-map-reduce.js";
 import {
   fileExists,
   readYamlDocument,
@@ -268,13 +271,15 @@ function uniqueLines(lines: string[]): string[] {
 function boundaryNoteFromProjection(
   projection: ReviewResultIssueProjection,
 ): string {
-  const basis =
-    projection.problem_definition ??
-    projection.issue_statement ??
-    projection.failure_condition ??
-    projection.impact ??
-    projection.rationale;
-  return `- ${projection.issue_id} evidence gap: ${compactSentence(basis)}`;
+  const basis = [
+    projection.problem_definition,
+    projection.issue_statement,
+    projection.failure_condition,
+    projection.impact,
+    projection.rationale,
+  ].filter((value): value is string => typeof value === "string" && value.length > 0)
+    .join(" ");
+  return `- ${projection.issue_id} evidence gap: ${compactSentence(basis, 560)}`;
 }
 
 export function extractBoundaryEvidenceNotesFromLensText(args: {
@@ -453,6 +458,128 @@ function renderRefs(refs: string[]): string {
   return refs.length > 0 ? refs.map((ref) => `\`${ref}\``).join(", ") : "none";
 }
 
+function listOrNone(values: string[]): string {
+  return values.length > 0 ? values.join(", ") : "none";
+}
+
+function requireLedgerStringArray(
+  value: unknown,
+  label: string,
+): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error(`${label} must be a string list.`);
+  }
+  return value;
+}
+
+function requireLedgerNumber(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${label} must be a non-negative number.`);
+  }
+  return value;
+}
+
+function requireLensPositionSummary(
+  summary: unknown,
+  issueId: string,
+): ReviewSynthesisLensPositionSummary {
+  const label = `synthesis-ledger.material_issues.${issueId}.lens_position_summary`;
+  if (!isRecord(summary)) {
+    throw new Error(`${label} must be a YAML mapping.`);
+  }
+  if (!isRecord(summary.stance_buckets)) {
+    throw new Error(`${label}.stance_buckets must be a YAML mapping.`);
+  }
+  if (!isRecord(summary.resolution_acceptance)) {
+    throw new Error(`${label}.resolution_acceptance must be a YAML mapping.`);
+  }
+  return {
+    issue_stance_lens_count: requireLedgerNumber(
+      summary.issue_stance_lens_count,
+      `${label}.issue_stance_lens_count`,
+    ),
+    raised_by_lens_ids: requireLedgerStringArray(
+      summary.raised_by_lens_ids,
+      `${label}.raised_by_lens_ids`,
+    ),
+    stance_buckets: {
+      support: requireLedgerStringArray(
+        summary.stance_buckets.support,
+        `${label}.stance_buckets.support`,
+      ),
+      narrow: requireLedgerStringArray(
+        summary.stance_buckets.narrow,
+        `${label}.stance_buckets.narrow`,
+      ),
+      oppose: requireLedgerStringArray(
+        summary.stance_buckets.oppose,
+        `${label}.stance_buckets.oppose`,
+      ),
+      alternative_root: requireLedgerStringArray(
+        summary.stance_buckets.alternative_root,
+        `${label}.stance_buckets.alternative_root`,
+      ),
+      surface_only: requireLedgerStringArray(
+        summary.stance_buckets.surface_only,
+        `${label}.stance_buckets.surface_only`,
+      ),
+      not_applicable: requireLedgerStringArray(
+        summary.stance_buckets.not_applicable,
+        `${label}.stance_buckets.not_applicable`,
+      ),
+      insufficient_evidence: requireLedgerStringArray(
+        summary.stance_buckets.insufficient_evidence,
+        `${label}.stance_buckets.insufficient_evidence`,
+      ),
+    },
+    resolution_acceptance: {
+      deliberation_participating_lens_ids: requireLedgerStringArray(
+        summary.resolution_acceptance.deliberation_participating_lens_ids,
+        `${label}.resolution_acceptance.deliberation_participating_lens_ids`,
+      ),
+      accepted_by_lens_ids: requireLedgerStringArray(
+        summary.resolution_acceptance.accepted_by_lens_ids,
+        `${label}.resolution_acceptance.accepted_by_lens_ids`,
+      ),
+      remaining_disagreement_lens_ids: requireLedgerStringArray(
+        summary.resolution_acceptance.remaining_disagreement_lens_ids,
+        `${label}.resolution_acceptance.remaining_disagreement_lens_ids`,
+      ),
+    },
+  };
+}
+
+function renderLensPositionSummary(
+  rawSummary: unknown,
+  issueId: string,
+): string[] {
+  const summary = requireLensPositionSummary(rawSummary, issueId);
+  const agreedOrNarrowed = [
+    ...summary.stance_buckets.support,
+    ...summary.stance_buckets.narrow,
+  ];
+  const disagreeing = [
+    ...summary.stance_buckets.oppose,
+    ...summary.stance_buckets.alternative_root,
+    ...summary.stance_buckets.surface_only,
+  ];
+  const participantCount =
+    summary.resolution_acceptance.deliberation_participating_lens_ids.length;
+  return [
+    `  - issue stance agreement: ${agreedOrNarrowed.length}/${summary.issue_stance_lens_count}`,
+    `  - agreed or narrowed lenses: ${listOrNone(agreedOrNarrowed)}`,
+    `  - issue stance disagreement: ${disagreeing.length}/${summary.issue_stance_lens_count}`,
+    `  - disagreeing stance lenses: ${listOrNone(disagreeing)}`,
+    `  - not applicable lenses: ${listOrNone(summary.stance_buckets.not_applicable)}`,
+    `  - insufficient evidence lenses: ${listOrNone(summary.stance_buckets.insufficient_evidence)}`,
+    `  - resolution accepted by: ${summary.resolution_acceptance.accepted_by_lens_ids.length}/${participantCount} deliberation participants`,
+    `  - accepted lenses: ${listOrNone(summary.resolution_acceptance.accepted_by_lens_ids)}`,
+    `  - remaining disagreement: ${summary.resolution_acceptance.remaining_disagreement_lens_ids.length}/${participantCount} deliberation participants`,
+    `  - remaining disagreement lenses: ${listOrNone(summary.resolution_acceptance.remaining_disagreement_lens_ids)}`,
+    `  - raised by lenses: ${listOrNone(summary.raised_by_lens_ids)}`,
+  ];
+}
+
 function renderIssueProjection(
   projection: ReviewResultIssueProjection,
 ): string {
@@ -516,6 +643,15 @@ function renderLedgerMaterialIssues(
     .map((issue) =>
       [
         `- ${issue.issue_id} (${issue.severity}): ${issue.conclusion}`,
+        ...renderLensPositionSummary(issue.lens_position_summary, issue.issue_id),
+        `  - issue statement: ${issue.issue_statement}`,
+        `  - affected purpose: ${issue.affected_purpose}`,
+        `  - failure condition: ${issue.failure_condition}`,
+        `  - impact: ${issue.impact}`,
+        `  - root hypothesis: ${issue.root_hypothesis}`,
+        `  - evidence: ${renderRefs(issue.evidence_refs)}`,
+        `  - source lenses: ${listOrNone(issue.source_lens_ids)}`,
+        `  - action candidates: ${listOrNone(issue.action_candidates)}`,
         `  - materiality: ${issue.materiality_explanation}`,
         `  - root cause: ${issue.root_cause_explanation}`,
         `  - causal path: ${issue.causal_path_explanation}`,
@@ -562,9 +698,14 @@ function renderLedgerActions(ledger: ReviewSynthesisLedgerArtifact | null): stri
       return [
         `- ${action.issue_id} (${action.severity})`,
         issue ? `  - issue: ${issue.conclusion}` : null,
+        issue ? `  - target: ${issue.issue_statement}` : null,
+        issue ? `  - failure condition: ${issue.failure_condition}` : null,
         `  - candidates: ${action.action_candidates.join(", ") || "none"}`,
         `  - rationale: ${action.rationale}`,
         issue ? `  - remediation: ${issue.action_explanation}` : null,
+        issue
+          ? "  - verification: verify the remediation against the failure condition with a focused check before closing"
+          : null,
       ].filter((line): line is string => line !== null).join("\n");
     })
     .join("\n");

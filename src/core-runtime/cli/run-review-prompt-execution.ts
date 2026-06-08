@@ -55,6 +55,7 @@ import {
 import {
   PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
   buildIssueStanceResponsePrompt,
+  completeIssueLedgerArtifactOnDisk,
   issueArtifactConsumerId,
   issueArtifactSpec,
   issueStanceConsumerId,
@@ -91,6 +92,8 @@ import {
   buildIssueScopedDeliberationWorklist,
   buildIssueScopedLensDeliberationPrompt,
   buildNoPlannedDeliberationResolution,
+  buildRuntimeIssueDeliberationUnavailableResponse,
+  buildRuntimeUnavailableDeliberationResolution,
   buildTeamleadIssueResolutionPrompt,
   deliberationResolutionPath,
   renderDeliberationMarkdownProjection,
@@ -122,6 +125,7 @@ import {
 } from "../review/unit-boundary-details.js";
 import {
   renderIssueSynthesisPrompt,
+  buildRuntimeIssueSynthesisUnavailableResponse,
   synthesisLedgerPath,
   synthesisWorkItemsPath,
   validateIssueSynthesisResponseOnDisk,
@@ -743,6 +747,71 @@ function maxUnitOutputBytes(args: {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 512 * 1024;
 }
 
+function stripSingleValueCliOptions(args: string[], optionNames: string[]): string[] {
+  const optionSet = new Set(optionNames.map((optionName) => `--${optionName}`));
+  const equalsPrefixes = optionNames.map((optionName) => `--${optionName}=`);
+  const out: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === undefined) continue;
+    if (optionSet.has(token)) {
+      const value = args[index + 1];
+      if (typeof value === "string" && !value.startsWith("--")) {
+        index += 1;
+      }
+      continue;
+    }
+    if (equalsPrefixes.some((prefix) => token.startsWith(prefix))) {
+      continue;
+    }
+    out.push(token);
+  }
+  return out;
+}
+
+function stripInlineHttpLlmOverrideArgs(args: string[]): string[] {
+  return stripSingleValueCliOptions(args, [
+    "provider",
+    "auth",
+    "model",
+    "llm-base-url",
+    "api-key-env",
+    "reasoning-effort",
+  ]);
+}
+
+function isServiceTierConfigOverride(value: string | undefined): boolean {
+  if (!value) return false;
+  return value.trim().startsWith("service_tier=");
+}
+
+function stripCodexLlmOverrideArgs(args: string[]): string[] {
+  const withoutSimpleOverrides = stripSingleValueCliOptions(args, [
+    "model",
+    "reasoning-effort",
+  ]);
+  const out: string[] = [];
+  for (let index = 0; index < withoutSimpleOverrides.length; index += 1) {
+    const token = withoutSimpleOverrides[index];
+    if (token === undefined) continue;
+    if (token === "--config-override") {
+      const value = withoutSimpleOverrides[index + 1];
+      if (isServiceTierConfigOverride(value)) {
+        index += 1;
+        continue;
+      }
+    }
+    if (
+      token.startsWith("--config-override=") &&
+      isServiceTierConfigOverride(token.slice("--config-override=".length))
+    ) {
+      continue;
+    }
+    out.push(token);
+  }
+  return out;
+}
+
 function appendInlineHttpLlmOverrideArgs(
   args: string[],
   llm: ReviewLlmRef | undefined,
@@ -825,16 +894,22 @@ function executorConfigWithUnitSettings(args: {
     return args.executorConfig;
   }
 
-  const executorArgs = [...args.executorConfig.args];
+  let executorArgs = [...args.executorConfig.args];
   const unitId = unitSettingsIdForDispatch(args.dispatch);
   const effectiveLlm = args.profile
     ? effectiveReviewUnitLlmRef(args.profile, unitId)
     : unitSettings.llm;
   const isInlineHttp = executorConfigUsesInlineHttpWorker(args.executorConfig);
   if (isInlineHttp) {
+    if (effectiveLlm) {
+      executorArgs = stripInlineHttpLlmOverrideArgs(executorArgs);
+    }
     appendInlineHttpLlmOverrideArgs(executorArgs, effectiveLlm);
     appendInlineHttpUnitExecutionKnobArgs(executorArgs, unitSettings);
   } else if (executorConfigUsesCodexWorker(args.executorConfig)) {
+    if (effectiveLlm) {
+      executorArgs = stripCodexLlmOverrideArgs(executorArgs);
+    }
     appendCodexLlmOverrideArgs(executorArgs, effectiveLlm);
     rejectUnsupportedUnitExecutionKnobs({
       settings: unitSettings,
@@ -1536,13 +1611,20 @@ function shouldRetryUnitFailure(args: {
   if (args.attempt >= args.maxRetries) return false;
   const failureKind = failureKindFromError(args.error);
   if (
-    failureKind === "timeout" ||
     failureKind === "empty_output" ||
     failureKind === "output_contract"
   ) {
     return false;
   }
   return true;
+}
+
+function retryTimeoutMs(baseTimeoutMs: number, attempt: number): number {
+  const multiplier = attempt + 1;
+  const expanded = baseTimeoutMs * multiplier;
+  return Number.isFinite(expanded) && expanded > 0
+    ? Math.floor(expanded)
+    : baseTimeoutMs;
 }
 
 function parseExecutorRunMetadata(stdout: string): ReviewExecutorRunMetadata | undefined {
@@ -2182,14 +2264,23 @@ function outcomeFromPreviousResult(
 function deriveExecutionStatus(params: {
   synthesisExecuted: boolean;
   degradedLensIds: string[];
+  degradedUnitCount?: number;
 }): ReviewExecutionStatus {
   if (!params.synthesisExecuted) {
     return "halted_partial";
   }
-  if (params.degradedLensIds.length > 0) {
+  if (params.degradedLensIds.length > 0 || (params.degradedUnitCount ?? 0) > 0) {
     return "completed_with_degradation";
   }
   return "completed";
+}
+
+function failedChildOutcomeCount(outcome: ExecutionOutcome): number {
+  return (outcome.childOutcomes ?? []).reduce(
+    (total, child) =>
+      total + (child.success ? 0 : 1) + failedChildOutcomeCount(child),
+    0,
+  );
 }
 
 async function readStructuredDeliberationStatus(
@@ -2256,14 +2347,7 @@ function inferFailureLensId(
 function collectFailedUnits(
   artifact: ReviewExecutionResultArtifact,
 ): ReviewDegradationUnitFailure[] {
-  const synthesizeResult = artifact.synthesize_execution_result ?? null;
-  const unitResults = [
-    ...artifact.lens_execution_results,
-    ...(artifact.issue_artifact_execution_results ?? []),
-    ...(artifact.deliberation_execution_results ?? []),
-    ...(synthesizeResult ? [synthesizeResult] : []),
-  ];
-  return unitResults
+  return allUnitExecutionResults(artifact)
     .filter((result) => result.status === "failed")
     .map((result) => ({
       unit_id: result.unit_id,
@@ -3387,7 +3471,7 @@ async function runSingleDispatchWithRetries(args: {
         sessionRoot,
         executionPlan,
         dispatch,
-        effectiveUnitTimeoutMs,
+        retryTimeoutMs(effectiveUnitTimeoutMs, attempt),
         reviewExecutionProfile,
       );
       const completedAtMs = Date.now();
@@ -3828,6 +3912,64 @@ async function runIssueArtifactDispatch(args: {
   let lastOutcome: ExecutionOutcome | null = null;
   let lastValidationError: unknown = null;
   const validationMaxAttempts = Math.max(1, args.retryPolicy.issueArtifactMaxRetries);
+  const tryCompleteIssueLedgerWithRuntime = async (params: {
+    outcome: ExecutionOutcome;
+    reason: string;
+    candidatePath?: string | undefined;
+    attemptCount: number;
+  }): Promise<ExecutionOutcome | null> => {
+    if (args.artifactId !== "issue-ledger") return null;
+    try {
+      await completeIssueLedgerArtifactOnDisk({
+        executionPlan: args.executionPlan,
+        projectRoot: args.projectRoot,
+        participatingLensIds,
+        candidatePath: params.candidatePath,
+      });
+      await appendExecutionProgress(
+        args.executionPlan.error_log_path,
+        "runner issue-ledger runtime completion",
+        [
+          `reason: ${params.reason.slice(0, 500)}`,
+          "completion_source: finding-ledger.yaml + finding-relation-graph.yaml",
+          "completion_rule: same_root_candidate merges only; shared_cause_candidate dependencies only",
+        ],
+      );
+      return {
+        dispatch,
+        success: true,
+        startedAtMs: params.outcome.startedAtMs,
+        completedAtMs: Date.now(),
+        attemptCount: params.attemptCount,
+        ...(params.outcome.executorMetadata !== undefined
+          ? { executorMetadata: params.outcome.executorMetadata }
+          : {}),
+        ...(params.outcome.artifactGenerationRealization !== undefined
+          ? {
+              artifactGenerationRealization:
+                params.outcome.artifactGenerationRealization,
+            }
+          : {}),
+        ...(params.outcome.semanticQualityEvidence !== undefined
+          ? { semanticQualityEvidence: params.outcome.semanticQualityEvidence }
+          : {}),
+        packetBytes:
+          params.outcome.packetBytes ?? (await fileSizeIfPresent(seat.packet_path)),
+        outputBytes: await fileSizeIfPresent(seat.output_path),
+      };
+    } catch (completionError) {
+      await appendExecutionProgress(
+        args.executionPlan.error_log_path,
+        "runner issue-ledger runtime completion failed",
+        [
+          `reason: ${params.reason.slice(0, 500)}`,
+          `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+        ],
+      );
+      lastValidationError = completionError;
+      return null;
+    }
+  };
   for (let attempt = 0; attempt < validationMaxAttempts; attempt += 1) {
     if (attempt > 0) {
       await fs.appendFile(
@@ -3866,6 +4008,12 @@ async function runIssueArtifactDispatch(args: {
     });
     lastOutcome = outcome;
     if (!outcome.success) {
+      const completedOutcome = await tryCompleteIssueLedgerWithRuntime({
+        outcome,
+        reason: `executor failure: ${outcome.failure?.message ?? "unknown error"}`,
+        attemptCount: outcome.attemptCount ?? attempt + 1,
+      });
+      if (completedOutcome) return completedOutcome;
       throw new ReviewIssueArtifactDispatchError(
         `Issue artifact generation failed for ${args.artifactId}: ${outcome.failure?.message ?? "unknown error"}`,
         outcome,
@@ -3885,6 +4033,13 @@ async function runIssueArtifactDispatch(args: {
       };
     } catch (error) {
       lastValidationError = error;
+      const completedOutcome = await tryCompleteIssueLedgerWithRuntime({
+        outcome,
+        reason: error instanceof Error ? error.message : String(error),
+        candidatePath: seat.output_path,
+        attemptCount: attempt + (outcome.attemptCount ?? 1),
+      });
+      if (completedOutcome) return completedOutcome;
       console.warn(
         `[review progress] ${progress.step}/${REVIEW_PROGRESS_TOTAL_STEPS} ${args.artifactId} validation failed on attempt ${attempt + 1}/${validationMaxAttempts}: ${
           error instanceof Error ? error.message : String(error)
@@ -4076,6 +4231,73 @@ async function runControlledLensDeliberation(args: {
       failure,
     };
   };
+  const completeUnavailableDeliberationResponse = async (
+    dispatch: ExecutionDispatchResult,
+    reason: string,
+    failedOutcome?: ExecutionOutcome,
+  ): Promise<ExecutionOutcome | null> => {
+    const workItem = workItemByUnitId.get(dispatch.unit_id);
+    if (!workItem) return null;
+    try {
+      const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
+        await fs.readFile(dispatch.packet_path, "utf8"),
+      ).allowed_evidence_refs;
+      const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
+        sessionId: executionPlan.session_id,
+        workItem,
+        reason,
+        allowedEvidenceRefs,
+      });
+      await writeYamlDocument(dispatch.output_path, artifact);
+      validateIssueDeliberationResponseObject({
+        parsed: artifact,
+        sessionId: executionPlan.session_id,
+        issueId: workItem.issue_id,
+        lensId: workItem.lens_id,
+        allowedEvidenceRefs,
+      });
+      await appendExecutionProgress(
+        executionPlan.error_log_path,
+        "runner issue deliberation runtime completion",
+        [
+          `unit_id: ${dispatch.unit_id}`,
+          `reason: ${reason.slice(0, 500)}`,
+          "completion_rule: preserve source stance; record unavailable participant response",
+        ],
+      );
+      return {
+        dispatch,
+        success: true,
+        startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+        completedAtMs: Date.now(),
+        attemptCount: failedOutcome?.attemptCount ?? 1,
+        packetBytes:
+          failedOutcome?.packetBytes ?? (await fileSizeIfPresent(dispatch.packet_path)),
+        outputBytes: await fileSizeIfPresent(dispatch.output_path),
+        ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+        ...(failedOutcome?.artifactGenerationRealization !== undefined
+          ? {
+              artifactGenerationRealization:
+                failedOutcome.artifactGenerationRealization,
+            }
+          : {}),
+        ...(failedOutcome?.semanticQualityEvidence !== undefined
+          ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+          : {}),
+      };
+    } catch (completionError) {
+      await appendExecutionProgress(
+        executionPlan.error_log_path,
+        "runner issue deliberation runtime completion failed",
+        [
+          `unit_id: ${dispatch.unit_id}`,
+          `reason: ${reason.slice(0, 500)}`,
+          `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+        ],
+      );
+      return null;
+    }
+  };
   for (const dispatch of deliberationDispatches) {
     if (!shouldRunUnit(dispatch.unit_id)) continue;
     const workItem = workItemByUnitId.get(dispatch.unit_id);
@@ -4124,7 +4346,7 @@ async function runControlledLensDeliberation(args: {
         deliberationOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
         continue;
       }
-      deliberationOutcomes[currentIndex] = await runSingleDispatchWithRetries({
+      const outcome = await runSingleDispatchWithRetries({
         projectRoot,
         sessionRoot,
         executionPlan,
@@ -4135,6 +4357,16 @@ async function runControlledLensDeliberation(args: {
         unitTimeoutMs,
         reviewExecutionProfile: args.reviewExecutionProfile,
       });
+      if (!outcome.success) {
+        deliberationOutcomes[currentIndex] =
+          (await completeUnavailableDeliberationResponse(
+            dispatch,
+            outcome.failure?.message ?? "unknown executor failure",
+            outcome,
+          )) ?? outcome;
+        continue;
+      }
+      deliberationOutcomes[currentIndex] = outcome;
     }
   }
 
@@ -4183,6 +4415,36 @@ async function runControlledLensDeliberation(args: {
           (outcome) => outcome.dispatch.unit_id === dispatch.unit_id,
         ),
       );
+      const completedOutcome = await completeUnavailableDeliberationResponse(
+        dispatch,
+        errorMessage(error),
+        failedOutcome,
+      );
+      if (completedOutcome) {
+        const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
+          await fs.readFile(dispatch.packet_path, "utf8"),
+        ).allowed_evidence_refs;
+        validatedResponses.push(
+          validateIssueDeliberationResponseObject({
+            parsed: await readYamlDocument<Record<string, unknown>>(
+              dispatch.output_path,
+            ),
+            sessionId: executionPlan.session_id,
+            issueId: workItem.issue_id,
+            lensId: workItem.lens_id,
+            allowedEvidenceRefs,
+          }),
+        );
+        const outcomeIndex = completedDeliberationOutcomes.findIndex(
+          (outcome) => outcome.dispatch.unit_id === dispatch.unit_id,
+        );
+        if (outcomeIndex >= 0) {
+          completedDeliberationOutcomes[outcomeIndex] = completedOutcome;
+        } else {
+          completedDeliberationOutcomes.push(completedOutcome);
+        }
+        continue;
+      }
       throw new ReviewControlledDeliberationDispatchError(
         `Controlled lens deliberation output contract failed for ${dispatch.unit_id}: ${errorMessage(error)}`,
         [
@@ -4214,6 +4476,79 @@ async function runControlledLensDeliberation(args: {
     packet_path: executionPlan.teamlead_deliberation_prompt_packet_path,
     output_path: resolutionPath,
     output_format: "deliberation-resolution",
+  };
+  const completeUnavailableTeamleadResolution = async (
+    reason: string,
+    failedOutcome?: ExecutionOutcome,
+  ): Promise<{
+    outcome: ExecutionOutcome;
+    resolution: ReturnType<typeof buildRuntimeUnavailableDeliberationResolution>;
+  } | null> => {
+    try {
+      const resolution = buildRuntimeUnavailableDeliberationResolution({
+        sessionId: executionPlan.session_id,
+        issueLedger,
+        deliberationPlan,
+        responses: validatedResponses,
+        reason,
+      });
+      await writeYamlDocument(resolutionPath, resolution);
+      const validatedResolution = validateDeliberationResolutionObject({
+        parsed: resolution,
+        sessionId: executionPlan.session_id,
+        issueLedger,
+        deliberationPlan,
+      });
+      await fs.writeFile(
+        executionPlan.deliberation_output_path,
+        `${renderDeliberationMarkdownProjection({
+          resolution: validatedResolution,
+        }).trimEnd()}\n`,
+        "utf8",
+      );
+      await appendExecutionProgress(
+        executionPlan.error_log_path,
+        "runner teamlead deliberation runtime completion",
+        [
+          `reason: ${reason.slice(0, 500)}`,
+          "completion_rule: preserve issue-ledger truth; mark planned issues unresolved-with-reason",
+        ],
+      );
+      return {
+        outcome: {
+          dispatch: teamleadDispatch,
+          success: true,
+          startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+          completedAtMs: Date.now(),
+          attemptCount: failedOutcome?.attemptCount ?? 1,
+          packetBytes:
+            failedOutcome?.packetBytes ??
+            await fileSizeIfPresent(teamleadDispatch.packet_path),
+          outputBytes: await fileSizeIfPresent(teamleadDispatch.output_path),
+          ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+          ...(failedOutcome?.artifactGenerationRealization !== undefined
+            ? {
+                artifactGenerationRealization:
+                  failedOutcome.artifactGenerationRealization,
+              }
+            : {}),
+          ...(failedOutcome?.semanticQualityEvidence !== undefined
+            ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+            : {}),
+        },
+        resolution: validatedResolution,
+      };
+    } catch (completionError) {
+      await appendExecutionProgress(
+        executionPlan.error_log_path,
+        "runner teamlead deliberation runtime completion failed",
+        [
+          `reason: ${reason.slice(0, 500)}`,
+          `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+        ],
+      );
+      return null;
+    }
   };
   let teamleadOutcome: ExecutionOutcome;
   if (shouldRunUnit(teamleadDispatch.unit_id) && deliberationDispatches.length === 0) {
@@ -4301,11 +4636,19 @@ async function runControlledLensDeliberation(args: {
     teamleadOutcome = preservedOutcomeForDispatch(teamleadDispatch);
   }
   if (!teamleadOutcome.success) {
-    throw new ReviewControlledDeliberationDispatchError(
-      `Teamlead controlled deliberation failed: ${teamleadOutcome.failure?.message ?? "unknown error"}`,
-      [...completedDeliberationOutcomes, teamleadOutcome],
+    const completedResolution = await completeUnavailableTeamleadResolution(
+      teamleadOutcome.failure?.message ?? "unknown teamlead failure",
       teamleadOutcome,
     );
+    if (completedResolution) {
+      teamleadOutcome = completedResolution.outcome;
+    } else {
+      throw new ReviewControlledDeliberationDispatchError(
+        `Teamlead controlled deliberation failed: ${teamleadOutcome.failure?.message ?? "unknown error"}`,
+        [...completedDeliberationOutcomes, teamleadOutcome],
+        teamleadOutcome,
+      );
+    }
   }
   let resolution;
   try {
@@ -4321,11 +4664,20 @@ async function runControlledLensDeliberation(args: {
       error,
       teamleadOutcome,
     );
+    const completedResolution = await completeUnavailableTeamleadResolution(
+      errorMessage(error),
+      failedOutcome,
+    );
+    if (completedResolution) {
+      teamleadOutcome = completedResolution.outcome;
+      resolution = completedResolution.resolution;
+    } else {
     throw new ReviewControlledDeliberationDispatchError(
       `Teamlead controlled deliberation output contract failed: ${errorMessage(error)}`,
       [...completedDeliberationOutcomes, failedOutcome],
       failedOutcome,
     );
+    }
   }
   await fs.writeFile(
     executionPlan.deliberation_output_path,
@@ -4713,6 +5065,71 @@ async function runSynthesisMapReduceDispatch(args: {
     const workItemByUnitId = new Map(
       workItems.work_items.map((workItem) => [workItem.work_item_id, workItem]),
     );
+    const completeUnavailableSynthesisResponse = async (
+      dispatch: ExecutionDispatchResult,
+      reason: string,
+      failedOutcome?: ExecutionOutcome,
+    ): Promise<{
+      outcome: ExecutionOutcome;
+      response: IssueSynthesisResponseArtifact;
+    } | null> => {
+      const workItem = workItemByUnitId.get(dispatch.unit_id);
+      if (!workItem) return null;
+      try {
+        const sourceWorkItemsRef = sourceWorkItemRef(workItem);
+        const response = buildRuntimeIssueSynthesisUnavailableResponse({
+          sessionId: args.executionPlan.session_id,
+          workItem,
+          sourceWorkItemsRef,
+          reason,
+        });
+        await writeYamlDocument(dispatch.output_path, response);
+        await appendExecutionProgress(
+          args.executionPlan.error_log_path,
+          "runner issue synthesis runtime completion",
+          [
+            `unit_id: ${dispatch.unit_id}`,
+            `reason: ${reason.slice(0, 500)}`,
+            "completion_rule: conservative projection from synthesis-work-items.yaml",
+          ],
+        );
+        return {
+          outcome: {
+            dispatch,
+            success: true,
+            startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+            completedAtMs: Date.now(),
+            attemptCount: failedOutcome?.attemptCount ?? 1,
+            packetBytes:
+              failedOutcome?.packetBytes ??
+              await fileSizeIfPresent(dispatch.packet_path),
+            outputBytes: await fileSizeIfPresent(dispatch.output_path),
+            ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+            ...(failedOutcome?.artifactGenerationRealization !== undefined
+              ? {
+                  artifactGenerationRealization:
+                    failedOutcome.artifactGenerationRealization,
+                }
+              : {}),
+            ...(failedOutcome?.semanticQualityEvidence !== undefined
+              ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+              : {}),
+          },
+          response,
+        };
+      } catch (completionError) {
+        await appendExecutionProgress(
+          args.executionPlan.error_log_path,
+          "runner issue synthesis runtime completion failed",
+          [
+            `unit_id: ${dispatch.unit_id}`,
+            `reason: ${reason.slice(0, 500)}`,
+            `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+          ],
+        );
+        return null;
+      }
+    };
     const synthesisReadRefs = uniqueAllowedReadRefs(args.projectRoot, [
       workItemsPath,
       args.executionPlan.finding_ledger_path,
@@ -4794,7 +5211,17 @@ async function runSynthesisMapReduceDispatch(args: {
           reviewExecutionProfile: args.reviewExecutionProfile,
         });
         if (!outcome.success) {
-          issueOutcomes[currentIndex] = outcome;
+          const completed = await completeUnavailableSynthesisResponse(
+            dispatch,
+            outcome.failure?.message ?? "unknown synthesis worker failure",
+            outcome,
+          );
+          if (completed) {
+            responses[currentIndex] = completed.response;
+            issueOutcomes[currentIndex] = completed.outcome;
+          } else {
+            issueOutcomes[currentIndex] = outcome;
+          }
           continue;
         }
         try {
@@ -4806,12 +5233,23 @@ async function runSynthesisMapReduceDispatch(args: {
           });
           issueOutcomes[currentIndex] = outcome;
         } catch (error) {
-          issueOutcomes[currentIndex] = await synthesisValidationFailureOutcome({
+          const failedOutcome = await synthesisValidationFailureOutcome({
             executionPlan: args.executionPlan,
             dispatch,
             priorOutcome: outcome,
             error,
           });
+          const completed = await completeUnavailableSynthesisResponse(
+            dispatch,
+            errorMessage(error),
+            failedOutcome,
+          );
+          if (completed) {
+            responses[currentIndex] = completed.response;
+            issueOutcomes[currentIndex] = completed.outcome;
+          } else {
+            issueOutcomes[currentIndex] = failedOutcome;
+          }
         }
       }
     };
@@ -5243,7 +5681,7 @@ export async function executeReviewPromptExecution(
             sessionRoot,
             executionPlan,
             dispatch,
-            effectiveUnitTimeoutMs,
+            retryTimeoutMs(effectiveUnitTimeoutMs, attempt),
             params.reviewExecutionProfile,
           );
           succeeded = true;
@@ -6041,6 +6479,12 @@ export async function executeReviewPromptExecution(
   const degradedLensIds = executionFailures
     .filter((failure) => failure.unit_kind === "lens")
     .map((failure) => failure.unit_id);
+  const degradedUnitCount = [
+    ...issueArtifactOutcomes,
+    ...controlledDeliberation.deliberationOutcomes,
+    controlledDeliberation.teamleadOutcome,
+    synthesizeOutcome,
+  ].reduce((total, outcome) => total + failedChildOutcomeCount(outcome), 0);
   const executionCompletedAtMs = Date.now();
   const deliberationStatus = await readStructuredDeliberationStatus(
     executionPlan,
@@ -6067,6 +6511,7 @@ export async function executeReviewPromptExecution(
     execution_status: deriveExecutionStatus({
       synthesisExecuted: true,
       degradedLensIds,
+      degradedUnitCount,
     }),
     execution_started_at: isoFromTimestamp(executionStartedAtMs),
     execution_completed_at: isoFromTimestamp(executionCompletedAtMs),

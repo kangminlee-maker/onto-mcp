@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Review Pipeline Effort Benchmark Summary</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --ink: #18202b;
+      --muted: #667085;
+      --line: #d8dee8;
+      --accent: #126e82;
+      --accent-2: #7257a3;
+      --ok: #18754a;
+      --warn: #a05a00;
+      --bad: #b42318;
+      --soft-ok: #e8f5ee;
+      --soft-warn: #fff4df;
+      --soft-bad: #fdeceb;
+      --soft-info: #eaf3f5;
+      --bar: #49a2b1;
+      --bar-alt: #8b74c7;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+
+    header {
+      display: grid;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.08;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 3px;
+    }
+
+    section {
+      margin-top: 24px;
+    }
+
+    .subhead {
+      color: var(--muted);
+      max-width: 820px;
+      font-size: 16px;
+    }
+
+    .badge-row,
+    .meta-grid,
+    .kpi-grid,
+    .note-grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .badge-row {
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+
+    .meta-grid {
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .kpi-grid {
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+
+    .note-grid {
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .panel,
+    .kpi,
+    .callout {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--soft-warn);
+    }
+
+    .callout.bad {
+      border-left-color: var(--bad);
+      background: var(--soft-bad);
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 9px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .tag.ok {
+      color: var(--ok);
+      background: var(--soft-ok);
+      border-color: #b9e2ca;
+    }
+
+    .tag.warn {
+      color: var(--warn);
+      background: var(--soft-warn);
+      border-color: #f1d59c;
+    }
+
+    .tag.bad {
+      color: var(--bad);
+      background: var(--soft-bad);
+      border-color: #f4b8b5;
+    }
+
+    .kpi dt,
+    .meta dt {
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .kpi dd,
+    .meta dd {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 760;
+    }
+
+    .meta dd {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 880px;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      background: #edf2f7;
+      color: #303947;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    code {
+      padding: 2px 5px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: #f4f6f8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .chart {
+      display: grid;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: minmax(190px, 270px) 1fr 80px;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .bar-label {
+      font-size: 14px;
+      font-weight: 680;
+    }
+
+    .track {
+      height: 24px;
+      background: #e8edf3;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #dce3eb;
+    }
+
+    .fill {
+      height: 100%;
+      width: var(--w);
+      background: var(--bar);
+    }
+
+    .fill.baseline {
+      background: var(--bar-alt);
+    }
+
+    .value {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      font-size: 13px;
+    }
+
+    .legend {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    ul {
+      margin: 8px 0 0;
+      padding-left: 20px;
+    }
+
+    li + li {
+      margin-top: 6px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .source-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 14px;
+    }
+
+    @media (max-width: 760px) {
+      main {
+        padding: 24px 14px 44px;
+      }
+
+      .split {
+        grid-template-columns: 1fr;
+      }
+
+      .bar-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .value {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="badge-row">
+        <span class="tag warn">PRELIMINARY, decision-grade 아님</span>
+        <span class="tag">fixture 1개 × run 1회</span>
+        <span class="tag">OAuth / OpenAI / gpt-5.5</span>
+        <span class="tag">base effort: medium</span>
+      </div>
+      <h1>Review Pipeline Effort Benchmark</h1>
+      <p class="subhead">
+        2026-06-08에 실행한 review pipeline unit effort sweep 결과입니다.
+        모든 비교는 한 번에 한 unit만 <code>high</code>로 올리고 나머지는 <code>medium</code>으로 둔 예비 관찰입니다.
+        표본 조건이 부족하므로 설정 결정을 내리기 위한 근거가 아니라 다음 decision-grade 벤치마크 후보를 좁히는 용도입니다.
+      </p>
+    </header>
+
+    <section class="kpi-grid" aria-label="핵심 지표">
+      <dl class="kpi">
+        <dt>main sweep 완료율</dt>
+        <dd>6 / 6</dd>
+      </dl>
+      <dl class="kpi">
+        <dt>runtime failed unit</dt>
+        <dd>0</dd>
+      </dl>
+      <dl class="kpi">
+        <dt>semantic quality</dt>
+        <dd>5 pass / 1 fail</dd>
+      </dl>
+      <dl class="kpi">
+        <dt>총 command 시간</dt>
+        <dd>40.18분</dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2>실험 설정</h2>
+      <div class="meta-grid">
+        <dl class="meta">
+          <dt>provider / auth</dt>
+          <dd>OpenAI / OAuth</dd>
+        </dl>
+        <dl class="meta">
+          <dt>model</dt>
+          <dd>gpt-5.5</dd>
+        </dl>
+        <dl class="meta">
+          <dt>baseline</dt>
+          <dd>all units medium</dd>
+        </dl>
+        <dl class="meta">
+          <dt>candidate</dt>
+          <dd>one unit high</dd>
+        </dl>
+        <dl class="meta">
+          <dt>fixture</dt>
+          <dd>review-pipeline-target-v1</dd>
+        </dl>
+        <dl class="meta">
+          <dt>lens concurrency</dt>
+          <dd>3</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="callout warn">
+      <h2>판정 게이트</h2>
+      <p>
+        이 리포트는 <strong>예비 관찰</strong>입니다. Decision-grade 기준은 case/fixture당 3회 이상, fixture 2개 이상인데,
+        이번 실행은 case/fixture당 1회, fixture 1개입니다. 따라서 “어떤 effort가 확실히 빠르다”는 결론은 내리지 않습니다.
+      </p>
+    </section>
+
+    <section class="split">
+      <div class="panel">
+        <h2>속도 결과</h2>
+        <div class="chart" role="img" aria-label="각 benchmark case의 command duration 막대 그래프">
+          <div class="bar-row">
+            <div class="bar-label"><code>finding_relation_graph</code> high</div>
+            <div class="track"><div class="fill" style="--w: 53.5%"></div></div>
+            <div class="value">5.14분</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><code>problem_framing</code> high</div>
+            <div class="track"><div class="fill" style="--w: 58.4%"></div></div>
+            <div class="value">5.61분</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><code>synthesis_response</code> high</div>
+            <div class="track"><div class="fill" style="--w: 58.5%"></div></div>
+            <div class="value">5.62분</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><code>issue_ledger</code> high</div>
+            <div class="track"><div class="fill" style="--w: 66.7%"></div></div>
+            <div class="value">6.40분</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label"><code>deliberation_resolution</code> high</div>
+            <div class="track"><div class="fill" style="--w: 81.6%"></div></div>
+            <div class="value">7.83분</div>
+          </div>
+          <div class="bar-row">
+            <div class="bar-label">baseline, all medium</div>
+            <div class="track"><div class="fill baseline" style="--w: 100%"></div></div>
+            <div class="value">9.59분</div>
+          </div>
+        </div>
+        <p class="legend">막대는 가장 긴 baseline 9.59분을 100%로 둔 상대 길이입니다.</p>
+      </div>
+
+      <div class="callout">
+        <h2>해석</h2>
+        <p>
+          baseline이 가장 느리게 관찰됐지만, 단일 표본이라 provider 응답 지연과 retry 변동성이 섞여 있습니다.
+          이번 결과는 후보 축소에는 유용하지만 설정 채택 근거로는 부족합니다.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Main Sweep 상세</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>case</th>
+              <th>effort 변경</th>
+              <th>duration</th>
+              <th>runtime</th>
+              <th>semantic</th>
+              <th>attempts</th>
+              <th>input packets</th>
+              <th>outputs</th>
+              <th>final output</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>unit-sweep-base-medium</code></td>
+              <td>all medium</td>
+              <td>575,698ms<br /><span class="muted">9.59분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag ok">pass</span></td>
+              <td>47</td>
+              <td>1,077,883 bytes</td>
+              <td>242,668 bytes</td>
+              <td>53,779 bytes</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-finding_relation_graph-high</code></td>
+              <td><code>finding_relation_graph</code> high</td>
+              <td>308,148ms<br /><span class="muted">5.14분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag ok">pass</span></td>
+              <td>16</td>
+              <td>446,894 bytes</td>
+              <td>164,162 bytes</td>
+              <td>49,685 bytes</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-problem_framing-high</code></td>
+              <td><code>problem_framing</code> high</td>
+              <td>336,433ms<br /><span class="muted">5.61분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag ok">pass</span></td>
+              <td>27</td>
+              <td>517,263 bytes</td>
+              <td>114,179 bytes</td>
+              <td>26,641 bytes</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-synthesis_response-high</code></td>
+              <td><code>synthesis_response</code> high</td>
+              <td>336,970ms<br /><span class="muted">5.62분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag ok">pass</span></td>
+              <td>18</td>
+              <td>417,323 bytes</td>
+              <td>116,935 bytes</td>
+              <td>31,250 bytes</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-issue_ledger-high</code></td>
+              <td><code>issue_ledger</code> high</td>
+              <td>384,216ms<br /><span class="muted">6.40분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag ok">pass</span></td>
+              <td>25</td>
+              <td>617,882 bytes</td>
+              <td>177,260 bytes</td>
+              <td>47,899 bytes</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-deliberation_resolution-high</code></td>
+              <td><code>deliberation_resolution</code> high</td>
+              <td>469,610ms<br /><span class="muted">7.83분</span></td>
+              <td><span class="tag ok">completed</span><br />failed units 0</td>
+              <td><span class="tag bad">fail</span></td>
+              <td>19</td>
+              <td>354,849 bytes</td>
+              <td>66,224 bytes</td>
+              <td>14,230 bytes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="note-grid">
+      <div class="callout bad">
+        <h2>Semantic Fail</h2>
+        <p><code>deliberation_resolution=high</code>는 runtime failure 없이 완료됐지만 semantic quality가 실패했습니다.</p>
+        <ul>
+          <li><code>material_issue_recall</code>: expected target truth인 <code>unstableFormat</code>, <code>JSON.stringify</code>, <code>undefined</code> 보존 부족</li>
+          <li><code>final_result_material_issue_recall</code>: final explanation에서 핵심 material issue recall 부족</li>
+          <li><code>grounding</code>: lens/artifact refs 및 <code>src/target.ts</code> anchor 보존 부족</li>
+        </ul>
+      </div>
+
+      <div class="callout warn">
+        <h2>Stability Signal</h2>
+        <p>
+          keep-tmp 진단 run에서는 semantic fail 재현 전에 live worker timeout이 먼저 발생했습니다.
+          baseline은 1,800,093ms에서 SIGTERM, candidate는 <code>evolution</code>, <code>semantics</code> lens timeout으로 <code>halted_partial</code>이 됐습니다.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Diagnostic Run</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>case</th>
+              <th>status</th>
+              <th>duration</th>
+              <th>runtime signal</th>
+              <th>meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>unit-sweep-base-medium</code></td>
+              <td><span class="tag bad">failed</span></td>
+              <td>1,800,093ms<br /><span class="muted">30.00분</span></td>
+              <td>exit 143, SIGTERM</td>
+              <td>현재 30분 command timeout은 live path 지연을 감당하지 못할 수 있음</td>
+            </tr>
+            <tr>
+              <td><code>unit-sweep-deliberation_resolution-high</code></td>
+              <td><span class="tag bad">failed</span></td>
+              <td>1,473,872ms<br /><span class="muted">24.56분</span></td>
+              <td><code>evolution</code>, <code>semantics</code> timeout, failed units 2</td>
+              <td>effort 후보 이전에 lens worker timeout/retry 안정성 튜닝 필요</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>다음 벤치마크 후보</h2>
+      <ul>
+        <li>Decision-grade 조건으로 재실행: case/fixture당 3회 이상, fixture 2개 이상.</li>
+        <li>Timeout을 60분 이상으로 확장하고, unit별 timeout/retry가 settings chain에서 의도대로 반영되는지 먼저 확인.</li>
+        <li>우선 후보: <code>finding_relation_graph=high</code>, <code>problem_framing=high</code>, <code>synthesis_response=high</code>, <code>issue_ledger=high</code>.</li>
+        <li><code>deliberation_resolution=high</code>는 semantic fail 원인을 먼저 재현 가능한 artifact로 분석한 뒤 후보에 재진입.</li>
+        <li>별도 안정성 벤치: lens worker timeout, retry count, observed dispatch width, failed unit kind를 effort 비교와 분리해서 측정.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Source Files</h2>
+      <div class="source-list">
+        <a href="review-unit-effort-high-candidates-preliminary-20260608.json">review-unit-effort-high-candidates-preliminary-20260608.json</a>
+        <a href="review-unit-effort-high-candidates-preliminary-20260608.partial.json">review-unit-effort-high-candidates-preliminary-20260608.partial.json</a>
+        <a href="review-unit-effort-deliberation-resolution-high-diagnostic-20260608.json">review-unit-effort-deliberation-resolution-high-diagnostic-20260608.json</a>
+        <a href="review-unit-effort-deliberation-resolution-high-diagnostic-20260608.partial.json">review-unit-effort-deliberation-resolution-high-diagnostic-20260608.partial.json</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

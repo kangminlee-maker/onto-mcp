@@ -604,6 +604,53 @@ export function validateIssueDeliberationResponseObject(args: {
   };
 }
 
+export function buildRuntimeIssueDeliberationUnavailableResponse(args: {
+  sessionId: string;
+  workItem: IssueScopedDeliberationWorkItem;
+  reason: string;
+  allowedEvidenceRefs?: readonly string[] | undefined;
+}): IssueDeliberationResponseArtifact {
+  const sourceStanceRef = stanceAnchorRef(args.workItem.issue_id, args.workItem.lens_id);
+  const candidateEvidenceRefs = [
+    sourceStanceRef,
+    `issue-ledger.yaml#${args.workItem.issue_id}`,
+  ];
+  const allowed = args.allowedEvidenceRefs
+    ? new Set(args.allowedEvidenceRefs)
+    : null;
+  const evidenceRefs = allowed
+    ? candidateEvidenceRefs.filter((ref) => allowed.has(ref))
+    : candidateEvidenceRefs;
+  const updatedStance = requireAllowed<IssueDeliberationUpdatedStance>(
+    args.workItem.own_stance.stance,
+    UPDATED_STANCE_VALUES,
+    "runtime issue deliberation unavailable own_stance.stance",
+  );
+  return {
+    schema_version: 1,
+    session_id: args.sessionId,
+    issue_id: args.workItem.issue_id,
+    lens_id: args.workItem.lens_id,
+    difference_explanation:
+      "Runtime completion: this issue-scoped deliberation participant did not produce a valid response.",
+    response_to_other_positions:
+      "No additional peer-position response was produced; preserve the source stance without adding new semantic judgment.",
+    updated_stance: updatedStance,
+    changed: false,
+    change_reason: null,
+    accepted_root_hypothesis:
+      typeof args.workItem.issue.root_cause_hypothesis === "string" &&
+        args.workItem.issue.root_cause_hypothesis.trim().length > 0
+        ? args.workItem.issue.root_cause_hypothesis
+        : null,
+    remaining_blocker: `Deliberation participant response unavailable after executor failure: ${args.reason.slice(0, 500)}`,
+    evidence_refs: evidenceRefs,
+    validation: {
+      source_stance_ref: sourceStanceRef,
+    },
+  };
+}
+
 export function buildTeamleadIssueResolutionPrompt(args: {
   sessionId: string;
   projectRoot: string;
@@ -810,6 +857,107 @@ export function buildNoPlannedDeliberationResolution(args: {
       reason: "No material conflict was planned for controlled deliberation.",
       required_follow_up_evidence: [],
     })),
+    validation: {
+      missing_issue_ids: [],
+    },
+  };
+}
+
+export function buildRuntimeUnavailableDeliberationResolution(args: {
+  sessionId: string;
+  issueLedger: Record<string, unknown>;
+  deliberationPlan: Record<string, unknown>;
+  responses: IssueDeliberationResponseArtifact[];
+  reason: string;
+}): DeliberationResolutionArtifact {
+  const plannedByIssueId = new Map(
+    plannedIssueEntries(args.deliberationPlan).map((entry, index) => [
+      requireString(
+        entry.issue_id,
+        `deliberation-plan.planned_issues[${index}].issue_id`,
+      ),
+      entry,
+    ]),
+  );
+  const skipped = new Set(skippedIssueIds(args.deliberationPlan));
+  const responsesByIssueId = new Map<string, IssueDeliberationResponseArtifact[]>();
+  for (const response of args.responses) {
+    responsesByIssueId.set(response.issue_id, [
+      ...(responsesByIssueId.get(response.issue_id) ?? []),
+      response,
+    ]);
+  }
+
+  return {
+    schema_version: 1,
+    session_id: args.sessionId,
+    issues: issueLedgerIssues(args.issueLedger).map((issue, index) => {
+      const issueId = requireString(
+        issue.issue_id,
+        `issue-ledger.issues[${index}].issue_id`,
+      );
+      const finalRootCause = requireString(
+        issue.root_cause_hypothesis,
+        `issue-ledger.issues[${index}].root_cause_hypothesis`,
+      );
+      const finalClaim = requireString(
+        issue.issue_statement,
+        `issue-ledger.issues[${index}].issue_statement`,
+      );
+      const surfaceFindingIds = requireStringArray(
+        issue.surface_finding_ids,
+        `issue-ledger.issues[${index}].surface_finding_ids`,
+      );
+      const planEntry = plannedByIssueId.get(issueId);
+      if (!planEntry && skipped.has(issueId)) {
+        return {
+          issue_id: issueId,
+          status: "no-deliberation-needed",
+          final_root_cause: finalRootCause,
+          final_claim: finalClaim,
+          surface_finding_ids: surfaceFindingIds,
+          accepted_by_lens_ids: requireStringArray(
+            issue.raised_by_lens_ids,
+            `issue-ledger.issues[${index}].raised_by_lens_ids`,
+          ),
+          remaining_disagreement_lens_ids: [],
+          reason: "Runtime completion: issue was skipped by deliberation-plan.",
+          required_follow_up_evidence: [],
+        };
+      }
+
+      const participantLensIds = planEntry
+        ? requireStringArray(
+            planEntry.participating_lens_ids,
+            `deliberation-plan.planned_issues.${issueId}.participating_lens_ids`,
+          )
+        : [];
+      const sourceStanceRefs = planEntry
+        ? requireStringArray(
+            planEntry.source_stance_refs,
+            `deliberation-plan.planned_issues.${issueId}.source_stance_refs`,
+          )
+        : [];
+      const unavailableResponses = responsesByIssueId
+        .get(issueId)
+        ?.filter((response) => response.remaining_blocker !== null) ?? [];
+      const blockers = unavailableResponses
+        .map((response) => `${response.lens_id}: ${response.remaining_blocker}`)
+        .join("; ");
+      const reasonSuffix = blockers.length > 0 ? ` Participant blockers: ${blockers}` : "";
+
+      return {
+        issue_id: issueId,
+        status: "unresolved-with-reason",
+        final_root_cause: finalRootCause,
+        final_claim: finalClaim,
+        surface_finding_ids: surfaceFindingIds,
+        accepted_by_lens_ids: [],
+        remaining_disagreement_lens_ids: participantLensIds,
+        reason: `Runtime completion: controlled deliberation resolver did not produce a valid resolution, so this issue remains unresolved. ${args.reason.slice(0, 500)}${reasonSuffix}`,
+        required_follow_up_evidence: sourceStanceRefs,
+      };
+    }),
     validation: {
       missing_issue_ids: [],
     },

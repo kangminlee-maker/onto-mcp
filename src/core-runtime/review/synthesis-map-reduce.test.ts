@@ -4,6 +4,7 @@ import type {
   ReviewResultClassificationSummary,
 } from "./artifact-types.js";
 import {
+  buildRuntimeIssueSynthesisUnavailableResponse,
   buildReviewSynthesisLedger,
   buildReviewSynthesisWorkItemsArtifact,
   renderSynthesisMarkdownFromLedger,
@@ -320,7 +321,15 @@ describe("synthesis map-reduce artifacts", () => {
       },
       deliberationResolution,
       problemFraming,
-      classificationSummary,
+      classificationSummary: {
+        ...classificationSummary,
+        material_issues: [
+          {
+            ...classificationSummary.material_issues[0]!,
+            source_lens_ids: ["logic", "structure"],
+          },
+        ],
+      },
     });
 
     expect(workItems.work_items).toHaveLength(1);
@@ -332,6 +341,57 @@ describe("synthesis map-reduce artifacts", () => {
     expect(workItems.work_items[0]?.allowed_source_refs).toContain(
       "finding-ledger.yaml#finding-001",
     );
+    expect(workItems.work_items[0]?.deliberation_participating_lens_ids).toEqual([
+      "logic",
+    ]);
+  });
+
+  it("uses classification projections as synthesis work item source truth", () => {
+    const plan = minimalExecutionPlan();
+    const projectedSummary: ReviewResultClassificationSummary = {
+      ...classificationSummary,
+      material_issues: [
+        {
+          ...classificationSummary.material_issues[0]!,
+          issue_statement:
+            "The formatter output contract is unstable. Source finding context: unstableFormat delegates to JSON.stringify.",
+          failure_condition:
+            "Unsupported values reach the formatter. Source finding context: JSON.stringify(undefined) can produce undefined.",
+          impact:
+            "The output contract is weakened. Source finding context: callers can receive undefined where string is declared.",
+          evidence_refs: [
+            "issue-ledger.yaml#issue-001",
+            "src/target.ts:13",
+          ],
+          source_lens_ids: ["coverage", "semantics"],
+        },
+      ],
+    };
+    const workItems = buildReviewSynthesisWorkItemsArtifact({
+      projectRoot: "/repo",
+      executionPlan: plan,
+      findingLedger,
+      relationGraph: { schema_version: 1, session_id: "session-1", relations: [] },
+      issueLedger,
+      issueStanceMatrix,
+      deliberationPlan: {
+        schema_version: 1,
+        session_id: "session-1",
+        planned_issues: [],
+        skipped_issues: [],
+      },
+      deliberationResolution,
+      problemFraming,
+      classificationSummary: projectedSummary,
+    });
+
+    expect(workItems.work_items[0]?.issue_statement).toContain("unstableFormat");
+    expect(workItems.work_items[0]?.failure_condition).toContain("undefined");
+    expect(workItems.work_items[0]?.impact).toContain("undefined");
+    expect(workItems.work_items[0]?.raised_by_lens_ids).toEqual([
+      "coverage",
+      "semantics",
+    ]);
   });
 
   it("validates issue synthesis response refs before ledger assembly", () => {
@@ -459,5 +519,305 @@ describe("synthesis map-reduce artifacts", () => {
     expect(markdown).toContain("expected_lenses:\n    - logic\n    - structure");
     expect(markdown).toContain("received_lenses:\n    - logic");
     expect(markdown).toContain("## Shared Phenomenon Summary\n- none");
+  });
+
+  it("projects lens position summary from stance and deliberation artifacts", () => {
+    const plan = minimalExecutionPlan();
+    const workItems = buildReviewSynthesisWorkItemsArtifact({
+      projectRoot: "/repo",
+      executionPlan: plan,
+      findingLedger,
+      relationGraph: { schema_version: 1, session_id: "session-1", relations: [] },
+      issueLedger: {
+        ...issueLedger,
+        issues: [
+          {
+            ...issueLedger.issues[0],
+            raised_by_lens_ids: ["logic", "structure"],
+          },
+        ],
+      },
+      issueStanceMatrix: {
+        schema_version: 1,
+        session_id: "session-1",
+        issues: [
+          {
+            issue_id: "issue-001",
+            stances: [
+              {
+                lens_id: "logic",
+                stance: "support",
+                rationale: "logic supports",
+                root_hypothesis_position: "accepts",
+                severity_position: "keeps",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "structure",
+                stance: "narrow",
+                rationale: "structure narrows",
+                root_hypothesis_position: "narrows",
+                severity_position: "keeps",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "coverage",
+                stance: "oppose",
+                rationale: "coverage opposes",
+                root_hypothesis_position: "rejects",
+                severity_position: "lowers",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "pragmatics",
+                stance: "surface_only",
+                rationale: "pragmatics accepts the surface only",
+                root_hypothesis_position: "rejects",
+                severity_position: "keeps",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "axiology",
+                stance: "alternative_root",
+                rationale: "axiology proposes an alternative root",
+                root_hypothesis_position: "replaces",
+                severity_position: "keeps",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "conciseness",
+                stance: "not_applicable",
+                rationale: "conciseness is not applicable",
+                root_hypothesis_position: "not_applicable",
+                severity_position: "not_applicable",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+              {
+                lens_id: "evolution",
+                stance: "insufficient_evidence",
+                rationale: "evolution lacks evidence",
+                root_hypothesis_position: "insufficient_evidence",
+                severity_position: "insufficient_evidence",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+            ],
+          },
+        ],
+        validation: {
+          missing_stances: [],
+        },
+      },
+      deliberationPlan: {
+        schema_version: 1,
+        session_id: "session-1",
+        planned_issues: [
+          {
+            issue_id: "issue-001",
+            participating_lens_ids: [
+              "logic",
+              "structure",
+              "coverage",
+              "pragmatics",
+              "axiology",
+            ],
+          },
+        ],
+        skipped_issues: [],
+      },
+      deliberationResolution: {
+        ...deliberationResolution,
+        issues: [
+          {
+            ...deliberationResolution.issues[0],
+            accepted_by_lens_ids: ["logic", "structure"],
+            remaining_disagreement_lens_ids: [
+              "coverage",
+              "pragmatics",
+              "axiology",
+            ],
+          },
+        ],
+      },
+      problemFraming,
+      classificationSummary: {
+        ...classificationSummary,
+        material_issues: [
+          {
+            ...classificationSummary.material_issues[0]!,
+            source_lens_ids: ["logic", "structure"],
+          },
+        ],
+      },
+    });
+    const workItem = workItems.work_items[0]!;
+    const response = validateIssueSynthesisResponseObject({
+      parsed: {
+        schema_version: 1,
+        session_id: "session-1",
+        work_item_id: workItem.work_item_id,
+        issue_id: workItem.issue_id,
+        source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-001",
+        conclusion: "fix the root",
+        materiality_explanation: "weakens the declared purpose",
+        root_cause_explanation: "root cause starts the chain",
+        causal_path_explanation: "cause leads to failure",
+        action_explanation: "fix before release",
+        unresolved_disagreement_note: "coverage still disagrees",
+        boundary_notes: [],
+        source_refs_used: ["finding-ledger.yaml#finding-001"],
+      },
+      sessionId: "session-1",
+      workItem,
+      sourceWorkItemsRef: "synthesis-work-items.yaml#synthesis:issue-001",
+    });
+    const ledger = buildReviewSynthesisLedger({
+      projectRoot: "/repo",
+      executionPlan: plan,
+      workItemsPath: `${plan.session_root}/synthesis-work-items.yaml`,
+      workItems,
+      responses: [response],
+    });
+
+    expect(ledger.material_issues[0]?.lens_position_summary).toEqual({
+      issue_stance_lens_count: 7,
+      raised_by_lens_ids: ["logic", "structure"],
+      stance_buckets: {
+        support: ["logic"],
+        narrow: ["structure"],
+        oppose: ["coverage"],
+        alternative_root: ["axiology"],
+        surface_only: ["pragmatics"],
+        not_applicable: ["conciseness"],
+        insufficient_evidence: ["evolution"],
+      },
+      resolution_acceptance: {
+        deliberation_participating_lens_ids: [
+          "logic",
+          "structure",
+          "coverage",
+          "pragmatics",
+          "axiology",
+        ],
+        accepted_by_lens_ids: ["logic", "structure"],
+        remaining_disagreement_lens_ids: [
+          "coverage",
+          "pragmatics",
+          "axiology",
+        ],
+      },
+    });
+  });
+
+  it("fails loudly for unsupported stance values during lens position projection", () => {
+    const plan = minimalExecutionPlan();
+    const workItems = buildReviewSynthesisWorkItemsArtifact({
+      projectRoot: "/repo",
+      executionPlan: plan,
+      findingLedger,
+      relationGraph: { schema_version: 1, session_id: "session-1", relations: [] },
+      issueLedger,
+      issueStanceMatrix: {
+        schema_version: 1,
+        session_id: "session-1",
+        issues: [
+          {
+            issue_id: "issue-001",
+            stances: [
+              {
+                lens_id: "logic",
+                stance: "maybe",
+                rationale: "unsupported",
+                root_hypothesis_position: "accepts",
+                severity_position: "keeps",
+                evidence_refs: ["issue-ledger.yaml#issue-001"],
+              },
+            ],
+          },
+        ],
+        validation: {
+          missing_stances: [],
+        },
+      },
+      deliberationPlan: {
+        schema_version: 1,
+        session_id: "session-1",
+        planned_issues: [],
+        skipped_issues: [],
+      },
+      deliberationResolution,
+      problemFraming,
+      classificationSummary,
+    });
+    const workItem = workItems.work_items[0]!;
+    const response = validateIssueSynthesisResponseObject({
+      parsed: {
+        schema_version: 1,
+        session_id: "session-1",
+        work_item_id: workItem.work_item_id,
+        issue_id: workItem.issue_id,
+        source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-001",
+        conclusion: "fix the root",
+        materiality_explanation: "weakens the declared purpose",
+        root_cause_explanation: "root cause starts the chain",
+        causal_path_explanation: "cause leads to failure",
+        action_explanation: "fix before release",
+        unresolved_disagreement_note: null,
+        boundary_notes: [],
+        source_refs_used: ["finding-ledger.yaml#finding-001"],
+      },
+      sessionId: "session-1",
+      workItem,
+      sourceWorkItemsRef: "synthesis-work-items.yaml#synthesis:issue-001",
+    });
+
+    expect(() =>
+      buildReviewSynthesisLedger({
+        projectRoot: "/repo",
+        executionPlan: plan,
+        workItemsPath: `${plan.session_root}/synthesis-work-items.yaml`,
+        workItems,
+        responses: [response],
+      }),
+    ).toThrow(/unsupported stance/);
+  });
+
+  it("builds a valid runtime synthesis response when issue synthesis is unavailable", () => {
+    const plan = minimalExecutionPlan();
+    const workItems = buildReviewSynthesisWorkItemsArtifact({
+      projectRoot: "/repo",
+      executionPlan: plan,
+      findingLedger,
+      relationGraph: { schema_version: 1, session_id: "session-1", relations: [] },
+      issueLedger,
+      issueStanceMatrix,
+      deliberationPlan: {
+        schema_version: 1,
+        session_id: "session-1",
+        planned_issues: [],
+        skipped_issues: [],
+      },
+      deliberationResolution,
+      problemFraming,
+      classificationSummary,
+    });
+    const workItem = workItems.work_items[0]!;
+    const response = buildRuntimeIssueSynthesisUnavailableResponse({
+      sessionId: "session-1",
+      workItem,
+      sourceWorkItemsRef: "synthesis-work-items.yaml#synthesis:issue-001",
+      reason: "executor exited after retry budget",
+    });
+
+    expect(response.issue_id).toBe("issue-001");
+    expect(response.source_refs_used).toContain("issue-ledger.yaml#issue-001");
+    expect(response.boundary_notes[0]).toContain("Runtime completion");
+    expect(() =>
+      validateIssueSynthesisResponseObject({
+        parsed: response,
+        sessionId: "session-1",
+        workItem,
+        sourceWorkItemsRef: "synthesis-work-items.yaml#synthesis:issue-001",
+      }),
+    ).not.toThrow();
   });
 });

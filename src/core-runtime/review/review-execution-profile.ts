@@ -109,6 +109,31 @@ function mergeLlmRef(
   };
 }
 
+function mergeReviewExecutionUnits(
+  base: ReviewExecutionUnits,
+  override: ReviewExecutionUnits | undefined,
+): ReviewExecutionUnits {
+  const out: ReviewExecutionUnits = {};
+  for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
+    const baseUnit = base[unitId];
+    const overrideUnit = override?.[unitId];
+    if (!baseUnit && !overrideUnit) continue;
+    out[unitId] = {
+      ...(baseUnit ?? {}),
+      ...(overrideUnit ?? {}),
+      ...(baseUnit?.llm || overrideUnit?.llm
+        ? {
+            llm: {
+              ...(baseUnit?.llm ?? {}),
+              ...(overrideUnit?.llm ?? {}),
+            },
+          }
+        : {}),
+    };
+  }
+  return out;
+}
+
 function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSettings {
   const defaults = defaultReviewExecution();
   const execution = settings.review?.execution;
@@ -129,7 +154,7 @@ function settingsExecution(settings: OntoSettings): ResolvedReviewExecutionSetti
       ...(execution.synthesize ?? {}),
     },
     retry: execution.retry ?? defaults.retry,
-    units: execution.units ?? defaults.units,
+    units: mergeReviewExecutionUnits(defaults.units, execution.units),
   };
 }
 

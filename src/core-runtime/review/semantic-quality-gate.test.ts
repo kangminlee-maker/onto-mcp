@@ -362,7 +362,7 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
     ).toBe("failed");
   });
 
-  it("fails when lensId is promoted into a material issue", () => {
+  it("fails when boundary uncertainty is admitted as material despite an evidence gap", () => {
     const record = passingReviewRecord();
     record.result_classification_summary.material_issues[0]!.problem_definition =
       "lensId is a material defect despite an evidence gap, and unstableFormat returns JSON.stringify undefined.";
@@ -378,6 +378,24 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
       result.checks.find((check) => check.check_id === "false_materiality_guard")
         ?.status,
     ).toBe("failed");
+  });
+
+  it("allows boundary-sensitive terms to be material when admitted with concrete evidence", () => {
+    const record = passingReviewRecord();
+    record.result_classification_summary.material_issues[0]!.problem_definition =
+      "ReviewPipelineInput.lensId omission is evidence-backed, and unstableFormat returns JSON.stringify undefined.";
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executorRealization: "codex",
+      reviewRecord: record,
+      finalOutputText: PASSING_FINAL_OUTPUT,
+    });
+
+    expect(result.status).toBe("passed");
+    expect(
+      result.checks.find((check) => check.check_id === "false_materiality_guard")
+        ?.status,
+    ).toBe("passed");
   });
 
   it("fails when Final Review Result drops the material issue", () => {

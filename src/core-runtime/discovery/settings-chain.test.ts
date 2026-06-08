@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  REVIEW_EXECUTION_UNIT_IDS,
+  defaultReviewExecutionUnits,
   projectSettingsPath,
   resolveReconstructActorLlmSettings,
   resolveSettingsChain,
@@ -265,6 +267,25 @@ describe("resolveSettingsChain", () => {
       synthesis_max_retries: 2,
       retry_initial_delay_ms: 3000,
     });
+  });
+
+  it("provides stage-structured default review unit settings", () => {
+    const units = defaultReviewExecutionUnits();
+
+    expect(Object.keys(units).sort()).toEqual([...REVIEW_EXECUTION_UNIT_IDS].sort());
+    expect(units.lens).toEqual({
+      timeout_ms: 240000,
+      max_retries: 2,
+      retry_initial_delay_ms: 3000,
+      max_output_bytes: 524288,
+    });
+    expect(units.issue_stance_response?.timeout_ms).toBe(180000);
+    expect(units.synthesis_response?.timeout_ms).toBe(180000);
+    expect(units.issue_stance_matrix).toEqual({
+      timeout_ms: 120000,
+      max_output_bytes: 524288,
+    });
+    expect(units.lens?.llm).toBeUndefined();
   });
 
   it("parses review max_concurrent_lenses from project settings", async () => {

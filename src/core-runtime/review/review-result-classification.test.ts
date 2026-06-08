@@ -430,6 +430,96 @@ describe("readReviewResultClassification", () => {
     ).toEqual(["needs_evidence"]);
   });
 
+  it("preserves material source finding semantic context in issue projections", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "finding-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-source-context-test",
+      findings: [
+        {
+          finding_id: "finding-retry-zero",
+          lens_id: "logic",
+          source_ref: "round1/logic.findings.yaml#retry-zero",
+          target: "src/retry.ts",
+          evidence_anchor: "src/retry.ts:8",
+          claim: "Explicit maxRetries zero is collapsed to the default retry budget.",
+          lens_rationale_summary:
+            "retryRequest and retryBudget share falsy defaulting over maxRetries.",
+          proposed_action: "Use nullish defaulting and add focused tests.",
+          affected_purpose: "retry policy correctness",
+          failure_condition: "caller supplies maxRetries zero",
+          impact: "explicit zero retry intent is erased",
+          evidence_refs: ["src/retry.ts:8"],
+          severity: "medium",
+          domain_threshold_used: null,
+          materiality_basis: {
+            affected_purpose: "retryRequest retry policy correctness",
+            failure_condition: "caller supplies maxRetries zero",
+            impact: "explicit zero retry intent is erased",
+            evidence_refs: ["src/retry.ts:8"],
+          },
+          causal_path: {
+            root_cause_candidate: "Falsy defaulting treats zero as absent.",
+            root_cause_step_id: "finding-retry-zero.cause-002",
+            steps: [
+              {
+                cause_id: "finding-retry-zero.cause-001",
+                claim: "retryRequest reads maxRetries from caller options.",
+                relation_to_previous: null,
+                evidence_refs: ["src/retry.ts:3"],
+              },
+              {
+                cause_id: "finding-retry-zero.cause-002",
+                claim: "Because zero is falsy, `request.maxRetries || 3` replaces it.",
+                relation_to_previous: "causes",
+                evidence_refs: ["src/retry.ts:8"],
+              },
+            ],
+          },
+        },
+      ],
+      validation: {
+        unaddressable_findings: [],
+      },
+    });
+    await writeYamlDocument(path.join(sessionRoot, "issue-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-source-context-test",
+      issues: [
+        {
+          issue_id: "issue-retry-zero",
+          root_cause_hypothesis: "zero retry policy is collapsed",
+          root_confidence: "high",
+          surface_finding_ids: ["finding-retry-zero"],
+          relation_refs: [],
+          raised_by_lens_ids: ["logic"],
+          issue_statement: "Explicit maxRetries zero is not preserved.",
+          proposed_action: "Use nullish defaulting.",
+          affected_purpose: "retry policy correctness",
+          failure_condition: "caller supplies maxRetries zero",
+          impact: "explicit zero retry intent is erased",
+          evidence_refs: ["src/retry.ts:8"],
+          severity: "medium",
+          domain_threshold_used: null,
+          singleton_reason: "fixture",
+        },
+      ],
+      issue_dependencies: [],
+      validation: {
+        unclustered_finding_ids: [],
+      },
+    });
+
+    const summary = await readReviewResultClassification(sessionRoot);
+    const issueText = JSON.stringify(summary.material_issues[0]).toLowerCase();
+
+    expect(summary.material_issue_count).toBe(1);
+    expect(issueText).toContain("retryrequest");
+    expect(issueText).toContain("maxretries");
+    expect(issueText).toContain("zero");
+    expect(issueText).toContain("falsy");
+  });
+
   it("preserves domain threshold explanations without creating a second materiality axis", async () => {
     const cases = [
       {
@@ -564,6 +654,113 @@ describe("readReviewResultClassification", () => {
         )?.derivation_refs,
       ).toContain("problem-framing.yaml");
     }
+  });
+
+  it("preserves material source finding context when issue summaries are compressed", async () => {
+    const sessionRoot = await tempSessionRoot();
+    await writeYamlDocument(path.join(sessionRoot, "finding-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-source-context-test",
+      findings: [
+        {
+          finding_id: "finding-001",
+          lens_id: "semantics",
+          source_ref: "round1/semantics.findings.yaml#finding-001",
+          target: "unstableFormat",
+          evidence_anchor: "src/target.ts:13",
+          claim:
+            "unstableFormat delegates directly to JSON.stringify and can return undefined despite a string contract.",
+          lens_rationale_summary: "The formatter contract is contradicted by the JSON.stringify top-level undefined behavior.",
+          proposed_action: "normalize undefined or widen the return type",
+          affected_purpose: "declared formatter string contract",
+          failure_condition: "top-level undefined input reaches JSON.stringify",
+          impact: "callers can receive undefined where the API declares string",
+          evidence_refs: ["src/target.ts:13", "src/target.ts:14"],
+          severity: "medium",
+          domain_threshold_used: null,
+          materiality_basis: {
+            affected_purpose: "declared formatter string contract",
+            failure_condition:
+              "unstableFormat returns JSON.stringify(value), and JSON.stringify(undefined) can produce undefined.",
+            impact:
+              "The declared string output contract is weakened because callers can receive undefined.",
+            evidence_refs: ["src/target.ts:13", "src/target.ts:14"],
+          },
+        },
+      ],
+      validation: {
+        unaddressable_findings: [],
+      },
+    });
+    await writeYamlDocument(path.join(sessionRoot, "issue-ledger.yaml"), {
+      schema_version: 1,
+      session_id: "classification-source-context-test",
+      issues: [
+        {
+          issue_id: "issue-001",
+          root_cause_hypothesis: "formatter output is not normalized",
+          root_confidence: "high",
+          surface_finding_ids: ["finding-001"],
+          relation_refs: [],
+          raised_by_lens_ids: [],
+          source_lens_ids: ["coverage"],
+          issue_statement: "The formatter output contract is unstable.",
+          proposed_action: "normalize formatter output",
+          affected_purpose: "declared formatter string contract",
+          failure_condition: "unsupported values reach the formatter",
+          impact: "the output contract is weakened",
+          evidence_refs: ["issue-ledger.yaml#issue-001"],
+          severity: "medium",
+          domain_threshold_used: null,
+          singleton_reason: "fixture",
+        },
+      ],
+      issue_dependencies: [],
+      validation: {
+        unclustered_finding_ids: [],
+      },
+    });
+    await writeYamlDocument(path.join(sessionRoot, "problem-framing.yaml"), {
+      schema_version: 1,
+      session_id: "classification-source-context-test",
+      classification_context: {
+        common_spine_version: 1,
+        session_domain: "none",
+        domain_profile_ref: "",
+        domain_profile_doc_type: "custom:problem_framing_profile",
+        domain_profile_status: "not_requested",
+      },
+      classifications: [
+        {
+          issue_id: "issue-001",
+          problem_definition: "formatter output contract mismatch",
+          issue_role: "root_cause",
+          judgment_state: "observed",
+          impact_kind: "correctness",
+          timing_class: "next_step_blocker",
+          closure_class: "fix_now",
+          closure_obligation: "must_close_before_next_stage",
+          domain_axes: {},
+          rationale: "The contract mismatch is currently observable from the bounded target.",
+          related_surface_finding_ids: ["finding-001"],
+        },
+      ],
+    });
+
+    const summary = await readReviewResultClassification(sessionRoot);
+    const issue = summary.material_issues[0];
+
+    expect(issue?.issue_id).toBe("issue-001");
+    expect(issue?.failure_condition).toContain("unstableFormat");
+    expect(issue?.failure_condition).toContain("JSON.stringify");
+    expect(issue?.failure_condition).toContain("undefined");
+    expect(issue?.impact).toContain("undefined");
+    expect(issue?.evidence_refs).toEqual([
+      "issue-ledger.yaml#issue-001",
+      "src/target.ts:13",
+      "src/target.ts:14",
+    ]);
+    expect(issue?.source_lens_ids).toEqual(["coverage", "semantics"]);
   });
 
   it("rejects malformed finding-ledger severities", async () => {

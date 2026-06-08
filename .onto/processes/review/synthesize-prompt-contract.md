@@ -102,6 +102,7 @@ runtime은 synthesize 시작 전에 아래 artifact를 생성한다.
 - `causal_path_summary`
 - `stance_summary`
 - `deliberation_resolution`
+- `deliberation_participating_lens_ids`
 - `problem_framing`
 - `action_candidate_projection`
 - `boundary_note_candidates`
@@ -160,6 +161,7 @@ runtime은 아래를 소유한다.
 - structured submit tool validation
 - issue response YAML serialization
 - ledger assembly
+- lens position summary projection
 - markdown projection
 
 ---
@@ -189,6 +191,13 @@ runtime은 제출 payload에 아래 deterministic fields를 주입해
 - `issue_id`
 - `source_work_item_ref`
 
+If an issue-scoped synthesis worker times out, fails, or violates its output
+contract, runtime MAY write the same response schema through an unavailable
+completion path. The fallback response must be a conservative projection from
+`synthesis-work-items.yaml` and upstream source refs; it must not create new
+issues, alter materiality, change deliberation status, or invent source refs.
+The original failed unit result must remain available as a child result.
+
 ### 6.2 Canonical Aggregate Output
 
 runtime은 issue responses와 source work items를 검증한 뒤
@@ -200,12 +209,52 @@ runtime은 issue responses와 source work items를 검증한 뒤
 - source artifact refs
 - participation summary
 - material issues
+- per-material-issue lens position summary
 - non-material findings
 - issue dependencies
 - action ordering
 - boundary notes
 - final review result
 - validation summary
+
+Each `material_issues[]` row must include runtime-owned
+`lens_position_summary`.
+
+```yaml
+lens_position_summary:
+  issue_stance_lens_count: 6
+  raised_by_lens_ids: [logic, structure]
+  stance_buckets:
+    support: [logic]
+    narrow: [structure]
+    oppose: [coverage]
+    alternative_root: []
+    surface_only: [pragmatics]
+    not_applicable: [conciseness]
+    insufficient_evidence: [evolution]
+  resolution_acceptance:
+    deliberation_participating_lens_ids: [logic, structure, coverage]
+    accepted_by_lens_ids: [logic, structure]
+    remaining_disagreement_lens_ids: [coverage]
+```
+
+Rules:
+
+1. `lens_position_summary` is assembled by runtime from
+   `synthesis-work-items.yaml.stance_summary`,
+   `deliberation_participating_lens_ids`, and
+   `deliberation_resolution`.
+2. `support` and `narrow` count as issue stance agreement for compact display.
+3. `oppose`, `alternative_root`, and `surface_only` count as issue stance
+   disagreement for compact display.
+4. `not_applicable` and `insufficient_evidence` are shown separately and do
+   not count as agreement or disagreement.
+5. `resolution_acceptance` is distinct from issue stance agreement. It shows
+   which deliberation participants accepted the final resolution and which
+   participants still disagree.
+6. Final output renderers must read this projection from
+   `synthesis-ledger.yaml`; they must not reopen raw stance or deliberation
+   artifacts to recompute user-facing lens counts.
 
 ### 6.3 Markdown Projection
 

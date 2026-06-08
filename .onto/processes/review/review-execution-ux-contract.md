@@ -9,6 +9,7 @@
 > - `.onto/processes/review/issue-stance-deliberation-contract.md`
 > - `.onto/processes/review/record-contract.md`
 > - `.onto/processes/review/record-field-mapping.md`
+> - `.onto/processes/review/material-issue-contract.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -87,12 +88,7 @@ This contract reuses existing concepts:
 | `review-run-manifest.yaml` | progress, step, and run audit source |
 
 This contract does not introduce a separate `materiality` field. Material issue
-status is derived from `severity`.
-
-```text
-material_issue = severity in [blocker, high, medium]
-non_material_finding = severity in [low, info]
-```
+status is derived only by `.onto/processes/review/material-issue-contract.md`.
 
 ---
 
@@ -112,13 +108,20 @@ for its declared purpose.
 Rules:
 
 1. `severity` is finding-level or issue-level depending on the artifact layer.
-2. `blocker`, `high`, and `medium` are material-severity candidates; they become material issues only after problem-framing admission.
-3. `low` and `info` are not material issues.
+2. Material issue status follows `material-issue-contract.md`; do not redefine the predicate here.
+3. `low` and `info` feed the contract as always non-material severities.
 4. A severity claim must cite evidence. Without evidence, use `info` or a
    domain-specific `needs_evidence` classification in problem framing.
 5. A `blocker` finding does not automatically become `current_blocker` in
    problem framing. Timing still depends on the review target role, declared
    purpose, and development phase.
+6. Material issue status is a classification and disclosure projection. It does
+   not by itself block the hot path or stage progress.
+7. Blocking is owned only by deterministic runtime gates: schema, artifact
+   contract, allowed-set, enum, ref, path, id, digest, lineage, required
+   artifact, or runtime-owned-field failures.
+8. Non-material findings are preserved as review output and must not be forced
+   to zero.
 
 ---
 
@@ -601,7 +604,7 @@ Minimum presentation facts:
 
 - finding count by severity
 - root-cause issue count by severity
-- material issue count derived from severity plus problem-framing admission
+- material issue count derived by `material-issue-contract.md`
 - evidence gaps
 - relation/root hypothesis summary
 
@@ -650,8 +653,8 @@ Minimum presentation facts:
 - declared purpose and scope
 - highest severity
 - severity counts
-- material issues: `blocker`, then `high`, then `medium`
-- non-material findings: `low`, then `info`
+- material issues classified by `material-issue-contract.md`, ordered `blocker`, `high`, then `medium`
+- non-material findings classified by `material-issue-contract.md`, ordered `low`, then `info` when applicable
 - action candidates
 - evidence and limits
 - artifact refs
@@ -699,7 +702,7 @@ Human-readable final output should use this order:
 1. **Review Basis**: declared purpose, target, domain, boundary, route summary.
 2. **Classification Summary**: highest severity and severity counts.
 3. **Material Issues**: admitted `blocker`, `high`, `medium` findings or issues.
-4. **Non-Material Findings**: `low`, `info`, evidence observations, and material-severity candidates disqualified by problem framing.
+4. **Non-Material Findings**: findings or issues classified as non-material by `material-issue-contract.md`.
 5. **Action Candidates**: next options grouped by finding/issue.
 6. **Evidence and Limits**: what was reviewed, what was not verified, and why.
 7. **Artifact Refs**: primary refs needed for audit or follow-up.
@@ -836,7 +839,7 @@ This UX contract is implemented when:
    available,
 7. intermediate finding-like updates are labeled with interim signal status,
 8. every completed review exposes highest severity and severity counts,
-9. material issues are derived from severity plus problem-framing admission and rendered before non-material
+9. material issues are derived by `material-issue-contract.md` and rendered before non-material
    findings,
 10. every material issue has affected purpose, failure condition, impact, and
    evidence refs,

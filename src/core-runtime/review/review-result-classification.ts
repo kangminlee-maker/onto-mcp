@@ -12,6 +12,9 @@ import {
   readYamlDocument,
 } from "./review-artifact-utils.js";
 
+export const REVIEW_MATERIAL_ISSUE_CONTRACT_REF =
+  ".onto/processes/review/material-issue-contract.md";
+
 export const REVIEW_SEVERITY_ORDER: ReviewFindingSeverity[] = [
   "blocker",
   "high",
@@ -24,11 +27,27 @@ const REVIEW_SEVERITY_VALUES = new Set<ReviewFindingSeverity>(
   REVIEW_SEVERITY_ORDER,
 );
 
-const MATERIAL_SEVERITIES = new Set<ReviewFindingSeverity>([
+export const REVIEW_MATERIAL_SEVERITIES = [
   "blocker",
   "high",
   "medium",
-]);
+] as const satisfies readonly ReviewFindingSeverity[];
+
+export const REVIEW_NON_MATERIAL_SEVERITIES = [
+  "low",
+  "info",
+] as const satisfies readonly ReviewFindingSeverity[];
+
+export const REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS = {
+  issue_role: ["evidence_gap"],
+  judgment_state: ["insufficient_evidence", "outside_boundary"],
+  closure_class: ["needs_evidence", "watch"],
+  closure_obligation: ["out_of_scope"],
+} as const;
+
+const MATERIAL_SEVERITIES = new Set<ReviewFindingSeverity>(
+  REVIEW_MATERIAL_SEVERITIES,
+);
 
 export interface ReviewMaterialAdmissionContext {
   issue_role?: unknown;
@@ -57,6 +76,10 @@ export function isMaterialSeverity(severity: ReviewFindingSeverity): boolean {
   return MATERIAL_SEVERITIES.has(severity);
 }
 
+function includesString(values: readonly string[], value: string): boolean {
+  return values.includes(value);
+}
+
 export function isReviewMaterialAdmissionDisqualified(
   context: ReviewMaterialAdmissionContext | null | undefined,
 ): boolean {
@@ -64,12 +87,21 @@ export function isReviewMaterialAdmissionDisqualified(
   const judgmentState = stringValue(context?.judgment_state);
   const closureClass = stringValue(context?.closure_class);
   const closureObligation = stringValue(context?.closure_obligation);
-  return issueRole === "evidence_gap" ||
-    judgmentState === "insufficient_evidence" ||
-    judgmentState === "outside_boundary" ||
-    closureClass === "needs_evidence" ||
-    closureClass === "watch" ||
-    closureObligation === "out_of_scope";
+  return (
+    includesString(REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS.issue_role, issueRole) ||
+    includesString(
+      REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS.judgment_state,
+      judgmentState,
+    ) ||
+    includesString(
+      REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS.closure_class,
+      closureClass,
+    ) ||
+    includesString(
+      REVIEW_MATERIAL_ADMISSION_DISQUALIFIERS.closure_obligation,
+      closureObligation,
+    )
+  );
 }
 
 export function isAdmittedReviewMaterialIssue(
@@ -118,6 +150,15 @@ function artifactRecordList(
   return requireRecordList(artifact[fieldName], label);
 }
 
+function recordListFrom(value: unknown): UnknownRecord[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is UnknownRecord =>
+          item !== null && typeof item === "object" && !Array.isArray(item),
+      )
+    : [];
+}
+
 function stringValue(value: unknown, defaultValue = ""): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
@@ -140,6 +181,37 @@ function stringArray(value: unknown): string[] {
 
 function unique(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function normalizedText(value: string): string {
+  return value.toLowerCase().replace(/\s+/gu, " ").trim();
+}
+
+function mergeTextWithSourceContext(
+  primary: string,
+  sourceTexts: string[],
+): string {
+  const mergedParts: string[] = [];
+  const primaryText = primary.trim();
+  if (primaryText.length > 0) mergedParts.push(primaryText);
+
+  const mergedNormalized = new Set(mergedParts.map(normalizedText));
+  for (const sourceText of sourceTexts) {
+    const compact = sourceText.trim();
+    if (compact.length === 0) continue;
+    const sourceNormalized = normalizedText(compact);
+    if (mergedNormalized.has(sourceNormalized)) continue;
+    if (
+      primaryText.length > 0 &&
+      normalizedText(primaryText).includes(sourceNormalized)
+    ) {
+      continue;
+    }
+    mergedParts.push(`Source finding context: ${compact}`);
+    mergedNormalized.add(sourceNormalized);
+  }
+
+  return mergedParts.join(" ");
 }
 
 async function readOptionalYaml<T>(filePath: string): Promise<T | null> {
@@ -308,17 +380,64 @@ function findingMap(findings: UnknownRecord[]): Map<string, UnknownRecord> {
   return map;
 }
 
+function findingsForIssue(
+  issue: UnknownRecord,
+  findingsById: Map<string, UnknownRecord>,
+): UnknownRecord[] {
+  return stringArray(issue.surface_finding_ids)
+    .map((findingId) => findingsById.get(findingId))
+    .filter((finding): finding is UnknownRecord => Boolean(finding));
+}
+
+function nestedRecord(
+  value: unknown,
+): UnknownRecord | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as UnknownRecord
+    : null;
+}
+
+function sourceFindingTexts(
+  findings: UnknownRecord[],
+  fieldName: string,
+): string[] {
+  return findings
+    .map((finding) => stringValue(nestedRecord(finding.materiality_basis)?.[fieldName]))
+    .filter((value) => value.length > 0);
+}
+
+function sourceFindingSemanticContextTexts(findings: UnknownRecord[]): string[] {
+  const texts: string[] = [];
+  for (const finding of findings) {
+    texts.push(stringValue(finding.target));
+    texts.push(stringValue(finding.evidence_anchor));
+    texts.push(stringValue(finding.claim));
+    texts.push(stringValue(finding.lens_rationale_summary));
+    texts.push(stringValue(finding.proposed_action));
+    texts.push(stringValue(finding.source_ref));
+    const materialityBasis = nestedRecord(finding.materiality_basis);
+    if (materialityBasis) {
+      texts.push(stringValue(materialityBasis.affected_purpose));
+      texts.push(stringValue(materialityBasis.failure_condition));
+      texts.push(stringValue(materialityBasis.impact));
+    }
+    const causalPath = nestedRecord(finding.causal_path);
+    if (causalPath) {
+      texts.push(stringValue(causalPath.root_cause_candidate));
+      for (const step of recordListFrom(causalPath.steps)) {
+        texts.push(stringValue(step.claim));
+      }
+    }
+  }
+  return texts.filter((value) => value.length > 0);
+}
+
 function evidenceRefsForIssue(
   issue: UnknownRecord,
   findingsById: Map<string, UnknownRecord>,
 ): string[] {
-  const directRefs = stringArray(issue.evidence_refs);
-  if (directRefs.length > 0) return unique(directRefs);
-
-  const refs: string[] = [];
-  for (const findingId of stringArray(issue.surface_finding_ids)) {
-    const finding = findingsById.get(findingId);
-    if (!finding) continue;
+  const refs = [...stringArray(issue.evidence_refs)];
+  for (const finding of findingsForIssue(issue, findingsById)) {
     refs.push(...buildFindingEvidenceRefs(finding));
   }
   return unique(refs);
@@ -328,11 +447,12 @@ function sourceLensIdsForIssue(
   issue: UnknownRecord,
   findingsById: Map<string, UnknownRecord>,
 ): string[] {
-  const direct = stringArray(issue.raised_by_lens_ids);
-  if (direct.length > 0) return unique(direct);
-  const lensIds: string[] = [];
-  for (const findingId of stringArray(issue.surface_finding_ids)) {
-    const lensId = stringValue(findingsById.get(findingId)?.lens_id);
+  const lensIds = [
+    ...stringArray(issue.raised_by_lens_ids),
+    ...stringArray(issue.source_lens_ids),
+  ];
+  for (const finding of findingsForIssue(issue, findingsById)) {
+    const lensId = stringValue(finding.lens_id);
     if (lensId.length > 0) lensIds.push(lensId);
   }
   return unique(lensIds);
@@ -381,49 +501,67 @@ function projectionFromIssue(args: {
     args.issue.severity,
     `issue-ledger issue ${issueId}.severity`,
   );
-  const issueStatement = stringValue(args.issue.issue_statement);
-  const affectedPurpose = stringValue(
-    args.issue.affected_purpose,
-    stringValue(args.classification?.problem_definition, "declared review purpose"),
+  const issueRole = stringValue(args.classification?.issue_role);
+  const judgmentState = stringValue(args.classification?.judgment_state);
+  const closureClass = stringValue(args.classification?.closure_class);
+  const closureObligation = stringValue(args.classification?.closure_obligation);
+  const material = isAdmittedReviewMaterialIssue(severity, {
+    issue_role: issueRole,
+    judgment_state: judgmentState,
+    closure_class: closureClass,
+    closure_obligation: closureObligation,
+  });
+  const sourceFindings = findingsForIssue(args.issue, args.findingsById);
+  const sourceSemanticContext = sourceFindingSemanticContextTexts(sourceFindings);
+  const issueStatement = mergeTextWithSourceContext(
+    stringValue(args.issue.issue_statement),
+    sourceSemanticContext,
   );
-  const failureCondition = stringValue(
-    args.issue.failure_condition,
-    stringValue(args.issue.root_cause_hypothesis, issueStatement),
+  const affectedPurpose = mergeTextWithSourceContext(
+    stringValue(
+      args.issue.affected_purpose,
+      stringValue(args.classification?.problem_definition, "declared review purpose"),
+    ),
+    material ? sourceFindingTexts(sourceFindings, "affected_purpose") : [],
   );
-  const impact = stringValue(
-    args.issue.impact,
-    stringValue(args.classification?.impact_kind, issueStatement),
+  const failureCondition = mergeTextWithSourceContext(
+    stringValue(
+      args.issue.failure_condition,
+      stringValue(args.issue.root_cause_hypothesis, issueStatement),
+    ),
+    material ? sourceFindingTexts(sourceFindings, "failure_condition") : [],
+  );
+  const impact = mergeTextWithSourceContext(
+    stringValue(
+      args.issue.impact,
+      stringValue(args.classification?.impact_kind, issueStatement),
+    ),
+    material ? sourceFindingTexts(sourceFindings, "impact") : [],
   );
   const actionCandidates = deriveActionCandidates({
     severity,
     classification: args.classification,
     hasProblemFraming: args.hasProblemFraming,
   });
-  const issueRole = stringValue(args.classification?.issue_role);
-  const judgmentState = stringValue(args.classification?.judgment_state);
-  const closureClass = stringValue(args.classification?.closure_class);
-  const closureObligation = stringValue(args.classification?.closure_obligation);
   const projection: ReviewResultIssueProjection = {
     issue_id: issueId,
     severity,
-    material: isAdmittedReviewMaterialIssue(severity, {
-      issue_role: issueRole,
-      judgment_state: judgmentState,
-      closure_class: closureClass,
-      closure_obligation: closureObligation,
-    }),
+    material,
     affected_purpose: affectedPurpose,
     failure_condition: failureCondition,
     impact,
     evidence_refs: evidenceRefsForIssue(args.issue, args.findingsById),
     source_lens_ids: sourceLensIdsForIssue(args.issue, args.findingsById),
     action_candidates: actionCandidates,
-    rationale: actionRationale({
-      classification: args.classification,
-      hasProblemFraming: args.hasProblemFraming,
-      severity,
-      issueStatement,
-    }),
+    rationale: mergeTextWithSourceContext(
+      actionRationale({
+          classification: args.classification,
+          hasProblemFraming: args.hasProblemFraming,
+          severity,
+          issueStatement,
+      }),
+      sourceSemanticContext,
+    ),
   };
 
   const domainThresholdUsed = nullableStringValue(args.issue.domain_threshold_used);

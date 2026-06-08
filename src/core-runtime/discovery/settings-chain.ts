@@ -140,6 +140,11 @@ const DEFAULT_REVIEW_RETRY_SETTINGS = {
   retry_initial_delay_ms: 3000,
 } as const;
 
+const DEFAULT_REVIEW_UNIT_TIMEOUT_MS = 240000;
+const DEFAULT_REVIEW_SHORT_LLM_UNIT_TIMEOUT_MS = 180000;
+const DEFAULT_REVIEW_RUNTIME_UNIT_TIMEOUT_MS = 120000;
+const DEFAULT_REVIEW_UNIT_MAX_OUTPUT_BYTES = 524288;
+
 const ReviewActorSettingsSchema = z
   .object({
     seat: ReviewWorkerSeatSchema.optional(),
@@ -1001,19 +1006,53 @@ function mergeReviewRetrySettings(
   return completeReviewRetrySettings(merged);
 }
 
+function defaultReviewUnitExecutionSettings(
+  unitId: ReviewExecutionUnitId,
+): ReviewUnitExecutionSettings {
+  if (unitId === "issue_stance_matrix") {
+    return {
+      timeout_ms: DEFAULT_REVIEW_RUNTIME_UNIT_TIMEOUT_MS,
+      max_output_bytes: DEFAULT_REVIEW_UNIT_MAX_OUTPUT_BYTES,
+    };
+  }
+  const timeoutMs =
+    unitId === "issue_stance_response" ||
+    unitId === "deliberation_response" ||
+    unitId === "synthesis_response"
+      ? DEFAULT_REVIEW_SHORT_LLM_UNIT_TIMEOUT_MS
+      : DEFAULT_REVIEW_UNIT_TIMEOUT_MS;
+  return {
+    timeout_ms: timeoutMs,
+    max_retries: 2,
+    retry_initial_delay_ms: DEFAULT_REVIEW_RETRY_SETTINGS.retry_initial_delay_ms,
+    max_output_bytes: DEFAULT_REVIEW_UNIT_MAX_OUTPUT_BYTES,
+  };
+}
+
+export function defaultReviewExecutionUnits(): ReviewExecutionUnits {
+  const units: ReviewExecutionUnits = {};
+  for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
+    units[unitId] = defaultReviewUnitExecutionSettings(unitId);
+  }
+  return units;
+}
+
 function mergeReviewUnitExecutionSettings(
+  defaultUnit: ReviewUnitExecutionSettings | undefined,
   userUnit: ReviewUnitExecutionSettings | undefined,
   projectUnit: ReviewUnitExecutionSettings | undefined,
 ): ReviewUnitExecutionSettings | undefined {
-  if (!userUnit && !projectUnit) return undefined;
+  if (!defaultUnit && !userUnit && !projectUnit) return undefined;
   const mergedLlm =
-    (userUnit?.llm || projectUnit?.llm)
+    (defaultUnit?.llm || userUnit?.llm || projectUnit?.llm)
       ? {
+          ...(defaultUnit?.llm ?? {}),
           ...(userUnit?.llm ?? {}),
           ...(projectUnit?.llm ?? {}),
         }
       : undefined;
   return definedReviewUnitExecutionSettings({
+    ...(defaultUnit ?? {}),
     ...(userUnit ?? {}),
     ...(projectUnit ?? {}),
     ...(mergedLlm ? { llm: mergedLlm } : {}),
@@ -1021,12 +1060,14 @@ function mergeReviewUnitExecutionSettings(
 }
 
 function mergeReviewUnits(
+  defaultUnits: ReviewExecutionUnits | undefined,
   userUnits: ReviewExecutionUnits | undefined,
   projectUnits: ReviewExecutionUnits | undefined,
 ): ReviewExecutionUnits {
   const out: ReviewExecutionUnits = {};
   for (const unitId of REVIEW_EXECUTION_UNIT_IDS) {
     const unit = mergeReviewUnitExecutionSettings(
+      defaultUnits?.[unitId],
       userUnits?.[unitId],
       projectUnits?.[unitId],
     );
@@ -1154,6 +1195,7 @@ function mergeSettings(
           projectExecution?.retry,
         );
         const units = mergeReviewUnits(
+          defaultExecution.units,
           userExecution?.units,
           projectExecution?.units,
         );
@@ -1284,7 +1326,7 @@ export function defaultReviewExecution(): ResolvedReviewExecutionSettings {
     synthesize: { ...DEFAULT_REVIEW_EXECUTION.synthesize },
     deliberation: DEFAULT_REVIEW_EXECUTION.deliberation,
     retry: defaultReviewRetrySettings(),
-    units: {},
+    units: defaultReviewExecutionUnits(),
   };
 }
 

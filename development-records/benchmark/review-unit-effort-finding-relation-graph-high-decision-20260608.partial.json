@@ -1,0 +1,1598 @@
+{
+  "schema_version": 3,
+  "generated_at": "2026-06-08T13:05:52.722Z",
+  "benchmark_kind": "review_pipeline_unit_effort",
+  "status": "PARTIAL — run in progress",
+  "expected_run_count": 12,
+  "completed_run_count": 2,
+  "decision_gate": {
+    "required_min_runs_per_case_fixture": 3,
+    "required_min_fixture_count": 2,
+    "actual_runs_per_case_fixture": 3,
+    "actual_fixture_count": 2,
+    "comparison_conclusion_allowed": false
+  },
+  "matrix": {
+    "axes": [
+      "fixture",
+      "case",
+      "run"
+    ],
+    "supported_case_axes": [
+      "legacy_profile",
+      "all_effort",
+      "unit_effort"
+    ],
+    "llm_backed_units": [
+      "lens",
+      "finding_ledger",
+      "finding_relation_graph",
+      "issue_ledger",
+      "deliberation_plan",
+      "problem_framing",
+      "issue_stance_response",
+      "deliberation_response",
+      "deliberation_resolution",
+      "synthesis_response"
+    ],
+    "runtime_only_units": [
+      "issue_stance_matrix"
+    ]
+  },
+  "comparison_mode": "same_checkout_profile_comparison",
+  "model": "gpt-5.5",
+  "provider": "openai",
+  "auth": "oauth",
+  "base_effort": "medium",
+  "selected_lens_ids": [],
+  "fixtures": [
+    "review-pipeline-target-v1",
+    "retry-policy-target-v1"
+  ],
+  "repetitions": 3,
+  "max_concurrent_lenses": 3,
+  "cases": [
+    {
+      "case_id": "unit-sweep-base-medium",
+      "label": "Unit sweep baseline: all LLM-backed units at medium",
+      "profile_role": "baseline",
+      "comparison_axis": "unit_effort",
+      "base_effort": "medium",
+      "varied_unit_id": null,
+      "varied_effort": null,
+      "unit_efforts": {
+        "lens": "medium",
+        "finding_ledger": "medium",
+        "finding_relation_graph": "medium",
+        "issue_ledger": "medium",
+        "deliberation_plan": "medium",
+        "problem_framing": "medium",
+        "issue_stance_response": "medium",
+        "deliberation_response": "medium",
+        "deliberation_resolution": "medium",
+        "synthesis_response": "medium"
+      }
+    },
+    {
+      "case_id": "unit-sweep-finding_relation_graph-high",
+      "label": "Unit sweep: finding_relation_graph at high, others at medium",
+      "profile_role": "candidate",
+      "comparison_axis": "unit_effort",
+      "base_effort": "medium",
+      "varied_unit_id": "finding_relation_graph",
+      "varied_effort": "high",
+      "unit_efforts": {
+        "lens": "medium",
+        "finding_ledger": "medium",
+        "finding_relation_graph": "high",
+        "issue_ledger": "medium",
+        "deliberation_plan": "medium",
+        "problem_framing": "medium",
+        "issue_stance_response": "medium",
+        "deliberation_response": "medium",
+        "deliberation_resolution": "medium",
+        "synthesis_response": "medium"
+      }
+    }
+  ],
+  "case_summaries": [
+    {
+      "case_id": "unit-sweep-base-medium",
+      "profile_role": "baseline",
+      "comparison_axis": "unit_effort",
+      "base_effort": "medium",
+      "fixture_ids": [
+        "review-pipeline-target-v1"
+      ],
+      "fixture_count": 1,
+      "run_count": 2,
+      "completed_count": 1,
+      "failed_count": 1,
+      "completion_rate": 0.5,
+      "average_command_duration_ms": 461904,
+      "average_total_unit_duration_ms": 705805,
+      "average_total_packet_bytes": 739623,
+      "average_total_output_bytes": 193742,
+      "average_max_packet_bytes": 95605,
+      "average_synthesize_packet_bytes": 95605,
+      "average_synthesize_output_bytes": 54667,
+      "average_final_output_bytes": 126291,
+      "average_total_attempt_count": 29,
+      "average_failed_unit_count": 0,
+      "metric_stats": {
+        "command_duration_ms": {
+          "mean": 461904,
+          "stdev": 14018,
+          "min": 447886,
+          "max": 475922,
+          "n": 2
+        },
+        "total_unit_duration_ms": {
+          "mean": 705805,
+          "stdev": 0,
+          "min": 705805,
+          "max": 705805,
+          "n": 1
+        },
+        "total_packet_bytes": {
+          "mean": 739623,
+          "stdev": 0,
+          "min": 739623,
+          "max": 739623,
+          "n": 1
+        },
+        "total_output_bytes": {
+          "mean": 193742,
+          "stdev": 0,
+          "min": 193742,
+          "max": 193742,
+          "n": 1
+        },
+        "max_packet_bytes": {
+          "mean": 95605,
+          "stdev": 0,
+          "min": 95605,
+          "max": 95605,
+          "n": 1
+        },
+        "synthesize_packet_bytes": {
+          "mean": 95605,
+          "stdev": 0,
+          "min": 95605,
+          "max": 95605,
+          "n": 1
+        },
+        "synthesize_output_bytes": {
+          "mean": 54667,
+          "stdev": 0,
+          "min": 54667,
+          "max": 54667,
+          "n": 1
+        },
+        "final_output_bytes": {
+          "mean": 126291,
+          "stdev": 0,
+          "min": 126291,
+          "max": 126291,
+          "n": 1
+        },
+        "total_attempt_count": {
+          "mean": 29,
+          "stdev": 0,
+          "min": 29,
+          "max": 29,
+          "n": 1
+        },
+        "failed_unit_count": {
+          "mean": 0,
+          "stdev": 0,
+          "min": 0,
+          "max": 0,
+          "n": 2
+        }
+      },
+      "semantic_quality_passed_count": 1,
+      "semantic_quality_failed_count": 0,
+      "semantic_quality_not_applicable_count": 0,
+      "failure_kind_counts": {
+        "none": 60
+      }
+    },
+    {
+      "case_id": "unit-sweep-finding_relation_graph-high",
+      "profile_role": "candidate",
+      "comparison_axis": "unit_effort",
+      "base_effort": "medium",
+      "varied_unit_id": "finding_relation_graph",
+      "varied_effort": "high",
+      "fixture_ids": [],
+      "fixture_count": 0,
+      "run_count": 0,
+      "completed_count": 0,
+      "failed_count": 0,
+      "completion_rate": 0,
+      "average_command_duration_ms": null,
+      "average_total_unit_duration_ms": null,
+      "average_total_packet_bytes": null,
+      "average_total_output_bytes": null,
+      "average_max_packet_bytes": null,
+      "average_synthesize_packet_bytes": null,
+      "average_synthesize_output_bytes": null,
+      "average_final_output_bytes": null,
+      "average_total_attempt_count": null,
+      "average_failed_unit_count": null,
+      "metric_stats": {
+        "command_duration_ms": null,
+        "total_unit_duration_ms": null,
+        "total_packet_bytes": null,
+        "total_output_bytes": null,
+        "max_packet_bytes": null,
+        "synthesize_packet_bytes": null,
+        "synthesize_output_bytes": null,
+        "final_output_bytes": null,
+        "total_attempt_count": null,
+        "failed_unit_count": null
+      },
+      "semantic_quality_passed_count": 0,
+      "semantic_quality_failed_count": 0,
+      "semantic_quality_not_applicable_count": 0,
+      "failure_kind_counts": {}
+    }
+  ],
+  "comparisons": [
+    {
+      "baseline_case_id": "unit-sweep-base-medium",
+      "candidate_case_id": "unit-sweep-finding_relation_graph-high",
+      "comparison_axis": "unit_effort",
+      "varied_unit_id": "finding_relation_graph",
+      "varied_effort": "high",
+      "metrics": {
+        "completion_rate": {
+          "baseline": 0.5,
+          "candidate": 0,
+          "delta": -0.5,
+          "delta_pct": -100
+        },
+        "average_command_duration_ms": {
+          "baseline": 461904,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_total_unit_duration_ms": {
+          "baseline": 705805,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_total_packet_bytes": {
+          "baseline": 739623,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_total_output_bytes": {
+          "baseline": 193742,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_max_packet_bytes": {
+          "baseline": 95605,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_synthesize_packet_bytes": {
+          "baseline": 95605,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_synthesize_output_bytes": {
+          "baseline": 54667,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_final_output_bytes": {
+          "baseline": 126291,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_total_attempt_count": {
+          "baseline": 29,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        },
+        "average_failed_unit_count": {
+          "baseline": 0,
+          "candidate": null,
+          "delta": null,
+          "delta_pct": null
+        }
+      }
+    }
+  ],
+  "comparison_conclusion": null,
+  "interpretation_notes": [
+    "Partial benchmark report written after each completed run to preserve progress if the live benchmark is interrupted.",
+    "Do not use this partial report as decision evidence; use the final report after all requested runs complete."
+  ],
+  "runs": [
+    {
+      "case_id": "unit-sweep-base-medium",
+      "fixture_id": "review-pipeline-target-v1",
+      "run_index": 1,
+      "command_exit_code": 0,
+      "command_signal": null,
+      "command_duration_ms": 447886,
+      "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-unit-sweep-base-medium-Z3eDm1",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-unit-sweep-base-medium-Z3eDm1/.onto/review/20260608-03589b82",
+      "temp_root_kept": true,
+      "target_path": "src/target.ts",
+      "model": "gpt-5.5",
+      "provider": "openai",
+      "auth": "oauth",
+      "base_effort": "medium",
+      "unit_efforts": {
+        "lens": "medium",
+        "finding_ledger": "medium",
+        "finding_relation_graph": "medium",
+        "issue_ledger": "medium",
+        "deliberation_plan": "medium",
+        "problem_framing": "medium",
+        "issue_stance_response": "medium",
+        "deliberation_response": "medium",
+        "deliberation_resolution": "medium",
+        "synthesis_response": "medium"
+      },
+      "status": "completed",
+      "execution_status": "completed",
+      "deliberation_status": "performed",
+      "planned_lens_count": 6,
+      "participating_lens_count": 6,
+      "degraded_lens_count": 0,
+      "max_concurrent_lenses": 3,
+      "observed_dispatch_width": 3,
+      "unit_count": 29,
+      "failed_unit_count": 0,
+      "total_unit_duration_ms": 705805,
+      "total_packet_bytes": 739623,
+      "total_output_bytes": 193742,
+      "max_packet_bytes": 95605,
+      "synthesize_packet_bytes": 95605,
+      "synthesize_output_bytes": 54667,
+      "final_output_bytes": 126291,
+      "total_attempt_count": 29,
+      "failure_kind_counts": {
+        "none": 29
+      },
+      "unit_summaries": [
+        {
+          "unit_id": "axiology",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 58434,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 22864,
+          "output_bytes": 5166
+        },
+        {
+          "unit_id": "coverage",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 39124,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18025,
+          "output_bytes": 6288
+        },
+        {
+          "unit_id": "evolution",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 23479,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18047,
+          "output_bytes": 4227
+        },
+        {
+          "unit_id": "logic",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 40180,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 22641,
+          "output_bytes": 4061
+        },
+        {
+          "unit_id": "semantics",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 8878,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18283,
+          "output_bytes": 744
+        },
+        {
+          "unit_id": "structure",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 33570,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17588,
+          "output_bytes": 4485
+        },
+        {
+          "unit_id": "finding-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 19,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 854,
+          "output_bytes": 25911
+        },
+        {
+          "unit_id": "finding-relation-graph",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 13748,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 40628,
+          "output_bytes": 3511
+        },
+        {
+          "unit_id": "issue-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 44350,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 15499,
+          "output_bytes": 11962
+        },
+        {
+          "unit_id": "issue-stance-matrix",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 78846,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 726,
+          "output_bytes": 27381
+        },
+        {
+          "unit_id": "deliberation-plan",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 20808,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 54348,
+          "output_bytes": 4078
+        },
+        {
+          "unit_id": "problem-framing",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 17539,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 62708,
+          "output_bytes": 4683
+        },
+        {
+          "unit_id": "deliberation:issue-002:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 14013,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18165,
+          "output_bytes": 2069
+        },
+        {
+          "unit_id": "deliberation:issue-002:logic",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10985,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18145,
+          "output_bytes": 2173
+        },
+        {
+          "unit_id": "deliberation:issue-002:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 14620,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18165,
+          "output_bytes": 1656
+        },
+        {
+          "unit_id": "deliberation:issue-002:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 14594,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18179,
+          "output_bytes": 2033
+        },
+        {
+          "unit_id": "deliberation:issue-002:structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 11018,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18175,
+          "output_bytes": 1870
+        },
+        {
+          "unit_id": "deliberation:issue-003:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13121,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19881,
+          "output_bytes": 2035
+        },
+        {
+          "unit_id": "deliberation:issue-003:structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13623,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19869,
+          "output_bytes": 2262
+        },
+        {
+          "unit_id": "deliberation:issue-003:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 14295,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19859,
+          "output_bytes": 2010
+        },
+        {
+          "unit_id": "deliberation:issue-003:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10224,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19863,
+          "output_bytes": 1969
+        },
+        {
+          "unit_id": "deliberation:issue-003:logic",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13986,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19843,
+          "output_bytes": 1837
+        },
+        {
+          "unit_id": "deliberation:issue-005:structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13418,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19623,
+          "output_bytes": 2155
+        },
+        {
+          "unit_id": "deliberation:issue-005:logic",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10557,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19591,
+          "output_bytes": 2060
+        },
+        {
+          "unit_id": "deliberation:issue-005:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 16531,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19613,
+          "output_bytes": 2384
+        },
+        {
+          "unit_id": "deliberation:issue-005:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 87412,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19613,
+          "output_bytes": 2374
+        },
+        {
+          "unit_id": "deliberation:issue-005:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 18835,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 19627,
+          "output_bytes": 2134
+        },
+        {
+          "unit_id": "controlled-deliberation",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 20015,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 63596,
+          "output_bytes": 5557
+        },
+        {
+          "unit_id": "synthesize",
+          "unit_kind": "synthesize",
+          "status": "completed",
+          "duration_ms": 29583,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 95605,
+          "output_bytes": 54667
+        }
+      ],
+      "review_profile": {
+        "mode": "main-workers",
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "deliberation": "controlled-lens-deliberation",
+        "runtime_route": {
+          "execution_route": "external_oauth_worker",
+          "execution_adapter": "codex_cli",
+          "model_provider": "openai",
+          "model_id": "gpt-5.5",
+          "billing_mode": "subscription",
+          "execution_realization": "worker",
+          "host_runtime": "codex",
+          "artifact_generation_realization": "live",
+          "worker_executor": "codex",
+          "runtime_provider": "codex",
+          "auth_mode": "oauth"
+        },
+        "model": "gpt-5.5",
+        "effort": "medium",
+        "service_tier": "fast",
+        "base_url": null,
+        "retry": {
+          "lens_max_retries": 2,
+          "issue_artifact_max_retries": 2,
+          "deliberation_max_retries": 2,
+          "synthesis_max_retries": 2,
+          "retry_initial_delay_ms": 3000
+        },
+        "units": {
+          "lens": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "finding_ledger": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "finding_relation_graph": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_ledger": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_stance_matrix": {
+            "timeout_ms": 1800000,
+            "max_output_bytes": 524288
+          },
+          "deliberation_plan": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "problem_framing": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_stance_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "deliberation_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "deliberation_resolution": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "synthesis_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          }
+        },
+        "trace": [
+          "codex worker selected by host-bound OpenAI OAuth settings"
+        ]
+      },
+      "quality_proxy": {
+        "record_status": "completed",
+        "issue_count": 5,
+        "material_issue_count": 5,
+        "non_material_finding_count": 0,
+        "highest_severity": "medium",
+        "action_candidate_count": 5
+      },
+      "semantic_quality_gate": {
+        "status": "passed",
+        "fixture_id": "review-pipeline-target-v1",
+        "scope": "fixture_specific",
+        "fixture_target_anchor": "src/target.ts",
+        "applicability": "real_model_only",
+        "checks": [
+          {
+            "check_id": "count_list_consistency",
+            "status": "passed",
+            "evidence": [
+              "material_issue_count=5, material_issues.length=5",
+              "non_material_finding_count=0, non_material_findings.length=0"
+            ]
+          },
+          {
+            "check_id": "material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "material_issue_count=5",
+              "expected target truth: unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "final_result_material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "Final Review Result chars=60750",
+              "expected final explanation to preserve unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "false_materiality_guard",
+            "status": "passed",
+            "evidence": [
+              "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: lensid, lens id, lens ids, lens identity",
+              "non_material_finding_count=0",
+              "boundary_notes_chars=292"
+            ]
+          },
+          {
+            "check_id": "boundary_uncertainty_preservation",
+            "status": "passed",
+            "evidence": [
+              "Boundary Notes chars=292",
+              "expected: compact note preserving lensid, lens id, lens ids, lens identity uncertainty"
+            ]
+          },
+          {
+            "check_id": "causal_materiality_shape",
+            "status": "passed",
+            "evidence": [
+              "finding_count=6",
+              "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006",
+              "non_material_finding_ids=none"
+            ]
+          },
+          {
+            "check_id": "artifact_material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006",
+              "expected artifact truth: unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "non_material_finding_preservation",
+            "status": "passed",
+            "evidence": [
+              "declared_non_material_finding_count=0",
+              "preserved_non_material_ids=none",
+              "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+            ]
+          },
+          {
+            "check_id": "causal_relation_correctness",
+            "status": "passed",
+            "evidence": [
+              "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006",
+              "relation_covered_ids=finding-001,finding-005,finding-002,finding-004,finding-003,finding-006",
+              "shared_cause_relation_ids=rel-003"
+            ]
+          },
+          {
+            "check_id": "issue_dependency_preservation",
+            "status": "passed",
+            "evidence": [
+              "shared_cause_relation_ids=rel-003",
+              "issue_relation_refs=rel-002",
+              "dependency_relation_refs=rel-003"
+            ]
+          },
+          {
+            "check_id": "actionability",
+            "status": "passed",
+            "evidence": [
+              "material_action_candidates=fix_before_release,fix_now,accept_risk,follow_up",
+              "expected final output to include a concrete remediation path"
+            ]
+          },
+          {
+            "check_id": "grounding",
+            "status": "passed",
+            "evidence": [
+              "material issue must preserve lens/artifact refs",
+              "material issue must preserve target anchor src/target.ts"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case_id": "unit-sweep-base-medium",
+      "fixture_id": "review-pipeline-target-v1",
+      "run_index": 2,
+      "command_exit_code": 0,
+      "command_signal": null,
+      "command_duration_ms": 475922,
+      "project_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-unit-sweep-base-medium-udICcd",
+      "session_root": "/var/folders/3h/5ml_qx851hsgcn3h6j6y2l5r0000gn/T/onto-review-benchmark-unit-sweep-base-medium-udICcd/.onto/review/20260608-c23cab22",
+      "temp_root_kept": true,
+      "target_path": "src/target.ts",
+      "model": "gpt-5.5",
+      "provider": "openai",
+      "auth": "oauth",
+      "base_effort": "medium",
+      "unit_efforts": {
+        "lens": "medium",
+        "finding_ledger": "medium",
+        "finding_relation_graph": "medium",
+        "issue_ledger": "medium",
+        "deliberation_plan": "medium",
+        "problem_framing": "medium",
+        "issue_stance_response": "medium",
+        "deliberation_response": "medium",
+        "deliberation_resolution": "medium",
+        "synthesis_response": "medium"
+      },
+      "status": "failed",
+      "execution_status": "completed_with_degradation",
+      "deliberation_status": "performed",
+      "planned_lens_count": 6,
+      "participating_lens_count": 6,
+      "degraded_lens_count": 0,
+      "max_concurrent_lenses": 3,
+      "observed_dispatch_width": 3,
+      "unit_count": 31,
+      "failed_unit_count": 0,
+      "total_unit_duration_ms": 762594,
+      "total_packet_bytes": 829027,
+      "total_output_bytes": 251228,
+      "max_packet_bytes": 127132,
+      "synthesize_packet_bytes": 127132,
+      "synthesize_output_bytes": 76530,
+      "final_output_bytes": 177375,
+      "total_attempt_count": 33,
+      "failure_kind_counts": {
+        "none": 31
+      },
+      "unit_summaries": [
+        {
+          "unit_id": "axiology",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 57963,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 22864,
+          "output_bytes": 7146
+        },
+        {
+          "unit_id": "coverage",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 54872,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18025,
+          "output_bytes": 6221
+        },
+        {
+          "unit_id": "evolution",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 55366,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18047,
+          "output_bytes": 7564
+        },
+        {
+          "unit_id": "logic",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 10322,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 22641,
+          "output_bytes": 890
+        },
+        {
+          "unit_id": "semantics",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 65425,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18283,
+          "output_bytes": 7677
+        },
+        {
+          "unit_id": "structure",
+          "unit_kind": "lens",
+          "status": "completed",
+          "duration_ms": 35037,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17588,
+          "output_bytes": 4547
+        },
+        {
+          "unit_id": "finding-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 30,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 854,
+          "output_bytes": 36251
+        },
+        {
+          "unit_id": "finding-relation-graph",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 25185,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 51016,
+          "output_bytes": 5856
+        },
+        {
+          "unit_id": "issue-ledger",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 50675,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 15739,
+          "output_bytes": 16028
+        },
+        {
+          "unit_id": "issue-stance-matrix",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 55470,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 726,
+          "output_bytes": 31564
+        },
+        {
+          "unit_id": "deliberation-plan",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 25447,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 64636,
+          "output_bytes": 4657
+        },
+        {
+          "unit_id": "problem-framing",
+          "unit_kind": "issue_artifact",
+          "status": "completed",
+          "duration_ms": 22149,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 74272,
+          "output_bytes": 6374
+        },
+        {
+          "unit_id": "deliberation:issue-001:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12047,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18284,
+          "output_bytes": 2245
+        },
+        {
+          "unit_id": "deliberation:issue-001:semantics",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10980,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18292,
+          "output_bytes": 2099
+        },
+        {
+          "unit_id": "deliberation:issue-001:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12480,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18292,
+          "output_bytes": 2288
+        },
+        {
+          "unit_id": "deliberation:issue-001:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13884,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18290,
+          "output_bytes": 2058
+        },
+        {
+          "unit_id": "deliberation:issue-003:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12868,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17410,
+          "output_bytes": 2006
+        },
+        {
+          "unit_id": "deliberation:issue-003:semantics",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 11077,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17418,
+          "output_bytes": 1931
+        },
+        {
+          "unit_id": "deliberation:issue-003:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12706,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17406,
+          "output_bytes": 1499
+        },
+        {
+          "unit_id": "deliberation:issue-003:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 13008,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17416,
+          "output_bytes": 1648
+        },
+        {
+          "unit_id": "deliberation:issue-005:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 11923,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17801,
+          "output_bytes": 1974
+        },
+        {
+          "unit_id": "deliberation:issue-005:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 11833,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17797,
+          "output_bytes": 1980
+        },
+        {
+          "unit_id": "deliberation:issue-005:semantics",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10551,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17805,
+          "output_bytes": 2098
+        },
+        {
+          "unit_id": "deliberation:issue-005:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12131,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 17791,
+          "output_bytes": 2183
+        },
+        {
+          "unit_id": "deliberation:issue-006:evolution",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 11321,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18567,
+          "output_bytes": 1616
+        },
+        {
+          "unit_id": "deliberation:issue-006:coverage",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12008,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18561,
+          "output_bytes": 1892
+        },
+        {
+          "unit_id": "deliberation:issue-006:axiology",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 12693,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18555,
+          "output_bytes": 1863
+        },
+        {
+          "unit_id": "deliberation:issue-006:semantics",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 10358,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 18569,
+          "output_bytes": 1819
+        },
+        {
+          "unit_id": "deliberation:issue-006:structure",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 41775,
+          "failure_kind": null,
+          "attempt_count": 3,
+          "packet_bytes": 18563,
+          "output_bytes": 1204
+        },
+        {
+          "unit_id": "controlled-deliberation",
+          "unit_kind": "deliberation",
+          "status": "completed",
+          "duration_ms": 27811,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 70387,
+          "output_bytes": 7520
+        },
+        {
+          "unit_id": "synthesize",
+          "unit_kind": "synthesize",
+          "status": "completed",
+          "duration_ms": 43199,
+          "failure_kind": null,
+          "attempt_count": 1,
+          "packet_bytes": 127132,
+          "output_bytes": 76530
+        }
+      ],
+      "review_profile": {
+        "mode": "main-workers",
+        "teamlead": {
+          "seat": "main",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "lens": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "synthesize": {
+          "seat": "worker",
+          "llm": {
+            "auth": "oauth",
+            "provider": "openai",
+            "model": "gpt-5.5",
+            "effort": "medium",
+            "service_tier": "fast"
+          }
+        },
+        "deliberation": "controlled-lens-deliberation",
+        "runtime_route": {
+          "execution_route": "external_oauth_worker",
+          "execution_adapter": "codex_cli",
+          "model_provider": "openai",
+          "model_id": "gpt-5.5",
+          "billing_mode": "subscription",
+          "execution_realization": "worker",
+          "host_runtime": "codex",
+          "artifact_generation_realization": "live",
+          "worker_executor": "codex",
+          "runtime_provider": "codex",
+          "auth_mode": "oauth"
+        },
+        "model": "gpt-5.5",
+        "effort": "medium",
+        "service_tier": "fast",
+        "base_url": null,
+        "retry": {
+          "lens_max_retries": 2,
+          "issue_artifact_max_retries": 2,
+          "deliberation_max_retries": 2,
+          "synthesis_max_retries": 2,
+          "retry_initial_delay_ms": 3000
+        },
+        "units": {
+          "lens": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "finding_ledger": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "finding_relation_graph": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_ledger": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_stance_matrix": {
+            "timeout_ms": 1800000,
+            "max_output_bytes": 524288
+          },
+          "deliberation_plan": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "problem_framing": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "issue_stance_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "deliberation_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "deliberation_resolution": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          },
+          "synthesis_response": {
+            "timeout_ms": 1800000,
+            "max_retries": 2,
+            "retry_initial_delay_ms": 3000,
+            "max_output_bytes": 524288,
+            "llm": {
+              "model": "gpt-5.5",
+              "effort": "medium"
+            }
+          }
+        },
+        "trace": [
+          "codex worker selected by host-bound OpenAI OAuth settings"
+        ]
+      },
+      "quality_proxy": {
+        "record_status": "completed_with_degradation",
+        "issue_count": 7,
+        "material_issue_count": 7,
+        "non_material_finding_count": 0,
+        "highest_severity": "medium",
+        "action_candidate_count": 7
+      },
+      "semantic_quality_gate": {
+        "status": "failed",
+        "fixture_id": "review-pipeline-target-v1",
+        "scope": "fixture_specific",
+        "fixture_target_anchor": "src/target.ts",
+        "applicability": "real_model_only",
+        "checks": [
+          {
+            "check_id": "count_list_consistency",
+            "status": "passed",
+            "evidence": [
+              "material_issue_count=7, material_issues.length=7",
+              "non_material_finding_count=0, non_material_findings.length=0"
+            ]
+          },
+          {
+            "check_id": "material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "material_issue_count=7",
+              "expected target truth: unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "final_result_material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "Final Review Result chars=81725",
+              "expected final explanation to preserve unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "false_materiality_guard",
+            "status": "failed",
+            "evidence": [
+              "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: lensid, lens id, lens ids, lens identity",
+              "non_material_finding_count=0",
+              "boundary_notes_chars=483"
+            ]
+          },
+          {
+            "check_id": "boundary_uncertainty_preservation",
+            "status": "failed",
+            "evidence": [
+              "Boundary Notes chars=483",
+              "expected: compact note preserving lensid, lens id, lens ids, lens identity uncertainty"
+            ]
+          },
+          {
+            "check_id": "causal_materiality_shape",
+            "status": "passed",
+            "evidence": [
+              "finding_count=9",
+              "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009",
+              "non_material_finding_ids=none"
+            ]
+          },
+          {
+            "check_id": "artifact_material_issue_recall",
+            "status": "passed",
+            "evidence": [
+              "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009",
+              "expected artifact truth: unstableFormat + JSON.stringify + undefined"
+            ]
+          },
+          {
+            "check_id": "non_material_finding_preservation",
+            "status": "passed",
+            "evidence": [
+              "declared_non_material_finding_count=0",
+              "preserved_non_material_ids=none",
+              "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+            ]
+          },
+          {
+            "check_id": "causal_relation_correctness",
+            "status": "passed",
+            "evidence": [
+              "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009",
+              "relation_covered_ids=finding-001,finding-003,finding-005,finding-007,finding-002,finding-004,finding-006,finding-008,finding-009",
+              "shared_cause_relation_ids=rel-002,rel-005"
+            ]
+          },
+          {
+            "check_id": "issue_dependency_preservation",
+            "status": "passed",
+            "evidence": [
+              "shared_cause_relation_ids=rel-002,rel-005",
+              "issue_relation_refs=rel-003,rel-006",
+              "dependency_relation_refs=rel-002,rel-005"
+            ]
+          },
+          {
+            "check_id": "actionability",
+            "status": "passed",
+            "evidence": [
+              "material_action_candidates=fix_before_release,fix_now,follow_up",
+              "expected final output to include a concrete remediation path"
+            ]
+          },
+          {
+            "check_id": "grounding",
+            "status": "passed",
+            "evidence": [
+              "material issue must preserve lens/artifact refs",
+              "material issue must preserve target anchor src/target.ts"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

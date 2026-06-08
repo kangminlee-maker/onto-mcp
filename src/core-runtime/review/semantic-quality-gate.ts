@@ -59,7 +59,7 @@ interface SemanticQualityFixture {
   fixtureId: SemanticQualityGateFixtureId;
   materialTerms: string[];
   expectedMaterialTruth: string;
-  falseMaterialityTerms: string[];
+  boundaryUncertaintyTerms: string[];
   boundaryContextTerms: string[];
   actionMaterialTerms: string[];
   actionRemediationTerms: string[];
@@ -74,7 +74,7 @@ const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityFixture> = {
     fixtureId: "review-pipeline-target-v1",
     materialTerms: ["unstableformat", "json.stringify", "undefined"],
     expectedMaterialTruth: "unstableFormat + JSON.stringify + undefined",
-    falseMaterialityTerms: ["lensid", "lens id", "lens ids", "lens identity"],
+    boundaryUncertaintyTerms: ["lensid", "lens id", "lens ids", "lens identity"],
     boundaryContextTerms: [
       "evidence gap",
       "needs evidence",
@@ -103,7 +103,7 @@ const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityFixture> = {
     materialTerms: ["retryrequest", "maxretries", "zero", "falsy"],
     expectedMaterialTruth:
       "retryRequest + maxRetries zero + falsy defaulting behavior",
-    falseMaterialityTerms: ["telemetry label", "debug export"],
+    boundaryUncertaintyTerms: ["telemetry label", "debug export"],
     boundaryContextTerms: [
       "evidence gap",
       "needs evidence",
@@ -165,7 +165,11 @@ function strings(value: unknown): string[] {
 }
 
 function normalizedText(value: unknown): string {
-  return JSON.stringify(value ?? "").toLowerCase();
+  const raw = JSON.stringify(value ?? "");
+  const searchFriendly = raw
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/[-_/]+/gu, " ");
+  return `${raw}\n${searchFriendly}`.toLowerCase();
 }
 
 function textContainsAll(text: string, terms: string[]): boolean {
@@ -176,11 +180,11 @@ function textContainsAny(text: string, terms: string[]): boolean {
   return terms.some((term) => text.includes(term));
 }
 
-function containsBoundarySensitiveFalseMateriality(
+function containsBoundarySensitiveUncertainty(
   text: string,
   fixture: SemanticQualityFixture,
 ): boolean {
-  return textContainsAny(text, fixture.falseMaterialityTerms) &&
+  return textContainsAny(text, fixture.boundaryUncertaintyTerms) &&
     textContainsAny(text, fixture.boundaryContextTerms);
 }
 
@@ -359,14 +363,14 @@ function issueArtifactChecks(
     !(
       findings.some((finding) =>
         ["low", "info"].includes(String(finding.severity)) &&
-        containsBoundarySensitiveFalseMateriality(normalizedText(finding), fixture)
+        containsBoundarySensitiveUncertainty(normalizedText(finding), fixture)
       ) ||
-      containsBoundarySensitiveFalseMateriality(nonMaterialFindingText, fixture)
+      containsBoundarySensitiveUncertainty(nonMaterialFindingText, fixture)
     ) ||
       (
         nonMaterialPreservationIds.length > 0 &&
         nonMaterialPreservationIds.length >= declaredNonMaterialFindingCount &&
-        textContainsAny(nonMaterialFindingText, fixture.falseMaterialityTerms) &&
+        textContainsAny(nonMaterialFindingText, fixture.boundaryUncertaintyTerms) &&
         textContainsAny(nonMaterialFindingText, fixture.boundaryContextTerms) &&
         nonMaterialFindingIds.every((findingId) => !relationCoveredIds.has(findingId))
       ),
@@ -505,14 +509,14 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   const finalReviewResult = markdownSectionBody(args.finalOutputText, "Final Review Result");
   const finalReviewResultText = normalizedText(finalReviewResult ?? "");
   const boundaryNotes = markdownSectionBody(args.finalOutputText, "Boundary Notes");
-  const boundaryNotesText = (boundaryNotes ?? "").toLowerCase();
+  const boundaryNotesText = normalizedText(boundaryNotes ?? "");
   const preservedBoundaryText = `${nonMaterialText}\n${boundaryNotesText}`;
   const materialBoundarySensitiveFalsePositive = materialIssues.some((issue) =>
-    containsBoundarySensitiveFalseMateriality(normalizedText(issue), fixture)
+    containsBoundarySensitiveUncertainty(normalizedText(issue), fixture)
   );
   const falseMaterialityCandidateObserved =
     materialBoundarySensitiveFalsePositive ||
-    containsBoundarySensitiveFalseMateriality(preservedBoundaryText, fixture);
+    containsBoundarySensitiveUncertainty(preservedBoundaryText, fixture);
   const declaredMaterialIssueCount =
     typeof summary?.material_issue_count === "number"
       ? summary.material_issue_count
@@ -560,12 +564,12 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
       (
         !falseMaterialityCandidateObserved ||
         (
-          textContainsAny(preservedBoundaryText, fixture.falseMaterialityTerms) &&
+          textContainsAny(preservedBoundaryText, fixture.boundaryUncertaintyTerms) &&
           textContainsAny(preservedBoundaryText, fixture.boundaryContextTerms)
         )
       ),
     [
-      `false materiality terms must remain non-material: ${fixture.falseMaterialityTerms.join(", ")}`,
+      `boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ${fixture.boundaryUncertaintyTerms.join(", ")}`,
       `non_material_finding_count=${nonMaterialFindings.length}`,
       `boundary_notes_chars=${boundaryNotes?.length ?? 0}`,
     ],
@@ -576,14 +580,14 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
     !falseMaterialityCandidateObserved ||
       (
         boundaryNotes !== null &&
-        textContainsAny(boundaryNotesText, fixture.falseMaterialityTerms) &&
+        textContainsAny(boundaryNotesText, fixture.boundaryUncertaintyTerms) &&
         textContainsAny(boundaryNotesText, fixture.boundaryContextTerms)
       ),
     [
       boundaryNotes === null
         ? "Boundary Notes section missing"
         : `Boundary Notes chars=${boundaryNotes.length}`,
-      `expected: compact note preserving ${fixture.falseMaterialityTerms.join(", ")} uncertainty`,
+      `expected: compact note preserving ${fixture.boundaryUncertaintyTerms.join(", ")} uncertainty`,
     ],
   );
 

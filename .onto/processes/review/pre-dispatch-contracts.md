@@ -369,18 +369,20 @@ Timeout must be recorded as:
 
 The runtime does not synthesize a final review from a partial lens set.
 
-Controlled deliberation timeout follows the same fail-loud closure shape:
+Controlled deliberation timeout/failure follows an unavailable-artifact
+completion shape:
 
-- synthesize is not executed
-- `execution_status=halted_partial`
-- `deliberation_status=not_performed`
-- `halt_phase=controlled_lens_deliberation`
-- `halt_unit_id`, `halt_unit_kind`, and lens-bound `halt_lens_id` identify the
-  failed deliberation unit
-- `deliberation_execution_results` preserve completed and failed deliberation
-  unit results, including timeout `failure_message`
-- `ReviewRecord` preserves refs for issue-stage artifacts already produced in
-  the same run and uses `null` for output artifacts that were not produced
+- per-lens deliberation failure writes an issue-scoped unavailable response that
+  preserves the source stance and records the blocker
+- teamlead deliberation failure writes an unavailable resolution where planned
+  issues are `unresolved-with-reason`
+- synthesize may execute from the unresolved controlled deliberation artifact
+- `deliberation_execution_results` preserve original failed unit results as
+  child results, including timeout `failure_message`
+- completed reviews with such child failures surface degradation evidence
+- `ReviewRecord` preserves refs for controlled deliberation and downstream
+  artifacts that were produced by runtime unavailable completion
+- `ReviewRecord` uses `null` only for output artifacts that were not produced
 
 ---
 

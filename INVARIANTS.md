@@ -52,6 +52,8 @@
 
 ## INV-MATERIAL-1 — material issue 정의는 고정 source, 변경은 사람 승인
 - **규칙**: "material issue"의 정의·판정 기준은 단일 source 문서에 고정한다. 정의 변경은 사람 승인을 거친다.
+- **현재 source**: [.onto/processes/review/material-issue-contract.md](.onto/processes/review/material-issue-contract.md)가 canonical predicate와 machine-readable contract를 소유한다. [.onto/authority/core-lexicon.yaml](.onto/authority/core-lexicon.yaml)의 `material_issue` term은 개념 seat이고, [src/core-runtime/review/review-result-classification.ts](src/core-runtime/review/review-result-classification.ts)가 runtime predicate owner다.
+- **현재 정의**: material issue는 `severity in {blocker, high, medium}` 그리고 `NOT admission_disqualified`일 때만 참인 classification/disclosure이며, 그 자체로 hot path나 stage progress를 차단하지 않는다. 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다.
 - **근거**: 판정 기준이 흔들리면 파이프라인 의미와 품질 비교의 기준선도 흔들린다.
 - **강제**: 역량 경계(보호 경로) + 지침. `↔ AGENTS §0-2`. 관련 계약: [.onto/processes/review/](.onto/processes/review/).
 

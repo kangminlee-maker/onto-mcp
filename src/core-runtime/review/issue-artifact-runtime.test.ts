@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import YAML from "yaml";
 import { describe, expect, it } from "vitest";
 import {
   buildDeliberationPlanInputProjection,
@@ -15,6 +16,7 @@ import {
   renderFindingRelationInputProjectionSection,
   renderProblemFramingInputProjectionSection,
   renderIssueStanceInputProjectionSection,
+  completeIssueLedgerArtifactOnDisk,
   validateIssueStanceResponseObject,
   validateIssueArtifactOnDisk,
   validateIssueArtifactObject,
@@ -149,6 +151,105 @@ function minimalExecutionPlan(projectRoot = "/repo") {
       },
     },
   } as any;
+}
+
+function writeYamlForTest(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `${YAML.stringify(value).trimEnd()}\n`, "utf8");
+}
+
+function findingLedgerForIssueCompletion() {
+  return {
+    schema_version: 1,
+    session_id: "session-001",
+    findings: [
+      {
+        finding_id: "finding-001",
+        lens_id: "logic",
+        source_ref: "round1/logic.findings.yaml#logic-candidate-001",
+        target: "src/retry.ts",
+        evidence_anchor: "src/retry.ts:1-4",
+        claim: "Retry zero is replaced by a default.",
+        lens_rationale_summary: "Zero retry budget is not preserved.",
+        proposed_action: "Preserve explicit zero retry budget.",
+        affected_purpose: "retry policy authority",
+        failure_condition: "Users configuring zero retries still get retries.",
+        impact: "The runtime behavior diverges from explicit settings.",
+        evidence_refs: [
+          "round1/logic.findings.yaml#logic-candidate-001",
+        ],
+        severity: "medium",
+        domain_threshold_used: null,
+        materiality_basis: {
+          affected_purpose: "retry policy authority",
+          failure_condition: "Users configuring zero retries still get retries.",
+          impact: "The runtime behavior diverges from explicit settings.",
+          evidence_refs: [
+            "round1/logic.findings.yaml#logic-candidate-001",
+          ],
+        },
+        causal_path: {
+          root_cause_candidate: "Falsy defaulting owns retry budget resolution.",
+          root_cause_step_id: "finding-001.cause-001",
+          steps: [
+            {
+              cause_id: "finding-001.cause-001",
+              claim: "Falsy defaulting is used for maxRetries.",
+              relation_to_previous: null,
+              evidence_refs: [
+                "round1/logic.findings.yaml#logic-candidate-001",
+              ],
+            },
+          ],
+          unresolved_beyond_evidence: null,
+        },
+      },
+      {
+        finding_id: "finding-002",
+        lens_id: "coverage",
+        source_ref: "round1/coverage.findings.yaml#coverage-candidate-001",
+        target: "src/retry.test.ts",
+        evidence_anchor: "src/retry.test.ts:1-4",
+        claim: "No test covers explicit zero retry budget.",
+        lens_rationale_summary: "Regression coverage is missing.",
+        proposed_action: "Add explicit zero retry coverage.",
+        affected_purpose: "retry policy regression safety",
+        failure_condition: "A future retry regression is not caught.",
+        impact: "Trust in settings boundary verification is weakened.",
+        evidence_refs: [
+          "round1/coverage.findings.yaml#coverage-candidate-001",
+        ],
+        severity: "medium",
+        domain_threshold_used: null,
+        materiality_basis: {
+          affected_purpose: "retry policy regression safety",
+          failure_condition: "A future retry regression is not caught.",
+          impact: "Trust in settings boundary verification is weakened.",
+          evidence_refs: [
+            "round1/coverage.findings.yaml#coverage-candidate-001",
+          ],
+        },
+        causal_path: {
+          root_cause_candidate: "The retry boundary lacks an explicit zero case.",
+          root_cause_step_id: "finding-002.cause-001",
+          steps: [
+            {
+              cause_id: "finding-002.cause-001",
+              claim: "No zero retry fixture exists.",
+              relation_to_previous: null,
+              evidence_refs: [
+                "round1/coverage.findings.yaml#coverage-candidate-001",
+              ],
+            },
+          ],
+          unresolved_beyond_evidence: null,
+        },
+      },
+    ],
+    validation: {
+      unaddressable_findings: [],
+    },
+  };
 }
 
 describe("validateIssueArtifactObject — issue-stance-matrix enum fields", () => {
@@ -2210,6 +2311,15 @@ describe("issue-ledger dependency validation", () => {
       },
     ],
   ]);
+  const mixedRelationIds = new Set(["rel-shared", "rel-same"]);
+  const mixedRelationKinds = new Map([
+    ["rel-shared", "shared_cause_candidate"],
+    ["rel-same", "same_root_candidate"],
+  ]);
+  const mixedRelationFacts = new Map([
+    ...knownRelationFacts,
+    ...sameRootRelationFacts,
+  ]);
   const knownFindingFacts = new Map([
     [
       "finding-001",
@@ -2336,6 +2446,28 @@ describe("issue-ledger dependency validation", () => {
     ).not.toThrow();
   });
 
+  it("allows a same-root-supported merge when the endpoints also share cause context", () => {
+    const ledger = validIssueLedger();
+    ledger.issues = [
+      {
+        ...issue("finding-001", "issue-001"),
+        surface_finding_ids: ["finding-001", "finding-002"],
+        relation_refs: ["rel-same"],
+      },
+    ];
+    ledger.issue_dependencies = [];
+
+    expect(() =>
+      validateIssueArtifactObject({
+        ...validationContext,
+        knownRelationIds: mixedRelationIds,
+        knownRelationKinds: mixedRelationKinds,
+        knownRelationFacts: mixedRelationFacts,
+        parsed: ledger,
+      }),
+    ).not.toThrow();
+  });
+
   it("rejects merging relation-graph singleton findings without same-root support", () => {
     const ledger = validIssueLedger();
     ledger.issues = [
@@ -2433,6 +2565,211 @@ describe("issue-ledger dependency validation", () => {
         parsed: ledger,
       }),
     ).toThrow(/raised_by_lens_ids/);
+  });
+});
+
+describe("completeIssueLedgerArtifactOnDisk", () => {
+  it("splits unsupported shared-cause-only merges and reprojects evidence refs", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-ledger-complete-"));
+    const executionPlan = minimalExecutionPlan(projectRoot);
+    writeYamlForTest(executionPlan.finding_ledger_path, findingLedgerForIssueCompletion());
+    writeYamlForTest(executionPlan.finding_relation_graph_path, {
+      schema_version: 1,
+      session_id: "session-001",
+      relations: [
+        {
+          relation_id: "rel-shared",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "shared_cause_candidate",
+          root_hypothesis: "Both findings involve retry policy handling.",
+          shared_cause: {
+            cause_claim: "Retry settings authority is not consistently enforced.",
+            from_cause_ref: "finding-001.cause-001",
+            to_cause_ref: "finding-002.cause-001",
+          },
+          rationale: "The two findings share intermediate retry-policy context but not one root.",
+          confidence: "medium",
+        },
+      ],
+      singleton_findings: [],
+      validation: {
+        uncovered_finding_ids: [],
+      },
+    });
+    writeYamlForTest(executionPlan.issue_ledger_path, {
+      schema_version: 1,
+      session_id: "session-001",
+      issues: [
+        {
+          issue_id: "issue-bad",
+          root_cause_hypothesis: "Retry policy authority is unstable.",
+          root_confidence: "medium",
+          surface_finding_ids: ["finding-001", "finding-002"],
+          relation_refs: [],
+          raised_by_lens_ids: ["logic", "coverage"],
+          issue_statement: "Retry policy issue.",
+          proposed_action: "Fix retry policy authority.",
+          affected_purpose: "retry policy authority",
+          failure_condition: "retry policy contracts drift",
+          impact: "settings behavior is less trustworthy",
+          evidence_refs: ["src/retry.ts:99-100"],
+          severity: "medium",
+          domain_threshold_used: null,
+          singleton_reason: null,
+        },
+      ],
+      issue_dependencies: [],
+      validation: {
+        unclustered_finding_ids: [],
+      },
+    });
+
+    const completed = await completeIssueLedgerArtifactOnDisk({
+      executionPlan,
+      projectRoot,
+      participatingLensIds: ["logic", "coverage"],
+      candidatePath: executionPlan.issue_ledger_path,
+    });
+
+    expect(completed.issues).toHaveLength(2);
+    expect(completed).toMatchObject({
+      issue_dependencies: [
+        {
+          dependency_kind: "shared_cause_candidate",
+          issue_ids: ["issue-001", "issue-002"],
+          relation_refs: ["rel-shared"],
+        },
+      ],
+    });
+    const firstIssue = (completed.issues as Array<Record<string, unknown>>)[0]!;
+    expect(firstIssue.surface_finding_ids).toEqual(["finding-001"]);
+    expect(firstIssue.evidence_refs).toContain(
+      "round1/logic.findings.yaml#logic-candidate-001",
+    );
+    expect(firstIssue.evidence_refs).not.toContain("src/retry.ts:99-100");
+    await expect(
+      validateIssueArtifactOnDisk({
+        executionPlan,
+        projectRoot,
+        artifactId: "issue-ledger",
+        participatingLensIds: ["logic", "coverage"],
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("keeps same-root-supported shared-cause endpoints in one completed issue", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-ledger-complete-"));
+    const executionPlan = minimalExecutionPlan(projectRoot);
+    writeYamlForTest(executionPlan.finding_ledger_path, findingLedgerForIssueCompletion());
+    writeYamlForTest(executionPlan.finding_relation_graph_path, {
+      schema_version: 1,
+      session_id: "session-001",
+      relations: [
+        {
+          relation_id: "rel-same",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "same_root_candidate",
+          root_hypothesis: "Retry policy authority is not enforced at the settings boundary.",
+          shared_cause: null,
+          rationale: "Both findings point to one settings-boundary root.",
+          confidence: "medium",
+        },
+        {
+          relation_id: "rel-shared",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "shared_cause_candidate",
+          root_hypothesis: "Both findings involve retry policy handling.",
+          shared_cause: {
+            cause_claim: "Retry settings authority is not consistently enforced.",
+            from_cause_ref: "finding-001.cause-001",
+            to_cause_ref: "finding-002.cause-001",
+          },
+          rationale: "The same endpoint findings also preserve shared cause context.",
+          confidence: "medium",
+        },
+      ],
+      singleton_findings: [],
+      validation: {
+        uncovered_finding_ids: [],
+      },
+    });
+
+    const completed = await completeIssueLedgerArtifactOnDisk({
+      executionPlan,
+      projectRoot,
+      participatingLensIds: ["logic", "coverage"],
+    });
+
+    expect(completed.issues).toMatchObject([
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-002"],
+        relation_refs: ["rel-same"],
+      },
+    ]);
+    expect(completed.issue_dependencies).toEqual([]);
+    await expect(
+      validateIssueArtifactOnDisk({
+        executionPlan,
+        projectRoot,
+        artifactId: "issue-ledger",
+        participatingLensIds: ["logic", "coverage"],
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("can build a conservative issue-ledger when no candidate output exists", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-ledger-fallback-"));
+    const executionPlan = minimalExecutionPlan(projectRoot);
+    writeYamlForTest(executionPlan.finding_ledger_path, findingLedgerForIssueCompletion());
+    writeYamlForTest(executionPlan.finding_relation_graph_path, {
+      schema_version: 1,
+      session_id: "session-001",
+      relations: [
+        {
+          relation_id: "rel-same",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "same_root_candidate",
+          root_hypothesis: "Retry policy authority is not enforced at the settings boundary.",
+          shared_cause: null,
+          rationale: "Both findings point to one settings-boundary root.",
+          confidence: "medium",
+        },
+      ],
+      singleton_findings: [],
+      validation: {
+        uncovered_finding_ids: [],
+      },
+    });
+
+    const completed = await completeIssueLedgerArtifactOnDisk({
+      executionPlan,
+      projectRoot,
+      participatingLensIds: ["logic", "coverage"],
+    });
+
+    expect(completed.issues).toMatchObject([
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-002"],
+        relation_refs: ["rel-same"],
+        raised_by_lens_ids: ["logic", "coverage"],
+        severity: "medium",
+      },
+    ]);
+    expect(completed.issue_dependencies).toEqual([]);
+    await expect(
+      validateIssueArtifactOnDisk({
+        executionPlan,
+        projectRoot,
+        artifactId: "issue-ledger",
+        participatingLensIds: ["logic", "coverage"],
+      }),
+    ).resolves.toBeTruthy();
   });
 });
 
