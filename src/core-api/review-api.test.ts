@@ -18,6 +18,7 @@ import {
 import {
   executeReviewPromptExecution,
 } from "../core-runtime/cli/run-review-prompt-execution.js";
+import { driveHostOrchestration } from "../core-runtime/cli/host-orchestration-reference-driver.js";
 import {
   disableReviewMockRealizationEnv,
   REVIEW_MOCK_REALIZATION_ENV,
@@ -327,6 +328,70 @@ describe("createOntoReviewCoreApi", () => {
     if (advance.status !== "in_progress") return;
     expect(advance.readyUnits.map((u) => u.unit_id)).toEqual(["finding-ledger"]);
     expect(advance.readyUnits[0]?.unit_kind).toBe("issue_artifact");
+  });
+
+  it("reference host driver advances a host session deterministically (mock)", async () => {
+    const projectRoot = await tempProjectRoot();
+    await writeProjectSettings(projectRoot, {
+      schema_version: "settings.json/v3",
+      review: {
+        artifacts: { lens_output_format: "markdown" },
+        execution: {
+          topology: "main-workers",
+          executor: "direct_call",
+          orchestration: "host",
+          deliberation: "controlled-lens-deliberation",
+          artifact_generation_realization: "semantic_mock",
+          actors: {
+            teamlead: { seat: "main", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            lens: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            synthesize: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+          },
+        },
+      },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Reference host driver mock run",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic", "coverage"],
+    });
+    const plan = await readYamlDocument<ReviewExecutionPlan>(
+      path.join(prepared.sessionRoot, "execution-plan.yaml"),
+    );
+
+    // Mock executor: write a deterministic seat at each unit's output path.
+    const mockExecutor = async (unit: { unit_id: string; output_path: string | null }) => {
+      if (!unit.output_path) throw new Error(`unit ${unit.unit_id} has no output path`);
+      if (unit.unit_id === "finding-ledger") {
+        await writeYamlDocument(unit.output_path, {
+          session_id: plan.session_id,
+          findings: [],
+        });
+        return;
+      }
+      await fs.writeFile(unit.output_path, `# ${unit.unit_id}\n`, "utf8");
+    };
+
+    // Two rounds: lens stage -> finding-ledger stage. Bounded so the mock never
+    // has to satisfy the deeper issue-artifact schemas.
+    const run = await driveHostOrchestration({
+      sessionRoot: prepared.sessionRoot,
+      executeUnit: mockExecutor,
+      maxRounds: 2,
+    });
+
+    expect(run.finalStatus).toBe("max_rounds");
+    expect(run.roundCount).toBe(2);
+    expect(run.executedUnitIds).toContain("logic");
+    expect(run.executedUnitIds).toContain("coverage");
+    expect(run.executedUnitIds).toContain("finding-ledger");
+    expect(run.executedUnitIds[run.executedUnitIds.length - 1]).toBe(
+      "finding-ledger",
+    );
   });
 
   it("fails loudly when a present review-record is malformed", async () => {
