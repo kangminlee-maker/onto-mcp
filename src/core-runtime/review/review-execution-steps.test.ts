@@ -13,6 +13,7 @@ import type { ReviewContinuationUnit } from "./continuation-plan.js";
 import {
   computeReviewFrontier,
   ensureUnitPacket,
+  finalizeStageGate,
   mergeUnitResultIntoExecutionResult,
   reconstructIssueArtifactPacketInputs,
   validateUnitSeatToResult,
@@ -538,6 +539,56 @@ describe("ensureUnitPacket", () => {
     expect(result.packetPath).toBe(unit.packetPath);
     const packet = await fs.readFile(result.packetPath, "utf8");
     expect(packet.trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("finalizeStageGate", () => {
+  it("passes the gate and allows downstream once every lens is trusted", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await seedTrustedLensSeats(root, plan);
+
+    const barrier = await finalizeStageGate(root);
+
+    expect(barrier.status).toBe("passed");
+    expect(barrier.downstream_allowed).toBe(true);
+    expect(barrier.completed_lens_ids).toEqual(
+      expect.arrayContaining(["logic", "coverage"]),
+    );
+    expect(barrier.missing_lens_ids).toEqual([]);
+    expect(barrier.degraded_lens_ids).toEqual([]);
+    // The barrier is recorded for downstream consumers / completeReviewSession.
+    const onDisk = YAML.parse(
+      await fs.readFile(plan.lens_completion_barrier_path, "utf8"),
+    ) as typeof barrier;
+    expect(onDisk.downstream_allowed).toBe(true);
+  });
+
+  it("fails the gate and blocks downstream when a lens never completes", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root); // min participating = 2 lenses
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    // Only "logic" was produced + recorded; "coverage" never arrived.
+    const logicSeat = plan.lens_execution_seats.find((s) => s.lens_id === "logic")!;
+    await writeOutput(logicSeat.output_path);
+    await writeYaml(path.join(root, "execution-result.yaml"), {
+      ...lensOnlyExecutionResult(plan),
+      lens_execution_results: [
+        lensResult(
+          "logic",
+          plan.lens_prompt_packet_seats.find((s) => s.lens_id === "logic")!.packet_path,
+          logicSeat.output_path,
+        ),
+      ],
+    });
+
+    const barrier = await finalizeStageGate(root);
+
+    expect(barrier.downstream_allowed).toBe(false);
+    expect(barrier.status).toBe("failed");
+    expect(barrier.completed_lens_ids).toEqual(["logic"]);
+    expect(barrier.missing_lens_ids).toContain("coverage");
   });
 });
 

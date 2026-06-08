@@ -21,6 +21,10 @@ import {
 } from "./continuation-plan.js";
 import { readValidatedLensSidecarArtifact } from "./lens-sidecar-artifact.js";
 import {
+  computeLensCompletionBarrier,
+  resolveRequiredParticipatingLensCount,
+} from "./lens-completion-policy.js";
+import {
   resolveProblemFramingProfileRef,
   writeIssueArtifactPromptPacket,
 } from "./issue-artifact-runtime.js";
@@ -43,8 +47,9 @@ import type {
  * spawns). Extractions so far: 4a `computeReviewFrontier` (read-only frontier);
  * 4b `validateUnitSeatToResult` + `mergeUnitResultIntoExecutionResult` (seat ->
  * result -> execution-result merge); 4c `ensureUnitPacket` (frontier-unit prompt
- * packet from durable state). Subsequent extractions (stage gate, assemble) land
- * here too.
+ * packet from durable state); 4d `finalizeStageGate` (lens-completion barrier
+ * from durable state, via the shared `computeLensCompletionBarrier`). The final
+ * `assembleIfComplete` extraction lands here too.
  */
 
 async function readOptionalYamlArtifact<T>(filePath: string): Promise<T | null> {
@@ -476,4 +481,50 @@ export async function ensureUnitPacket(
   throw new Error(
     `ensureUnitPacket does not generate ${unit.unitKind} packets; the host round assembles deliberation/synthesize packets (Stage 1 Step 4e).`,
   );
+}
+
+/**
+ * Compute and record the lens-completion stage gate from durable state (4d).
+ *
+ * The lens stage barrier decides whether downstream (issue-artifact) work may
+ * proceed. The onto-runtime (A) writes it inline from in-memory dispatch
+ * outcomes; this is the shared durable-state extraction so the host (B) round
+ * can write the same gate after its lens round. Both compute the gate via the
+ * shared {@link computeLensCompletionBarrier}; A and B only differ in how the
+ * planned / completed / failed lens id sets are derived.
+ *
+ * Here the sets come from the ledger: completed = trusted lens units, failed =
+ * lens units recorded `failed`, planned = the plan's lens seats. The caller
+ * decides halt/proceed from the returned barrier's `downstream_allowed`.
+ */
+export async function finalizeStageGate(
+  sessionRoot: string,
+  executionPlan?: ReviewExecutionPlan,
+): Promise<ReviewLensCompletionBarrierArtifact> {
+  const plan = executionPlan ?? (await loadExecutionPlan(sessionRoot));
+  const ledger = await buildSessionLedger(sessionRoot, plan);
+  const lensUnits = ledger.units.filter((entry) => entry.unitKind === "lens");
+  const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);
+  const completedLensIds = lensUnits
+    .filter((entry) => isTrustedLedgerUnit(entry))
+    .map((entry) => entry.unitId);
+  const failedLensIds = lensUnits
+    .filter((entry) => entry.status === "failed")
+    .map((entry) => entry.unitId);
+
+  const barrier = computeLensCompletionBarrier({
+    sessionId: plan.session_id,
+    createdAt: isoNow(),
+    observedDispatchWidth: plan.max_concurrent_lenses ?? plannedLensIds.length,
+    minimumParticipatingLenses: resolveRequiredParticipatingLensCount(plan),
+    plannedLensIds,
+    completedLensIds,
+    failedLensIds,
+  });
+
+  const barrierPath =
+    plan.lens_completion_barrier_path ??
+    path.join(sessionRoot, "lens-completion-barrier.yaml");
+  await writeYamlDocument(barrierPath, barrier);
+  return barrier;
 }
