@@ -25,6 +25,8 @@ import {
   resolveRequiredParticipatingLensCount,
 } from "./lens-completion-policy.js";
 import { assertHostOrchestratedSession } from "./orchestration-owner.js";
+import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
+import { defaultReviewRetrySettings } from "../discovery/settings-chain.js";
 import {
   resolveProblemFramingProfileRef,
   writeIssueArtifactPromptPacket,
@@ -641,14 +643,51 @@ export async function reviewRound(
 }
 
 /**
+ * Initial execution-result.yaml scaffold for a host session (B), seeded on the
+ * first advance before any unit result exists. It carries only the
+ * execution-level metadata derived from the plan (status starts `halted_partial`
+ * as an in-progress proxy — the enum has no explicit in-progress); per-unit
+ * results are merged in by {@link mergeUnitResultIntoExecutionResult}.
+ */
+function buildInitialExecutionResultScaffold(
+  plan: ReviewExecutionPlan,
+): ReviewExecutionResultArtifact {
+  const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);
+  return {
+    session_id: plan.session_id,
+    session_root: plan.session_root,
+    execution_realization: plan.execution_realization,
+    host_runtime: plan.host_runtime,
+    artifact_generation_realization: plan.artifact_generation_realization,
+    semantic_quality_evidence: semanticQualityEvidenceForArtifactGeneration(
+      plan.artifact_generation_realization,
+    ),
+    review_mode: plan.review_mode,
+    execution_status: "halted_partial",
+    execution_started_at: isoNow(),
+    execution_completed_at: isoNow(),
+    total_duration_ms: 0,
+    max_concurrent_lenses: plan.max_concurrent_lenses ?? plannedLensIds.length,
+    retry_policy: defaultReviewRetrySettings(),
+    planned_lens_ids: plannedLensIds,
+    participating_lens_ids: [],
+    degraded_lens_ids: [],
+    excluded_lens_ids: [],
+    executed_lens_count: 0,
+    synthesis_executed: false,
+    error_log_path: plan.error_log_path,
+    lens_execution_results: [],
+  };
+}
+
+/**
  * Host advance (B): validate the seats the host just wrote for `executed`
  * units, merge them into the durable result, finalize the lens stage gate, then
  * return the next round (4e). onto owns ledger/result/gate truth; the host owns
  * unit execution. Fail-closed to host-orchestrated sessions.
  *
- * `opts.base` seeds execution-result.yaml on the first advance of a session
- * (before any result exists); the core-api wrapper supplies the scaffold since
- * its execution-level metadata derivation lives in the cli layer.
+ * On the first advance (no execution-result yet) the result is self-seeded from
+ * {@link buildInitialExecutionResultScaffold}; `opts.base` overrides that seed.
  */
 export async function reviewAdvance(
   sessionRoot: string,
@@ -663,7 +702,8 @@ export async function reviewAdvance(
     frontier.frontierUnits.map((unit) => [unit.unitId, unit]),
   );
 
-  let base = opts?.base;
+  let base: ReviewExecutionResultArtifact | undefined =
+    opts?.base ?? buildInitialExecutionResultScaffold(plan);
   for (const unitId of executed) {
     const unit = frontierById.get(unitId);
     if (!unit) {

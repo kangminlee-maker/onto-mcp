@@ -631,9 +631,8 @@ describe("reviewRound / reviewAdvance (host B engine)", () => {
       await writeOutput(seat.output_path);
     }
 
-    const result = await reviewAdvance(root, ["logic", "coverage"], {
-      base: scaffoldExecutionResult(plan),
-    });
+    // No base passed: reviewAdvance self-seeds execution-result.yaml.
+    const result = await reviewAdvance(root, ["logic", "coverage"]);
 
     expect(result.status).toBe("in_progress");
     if (result.status !== "in_progress") return;

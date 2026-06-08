@@ -268,6 +268,67 @@ describe("createOntoReviewCoreApi", () => {
     ).toContain("coverage.findings.yaml");
   });
 
+  it("drives a host-orchestrated session through reviewRound/reviewAdvance", async () => {
+    const projectRoot = await tempProjectRoot();
+    // Host-orchestrated session with markdown lenses (simple mock seats).
+    await writeProjectSettings(projectRoot, {
+      schema_version: "settings.json/v3",
+      review: {
+        artifacts: { lens_output_format: "markdown" },
+        execution: {
+          topology: "main-workers",
+          executor: "direct_call",
+          orchestration: "host",
+          deliberation: "controlled-lens-deliberation",
+          artifact_generation_realization: "semantic_mock",
+          actors: {
+            teamlead: { seat: "main", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            lens: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            synthesize: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+          },
+        },
+      },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Host orchestration round contract",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic", "coverage"],
+    });
+    const plan = await readYamlDocument<ReviewExecutionPlan>(
+      path.join(prepared.sessionRoot, "execution-plan.yaml"),
+    );
+    expect(plan.orchestration).toBe("host");
+
+    // Round 1: onto reports the lens units ready for the host to execute.
+    const round = await api.reviewRound({ sessionRoot: prepared.sessionRoot });
+    expect(round.status).toBe("in_progress");
+    if (round.status !== "in_progress") return;
+    expect(round.readyUnits.map((u) => u.unit_id).sort()).toEqual([
+      "coverage",
+      "logic",
+    ]);
+    expect(round.readyUnits.every((u) => u.unit_kind === "lens")).toBe(true);
+
+    // The host executes the lenses -> writes their seats.
+    for (const seat of plan.lens_execution_seats) {
+      await fs.writeFile(seat.output_path, `# ${seat.lens_id} findings\n`, "utf8");
+    }
+
+    // Advance: onto validates the seats and returns the next round.
+    const advance = await api.reviewAdvance({
+      sessionRoot: prepared.sessionRoot,
+      executed: ["logic", "coverage"],
+    });
+    expect(advance.status).toBe("in_progress");
+    if (advance.status !== "in_progress") return;
+    expect(advance.readyUnits.map((u) => u.unit_id)).toEqual(["finding-ledger"]);
+    expect(advance.readyUnits[0]?.unit_kind).toBe("issue_artifact");
+  });
+
   it("fails loudly when a present review-record is malformed", async () => {
     const projectRoot = await tempProjectRoot();
     await writeDirectCallReviewSettings(projectRoot);
