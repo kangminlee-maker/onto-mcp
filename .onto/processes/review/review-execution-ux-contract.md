@@ -87,11 +87,11 @@ This contract reuses existing concepts:
 | `review-run-manifest.yaml` | progress, step, and run audit source |
 
 This contract does not introduce a separate `materiality` field. Material issue
-status is derived from `severity`.
+status is derived from `severity` plus `problem-framing.yaml` admission.
 
 ```text
-material_issue = severity in [blocker, high, medium]
-non_material_finding = severity in [low, info]
+material_issue = severity in [blocker, high, medium] after problem-framing admission
+non_material_finding = severity in [low, info] or a disqualified material-severity candidate
 ```
 
 ---
@@ -119,6 +119,13 @@ Rules:
 5. A `blocker` finding does not automatically become `current_blocker` in
    problem framing. Timing still depends on the review target role, declared
    purpose, and development phase.
+6. Material issue status is a classification and disclosure projection. It does
+   not by itself block the hot path or stage progress.
+7. Blocking is owned only by deterministic runtime gates: schema, artifact
+   contract, allowed-set, enum, ref, path, id, digest, lineage, required
+   artifact, or runtime-owned-field failures.
+8. Non-material findings are preserved as review output and must not be forced
+   to zero.
 
 ---
 

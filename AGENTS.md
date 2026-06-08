@@ -189,7 +189,7 @@ DO:
 - `deliberation.md`는 `deliberation-resolution.yaml`의 human-readable projection이다
 - `synthesis-ledger.yaml`이 synthesize source layer이고 `synthesis.md`는 projection이다
 - `synthesize`는 issue artifact truth와 `deliberation-resolution.yaml`을 보존적으로 렌더링하며 새 resolution을 만들지 않는다
-- material issue는 별도 enum이 아니라 severity와 `problem-framing.yaml` admission에서 파생한다. canonical 기준은 review contracts가 소유한다
+- material issue는 별도 enum이 아니라 severity와 `problem-framing.yaml` admission에서 파생한 분류·disclosure다. canonical 기준은 review contracts가 소유하며, 단계 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다
 
 ---
 

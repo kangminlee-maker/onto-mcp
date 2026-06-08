@@ -13,8 +13,11 @@ bounded runtime facts instead of scraping CLI stdout.
 
 Review results also expose `resultClassificationSummary`, the runtime-derived
 projection that separates material issues from non-material findings using the
-active severity contract: `blocker`/`high`/`medium` are material, while
-`low`/`info` are non-material.
+active review contract. `blocker`/`high`/`medium` become material only after
+`problem-framing.yaml` admission; `low`/`info` and material-severity candidates
+disqualified by problem framing remain non-material/disclosed. This projection is
+not a hot-path gate; blocking belongs to deterministic runtime structural and
+contract failures.
 
 `runReview` supports timeout-safe MCP operation through
 `returnRunningAfterMs`. If a session is planned but final artifacts are not
