@@ -11,15 +11,25 @@ import {
   type ReviewRunManifestForLedger,
 } from "./pipeline-execution-ledger.js";
 import {
+  isTrustedLedgerUnit,
+  type PipelineExecutionLedger,
+} from "../pipeline-execution-ledger.js";
+import {
   buildReviewContinuationPlan,
   type ReviewContinuationPlan,
   type ReviewContinuationUnit,
 } from "./continuation-plan.js";
 import { readValidatedLensSidecarArtifact } from "./lens-sidecar-artifact.js";
+import {
+  resolveProblemFramingProfileRef,
+  writeIssueArtifactPromptPacket,
+} from "./issue-artifact-runtime.js";
 import type {
   ReviewExecutionPlan,
   ReviewExecutionResultArtifact,
+  ReviewIssueArtifactId,
   ReviewLensCompletionBarrierArtifact,
+  ReviewSessionMetadata,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
 
@@ -30,10 +40,11 @@ import type {
  * continuation-plan frontier, NOT by in-memory control flow. The onto-runtime
  * path (A) and the host-orchestration path (B) share these steps; the only
  * difference between A and B is who *executes* a unit (onto spawns vs the host
- * spawns). Extractions so far: 4a `computeReviewFrontier` (read-only frontier)
- * and 4b `validateUnitSeatToResult` + `mergeUnitResultIntoExecutionResult`
- * (seat -> result -> execution-result merge). Subsequent extractions (packet
- * generation, stage gate, assemble) land here too.
+ * spawns). Extractions so far: 4a `computeReviewFrontier` (read-only frontier);
+ * 4b `validateUnitSeatToResult` + `mergeUnitResultIntoExecutionResult` (seat ->
+ * result -> execution-result merge); 4c `ensureUnitPacket` (frontier-unit prompt
+ * packet from durable state). Subsequent extractions (stage gate, assemble) land
+ * here too.
  */
 
 async function readOptionalYamlArtifact<T>(filePath: string): Promise<T | null> {
@@ -63,22 +74,20 @@ async function loadExecutionPlan(sessionRoot: string): Promise<ReviewExecutionPl
 }
 
 /**
- * Build the current review frontier for a prepared session from durable state.
+ * Reconstruct the PipelineExecutionLedger for a prepared session from durable
+ * state (execution-plan + optional execution-result / review-run-manifest /
+ * lens-completion-barrier). Read-only.
  *
- * Reads execution-plan (+ optional execution-result, review-run-manifest,
- * lens-completion-barrier), reconstructs the PipelineExecutionLedger, and
- * returns the continuation plan whose `frontierUnits` are the units that are
- * ready to run next (all upstreams trusted, not yet trusted themselves).
- *
- * Read-only: writes nothing. A fresh session (no execution-result) yields the
- * initial stage (lens units) as the frontier.
+ * Shared by {@link computeReviewFrontier} (frontier) and the packet/result
+ * steps that need trusted-unit provenance (e.g. {@link ensureUnitPacket}'s
+ * lens-output reconstruction).
  */
-export async function computeReviewFrontier(
+export async function buildSessionLedger(
   sessionRoot: string,
-  targetUnits?: string[],
-): Promise<ReviewContinuationPlan> {
+  executionPlan?: ReviewExecutionPlan,
+): Promise<PipelineExecutionLedger> {
   const planPath = executionPlanPath(sessionRoot);
-  const executionPlan = await loadExecutionPlan(sessionRoot);
+  const plan = executionPlan ?? (await loadExecutionPlan(sessionRoot));
 
   const resultPath = executionResultPath(sessionRoot);
   const reviewRunManifestPath = path.join(sessionRoot, "review-run-manifest.yaml");
@@ -108,26 +117,40 @@ export async function computeReviewFrontier(
     ...(lensCompletionBarrier
       ? { lens_completion_barrier: lensCompletionBarrierPath }
       : {}),
-    ...(executionPlan.finding_ledger_path
-      ? { finding_ledger: executionPlan.finding_ledger_path }
+    ...(plan.finding_ledger_path
+      ? { finding_ledger: plan.finding_ledger_path }
       : {}),
-    ...(executionPlan.issue_ledger_path
-      ? { issue_ledger: executionPlan.issue_ledger_path }
-      : {}),
-    ...(executionPlan.review_context_manifest_path
-      ? { review_context_manifest: executionPlan.review_context_manifest_path }
+    ...(plan.issue_ledger_path ? { issue_ledger: plan.issue_ledger_path } : {}),
+    ...(plan.review_context_manifest_path
+      ? { review_context_manifest: plan.review_context_manifest_path }
       : {}),
   };
 
-  const ledger = await buildReviewPipelineExecutionLedger({
-      sessionRoot,
-      executionPlan,
-      artifactRefs,
-      executionResult,
-      reviewRunManifest,
-      lensCompletionBarrier,
-    });
+  return buildReviewPipelineExecutionLedger({
+    sessionRoot,
+    executionPlan: plan,
+    artifactRefs,
+    executionResult,
+    reviewRunManifest,
+    lensCompletionBarrier,
+  });
+}
 
+/**
+ * Build the current review frontier for a prepared session from durable state.
+ *
+ * Reconstructs the PipelineExecutionLedger (see {@link buildSessionLedger}) and
+ * returns the continuation plan whose `frontierUnits` are the units that are
+ * ready to run next (all upstreams trusted, not yet trusted themselves).
+ *
+ * Read-only: writes nothing. A fresh session (no execution-result) yields the
+ * initial stage (lens units) as the frontier.
+ */
+export async function computeReviewFrontier(
+  sessionRoot: string,
+  targetUnits?: string[],
+): Promise<ReviewContinuationPlan> {
+  const ledger = await buildSessionLedger(sessionRoot);
   return buildReviewContinuationPlan({
     ledger,
     ...(targetUnits !== undefined ? { targetUnits } : {}),
@@ -307,4 +330,150 @@ export async function mergeUnitResultIntoExecutionResult(args: {
 
   await writeYamlDocument(resultPath, merged);
   return merged;
+}
+
+/** Repo project root, read from the session metadata the plan points at. */
+async function loadProjectRoot(plan: ReviewExecutionPlan): Promise<string> {
+  const metadata = await readOptionalYamlArtifact<ReviewSessionMetadata>(
+    plan.session_metadata_path,
+  );
+  if (!metadata?.project_root) {
+    throw new Error(
+      `review-execution-steps requires session-metadata project_root: ${plan.session_metadata_path}`,
+    );
+  }
+  return metadata.project_root;
+}
+
+/** Trusted units of a given kind, in ledger order, with their seat output path. */
+function trustedUnitOutputPaths(
+  ledger: PipelineExecutionLedger,
+  unitKind: string,
+): string[] {
+  return ledger.units
+    .filter((entry) => entry.unitKind === unitKind && isTrustedLedgerUnit(entry))
+    .flatMap((entry) => entry.outputRefs.slice(0, 1));
+}
+
+export interface IssueArtifactPacketInputs {
+  projectRoot: string;
+  lensOutputPaths: string[];
+  deliberationResponsePaths: string[];
+  deliberationOutputPath: string | undefined;
+  problemFramingProfileRef: string | null;
+}
+
+/**
+ * Reconstruct, from durable session state, the inputs that
+ * {@link writeIssueArtifactPromptPacket} consumes (4c).
+ *
+ * In the onto-runtime path (A) these come from in-memory execution context; the
+ * host path (B) has only on-disk state, so this rebuilds them: `project_root`
+ * from the plan, `lensOutputPaths` from the trusted lens units in the ledger,
+ * and (for the post-deliberation `problem-framing` artifact) the deliberation
+ * refs from the trusted deliberation units + the plan's teamlead deliberation
+ * output + the resolved problem-framing profile.
+ */
+export async function reconstructIssueArtifactPacketInputs(
+  sessionRoot: string,
+  artifactId: ReviewIssueArtifactId,
+  executionPlan?: ReviewExecutionPlan,
+): Promise<IssueArtifactPacketInputs> {
+  const plan = executionPlan ?? (await loadExecutionPlan(sessionRoot));
+  const projectRoot = await loadProjectRoot(plan);
+  const ledger = await buildSessionLedger(sessionRoot, plan);
+  const lensOutputPaths = trustedUnitOutputPaths(ledger, "lens");
+
+  if (artifactId !== "problem-framing") {
+    return {
+      projectRoot,
+      lensOutputPaths,
+      deliberationResponsePaths: [],
+      deliberationOutputPath: undefined,
+      problemFramingProfileRef: null,
+    };
+  }
+
+  const deliberationOutputPath = (await fileExists(plan.deliberation_output_path))
+    ? plan.deliberation_output_path
+    : undefined;
+  return {
+    projectRoot,
+    lensOutputPaths,
+    deliberationResponsePaths: trustedUnitOutputPaths(ledger, "deliberation"),
+    deliberationOutputPath,
+    problemFramingProfileRef: await resolveProblemFramingProfileRef({
+      projectRoot,
+      executionPlan: plan,
+    }),
+  };
+}
+
+export interface EnsureUnitPacketResult {
+  packetPath: string;
+  generated: boolean;
+}
+
+/**
+ * Ensure a frontier unit's prompt packet exists on disk, generating it from
+ * durable state when the host (B) is about to execute the unit (4c).
+ *
+ * The onto-runtime path (A) generates these packets inline inside
+ * `executeReviewPromptExecution`; this is the shared, durable-state extraction
+ * so the host round can produce the same packet without that in-memory context.
+ * A and B differ only in who *executes* the unit afterward.
+ *
+ * - `lens`: prepare already materialized the packet -> noop; assert it exists
+ *   and return its path.
+ * - `issue_artifact`: generate via {@link writeIssueArtifactPromptPacket} with
+ *   inputs rebuilt by {@link reconstructIssueArtifactPacketInputs}.
+ * - `deliberation` / `synthesize`: NOT generated here. Their packets are
+ *   produced dynamically by the deliberation / synthesis orchestration (which
+ *   is interleaved with execution in A); the host round assembles those in
+ *   Step 4e. Fail closed rather than emit a divergent packet.
+ */
+export async function ensureUnitPacket(
+  sessionRoot: string,
+  unit: ReviewContinuationUnit,
+  executionPlan?: ReviewExecutionPlan,
+): Promise<EnsureUnitPacketResult> {
+  const plan = executionPlan ?? (await loadExecutionPlan(sessionRoot));
+
+  if (unit.unitKind === "lens") {
+    const packetPath = unit.packetPath ?? "";
+    if (!packetPath || !(await fileExists(packetPath))) {
+      throw new Error(
+        `ensureUnitPacket: lens packet missing for ${unit.unitId} (prepare must materialize it): ${packetPath}`,
+      );
+    }
+    return { packetPath, generated: false };
+  }
+
+  if (unit.unitKind === "issue_artifact") {
+    const artifactId = unit.unitId as ReviewIssueArtifactId;
+    const inputs = await reconstructIssueArtifactPacketInputs(
+      sessionRoot,
+      artifactId,
+      plan,
+    );
+    const seat = await writeIssueArtifactPromptPacket({
+      artifactId,
+      sessionId: plan.session_id,
+      projectRoot: inputs.projectRoot,
+      executionPlan: plan,
+      lensOutputPaths: inputs.lensOutputPaths,
+      ...(inputs.deliberationResponsePaths.length > 0
+        ? { deliberationResponsePaths: inputs.deliberationResponsePaths }
+        : {}),
+      ...(inputs.deliberationOutputPath
+        ? { deliberationOutputPath: inputs.deliberationOutputPath }
+        : {}),
+      problemFramingProfileRef: inputs.problemFramingProfileRef,
+    });
+    return { packetPath: seat.packet_path, generated: true };
+  }
+
+  throw new Error(
+    `ensureUnitPacket does not generate ${unit.unitKind} packets; the host round assembles deliberation/synthesize packets (Stage 1 Step 4e).`,
+  );
 }

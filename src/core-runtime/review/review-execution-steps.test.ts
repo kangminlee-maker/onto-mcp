@@ -12,7 +12,9 @@ import type {
 import type { ReviewContinuationUnit } from "./continuation-plan.js";
 import {
   computeReviewFrontier,
+  ensureUnitPacket,
   mergeUnitResultIntoExecutionResult,
+  reconstructIssueArtifactPacketInputs,
   validateUnitSeatToResult,
 } from "./review-execution-steps.js";
 
@@ -349,6 +351,193 @@ describe("mergeUnitResultIntoExecutionResult", () => {
     const frontierIds = frontier.frontierUnits.map((u) => u.unitId);
     expect(frontierIds).toContain("finding-ledger");
     expect(frontierIds).not.toContain("logic");
+  });
+});
+
+// Minimal-but-valid boundary fields so writeIssueArtifactPromptPacket can render
+// a full prompt (mirrors the fixture in issue-artifact-runtime.test.ts).
+function withBoundary(
+  plan: ReviewExecutionPlan,
+  projectRoot: string,
+): ReviewExecutionPlan {
+  const decision = {
+    requested_policy: "denied",
+    effective_policy: "denied",
+    guarantee_level: "prompt_declared_only",
+    notes: [],
+  };
+  return {
+    ...plan,
+    boundary_policy: {
+      web_research_policy: "denied",
+      repo_exploration_policy: "allowed",
+      recursive_reference_expansion_policy: "denied",
+      filesystem_scope: { allowed_roots: [projectRoot] },
+      write_policy: {
+        source_mutation_policy: "denied",
+        allowed_output_refs: [plan.session_root],
+      },
+      provenance_policy: {
+        extra_exploration_citation_required: false,
+        web_source_citation_required: false,
+      },
+    },
+    boundary_presentation: {
+      role_definition_presentation: "embedded_and_ref",
+      primary_target_presentation: "embedded_and_ref",
+      required_context_presentation: "ref_only",
+      output_seat_presentation: "declared",
+      control_policy_presentation: "declared",
+    },
+    boundary_enforcement_profile: {
+      prompt_boundary_enforcement: "prompt_declared_only",
+      filesystem_boundary_enforcement: "prompt_declared_only",
+      network_boundary_enforcement: "prompt_declared_only",
+      write_boundary_enforcement: "prompt_declared_only",
+    },
+    effective_boundary_state: {
+      web_research: { ...decision, effective_policy: "denied" },
+      repo_exploration: {
+        ...decision,
+        requested_policy: "allowed",
+        effective_policy: "allowed",
+      },
+      recursive_reference_expansion: decision,
+      source_mutation: decision,
+      filesystem_scope: {
+        requested_allowed_roots: [projectRoot],
+        effective_allowed_roots: [projectRoot],
+        guarantee_level: "prompt_declared_only",
+        notes: [],
+      },
+    },
+  } as ReviewExecutionPlan;
+}
+
+async function writeSessionMetadata(
+  plan: ReviewExecutionPlan,
+  projectRoot: string,
+): Promise<void> {
+  await writeYaml(plan.session_metadata_path, {
+    session_id: plan.session_id,
+    project_root: projectRoot,
+  });
+}
+
+async function seedTrustedLensSeats(
+  root: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  for (const seat of plan.lens_execution_seats) {
+    await writeOutput(seat.output_path);
+  }
+  await writeYaml(
+    path.join(root, "execution-result.yaml"),
+    lensOnlyExecutionResult(plan),
+  );
+}
+
+describe("reconstructIssueArtifactPacketInputs", () => {
+  it("rebuilds lens output paths from trusted lens units + project root", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, "/repo");
+    await seedTrustedLensSeats(root, plan);
+
+    const inputs = await reconstructIssueArtifactPacketInputs(
+      root,
+      "finding-relation-graph",
+    );
+
+    expect(inputs.projectRoot).toBe("/repo");
+    expect(inputs.lensOutputPaths).toEqual(
+      plan.lens_execution_seats.map((seat) => seat.output_path),
+    );
+    // Non-deliberation artifact: no deliberation refs.
+    expect(inputs.deliberationResponsePaths).toEqual([]);
+    expect(inputs.deliberationOutputPath).toBeUndefined();
+    expect(inputs.problemFramingProfileRef).toBeNull();
+  });
+
+  it("omits untrusted lenses (only seats recorded completed count)", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, "/repo");
+    // No execution-result and no seats on disk -> no lens is trusted yet.
+
+    const inputs = await reconstructIssueArtifactPacketInputs(
+      root,
+      "finding-relation-graph",
+    );
+
+    expect(inputs.lensOutputPaths).toEqual([]);
+  });
+});
+
+describe("ensureUnitPacket", () => {
+  it("is a noop for a lens unit whose packet prepare materialized", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    await writeOutput(unit.packetPath!);
+
+    const result = await ensureUnitPacket(root, unit);
+
+    expect(result.generated).toBe(false);
+    expect(result.packetPath).toBe(unit.packetPath);
+  });
+
+  it("throws for a lens unit whose prepared packet is missing", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+
+    await expect(ensureUnitPacket(root, unit)).rejects.toThrow(
+      /lens packet missing/,
+    );
+  });
+
+  it("fails closed for deliberation/synthesize packets (assembled in 4e)", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const delibUnit: ReviewContinuationUnit = {
+      unitId: "deliberation:issue-001",
+      unitKind: "deliberation",
+      packetPath: null,
+      outputPath: path.join(root, "deliberation", "issue-001.yaml"),
+      priorStatus: "planned",
+      dispatchDecision: "run",
+      reason: "frontier",
+    };
+
+    await expect(ensureUnitPacket(root, delibUnit)).rejects.toThrow(
+      /does not generate deliberation packets/,
+    );
+  });
+
+  it("generates an issue-artifact packet from durable state", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root);
+    await seedTrustedLensSeats(root, plan);
+    await writeYaml(plan.finding_ledger_path, {
+      session_id: plan.session_id,
+      findings: [],
+    });
+
+    const unit = issueArtifactFrontierUnit(plan, "finding-relation-graph");
+    const result = await ensureUnitPacket(root, unit);
+
+    expect(result.generated).toBe(true);
+    expect(result.packetPath).toBe(unit.packetPath);
+    const packet = await fs.readFile(result.packetPath, "utf8");
+    expect(packet.trim().length).toBeGreaterThan(0);
   });
 });
 
