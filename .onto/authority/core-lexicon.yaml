@@ -726,6 +726,58 @@ entities:
       - "Provider resolution 축(LlmBillingMode, LlmCompatibleProxy)과 직교 — background task의 단일-턴 API call 경로와 review의 agentic 실행 경로는 서로 영향 주지 않음"
       - "Reserved/future local model access will be represented by actor-owned `llm.auth: local` + `llm.provider: lmstudio` + explicit `llm.model`. Review orchestration remains selected by the `review:` block."
 
+  ReviewOrchestrationOwner:
+    canonical_label: "ReviewOrchestrationOwner"
+    korean_label: "리뷰 오케스트레이션 소유자"
+    definition: "review의 라운드 루프(다음 ready unit 산출 → 실행 → 검증·전진 → assemble)를 누가 구동하는가를 규정하는 brand-agnostic 축. runtime은 onto TS 런타임이 한 MCP 호출 안에서 전 라운드를 구동(A, 블랙박스), host는 외부 host가 round/advance MCP 호출로 라운드 루프를 소유(B). prepare 시 세션에 불변 각인된다."
+    core_value: "이 개념이 없으면 'onto가 unit을 spawn하는가, 외부 host가 spawn하는가'가 설정·코드 경로에 암묵적으로 흩어져, 한 세션을 두 주체가 구동하는 이중 실행/누수를 구조적으로 막을 수 없다. 이 축이 단일 dispatch 소유권과 A/B fail-closed 경계의 기준점이다."
+    attributes:
+      shared: []
+      local:
+        loop_driver:
+          definition: "라운드 루프(frontier 산출·unit 실행·advance·assemble)를 구동하는 주체"
+          values:
+            onto_runtime: "onto TS 런타임이 MCP 호출 내부에서 전 라운드를 구동"
+            external_host: "외부 host가 round/advance MCP 호출로 라운드 루프를 소유"
+        unit_dispatch:
+          definition: "reasoning/issue/deliberation/synthesize unit을 누가 spawn하는가"
+          values:
+            onto_spawns: "onto가 executor subprocess를 spawn (runtime)"
+            host_spawns: "host가 자기 fabric에서 unit을 실행하고 seat 내용만 canonical output_path에 기록 (host)"
+        authority_invariant:
+          definition: "loop_driver와 무관하게 artifact 진실성을 소유하는 주체 (어느 locus든 불변)"
+          values:
+            onto_owns_artifact_truth: "ledger·execution-result·lens-completion-barrier·review-record·trust는 항상 onto가 기록 (host는 seat 내용만 기록)"
+    instances:
+      runtime:
+        loop_driver: "onto_runtime"
+        unit_dispatch: "onto_spawns"
+        authority_invariant: "onto_owns_artifact_truth"
+        settings_value: "review.execution.orchestration: runtime (미지정 기본)"
+        entry_tools: "onto_review / (onto_prepare_review + onto_review_continue)"
+        notes: "기본·무회귀 경로(A). host 세션에 이 경로(executeReviewPromptExecution)를 호출하면 spawn 전 fail-closed 거부."
+      host:
+        loop_driver: "external_host"
+        unit_dispatch: "host_spawns"
+        authority_invariant: "onto_owns_artifact_truth"
+        settings_value: "review.execution.orchestration: host (topology=main-workers 필수)"
+        entry_tools: "onto_prepare_review + onto_review_round / onto_review_advance"
+        notes: "opt-in 경로(B). runtime 세션에 round/advance를 호출하면 fail-closed 거부. Stage 1은 flat(main-workers)·controlled 심의만; nested·subagent·live 심의는 Stage 2/3."
+    distinction_from_route:
+      orchestration_locus: "ReviewReasoningUnitExecutionRoute.orchestration_locus는 '한 unit이 어디서 실행되나'(runtime_main/external_worker/direct_runtime_call)를 규정하는 직교 축이다. ReviewOrchestrationOwner는 '리뷰 라운드 루프를 누가 구동하나'를 규정한다. 이름이 비슷하나 결합되지 않는다 — host 세션이라도 각 unit의 execution route(orchestration_locus)는 별개로 선택된다."
+    execution_rules_ref:
+      settings_key: "src/core-runtime/discovery/settings-chain.ts (review.execution.orchestration; host ⇒ topology=main-workers superRefine)"
+      durable_stamp: "src/core-runtime/review/materializers.ts (session-metadata + execution-plan에 불변 각인)"
+      capability_surface_guards: "src/core-runtime/review/orchestration-owner.ts (assertHostOrchestratedSession / assertRuntimeOrchestratedSession)"
+      runtime_round_engine: "src/core-runtime/review/review-execution-steps.ts (reviewRound / reviewAdvance + 공유 step 함수: computeReviewFrontier·ensureUnitPacket·validateUnitSeatToResult·mergeUnitResultIntoExecutionResult·finalizeStageGate)"
+      host_round_tools: "src/core-api/review-api.ts (reviewRound/reviewAdvance) + src/mcp/server.ts (onto_review_round/onto_review_advance)"
+      reference_host: "src/core-runtime/cli/host-orchestration-reference-driver.ts"
+      contract_ref: ".onto/processes/review/host-orchestration-contract.md"
+    notes:
+      - "prepare가 settings의 orchestration을 세션에 각인하면 생애 불변 — 한 세션은 정확히 한 locus만 구동한다(이중 실행·누수 차단)."
+      - "A·B는 '유닛을 누가 실행하나'만 다르다. packet 생성·seat 검증·결과 기록·stage gate·frontier·assemble은 단일 공유 구현(review-execution-steps.ts)을 쓴다."
+      - "Stage 1 범위: deliberation/synthesize 및 runtime-owned issue-artifact(stance-matrix collection, sidecar finding-ledger, issue-ledger completion)의 완전한 host 구동은 후속. reference host mock E2E는 lens→issue-artifact 단계 전진을 증명한다."
+
   # -------------------------------------------------------------------------
   # Framework v1.0 entities (§8.1, §8.6) — scope axis + Tier 1/2 types
   # Added in lexicon v0.15.0 (2026-04-20) per
