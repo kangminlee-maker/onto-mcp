@@ -40,8 +40,10 @@ import {
   OntoPrepareReviewToolInputSchema,
   OntoReconstructSessionInputSchema,
   OntoReconstructToolInputSchema,
+  OntoReviewAdvanceToolInputSchema,
   OntoReviewCancelToolInputSchema,
   OntoReviewContinueToolInputSchema,
+  OntoReviewRoundToolInputSchema,
   OntoReviewResultInputSchema,
   OntoReviewSessionInputSchema,
   OntoReviewStatusInputSchema,
@@ -305,6 +307,51 @@ const REVIEW_CANCEL_INPUT_SCHEMA: JsonValue = {
   },
 };
 
+const REVIEW_ROUND_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description: "Absolute or project-relative host-orchestrated review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+  },
+};
+
+const REVIEW_ADVANCE_INPUT_SCHEMA: JsonValue = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sessionRoot", "executed"],
+  properties: {
+    sessionRoot: {
+      type: "string",
+      description: "Absolute or project-relative host-orchestrated review session root.",
+    },
+    projectRoot: {
+      type: "string",
+      description:
+        "Project root that owns the review session. Defaults to the MCP server working directory.",
+    },
+    executed: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Unit ids the host just executed (their seats are written at the plan's canonical output paths). onto validates them and returns the next round.",
+    },
+    requestText: {
+      type: "string",
+      description:
+        "Optional original request text used when the final advance assembles the ReviewRecord.",
+    },
+  },
+};
+
 const LIST_DOMAINS_INPUT_SCHEMA: JsonValue = {
   type: "object",
   additionalProperties: false,
@@ -528,6 +575,18 @@ const TOOL_DEFINITIONS: ToolDefinition[] = [
     inputSchema: REVIEW_CONTINUE_INPUT_SCHEMA,
   },
   {
+    name: "onto_review_round",
+    description:
+      "Host-orchestration (B): for a session prepared with review.execution.orchestration=host, return the units ready to execute now (with their prompt packets materialized). onto does not execute them — the host does, then calls onto_review_advance. Rejected for runtime-orchestrated sessions (use onto_review).",
+    inputSchema: REVIEW_ROUND_INPUT_SCHEMA,
+  },
+  {
+    name: "onto_review_advance",
+    description:
+      "Host-orchestration (B): report the units the host just executed (seats written at their canonical output paths). onto validates the seats, records results/gate, and returns the next round (or assembles the ReviewRecord when the frontier is complete). Rejected for runtime-orchestrated sessions.",
+    inputSchema: REVIEW_ADVANCE_INPUT_SCHEMA,
+  },
+  {
     name: "onto_review_cancel",
     description:
       "Request cancellation for a running review session. The runner writes a halted cancellation result at the next runtime cancellation checkpoint.",
@@ -638,6 +697,9 @@ reported through canonical route visibility. Listing tools needs no provider.
 
 Other review tools: \`onto_prepare_review\` (materialize without executing) then
 \`onto_review_continue\`; \`onto_review_cancel\` to stop a running session.
+Host-orchestration (review.execution.orchestration=host): \`onto_prepare_review\`
+then drive the round loop yourself with \`onto_review_round\` (get ready units) and
+\`onto_review_advance\` (report executed units); onto validates seats and assembles.
 Discover options with \`onto_list_lenses\` and \`onto_list_domains\`.
 
 ## Reconstruct — multi-step (LLM authors artifacts between steps)
@@ -1398,6 +1460,33 @@ async function callTool(
             : {}),
           ...(parsed.executionRoute !== undefined
             ? { executionRoute: parsed.executionRoute }
+            : {}),
+        });
+        return formatToolResult(result);
+      }
+      case "onto_review_round": {
+        const parsed = OntoReviewRoundToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: parsed.sessionRoot,
+          projectRoot,
+        });
+        const result = await reviewApi.reviewRound({ projectRoot, sessionRoot });
+        return formatToolResult(result);
+      }
+      case "onto_review_advance": {
+        const parsed = OntoReviewAdvanceToolInputSchema.parse(args);
+        const projectRoot = resolveProjectRoot(parsed.projectRoot);
+        const sessionRoot = await resolveAllowedSessionRoot({
+          sessionRoot: parsed.sessionRoot,
+          projectRoot,
+        });
+        const result = await reviewApi.reviewAdvance({
+          projectRoot,
+          sessionRoot,
+          executed: parsed.executed,
+          ...(parsed.requestText !== undefined
+            ? { requestText: parsed.requestText }
             : {}),
         });
         return formatToolResult(result);
