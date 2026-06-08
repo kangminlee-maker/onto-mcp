@@ -9,7 +9,12 @@ import type {
   ReviewIssueArtifactId,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
-import { computeReviewFrontier } from "./review-execution-steps.js";
+import type { ReviewContinuationUnit } from "./continuation-plan.js";
+import {
+  computeReviewFrontier,
+  mergeUnitResultIntoExecutionResult,
+  validateUnitSeatToResult,
+} from "./review-execution-steps.js";
 
 const tempRoots: string[] = [];
 
@@ -150,6 +155,202 @@ function lensOnlyExecutionResult(
     ),
   };
 }
+
+function scaffoldExecutionResult(
+  plan: ReviewExecutionPlan,
+): ReviewExecutionResultArtifact {
+  return { ...lensOnlyExecutionResult(plan), lens_execution_results: [] };
+}
+
+function lensFrontierUnit(
+  plan: ReviewExecutionPlan,
+  lensId: string,
+): ReviewContinuationUnit {
+  const seat = plan.lens_prompt_packet_seats.find((s) => s.lens_id === lensId)!;
+  return {
+    unitId: lensId,
+    unitKind: "lens",
+    lensId,
+    packetPath: seat.packet_path,
+    outputPath: seat.output_path,
+    priorStatus: "planned",
+    dispatchDecision: "run",
+    reason: "frontier",
+  };
+}
+
+function issueArtifactFrontierUnit(
+  plan: ReviewExecutionPlan,
+  artifactId: ReviewIssueArtifactId,
+): ReviewContinuationUnit {
+  const seat = plan.issue_artifact_prompt_packet_seats.find(
+    (s) => s.artifact_id === artifactId,
+  )!;
+  return {
+    unitId: artifactId,
+    unitKind: "issue_artifact",
+    packetPath: seat.packet_path,
+    outputPath: seat.output_path,
+    priorStatus: "planned",
+    dispatchDecision: "run",
+    reason: "frontier",
+  };
+}
+
+describe("validateUnitSeatToResult", () => {
+  it("projects a present non-empty seat into a completed result", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    await writeOutput(unit.outputPath!);
+
+    const result = await validateUnitSeatToResult({
+      sessionRoot: root,
+      unit,
+      recordedAt: "2026-06-09T00:00:00.000Z",
+    });
+
+    expect(result.status).toBe("completed");
+    expect(result.unit_id).toBe("logic");
+    expect(result.unit_kind).toBe("lens");
+    expect(result.output_path).toBe(unit.outputPath);
+    expect(result.failure_message).toBeNull();
+    // Host ran the unit, not onto: timing is non-comparable.
+    expect(result.timestamp_provenance).toBe("batch_window");
+  });
+
+  it("fails when the seat file is missing", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+
+    const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+
+    expect(result.status).toBe("failed");
+    expect(result.failure_kind).toBe("output_contract");
+    expect(result.failure_message).toContain("did not create output file");
+  });
+
+  it("fails when the seat file is empty", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    await fs.mkdir(path.dirname(unit.outputPath!), { recursive: true });
+    await fs.writeFile(unit.outputPath!, "   \n", "utf8");
+
+    const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+
+    expect(result.status).toBe("failed");
+    expect(result.failure_kind).toBe("empty_output");
+  });
+
+  it("fails a sidecar-format lens seat that is not a valid sidecar artifact", async () => {
+    const root = await tempSessionRoot();
+    const plan: ReviewExecutionPlan = {
+      ...executionPlan(root),
+      lens_output_format: "sidecar",
+    };
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    // A plain markdown body where a structured sidecar YAML is required.
+    await writeOutput(unit.outputPath!);
+
+    const result = await validateUnitSeatToResult({
+      sessionRoot: root,
+      unit,
+      executionPlan: plan,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(result.failure_kind).toBe("output_contract");
+  });
+});
+
+describe("mergeUnitResultIntoExecutionResult", () => {
+  it("creates execution-result.yaml from a base scaffold and buckets by unit_kind", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    await writeOutput(unit.outputPath!);
+    const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+
+    const merged = await mergeUnitResultIntoExecutionResult({
+      sessionRoot: root,
+      result,
+      base: scaffoldExecutionResult(plan),
+    });
+
+    expect(merged.lens_execution_results.map((r) => r.unit_id)).toEqual(["logic"]);
+    const onDisk = YAML.parse(
+      await fs.readFile(path.join(root, "execution-result.yaml"), "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(onDisk.lens_execution_results[0]?.status).toBe("completed");
+  });
+
+  it("upserts by unit_id into an existing execution-result (no duplicates)", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeYaml(
+      path.join(root, "execution-result.yaml"),
+      lensOnlyExecutionResult(plan),
+    );
+    const unit = issueArtifactFrontierUnit(plan, "finding-ledger");
+    await writeOutput(unit.outputPath!);
+    const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+
+    await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result });
+    // Re-merging the same unit replaces rather than appends.
+    const merged = await mergeUnitResultIntoExecutionResult({
+      sessionRoot: root,
+      result: { ...result, status: "completed" },
+    });
+
+    expect(merged.lens_execution_results).toHaveLength(2);
+    expect(
+      (merged.issue_artifact_execution_results ?? []).map((r) => r.unit_id),
+    ).toEqual(["finding-ledger"]);
+  });
+
+  it("throws when neither an existing result nor a base scaffold is available", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    const unit = lensFrontierUnit(plan, "logic");
+    await writeOutput(unit.outputPath!);
+    const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+
+    await expect(
+      mergeUnitResultIntoExecutionResult({ sessionRoot: root, result }),
+    ).rejects.toThrow(/requires an existing execution-result|base scaffold/);
+  });
+
+  it("advances the frontier when seats are validated and merged (durable round)", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+
+    // Host wrote every lens seat; onto validates + merges each into the result.
+    let base: ReviewExecutionResultArtifact | undefined =
+      scaffoldExecutionResult(plan);
+    for (const seat of plan.lens_execution_seats) {
+      const unit = lensFrontierUnit(plan, seat.lens_id);
+      await writeOutput(unit.outputPath!);
+      const result = await validateUnitSeatToResult({ sessionRoot: root, unit });
+      await mergeUnitResultIntoExecutionResult({ sessionRoot: root, result, base });
+      base = undefined; // subsequent merges read the now-existing artifact
+    }
+
+    const frontier = await computeReviewFrontier(root);
+    const frontierIds = frontier.frontierUnits.map((u) => u.unitId);
+    expect(frontierIds).toContain("finding-ledger");
+    expect(frontierIds).not.toContain("logic");
+  });
+});
 
 describe("computeReviewFrontier", () => {
   it("returns the lens units as the initial frontier for a fresh session", async () => {
