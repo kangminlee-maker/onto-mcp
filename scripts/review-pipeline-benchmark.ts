@@ -628,7 +628,7 @@ function benchmarkFixture(fixtureId: SemanticQualityGateFixtureId): BenchmarkFix
     fixture_id: fixtureId,
     target_path: "src/target.ts",
     intent:
-      "Review formatter behavior, especially unstableFormat and boundary-only lens identity uncertainty.",
+      "Review formatter behavior, especially unstableFormat. For this fixture, lensId/lens identity is intentionally not a material defect: the target provides no caller requirement, expected summary contract, or public API obligation to expose identity. Preserve it only as boundary/evidence-gap context while focusing material issues on unstableFormat.",
     files: {
       "src/target.ts": [
         "export interface ReviewPipelineInput {",

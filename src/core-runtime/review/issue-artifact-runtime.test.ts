@@ -2311,6 +2311,15 @@ describe("issue-ledger dependency validation", () => {
       },
     ],
   ]);
+  const mixedRelationIds = new Set(["rel-shared", "rel-same"]);
+  const mixedRelationKinds = new Map([
+    ["rel-shared", "shared_cause_candidate"],
+    ["rel-same", "same_root_candidate"],
+  ]);
+  const mixedRelationFacts = new Map([
+    ...knownRelationFacts,
+    ...sameRootRelationFacts,
+  ]);
   const knownFindingFacts = new Map([
     [
       "finding-001",
@@ -2432,6 +2441,28 @@ describe("issue-ledger dependency validation", () => {
         knownRelationIds: sameRootRelationIds,
         knownRelationKinds: sameRootRelationKinds,
         knownRelationFacts: sameRootRelationFacts,
+        parsed: ledger,
+      }),
+    ).not.toThrow();
+  });
+
+  it("allows a same-root-supported merge when the endpoints also share cause context", () => {
+    const ledger = validIssueLedger();
+    ledger.issues = [
+      {
+        ...issue("finding-001", "issue-001"),
+        surface_finding_ids: ["finding-001", "finding-002"],
+        relation_refs: ["rel-same"],
+      },
+    ];
+    ledger.issue_dependencies = [];
+
+    expect(() =>
+      validateIssueArtifactObject({
+        ...validationContext,
+        knownRelationIds: mixedRelationIds,
+        knownRelationKinds: mixedRelationKinds,
+        knownRelationFacts: mixedRelationFacts,
         parsed: ledger,
       }),
     ).not.toThrow();
@@ -2617,6 +2648,69 @@ describe("completeIssueLedgerArtifactOnDisk", () => {
       "round1/logic.findings.yaml#logic-candidate-001",
     );
     expect(firstIssue.evidence_refs).not.toContain("src/retry.ts:99-100");
+    await expect(
+      validateIssueArtifactOnDisk({
+        executionPlan,
+        projectRoot,
+        artifactId: "issue-ledger",
+        participatingLensIds: ["logic", "coverage"],
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it("keeps same-root-supported shared-cause endpoints in one completed issue", async () => {
+    const projectRoot = fs.mkdtempSync(path.join(os.tmpdir(), "onto-ledger-complete-"));
+    const executionPlan = minimalExecutionPlan(projectRoot);
+    writeYamlForTest(executionPlan.finding_ledger_path, findingLedgerForIssueCompletion());
+    writeYamlForTest(executionPlan.finding_relation_graph_path, {
+      schema_version: 1,
+      session_id: "session-001",
+      relations: [
+        {
+          relation_id: "rel-same",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "same_root_candidate",
+          root_hypothesis: "Retry policy authority is not enforced at the settings boundary.",
+          shared_cause: null,
+          rationale: "Both findings point to one settings-boundary root.",
+          confidence: "medium",
+        },
+        {
+          relation_id: "rel-shared",
+          from_finding_id: "finding-001",
+          to_finding_id: "finding-002",
+          relation: "shared_cause_candidate",
+          root_hypothesis: "Both findings involve retry policy handling.",
+          shared_cause: {
+            cause_claim: "Retry settings authority is not consistently enforced.",
+            from_cause_ref: "finding-001.cause-001",
+            to_cause_ref: "finding-002.cause-001",
+          },
+          rationale: "The same endpoint findings also preserve shared cause context.",
+          confidence: "medium",
+        },
+      ],
+      singleton_findings: [],
+      validation: {
+        uncovered_finding_ids: [],
+      },
+    });
+
+    const completed = await completeIssueLedgerArtifactOnDisk({
+      executionPlan,
+      projectRoot,
+      participatingLensIds: ["logic", "coverage"],
+    });
+
+    expect(completed.issues).toMatchObject([
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-002"],
+        relation_refs: ["rel-same"],
+      },
+    ]);
+    expect(completed.issue_dependencies).toEqual([]);
     await expect(
       validateIssueArtifactOnDisk({
         executionPlan,

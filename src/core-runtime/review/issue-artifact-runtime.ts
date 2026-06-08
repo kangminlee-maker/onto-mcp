@@ -567,20 +567,9 @@ function validateIssueMergeRelations(args: {
 }): void {
   if (args.surfaceFindingIds.length <= 1) return;
 
-  const findingSet = new Set(args.surfaceFindingIds);
-  for (const [relationId, relationFact] of args.knownRelationFacts) {
-    if (
-      relationFact.relation === "shared_cause_candidate" &&
-      findingSet.has(relationFact.from_finding_id) &&
-      findingSet.has(relationFact.to_finding_id)
-    ) {
-      throw new Error(
-        `issue-ledger must not merge findings connected only by shared_cause_candidate relation ${relationId}.`,
-      );
-    }
-  }
-
-  const parent = new Map(args.surfaceFindingIds.map((findingId) => [findingId, findingId]));
+  const parent = new Map(
+    args.surfaceFindingIds.map((findingId) => [findingId, findingId]),
+  );
   const find = (findingId: string): string => {
     const parentId = parent.get(findingId);
     if (!parentId || parentId === findingId) return findingId;
@@ -593,6 +582,7 @@ function validateIssueMergeRelations(args: {
     const secondRoot = find(second);
     if (firstRoot !== secondRoot) parent.set(secondRoot, firstRoot);
   };
+  const findingSet = new Set(args.surfaceFindingIds);
 
   for (const relationId of args.relationRefs) {
     const relationFact = args.knownRelationFacts.get(relationId);
@@ -605,6 +595,19 @@ function validateIssueMergeRelations(args: {
       continue;
     }
     union(relationFact.from_finding_id, relationFact.to_finding_id);
+  }
+
+  for (const [relationId, relationFact] of args.knownRelationFacts) {
+    if (
+      relationFact.relation === "shared_cause_candidate" &&
+      findingSet.has(relationFact.from_finding_id) &&
+      findingSet.has(relationFact.to_finding_id) &&
+      find(relationFact.from_finding_id) !== find(relationFact.to_finding_id)
+    ) {
+      throw new Error(
+        `issue-ledger must not merge findings connected only by shared_cause_candidate relation ${relationId}.`,
+      );
+    }
   }
 
   const firstFindingId = requireString(
@@ -3519,6 +3522,8 @@ export function validateIssueArtifactObject(args: {
       const issueIds: string[] = [];
       const issueIdsSet = new Set<string>();
       const findingIssueIds = new Map<string, string>();
+      const issueRelationRefsByIssueId = new Map<string, string[]>();
+      const issueSurfaceFindingIdsByIssueId = new Map<string, string[]>();
       for (const [index, item] of requireArray(args.parsed.issues, "issue-ledger.issues").entries()) {
         const issue = requireRecord(item, `issue-ledger.issues[${index}]`);
         const issueId = requireString(issue.issue_id, `issue-ledger.issues[${index}].issue_id`);
@@ -3607,6 +3612,8 @@ export function validateIssueArtifactObject(args: {
           relationRefs,
           knownRelationFacts,
         });
+        issueRelationRefsByIssueId.set(issueId, relationRefs);
+        issueSurfaceFindingIdsByIssueId.set(issueId, surfaceFindingIds);
         const raisedByLensIds = requireStringArray(issue.raised_by_lens_ids, `issue-ledger.issues[${index}].raised_by_lens_ids`);
         ensureUnique(
           raisedByLensIds,
@@ -3698,9 +3705,13 @@ export function validateIssueArtifactObject(args: {
           );
         }
         if (fromIssueId === toIssueId) {
-          throw new Error(
-            `issue-ledger must not merge findings connected only by shared_cause_candidate relation ${relationId}.`,
-          );
+          validateIssueMergeRelations({
+            issueLabel: `issue-ledger issue ${fromIssueId}`,
+            surfaceFindingIds: issueSurfaceFindingIdsByIssueId.get(fromIssueId) ?? [],
+            relationRefs: issueRelationRefsByIssueId.get(fromIssueId) ?? [],
+            knownRelationFacts,
+          });
+          continue;
         }
         if (!dependencyRelationRefs.has(relationId)) {
           throw new Error(
