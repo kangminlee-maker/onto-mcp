@@ -169,7 +169,8 @@ derive rule:
 - `issue-ledger.yaml`가 있으면 issue-level severity가 final result classification의 primary severity source다.
 - `problem-framing.yaml`는 action candidate derivation의 primary source다. `timing_class`, `closure_class`, `closure_obligation`, `judgment_state`가 action candidates로 project된다.
 - `execution-result.yaml`가 `halted_partial`이면 runtime-level `retry_execution`/`continue_review` action candidate가 추가된다.
-- `material_issue` 여부는 severity와 `problem-framing.yaml` admission fields에서 파생한다. `blocker`, `high`, `medium`은 material-severity candidates이며, `issue_role: evidence_gap`, `judgment_state: insufficient_evidence|outside_boundary`, `closure_class: needs_evidence|watch`, 또는 `closure_obligation: out_of_scope`이면 non-material finding으로 보존한다. `low`, `info`는 non-material finding이다.
+- `material_issue` 여부는 `.onto/processes/review/material-issue-contract.md`의 canonical predicate에서 파생하는 classification/disclosure다.
+- material issue disclosure 자체는 hot path나 stage progress를 차단하지 않는다. 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다. non-material finding은 보존하며 0으로 강제하지 않는다.
 - `domain_threshold_used`는 severity를 설명하는 보조 값이며, 별도 materiality 축을 만들지 않는다.
 
 ### 4.4 From `execution-result.yaml`, `deliberation-resolution.yaml`, and `synthesis-ledger.yaml`

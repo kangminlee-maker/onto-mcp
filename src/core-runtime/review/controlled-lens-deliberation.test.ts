@@ -3,6 +3,8 @@ import {
   buildIssueScopedDeliberationWorklist,
   buildIssueScopedLensDeliberationPrompt,
   buildNoPlannedDeliberationResolution,
+  buildRuntimeIssueDeliberationUnavailableResponse,
+  buildRuntimeUnavailableDeliberationResolution,
   renderDeliberationMarkdownProjection,
   validateDeliberationResolutionObject,
   validateIssueDeliberationResponseObject,
@@ -229,6 +231,39 @@ describe("controlled lens deliberation artifacts", () => {
     ).toThrow(/change_reason/);
   });
 
+  it("builds a valid runtime response when a deliberation participant is unavailable", () => {
+    const [workItem] = buildIssueScopedDeliberationWorklist({
+      promptPacketsRoot: "/repo/.onto/review/session-1/prompt-packets",
+      deliberationRootPath: "/repo/.onto/review/session-1/deliberation",
+      deliberationPlan,
+      issueLedger,
+      issueStanceMatrix,
+    });
+    const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
+      sessionId: "session-1",
+      workItem: workItem!,
+      reason: "Executor exited after retry budget.",
+      allowedEvidenceRefs: [
+        "issue-stance-matrix.yaml#stances.issue-001.logic",
+        "issue-ledger.yaml#issue-001",
+      ],
+    });
+    const validated = validateIssueDeliberationResponseObject({
+      sessionId: "session-1",
+      issueId: "issue-001",
+      lensId: "logic",
+      parsed: artifact,
+      allowedEvidenceRefs: [
+        "issue-stance-matrix.yaml#stances.issue-001.logic",
+        "issue-ledger.yaml#issue-001",
+      ],
+    });
+
+    expect(validated.updated_stance).toBe("support");
+    expect(validated.changed).toBe(false);
+    expect(validated.remaining_blocker).toContain("Executor exited");
+  });
+
   it("validates resolution coverage and renders markdown projection", () => {
     const resolution = validateDeliberationResolutionObject({
       sessionId: "session-1",
@@ -287,5 +322,39 @@ describe("controlled lens deliberation artifacts", () => {
     });
 
     expect(validated.issues[0]?.status).toBe("no-deliberation-needed");
+  });
+
+  it("builds runtime unresolved resolution when teamlead deliberation is unavailable", () => {
+    const response = buildRuntimeIssueDeliberationUnavailableResponse({
+      sessionId: "session-1",
+      workItem: buildIssueScopedDeliberationWorklist({
+        promptPacketsRoot: "/repo/.onto/review/session-1/prompt-packets",
+        deliberationRootPath: "/repo/.onto/review/session-1/deliberation",
+        deliberationPlan,
+        issueLedger,
+        issueStanceMatrix,
+      })[0]!,
+      reason: "participant unavailable",
+    });
+    const resolution = buildRuntimeUnavailableDeliberationResolution({
+      sessionId: "session-1",
+      issueLedger,
+      deliberationPlan,
+      responses: [response],
+      reason: "teamlead executor exited",
+    });
+    const validated = validateDeliberationResolutionObject({
+      parsed: resolution,
+      sessionId: "session-1",
+      issueLedger,
+      deliberationPlan,
+    });
+
+    expect(validated.issues[0]?.status).toBe("unresolved-with-reason");
+    expect(validated.issues[0]?.remaining_disagreement_lens_ids).toEqual([
+      "logic",
+      "structure",
+    ]);
+    expect(validated.issues[0]?.reason).toContain("teamlead executor exited");
   });
 });

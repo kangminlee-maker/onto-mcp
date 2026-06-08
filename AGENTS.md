@@ -107,17 +107,18 @@ target material 관련 작업 시 추가로 읽을 문서:
 7. [synthesize-prompt-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/synthesize-prompt-contract.md)
 8. [issue-stance-deliberation-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/issue-stance-deliberation-contract.md)
 9. [shared-phenomenon-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/shared-phenomenon-contract.md)
-10. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
-11. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
-12. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
-13. [review-context-manifest-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-context-manifest-contract.md)
-14. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
-15. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
-16. [pipeline-execution-ledger-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/pipeline-execution-ledger-contract.md)
-17. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
-18. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
-19. [review-continuation-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/review-continuation-surface.md)
-20. [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
+10. [material-issue-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/material-issue-contract.md)
+11. selected domain `problem_framing_profile.md` if `session_domain` is not `none`
+12. [execution-preparation-artifacts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/execution-preparation-artifacts.md)
+13. [review-target-profile-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-target-profile-contract.md)
+14. [review-context-manifest-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/review-context-manifest-contract.md)
+15. [prompt-execution-runner-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/prompt-execution-runner-contract.md)
+16. [pre-dispatch-contracts.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/pre-dispatch-contracts.md)
+17. [pipeline-execution-ledger-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/shared/pipeline-execution-ledger-contract.md)
+18. [record-contract.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-contract.md)
+19. [record-field-mapping.md](/Users/kangmin/cowork/onto-mcp/.onto/processes/review/record-field-mapping.md)
+20. [review-continuation-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/review-continuation-surface.md)
+21. [mcp-native-tool-surface.md](/Users/kangmin/cowork/onto-mcp/docs/architecture/mcp-native-tool-surface.md)
 
 `reconstruct` 작업 시 추가로 읽을 문서:
 
@@ -189,7 +190,7 @@ DO:
 - `deliberation.md`는 `deliberation-resolution.yaml`의 human-readable projection이다
 - `synthesis-ledger.yaml`이 synthesize source layer이고 `synthesis.md`는 projection이다
 - `synthesize`는 issue artifact truth와 `deliberation-resolution.yaml`을 보존적으로 렌더링하며 새 resolution을 만들지 않는다
-- material issue는 별도 enum이 아니라 severity와 `problem-framing.yaml` admission에서 파생한 분류·disclosure다. canonical 기준은 review contracts가 소유하며, 단계 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다
+- material issue의 canonical predicate는 `.onto/processes/review/material-issue-contract.md`가 소유하며 `src/core-runtime/review/review-result-classification.ts`가 구현한다. 별도 enum을 만들지 않는다. 단계 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다. non-material finding은 보존하며 0으로 강제하지 않는다
 
 ---
 

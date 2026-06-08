@@ -122,6 +122,7 @@ runtime은 아래만 한다.
 - `execution-result.yaml`과 `review-run-manifest.yaml`은 effective retry policy를 기록해야 한다
 - `lens-completion-barrier.yaml`은 downstream stage 진입 gate다
 - degraded case / partial failure는 `error-log.md`에 기록해야 한다
+- runtime unavailable completion으로 root unit이 completed가 된 경우에도 원 실패는 child unit result로 보존하고 degradation evidence에 포함해야 한다
 - `error-log.md`는 최소 한 번 `EffectiveBoundaryState`를 기록해야 한다
 - `error-log.md`는 runner progress seat도 겸할 수 있다
 - runner는 seat를 바꾸면 안 된다

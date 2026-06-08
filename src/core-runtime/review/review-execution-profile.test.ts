@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { OntoSettings } from "../discovery/settings-chain.js";
 import { defaultReviewExecution } from "../discovery/settings-chain.js";
-import { resolveReviewExecutionProfile } from "./review-execution-profile.js";
+import {
+  effectiveReviewUnitLlmRef,
+  resolveReviewExecutionProfile,
+} from "./review-execution-profile.js";
 import {
   REVIEW_MOCK_REALIZATION_ENV,
 } from "./test-fixtures/mock-realization.js";
@@ -281,6 +284,12 @@ describe("resolveReviewExecutionProfile", () => {
       max_retries: 3,
       retry_initial_delay_ms: 1000,
       max_output_bytes: 262144,
+    });
+    expect(effectiveReviewUnitLlmRef(result.profile, "lens")).toEqual({
+      auth: "api_key",
+      provider: "openai",
+      model: "gpt-5.5-review-lens",
+      effort: "xhigh",
     });
     expect(result.profile.model).toBeUndefined();
   });

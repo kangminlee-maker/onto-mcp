@@ -12,6 +12,7 @@
 > - `.onto/processes/review/review-execution-ux-contract.md`
 > - `.onto/processes/review/execution-preparation-artifacts.md`
 > - `.onto/processes/review/record-field-mapping.md`
+> - `.onto/processes/review/material-issue-contract.md`
 > - `.onto/authority/core-lexicon.yaml`
 
 ---
@@ -211,8 +212,10 @@ degraded_lens_ids: []
 - `deliberation-resolution.yaml`은 `completed`와 `completed_with_degradation` review에서 필수 artifact다
 - `deliberation.md`는 `deliberation-resolution.yaml`에서 생성되는 human-readable projection이다
 - `synthesis.md`는 `synthesis-ledger.yaml`에서 생성되는 human-readable projection이며, frontmatter로 `deliberation_status: performed`를 선언해야 한다
-- `halted_partial` review에서 controlled deliberation이 완료되지 않았으면 `deliberation_status: not_performed`를 기록하고, synthesize를 실행하지 않는다
-- controlled deliberation timeout은 unresolved stance continuation으로 승격하지 않는다. `execution-result.yaml`과 `review-run-manifest.yaml`에 halt phase, failed unit id/kind, lens-bound unit의 lens id, failure message를 보존한다
+- `halted_partial` review에서 controlled deliberation artifact가 생성되지 않았으면 `deliberation_status: not_performed`를 기록하고, synthesize를 실행하지 않는다
+- controlled deliberation participant timeout/failure는 runtime unavailable response로 닫는다. source stance를 보존하고 `remaining_blocker`에 실패 사유를 기록한다
+- controlled deliberation teamlead timeout/failure는 runtime unavailable resolution으로 닫는다. planned issue는 `unresolved-with-reason`으로 보존하고 synthesize는 해당 unresolved 상태를 입력으로 계속 진행할 수 있다
+- unavailable completion의 원 실패 unit result는 `execution-result.yaml`과 `review-run-manifest.yaml`의 child result로 보존하며, completed review는 필요 시 `completed_with_degradation`으로 노출한다
 - `final_output_ref`는 주체자에게 보여주는 canonical `final-output.md`를 가리킨다. status/result 조회는 세션 내부 다른 파일로의 redirect를 허용하지 않는다
 - `final_output_sha256`은 canonical `final-output.md`의 생성 시점 digest다. status/result 조회는 현재 파일 digest가 이 값과 다르면 fail-loud 한다
 - `ReviewRecord`가 primary artifact이고 `final-output.md`는 secondary human-readable output이다
@@ -243,7 +246,8 @@ degraded_lens_ids: []
 - `deliberation_result_ref`는 controlled deliberation이 생성한 `deliberation-resolution.yaml`을 가리키며, 생성되지 않았으면 `null`이다.
 - `synthesis_result_ref`는 issue status를 변경한 source가 될 수 없다.
 - `result_classification_summary`는 `finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`, `execution-result.yaml`에서 파생되는 presentation projection이다.
-- `material_issue_count`와 `material_issues`는 별도 materiality enum이 아니라 severity와 `problem-framing.yaml` admission fields에서 파생한다. `blocker`, `high`, `medium`은 material-severity candidates이며, `issue_role: evidence_gap`, `judgment_state: insufficient_evidence|outside_boundary`, `closure_class: needs_evidence|watch`, 또는 `closure_obligation: out_of_scope`이면 non-material finding으로 보존한다. `low`, `info`는 non-material finding이다.
+- `material_issue_count`와 `material_issues`는 `.onto/processes/review/material-issue-contract.md`의 canonical predicate에서 파생하는 classification/disclosure다.
+- material issue disclosure 자체는 hot path나 stage progress를 차단하지 않는다. 차단은 deterministic runtime gate의 구조·계약 실패만 소유한다. non-material finding은 보존하며 0으로 강제하지 않는다.
 - action candidates는 severity 자체가 아니라 `problem-framing.yaml`의 timing/closure/judgment fields와 runtime halt state에서 파생한다.
 
 ### 4.6 Internal Body vs Final Review Summary 경계 (Cross-reference)

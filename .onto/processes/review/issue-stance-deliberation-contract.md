@@ -10,6 +10,7 @@
 > - `.onto/processes/review/synthesize-prompt-contract.md`
 > - `.onto/processes/review/record-contract.md`
 > - `.onto/processes/review/review-execution-ux-contract.md`
+> - `.onto/processes/review/material-issue-contract.md`
 
 ---
 
@@ -55,7 +56,8 @@ finding 간 연결관계를 먼저 파악해 공통 원인을 가진 문제끼�
 
 `shared phenomenon`은 같은 위치를 보는 claim을 묶는다.
 `root-cause issue`는 서로 다른 위치의 finding이라도 같은 근본 원인에서 비롯되었다면 묶을 수 있다.
-`material issue` 여부는 별도 materiality enum이 아니라 severity와 problem-framing admission에서 파생된다.
+`material issue` 여부는 별도 materiality enum이 아니라
+`material-issue-contract.md`의 canonical predicate에서 파생된다.
 
 Severity values are:
 
@@ -67,7 +69,11 @@ Severity values are:
 | `low` | Improvement opportunity that does not make the reviewed result unsafe for its declared purpose. |
 | `info` | Observation, question, or evidence gap that is not yet an issue. |
 
-`blocker`, `high`, and `medium` are material-severity candidates. They are admitted as material issues only when problem framing does not mark the issue as an evidence gap, outside the review boundary, or evidence-insufficient. `low` and `info` are non-material findings. Every admitted material issue must include `affected_purpose`, `failure_condition`, `impact`, and concrete `evidence_refs`.
+Severity values feed the material issue predicate, but this contract does not
+redefine that predicate. See `material-issue-contract.md` for the exact
+machine-readable rule, admission disqualifiers, and blocking semantics.
+Every admitted material issue must include `affected_purpose`,
+`failure_condition`, `impact`, and concrete `evidence_refs`.
 
 예:
 
@@ -294,7 +300,8 @@ Rules:
 8. The issue statement should describe the root, not merely restate a surface symptom.
 9. If the root hypothesis is uncertain, keep the uncertainty rather than flattening it into a confident issue.
 10. Every issue must carry the severity contract fields: `affected_purpose`, `failure_condition`, `impact`, `evidence_refs`, `severity`, and optional `domain_threshold_used`.
-11. `material issue` is derived from severity plus problem-framing admission. Do not add a second materiality enum.
+11. `material issue` is derived only by `material-issue-contract.md`. Do not add a second materiality enum.
+12. Material issue disclosure does not block stage progress; only deterministic structural/contract runtime gate failures block.
 
 ---
 
@@ -846,30 +853,35 @@ The detailed human-readable reasoning remains in the source artifacts.
 
 ## 15. Runtime Timeout Policy
 
-Controlled deliberation timeout is a hard halt, not an unresolved-stance
-continuation path.
+Controlled deliberation timeout or executor failure closes through an
+unavailable-artifact path, not through silent semantic success.
 
-If any per-lens deliberation response or teamlead controlled deliberation unit
-times out or fails:
+If a per-lens deliberation response times out, fails, or violates its output
+contract:
 
-- synthesize MUST NOT run
-- `execution-result.yaml.execution_status` MUST be `halted_partial`
-- `execution-result.yaml.deliberation_status` MUST be `not_performed`
-- `execution-result.yaml.halt_phase` MUST identify `controlled_lens_deliberation`
-- `execution-result.yaml.halt_unit_id` and `halt_unit_kind` MUST identify the
-  failed deliberation unit
-- lens-bound deliberation failures SHOULD expose `halt_lens_id` as the
-  lens id derived from `deliberation:{issue_id}:{lens_id}`
-- `deliberation_execution_results` MUST preserve completed and failed
-  deliberation unit results, including timeout `failure_message`
-- `review-run-manifest.yaml` MUST mirror the halt phase, unit, lens, and reason
-- `review-record.yaml` MUST NOT expose produced-artifact refs for
-  `synthesis.md` or `deliberation-resolution.yaml` when those files were not produced
-- `review-record.yaml` MUST preserve refs for issue-stage artifacts that were
-  produced before the halt, independent of whether synthesize ran
+- runtime MUST write `deliberation/responses/{issue_id}/{lens_id}.yaml` using
+  the existing issue deliberation response schema
+- the response MUST preserve the source stance, set `changed=false`, and record
+  the executor/output failure in `remaining_blocker`
+- the original failed unit result MUST be preserved as a child result in
+  `execution-result.yaml` and `review-run-manifest.yaml`
 
-This preserves the context-isolated lens outputs and failure identity without
-letting synthesize infer a final review from incomplete deliberation truth.
+If the teamlead controlled deliberation unit times out, fails, or violates its
+output contract:
+
+- runtime MUST write `deliberation-resolution.yaml`
+- planned issues MUST be marked `unresolved-with-reason`
+- skipped issues MAY remain `no-deliberation-needed`
+- runtime MUST write `deliberation.md` from `deliberation-resolution.yaml`
+- synthesize MAY run from the unresolved deliberation result
+- the original failed teamlead unit result MUST be preserved as a child result
+  in `execution-result.yaml` and `review-run-manifest.yaml`
+- a completed review with such child failures SHOULD surface
+  `completed_with_degradation` and a degradation summary
+
+This preserves the context-isolated lens outputs and failure identity while
+letting synthesize consume explicit unresolved deliberation truth instead of
+inventing a resolution.
 
 ## 16. Implementation Order
 

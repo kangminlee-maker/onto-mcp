@@ -120,25 +120,62 @@
       # max_tokens/tool_mode은 direct_call/inline HTTP executor에서만 강제 가능합니다.
       # 기본 Codex OAuth worker 경로는 해당 knob를 강제할 수 없으므로 설정 시 fail-loud합니다.
       "units": {
-        # lens는 9개 관점별 독립 검토입니다.
+        # lens는 9개 관점별 독립 검토입니다. 아래 값들은 시작 기준 예시입니다.
+        # 실제 튜닝은 benchmark:review:pipeline의 unit-sweep 결과를 보고 조정하세요.
         "lens": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "xhigh"
+            "effort": "medium"
           },
-          # 긴 provider 대기 때문에 전체 pipeline이 멈추지 않도록 unit timeout은 짧게 잡고
-          # 실패한 unit만 소수 재시도합니다.
           "timeout_ms": 240000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
         },
-
-        # finding_relation_graph는 finding 간 cause/dependency 관계를 정리합니다.
+        "finding_ledger": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
         "finding_relation_graph": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "xhigh"
+            "effort": "medium"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+        "issue_ledger": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+        "deliberation_plan": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+        "problem_framing": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
           },
           "timeout_ms": 240000,
           "max_retries": 2,
@@ -152,11 +189,40 @@
           "max_output_bytes": 524288
         },
 
-        # synthesis_response는 issue-scoped synthesis map 단계입니다.
+        "issue_stance_response": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 180000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+        "deliberation_response": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 180000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
+        "deliberation_resolution": {
+          "llm": {
+            "model": "gpt-5.5",
+            "effort": "medium"
+          },
+          "timeout_ms": 240000,
+          "max_retries": 2,
+          "retry_initial_delay_ms": 3000,
+          "max_output_bytes": 524288
+        },
         "synthesis_response": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "xhigh"
+            "effort": "medium"
           },
           "timeout_ms": 180000,
           "max_retries": 2,

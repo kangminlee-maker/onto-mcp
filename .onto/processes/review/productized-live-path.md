@@ -371,12 +371,13 @@ Progress step id/label/total truth는 runtime review progress contract와
 Severity/result classification은 runtime active projection이다. Projection source는
 `finding-ledger.yaml`, `issue-ledger.yaml`, `problem-framing.yaml`,
 `execution-result.yaml`이다.
+Material issue predicate는 `.onto/processes/review/material-issue-contract.md`가
+소유한다.
 
 Target rules:
 
 - `severity`가 finding의 materiality candidate boundary를 포함한다
-- `blocker`, `high`, `medium`은 problem-framing admission을 통과해야 material issue로 파생된다
-- `low`, `info`는 non-material finding 또는 evidence observation이다
+- material issue/non-material finding 분류는 `material-issue-contract.md`의 predicate를 따른다
 - 모든 material issue는 affected purpose, failure condition, impact, evidence refs를 가져야 한다
 - 시작 시점에는 환경, 방식, non-secret 모델/profile, 도메인, target, review direction을 짧게 제시해야 한다
 - 긴 실행 중에는 stepwise/progress-bar 형태로 진행 상태와 새로 수집된 review 정보를 함께 제시해야 하며, 새 정보가 없더라도 bounded liveness update를 제공해야 한다

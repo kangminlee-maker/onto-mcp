@@ -194,9 +194,11 @@ host LLM and user-mediated flow.
   canonical read surface remains `onto_review_status`, and progress step ids
   come from the shared runtime progress contract projected into
   `review-run-manifest.yaml`.
-- MCP does not create a second materiality concept. Result materiality is derived
-  from the active `severity` contract: `blocker`, `high`, and `medium` are
-  material; `low` and `info` are non-material.
+- MCP does not create a second materiality concept. Result materiality is the
+  classification/disclosure projection defined by
+  `.onto/processes/review/material-issue-contract.md`. This disclosure is not a
+  hot-path gate; blocking is owned only by deterministic runtime
+  structural/contract failures.
 - MCP does not add generic public concepts for timeout or retry policy. Long
   running review units halt through the existing execution result artifacts;
   host-call timeout leaves the review running under the same session handle;

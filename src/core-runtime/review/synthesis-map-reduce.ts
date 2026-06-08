@@ -73,6 +73,7 @@ export interface ReviewSynthesisWorkItem {
   causal_path_summary: ReviewSynthesisCausalPathSummary[];
   stance_summary: ReviewSynthesisStanceSummary[];
   deliberation_resolution: ReviewSynthesisDeliberationSummary;
+  deliberation_participating_lens_ids: string[];
   problem_framing: ReviewSynthesisProblemFramingSummary | null;
   action_candidate_projection: ReviewActionCandidate[];
   boundary_note_candidates: string[];
@@ -200,6 +201,7 @@ export interface ReviewSynthesisLedgerMaterialIssue {
   root_hypothesis: string;
   deliberation_status: string;
   problem_framing: ReviewSynthesisProblemFramingSummary | null;
+  lens_position_summary: ReviewSynthesisLensPositionSummary;
   related_surface_finding_ids: string[];
   source_lens_ids: string[];
   evidence_refs: string[];
@@ -212,6 +214,26 @@ export interface ReviewSynthesisLedgerMaterialIssue {
   unresolved_disagreement_note: string | null;
   boundary_notes: string[];
   source_refs_used: string[];
+}
+
+export type ReviewSynthesisStanceBucketName =
+  | "support"
+  | "narrow"
+  | "oppose"
+  | "alternative_root"
+  | "surface_only"
+  | "not_applicable"
+  | "insufficient_evidence";
+
+export interface ReviewSynthesisLensPositionSummary {
+  issue_stance_lens_count: number;
+  raised_by_lens_ids: string[];
+  stance_buckets: Record<ReviewSynthesisStanceBucketName, string[]>;
+  resolution_acceptance: {
+    deliberation_participating_lens_ids: string[];
+    accepted_by_lens_ids: string[];
+    remaining_disagreement_lens_ids: string[];
+  };
 }
 
 export interface ReviewSynthesisActionOrdering {
@@ -229,6 +251,16 @@ const MAX_LEDGER_BOUNDARY_NOTES = 3;
 const SEVERITY_INDEX = new Map(
   REVIEW_SEVERITY_ORDER.map((severity, index) => [severity, index]),
 );
+const STANCE_BUCKET_NAMES: readonly ReviewSynthesisStanceBucketName[] = [
+  "support",
+  "narrow",
+  "oppose",
+  "alternative_root",
+  "surface_only",
+  "not_applicable",
+  "insufficient_evidence",
+];
+const STANCE_BUCKET_NAME_SET = new Set<string>(STANCE_BUCKET_NAMES);
 
 function requireRecord(value: unknown, label: string): UnknownRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -285,6 +317,30 @@ function requireSafeArtifactSegment(value: string, label: string): string {
 
 function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function emptyStanceBuckets(): Record<ReviewSynthesisStanceBucketName, string[]> {
+  return {
+    support: [],
+    narrow: [],
+    oppose: [],
+    alternative_root: [],
+    surface_only: [],
+    not_applicable: [],
+    insufficient_evidence: [],
+  };
+}
+
+function requireStanceBucketName(
+  value: string,
+  label: string,
+): ReviewSynthesisStanceBucketName {
+  if (!STANCE_BUCKET_NAME_SET.has(value)) {
+    throw new Error(
+      `${label} has unsupported stance: ${value}. Allowed: ${STANCE_BUCKET_NAMES.join(", ")}`,
+    );
+  }
+  return value as ReviewSynthesisStanceBucketName;
 }
 
 function sortBySeverityAndId<T extends { severity: ReviewFindingSeverity; issue_id: string }>(
@@ -549,6 +605,39 @@ function deliberationSummaryFor(
   };
 }
 
+function deliberationParticipatingLensIdsFor(args: {
+  deliberationPlan: UnknownRecord;
+  issueId: string;
+  deliberationSummary: ReviewSynthesisDeliberationSummary;
+}): string[] {
+  const plannedIssues = requireArray(
+    args.deliberationPlan.planned_issues,
+    "deliberation-plan.planned_issues",
+  );
+  for (const [index, item] of plannedIssues.entries()) {
+    const row = requireRecord(item, `deliberation-plan.planned_issues[${index}]`);
+    const issueId = requireString(
+      row.issue_id,
+      `deliberation-plan.planned_issues[${index}].issue_id`,
+    );
+    if (issueId !== args.issueId) continue;
+    const lensIds = requireStringArray(
+      row.participating_lens_ids,
+      `deliberation-plan.planned_issues[${index}].participating_lens_ids`,
+    );
+    if (lensIds.length === 0) {
+      throw new Error(
+        `deliberation-plan.planned_issues[${index}].participating_lens_ids must not be empty.`,
+      );
+    }
+    return unique(lensIds);
+  }
+  return unique([
+    ...args.deliberationSummary.accepted_by_lens_ids,
+    ...args.deliberationSummary.remaining_disagreement_lens_ids,
+  ]);
+}
+
 function problemFramingSummaryFor(
   problemFramingByIssueId: ReadonlyMap<string, UnknownRecord>,
   issueId: string,
@@ -735,6 +824,42 @@ function nonMaterialFindingFromProjection(
   };
 }
 
+function lensPositionSummaryFor(
+  workItem: ReviewSynthesisWorkItem,
+): ReviewSynthesisLensPositionSummary {
+  const buckets = emptyStanceBuckets();
+  const seenStanceLensIds = new Set<string>();
+  for (const [index, stance] of workItem.stance_summary.entries()) {
+    if (seenStanceLensIds.has(stance.lens_id)) {
+      throw new Error(
+        `synthesis lens position summary has duplicate stance lens for ${workItem.issue_id}: ${stance.lens_id}`,
+      );
+    }
+    seenStanceLensIds.add(stance.lens_id);
+    const bucket = requireStanceBucketName(
+      stance.stance,
+      `synthesis-work-items.${workItem.work_item_id}.stance_summary[${index}].stance`,
+    );
+    buckets[bucket].push(stance.lens_id);
+  }
+  return {
+    issue_stance_lens_count: workItem.stance_summary.length,
+    raised_by_lens_ids: unique(workItem.raised_by_lens_ids),
+    stance_buckets: buckets,
+    resolution_acceptance: {
+      deliberation_participating_lens_ids: unique(
+        workItem.deliberation_participating_lens_ids,
+      ),
+      accepted_by_lens_ids: unique(
+        workItem.deliberation_resolution.accepted_by_lens_ids,
+      ),
+      remaining_disagreement_lens_ids: unique(
+        workItem.deliberation_resolution.remaining_disagreement_lens_ids,
+      ),
+    },
+  };
+}
+
 export function buildReviewSynthesisWorkItemsArtifact(args: {
   projectRoot: string;
   executionPlan: ReviewExecutionPlan;
@@ -811,6 +936,11 @@ export function buildReviewSynthesisWorkItemsArtifact(args: {
         resolutionByIssueId,
         projection.issue_id,
       );
+      const deliberationParticipatingLensIds = deliberationParticipatingLensIdsFor({
+        deliberationPlan: args.deliberationPlan,
+        issueId: projection.issue_id,
+        deliberationSummary,
+      });
       const relatedIssueContext = issueDependenciesFor(
         args.issueLedger,
         projection.issue_id,
@@ -831,20 +961,20 @@ export function buildReviewSynthesisWorkItemsArtifact(args: {
         severity,
         material: true,
         issue_statement: requireString(
-          issue.issue_statement,
-          `issue-ledger.issues.${projection.issue_id}.issue_statement`,
+          projection.issue_statement ?? issue.issue_statement,
+          `classification material issue ${projection.issue_id}.issue_statement`,
         ),
         affected_purpose: requireString(
-          issue.affected_purpose,
-          `issue-ledger.issues.${projection.issue_id}.affected_purpose`,
+          projection.affected_purpose,
+          `classification material issue ${projection.issue_id}.affected_purpose`,
         ),
         failure_condition: requireString(
-          issue.failure_condition,
-          `issue-ledger.issues.${projection.issue_id}.failure_condition`,
+          projection.failure_condition,
+          `classification material issue ${projection.issue_id}.failure_condition`,
         ),
         impact: requireString(
-          issue.impact,
-          `issue-ledger.issues.${projection.issue_id}.impact`,
+          projection.impact,
+          `classification material issue ${projection.issue_id}.impact`,
         ),
         root_hypothesis: requireString(
           issue.root_cause_hypothesis,
@@ -859,10 +989,7 @@ export function buildReviewSynthesisWorkItemsArtifact(args: {
           `issue-ledger.issues.${projection.issue_id}.proposed_action`,
         ),
         surface_finding_ids: surfaceFindingIds,
-        raised_by_lens_ids: requireStringArray(
-          issue.raised_by_lens_ids,
-          `issue-ledger.issues.${projection.issue_id}.raised_by_lens_ids`,
-        ),
+        raised_by_lens_ids: projection.source_lens_ids,
         relation_refs: requireStringArray(
           issue.relation_refs,
           `issue-ledger.issues.${projection.issue_id}.relation_refs`,
@@ -871,6 +998,7 @@ export function buildReviewSynthesisWorkItemsArtifact(args: {
         causal_path_summary: causalSummaries,
         stance_summary: stanceSummaries,
         deliberation_resolution: deliberationSummary,
+        deliberation_participating_lens_ids: deliberationParticipatingLensIds,
         problem_framing: problemFramingSummaryFor(
           problemFramingByIssueId,
           projection.issue_id,
@@ -1111,6 +1239,84 @@ export function validateIssueSynthesisResponseObject(args: {
   };
 }
 
+export function buildRuntimeIssueSynthesisUnavailableResponse(args: {
+  sessionId: string;
+  workItem: ReviewSynthesisWorkItem;
+  sourceWorkItemsRef: string;
+  reason: string;
+}): IssueSynthesisResponseArtifact {
+  const preferredSourceRefs = [
+    `issue-ledger.yaml#${args.workItem.issue_id}`,
+    `problem-framing.yaml#${args.workItem.issue_id}`,
+    `deliberation-resolution.yaml#${args.workItem.issue_id}`,
+    ...args.workItem.surface_finding_ids.map(
+      (findingId) => `finding-ledger.yaml#${findingId}`,
+    ),
+  ].filter((ref) => args.workItem.allowed_source_refs.includes(ref));
+  const sourceRefsUsed = preferredSourceRefs.length > 0
+    ? unique(preferredSourceRefs)
+    : [args.workItem.allowed_source_refs[0]].filter(
+        (ref): ref is string => typeof ref === "string",
+      );
+  return validateIssueSynthesisResponseObject({
+    parsed: {
+      schema_version: 1,
+      session_id: args.sessionId,
+      work_item_id: args.workItem.work_item_id,
+      issue_id: args.workItem.issue_id,
+      source_work_item_ref: args.sourceWorkItemsRef,
+      conclusion: compactSentence(args.workItem.issue_statement),
+      materiality_explanation: compactSentence(
+        [
+          `Upstream artifacts classify this as ${args.workItem.severity}.`,
+          `Affected purpose: ${args.workItem.affected_purpose}.`,
+          `Failure condition: ${args.workItem.failure_condition}.`,
+          `Impact: ${args.workItem.impact}.`,
+        ].join(" "),
+        640,
+      ),
+      root_cause_explanation: compactSentence(
+        `Root cause hypothesis preserved from issue-ledger: ${args.workItem.root_hypothesis}. Confidence: ${args.workItem.root_confidence}.`,
+        640,
+      ),
+      causal_path_explanation: compactSentence(
+        args.workItem.causal_path_summary.length > 0
+          ? args.workItem.causal_path_summary
+              .map((summary) => `${summary.finding_id}: ${summary.claim}`)
+              .join(" ")
+          : `Runtime completion preserved the issue-ledger surface finding ids: ${args.workItem.surface_finding_ids.join(", ")}.`,
+        640,
+      ),
+      action_explanation: compactSentence(
+        [
+          `Preserved proposed action: ${args.workItem.proposed_action}.`,
+          args.workItem.action_candidate_projection.length > 0
+            ? `Action candidates: ${args.workItem.action_candidate_projection.join(", ")}.`
+            : "",
+        ].join(" "),
+        640,
+      ),
+      unresolved_disagreement_note:
+        args.workItem.deliberation_resolution.status === "unresolved-with-reason"
+          ? compactSentence(
+              `Controlled deliberation remains unresolved or synthesis worker was unavailable: ${args.reason}`,
+              640,
+            )
+          : null,
+      boundary_notes: [
+        compactSentence(
+          `Runtime completion: issue-scoped synthesis response was unavailable; prose was projected conservatively from upstream artifacts. ${args.reason}`,
+          640,
+        ),
+      ],
+      source_refs_used: sourceRefsUsed,
+    },
+    sessionId: args.sessionId,
+    workItem: args.workItem,
+    sourceWorkItemsRef: args.sourceWorkItemsRef,
+  });
+}
+
 export async function validateIssueSynthesisResponseOnDisk(args: {
   responsePath: string;
   sessionId: string;
@@ -1190,6 +1396,7 @@ export function buildReviewSynthesisLedger(args: {
         root_hypothesis: workItem.root_hypothesis,
         deliberation_status: workItem.deliberation_resolution.status,
         problem_framing: workItem.problem_framing,
+        lens_position_summary: lensPositionSummaryFor(workItem),
         related_surface_finding_ids: workItem.surface_finding_ids,
         source_lens_ids: workItem.raised_by_lens_ids,
         evidence_refs: workItem.allowed_evidence_refs,

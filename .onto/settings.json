@@ -35,7 +35,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -45,7 +45,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -53,9 +53,9 @@
         "finding_relation_graph": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "medium"
+            "effort": "high"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -63,15 +63,15 @@
         "issue_ledger": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "medium"
+            "effort": "high"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
         },
         "issue_stance_matrix": {
-          "timeout_ms": 120000,
+          "timeout_ms": 300000,
           "max_output_bytes": 524288
         },
         "deliberation_plan": {
@@ -79,7 +79,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -87,9 +87,9 @@
         "problem_framing": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "medium"
+            "effort": "high"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -99,7 +99,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 180000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -109,7 +109,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 180000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -117,9 +117,9 @@
         "deliberation_resolution": {
           "llm": {
             "model": "gpt-5.5",
-            "effort": "medium"
+            "effort": "high"
           },
-          "timeout_ms": 240000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -129,7 +129,7 @@
             "model": "gpt-5.5",
             "effort": "medium"
           },
-          "timeout_ms": 180000,
+          "timeout_ms": 600000,
           "max_retries": 2,
           "retry_initial_delay_ms": 3000,
           "max_output_bytes": 524288
@@ -142,7 +142,6 @@
             "auth": "oauth",
             "provider": "openai",
             "model": "gpt-5.5",
-            "effort": "medium",
             "service_tier": "fast"
           }
         },
@@ -152,7 +151,6 @@
             "auth": "oauth",
             "provider": "openai",
             "model": "gpt-5.5",
-            "effort": "medium",
             "service_tier": "fast"
           }
         },
@@ -162,7 +160,6 @@
             "auth": "oauth",
             "provider": "openai",
             "model": "gpt-5.5",
-            "effort": "medium",
             "service_tier": "fast"
           }
         }

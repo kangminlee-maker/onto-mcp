@@ -48,6 +48,30 @@ export interface IssueArtifactFindingFact {
   evidence_refs: ReadonlySet<string>;
 }
 
+interface IssueLedgerCompletionFinding {
+  finding_id: string;
+  lens_id: string;
+  claim: string;
+  lens_rationale_summary: string;
+  proposed_action: string | null;
+  affected_purpose: string;
+  failure_condition: string;
+  impact: string;
+  evidence_refs: string[];
+  severity: ReviewFindingSeverity;
+  domain_threshold_used: string | null;
+  root_cause_candidate: string | null;
+}
+
+interface IssueLedgerCompletionRelation {
+  relation_id: string;
+  relation: string;
+  from_finding_id: string;
+  to_finding_id: string;
+  root_hypothesis: string | null;
+  shared_cause_claim: string | null;
+}
+
 export interface IssueStanceResponseArtifact {
   schema_version: 1;
   session_id: string;
@@ -596,6 +620,513 @@ function validateIssueMergeRelations(args: {
       `${args.issueLabel}.surface_finding_ids must be connected by same_root_candidate relation_refs before they can be merged. Unsupported findings: ${unsupportedFindingIds.join(", ")}`,
     );
   }
+}
+
+function completionString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : null;
+}
+
+function completionStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string =>
+        typeof item === "string" && item.trim().length > 0
+      )
+    : [];
+}
+
+function completionSeverity(value: unknown): ReviewFindingSeverity | null {
+  return typeof value === "string" &&
+      (SEVERITY_VALUES as ReadonlySet<string>).has(value)
+    ? (value as ReviewFindingSeverity)
+    : null;
+}
+
+function completionConfidence(value: unknown): string {
+  return typeof value === "string" && CONFIDENCE_VALUES.has(value)
+    ? value
+    : "medium";
+}
+
+function severityRank(severity: ReviewFindingSeverity): number {
+  const index = REVIEW_SEVERITY_ORDER.indexOf(severity);
+  return index >= 0 ? index : REVIEW_SEVERITY_ORDER.length;
+}
+
+function mostSevere(
+  first: ReviewFindingSeverity,
+  second: ReviewFindingSeverity,
+): ReviewFindingSeverity {
+  return severityRank(first) <= severityRank(second) ? first : second;
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>): string[] {
+  return [
+    ...new Set(
+      values.filter(
+        (value): value is string =>
+          typeof value === "string" && value.trim().length > 0,
+      ),
+    ),
+  ];
+}
+
+function completionFindingsFrom(
+  findingLedger: Record<string, unknown>,
+): Map<string, IssueLedgerCompletionFinding> {
+  const findings = new Map<string, IssueLedgerCompletionFinding>();
+  for (const [index, item] of requireArray(
+    findingLedger.findings,
+    "finding-ledger.findings",
+  ).entries()) {
+    const finding = requireRecord(item, `finding-ledger.findings[${index}]`);
+    const findingId = requireString(
+      finding.finding_id,
+      `finding-ledger.findings[${index}].finding_id`,
+    );
+    const sourceRef = requireString(
+      finding.source_ref,
+      `finding-ledger.findings[${index}].source_ref`,
+    );
+    const evidenceRefs = uniqueNonEmpty([
+      ...requireStringArray(
+        finding.evidence_refs,
+        `finding-ledger.findings[${index}].evidence_refs`,
+      ),
+      sourceRef,
+      optionalString(
+        finding.evidence_anchor,
+        `finding-ledger.findings[${index}].evidence_anchor`,
+      ),
+    ]);
+    const causalPath = optionalCausalPathRecord(
+      finding.causal_path,
+      `finding-ledger.findings[${index}].causal_path`,
+    );
+    findings.set(findingId, {
+      finding_id: findingId,
+      lens_id: requireString(
+        finding.lens_id,
+        `finding-ledger.findings[${index}].lens_id`,
+      ),
+      claim: requireString(
+        finding.claim,
+        `finding-ledger.findings[${index}].claim`,
+      ),
+      lens_rationale_summary: requireString(
+        finding.lens_rationale_summary,
+        `finding-ledger.findings[${index}].lens_rationale_summary`,
+      ),
+      proposed_action: completionString(finding.proposed_action),
+      affected_purpose: requireString(
+        finding.affected_purpose,
+        `finding-ledger.findings[${index}].affected_purpose`,
+      ),
+      failure_condition: requireString(
+        finding.failure_condition,
+        `finding-ledger.findings[${index}].failure_condition`,
+      ),
+      impact: requireString(
+        finding.impact,
+        `finding-ledger.findings[${index}].impact`,
+      ),
+      evidence_refs: evidenceRefs,
+      severity: requireAllowed(
+        finding.severity,
+        SEVERITY_VALUES,
+        `finding-ledger.findings[${index}].severity`,
+      ) as ReviewFindingSeverity,
+      domain_threshold_used: optionalStringOrNull(
+        finding.domain_threshold_used,
+        `finding-ledger.findings[${index}].domain_threshold_used`,
+      ),
+      root_cause_candidate: causalPath
+        ? completionString(causalPath.root_cause_candidate)
+        : null,
+    });
+  }
+  return findings;
+}
+
+function completionRelationsFrom(
+  relationGraph: Record<string, unknown>,
+): IssueLedgerCompletionRelation[] {
+  return requireArray(
+    relationGraph.relations,
+    "finding-relation-graph.relations",
+  ).map((item, index) => {
+    const relation = requireRecord(
+      item,
+      `finding-relation-graph.relations[${index}]`,
+    );
+    const sharedCause =
+      relation.shared_cause &&
+      typeof relation.shared_cause === "object" &&
+      !Array.isArray(relation.shared_cause)
+        ? (relation.shared_cause as Record<string, unknown>)
+        : null;
+    return {
+      relation_id: requireString(
+        relation.relation_id,
+        `finding-relation-graph.relations[${index}].relation_id`,
+      ),
+      relation: requireAllowed(
+        relation.relation,
+        RELATION_VALUES,
+        `finding-relation-graph.relations[${index}].relation`,
+      ),
+      from_finding_id: requireString(
+        relation.from_finding_id,
+        `finding-relation-graph.relations[${index}].from_finding_id`,
+      ),
+      to_finding_id: requireString(
+        relation.to_finding_id,
+        `finding-relation-graph.relations[${index}].to_finding_id`,
+      ),
+      root_hypothesis: completionString(relation.root_hypothesis),
+      shared_cause_claim: sharedCause
+        ? completionString(sharedCause.cause_claim)
+        : null,
+    };
+  });
+}
+
+function relationGraphSingletonReasonsFrom(
+  relationGraph: Record<string, unknown>,
+): Map<string, string> {
+  const reasons = new Map<string, string>();
+  for (const [index, item] of requireArray(
+    relationGraph.singleton_findings,
+    "finding-relation-graph.singleton_findings",
+  ).entries()) {
+    const singleton = requireRecord(
+      item,
+      `finding-relation-graph.singleton_findings[${index}]`,
+    );
+    reasons.set(
+      requireString(
+        singleton.finding_id,
+        `finding-relation-graph.singleton_findings[${index}].finding_id`,
+      ),
+      requireString(
+        singleton.reason,
+        `finding-relation-graph.singleton_findings[${index}].reason`,
+      ),
+    );
+  }
+  return reasons;
+}
+
+function connectedFindingComponents(args: {
+  findingIds: string[];
+  relations: IssueLedgerCompletionRelation[];
+}): string[][] {
+  const uniqueFindingIds = [...new Set(args.findingIds)];
+  const parent = new Map(uniqueFindingIds.map((findingId) => [findingId, findingId]));
+  const find = (findingId: string): string => {
+    const parentId = parent.get(findingId);
+    if (!parentId || parentId === findingId) return findingId;
+    const root = find(parentId);
+    parent.set(findingId, root);
+    return root;
+  };
+  const union = (first: string, second: string): void => {
+    const firstRoot = find(first);
+    const secondRoot = find(second);
+    if (firstRoot !== secondRoot) parent.set(secondRoot, firstRoot);
+  };
+  const findingSet = new Set(uniqueFindingIds);
+  for (const relation of args.relations) {
+    if (!ISSUE_MERGE_RELATION_VALUES.has(relation.relation)) continue;
+    if (
+      findingSet.has(relation.from_finding_id) &&
+      findingSet.has(relation.to_finding_id)
+    ) {
+      union(relation.from_finding_id, relation.to_finding_id);
+    }
+  }
+  const groups = new Map<string, string[]>();
+  for (const findingId of uniqueFindingIds) {
+    const root = find(findingId);
+    groups.set(root, [...(groups.get(root) ?? []), findingId]);
+  }
+  return [...groups.values()].sort((a, b) =>
+    a[0] && b[0] ? a[0].localeCompare(b[0]) : a.length - b.length,
+  );
+}
+
+function sameRootRelationRefsForGroup(
+  findingIds: string[],
+  relations: IssueLedgerCompletionRelation[],
+): string[] {
+  const findingSet = new Set(findingIds);
+  return relations
+    .filter(
+      (relation) =>
+        ISSUE_MERGE_RELATION_VALUES.has(relation.relation) &&
+        findingSet.has(relation.from_finding_id) &&
+        findingSet.has(relation.to_finding_id),
+    )
+    .map((relation) => relation.relation_id);
+}
+
+function groupKey(findingIds: readonly string[]): string {
+  return [...findingIds].sort().join("\u0000");
+}
+
+function exactRawIssuesByGroup(
+  candidate: Record<string, unknown> | null,
+  knownFindingIds: ReadonlySet<string>,
+): Map<string, Record<string, unknown>> {
+  const rawByGroup = new Map<string, Record<string, unknown>>();
+  if (!candidate || !Array.isArray(candidate.issues)) return rawByGroup;
+  for (const item of candidate.issues) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const issue = item as Record<string, unknown>;
+    const surfaceFindingIds = completionStringArray(issue.surface_finding_ids)
+      .filter((findingId) => knownFindingIds.has(findingId));
+    if (surfaceFindingIds.length === 0) continue;
+    const key = groupKey(surfaceFindingIds);
+    if (!rawByGroup.has(key)) rawByGroup.set(key, issue);
+  }
+  return rawByGroup;
+}
+
+function candidateFindingIds(
+  candidate: Record<string, unknown> | null,
+  knownFindingIds: ReadonlySet<string>,
+): string[] {
+  if (!candidate || !Array.isArray(candidate.issues)) return [];
+  const ids: string[] = [];
+  for (const item of candidate.issues) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    ids.push(
+      ...completionStringArray(
+        (item as Record<string, unknown>).surface_finding_ids,
+      ).filter((findingId) => knownFindingIds.has(findingId)),
+    );
+  }
+  return [...new Set(ids)];
+}
+
+function highestFindingSeverity(
+  findings: IssueLedgerCompletionFinding[],
+): ReviewFindingSeverity {
+  return findings.reduce<ReviewFindingSeverity>(
+    (highest, finding) => mostSevere(highest, finding.severity),
+    "info",
+  );
+}
+
+function joinedOrPrimary(values: string[], fallback: string): string {
+  if (values.length === 0) return fallback;
+  if (values.length === 1) return values[0]!;
+  return values.join(" / ");
+}
+
+function completedIssueRow(args: {
+  issueId: string;
+  findingIds: string[];
+  findingsById: ReadonlyMap<string, IssueLedgerCompletionFinding>;
+  relations: IssueLedgerCompletionRelation[];
+  rawIssue?: Record<string, unknown> | undefined;
+  singletonReasons: ReadonlyMap<string, string>;
+}): Record<string, unknown> {
+  const findings = args.findingIds
+    .map((findingId) => args.findingsById.get(findingId))
+    .filter((finding): finding is IssueLedgerCompletionFinding => Boolean(finding));
+  const primary = findings.reduce<IssueLedgerCompletionFinding | null>(
+    (selected, finding) =>
+      !selected || severityRank(finding.severity) < severityRank(selected.severity)
+        ? finding
+        : selected,
+    null,
+  );
+  if (!primary) {
+    throw new Error("Cannot complete issue-ledger issue without known findings.");
+  }
+  const relationRefs = sameRootRelationRefsForGroup(args.findingIds, args.relations);
+  const relationRootHypotheses = uniqueNonEmpty(
+    args.relations
+      .filter((relation) => relationRefs.includes(relation.relation_id))
+      .map((relation) => relation.root_hypothesis),
+  );
+  const rootCauseHypothesis =
+    completionString(args.rawIssue?.root_cause_hypothesis) ??
+    joinedOrPrimary(
+      relationRootHypotheses,
+      primary.root_cause_candidate ?? primary.claim,
+    );
+  const rawSeverity = completionSeverity(args.rawIssue?.severity);
+  const derivedSeverity = highestFindingSeverity(findings);
+  const severity = rawSeverity
+    ? mostSevere(rawSeverity, derivedSeverity)
+    : derivedSeverity;
+  const proposedActions = uniqueNonEmpty(
+    findings.map((finding) => finding.proposed_action),
+  );
+  const evidenceRefs = uniqueNonEmpty(
+    findings.flatMap((finding) => finding.evidence_refs),
+  );
+  const raisedByLensIds = uniqueNonEmpty(findings.map((finding) => finding.lens_id));
+  const singletonReason =
+    args.findingIds.length === 1
+      ? completionString(args.rawIssue?.singleton_reason) ??
+        args.singletonReasons.get(args.findingIds[0]!) ??
+        "Runtime completion: finding is not connected to another issue by same_root_candidate relation refs."
+      : null;
+
+  return {
+    issue_id: args.issueId,
+    root_cause_hypothesis: rootCauseHypothesis,
+    root_confidence: completionConfidence(args.rawIssue?.root_confidence),
+    surface_finding_ids: args.findingIds,
+    relation_refs: relationRefs,
+    raised_by_lens_ids: raisedByLensIds,
+    issue_statement:
+      completionString(args.rawIssue?.issue_statement) ??
+      (args.findingIds.length === 1
+        ? primary.claim
+        : `Shared-root issue across ${args.findingIds.join(", ")}: ${rootCauseHypothesis}`),
+    proposed_action:
+      completionString(args.rawIssue?.proposed_action) ??
+      joinedOrPrimary(
+        proposedActions,
+        "Investigate and address the recorded finding at its root cause.",
+      ),
+    affected_purpose:
+      completionString(args.rawIssue?.affected_purpose) ??
+      joinedOrPrimary(
+        uniqueNonEmpty(findings.map((finding) => finding.affected_purpose)),
+        primary.affected_purpose,
+      ),
+    failure_condition:
+      completionString(args.rawIssue?.failure_condition) ??
+      joinedOrPrimary(
+        uniqueNonEmpty(findings.map((finding) => finding.failure_condition)),
+        primary.failure_condition,
+      ),
+    impact:
+      completionString(args.rawIssue?.impact) ??
+      joinedOrPrimary(
+        uniqueNonEmpty(findings.map((finding) => finding.impact)),
+        primary.impact,
+      ),
+    evidence_refs: evidenceRefs,
+    severity,
+    domain_threshold_used:
+      completionString(args.rawIssue?.domain_threshold_used) ??
+      (joinedOrPrimary(
+        uniqueNonEmpty(findings.map((finding) => finding.domain_threshold_used)),
+        "",
+      ) || null),
+    singleton_reason: singletonReason,
+  };
+}
+
+function runtimeIssueDependencies(args: {
+  issueRows: Record<string, unknown>[];
+  relations: IssueLedgerCompletionRelation[];
+}): Record<string, unknown>[] {
+  const issueIdsByFindingId = new Map<string, string>();
+  for (const issue of args.issueRows) {
+    const issueId = completionString(issue.issue_id);
+    if (!issueId) continue;
+    for (const findingId of completionStringArray(issue.surface_finding_ids)) {
+      issueIdsByFindingId.set(findingId, issueId);
+    }
+  }
+  const grouped = new Map<
+    string,
+    { issue_ids: string[]; relation_refs: string[]; cause_claims: string[] }
+  >();
+  for (const relation of args.relations) {
+    if (relation.relation !== "shared_cause_candidate") continue;
+    const fromIssueId = issueIdsByFindingId.get(relation.from_finding_id);
+    const toIssueId = issueIdsByFindingId.get(relation.to_finding_id);
+    if (!fromIssueId || !toIssueId || fromIssueId === toIssueId) continue;
+    const issueIds = [fromIssueId, toIssueId].sort();
+    const key = issueIds.join("\u0000");
+    const group =
+      grouped.get(key) ??
+      { issue_ids: issueIds, relation_refs: [], cause_claims: [] };
+    group.relation_refs.push(relation.relation_id);
+    if (relation.shared_cause_claim) {
+      group.cause_claims.push(relation.shared_cause_claim);
+    }
+    grouped.set(key, group);
+  }
+  return [...grouped.values()].map((group, index) => ({
+    dependency_id: `dep-${String(index + 1).padStart(3, "0")}`,
+    dependency_kind: "shared_cause_candidate",
+    issue_ids: group.issue_ids,
+    relation_refs: group.relation_refs,
+    rationale:
+      group.cause_claims.length > 0
+        ? `Runtime projection: these distinct issues share preserved relation graph cause context (${group.cause_claims.join(" / ")}).`
+        : `Runtime projection: these distinct issues share preserved relation graph cause context (${group.relation_refs.join(", ")}).`,
+  }));
+}
+
+export function completeIssueLedgerArtifactObject(args: {
+  sessionId: string;
+  candidate?: Record<string, unknown> | null;
+  findingLedger: Record<string, unknown>;
+  relationGraph: Record<string, unknown>;
+}): Record<string, unknown> {
+  const findingsById = completionFindingsFrom(args.findingLedger);
+  const knownFindingIds = new Set(findingsById.keys());
+  const relations = completionRelationsFrom(args.relationGraph);
+  const requiredFindingIds = relationGraphCoveredFindingIdsFrom(args.relationGraph);
+  const includedFindingIds = [
+    ...new Set([
+      ...requiredFindingIds,
+      ...candidateFindingIds(args.candidate ?? null, knownFindingIds),
+    ]),
+  ].filter((findingId) => knownFindingIds.has(findingId));
+  if (includedFindingIds.length === 0) {
+    return {
+      schema_version: 1,
+      session_id: args.sessionId,
+      issues: [],
+      issue_dependencies: [],
+      validation: {
+        unclustered_finding_ids: [...knownFindingIds],
+      },
+    };
+  }
+  const rawByGroup = exactRawIssuesByGroup(args.candidate ?? null, knownFindingIds);
+  const singletonReasons = relationGraphSingletonReasonsFrom(args.relationGraph);
+  const components = connectedFindingComponents({
+    findingIds: includedFindingIds,
+    relations,
+  });
+  const issueRows = components.map((findingIds, index) => {
+    const issueId = `issue-${String(index + 1).padStart(3, "0")}`;
+    return completedIssueRow({
+      issueId,
+      findingIds,
+      findingsById,
+      relations,
+      rawIssue: rawByGroup.get(groupKey(findingIds)),
+      singletonReasons,
+    });
+  });
+  const assignedFindingIds = new Set(
+    issueRows.flatMap((issue) => completionStringArray(issue.surface_finding_ids)),
+  );
+  return {
+    schema_version: 1,
+    session_id: args.sessionId,
+    issues: issueRows,
+    issue_dependencies: runtimeIssueDependencies({ issueRows, relations }),
+    validation: {
+      unclustered_finding_ids: [...knownFindingIds].filter(
+        (findingId) => !assignedFindingIds.has(findingId),
+      ),
+    },
+  };
 }
 
 function ensureExactStringSet(args: {
@@ -2225,7 +2756,7 @@ You must derive the requested artifact from existing lens finding sources and pr
 - Enum fields must use exactly one listed token. Do not append explanation text to enum values; put explanations in rationale fields.
 
 ## Severity Contract
-\`severity\` is the review result classification axis. It also determines whether an issue is material.
+\`severity\` is the review result classification axis. It is an input to the canonical material issue predicate, not a standalone materiality decision.
 
 Allowed severity values:
 - blocker: the declared primary happy path cannot be achieved by any intended user, or the result appears trustworthy while breaking a core contract.
@@ -2234,9 +2765,10 @@ Allowed severity values:
 - low: an improvement opportunity that does not make the reviewed result unsafe for its declared purpose.
 - info: an observation, question, or evidence gap that is not yet an issue.
 
-Derived materiality:
-- material issue: blocker, high, medium
+Derived materiality candidate boundary:
+- material-severity candidate: blocker, high, medium
 - non-material finding: low, info
+- final material issue admission is derived later by material-issue-contract.md
 
 Every blocker/high/medium severity claim must cite concrete evidence and explain affected_purpose, failure_condition, and impact.
 If evidence is insufficient, use severity: info and explain the evidence gap.
@@ -4408,6 +4940,62 @@ export async function validateIssueArtifactOnDisk(args: {
     participatingLensIds: args.participatingLensIds,
   });
   return parsed;
+}
+
+export async function completeIssueLedgerArtifactOnDisk(args: {
+  executionPlan: ReviewExecutionPlan;
+  projectRoot: string;
+  participatingLensIds: string[];
+  candidatePath?: string | undefined;
+}): Promise<Record<string, unknown>> {
+  const findingLedger = await readArtifact(args.executionPlan, "finding-ledger");
+  validateIssueArtifactObject({
+    artifactId: "finding-ledger",
+    parsed: findingLedger,
+    sessionId: args.executionPlan.session_id,
+    participatingLensIds: args.participatingLensIds,
+  });
+  const relationGraph = await readArtifact(
+    args.executionPlan,
+    "finding-relation-graph",
+  );
+  validateIssueArtifactObject({
+    artifactId: "finding-relation-graph",
+    parsed: relationGraph,
+    sessionId: args.executionPlan.session_id,
+    knownFindingIds: findingIdsFrom(findingLedger),
+    knownCauseFindingIds: causeFindingIdsFrom(findingLedger),
+    coverageFindingIds: causalCoverageFindingIdsFrom(findingLedger),
+    participatingLensIds: args.participatingLensIds,
+  });
+  const candidate =
+    args.candidatePath && await fileExists(args.candidatePath)
+      ? await readYamlDocument<Record<string, unknown>>(args.candidatePath)
+      : null;
+  const completed = completeIssueLedgerArtifactObject({
+    sessionId: args.executionPlan.session_id,
+    candidate,
+    findingLedger,
+    relationGraph,
+  });
+  await writeYamlDocument(args.executionPlan.issue_ledger_path, completed);
+  validateIssueArtifactObject({
+    artifactId: "issue-ledger",
+    parsed: completed,
+    sessionId: args.executionPlan.session_id,
+    knownFindingIds: findingIdsFrom(findingLedger),
+    knownFindingFacts: findingFactsFrom(findingLedger),
+    knownRelationIds: relationIdsFrom(relationGraph),
+    knownRelationKinds: new Map(
+      Array.from(relationFactsFrom(relationGraph).entries()).map(
+        ([relationId, fact]) => [relationId, fact.relation],
+      ),
+    ),
+    knownRelationFacts: relationFactsFrom(relationGraph),
+    requiredIssueFindingIds: relationGraphCoveredFindingIdsFrom(relationGraph),
+    participatingLensIds: args.participatingLensIds,
+  });
+  return completed;
 }
 
 export async function renderIssueArtifactContext(args: {

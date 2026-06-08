@@ -1,4 +1,4 @@
-lexicon_version: "0.43.0"
+lexicon_version: "0.44.0"
 schema_version: "2"
 position: "Prototype-to-service ontology authority for the onto main repository."
 notes:
@@ -924,6 +924,16 @@ terms:
     axis: "review_input"
     term_status: "active"
     definition: "Resolved review target as a scope or bundle, not necessarily a single file path."
+  - term_id: "material_issue"
+    canonical_label: "material_issue"
+    korean_label: "material issue"
+    axis: "review_result_classification"
+    term_status: "active"
+    definition: "Review result classification/disclosure derived by the canonical review material issue predicate; it is not a standalone enum and does not by itself block the hot path or stage progress."
+    contract_ref: ".onto/processes/review/material-issue-contract.md"
+    notes:
+      - "Exact predicate and admission disqualifiers are owned by .onto/processes/review/material-issue-contract.md and implemented by src/core-runtime/review/review-result-classification.ts."
+      - "Blocking is owned by deterministic runtime gates for structural or contract failures, not by semantic material issue disclosure."
   - term_id: "target_material_kind"
     canonical_label: "TargetMaterialKind"
     korean_label: "대상물 형식"
