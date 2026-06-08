@@ -7,6 +7,7 @@ function profile(
 ): ReviewExecutionProfile {
   return {
     mode: "main-workers",
+    orchestration: "runtime",
     teamlead: { seat: "main" },
     lens: { seat: "worker" },
     synthesize: { seat: "worker" },

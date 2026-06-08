@@ -2,7 +2,10 @@ import type {
   TargetMaterialKind,
   TargetMaterialSupportStatus,
 } from "../target-material-kind.js";
-import type { ReviewRetrySettings } from "../discovery/settings-chain.js";
+import type {
+  ReviewOrchestrationOwner,
+  ReviewRetrySettings,
+} from "../discovery/settings-chain.js";
 import type {
   LlmAuthMode,
   LlmBillingMode,
@@ -339,6 +342,7 @@ export interface ReviewExecutionPlan {
   artifact_generation_realization: ReviewArtifactGenerationRealization;
   semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
+  orchestration?: ReviewOrchestrationOwner;
   interpretation_artifact_path: string;
   binding_output_path: string;
   session_metadata_path: string;
@@ -584,6 +588,8 @@ export interface ReviewSessionMetadata {
   artifact_generation_realization: ReviewArtifactGenerationRealization;
   semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
+  /** Orchestration owner stamped at prepare (runtime=A, host=B). Immutable. */
+  orchestration?: ReviewOrchestrationOwner;
   created_at: string;
   project_root: string;
   requested_target: string;
@@ -1015,6 +1021,7 @@ export interface ReviewRecord {
   resolved_review_mode?: string;
   resolved_execution_realization?: string;
   resolved_host_runtime?: string;
+  orchestration?: ReviewOrchestrationOwner;
   resolved_artifact_generation_realization?: string;
   semantic_quality_evidence?: ReviewSemanticQualityEvidence;
   resolved_lens_ids: string[];

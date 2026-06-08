@@ -3526,6 +3526,9 @@ function reviewExecutionProfileFromManifest(
 
   const reconstructed: ReviewExecutionProfile = {
     mode: profile.mode,
+    // Continuation reconstruction is the onto-runtime (A) path; host-orchestrated
+    // sessions are driven via the round/advance API, never reconstructed here.
+    orchestration: "runtime",
     teamlead: profile.teamlead as ReviewExecutionProfile["teamlead"],
     lens: profile.lens as ReviewExecutionProfile["lens"],
     synthesize: profile.synthesize as ReviewExecutionProfile["synthesize"],
@@ -3639,6 +3642,7 @@ function reviewExecutionProfileFromActorProfiles(args: {
   const synthesizeLlm = actorLlmFromProfile(synthesize);
   const reconstructed: ReviewExecutionProfile = {
     mode: "main-workers",
+    orchestration: "runtime",
     teamlead: { seat: teamlead.seat, ...(teamleadLlm ? { llm: teamleadLlm } : {}) },
     lens: { seat: lens.seat, ...(lensLlm ? { llm: lensLlm } : {}) },
     synthesize: {

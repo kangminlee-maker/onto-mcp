@@ -779,6 +779,11 @@ export async function bootstrapInvocationBindingArtifacts(
     artifact_generation_realization: artifactGenerationRealization,
     semantic_quality_evidence: semanticQualityEvidence,
     review_mode: params.reviewMode,
+    // Durable, immutable stamp: who owns the review orchestration loop. The
+    // A/B fail-closed boundary reads this so a session prepared for one locus
+    // cannot be driven by the other.
+    orchestration:
+      ontoConfig?.review?.execution?.orchestration ?? "runtime",
     created_at: isoNow(),
     project_root: projectRoot,
     requested_target: params.requestedTarget,
@@ -865,6 +870,8 @@ export async function bootstrapInvocationBindingArtifacts(
     artifact_generation_realization: artifactGenerationRealization,
     semantic_quality_evidence: semanticQualityEvidence,
     review_mode: params.reviewMode,
+    orchestration:
+      ontoConfig?.review?.execution?.orchestration ?? "runtime",
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
     session_metadata_path: sessionMetadataPath,
