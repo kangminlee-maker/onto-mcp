@@ -79,8 +79,10 @@ deliberation 유닛도 DAG 위의 ready unit일 뿐(동료 seat를 읽는 execut
 | 2 | `review/review-execution-profile.ts` | `ReviewExecutionProfile` ~L44 | `orchestration: "runtime"\|"host"` 필드 + buildProfile에서 전파 |
 | 3 | `review/artifact-types.ts` | `ReviewSessionMetadata`, `ReviewExecutionPlan`, `ReviewRecord` | `orchestration` 투영 필드(옵셔널, 하위호환) |
 | 4 | `cli/prepare-review-session.ts` / prepare 경로 | — | settings→세션 stamp(`orchestration`) 기록 |
-| 5 | `core-api/review-api.ts` | `continueReview` ~L4296; `runReview` ~L3939 | `continueReview`를 **분해**: `reviewRound`(frontier 조회, 실행 X) + `reviewAdvance`(host seat 검증+전진, 실행 X) 신규; `runReview`/auto-execute는 `orchestration==="host"`면 거부 |
-| 6 | `cli/run-review-prompt-execution.ts` | `executeReviewPromptExecution` 진입 ~L4894 | `orchestration==="host"` 세션이면 spawn 전 fail-closed 거부 |
+| 5a | (신규) `review/review-execution-steps.ts` | — | **durable step engine** 공유 함수(§7.5): `computeReviewFrontier`/`ensureUnitPacket`/`validateUnitSeatToResult`/`mergeUnitResultIntoExecutionResult`/`finalizeStageGate`/`assembleIfComplete`. `continueReview`(A)는 손대지 않음 |
+| 5b | `cli/run-review-prompt-execution.ts` | `executeReviewPromptExecution` ~L5332 | 인라인 packet 생성·결과 기록·barrier를 5a 함수 **호출로 교체**(동작 보존, strangler 추출 4b–4d) |
+| 5c | `core-api/review-api.ts` | 신규 메서드 | `reviewRound`/`reviewAdvance`(B)를 5a 위에 조립; `runReview`/auto-execute는 세션 `orchestration==="host"`면 거부 |
+| 6 | `cli/run-review-prompt-execution.ts` | `executeReviewPromptExecution` 진입 ~L5332 | `orchestration==="host"` 세션이면 spawn 전 fail-closed 거부 |
 | 7 | `core-api` MCP 등록 | mcp 도구 표면 | **`onto_review_round`**, **`onto_review_advance`** 추가(prepare/assemble은 기존 재사용). 이름 charter 경유 |
 | 8 | `review/review-execution-route.ts` | route projection ~L24 | `orchestration` 투영 합류(adapter/host_runtime와 직교, 신규 필드) |
 | 9 | (신규) reference host driver | `cli/host-orchestration-reference-driver.ts`(가칭) | 결정론적 라운드 구동기(아래 §7) |
@@ -97,14 +99,37 @@ deliberation 유닛도 DAG 위의 ready unit일 뿐(동료 seat를 읽는 execut
 - 두 모드: (a) **live**(실 executor: codex_cli/claude_code/direct) — 실제 host 템플릿, (b) **mock**(fixture seat) — 결정론 단위/E2E 테스트.
 - 가치: 라운드 API·A/B 분리·seat 계약을 claude 없이도 검증. Stage 2/3 실제 host(claude main, subagent, teammate)의 레퍼런스.
 
-## 7.5 구현 발견 (Step 4 정밀화, 2026-06-08)
+## 7.5 Step 4 재설계 — strangler 전략 (durable step engine, 2026-06-09)
 
-코드 정밀 조사로 Step 4 접근을 정밀화했다(설계 본질 불변):
+코드 정밀 조사로 드러난 두 사실 + 전제 전환을 반영해 Step 4를 strangler 방식으로 재설계한다.
 
-- **`continueReview`(A)는 손대지 않는다.** 그 함수는 route/profile 재구성 등 A 전용 재실행 기계를 다량 포함하므로, 분해 대신 **`reviewRound`/`reviewAdvance`를 B 전용 신규 함수로 추가**하고 공유 1차자료(`buildPipelineExecutionLedgerIfPossible` → `buildReviewPipelineExecutionLedger`, `buildReviewContinuationPlan`, validator들, `completeReviewSession`)만 재사용한다. → **A 무회귀가 구조적으로 보장**된다.
-- **핵심 의존**: ledger의 unit `status`는 **seat 존재만으로 결정되지 않는다.** `buildUnitEntry`(pipeline-execution-ledger.ts ~L393)는 status를 `executionResult.status` → `worker-units`(manifest) → (lens면) `lens-completion-barrier` → `deriveMissingStatus` 순으로 도출한다. 즉 디스크에 seat만 있으면 status=`missing` → not trusted → frontier 전진 안 함.
-- **따라서 `reviewAdvance`는** host가 쓴 seat를 (a) `validateUnitOutputFile`+stage validator로 **검증**하고, (b) 각 unit을 `status="completed"`인 `ReviewUnitExecutionResult`로 만들어 **`execution-result.yaml`에 병합**(lens는 추가로 `lens-completion-barrier` 갱신)한 뒤, (c) ledger→continuation-plan을 재계산해 다음 frontier를 반환하고, (d) frontier가 비면 `completeReviewSession`으로 assemble한다. **execution-result/ledger/barrier/record는 onto가 소유**하고, host는 seat 내용만 쓴다(분업 불변).
-- 이 "seat 검증 → unit result → execution-result 병합" 경로가 Step 4의 유일한 실질 신규 코드다. 나머지는 기존 함수 재사용.
+**발견 1 — 단계 간 packet 결합**: issue-artifact/deliberation/synthesis packet의 *내용*은 prepare가 아니라 **실행 중** 이전 단계 출력으로부터 생성된다(`writeIssueArtifactPromptPacket` run-review-prompt-execution.ts:3838; delib/synth은 issue-ledger 기반 동적). host가 다음 단계를 실행하려면 onto가 먼저 그 packet을 생성해야 한다 → "단계 간 orchestration"이 현재 `executeReviewPromptExecution`(~1,300행, 5332–6620)에 인라인이다.
+
+**발견 2 — ledger status 출처**: ledger의 unit `status`는 seat 존재만으론 `completed`가 안 된다(`buildUnitEntry` ~L393: execution-result→manifest→barrier→missing). host seat는 검증 후 `execution-result.yaml`에 `completed`로 기록돼야 frontier가 전진한다.
+
+**전제 전환**: 프로세스 경계(MCP 1회 요청/응답)상 host(세션)가 자기 fabric에서 워커를 실행하는 **유일한 방법은 round/advance**다(in-process delegate는 onto 프로세스에 워커를 만들어 목표 미달). 그리고 이 분리는 파이프라인을 **in-memory 제어흐름 → durable state machine**으로 굳혀 **재개성·테스트성·정합성**을 높인다. 그래서 Step 4를 "어쩔 수 없는 비용"이 아니라 **핵심 파이프라인을 단단히 하며 host-orchestration을 여는 strangler 리팩터**로 본다.
+
+### 통일 모델 — durable step engine
+
+진행 동력 = **on-disk artifact → ledger → continuation-plan frontier**. 한 "스텝"의 공유 함수(신규 모듈 `review-execution-steps.ts`):
+
+| 공유 함수 | 역할 | 재사용 |
+|---|---|---|
+| `computeReviewFrontier(sessionRoot)` | 디스크 상태→ledger→continuation-plan→**ready units** | `buildPipelineExecutionLedgerIfPossible` + `buildReviewContinuationPlan` |
+| `ensureUnitPacket(sessionRoot, unit)` | frontier unit의 packet 생성(lens=prepare 존재; issue-artifact=`writeIssueArtifactPromptPacket`; delib/synth=worklist→packet) | 기존 packet 생성기 |
+| `validateUnitSeatToResult(sessionRoot, unit)` | seat 검증(`validateUnitOutputFile`+stage validator)→`ReviewUnitExecutionResult(completed/failed)` | 기존 validator |
+| `mergeUnitResultIntoExecutionResult(sessionRoot, result)` | execution-result.yaml 병합(흩어진 다중 기록을 단일화) | 단일화 신규 |
+| `finalizeStageGate(sessionRoot)` | 단계 게이트(lens-completion-barrier) 계산·기록·halt/proceed | `writeLensCompletionBarrier` |
+| `assembleIfComplete(sessionRoot)` | frontier 비고 terminal이면 `completeReviewSession` | `completeReviewSession` |
+
+**A와 B의 유일한 차이 = "유닛 실행"**(A=onto가 spawn, B=host가 spawn). 나머지(packet·validate·record·gate·frontier·assemble)는 **단일 구현 공유** → 정합성 구조 보장, host seat 검증→execution-result 기록의 분업(onto가 ledger/record 소유)도 그대로.
+
+- **A** = `ensureUnitPacket → spawn → validateUnitSeatToResult → merge` 반복 + `finalizeStageGate` → `assembleIfComplete`.
+- **B**: `reviewRound` = `computeReviewFrontier` + 각 `ensureUnitPacket` → frontier 반환. `reviewAdvance(executed)` = 각 `validateUnitSeatToResult`+`merge` → `finalizeStageGate` → `computeReviewFrontier` → (비면 `assembleIfComplete`) → 다음 frontier/complete.
+
+### strangler 안전망
+
+각 추출은 **`executeReviewPromptExecution`이 그 함수를 호출하도록 교체** → 기존 단위테스트 + full E2E가 **동작 보존 게이트**. 거대한 점프가 아니라 **검증된 작은 추출의 연속**. A 루프 전체를 frontier 엔진으로 바꾸는 최종 단계(4f)는 **안정성 보너스 완성**이지만 **Stage 1 범위 밖**(B는 공유 unit 함수만으로 동작).
 
 ## 8. 범위 / 비범위
 
@@ -128,7 +153,13 @@ deliberation 유닛도 DAG 위의 ready unit일 뿐(동료 seat를 읽는 execut
 1. **settings**: `orchestration` 키(schema/default/normalize/resolved) + superRefine `host⇒main-workers`. 게이트: settings-chain 테스트(신규 케이스: host+main-workers 통과, host+nested 거부, 미설정=runtime).
 2. **profile/route/artifact 투영**: `ReviewExecutionProfile.orchestration` + session-metadata/execution-plan/record 투영 필드 + route 합류. 게이트: profile/route 테스트.
 3. **세션 stamp**: prepare가 `orchestration`을 session-metadata에 각인. 게이트: prepare 단위테스트(stamp 존재).
-4. **continue 분해**: `review-api`에서 frontier 계산과 실행을 분리 → `reviewRound`(plan-only) + `reviewAdvance`(검증+전진, 실행 X). 기존 `continueReview`(A)는 두 반쪽을 합성해 동작 동일 유지. 게이트: review-api 테스트(round가 실행 안 함·frontier 정확; advance가 host seat 검증·전진; continueReview 무회귀).
+4. **(strangler) durable step engine 구축 후 B 조립** — 각 추출은 **기존 단위테스트 + E2E로 동작 보존 검증**(A 무회귀 게이트). 신규 모듈 `src/core-runtime/review/review-execution-steps.ts`.
+   - **4a `computeReviewFrontier(sessionRoot)`** 추출(`buildPipelineExecutionLedgerIfPossible`+`buildReviewContinuationPlan` 재사용). 게이트: fixture 세션 frontier 단위테스트(빈 상태→lens 전부; lens 완료→issue-artifact; …). [읽기 전용, 저위험]
+   - **4b `validateUnitSeatToResult` + `mergeUnitResultIntoExecutionResult`** 추출. `executeReviewPromptExecution`의 결과 경로를 이 함수 호출로 교체. 게이트: 기존 review-api/issue-artifact 테스트 + 신규(host seat→`completed` result, 잘못된 seat→`failed`).
+   - **4c `ensureUnitPacket(sessionRoot, unit)`** 추출(lens=noop; issue-artifact=`writeIssueArtifactPromptPacket`; delib/synth=worklist→packet). A의 인라인 packet 생성을 호출로 교체. 게이트: 기존 테스트 + E2E(A 불변).
+   - **4d `finalizeStageGate(sessionRoot)`** 추출(`writeLensCompletionBarrier` 래핑, A·B 공용). 게이트: barrier 테스트.
+   - **4e `reviewRound`/`reviewAdvance`(B)** 를 4a–4d + `completeReviewSession` 위에 조립(+ orchestration-owner 검사 = Step 5 연계). 게이트: B 단위테스트(mock seat → 단계별 frontier 전진 → `completed`) = 결정론 reference-host 슬라이스(Step 7 선행).
+   - **4f (이연, Stage 1 범위 밖)**: A `executeReviewPromptExecution` 루프를 frontier 엔진으로 rebase → durable·resumable·A/B/continuation 통일(안정성 보너스 완성). Stage 1은 A 루프 유지, B는 공유 unit 함수만으로 동작.
 5. **A/B fail-closed 경계**: `executeReviewPromptExecution` 진입 거부(host), `reviewAdvance` 진입 거부(runtime). 게이트: 누수 거부 테스트(완료기준 4).
 6. **MCP 도구**: `onto_review_round`/`onto_review_advance` 등록(+ 이름 charter). 게이트: typecheck + 도구 스키마.
 7. **reference host driver**(live+mock). 게이트: mock 모드 결정론 E2E → `completed` 고정 record.
@@ -137,8 +168,10 @@ deliberation 유닛도 DAG 위의 ready unit일 뿐(동료 seat를 읽는 execut
 
 ## 11. 리스크 / 구현 중 확인
 
-- `continueReview` 분해 시 기존 동작 보존(가장 큰 리팩터) — A 경로 무회귀가 게이트.
-- `advance`의 ledger/execution-result 갱신: host가 seat만 쓰고 onto가 trust/ledger를 쓰는 분업이 깨지지 않도록(host가 execution-result를 쓰지 못하게).
+- **strangler 추출(4a–4d)의 동작 보존**: 각 추출 후 `executeReviewPromptExecution`이 그 함수를 호출하도록 교체하고 기존 단위테스트+E2E로 즉시 검증. 한 번에 추출하지 말 것(검증된 작은 추출 연속). `continueReview`(A)는 손대지 않는다.
+- **4c packet 생성기의 standalone 호출 가능성**: issue-artifact/delib/synth packet 생성기가 on-disk 이전 단계 출력만으로 호출 가능한지 추출 시 확인(입력 의존성). 불가하면 입력을 디스크에서 재구성하는 얇은 어댑터 추가.
+- `advance`의 ledger/execution-result 갱신: host가 seat만 쓰고 onto가 trust/ledger/record를 쓰는 분업이 깨지지 않도록(host는 execution-result를 쓰지 못한다).
+- 4f(A 루프 rebase)는 Stage 1 범위 밖 — 안정성 보너스는 후속에 완성.
 - run-review-prompt-execution.ts 정확 line 재확인(대용량).
 - 이름(`orchestration`·`round`·`advance`·`ReviewOrchestrationOwner`) naming-charter 통과.
 - (Stage 2 연결) 아카이브 `nested-spawn-coordinator-contract.md`(retired)의 nested 개념은 Stage 2에서 재활용 — Stage 1 범위 밖.
