@@ -105,6 +105,7 @@ import {
   computeLensCompletionBarrier,
   resolveRequiredParticipatingLensCount,
 } from "../review/lens-completion-policy.js";
+import { assertRuntimeOrchestratedSession } from "../review/orchestration-owner.js";
 import {
   REVIEW_EXECUTION_STEP_IDS,
   REVIEW_PROGRESS_TOTAL_STEPS,
@@ -5324,6 +5325,9 @@ export async function executeReviewPromptExecution(
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   await assertReviewExecutionPlanSessionBoundary({ sessionRoot, executionPlan });
+  // Fail-closed A/B boundary (Step 5): onto must not spawn units for a
+  // host-orchestrated session. Reject before any dispatch.
+  assertRuntimeOrchestratedSession(executionPlan.orchestration);
   const executionStartedAtMs = Date.now();
   const continuationPlan = params.continuationPlan;
   const continuationMode = continuationPlan !== undefined;

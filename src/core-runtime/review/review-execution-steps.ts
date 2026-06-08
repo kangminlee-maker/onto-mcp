@@ -24,6 +24,7 @@ import {
   computeLensCompletionBarrier,
   resolveRequiredParticipatingLensCount,
 } from "./lens-completion-policy.js";
+import { assertHostOrchestratedSession } from "./orchestration-owner.js";
 import {
   resolveProblemFramingProfileRef,
   writeIssueArtifactPromptPacket,
@@ -367,21 +368,15 @@ async function loadProjectRoot(plan: ReviewExecutionPlan): Promise<string> {
 }
 
 /**
- * Fail-closed orchestration-owner guard (capability surface, Step 5 tie-in).
- * The host round/advance steps run only on a host-orchestrated session; a
- * runtime session (the default A path) is rejected so the two loci can never
- * drive the same session.
+ * Fail-closed orchestration-owner guard (capability surface, Step 5). The host
+ * round/advance steps run only on a host-orchestrated session; the gate
+ * semantics live in {@link assertHostOrchestratedSession}, this reads the stamp.
  */
 async function assertHostOrchestration(
   plan: ReviewExecutionPlan,
 ): Promise<void> {
   const metadata = await loadSessionMetadata(plan);
-  const owner = metadata.orchestration ?? "runtime";
-  if (owner !== "host") {
-    throw new Error(
-      `review round/advance requires a host-orchestrated session (orchestration=host); this session is orchestration=${owner}. Use onto_review for runtime-orchestrated sessions.`,
-    );
-  }
+  assertHostOrchestratedSession(metadata.orchestration);
 }
 
 /** Trusted units of a given kind, in ledger order, with their seat output path. */
