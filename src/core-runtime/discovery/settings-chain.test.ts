@@ -299,6 +299,40 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.max_concurrent_lenses).toBe(3);
   });
 
+  it("defaults review execution orchestration owner to runtime", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    writeJson(projectSettingsPath(projectRoot), v3ReviewSettings());
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.orchestration).toBe("runtime");
+  });
+
+  it("resolves review execution orchestration=host with main-workers", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings();
+    settingsDoc.review.execution.orchestration = "host";
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.orchestration).toBe("host");
+  });
+
+  it("rejects orchestration=host with nested-workers topology (fail-closed)", async () => {
+    const projectRoot = path.join(scratchRoot, "project");
+    const settingsDoc = v3ReviewSettings({
+      topology: "nested-workers",
+      teamleadSeat: "worker",
+    });
+    settingsDoc.review.execution.orchestration = "host";
+    writeJson(projectSettingsPath(projectRoot), settingsDoc);
+
+    await expect(
+      resolveSettingsChain("/unused", projectRoot),
+    ).rejects.toThrow(/orchestration=host/);
+  });
+
   it("parses and merges review unit execution settings", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     const userSettings = v3ReviewSettings();

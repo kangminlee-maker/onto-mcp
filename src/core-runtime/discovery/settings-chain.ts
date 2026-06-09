@@ -58,6 +58,10 @@ const LlmRefSchema = LlmSettingsSchema;
 
 const ReviewWorkerSeatSchema = z.enum(["main", "worker"]);
 const ReviewExecutionModeSchema = z.enum(["main-workers", "nested-workers"]);
+// Who owns the review orchestration loop: onto runtime (A, MCP black-box) vs an
+// external host (B, host-orchestration). Distinct from the route-level
+// orchestration_locus (where a unit runs). See phase2 host-orchestration design.
+const ReviewOrchestrationOwnerSchema = z.enum(["runtime", "host"]);
 const ReviewExecutorSelectionSchema = z.enum([
   "auto",
   "codex",
@@ -124,6 +128,7 @@ const ReviewExecutionUnitsSchema = z
 
 const DEFAULT_REVIEW_EXECUTION = {
   mode: "main-workers",
+  orchestration: "runtime",
   executor: "auto",
   artifact_generation_realization: "live",
   teamlead: { seat: "main" },
@@ -155,6 +160,7 @@ const ReviewActorSettingsSchema = z
 const ReviewExecutionSettingsSchema = z
   .object({
     mode: ReviewExecutionModeSchema.optional(),
+    orchestration: ReviewOrchestrationOwnerSchema.optional(),
     executor: ReviewExecutorSelectionSchema.optional(),
     artifact_generation_realization:
       ReviewArtifactGenerationRealizationSchema.optional(),
@@ -169,6 +175,14 @@ const ReviewExecutionSettingsSchema = z
   .strict()
   .superRefine((value, ctx) => {
     const mode = value.mode ?? "main-workers";
+    if (value.orchestration === "host" && mode !== "main-workers") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["orchestration"],
+        message:
+          "review.execution.orchestration=host currently requires mode=main-workers.",
+      });
+    }
     const teamleadSeat = value.teamlead?.seat ?? "main";
     const lensSeat = value.lens?.seat ?? "worker";
     const synthesizeSeat = value.synthesize?.seat ?? "worker";
@@ -264,6 +278,7 @@ const V3ReconstructActorSettingsSchema = z
 const V3ReviewExecutionSettingsSchema = z
   .object({
     topology: ReviewExecutionModeSchema.optional(),
+    orchestration: ReviewOrchestrationOwnerSchema.optional(),
     executor: ReviewExecutorSelectionSchema.optional(),
     artifact_generation_realization:
       ReviewArtifactGenerationRealizationSchema.optional(),
@@ -283,6 +298,14 @@ const V3ReviewExecutionSettingsSchema = z
   .strict()
   .superRefine((value, ctx) => {
     const topology = value.topology ?? "main-workers";
+    if (value.orchestration === "host" && topology !== "main-workers") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["orchestration"],
+        message:
+          "review.execution.orchestration=host currently requires topology=main-workers.",
+      });
+    }
     const teamleadSeat = value.actors?.teamlead?.seat ?? "main";
     const lensSeat = value.actors?.lens?.seat ?? "worker";
     const synthesizeSeat = value.actors?.synthesize?.seat ?? "worker";
@@ -409,6 +432,7 @@ type V3Settings = z.infer<typeof V3SettingsSchema>;
 type ParsedSettings = V3Settings;
 
 export type ReviewExecutionMode = z.infer<typeof ReviewExecutionModeSchema>;
+export type ReviewOrchestrationOwner = z.infer<typeof ReviewOrchestrationOwnerSchema>;
 export type ReviewExecutorSelection = z.infer<typeof ReviewExecutorSelectionSchema>;
 export type ReviewWorkerSeat = z.infer<typeof ReviewWorkerSeatSchema>;
 export type ReviewDeliberation = z.infer<typeof ReviewDeliberationSchema>;
@@ -485,6 +509,7 @@ type ReviewExecutionUnitsInput = Partial<
 
 export interface ReviewExecutionSettings {
   mode?: ReviewExecutionMode;
+  orchestration?: ReviewOrchestrationOwner;
   executor?: ReviewExecutorSelection;
   artifact_generation_realization?: ReviewArtifactGenerationRealization;
   max_concurrent_lenses?: number | undefined;
@@ -519,6 +544,7 @@ export interface ReviewArtifactSettings {
 
 export interface ResolvedReviewExecutionSettings {
   mode: ReviewExecutionMode;
+  orchestration: ReviewOrchestrationOwner;
   executor: ReviewExecutorSelection;
   artifact_generation_realization: ReviewArtifactGenerationRealization;
   max_concurrent_lenses?: number | undefined;
@@ -834,6 +860,9 @@ function normalizeV3Settings(settings: V3Settings): OntoSettings {
       }
       if (execution.topology !== undefined) {
         normalizedExecution.mode = execution.topology;
+      }
+      if (execution.orchestration !== undefined) {
+        normalizedExecution.orchestration = execution.orchestration;
       }
       if (execution.executor !== undefined) {
         normalizedExecution.executor = execution.executor;
@@ -1202,6 +1231,10 @@ function mergeSettings(
         return {
           mode:
             projectExecution?.mode ?? userExecution?.mode ?? defaultExecution.mode,
+          orchestration:
+            projectExecution?.orchestration ??
+            userExecution?.orchestration ??
+            defaultExecution.orchestration,
           executor:
             projectExecution?.executor ??
             userExecution?.executor ??
@@ -1318,6 +1351,7 @@ function mergeSettings(
 export function defaultReviewExecution(): ResolvedReviewExecutionSettings {
   return {
     mode: DEFAULT_REVIEW_EXECUTION.mode,
+    orchestration: DEFAULT_REVIEW_EXECUTION.orchestration,
     executor: DEFAULT_REVIEW_EXECUTION.executor,
     artifact_generation_realization:
       DEFAULT_REVIEW_EXECUTION.artifact_generation_realization,

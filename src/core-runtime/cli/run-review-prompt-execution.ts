@@ -101,7 +101,11 @@ import {
   validateIssueDeliberationResponseObject,
   type IssueDeliberationResponseArtifact,
 } from "../review/controlled-lens-deliberation.js";
-import { resolveRequiredParticipatingLensCount } from "../review/lens-completion-policy.js";
+import {
+  computeLensCompletionBarrier,
+  resolveRequiredParticipatingLensCount,
+} from "../review/lens-completion-policy.js";
+import { assertRuntimeOrchestratedSession } from "../review/orchestration-owner.js";
 import {
   REVIEW_EXECUTION_STEP_IDS,
   REVIEW_PROGRESS_TOTAL_STEPS,
@@ -382,45 +386,19 @@ async function writeLensCompletionBarrier(args: {
   successfulLensDispatches: ExecutionDispatchResult[];
   executionFailures: ExecutionFailure[];
 }): Promise<ReviewLensCompletionBarrierArtifact> {
-  const plannedLensIds = args.lensDispatches.map((dispatch) => dispatch.unit_id);
-  const completedLensIds = args.successfulLensDispatches.map(
-    (dispatch) => dispatch.unit_id,
-  );
-  const failedLensIds = args.executionFailures
-    .filter((failure) => failure.unit_kind === "lens")
-    .map((failure) => failure.unit_id);
-  const missingLensIds = plannedLensIds.filter(
-    (lensId) =>
-      !completedLensIds.includes(lensId) && !failedLensIds.includes(lensId),
-  );
-  const degradedLensIds = plannedLensIds.filter(
-    (lensId) => !completedLensIds.includes(lensId),
-  );
-  const downstreamAllowed =
-    completedLensIds.length >= args.minimumParticipatingLenses;
-  const status: ReviewLensCompletionBarrierArtifact["status"] =
-    downstreamAllowed && degradedLensIds.length === 0
-      ? "passed"
-      : downstreamAllowed
-        ? "passed_with_degradation"
-        : "failed";
-  const barrier: ReviewLensCompletionBarrierArtifact = {
-    schema_version: "1",
-    session_id: args.executionPlan.session_id,
-    created_at: isoFromTimestamp(Date.now()),
-    observed_dispatch_width: args.observedDispatchWidth,
-    minimum_participating_lenses: args.minimumParticipatingLenses,
-    planned_lens_ids: plannedLensIds,
-    completed_lens_ids: completedLensIds,
-    failed_lens_ids: failedLensIds,
-    missing_lens_ids: missingLensIds,
-    degraded_lens_ids: degradedLensIds,
-    status,
-    downstream_allowed: downstreamAllowed,
-    downstream_reason: downstreamAllowed
-      ? "selected lens completion threshold satisfied"
-      : "selected lens completion threshold not satisfied",
-  };
+  const barrier = computeLensCompletionBarrier({
+    sessionId: args.executionPlan.session_id,
+    createdAt: isoFromTimestamp(Date.now()),
+    observedDispatchWidth: args.observedDispatchWidth,
+    minimumParticipatingLenses: args.minimumParticipatingLenses,
+    plannedLensIds: args.lensDispatches.map((dispatch) => dispatch.unit_id),
+    completedLensIds: args.successfulLensDispatches.map(
+      (dispatch) => dispatch.unit_id,
+    ),
+    failedLensIds: args.executionFailures
+      .filter((failure) => failure.unit_kind === "lens")
+      .map((failure) => failure.unit_id),
+  });
   const barrierPath =
     args.executionPlan.lens_completion_barrier_path ??
     path.join(args.executionPlan.session_root, "lens-completion-barrier.yaml");
@@ -5347,6 +5325,9 @@ export async function executeReviewPromptExecution(
   const executionPlanPath = path.join(sessionRoot, "execution-plan.yaml");
   const executionPlan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
   await assertReviewExecutionPlanSessionBoundary({ sessionRoot, executionPlan });
+  // Fail-closed A/B boundary (Step 5): onto must not spawn units for a
+  // host-orchestrated session. Reject before any dispatch.
+  assertRuntimeOrchestratedSession(executionPlan.orchestration);
   const executionStartedAtMs = Date.now();
   const continuationPlan = params.continuationPlan;
   const continuationMode = continuationPlan !== undefined;

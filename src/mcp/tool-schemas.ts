@@ -87,6 +87,15 @@ export const OntoReviewContinueToolInputSchema =
     executionRoute: ReviewExecutionRouteSchema.optional(),
   }).strict();
 
+export const OntoReviewRoundToolInputSchema =
+  OntoReviewSessionInputSchema.strict();
+
+export const OntoReviewAdvanceToolInputSchema =
+  OntoReviewSessionInputSchema.extend({
+    executed: z.array(z.string().min(1)),
+    requestText: z.string().min(1).optional(),
+  }).strict();
+
 export const OntoListDomainsToolInputSchema = z.object({
   projectRoot: z.string().min(1).optional(),
 });
@@ -157,6 +166,8 @@ export const OntoToolNames = [
   "onto_review",
   "onto_prepare_review",
   "onto_review_continue",
+  "onto_review_round",
+  "onto_review_advance",
   "onto_review_cancel",
   "onto_review_status",
   "onto_review_result",
@@ -183,6 +194,12 @@ export type OntoReviewCancelToolInput = z.infer<
 >;
 export type OntoReviewContinueToolInput = z.infer<
   typeof OntoReviewContinueToolInputSchema
+>;
+export type OntoReviewRoundToolInput = z.infer<
+  typeof OntoReviewRoundToolInputSchema
+>;
+export type OntoReviewAdvanceToolInput = z.infer<
+  typeof OntoReviewAdvanceToolInputSchema
 >;
 export type OntoListDomainsToolInput = z.infer<
   typeof OntoListDomainsToolInputSchema

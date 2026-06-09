@@ -43,6 +43,8 @@ export interface ReviewExecutionActorProfile {
 
 export interface ReviewExecutionProfile {
   mode: ResolvedReviewExecutionSettings["mode"];
+  /** Who owns the review orchestration loop: onto runtime (A) vs host (B). */
+  orchestration: ResolvedReviewExecutionSettings["orchestration"];
   teamlead: ReviewExecutionActorProfile;
   lens: ReviewExecutionActorProfile;
   synthesize: ReviewExecutionActorProfile;
@@ -336,6 +338,7 @@ function buildProfile(args: {
   const normalized = normalizeLlmModelSwitcher(profileLlm);
   return {
     mode: execution.mode,
+    orchestration: execution.orchestration,
     teamlead: {
       seat: execution.teamlead.seat,
       ...(execution.teamlead.llm ? { llm: execution.teamlead.llm } : {}),

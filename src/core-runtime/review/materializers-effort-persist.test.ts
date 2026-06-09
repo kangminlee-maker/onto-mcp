@@ -158,6 +158,39 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     expect(md.resolved_llm_plan?.service_tier).toBe("fast");
   });
 
+  it("stamps orchestration owner=runtime by default into session metadata", async () => {
+    await writeConfig(
+      tmp,
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("medium"),
+      }),
+    );
+
+    const { sessionMetadataPath } =
+      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+
+    const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
+    expect(md.orchestration).toBe("runtime");
+  });
+
+  it("stamps orchestration owner=host when settings select host", async () => {
+    const settings = v3ReviewSettings({
+      teamlead: openAiOauthLlm("medium"),
+      lens: openAiOauthLlm("medium"),
+      synthesize: openAiOauthLlm("medium"),
+    });
+    (settings.review.execution as Record<string, unknown>).orchestration = "host";
+    await writeConfig(tmp, settings);
+
+    const { sessionMetadataPath } =
+      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+
+    const md = await readYaml<ReviewSessionMetadata>(sessionMetadataPath);
+    expect(md.orchestration).toBe("host");
+  });
+
   it("persists effective max_concurrent_lenses in the execution plan", async () => {
     await writeConfig(
       tmp,

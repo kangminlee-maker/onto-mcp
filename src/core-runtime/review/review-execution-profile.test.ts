@@ -79,6 +79,7 @@ describe("resolveReviewExecutionProfile", () => {
     expect(result.profile.teamlead.llm).toEqual(actorOwnedOauthSettings("medium"));
     expect(result.profile.lens.llm).toEqual(actorOwnedOauthSettings("medium"));
     expect(result.profile.synthesize.llm).toEqual(actorOwnedOauthSettings("xhigh"));
+    expect(result.profile.orchestration).toBe("runtime");
   });
 
   it("honors explicit direct-call executor settings", () => {

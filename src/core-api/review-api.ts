@@ -103,6 +103,11 @@ import {
   buildReviewContinuationPlan,
   type ReviewContinuationPlan,
 } from "../core-runtime/review/continuation-plan.js";
+import {
+  reviewAdvance as coreReviewAdvance,
+  reviewRound as coreReviewRound,
+  type ReviewRoundUnit,
+} from "../core-runtime/review/review-execution-steps.js";
 import type {
   LlmExecutionAdapter,
   LlmExecutionRoute,
@@ -348,6 +353,35 @@ export interface CancelReviewRequest {
   reason?: string;
 }
 
+/** Host-orchestration (B) round request: ask onto for the units ready now. */
+export interface ReviewRoundRequest {
+  sessionRoot: string;
+  projectRoot?: string;
+}
+
+/**
+ * Host-orchestration (B) advance request: report the units the host just
+ * executed so onto can validate their seats and return the next round.
+ */
+export interface ReviewAdvanceRequest {
+  sessionRoot: string;
+  projectRoot?: string;
+  executed: string[];
+  requestText?: string;
+}
+
+/**
+ * Result of a host round/advance. `in_progress` carries the units ready to
+ * execute; `ready_to_assemble` means the host should let onto assemble (advance
+ * does this automatically and returns `assembled`); `assembled` carries the
+ * final review status; `halted` carries the blocking reason.
+ */
+export type ReviewRoundResult =
+  | { status: "in_progress"; readyUnits: ReviewRoundUnit[] }
+  | { status: "ready_to_assemble" }
+  | { status: "assembled"; sessionRoot: string; reviewStatus: ReviewStatus }
+  | { status: "halted"; reason: string };
+
 export interface ReviewRunResult {
   sessionId: string;
   sessionRoot: string;
@@ -555,6 +589,8 @@ export interface OntoReviewCoreApi {
   prepareReview(request: PrepareReviewRequest): Promise<PreparedReview>;
   runReview(request: RunReviewRequest): Promise<ReviewRunResult>;
   continueReview(request: ContinueReviewRequest): Promise<ReviewContinueResult>;
+  reviewRound(request: ReviewRoundRequest): Promise<ReviewRoundResult>;
+  reviewAdvance(request: ReviewAdvanceRequest): Promise<ReviewRoundResult>;
   cancelReview(request: CancelReviewRequest): Promise<ReviewCancelResult>;
   getReviewStatus(
     sessionRoot: string,
@@ -3526,6 +3562,9 @@ function reviewExecutionProfileFromManifest(
 
   const reconstructed: ReviewExecutionProfile = {
     mode: profile.mode,
+    // Continuation reconstruction is the onto-runtime (A) path; host-orchestrated
+    // sessions are driven via the round/advance API, never reconstructed here.
+    orchestration: "runtime",
     teamlead: profile.teamlead as ReviewExecutionProfile["teamlead"],
     lens: profile.lens as ReviewExecutionProfile["lens"],
     synthesize: profile.synthesize as ReviewExecutionProfile["synthesize"],
@@ -3639,6 +3678,7 @@ function reviewExecutionProfileFromActorProfiles(args: {
   const synthesizeLlm = actorLlmFromProfile(synthesize);
   const reconstructed: ReviewExecutionProfile = {
     mode: "main-workers",
+    orchestration: "runtime",
     teamlead: { seat: teamlead.seat, ...(teamleadLlm ? { llm: teamleadLlm } : {}) },
     lens: { seat: lens.seat, ...(lensLlm ? { llm: lensLlm } : {}) },
     synthesize: {
@@ -4789,6 +4829,63 @@ export function createOntoReviewCoreApi(
         ...(postStatus.llmPresentation !== undefined
           ? { llmPresentation: postStatus.llmPresentation }
           : {}),
+      };
+    },
+
+    async reviewRound(request: ReviewRoundRequest): Promise<ReviewRoundResult> {
+      const resolvedSessionRoot = path.resolve(request.sessionRoot);
+      const result = await coreReviewRound(resolvedSessionRoot);
+      if (result.status === "in_progress") {
+        return { status: "in_progress", readyUnits: result.ready_units };
+      }
+      if (result.status === "halted") {
+        return { status: "halted", reason: result.reason };
+      }
+      return { status: "ready_to_assemble" };
+    },
+
+    async reviewAdvance(
+      request: ReviewAdvanceRequest,
+    ): Promise<ReviewRoundResult> {
+      const resolvedSessionRoot = path.resolve(request.sessionRoot);
+      const result = await coreReviewAdvance(
+        resolvedSessionRoot,
+        request.executed,
+      );
+      if (result.status === "in_progress") {
+        return { status: "in_progress", readyUnits: result.ready_units };
+      }
+      if (result.status === "halted") {
+        return { status: "halted", reason: result.reason };
+      }
+      // ready_to_assemble: onto assembles (completeReviewSession is a cli step).
+      const sessionMetadata = await readOptionalYaml<ReviewSessionMetadata>(
+        path.join(resolvedSessionRoot, "session-metadata.yaml"),
+      );
+      const projectRoot = path.resolve(
+        request.projectRoot ??
+          sessionMetadata?.project_root ??
+          resolvedSessionRoot,
+      );
+      const requestText = await resolveContinuationRequestText({
+        sessionRoot: resolvedSessionRoot,
+        ...(request.requestText ? { requestText: request.requestText } : {}),
+      });
+      await withCapturedConsole(() =>
+        completeReviewSession([
+          "--project-root",
+          projectRoot,
+          "--session-root",
+          resolvedSessionRoot,
+          "--request-text",
+          requestText,
+        ]),
+      );
+      const reviewStatus = await api.getReviewStatus(resolvedSessionRoot);
+      return {
+        status: "assembled",
+        sessionRoot: resolvedSessionRoot,
+        reviewStatus,
       };
     },
 
