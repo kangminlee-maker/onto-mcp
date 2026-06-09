@@ -213,6 +213,60 @@ describe("bootstrapInvocationBindingArtifacts — resolved_llm_plan persistence"
     expect(plan.minimum_participating_lenses).toBe(3);
   });
 
+  it("stamps the resolved retry policy into the execution plan", async () => {
+    const settings = v3ReviewSettings({
+      teamlead: openAiOauthLlm("medium"),
+      lens: openAiOauthLlm("medium"),
+      synthesize: openAiOauthLlm("medium"),
+    });
+    // Explicit non-default (zero-retry) policy must survive into the plan.
+    (settings.review.execution as Record<string, unknown>).retry = {
+      lens_max_retries: 0,
+      issue_artifact_max_retries: 0,
+      deliberation_max_retries: 0,
+      synthesis_max_retries: 0,
+      retry_initial_delay_ms: 500,
+    };
+    await writeConfig(tmp, settings);
+
+    const { bindingOutputPath } =
+      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const plan = await readYaml<ReviewExecutionPlan>(binding.execution_plan_path);
+
+    expect(plan.retry_policy).toEqual({
+      lens_max_retries: 0,
+      issue_artifact_max_retries: 0,
+      deliberation_max_retries: 0,
+      synthesis_max_retries: 0,
+      retry_initial_delay_ms: 500,
+    });
+  });
+
+  it("stamps the default retry policy when settings omit retry", async () => {
+    await writeConfig(
+      tmp,
+      v3ReviewSettings({
+        teamlead: openAiOauthLlm("medium"),
+        lens: openAiOauthLlm("medium"),
+        synthesize: openAiOauthLlm("medium"),
+      }),
+    );
+
+    const { bindingOutputPath } =
+      await bootstrapInvocationBindingArtifacts(commonParams(tmp));
+    const binding = await readYaml<InvocationBindingArtifact>(bindingOutputPath);
+    const plan = await readYaml<ReviewExecutionPlan>(binding.execution_plan_path);
+
+    expect(plan.retry_policy).toEqual({
+      lens_max_retries: 2,
+      issue_artifact_max_retries: 2,
+      deliberation_max_retries: 2,
+      synthesis_max_retries: 2,
+      retry_initial_delay_ms: 3000,
+    });
+  });
+
   it("persists provider when canonical Anthropic API-key llm config is set", async () => {
     await writeConfig(
       tmp,

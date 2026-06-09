@@ -683,6 +683,36 @@ describe("reviewRound / reviewAdvance (host B engine)", () => {
     expect(result.ready_units[0]?.unit_kind).toBe("issue_artifact");
   });
 
+  it("seeds the execution-result with the plan's resolved retry policy, not the default", async () => {
+    const root = await tempSessionRoot();
+    // A non-default (e.g. explicit zero-retry) policy stamped on the plan at prepare.
+    const customRetry = {
+      lens_max_retries: 0,
+      issue_artifact_max_retries: 0,
+      deliberation_max_retries: 0,
+      synthesis_max_retries: 0,
+      retry_initial_delay_ms: 500,
+    };
+    const plan = withBoundary(
+      { ...executionPlan(root), retry_policy: customRetry },
+      root,
+    );
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root, "host");
+    await materializeLensPackets(plan);
+    for (const seat of plan.lens_execution_seats) {
+      await writeOutput(seat.output_path);
+    }
+
+    // First advance self-seeds execution-result.yaml from the scaffold.
+    await reviewAdvance(root, ["logic", "coverage"]);
+
+    const onDisk = YAML.parse(
+      await fs.readFile(plan.execution_result_path, "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(onDisk.retry_policy).toEqual(customRetry);
+  });
+
   it("rejects a runtime-orchestrated session for both round and advance", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root);

@@ -343,6 +343,14 @@ export interface ReviewExecutionPlan {
   semantic_quality_evidence: ReviewSemanticQualityEvidence;
   review_mode: ReviewMode;
   orchestration?: ReviewOrchestrationOwner;
+  /**
+   * Durable, immutable stamp of the session's resolved retry policy. Host (B)
+   * advances seed the execution-result scaffold from this so the assembled
+   * ReviewRecord reports the configured budget (e.g. an explicit zero-retry
+   * run), not an invented default. Optional for backward-compat with plans
+   * serialized before this field existed (those fall back to the default).
+   */
+  retry_policy?: ReviewRetrySettings;
   interpretation_artifact_path: string;
   binding_output_path: string;
   session_metadata_path: string;

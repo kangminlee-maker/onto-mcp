@@ -1261,7 +1261,9 @@ function buildInitialExecutionResultScaffold(
     execution_completed_at: isoNow(),
     total_duration_ms: 0,
     max_concurrent_lenses: plan.max_concurrent_lenses ?? plannedLensIds.length,
-    retry_policy: defaultReviewRetrySettings(),
+    // Resolved retry policy stamped on the plan at prepare; fall back to the
+    // default only for plans serialized before the stamp existed.
+    retry_policy: plan.retry_policy ?? defaultReviewRetrySettings(),
     planned_lens_ids: plannedLensIds,
     participating_lens_ids: [],
     degraded_lens_ids: [],
