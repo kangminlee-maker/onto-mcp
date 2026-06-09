@@ -394,6 +394,130 @@ describe("createOntoReviewCoreApi", () => {
     );
   });
 
+  it("drives the host path through the runtime issue-stance-matrix reduce (mock)", async () => {
+    const projectRoot = await tempProjectRoot();
+    await writeProjectSettings(projectRoot, {
+      schema_version: "settings.json/v3",
+      review: {
+        artifacts: { lens_output_format: "markdown" },
+        execution: {
+          topology: "main-workers",
+          executor: "direct_call",
+          orchestration: "host",
+          deliberation: "controlled-lens-deliberation",
+          artifact_generation_realization: "semantic_mock",
+          actors: {
+            teamlead: { seat: "main", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            lens: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            synthesize: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+          },
+        },
+      },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Host runtime stance-matrix reduce mock run",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic", "coverage"],
+    });
+    const plan = await readYamlDocument<ReviewExecutionPlan>(
+      path.join(prepared.sessionRoot, "execution-plan.yaml"),
+    );
+
+    // Mock executor: write an empty-but-valid seat per host unit kind. With an
+    // empty issue-ledger every per-issue stage collapses, so the host only ever
+    // writes structurally-valid empty artifacts; onto's reduce merges the empty
+    // stance responses into the issue-stance-matrix.
+    const mockExecutor = async (unit: {
+      unit_id: string;
+      unit_kind: string;
+      output_path: string | null;
+    }): Promise<void> => {
+      if (!unit.output_path) throw new Error(`unit ${unit.unit_id} has no output path`);
+      if (unit.unit_id === "finding-ledger") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          findings: [],
+          validation: { unaddressable_findings: [] },
+        });
+        return;
+      }
+      if (unit.unit_id === "finding-relation-graph") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          relations: [],
+          singleton_findings: [],
+        });
+        return;
+      }
+      if (unit.unit_id === "issue-ledger") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          issues: [],
+          issue_dependencies: [],
+          validation: { unclustered_finding_ids: [] },
+        });
+        return;
+      }
+      if (unit.unit_id.startsWith("issue-stance:")) {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          lens_id: unit.unit_id.slice("issue-stance:".length),
+          stances: [],
+          validation: { missing_issues: [] },
+        });
+        return;
+      }
+      await fs.writeFile(unit.output_path, `# ${unit.unit_id}\n`, "utf8");
+    };
+
+    // Drive the host loop until the issue-stance-matrix reduce has run and the
+    // next host stage (deliberation-plan) is surfaced. Bounded so the mock never
+    // has to satisfy the deeper deliberation / synthesis schemas.
+    let round = await api.reviewRound({ sessionRoot: prepared.sessionRoot });
+    let surfacedDeliberationPlan = false;
+    for (let guard = 0; guard < 16 && round.status === "in_progress"; guard += 1) {
+      if (round.readyUnits.some((u) => u.unit_id === "deliberation-plan")) {
+        surfacedDeliberationPlan = true;
+        break;
+      }
+      // Runtime reduce units must never be handed to the host.
+      expect(round.readyUnits.some((u) => u.unit_id === "issue-stance-matrix")).toBe(
+        false,
+      );
+      for (const unit of round.readyUnits) {
+        await mockExecutor(unit);
+      }
+      round = await api.reviewAdvance({
+        sessionRoot: prepared.sessionRoot,
+        executed: round.readyUnits.map((u) => u.unit_id),
+      });
+      if (
+        round.status === "in_progress" &&
+        round.readyUnits.some((u) => u.unit_id === "deliberation-plan")
+      ) {
+        surfacedDeliberationPlan = true;
+        break;
+      }
+    }
+
+    // The runtime reduce wrote the issue-stance-matrix seat inline (never handed
+    // to the host) and the frontier advanced to the next host stage.
+    expect(surfacedDeliberationPlan).toBe(true);
+    expect(fsSync.existsSync(plan.issue_stance_matrix_path)).toBe(true);
+    const matrix = await readYamlDocument<{ issues: unknown[] }>(
+      plan.issue_stance_matrix_path,
+    );
+    expect(matrix.issues).toEqual([]);
+  });
+
   it("fails loudly when a present review-record is malformed", async () => {
     const projectRoot = await tempProjectRoot();
     await writeDirectCallReviewSettings(projectRoot);

@@ -142,9 +142,19 @@ function issueStancePromptPacketPath(
  * as discrete frontier units lets the host (B) drive each stance response, while
  * onto's reduce merges the trusted responses into the matrix. Derived purely
  * from the plan's lens seats (deterministic), so A and B agree.
+ *
+ * `collectionResultPresent` is true once an `issue-stance-matrix` execution
+ * result exists — the signature of the onto path (A), which runs the per-lens
+ * responses inside one collection dispatch and records only the matrix result.
+ * In that case each map unit is trusted by its response seat alone (the seat is
+ * validated before the collection succeeds). In the host path (B) the matrix
+ * result does not exist until onto's reduce runs (after the host's per-unit
+ * results are recorded), so seat presence must NOT trust the unit early — that
+ * would drop it from the frontier before the host can advance it.
  */
 function dynamicIssueStanceUnits(
   executionPlan: ReviewExecutionPlan,
+  collectionResultPresent: boolean,
 ): ReviewLedgerPlannedUnit[] {
   return executionPlan.lens_execution_seats.map((seat) => ({
     unitId: `issue-stance:${seat.lens_id}`,
@@ -153,7 +163,7 @@ function dynamicIssueStanceUnits(
     packetRef: issueStancePromptPacketPath(executionPlan, seat.lens_id),
     outputRefs: [issueStanceResponsePath(executionPlan, seat.lens_id)],
     upstreamUnitIds: ["issue-ledger"],
-    trustedOnSeatPresence: true,
+    ...(collectionResultPresent ? { trustedOnSeatPresence: true } : {}),
   }));
 }
 
@@ -637,9 +647,12 @@ export async function buildReviewPipelineExecutionLedger(
     deliberationUnitsFromDisk(params.executionPlan),
     synthesisUnitsFromDisk(params.executionPlan),
   ]);
+  const collectionResultPresent = allExecutionResults(params.executionResult).some(
+    (result) => result.unit_id === "issue-stance-matrix",
+  );
   const units = plannedReviewUnits(
     params.executionPlan,
-    dynamicIssueStanceUnits(params.executionPlan),
+    dynamicIssueStanceUnits(params.executionPlan, collectionResultPresent),
     dynamicIssueDeliberationUnits({
       diskUnits: deliberationDiskUnits,
       executionResult: params.executionResult,
