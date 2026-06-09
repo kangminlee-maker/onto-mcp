@@ -512,22 +512,64 @@ describe("ensureUnitPacket", () => {
     );
   });
 
-  it("fails closed for deliberation/synthesize packets (assembled in 4e)", async () => {
+  it("reconstructs an issue-stance map packet from durable state", async () => {
     const root = await tempSessionRoot();
-    const plan = executionPlan(root);
+    const plan = withBoundary(executionPlan(root), root);
     await writeYaml(path.join(root, "execution-plan.yaml"), plan);
-    const delibUnit: ReviewContinuationUnit = {
-      unitId: "deliberation:issue-001",
-      unitKind: "deliberation",
-      packetPath: null,
-      outputPath: path.join(root, "deliberation", "issue-001.yaml"),
+    await writeSessionMetadata(plan, root);
+    await seedTrustedLensSeats(root, plan);
+    await writeYaml(plan.finding_ledger_path, {
+      session_id: plan.session_id,
+      findings: [],
+    });
+    await writeYaml(plan.finding_relation_graph_path, {
+      session_id: plan.session_id,
+      relations: [],
+      singleton_findings: [],
+    });
+    await writeYaml(plan.issue_ledger_path, {
+      session_id: plan.session_id,
+      issues: [],
+      issue_dependencies: [],
+    });
+
+    const stanceUnit: ReviewContinuationUnit = {
+      unitId: "issue-stance:logic",
+      unitKind: "issue_artifact",
+      packetPath: path.join(plan.prompt_packets_root, "issue-stance", "logic.prompt.md"),
+      outputPath: path.join(root, "stance-responses", "logic.yaml"),
+      priorStatus: "planned",
+      dispatchDecision: "run",
+      reason: "frontier",
+    };
+    const result = await ensureUnitPacket(root, stanceUnit);
+
+    expect(result.generated).toBe(true);
+    expect(result.packetPath).toBe(stanceUnit.packetPath);
+    const packet = await fs.readFile(result.packetPath, "utf8");
+    expect(packet).toContain("Issue Stance Response Prompt");
+    expect(packet).toContain("Runtime Issue Stance Input Projection");
+  });
+
+  it("routes deliberation/synthesize units to their reconstruction adapters", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root);
+    const synthUnit: ReviewContinuationUnit = {
+      unitId: "synthesis:issue-001",
+      unitKind: "synthesize",
+      packetPath: path.join(plan.prompt_packets_root, "synthesis", "issue-001.prompt.md"),
+      outputPath: path.join(root, "synthesis-responses", "issue-001.yaml"),
       priorStatus: "planned",
       dispatchDecision: "run",
       reason: "frontier",
     };
 
-    await expect(ensureUnitPacket(root, delibUnit)).rejects.toThrow(
-      /does not generate deliberation packets/,
+    // No synthesis-work-items.yaml on disk: the adapter is reached (no longer the
+    // generic fail-closed throw), and fails reading the missing durable artifact.
+    await expect(ensureUnitPacket(root, synthUnit)).rejects.not.toThrow(
+      /unsupported unit kind/,
     );
   });
 
@@ -639,6 +681,36 @@ describe("reviewRound / reviewAdvance (host B engine)", () => {
     // Lenses are now trusted, so the first issue artifact is the next round.
     expect(result.ready_units.map((u) => u.unit_id)).toEqual(["finding-ledger"]);
     expect(result.ready_units[0]?.unit_kind).toBe("issue_artifact");
+  });
+
+  it("seeds the execution-result with the plan's resolved retry policy, not the default", async () => {
+    const root = await tempSessionRoot();
+    // A non-default (e.g. explicit zero-retry) policy stamped on the plan at prepare.
+    const customRetry = {
+      lens_max_retries: 0,
+      issue_artifact_max_retries: 0,
+      deliberation_max_retries: 0,
+      synthesis_max_retries: 0,
+      retry_initial_delay_ms: 500,
+    };
+    const plan = withBoundary(
+      { ...executionPlan(root), retry_policy: customRetry },
+      root,
+    );
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root, "host");
+    await materializeLensPackets(plan);
+    for (const seat of plan.lens_execution_seats) {
+      await writeOutput(seat.output_path);
+    }
+
+    // First advance self-seeds execution-result.yaml from the scaffold.
+    await reviewAdvance(root, ["logic", "coverage"]);
+
+    const onDisk = YAML.parse(
+      await fs.readFile(plan.execution_result_path, "utf8"),
+    ) as ReviewExecutionResultArtifact;
+    expect(onDisk.retry_policy).toEqual(customRetry);
   });
 
   it("rejects a runtime-orchestrated session for both round and advance", async () => {

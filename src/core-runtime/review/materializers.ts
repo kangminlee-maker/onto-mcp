@@ -38,6 +38,7 @@ import {
 } from "../llm/model-switcher.js";
 import {
   defaultReviewExecution,
+  defaultReviewRetrySettings,
   resolveSettingsChain,
   type OntoSettings,
   type ReviewLlmRef,
@@ -872,6 +873,11 @@ export async function bootstrapInvocationBindingArtifacts(
     review_mode: params.reviewMode,
     orchestration:
       ontoConfig?.review?.execution?.orchestration ?? "runtime",
+    // Durable, immutable stamp of the resolved retry policy (same resolution
+    // the A-path profile carries). Host advances read it for auditable
+    // execution-result/ReviewRecord retry reporting.
+    retry_policy:
+      ontoConfig?.review?.execution?.retry ?? defaultReviewRetrySettings(),
     interpretation_artifact_path: interpretationArtifactPath,
     binding_output_path: bindingOutputPath,
     session_metadata_path: sessionMetadataPath,

@@ -394,6 +394,177 @@ describe("createOntoReviewCoreApi", () => {
     );
   });
 
+  it("drives the full host pipeline to a completed ReviewRecord (deterministic mock)", async () => {
+    const projectRoot = await tempProjectRoot();
+    await writeProjectSettings(projectRoot, {
+      schema_version: "settings.json/v3",
+      review: {
+        artifacts: { lens_output_format: "markdown" },
+        execution: {
+          topology: "main-workers",
+          executor: "direct_call",
+          orchestration: "host",
+          deliberation: "controlled-lens-deliberation",
+          artifact_generation_realization: "semantic_mock",
+          actors: {
+            teamlead: { seat: "main", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            lens: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            synthesize: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+          },
+        },
+      },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Host runtime stance-matrix reduce mock run",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic", "coverage"],
+    });
+    const plan = await readYamlDocument<ReviewExecutionPlan>(
+      path.join(prepared.sessionRoot, "execution-plan.yaml"),
+    );
+
+    // Mock executor: write an empty-but-valid seat per host unit kind. With an
+    // empty issue-ledger every per-issue stage collapses, so the host only ever
+    // writes structurally-valid empty artifacts; onto's reduce merges the empty
+    // stance responses into the issue-stance-matrix.
+    const mockExecutor = async (unit: {
+      unit_id: string;
+      unit_kind: string;
+      output_path: string | null;
+    }): Promise<void> => {
+      if (!unit.output_path) throw new Error(`unit ${unit.unit_id} has no output path`);
+      if (unit.unit_id === "finding-ledger") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          findings: [],
+          validation: { unaddressable_findings: [] },
+        });
+        return;
+      }
+      if (unit.unit_id === "finding-relation-graph") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          relations: [],
+          singleton_findings: [],
+        });
+        return;
+      }
+      if (unit.unit_id === "issue-ledger") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          issues: [],
+          issue_dependencies: [],
+          validation: { unclustered_finding_ids: [] },
+        });
+        return;
+      }
+      if (unit.unit_id.startsWith("issue-stance:")) {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          lens_id: unit.unit_id.slice("issue-stance:".length),
+          stances: [],
+          validation: { missing_issues: [] },
+        });
+        return;
+      }
+      if (unit.unit_id === "deliberation-plan") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          planned_issues: [],
+          skipped_issues: [],
+        });
+        return;
+      }
+      if (unit.unit_id === "controlled-deliberation") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          issues: [],
+          validation: { missing_issue_ids: [] },
+        });
+        return;
+      }
+      if (unit.unit_id === "problem-framing") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          classifications: [],
+        });
+        return;
+      }
+      if (unit.unit_kind === "lens") {
+        await fs.writeFile(
+          unit.output_path,
+          [
+            `# ${unit.unit_id} lens findings`,
+            "",
+            "## Domain Constraints Used",
+            "```yaml",
+            "[]",
+            "```",
+            "",
+            "## Domain Context Assumptions",
+            "```yaml",
+            "[]",
+            "```",
+            "",
+          ].join("\n"),
+          "utf8",
+        );
+        return;
+      }
+      await fs.writeFile(unit.output_path, `# ${unit.unit_id}\n`, "utf8");
+    };
+
+    // Drive the host loop to completion. onto runs both runtime reduces
+    // (issue-stance-matrix, synthesize) inline; the host only ever executes
+    // host_llm units, and on `ready_to_assemble` the api wraps completeReviewSession.
+    let result = await api.reviewRound({ sessionRoot: prepared.sessionRoot });
+    let assembled: Extract<typeof result, { status: "assembled" }> | undefined;
+    const executedUnitKinds = new Set<string>();
+    for (let guard = 0; guard < 24; guard += 1) {
+      if (result.status === "assembled") {
+        assembled = result;
+        break;
+      }
+      if (result.status !== "in_progress") break;
+      // Runtime reduce units must never be handed to the host.
+      expect(
+        result.readyUnits.some(
+          (u) => u.unit_id === "issue-stance-matrix" || u.unit_id === "synthesize",
+        ),
+      ).toBe(false);
+      for (const unit of result.readyUnits) {
+        executedUnitKinds.add(unit.unit_kind);
+        await mockExecutor(unit);
+      }
+      result = await api.reviewAdvance({
+        sessionRoot: prepared.sessionRoot,
+        executed: result.readyUnits.map((u) => u.unit_id),
+      });
+    }
+
+    // The reference host driver reached a completed ReviewRecord.
+    expect(assembled?.status).toBe("assembled");
+    expect(assembled?.reviewStatus.status).toBe("completed");
+    // onto ran the runtime reduces inline (their seats exist, host never saw them).
+    expect(fsSync.existsSync(plan.issue_stance_matrix_path)).toBe(true);
+    expect(fsSync.existsSync(plan.synthesis_output_path)).toBe(true);
+    // The host executed lens, issue_artifact, and deliberation host_llm units.
+    expect(executedUnitKinds).toContain("lens");
+    expect(executedUnitKinds).toContain("issue_artifact");
+    expect(executedUnitKinds).toContain("deliberation");
+  });
+
   it("fails loudly when a present review-record is malformed", async () => {
     const projectRoot = await tempProjectRoot();
     await writeDirectCallReviewSettings(projectRoot);

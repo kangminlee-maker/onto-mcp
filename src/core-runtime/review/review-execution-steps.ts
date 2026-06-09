@@ -11,6 +11,7 @@ import {
   type ReviewRunManifestForLedger,
 } from "./pipeline-execution-ledger.js";
 import {
+  fileSha256IfPresent,
   isTrustedLedgerUnit,
   type PipelineExecutionLedger,
 } from "../pipeline-execution-ledger.js";
@@ -28,9 +29,35 @@ import { assertHostOrchestratedSession } from "./orchestration-owner.js";
 import { semanticQualityEvidenceForArtifactGeneration } from "./artifact-generation-realization.js";
 import { defaultReviewRetrySettings } from "../discovery/settings-chain.js";
 import {
+  buildIssueStanceInputProjection,
+  buildIssueStanceResponsePrompt,
+  PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+  renderIssueStanceInputProjectionSection,
   resolveProblemFramingProfileRef,
   writeIssueArtifactPromptPacket,
+  writeIssueStanceMatrixFromResponses,
 } from "./issue-artifact-runtime.js";
+import {
+  buildIssueScopedDeliberationWorklist,
+  buildIssueScopedLensDeliberationPrompt,
+  buildTeamleadIssueResolutionPrompt,
+  deliberationResolutionPath,
+  renderDeliberationMarkdownProjection,
+  validateDeliberationResolutionObject,
+  type IssueDeliberationResponseArtifact,
+} from "./controlled-lens-deliberation.js";
+import {
+  renderIssueSynthesisPrompt,
+  synthesisLedgerPath,
+  synthesisWorkItemsPath,
+  validateIssueSynthesisResponseOnDisk,
+  writeReviewSynthesisLedger,
+  writeReviewSynthesisWorkItems,
+  writeSynthesisMarkdownFromLedger,
+  type IssueSynthesisResponseArtifact,
+  type ReviewSynthesisWorkItemsArtifact,
+} from "./synthesis-map-reduce.js";
+import { renderReviewUnitBoundaryDetailsSection } from "./unit-boundary-details.js";
 import type {
   ReviewExecutionPlan,
   ReviewExecutionResultArtifact,
@@ -333,7 +360,18 @@ export async function mergeUnitResultIntoExecutionResult(args: {
           ),
         };
       case "synthesize":
-        return { ...artifact, synthesize_execution_result: result };
+        // The singular `synthesize` is the runtime reduce; per-issue
+        // `synthesis:<issue>` map results go to their own bucket so the N maps
+        // do not overwrite each other or the reduce.
+        return result.unit_id === "synthesize"
+          ? { ...artifact, synthesize_execution_result: result }
+          : {
+              ...artifact,
+              synthesis_map_execution_results: upsertUnitResult(
+                artifact.synthesis_map_execution_results ?? [],
+                result,
+              ),
+            };
       default:
         return artifact;
     }
@@ -430,8 +468,12 @@ export async function reconstructIssueArtifactPacketInputs(
     };
   }
 
-  const deliberationOutputPath = (await fileExists(plan.deliberation_output_path))
-    ? plan.deliberation_output_path
+  // `deliberationOutputPath` feeds writeIssueArtifactPromptPacket, which reads it
+  // as the deliberation *resolution* YAML — so this is deliberation-resolution.yaml,
+  // not the deliberation.md human projection.
+  const resolutionPath = deliberationResolutionPath(plan.session_root);
+  const deliberationOutputPath = (await fileExists(resolutionPath))
+    ? resolutionPath
     : undefined;
   return {
     projectRoot,
@@ -450,6 +492,247 @@ export interface EnsureUnitPacketResult {
   generated: boolean;
 }
 
+/** Issue-artifact output paths for the given ids (mirrors the A runner helper). */
+function issueArtifactOutputPaths(
+  executionPlan: ReviewExecutionPlan,
+  artifactIds: readonly ReviewIssueArtifactId[],
+): string[] {
+  const ids = new Set(artifactIds);
+  return executionPlan.issue_artifact_prompt_packet_seats
+    .filter((seat) => ids.has(seat.artifact_id))
+    .map((seat) => seat.output_path);
+}
+
+/**
+ * Reconstruct A's `renderReviewUnitBoundaryContext` (which lives in the cli
+ * layer) from the review-layer {@link renderReviewUnitBoundaryDetailsSection},
+ * so the host (B) packet carries the identical boundary section without a cli
+ * import. Same wrapper: leading newline + `repo_exploration_policy: "denied"`.
+ */
+function renderHostUnitBoundaryContext(args: {
+  projectRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  unitId: string;
+  outputPath: string;
+  allowedReadRefs: string[];
+}): string {
+  return `\n${renderReviewUnitBoundaryDetailsSection({
+    projectRoot: args.projectRoot,
+    unitId: args.unitId,
+    outputPath: args.outputPath,
+    allowedReadRefs: args.allowedReadRefs,
+    repoExplorationPolicy: "denied",
+    boundaryPolicy: args.executionPlan.boundary_policy,
+    effectiveBoundaryState: args.executionPlan.effective_boundary_state,
+    boundaryEnforcementProfile: args.executionPlan.boundary_enforcement_profile,
+  })}`;
+}
+
+async function writePacket(packetPath: string, packetText: string): Promise<void> {
+  await fs.mkdir(path.dirname(packetPath), { recursive: true });
+  await fs.writeFile(packetPath, `${packetText.trimEnd()}\n`, "utf8");
+}
+
+/**
+ * Reconstruct an `issue-stance:<lens>` map packet from durable state (Stage 2).
+ * Mirrors A's `runIssueStanceMatrixCollectionDispatch` per-lens dispatch: the
+ * runtime stance input projection (from finding/relation/issue ledgers) plus the
+ * trusted lens outputs. The stance prompt carries no boundary section.
+ */
+async function reconstructStancePacket(
+  sessionRoot: string,
+  unit: ReviewContinuationUnit,
+  plan: ReviewExecutionPlan,
+): Promise<EnsureUnitPacketResult> {
+  const lensId = unit.unitId.slice("issue-stance:".length);
+  const projectRoot = await loadProjectRoot(plan);
+  const ledger = await buildSessionLedger(sessionRoot, plan);
+  const lensOutputPaths = trustedUnitOutputPaths(ledger, "lens");
+  const [findingLedger, relationGraph, issueLedger] = await Promise.all([
+    readYamlDocument<Record<string, unknown>>(plan.finding_ledger_path),
+    readYamlDocument<Record<string, unknown>>(plan.finding_relation_graph_path),
+    readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+  ]);
+  const projection = renderIssueStanceInputProjectionSection(
+    buildIssueStanceInputProjection({
+      projectRoot,
+      findingLedgerPath: plan.finding_ledger_path,
+      findingRelationGraphPath: plan.finding_relation_graph_path,
+      issueLedgerPath: plan.issue_ledger_path,
+      findingLedger,
+      relationGraph,
+      issueLedger,
+      lensOutputPaths,
+    }),
+  );
+  const outputPath = unit.outputPath ?? "";
+  const packetText = buildIssueStanceResponsePrompt({
+    sessionId: plan.session_id,
+    projectRoot,
+    executionPlan: plan,
+    lensId,
+    outputPath,
+    lensOutputPaths,
+    issueStanceInputProjection: projection,
+  });
+  const packetPath = unit.packetPath ?? "";
+  await writePacket(packetPath, packetText);
+  return { packetPath, generated: true };
+}
+
+/**
+ * Reconstruct a deliberation packet: the per-issue `deliberation:<issue>:<lens>`
+ * map unit (from the issue-scoped worklist) or the `controlled-deliberation`
+ * teamlead reduce (from the trusted per-issue responses). Mirrors A's two call
+ * sites in the runner.
+ */
+async function reconstructDeliberationPacket(
+  sessionRoot: string,
+  unit: ReviewContinuationUnit,
+  plan: ReviewExecutionPlan,
+): Promise<EnsureUnitPacketResult> {
+  const projectRoot = await loadProjectRoot(plan);
+  const packetPath = unit.packetPath ?? "";
+
+  if (unit.unitId === "controlled-deliberation") {
+    const [deliberationPlan, issueLedger] = await Promise.all([
+      readYamlDocument<Record<string, unknown>>(plan.deliberation_plan_path),
+      readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+    ]);
+    const ledger = await buildSessionLedger(sessionRoot, plan);
+    const responsePaths = ledger.units
+      .filter(
+        (entry) =>
+          entry.unitKind === "deliberation" &&
+          entry.unitId.startsWith("deliberation:") &&
+          isTrustedLedgerUnit(entry),
+      )
+      .flatMap((entry) => entry.outputRefs.slice(0, 1));
+    const responses = await Promise.all(
+      responsePaths.map((responsePath) =>
+        readYamlDocument<IssueDeliberationResponseArtifact>(responsePath),
+      ),
+    );
+    const outputPath = unit.outputPath ?? deliberationResolutionPath(plan.session_root);
+    const teamleadReadRefs = [
+      plan.issue_ledger_path,
+      plan.issue_stance_matrix_path,
+      plan.deliberation_plan_path,
+      ...responsePaths,
+      ...issueArtifactOutputPaths(plan, PRE_DELIBERATION_ISSUE_ARTIFACT_IDS),
+    ];
+    const packetText = buildTeamleadIssueResolutionPrompt({
+      sessionId: plan.session_id,
+      projectRoot,
+      outputPath,
+      deliberationPlan,
+      issueLedger,
+      responses,
+      boundaryContext: renderHostUnitBoundaryContext({
+        projectRoot,
+        executionPlan: plan,
+        unitId: unit.unitId,
+        outputPath,
+        allowedReadRefs: teamleadReadRefs,
+      }),
+    });
+    await writePacket(packetPath, packetText);
+    return { packetPath, generated: true };
+  }
+
+  const [deliberationPlan, issueLedger, issueStanceMatrix] = await Promise.all([
+    readYamlDocument<Record<string, unknown>>(plan.deliberation_plan_path),
+    readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+    readYamlDocument<Record<string, unknown>>(plan.issue_stance_matrix_path),
+  ]);
+  const workItems = buildIssueScopedDeliberationWorklist({
+    promptPacketsRoot: plan.prompt_packets_root,
+    deliberationRootPath: plan.deliberation_root_path,
+    deliberationPlan,
+    issueLedger,
+    issueStanceMatrix,
+  });
+  const workItem = workItems.find(
+    (item) => `deliberation:${item.issue_id}:${item.lens_id}` === unit.unitId,
+  );
+  if (!workItem) {
+    throw new Error(
+      `reconstructDeliberationPacket: no work item for ${unit.unitId} in deliberation-plan.`,
+    );
+  }
+  const outputPath = unit.outputPath ?? workItem.output_path;
+  const deliberationReadRefs = [
+    plan.issue_ledger_path,
+    plan.issue_stance_matrix_path,
+    plan.deliberation_plan_path,
+    plan.finding_ledger_path,
+    plan.finding_relation_graph_path,
+  ];
+  const packetText = buildIssueScopedLensDeliberationPrompt({
+    sessionId: plan.session_id,
+    projectRoot,
+    workItem,
+    boundaryContext: renderHostUnitBoundaryContext({
+      projectRoot,
+      executionPlan: plan,
+      unitId: unit.unitId,
+      outputPath,
+      allowedReadRefs: deliberationReadRefs,
+    }),
+  });
+  await writePacket(packetPath, packetText);
+  return { packetPath, generated: true };
+}
+
+/**
+ * Reconstruct a `synthesis:<issue>` map packet from the durable
+ * `synthesis-work-items.yaml`. Mirrors A's per-work-item synthesis dispatch.
+ */
+async function reconstructSynthesisPacket(
+  unit: ReviewContinuationUnit,
+  plan: ReviewExecutionPlan,
+): Promise<EnsureUnitPacketResult> {
+  const projectRoot = await loadProjectRoot(plan);
+  const workItemsPath = synthesisWorkItemsPath(plan.session_root);
+  const workItems =
+    await readYamlDocument<ReviewSynthesisWorkItemsArtifact>(workItemsPath);
+  const workItem = workItems.work_items.find(
+    (item) => item.work_item_id === unit.unitId,
+  );
+  if (!workItem) {
+    throw new Error(
+      `reconstructSynthesisPacket: no work item for ${unit.unitId} in synthesis-work-items.`,
+    );
+  }
+  const synthesisReadRefs = [
+    workItemsPath,
+    plan.finding_ledger_path,
+    plan.finding_relation_graph_path,
+    plan.issue_ledger_path,
+    plan.issue_stance_matrix_path,
+    plan.deliberation_plan_path,
+    deliberationResolutionPath(plan.session_root),
+    plan.problem_framing_path,
+    plan.review_target_profile_path,
+  ];
+  const packetText = renderIssueSynthesisPrompt({
+    sessionId: plan.session_id,
+    projectRoot,
+    workItem,
+    workItemsPath,
+    boundaryContext: renderHostUnitBoundaryContext({
+      projectRoot,
+      executionPlan: plan,
+      unitId: unit.unitId,
+      outputPath: workItem.response_path,
+      allowedReadRefs: synthesisReadRefs,
+    }),
+  });
+  const packetPath = unit.packetPath ?? workItem.packet_path;
+  await writePacket(packetPath, packetText);
+  return { packetPath, generated: true };
+}
+
 /**
  * Ensure a frontier unit's prompt packet exists on disk, generating it from
  * durable state when the host (B) is about to execute the unit (4c).
@@ -461,12 +744,18 @@ export interface EnsureUnitPacketResult {
  *
  * - `lens`: prepare already materialized the packet -> noop; assert it exists
  *   and return its path.
+ * - `issue-stance:<lens>`: reconstruct via {@link reconstructStancePacket}.
  * - `issue_artifact`: generate via {@link writeIssueArtifactPromptPacket} with
  *   inputs rebuilt by {@link reconstructIssueArtifactPacketInputs}.
- * - `deliberation` / `synthesize`: NOT generated here. Their packets are
- *   produced dynamically by the deliberation / synthesis orchestration (which
- *   is interleaved with execution in A); the host round assembles those in
- *   Step 4e. Fail closed rather than emit a divergent packet.
+ * - `deliberation` (`deliberation:<i>:<l>` and `controlled-deliberation`):
+ *   reconstruct via {@link reconstructDeliberationPacket}.
+ * - `synthesize` (`synthesis:<issue>`): reconstruct via
+ *   {@link reconstructSynthesisPacket}.
+ *
+ * Each reconstruction mirrors A's corresponding runner call site, rebuilding the
+ * builder inputs from durable disk state (no cli import). The runtime reduce
+ * units (`issue-stance-matrix`, `synthesize`) never reach here — they are not
+ * host-executed and carry no LLM packet (see {@link computeRoundResult}).
  */
 export async function ensureUnitPacket(
   sessionRoot: string,
@@ -483,6 +772,12 @@ export async function ensureUnitPacket(
       );
     }
     return { packetPath, generated: false };
+  }
+
+  // The per-lens stance map units carry `unitKind: "issue_artifact"` but are not
+  // standard issue artifacts; intercept them before the issue-artifact path.
+  if (unit.unitId.startsWith("issue-stance:")) {
+    return reconstructStancePacket(sessionRoot, unit, plan);
   }
 
   if (unit.unitKind === "issue_artifact") {
@@ -509,8 +804,16 @@ export async function ensureUnitPacket(
     return { packetPath: seat.packet_path, generated: true };
   }
 
+  if (unit.unitKind === "deliberation") {
+    return reconstructDeliberationPacket(sessionRoot, unit, plan);
+  }
+
+  if (unit.unitKind === "synthesize") {
+    return reconstructSynthesisPacket(unit, plan);
+  }
+
   throw new Error(
-    `ensureUnitPacket does not generate ${unit.unitKind} packets; the host round assembles deliberation/synthesize packets (Stage 1 Step 4e).`,
+    `ensureUnitPacket: unsupported unit kind ${unit.unitKind} for ${unit.unitId}.`,
   );
 }
 
@@ -593,35 +896,325 @@ function projectRoundUnit(unit: ReviewContinuationUnit): ReviewRoundUnit {
   };
 }
 
+/** Whether a runtime reduce finished (seat written) or only advanced a stage. */
+interface RuntimeReduceOutcome {
+  completed: boolean;
+}
+
+/**
+ * Run the `synthesize` runtime reduce. Two stages, idempotent across the
+ * fixed-point: (1) if `synthesis-work-items.yaml` is absent, build it from the
+ * trusted upstream artifacts (this surfaces the per-issue `synthesis:<issue>` map
+ * units for the host to run, so it does NOT complete the unit); (2) once the work
+ * items exist (and all map responses are present), reduce them into the synthesis
+ * ledger + markdown projection. A zero-issue plan collapses straight to (2).
+ */
+async function runSynthesizeReduce(
+  plan: ReviewExecutionPlan,
+  projectRoot: string,
+): Promise<RuntimeReduceOutcome> {
+  const workItemsPath = synthesisWorkItemsPath(plan.session_root);
+  if (!(await fileExists(workItemsPath))) {
+    const [
+      findingLedger,
+      relationGraph,
+      issueLedger,
+      issueStanceMatrix,
+      deliberationPlan,
+      problemFraming,
+    ] = await Promise.all([
+      readYamlDocument<Record<string, unknown>>(plan.finding_ledger_path),
+      readYamlDocument<Record<string, unknown>>(plan.finding_relation_graph_path),
+      readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+      readYamlDocument<Record<string, unknown>>(plan.issue_stance_matrix_path),
+      readYamlDocument<Record<string, unknown>>(plan.deliberation_plan_path),
+      readYamlDocument<Record<string, unknown>>(plan.problem_framing_path),
+    ]);
+    const deliberationResolution = validateDeliberationResolutionObject({
+      parsed: await readYamlDocument<Record<string, unknown>>(
+        deliberationResolutionPath(plan.session_root),
+      ),
+      sessionId: plan.session_id,
+      issueLedger,
+      deliberationPlan,
+    });
+    await writeReviewSynthesisWorkItems({
+      projectRoot,
+      executionPlan: plan,
+      findingLedger,
+      relationGraph,
+      issueLedger,
+      issueStanceMatrix,
+      deliberationPlan,
+      deliberationResolution,
+      problemFraming,
+    });
+    // Stage 1 only surfaces the map units; the reduce is not yet complete unless
+    // there are no work items (handled by the next fixed-point iteration).
+    return { completed: false };
+  }
+
+  const workItems =
+    await readYamlDocument<ReviewSynthesisWorkItemsArtifact>(workItemsPath);
+  const responses: IssueSynthesisResponseArtifact[] = await Promise.all(
+    workItems.work_items.map((workItem) =>
+      validateIssueSynthesisResponseOnDisk({
+        responsePath: workItem.response_path,
+        sessionId: plan.session_id,
+        workItem,
+        sourceWorkItemsRef: `synthesis-work-items.yaml#${workItem.work_item_id}`,
+      }),
+    ),
+  );
+  const ledger = await writeReviewSynthesisLedger({
+    projectRoot,
+    executionPlan: plan,
+    workItems,
+    responses,
+  });
+  const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);
+  await writeSynthesisMarkdownFromLedger({
+    ledger,
+    outputPath: plan.synthesis_output_path,
+    expectedLensIds: plannedLensIds,
+    receivedLensIds: plannedLensIds,
+  });
+  return { completed: true };
+}
+
+/**
+ * Run one runtime-owned reduce unit inline (onto authority; never host-visible).
+ * The reduce writes its own output seat; the caller records the unit's result via
+ * the shared seat gate once the reduce reports it completed.
+ */
+async function runRuntimeOwnedUnit(
+  sessionRoot: string,
+  unit: ReviewContinuationUnit,
+  plan: ReviewExecutionPlan,
+): Promise<RuntimeReduceOutcome> {
+  const projectRoot = await loadProjectRoot(plan);
+
+  if (unit.unitId === "issue-stance-matrix") {
+    const ledger = await buildSessionLedger(sessionRoot, plan);
+    const responsePathsByLensId = new Map<string, string>();
+    const participatingLensIds: string[] = [];
+    for (const entry of ledger.units) {
+      if (!entry.unitId.startsWith("issue-stance:") || !isTrustedLedgerUnit(entry)) {
+        continue;
+      }
+      const lensId = entry.unitId.slice("issue-stance:".length);
+      const responsePath = entry.outputRefs[0];
+      if (!responsePath) continue;
+      participatingLensIds.push(lensId);
+      responsePathsByLensId.set(lensId, responsePath);
+    }
+    await writeIssueStanceMatrixFromResponses({
+      executionPlan: plan,
+      projectRoot,
+      responsePathsByLensId,
+      participatingLensIds,
+      outputPath: plan.issue_stance_matrix_path,
+    });
+    return { completed: true };
+  }
+
+  if (unit.unitId === "synthesize") {
+    return runSynthesizeReduce(plan, projectRoot);
+  }
+
+  throw new Error(
+    `runRuntimeOwnedUnit: no runtime reducer for ${unit.unitId} (${unit.unitKind}).`,
+  );
+}
+
+/** Build a `failed` result for a runtime unit whose reduce threw. */
+function failedRuntimeResult(
+  unit: ReviewContinuationUnit,
+  error: unknown,
+  recordedAt: string,
+): ReviewUnitExecutionResult {
+  return {
+    unit_id: unit.unitId,
+    unit_kind: unit.unitKind as ReviewUnitExecutionResult["unit_kind"],
+    packet_path: unit.packetPath ?? "",
+    output_path: unit.outputPath ?? "",
+    status: "failed",
+    started_at: recordedAt,
+    completed_at: recordedAt,
+    duration_ms: 0,
+    timestamp_provenance: "batch_window",
+    failure_message: error instanceof Error ? error.message : String(error),
+    failure_kind: "output_contract",
+  };
+}
+
+/**
+ * Drain runtime-owned reduce units from the frontier (4e fixed-point). After the
+ * host's seats are merged, re-derive the frontier and, while it contains only
+ * `runtime` units, run each reduce inline, record its result, and re-derive.
+ * Stops when a `host_llm` unit appears (the host must act next), the frontier is
+ * empty/terminal, or the max-iteration backstop trips. A reduce throw merges a
+ * `failed` result and halts cleanly.
+ */
+async function runRuntimeFixedPoint(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const MAX_ITERATIONS = 64;
+  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration += 1) {
+    const frontier = await computeReviewFrontier(sessionRoot);
+    if (!frontier.eligible) return;
+    const runnable = frontier.frontierUnits.filter(
+      (unit) => unit.dispatchDecision === "run",
+    );
+    if (runnable.some((unit) => unit.owner === "host_llm")) return;
+    const runtimeUnits = runnable.filter((unit) => unit.owner === "runtime");
+    if (runtimeUnits.length === 0) return;
+
+    for (const unit of runtimeUnits) {
+      try {
+        const outcome = await runRuntimeOwnedUnit(sessionRoot, unit, plan);
+        if (outcome.completed) {
+          const result = await validateUnitSeatToResult({
+            sessionRoot,
+            unit,
+            executionPlan: plan,
+          });
+          await mergeUnitResultIntoExecutionResult({ sessionRoot, result });
+        }
+      } catch (error) {
+        await mergeUnitResultIntoExecutionResult({
+          sessionRoot,
+          result: failedRuntimeResult(unit, error, isoNow()),
+        });
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * Ensure the runtime-owned `deliberation.md` human projection exists once the
+ * controlled-deliberation resolution seat is present. The onto path (A) writes it
+ * inline from the resolution; the host path produces only the machine resolution
+ * (`deliberation-resolution.yaml`), so onto derives the projection here. Idempotent
+ * and fail-soft: a missing resolution is a no-op.
+ */
+async function ensureDeliberationMarkdownProjection(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const resolutionPath = deliberationResolutionPath(plan.session_root);
+  if (!(await fileExists(resolutionPath))) return;
+  if (await fileExists(plan.deliberation_output_path)) return;
+  const [issueLedger, deliberationPlan] = await Promise.all([
+    readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+    readYamlDocument<Record<string, unknown>>(plan.deliberation_plan_path),
+  ]);
+  const resolution = validateDeliberationResolutionObject({
+    parsed: await readYamlDocument<Record<string, unknown>>(resolutionPath),
+    sessionId: plan.session_id,
+    issueLedger,
+    deliberationPlan,
+  });
+  await fs.writeFile(
+    plan.deliberation_output_path,
+    `${renderDeliberationMarkdownProjection({ resolution }).trimEnd()}\n`,
+    "utf8",
+  );
+}
+
+/**
+ * Once every ledger unit is trusted, promote the host (B) execution-result from
+ * its in-progress `halted_partial` scaffold to `completed`, so assembly does not
+ * treat the run as degraded/halted. Records the participating lenses and that
+ * synthesis ran. No-op until the pipeline is terminal or if already completed.
+ */
+async function finalizeHostExecutionResultIfComplete(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const ledger = await buildSessionLedger(sessionRoot, plan);
+  if (!ledger.units.every((unit) => isTrustedLedgerUnit(unit))) return;
+  const resultPath = executionResultPath(sessionRoot);
+  const existing =
+    await readOptionalYamlArtifact<ReviewExecutionResultArtifact>(resultPath);
+  if (!existing || existing.execution_status === "completed") return;
+  const trustedLensIds = ledger.units
+    .filter((unit) => unit.unitKind === "lens" && isTrustedLedgerUnit(unit))
+    .map((unit) => unit.unitId);
+  await writeYamlDocument(resultPath, {
+    ...existing,
+    execution_status: "completed",
+    execution_completed_at: isoNow(),
+    participating_lens_ids: trustedLensIds,
+    executed_lens_count: trustedLensIds.length,
+    synthesis_executed: true,
+    deliberation_status: "performed",
+  });
+
+  // The synthesis provenance the completed-record terminal trust check reads. The
+  // onto path (A) emits a full review-run-manifest; the host (B) writes just the
+  // synthesis provenance, whose hashes assembly recomputes from the same files.
+  const synthesisLedger = synthesisLedgerPath(plan.session_root);
+  await writeYamlDocument(path.join(sessionRoot, "review-run-manifest.yaml"), {
+    schema_version: "1",
+    session_id: plan.session_id,
+    synthesis_provenance: {
+      synthesis_executed: true,
+      synthesis_ledger_path: synthesisLedger,
+      synthesis_ledger_sha256: await fileSha256IfPresent(synthesisLedger),
+      synthesis_output_path: plan.synthesis_output_path,
+      synthesis_output_sha256: await fileSha256IfPresent(plan.synthesis_output_path),
+    },
+  });
+}
+
 /**
  * Compute the current round result: the frontier ready units (with their prompt
  * packets ensured) or a terminal/halted signal. Shared by reviewRound and the
  * tail of reviewAdvance.
+ *
+ * Only `host_llm` units are returned as `ready_units` (and have their packets
+ * ensured); `runtime` reduce units are never surfaced to the host — they are
+ * drained by {@link runRuntimeFixedPoint} inside reviewAdvance.
  */
 async function computeRoundResult(
   sessionRoot: string,
   plan: ReviewExecutionPlan,
 ): Promise<ReviewRoundResult> {
   const frontier = await computeReviewFrontier(sessionRoot);
+  // Terminal: every ledger unit is trusted, so there is nothing left to run and
+  // the caller assembles. (A continuation plan with no untrusted frontier is
+  // `eligible: false`, so this must precede the ineligibility check.)
+  if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+    return { status: "ready_to_assemble" };
+  }
   if (!frontier.eligible) {
     return {
       status: "halted",
       reason: frontier.ineligibleReason ?? "review continuation is not eligible",
     };
   }
-  if (frontier.frontierUnits.length === 0) {
-    if (frontier.downstreamUnits.length > 0) {
+  const hostUnits = frontier.frontierUnits.filter(
+    (unit) => unit.owner === "host_llm",
+  );
+  const runtimeUnits = frontier.frontierUnits.filter(
+    (unit) => unit.owner === "runtime",
+  );
+  if (hostUnits.length === 0) {
+    if (runtimeUnits.length > 0 || frontier.downstreamUnits.length > 0) {
       return {
         status: "halted",
         reason:
-          "no ready units but downstream work remains (an upstream is not trusted or the stage gate is unsatisfied)",
+          "no host-ready units but work remains (an upstream is not trusted, the stage gate is unsatisfied, or a runtime reduce did not drain)",
       };
     }
     return { status: "ready_to_assemble" };
   }
 
   const readyUnits: ReviewRoundUnit[] = [];
-  for (const unit of frontier.frontierUnits) {
+  for (const unit of hostUnits) {
     await ensureUnitPacket(sessionRoot, unit, plan);
     readyUnits.push(projectRoundUnit(unit));
   }
@@ -668,7 +1261,9 @@ function buildInitialExecutionResultScaffold(
     execution_completed_at: isoNow(),
     total_duration_ms: 0,
     max_concurrent_lenses: plan.max_concurrent_lenses ?? plannedLensIds.length,
-    retry_policy: defaultReviewRetrySettings(),
+    // Resolved retry policy stamped on the plan at prepare; fall back to the
+    // default only for plans serialized before the stamp existed.
+    retry_policy: plan.retry_policy ?? defaultReviewRetrySettings(),
     planned_lens_ids: plannedLensIds,
     participating_lens_ids: [],
     degraded_lens_ids: [],
@@ -725,5 +1320,8 @@ export async function reviewAdvance(
   }
 
   await finalizeStageGate(sessionRoot, plan);
+  await ensureDeliberationMarkdownProjection(sessionRoot, plan);
+  await runRuntimeFixedPoint(sessionRoot, plan);
+  await finalizeHostExecutionResultIfComplete(sessionRoot, plan);
   return computeRoundResult(sessionRoot, plan);
 }

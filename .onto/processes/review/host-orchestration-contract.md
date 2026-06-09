@@ -91,8 +91,23 @@ deliberation 유닛도 DAG 위의 ready unit이다(동료 seat를 읽는 executo
 
 `cli/host-orchestration-reference-driver.ts`의 `driveHostOrchestration`이 브랜드 중립 구동기로 §3 루프를 실증한다. executor-agnostic: **live**(실 executor subprocess) / **mock**(fixture seat, 결정론 테스트). onto가 artifact 진실성을 소유하고 executor는 seat만 기록한다.
 
-## 9. 범위 / 비범위 (Stage 1)
+## 9. 범위 / 비범위
 
-- **범위**: flat(main-workers)·controlled·브랜드 중립 라운드 계약 + A/B fail-closed + settings + reference host(mock). 결정론 mock E2E는 **lens→issue-artifact 단계 전진**을 증명한다.
-- **비범위(후속)**: `orchestration=host × topology≠main-workers`는 settings에서 거부. deliberation/synthesize 및 runtime-owned issue-artifact(stance-matrix collection, sidecar finding-ledger, issue-ledger completion)의 완전한 host 구동, `completed` ReviewRecord 전체 파이프라인, nested·subagent·live 심의는 Stage 2/3 또는 후속 추출.
+- **범위(Stage 1)**: flat(main-workers)·controlled·브랜드 중립 라운드 계약 + A/B fail-closed + settings + reference host(mock).
+- **범위(Stage 2 — §10)**: deliberation/synthesize 및 runtime-owned reduce(`issue-stance-matrix`, `synthesize`)의 완전한 host 구동, `completed` ReviewRecord **전체 파이프라인** 결정론 mock E2E.
+- **비범위(후속)**: `orchestration=host × topology≠main-workers`는 settings에서 거부. sidecar `finding-ledger`·no-planned-issue `controlled-deliberation`의 runtime-reduce 구동(현재 host_llm로 충분), live-LLM 전체 E2E, nested·subagent·live 심의는 후속/Stage 3.
 - **무회귀**: `orchestration` 미설정 시 A 경로 100% 동일. B는 분해된 공유 step 함수를 재사용할 뿐 A 실행 경로를 바꾸지 않는다.
+
+## 10. Stage 2 — 전체 파이프라인 host 구동 (compound runtime units)
+
+전 파이프라인(lens → finding-ledger → issue-ledger → issue-stance-matrix → deliberation-plan → per-issue deliberation → controlled-deliberation → problem-framing → per-issue synthesis → synthesize)을 host가 구동하여 `completed` ReviewRecord에 도달한다.
+
+- **map/reduce 분해**: 복합 runtime 유닛은 host가 실행하는 LLM **map** 유닛(상류) + onto가 실행하는 결정론적 **reduce**로 분해된다.
+  - `issue-stance:<lens>`(map, `host_llm`) → `issue-stance-matrix`(reduce, `runtime`).
+  - `synthesis:<issue>`(map, `host_llm`) → `synthesize`(reduce, `runtime`, 2단계: work-items plan → ledger+markdown).
+- **동적 map 유닛은 durable 디스크 아티팩트에서 파생**(`deliberation-plan.yaml`·`synthesis-work-items.yaml`)하여 execution-result가 생기기 전에 frontier에 표면화한다. A에서는 execution-result/manifest 소스와 동일 집합을 산출(무회귀).
+- **runtime fixed-point**: onto는 reduce를 **`reviewAdvance` 내부**에서 실행한다(host에 절대 노출 안 함). host seat 병합 후 frontier 재파생 → frontier가 전부 `runtime`인 동안 각 reduce 실행·seat 기록·재파생; host 유닛 출현/비어있음/max-iter 백스톱 시 정지. `reviewRound`/`computeRoundResult`는 `host_llm` 유닛만 ready로 투영한다.
+- **stance map trust**: `issue-stance:<lens>` map 유닛은 `issue-stance-matrix` collection 결과가 있을 때만 seat 존재로 trust한다(A의 단일 collection dispatch signature). B에서는 host가 per-unit 결과를 기록하므로 reduce 전에 정상적으로 frontier에서 advance한다.
+- **runtime 투영/완료**: onto는 `deliberation.md` 인간 투영을 resolution에서 파생하고, 파이프라인 종료 시 execution-result를 `completed`로 승격하며(참여 lens·synthesis·deliberation_status), `synthesize` reduce는 `synthesis-ledger.yaml`+`synthesis.md`와 완료-레코드 신뢰 검사가 읽는 synthesis provenance를 기록한다.
+- **retry_policy provenance**: 세션의 resolved retry policy는 prepare가 execution-plan에 불변 각인(`orchestration` stamp와 동일 패턴)하고, host advance의 execution-result scaffold는 그 값을 그대로 싣는다(default를 발명하지 않음) → host 경로에서도 ReviewRecord의 retry 보고가 설정값(예: zero-retry)과 일치하여 audit/replay 정확. 각인 전 직렬화된 plan은 default로 폴백.
+- **reduce 실패**: reduce throw 시 `failed` 결과를 병합하고 advance를 깨끗이 halt(무한 루프 없음).

@@ -152,10 +152,19 @@ function executionResult(plan: ReviewExecutionPlan): ReviewExecutionResultArtifa
     lens_execution_results: plan.lens_prompt_packet_seats.map((seat) =>
       result(seat.lens_id, "lens", seat.packet_path, seat.output_path),
     ),
-    issue_artifact_execution_results:
-      plan.issue_artifact_prompt_packet_seats.map((seat) =>
+    issue_artifact_execution_results: [
+      ...plan.lens_execution_seats.map((seat) =>
+        result(
+          `issue-stance:${seat.lens_id}`,
+          "issue_artifact",
+          path.join(plan.prompt_packets_root, "issue-stance", `${seat.lens_id}.prompt.md`),
+          path.join(plan.session_root, "stance-responses", `${seat.lens_id}.yaml`),
+        ),
+      ),
+      ...plan.issue_artifact_prompt_packet_seats.map((seat) =>
         result(seat.artifact_id, "issue_artifact", seat.packet_path, seat.output_path),
       ),
+    ],
     deliberation_execution_results: [
       ...plan.lens_prompt_packet_seats.map((seat) =>
         result(
@@ -375,6 +384,175 @@ describe("buildReviewPipelineExecutionLedger", () => {
     expect(issueStanceMatrix?.consumedArtifactRefs).toContain(
       path.join(root, "stance-responses", "coverage.yaml"),
     );
+  });
+
+  it("decomposes issue-stance-matrix into per-lens stance map units upstream of the runtime reduce", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+    });
+
+    const matrix = ledger.units.find((unit) => unit.unitId === "issue-stance-matrix");
+    expect(matrix?.owner).toBe("runtime");
+    expect(matrix?.upstreamUnitIds).toEqual([
+      "issue-stance:logic",
+      "issue-stance:coverage",
+    ]);
+    for (const lensId of ["logic", "coverage"]) {
+      const stance = ledger.units.find(
+        (unit) => unit.unitId === `issue-stance:${lensId}`,
+      );
+      expect(stance?.owner).toBe("host_llm");
+      expect(stance?.unitKind).toBe("issue_artifact");
+      expect(stance?.upstreamUnitIds).toEqual(["issue-ledger"]);
+      expect(stance?.packetRef).toBe(
+        path.join(plan.prompt_packets_root, "issue-stance", `${lensId}.prompt.md`),
+      );
+      expect(stance?.outputRefs).toEqual([
+        path.join(root, "stance-responses", `${lensId}.yaml`),
+      ]);
+    }
+    expect(
+      ledger.units.find((unit) => unit.unitId === "issue-ledger")?.downstreamUnitIds,
+    ).toEqual(expect.arrayContaining(["issue-stance:logic", "issue-stance:coverage"]));
+  });
+
+  it("keeps issue-stance-matrix untrusted until every stance map unit is trusted", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    const runResult = executionResult(plan);
+    // Half-done stance round: every unit is marked completed, but `coverage`'s
+    // stance seat is missing on disk, so its map unit cannot be trusted.
+    const coverageStanceSeat = path.join(root, "stance-responses", "coverage.yaml");
+    for (const unitResult of [
+      ...runResult.lens_execution_results,
+      ...(runResult.issue_artifact_execution_results ?? []),
+      ...(runResult.deliberation_execution_results ?? []),
+      runResult.synthesize_execution_result,
+    ]) {
+      if (unitResult && unitResult.output_path !== coverageStanceSeat) {
+        await writeOutput(unitResult.output_path);
+      }
+    }
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    expect(
+      ledger.units.find((unit) => unit.unitId === "issue-stance:logic")?.trustStatus,
+    ).toBe("trusted");
+    expect(
+      ledger.units.find((unit) => unit.unitId === "issue-stance:coverage")?.trustStatus,
+    ).toBe("untrusted");
+    expect(
+      ledger.units.find((unit) => unit.unitId === "issue-stance-matrix")?.trustStatus,
+    ).toBe("blocked_by_upstream");
+  });
+
+  it("derives issue deliberation map units from deliberation-plan.yaml before any execution-result", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    await writeOutput(plan.deliberation_plan_path);
+    await fs.writeFile(
+      plan.deliberation_plan_path,
+      [
+        "planned_issues:",
+        "  - issue_id: issue-001",
+        "    participating_lens_ids: [logic, coverage]",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+    });
+
+    const delibLogic = ledger.units.find(
+      (unit) => unit.unitId === "deliberation:issue-001:logic",
+    );
+    expect(delibLogic?.unitKind).toBe("deliberation");
+    expect(delibLogic?.owner).toBe("host_llm");
+    expect(delibLogic?.upstreamUnitIds).toEqual(["deliberation-plan"]);
+    expect(delibLogic?.outputRefs).toEqual([
+      path.join(plan.deliberation_root_path, "responses", "issue-001", "logic.yaml"),
+    ]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "controlled-deliberation")?.upstreamUnitIds,
+    ).toEqual(
+      expect.arrayContaining([
+        "deliberation:issue-001:logic",
+        "deliberation:issue-001:coverage",
+      ]),
+    );
+  });
+
+  it("merges disk-derived and execution-result deliberation units without duplicates", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage", "axiology"]);
+    await fs.writeFile(
+      plan.deliberation_plan_path,
+      [
+        "planned_issues:",
+        "  - issue_id: issue-001",
+        "    participating_lens_ids: [logic, coverage, axiology]",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+    const runResult = executionResult(plan);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    const delibUnits = ledger.units.filter((unit) =>
+      unit.unitId.startsWith("deliberation:issue-001:"),
+    );
+    expect(delibUnits.map((unit) => unit.unitId).sort()).toEqual([
+      "deliberation:issue-001:axiology",
+      "deliberation:issue-001:coverage",
+      "deliberation:issue-001:logic",
+    ]);
+  });
+
+  it("derives synthesis map units from synthesis-work-items.yaml", async () => {
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root, ["logic", "coverage"]);
+    await fs.writeFile(
+      path.join(root, "synthesis-work-items.yaml"),
+      [
+        "work_items:",
+        "  - work_item_id: synthesis:issue-001",
+        "    issue_id: issue-001",
+        `    packet_path: ${path.join(plan.prompt_packets_root, "synthesis", "issue-001.prompt.md")}`,
+        `    response_path: ${path.join(root, "synthesis-responses", "issue-001.yaml")}`,
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+    });
+
+    const synthMap = ledger.units.find((unit) => unit.unitId === "synthesis:issue-001");
+    expect(synthMap?.unitKind).toBe("synthesize");
+    expect(synthMap?.owner).toBe("host_llm");
+    expect(synthMap?.upstreamUnitIds).toEqual(["problem-framing"]);
+    expect(
+      ledger.units.find((unit) => unit.unitId === "synthesize")?.upstreamUnitIds,
+    ).toContain("synthesis:issue-001");
   });
 
   it("uses the lens completion barrier to locate failed lenses and block downstream trust", async () => {

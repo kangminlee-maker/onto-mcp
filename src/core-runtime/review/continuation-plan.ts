@@ -1,6 +1,7 @@
 import type {
   PipelineExecutionLedger,
   PipelineExecutionLedgerUnitEntry,
+  PipelineExecutionOwner,
   PipelineExecutionUnitStatus,
 } from "../pipeline-execution-ledger.js";
 import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
@@ -8,6 +9,12 @@ import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
 export interface ReviewContinuationUnit {
   unitId: string;
   unitKind: string;
+  /**
+   * Who executes the unit: `host_llm` units are returned to the host to run;
+   * `runtime` units are reduces onto runs inline inside `reviewAdvance` and are
+   * never surfaced to the host. Propagated from the ledger entry's owner.
+   */
+  owner: PipelineExecutionOwner;
   lensId?: string | null;
   packetPath: string | null;
   outputPath: string | null;
@@ -52,6 +59,7 @@ function toContinuationUnit(
   return {
     unitId: unit.unitId,
     unitKind: unit.unitKind,
+    owner: unit.owner,
     ...(lensId !== null ? { lensId } : {}),
     packetPath: unit.packetRef ?? null,
     outputPath: unit.outputRefs[0] ?? null,
@@ -112,6 +120,7 @@ function targetRejectedUnits(args: {
         {
           unitId,
           unitKind: "unknown",
+          owner: "runtime" as PipelineExecutionOwner,
           packetPath: null,
           outputPath: null,
           priorStatus: "missing" as PipelineExecutionUnitStatus,
