@@ -6,11 +6,16 @@ import type {
   ReviewLensCompletionBarrierArtifact,
   ReviewUnitExecutionResult,
 } from "./artifact-types.js";
-import { deliberationResolutionPath } from "./controlled-lens-deliberation.js";
+import {
+  deliberationResolutionPath,
+  issueDeliberationPromptPacketPath,
+  issueDeliberationResponsePath,
+} from "./controlled-lens-deliberation.js";
 import {
   synthesisLedgerPath,
   synthesisWorkItemsPath,
 } from "./synthesis-map-reduce.js";
+import { fileExists, readYamlDocument } from "./review-artifact-utils.js";
 import {
   PIPELINE_EXECUTION_LEDGER_SCHEMA_VERSION,
   buildLedgerTrust,
@@ -62,6 +67,16 @@ interface ReviewLedgerPlannedUnit {
   outputRefs: string[];
   additionalConsumedRefs?: string[];
   upstreamUnitIds: string[];
+  /**
+   * The unit is `completed` once its output seat exists on disk, even with no
+   * execution-result/manifest entry. Used for the per-lens `issue-stance:<lens>`
+   * map units: the onto-runtime path (A) runs them inside one collection dispatch
+   * and records only the matrix result, but the per-lens response seat is the
+   * durable proof each map unit ran (it is validated before the collection
+   * succeeds). The host path (B) still records a per-unit result, which takes
+   * precedence in the status chain.
+   */
+  trustedOnSeatPresence?: boolean;
 }
 
 export interface BuildReviewPipelineExecutionLedgerParams {
@@ -93,14 +108,53 @@ function issueArtifactOutputPath(
   }
 }
 
+function issueStanceResponsePath(
+  executionPlan: ReviewExecutionPlan,
+  lensId: string,
+): string {
+  return path.join(
+    executionPlan.session_root,
+    "stance-responses",
+    `${lensId}.yaml`,
+  );
+}
+
 function issueStanceResponsePaths(executionPlan: ReviewExecutionPlan): string[] {
   return executionPlan.lens_execution_seats.map((seat) =>
-    path.join(
-      executionPlan.session_root,
-      "stance-responses",
-      `${seat.lens_id}.yaml`,
-    ),
+    issueStanceResponsePath(executionPlan, seat.lens_id),
   );
+}
+
+function issueStancePromptPacketPath(
+  executionPlan: ReviewExecutionPlan,
+  lensId: string,
+): string {
+  return path.join(
+    executionPlan.prompt_packets_root,
+    "issue-stance",
+    `${lensId}.prompt.md`,
+  );
+}
+
+/**
+ * Per-lens stance "map" units (`issue-stance:<lens>`). Each is a host-executed
+ * LLM unit upstream of the runtime `issue-stance-matrix` reduce; surfacing them
+ * as discrete frontier units lets the host (B) drive each stance response, while
+ * onto's reduce merges the trusted responses into the matrix. Derived purely
+ * from the plan's lens seats (deterministic), so A and B agree.
+ */
+function dynamicIssueStanceUnits(
+  executionPlan: ReviewExecutionPlan,
+): ReviewLedgerPlannedUnit[] {
+  return executionPlan.lens_execution_seats.map((seat) => ({
+    unitId: `issue-stance:${seat.lens_id}`,
+    unitKind: "issue_artifact",
+    owner: "host_llm",
+    packetRef: issueStancePromptPacketPath(executionPlan, seat.lens_id),
+    outputRefs: [issueStanceResponsePath(executionPlan, seat.lens_id)],
+    upstreamUnitIds: ["issue-ledger"],
+    trustedOnSeatPresence: true,
+  }));
 }
 
 function issueArtifactPacketPath(
@@ -126,6 +180,7 @@ function allExecutionResults(
     ...executionResult.lens_execution_results,
     ...(executionResult.issue_artifact_execution_results ?? []),
     ...(executionResult.deliberation_execution_results ?? []),
+    ...(executionResult.synthesis_map_execution_results ?? []),
     ...(executionResult.synthesize_execution_result
       ? [executionResult.synthesize_execution_result]
       : []),
@@ -141,11 +196,60 @@ function statusFromWorkerUnit(
   return null;
 }
 
+/**
+ * Per-issue deliberation map units (`deliberation:<issue>:<lens>`) derived from
+ * the durable `deliberation-plan.yaml`. The host path (B) needs these surfaced
+ * before any execution-result exists, so the frontier can drive each map unit;
+ * the onto path (A) records them as execution results. Both sources are merged
+ * by `unit_id` (disk-derived first, recorded entries override), and in A the two
+ * sources yield the same set ⇒ no regression. Fail-soft: a missing or malformed
+ * plan yields no disk units.
+ */
+async function deliberationUnitsFromDisk(
+  executionPlan: ReviewExecutionPlan,
+): Promise<ReviewLedgerPlannedUnit[]> {
+  const planPath = executionPlan.deliberation_plan_path;
+  if (!planPath || !(await fileExists(planPath))) return [];
+  const doc = await readYamlDocument<Record<string, unknown>>(planPath);
+  const plannedIssues = Array.isArray(doc?.planned_issues) ? doc.planned_issues : [];
+  const units: ReviewLedgerPlannedUnit[] = [];
+  for (const entry of plannedIssues) {
+    if (entry === null || typeof entry !== "object") continue;
+    const issueId = (entry as { issue_id?: unknown }).issue_id;
+    const lensIds = (entry as { participating_lens_ids?: unknown }).participating_lens_ids;
+    if (typeof issueId !== "string" || !Array.isArray(lensIds)) continue;
+    for (const lensId of lensIds) {
+      if (typeof lensId !== "string") continue;
+      units.push({
+        unitId: `deliberation:${issueId}:${lensId}`,
+        unitKind: "deliberation",
+        owner: "host_llm",
+        packetRef: issueDeliberationPromptPacketPath({
+          promptPacketsRoot: executionPlan.prompt_packets_root,
+          issueId,
+          lensId,
+        }),
+        outputRefs: [
+          issueDeliberationResponsePath({
+            deliberationRootPath: executionPlan.deliberation_root_path,
+            issueId,
+            lensId,
+          }),
+        ],
+        upstreamUnitIds: ["deliberation-plan"],
+      });
+    }
+  }
+  return units;
+}
+
 function dynamicIssueDeliberationUnits(args: {
+  diskUnits: ReviewLedgerPlannedUnit[];
   executionResult?: ReviewExecutionResultArtifact | null | undefined;
   reviewRunManifest?: ReviewRunManifestForLedger | null | undefined;
 }): ReviewLedgerPlannedUnit[] {
   const byUnitId = new Map<string, ReviewLedgerPlannedUnit>();
+  for (const unit of args.diskUnits) byUnitId.set(unit.unitId, unit);
   const add = (unit: {
     unit_id?: string;
     unit_kind?: string;
@@ -177,11 +281,46 @@ function dynamicIssueDeliberationUnits(args: {
   return [...byUnitId.values()].sort((a, b) => a.unitId.localeCompare(b.unitId));
 }
 
+/**
+ * Per-issue synthesis map units (`synthesis:<issue>`) derived from the durable
+ * `synthesis-work-items.yaml`. Same rationale as {@link deliberationUnitsFromDisk}:
+ * surface map units before any execution-result exists so the host (B) frontier
+ * can drive each one. Each work item carries its own `packet_path`/`response_path`.
+ * Fail-soft on missing/malformed artifact.
+ */
+async function synthesisUnitsFromDisk(
+  executionPlan: ReviewExecutionPlan,
+): Promise<ReviewLedgerPlannedUnit[]> {
+  const workItemsPath = synthesisWorkItemsPath(executionPlan.session_root);
+  if (!(await fileExists(workItemsPath))) return [];
+  const doc = await readYamlDocument<Record<string, unknown>>(workItemsPath);
+  const workItems = Array.isArray(doc?.work_items) ? doc.work_items : [];
+  const units: ReviewLedgerPlannedUnit[] = [];
+  for (const item of workItems) {
+    if (item === null || typeof item !== "object") continue;
+    const workItemId = (item as { work_item_id?: unknown }).work_item_id;
+    if (typeof workItemId !== "string" || !workItemId.startsWith("synthesis:")) continue;
+    const packetPath = (item as { packet_path?: unknown }).packet_path;
+    const responsePath = (item as { response_path?: unknown }).response_path;
+    units.push({
+      unitId: workItemId,
+      unitKind: "synthesize",
+      owner: "host_llm",
+      packetRef: typeof packetPath === "string" ? packetPath : null,
+      outputRefs: typeof responsePath === "string" ? [responsePath] : [],
+      upstreamUnitIds: ["problem-framing"],
+    });
+  }
+  return units;
+}
+
 function dynamicIssueSynthesisUnits(args: {
+  diskUnits: ReviewLedgerPlannedUnit[];
   executionResult?: ReviewExecutionResultArtifact | null | undefined;
   reviewRunManifest?: ReviewRunManifestForLedger | null | undefined;
 }): ReviewLedgerPlannedUnit[] {
   const byUnitId = new Map<string, ReviewLedgerPlannedUnit>();
+  for (const unit of args.diskUnits) byUnitId.set(unit.unitId, unit);
   const add = (unit: {
     unit_id?: string;
     unit_kind?: string;
@@ -215,6 +354,7 @@ function dynamicIssueSynthesisUnits(args: {
 
 function plannedReviewUnits(
   executionPlan: ReviewExecutionPlan,
+  dynamicStanceUnits: ReviewLedgerPlannedUnit[],
   dynamicDeliberationUnits: ReviewLedgerPlannedUnit[],
   dynamicSynthesisUnits: ReviewLedgerPlannedUnit[],
 ): ReviewLedgerPlannedUnit[] {
@@ -242,6 +382,7 @@ function plannedReviewUnits(
     }),
   );
 
+  const stanceUnitIds = dynamicStanceUnits.map((unit) => unit.unitId);
   for (const [index, artifactId] of PRE_DELIBERATION_ISSUE_ARTIFACT_ORDER.entries()) {
     const previousArtifactId = PRE_DELIBERATION_ISSUE_ARTIFACT_ORDER[index - 1];
     const upstreamUnitIds =
@@ -250,15 +391,27 @@ function plannedReviewUnits(
         : previousArtifactId
           ? [previousArtifactId]
           : lensUnitIds;
+    if (artifactId === "issue-stance-matrix") {
+      // The matrix is a runtime reduce of the per-lens stance "map" units; insert
+      // those units (upstream issue-ledger) and rewire the matrix onto them.
+      units.push(...dynamicStanceUnits);
+      units.push({
+        unitId: artifactId,
+        unitKind: "issue_artifact",
+        owner: "runtime",
+        packetRef: issueArtifactPacketPath(executionPlan, artifactId),
+        outputRefs: [issueArtifactOutputPath(executionPlan, artifactId)],
+        additionalConsumedRefs: issueStanceResponsePaths(executionPlan),
+        upstreamUnitIds: stanceUnitIds.length > 0 ? stanceUnitIds : upstreamUnitIds,
+      });
+      continue;
+    }
     units.push({
       unitId: artifactId,
       unitKind: "issue_artifact",
-      owner: artifactId === "issue-stance-matrix" ? "runtime" : "host_llm",
+      owner: "host_llm",
       packetRef: issueArtifactPacketPath(executionPlan, artifactId),
       outputRefs: [issueArtifactOutputPath(executionPlan, artifactId)],
-      ...(artifactId === "issue-stance-matrix"
-        ? { additionalConsumedRefs: issueStanceResponsePaths(executionPlan) }
-        : {}),
       upstreamUnitIds,
     });
   }
@@ -420,6 +573,11 @@ async function buildUnitEntry(args: {
           lensCompletionBarrier: args.lensCompletionBarrier,
         })
       : null) ??
+    (args.plannedUnit.trustedOnSeatPresence &&
+    outputRefs.length > 0 &&
+    outputRefs.every((ref) => typeof outputHashes[ref] === "string")
+      ? "completed"
+      : null) ??
     deriveMissingStatus({
       unit: args.plannedUnit,
       hasExecutionResult: args.hasExecutionResult,
@@ -475,13 +633,20 @@ async function buildUnitEntry(args: {
 export async function buildReviewPipelineExecutionLedger(
   params: BuildReviewPipelineExecutionLedgerParams,
 ): Promise<PipelineExecutionLedger> {
+  const [deliberationDiskUnits, synthesisDiskUnits] = await Promise.all([
+    deliberationUnitsFromDisk(params.executionPlan),
+    synthesisUnitsFromDisk(params.executionPlan),
+  ]);
   const units = plannedReviewUnits(
     params.executionPlan,
+    dynamicIssueStanceUnits(params.executionPlan),
     dynamicIssueDeliberationUnits({
+      diskUnits: deliberationDiskUnits,
       executionResult: params.executionResult,
       reviewRunManifest: params.reviewRunManifest,
     }),
     dynamicIssueSynthesisUnits({
+      diskUnits: synthesisDiskUnits,
       executionResult: params.executionResult,
       reviewRunManifest: params.reviewRunManifest,
     }),

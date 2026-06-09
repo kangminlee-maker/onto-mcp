@@ -827,6 +827,13 @@ export interface ReviewExecutionResultArtifact {
    * check before including synthesize timing in any aggregation.
    */
   synthesize_execution_result?: ReviewUnitExecutionResult | null;
+  /**
+   * Per-issue synthesis "map" unit results (`synthesis:<issue>`), recorded by the
+   * host path (B) before the runtime `synthesize` reduce runs. Kept separate from
+   * the singular {@link synthesize_execution_result} (the reduce) so the N map
+   * results are not overwritten. The onto path (A) leaves this empty.
+   */
+  synthesis_map_execution_results?: ReviewUnitExecutionResult[];
 }
 
 export type ReviewDegradationKind =

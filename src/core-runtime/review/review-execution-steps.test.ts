@@ -512,22 +512,64 @@ describe("ensureUnitPacket", () => {
     );
   });
 
-  it("fails closed for deliberation/synthesize packets (assembled in 4e)", async () => {
+  it("reconstructs an issue-stance map packet from durable state", async () => {
     const root = await tempSessionRoot();
-    const plan = executionPlan(root);
+    const plan = withBoundary(executionPlan(root), root);
     await writeYaml(path.join(root, "execution-plan.yaml"), plan);
-    const delibUnit: ReviewContinuationUnit = {
-      unitId: "deliberation:issue-001",
-      unitKind: "deliberation",
-      packetPath: null,
-      outputPath: path.join(root, "deliberation", "issue-001.yaml"),
+    await writeSessionMetadata(plan, root);
+    await seedTrustedLensSeats(root, plan);
+    await writeYaml(plan.finding_ledger_path, {
+      session_id: plan.session_id,
+      findings: [],
+    });
+    await writeYaml(plan.finding_relation_graph_path, {
+      session_id: plan.session_id,
+      relations: [],
+      singleton_findings: [],
+    });
+    await writeYaml(plan.issue_ledger_path, {
+      session_id: plan.session_id,
+      issues: [],
+      issue_dependencies: [],
+    });
+
+    const stanceUnit: ReviewContinuationUnit = {
+      unitId: "issue-stance:logic",
+      unitKind: "issue_artifact",
+      packetPath: path.join(plan.prompt_packets_root, "issue-stance", "logic.prompt.md"),
+      outputPath: path.join(root, "stance-responses", "logic.yaml"),
+      priorStatus: "planned",
+      dispatchDecision: "run",
+      reason: "frontier",
+    };
+    const result = await ensureUnitPacket(root, stanceUnit);
+
+    expect(result.generated).toBe(true);
+    expect(result.packetPath).toBe(stanceUnit.packetPath);
+    const packet = await fs.readFile(result.packetPath, "utf8");
+    expect(packet).toContain("Issue Stance Response Prompt");
+    expect(packet).toContain("Runtime Issue Stance Input Projection");
+  });
+
+  it("routes deliberation/synthesize units to their reconstruction adapters", async () => {
+    const root = await tempSessionRoot();
+    const plan = withBoundary(executionPlan(root), root);
+    await writeYaml(path.join(root, "execution-plan.yaml"), plan);
+    await writeSessionMetadata(plan, root);
+    const synthUnit: ReviewContinuationUnit = {
+      unitId: "synthesis:issue-001",
+      unitKind: "synthesize",
+      packetPath: path.join(plan.prompt_packets_root, "synthesis", "issue-001.prompt.md"),
+      outputPath: path.join(root, "synthesis-responses", "issue-001.yaml"),
       priorStatus: "planned",
       dispatchDecision: "run",
       reason: "frontier",
     };
 
-    await expect(ensureUnitPacket(root, delibUnit)).rejects.toThrow(
-      /does not generate deliberation packets/,
+    // No synthesis-work-items.yaml on disk: the adapter is reached (no longer the
+    // generic fail-closed throw), and fails reading the missing durable artifact.
+    await expect(ensureUnitPacket(root, synthUnit)).rejects.not.toThrow(
+      /unsupported unit kind/,
     );
   });
 
