@@ -394,7 +394,7 @@ describe("createOntoReviewCoreApi", () => {
     );
   });
 
-  it("drives the host path through the runtime issue-stance-matrix reduce (mock)", async () => {
+  it("drives the full host pipeline to a completed ReviewRecord (deterministic mock)", async () => {
     const projectRoot = await tempProjectRoot();
     await writeProjectSettings(projectRoot, {
       schema_version: "settings.json/v3",
@@ -475,47 +475,94 @@ describe("createOntoReviewCoreApi", () => {
         });
         return;
       }
+      if (unit.unit_id === "deliberation-plan") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          planned_issues: [],
+          skipped_issues: [],
+        });
+        return;
+      }
+      if (unit.unit_id === "controlled-deliberation") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          issues: [],
+          validation: { missing_issue_ids: [] },
+        });
+        return;
+      }
+      if (unit.unit_id === "problem-framing") {
+        await writeYamlDocument(unit.output_path, {
+          schema_version: 1,
+          session_id: plan.session_id,
+          classifications: [],
+        });
+        return;
+      }
+      if (unit.unit_kind === "lens") {
+        await fs.writeFile(
+          unit.output_path,
+          [
+            `# ${unit.unit_id} lens findings`,
+            "",
+            "## Domain Constraints Used",
+            "```yaml",
+            "[]",
+            "```",
+            "",
+            "## Domain Context Assumptions",
+            "```yaml",
+            "[]",
+            "```",
+            "",
+          ].join("\n"),
+          "utf8",
+        );
+        return;
+      }
       await fs.writeFile(unit.output_path, `# ${unit.unit_id}\n`, "utf8");
     };
 
-    // Drive the host loop until the issue-stance-matrix reduce has run and the
-    // next host stage (deliberation-plan) is surfaced. Bounded so the mock never
-    // has to satisfy the deeper deliberation / synthesis schemas.
-    let round = await api.reviewRound({ sessionRoot: prepared.sessionRoot });
-    let surfacedDeliberationPlan = false;
-    for (let guard = 0; guard < 16 && round.status === "in_progress"; guard += 1) {
-      if (round.readyUnits.some((u) => u.unit_id === "deliberation-plan")) {
-        surfacedDeliberationPlan = true;
+    // Drive the host loop to completion. onto runs both runtime reduces
+    // (issue-stance-matrix, synthesize) inline; the host only ever executes
+    // host_llm units, and on `ready_to_assemble` the api wraps completeReviewSession.
+    let result = await api.reviewRound({ sessionRoot: prepared.sessionRoot });
+    let assembled: Extract<typeof result, { status: "assembled" }> | undefined;
+    const executedUnitKinds = new Set<string>();
+    for (let guard = 0; guard < 24; guard += 1) {
+      if (result.status === "assembled") {
+        assembled = result;
         break;
       }
+      if (result.status !== "in_progress") break;
       // Runtime reduce units must never be handed to the host.
-      expect(round.readyUnits.some((u) => u.unit_id === "issue-stance-matrix")).toBe(
-        false,
-      );
-      for (const unit of round.readyUnits) {
+      expect(
+        result.readyUnits.some(
+          (u) => u.unit_id === "issue-stance-matrix" || u.unit_id === "synthesize",
+        ),
+      ).toBe(false);
+      for (const unit of result.readyUnits) {
+        executedUnitKinds.add(unit.unit_kind);
         await mockExecutor(unit);
       }
-      round = await api.reviewAdvance({
+      result = await api.reviewAdvance({
         sessionRoot: prepared.sessionRoot,
-        executed: round.readyUnits.map((u) => u.unit_id),
+        executed: result.readyUnits.map((u) => u.unit_id),
       });
-      if (
-        round.status === "in_progress" &&
-        round.readyUnits.some((u) => u.unit_id === "deliberation-plan")
-      ) {
-        surfacedDeliberationPlan = true;
-        break;
-      }
     }
 
-    // The runtime reduce wrote the issue-stance-matrix seat inline (never handed
-    // to the host) and the frontier advanced to the next host stage.
-    expect(surfacedDeliberationPlan).toBe(true);
+    // The reference host driver reached a completed ReviewRecord.
+    expect(assembled?.status).toBe("assembled");
+    expect(assembled?.reviewStatus.status).toBe("completed");
+    // onto ran the runtime reduces inline (their seats exist, host never saw them).
     expect(fsSync.existsSync(plan.issue_stance_matrix_path)).toBe(true);
-    const matrix = await readYamlDocument<{ issues: unknown[] }>(
-      plan.issue_stance_matrix_path,
-    );
-    expect(matrix.issues).toEqual([]);
+    expect(fsSync.existsSync(plan.synthesis_output_path)).toBe(true);
+    // The host executed lens, issue_artifact, and deliberation host_llm units.
+    expect(executedUnitKinds).toContain("lens");
+    expect(executedUnitKinds).toContain("issue_artifact");
+    expect(executedUnitKinds).toContain("deliberation");
   });
 
   it("fails loudly when a present review-record is malformed", async () => {

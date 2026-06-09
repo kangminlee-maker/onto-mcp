@@ -11,6 +11,7 @@ import {
   type ReviewRunManifestForLedger,
 } from "./pipeline-execution-ledger.js";
 import {
+  fileSha256IfPresent,
   isTrustedLedgerUnit,
   type PipelineExecutionLedger,
 } from "../pipeline-execution-ledger.js";
@@ -41,11 +42,13 @@ import {
   buildIssueScopedLensDeliberationPrompt,
   buildTeamleadIssueResolutionPrompt,
   deliberationResolutionPath,
+  renderDeliberationMarkdownProjection,
   validateDeliberationResolutionObject,
   type IssueDeliberationResponseArtifact,
 } from "./controlled-lens-deliberation.js";
 import {
   renderIssueSynthesisPrompt,
+  synthesisLedgerPath,
   synthesisWorkItemsPath,
   validateIssueSynthesisResponseOnDisk,
   writeReviewSynthesisLedger,
@@ -465,8 +468,12 @@ export async function reconstructIssueArtifactPacketInputs(
     };
   }
 
-  const deliberationOutputPath = (await fileExists(plan.deliberation_output_path))
-    ? plan.deliberation_output_path
+  // `deliberationOutputPath` feeds writeIssueArtifactPromptPacket, which reads it
+  // as the deliberation *resolution* YAML — so this is deliberation-resolution.yaml,
+  // not the deliberation.md human projection.
+  const resolutionPath = deliberationResolutionPath(plan.session_root);
+  const deliberationOutputPath = (await fileExists(resolutionPath))
+    ? resolutionPath
     : undefined;
   return {
     projectRoot,
@@ -1087,6 +1094,83 @@ async function runRuntimeFixedPoint(
 }
 
 /**
+ * Ensure the runtime-owned `deliberation.md` human projection exists once the
+ * controlled-deliberation resolution seat is present. The onto path (A) writes it
+ * inline from the resolution; the host path produces only the machine resolution
+ * (`deliberation-resolution.yaml`), so onto derives the projection here. Idempotent
+ * and fail-soft: a missing resolution is a no-op.
+ */
+async function ensureDeliberationMarkdownProjection(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const resolutionPath = deliberationResolutionPath(plan.session_root);
+  if (!(await fileExists(resolutionPath))) return;
+  if (await fileExists(plan.deliberation_output_path)) return;
+  const [issueLedger, deliberationPlan] = await Promise.all([
+    readYamlDocument<Record<string, unknown>>(plan.issue_ledger_path),
+    readYamlDocument<Record<string, unknown>>(plan.deliberation_plan_path),
+  ]);
+  const resolution = validateDeliberationResolutionObject({
+    parsed: await readYamlDocument<Record<string, unknown>>(resolutionPath),
+    sessionId: plan.session_id,
+    issueLedger,
+    deliberationPlan,
+  });
+  await fs.writeFile(
+    plan.deliberation_output_path,
+    `${renderDeliberationMarkdownProjection({ resolution }).trimEnd()}\n`,
+    "utf8",
+  );
+}
+
+/**
+ * Once every ledger unit is trusted, promote the host (B) execution-result from
+ * its in-progress `halted_partial` scaffold to `completed`, so assembly does not
+ * treat the run as degraded/halted. Records the participating lenses and that
+ * synthesis ran. No-op until the pipeline is terminal or if already completed.
+ */
+async function finalizeHostExecutionResultIfComplete(
+  sessionRoot: string,
+  plan: ReviewExecutionPlan,
+): Promise<void> {
+  const ledger = await buildSessionLedger(sessionRoot, plan);
+  if (!ledger.units.every((unit) => isTrustedLedgerUnit(unit))) return;
+  const resultPath = executionResultPath(sessionRoot);
+  const existing =
+    await readOptionalYamlArtifact<ReviewExecutionResultArtifact>(resultPath);
+  if (!existing || existing.execution_status === "completed") return;
+  const trustedLensIds = ledger.units
+    .filter((unit) => unit.unitKind === "lens" && isTrustedLedgerUnit(unit))
+    .map((unit) => unit.unitId);
+  await writeYamlDocument(resultPath, {
+    ...existing,
+    execution_status: "completed",
+    execution_completed_at: isoNow(),
+    participating_lens_ids: trustedLensIds,
+    executed_lens_count: trustedLensIds.length,
+    synthesis_executed: true,
+    deliberation_status: "performed",
+  });
+
+  // The synthesis provenance the completed-record terminal trust check reads. The
+  // onto path (A) emits a full review-run-manifest; the host (B) writes just the
+  // synthesis provenance, whose hashes assembly recomputes from the same files.
+  const synthesisLedger = synthesisLedgerPath(plan.session_root);
+  await writeYamlDocument(path.join(sessionRoot, "review-run-manifest.yaml"), {
+    schema_version: "1",
+    session_id: plan.session_id,
+    synthesis_provenance: {
+      synthesis_executed: true,
+      synthesis_ledger_path: synthesisLedger,
+      synthesis_ledger_sha256: await fileSha256IfPresent(synthesisLedger),
+      synthesis_output_path: plan.synthesis_output_path,
+      synthesis_output_sha256: await fileSha256IfPresent(plan.synthesis_output_path),
+    },
+  });
+}
+
+/**
  * Compute the current round result: the frontier ready units (with their prompt
  * packets ensured) or a terminal/halted signal. Shared by reviewRound and the
  * tail of reviewAdvance.
@@ -1100,6 +1184,12 @@ async function computeRoundResult(
   plan: ReviewExecutionPlan,
 ): Promise<ReviewRoundResult> {
   const frontier = await computeReviewFrontier(sessionRoot);
+  // Terminal: every ledger unit is trusted, so there is nothing left to run and
+  // the caller assembles. (A continuation plan with no untrusted frontier is
+  // `eligible: false`, so this must precede the ineligibility check.)
+  if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+    return { status: "ready_to_assemble" };
+  }
   if (!frontier.eligible) {
     return {
       status: "halted",
@@ -1228,6 +1318,8 @@ export async function reviewAdvance(
   }
 
   await finalizeStageGate(sessionRoot, plan);
+  await ensureDeliberationMarkdownProjection(sessionRoot, plan);
   await runRuntimeFixedPoint(sessionRoot, plan);
+  await finalizeHostExecutionResultIfComplete(sessionRoot, plan);
   return computeRoundResult(sessionRoot, plan);
 }
