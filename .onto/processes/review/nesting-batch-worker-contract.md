@@ -42,7 +42,12 @@ outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에
 
 ## 4. A/B 통합 지점
 
-- **A (runtime)**: `nested-batch-dispatch.ts`의 `executeReviewViaNestedBatch({brand, units, inner_executor, …})`. **units와 inner executor argv는 호출자(runner)가 flat dispatch 목록과 동일하게 구성한다 — parity by construction.** 초기 lens 단계 배치만 nested로 실행하고, continuation/repair는 flat per-unit 루프(동일 unit-executor·동일 seat 계약). nested를 지원하지 않는 executor(direct_call)는 진입에서 `nested_workers_executor_unsupported`로 거부(fail-closed).
+- **A (runtime)**: `nested-batch-dispatch.ts`의 transport core `dispatchNestedBatch` 위에 두 소비자가 있다. **units와 inner executor argv는 호출자(runner)가 flat dispatch 목록과 동일하게 구성한다 — parity by construction.** nested를 지원하지 않는 executor(direct_call)는 진입에서 `nested_workers_executor_unsupported`로 거부(fail-closed).
+  - **lens 단계**: `executeReviewViaNestedBatch`(초기 dispatch 전체를 1 배치).
+  - **downstream wide 단계**(fan-out이 실재하는 3곳 — issue-stance per-lens·per-issue deliberation·per-issue synthesis): `runNestedStageFirstAttempt`가 단계의 runnable 유닛(≥2)을 1 배치로 위임한다. **단일 유닛 체인 단계(finding-ledger·relation-graph·issue-ledger·deliberation-plan·controlled-deliberation·problem-framing)는 flat 유지** — 배치-of-1은 fan-out 이익 없이 outer LLM 비용만 추가한다.
+  - **retry 의미론(불변)**: 배치는 unit의 attempt #1이다. 실패 유닛은 기존 flat retry 루프로 잔여 예산(effective−1)을 소진한다(`unitOutcomeWithNestedFirstAttempt`). 명시적 zero-retry 정책에서는 두 번째 시도 없이 배치 실패를 확정한다(감사 동등). 단계 사후검증·unavailable-완성 fallback·preserved(repair) 유닛 처리도 flat과 동일 — preserved는 배치에서 제외된다.
+  - **동시성(불변)**: 배치 wave 폭은 해당 단계의 flat worker-pool cap과 동일(`dispatch_width`); outer timeout은 wave 수에 비례해 산정된다.
+  - continuation/repair 재실행은 flat per-unit 루프(동일 unit-executor·동일 seat 계약).
 - **B (host)**: host는 라운드의 ready units를 통째로 NestingBatchWorker에 위임할 수 있다(reference driver `executeBatch`). 라운드 루프 소유·seat 검증·gate·assemble은 `host-orchestration-contract.md` §3–5 그대로 — 엔진은 topology를 모른다. settings의 host×nested 차단은 S2에서 해제됐다.
 
 ## 5. 분류·실패 의미론
@@ -58,4 +63,5 @@ outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에
 ## 7. 범위 / 비범위
 
 - **범위(S2)**: 위 배치 계약 + codex/claude outer 실현 + A lens 단계 nested + B 라운드 배치 + settings host×nested 해제 + 4셀 동등성.
-- **비범위(후속)**: live-LLM nested E2E(계약은 mock으로 증명; live는 기존 live E2E 트랙과 함께), A downstream(이슈 아티팩트 이후) nesting(4f rebase와 함께 검토), teammate 지속형·live 심의(S3).
+- **범위(S2 후속 — A downstream)**: A의 downstream wide 3단계(issue-stance·per-issue deliberation·per-issue synthesis) nested 1차 시도 + flat retry fallback(§4). wave 분할(`dispatch_width`)과 단계별 스트림 로그(`nested-outer-<stage>-*.log`) 포함.
+- **비범위(후속)**: live-LLM nested E2E(계약은 mock으로 증명; live는 기존 live E2E 트랙과 함께), A 단일-유닛 체인 단계의 nesting(fan-out 부재 — 의도적 제외), A 루프의 frontier 엔진 rebase(4f), teammate 지속형·live 심의(S3).

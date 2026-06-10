@@ -819,7 +819,7 @@ entities:
       contract_ref: ".onto/processes/review/nesting-batch-worker-contract.md"
     notes:
       - "topology 값(main-workers|nested-workers)은 기존 ReviewExecutionMode 설정 축을 재사용 — 신규 settings 키 없음."
-      - "A에서는 초기 lens 단계 배치만 nested로 실행하고 continuation/repair는 flat per-unit 루프를 쓴다(동일 unit-executor 호출·동일 seat 계약). B에서는 host가 라운드 단위로 배치를 위임할 수 있다."
+      - "A에서는 lens 단계 + downstream wide 3단계(issue-stance per-lens·per-issue deliberation·per-issue synthesis)가 nested 배치로 실행된다 — 배치는 attempt #1이고 실패 유닛은 flat retry 루프로 잔여 예산을 소진(retry 의미론 불변), wave 폭은 flat pool cap과 동일(dispatch_width). 단일-유닛 체인 단계와 continuation/repair는 flat per-unit 루프(fan-out 부재; 동일 unit-executor·동일 seat 계약). B에서는 host가 라운드 단위로 배치를 위임할 수 있다."
       - "outer 비순응(요약 누락·unit 누락·timeout)은 해당 unit fail로 수렴하고 seat 검증은 onto 소유 → fail-closed. nested에서 지원되지 않는 executor(direct_call)는 A 진입에서 nested_workers_executor_unsupported로 거부."
 
   # -------------------------------------------------------------------------
