@@ -83,7 +83,17 @@ import {
 } from "../review/lens-sidecar-ledger.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import { effectiveReviewUnitLlmRef } from "../review/review-execution-profile.js";
-import type { ReviewContinuationPlan } from "../review/continuation-plan.js";
+import type {
+  ReviewContinuationPlan,
+  ReviewContinuationUnit,
+} from "../review/continuation-plan.js";
+import {
+  buildInitialExecutionResultScaffold,
+  computeReviewFrontier,
+  mergeUnitResultIntoExecutionResult,
+  validateUnitSeatToResult,
+} from "../review/review-execution-steps.js";
+import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
 import {
   buildReviewExecutionRoute,
   buildReviewRuntimeRouteArtifactProjection,
@@ -4126,6 +4136,122 @@ export async function executeSynthesisResponseUnit(args: {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 4f F3 — frontier plumbing for the A loop. The shared ledger/frontier
+// (review-execution-steps) needs engine-shaped execution-result entries on
+// disk to advance; these helpers seed/merge them mid-run. They are ledger
+// bookkeeping ONLY: every halt/final path still batch-writes A's enriched
+// artifact via writeExecutionResultArtifact, overwriting the mid-run state.
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge one A outcome into the on-disk execution-result in engine shape so
+ * the frontier can trust/advance past it. Successful seats go through the
+ * same seat-level gate B uses (validateUnitSeatToResult — hashes included,
+ * which ledger trust requires); failures merge as failed results.
+ */
+async function mergeOutcomeIntoFrontierLedger(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  outcome: ExecutionOutcome;
+  base?: ReviewExecutionResultArtifact | undefined;
+}): Promise<void> {
+  const { dispatch } = args.outcome;
+  if (args.outcome.success) {
+    const unit: ReviewContinuationUnit = {
+      unitId: dispatch.unit_id,
+      unitKind: dispatch.unit_kind as ReviewContinuationUnit["unitKind"],
+      ...(dispatch.unit_kind === "lens" ? { lensId: dispatch.unit_id } : {}),
+      packetPath: dispatch.packet_path,
+      outputPath: dispatch.output_path,
+      priorStatus: "missing",
+      dispatchDecision: "run",
+      reason: "runtime loop seed (4f): merge an executed unit into the frontier ledger",
+      owner: "host_llm",
+    };
+    const result = await validateUnitSeatToResult({
+      sessionRoot: args.sessionRoot,
+      unit,
+      executionPlan: args.executionPlan,
+    });
+    await mergeUnitResultIntoExecutionResult({
+      sessionRoot: args.sessionRoot,
+      result,
+      ...(args.base ? { base: args.base } : {}),
+    });
+    return;
+  }
+  await mergeUnitResultIntoExecutionResult({
+    sessionRoot: args.sessionRoot,
+    result: toUnitExecutionResult(args.outcome),
+    ...(args.base ? { base: args.base } : {}),
+  });
+}
+
+/**
+ * Seed the lens stage into the frontier ledger after the (still inline) lens
+ * phase, so the post-lens loop starts from a frontier that trusts the lenses
+ * the barrier already admitted.
+ */
+async function seedLensResultsForFrontier(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  outcomes: ExecutionOutcome[];
+}): Promise<void> {
+  let base: ReviewExecutionResultArtifact | undefined =
+    buildInitialExecutionResultScaffold(args.executionPlan);
+  for (const outcome of args.outcomes) {
+    await mergeOutcomeIntoFrontierLedger({
+      sessionRoot: args.sessionRoot,
+      executionPlan: args.executionPlan,
+      outcome,
+      ...(base ? { base } : {}),
+    });
+    base = undefined;
+  }
+}
+
+type PostLensFrontierRoute =
+  | { kind: "issue_artifact"; artifactId: ReviewIssueArtifactId }
+  | { kind: "deliberation" }
+  | { kind: "problem_framing" }
+  | { kind: "synthesize" };
+
+/**
+ * Canonical stage routing for ready frontier units. Order mirrors the
+ * retired sequential path (PRE_DELIBERATION ids → deliberation →
+ * problem-framing → synthesize); the per-lens stance maps and per-issue
+ * synthesis maps route to their collection stages.
+ */
+function pickPostLensFrontierRoute(
+  ready: ReviewContinuationUnit[],
+): PostLensFrontierRoute | null {
+  const ids = new Set(ready.map((unit) => unit.unitId));
+  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    if (artifactId === "issue-stance-matrix") {
+      if (
+        ids.has("issue-stance-matrix") ||
+        ready.some((unit) => unit.unitId.startsWith("issue-stance:"))
+      ) {
+        return { kind: "issue_artifact", artifactId };
+      }
+      continue;
+    }
+    if (ids.has(artifactId)) return { kind: "issue_artifact", artifactId };
+  }
+  if (ready.some((unit) => unit.unitKind === "deliberation")) {
+    return { kind: "deliberation" };
+  }
+  if (ids.has("problem-framing")) return { kind: "problem_framing" };
+  if (
+    ids.has("synthesize") ||
+    ready.some((unit) => unit.unitId.startsWith("synthesis:"))
+  ) {
+    return { kind: "synthesize" };
+  }
+  return null;
+}
+
 function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
   step: number;
   label: string;
@@ -6612,7 +6738,33 @@ export async function executeReviewPromptExecution(
       ...haltArtifactFields("issue_artifact", failureOutcome),
     };
   };
-  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+  // ---------------------------------------------------------------------
+  // 4f F3 — frontier-driven post-lens sequencing. The shared ledger/
+  // frontier decides WHAT runs next; the existing stage handlers execute
+  // it and the existing composition/halt blocks remain the artifact
+  // authority. Mid-loop engine merges exist only so the frontier can
+  // advance — every halt/final path still batch-writes A's enriched
+  // artifact, overwriting the mid-run engine-shaped state.
+  // ---------------------------------------------------------------------
+  await seedLensResultsForFrontier({
+    sessionRoot,
+    executionPlan,
+    outcomes: executionOutcomes.filter(
+      (outcome): outcome is ExecutionOutcome => outcome !== undefined,
+    ),
+  });
+
+  let controlledDeliberation!: Awaited<
+    ReturnType<typeof runControlledLensDeliberation>
+  >;
+  let deliberationStageRan = false;
+  let synthesizeOutcome!: ExecutionOutcome;
+  let synthesizeStageRan = false;
+  const routedFrontierStages = new Set<string>();
+
+  const runPreDeliberationArtifactStage = async (
+    artifactId: ReviewIssueArtifactId,
+  ): Promise<ReviewPromptExecutionResult | null> => {
     const cancelRequest = await readReviewCancelRequest(sessionRoot);
     if (cancelRequest) {
       return haltForCancellation({
@@ -6637,7 +6789,7 @@ export async function executeReviewPromptExecution(
           output_path: issueArtifactOutputPath(executionPlan, artifactId),
         }),
       );
-      continue;
+      return null;
     }
     try {
       issueArtifactOutcomes.push(await runIssueArtifactDispatch({
@@ -6654,44 +6806,47 @@ export async function executeReviewPromptExecution(
         retryPolicy,
         reviewExecutionProfile: params.reviewExecutionProfile,
       }));
+      return null;
     } catch (error) {
       return haltAfterIssueArtifactFailure({
         error,
         deliberationStatus: "not_performed",
       });
     }
-  }
-  let controlledDeliberation: Awaited<
-    ReturnType<typeof runControlledLensDeliberation>
-  >;
-  const preDeliberationCancelRequest = await readReviewCancelRequest(sessionRoot);
-  if (preDeliberationCancelRequest) {
-    return haltForCancellation({
-      cancelRequest: preDeliberationCancelRequest,
-      phase: "before_controlled_deliberation",
-      issueArtifactOutcomes,
-    });
-  }
-  try {
-    controlledDeliberation = await runControlledLensDeliberation({
-      projectRoot,
-      sessionRoot,
-      executionPlan,
-      lensExecutorConfig: defaultExecutorConfig,
-      teamleadExecutorConfig,
-      successfulLensDispatches,
-      maxConcurrentLenses,
-      unitTimeoutMs,
-      retryPolicy,
-      reviewExecutionProfile: params.reviewExecutionProfile,
-      ...(continuationMode
-        ? {
-            runUnitIds: continuationRunUnitIds,
-            preservedResultsByUnitId: previousResultsByUnitId,
-          }
-        : {}),
-    });
-  } catch (error) {
+  };
+
+  const runDeliberationStage = async (): Promise<ReviewPromptExecutionResult | null> => {
+    routedFrontierStages.add("deliberation");
+    const preDeliberationCancelRequest = await readReviewCancelRequest(sessionRoot);
+    if (preDeliberationCancelRequest) {
+      return haltForCancellation({
+        cancelRequest: preDeliberationCancelRequest,
+        phase: "before_controlled_deliberation",
+        issueArtifactOutcomes,
+      });
+    }
+    try {
+      controlledDeliberation = await runControlledLensDeliberation({
+        projectRoot,
+        sessionRoot,
+        executionPlan,
+        lensExecutorConfig: defaultExecutorConfig,
+        teamleadExecutorConfig,
+        successfulLensDispatches,
+        maxConcurrentLenses,
+        unitTimeoutMs,
+        retryPolicy,
+        reviewExecutionProfile: params.reviewExecutionProfile,
+        ...(continuationMode
+          ? {
+              runUnitIds: continuationRunUnitIds,
+              preservedResultsByUnitId: previousResultsByUnitId,
+            }
+          : {}),
+      });
+      deliberationStageRan = true;
+      return null;
+    } catch (error) {
     const failureMessage = error instanceof Error ? error.message : String(error);
     const deliberationExecutionOutcomes =
       controlledDeliberationOutcomesFromError(error);
@@ -6773,8 +6928,10 @@ export async function executeReviewPromptExecution(
         failedDeliberationOutcome,
       ),
     };
-  }
+    }
+  };
 
+  const runProblemFramingStage = async (): Promise<ReviewPromptExecutionResult | null> => {
   if (!shouldRunUnit("problem-framing")) {
     issueArtifactOutcomes.push(
       preservedOutcomeForDispatch({
@@ -6825,6 +6982,8 @@ export async function executeReviewPromptExecution(
       });
     }
   }
+    return null;
+  };
 
   const synthesizeDispatch: ExecutionDispatchResult = {
     unit_id: "synthesize",
@@ -6833,6 +6992,7 @@ export async function executeReviewPromptExecution(
     output_path: synthesisLedgerPath(sessionRoot),
   };
 
+  const runSynthesizeStage = async (): Promise<ReviewPromptExecutionResult | null> => {
   const preSynthesizeCancelRequest = await readReviewCancelRequest(sessionRoot);
   if (preSynthesizeCancelRequest) {
     return haltForCancellation({
@@ -6847,7 +7007,7 @@ export async function executeReviewPromptExecution(
     });
   }
 
-  let synthesizeOutcome: ExecutionOutcome;
+  synthesizeStageRan = true;
   if (shouldRunUnit("synthesize")) {
     console.log("[review runner] starting synthesize map-reduce: synthesize");
     await appendExecutionProgress(
@@ -6886,6 +7046,161 @@ export async function executeReviewPromptExecution(
     await ensureNonEmptyOutputFile(synthesizeDispatch.output_path);
     await ensureNonEmptyOutputFile(executionPlan.synthesis_output_path);
   }
+    return null;
+  };
+
+  // Was a unit's stage already run this process (its seats are this run's
+  // products) — used by the absorb gate so a continuation rerun target is
+  // never absorbed from a stale seat before its stage executed.
+  const frontierStageRanFor = (unit: ReviewContinuationUnit): boolean => {
+    const id = unit.unitId;
+    if (unit.unitKind === "deliberation") {
+      return routedFrontierStages.has("deliberation");
+    }
+    if (id.startsWith("issue-stance:") || id === "issue-stance-matrix") {
+      return routedFrontierStages.has("issue_artifact:issue-stance-matrix");
+    }
+    if (id === "synthesize" || id.startsWith("synthesis:")) {
+      return routedFrontierStages.has("synthesize");
+    }
+    if (id === "problem-framing") {
+      return routedFrontierStages.has("problem_framing");
+    }
+    return routedFrontierStages.has(`issue_artifact:${id}`);
+  };
+
+  const FRONTIER_LOOP_MAX_ITERATIONS = 64;
+  for (let iteration = 0; ; iteration += 1) {
+    if (iteration >= FRONTIER_LOOP_MAX_ITERATIONS) {
+      throw new Error(
+        "post-lens frontier loop did not converge (max iterations)",
+      );
+    }
+    const frontier = await computeReviewFrontier(sessionRoot);
+    if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+      break;
+    }
+    const ready = frontier.frontierUnits.filter(
+      (unit) => unit.dispatchDecision !== "skip",
+    );
+    if (ready.length === 0) {
+      throw new Error(
+        frontier.ineligibleReason ??
+          "post-lens frontier stalled: no ready units but untrusted work remains",
+      );
+    }
+    // Absorb seats that already exist (stage products from the previous
+    // iteration, preserved continuation units): the same seat-level gate B
+    // uses merges them so the frontier advances. Units that still owe an
+    // execution this run (stage not run, shouldRunUnit true) are not
+    // absorbed from stale seats.
+    let absorbed = false;
+    for (const unit of ready) {
+      if (!unit.outputPath) continue;
+      if (!frontierStageRanFor(unit) && shouldRunUnit(unit.unitId)) continue;
+      if (!(await fileExists(unit.outputPath))) continue;
+      const result = await validateUnitSeatToResult({
+        sessionRoot,
+        unit,
+        executionPlan,
+      });
+      if (result.status !== "completed") continue;
+      await mergeUnitResultIntoExecutionResult({ sessionRoot, result });
+      absorbed = true;
+    }
+    if (absorbed) continue;
+    const route = pickPostLensFrontierRoute(ready);
+    if (!route) {
+      throw new Error(
+        `post-lens frontier has no stage route for ready units: ${ready
+          .map((unit) => unit.unitId)
+          .join(", ")}`,
+      );
+    }
+    const routeKey =
+      route.kind === "issue_artifact"
+        ? `issue_artifact:${route.artifactId}`
+        : route.kind;
+    if (routedFrontierStages.has(routeKey)) {
+      throw new Error(
+        `post-lens frontier did not converge after stage ${routeKey}`,
+      );
+    }
+    routedFrontierStages.add(routeKey);
+    let halt: ReviewPromptExecutionResult | null = null;
+    switch (route.kind) {
+      case "issue_artifact":
+        halt = await runPreDeliberationArtifactStage(route.artifactId);
+        break;
+      case "deliberation":
+        halt = await runDeliberationStage();
+        break;
+      case "problem_framing":
+        if (!deliberationStageRan) halt = await runDeliberationStage();
+        if (!halt) halt = await runProblemFramingStage();
+        break;
+      case "synthesize":
+        if (!deliberationStageRan) halt = await runDeliberationStage();
+        if (!halt) halt = await runSynthesizeStage();
+        break;
+    }
+    if (halt) return halt;
+  }
+
+  // Composition parity: stages the frontier never routed (their units were
+  // already trusted — continuation) still run their handlers so the final
+  // write composes the same arrays the sequential path did (handlers
+  // preserve internally via shouldRunUnit).
+  if (!deliberationStageRan) {
+    const halt = await runDeliberationStage();
+    if (halt) return halt;
+  }
+  if (!synthesizeStageRan) {
+    const halt = await runSynthesizeStage();
+    if (halt) return halt;
+  }
+  // Canonical issue-artifact ordering, independent of frontier execution
+  // order; preserved entries fill the canonical slots the loop never ran.
+  {
+    const issueOutcomeById = new Map(
+      issueArtifactOutcomes.map((outcome) => [outcome.dispatch.unit_id, outcome]),
+    );
+    const orderedIssueArtifactOutcomes: ExecutionOutcome[] = [];
+    for (const artifactId of [
+      ...PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+      "problem-framing" as const,
+    ]) {
+      const existing = issueOutcomeById.get(artifactId);
+      if (existing) {
+        orderedIssueArtifactOutcomes.push(existing);
+        continue;
+      }
+      if (!shouldRunUnit(artifactId)) {
+        orderedIssueArtifactOutcomes.push(
+          preservedOutcomeForDispatch({
+            unit_id: artifactId,
+            unit_kind: "issue_artifact",
+            packet_path:
+              executionPlan.issue_artifact_prompt_packet_seats.find(
+                (seat) => seat.artifact_id === artifactId,
+              )?.packet_path ??
+              path.join(
+                executionPlan.prompt_packets_root,
+                issueArtifactSpec(artifactId).prompt_packet_file_name,
+              ),
+            output_path: issueArtifactOutputPath(executionPlan, artifactId),
+          }),
+        );
+        continue;
+      }
+      throw new Error(
+        `issue artifact ${artifactId} missing from frontier composition`,
+      );
+    }
+    issueArtifactOutcomes.length = 0;
+    issueArtifactOutcomes.push(...orderedIssueArtifactOutcomes);
+  }
+
   const synthesizeSucceeded = synthesizeOutcome.success;
   if (synthesizeSucceeded) {
     await validateSynthesizeOutputParticipationTruth({
