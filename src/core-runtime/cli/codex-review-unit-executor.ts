@@ -37,6 +37,7 @@ async function runCodexWorker(
   unitKind: string,
   sessionRoot: string,
   outputSchemaPath?: string | undefined,
+  timeoutMs?: number | undefined,
 ): Promise<void> {
   const codexArgs: string[] = [
     "exec",
@@ -142,16 +143,68 @@ async function runCodexWorker(
   child.stdin.write(boundedPrompt);
   child.stdin.end();
 
+  // Self-enforced unit timeout (`--timeout-ms`): in the flat path the parent
+  // runner kills timed-out workers, but a nesting batch script has no
+  // per-unit kill switch — a hung inner would otherwise hold its wave's
+  // `wait` barrier and burn the outer worker's whole multi-wave budget. The
+  // executor bounding itself keeps a hang local to one unit in every
+  // topology.
+  let timedOut = false;
+  let timeoutTimer: NodeJS.Timeout | null = null;
+  let forceKillTimer: NodeJS.Timeout | null = null;
+  if (typeof timeoutMs === "number" && timeoutMs > 0) {
+    timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // ignore
+      }
+      forceKillTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      }, 2_000);
+    }, timeoutMs);
+  }
+
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
       if (err.code === "ENOENT") {
         reject(new Error("codex CLI not found. Install codex or use a different executor."));
       } else {
         reject(err);
       }
     });
-    child.on("close", (code) => resolve(code ?? 1));
+    child.on("close", (code) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      resolve(code ?? 1);
+    });
   });
+
+  if (timedOut) {
+    try {
+      fsSync.rmSync(outputPath, { force: true });
+    } catch {
+      // ignore
+    }
+    if (runningLogStream) {
+      try {
+        runningLogStream.write(`ENV-AFTER unit=${unitId} exit=timeout\n`);
+        runningLogStream.end();
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(
+      `Codex worker executor timed out after ${timeoutMs} ms for ${unitId}.`,
+    );
+  }
   appendRuntimeStreamEventSync({
     pipeline: "review",
     sessionRoot,
@@ -235,6 +288,7 @@ export async function runCodexReviewUnitExecutorCli(
       "config-override": { type: "string", multiple: true, default: [] },
       "output-format": { type: "string", default: "markdown" },
       "human-output-ref": { type: "string" },
+      "timeout-ms": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -303,6 +357,15 @@ export async function runCodexReviewUnitExecutorCli(
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
+  const timeoutMsRaw = values["timeout-ms"];
+  const timeoutMs =
+    typeof timeoutMsRaw === "string" && timeoutMsRaw.length > 0
+      ? Number.parseInt(timeoutMsRaw, 10)
+      : undefined;
+  if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs <= 0)) {
+    throw new Error(`--timeout-ms must be a positive integer, got "${timeoutMsRaw}".`);
+  }
+
   await runCodexWorker(
     projectRoot,
     boundedPrompt,
@@ -315,6 +378,7 @@ export async function runCodexReviewUnitExecutorCli(
     unitKind,
     sessionRoot,
     structuredOutput?.schemaPath,
+    timeoutMs,
   );
 
   let structuredPayloadFields: number | undefined;

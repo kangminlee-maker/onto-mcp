@@ -46,7 +46,7 @@ outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에
   - **lens 단계**: `executeReviewViaNestedBatch`(초기 dispatch 전체를 1 배치).
   - **downstream wide 단계**(fan-out이 실재하는 3곳 — issue-stance per-lens·per-issue deliberation·per-issue synthesis): `runNestedStageFirstAttempt`가 단계의 runnable 유닛(≥2)을 1 배치로 위임한다. **단일 유닛 체인 단계(finding-ledger·relation-graph·issue-ledger·deliberation-plan·controlled-deliberation·problem-framing)는 flat 유지** — 배치-of-1은 fan-out 이익 없이 outer LLM 비용만 추가한다.
   - **retry 의미론(불변)**: 배치는 unit의 attempt #1이다. 실패 유닛은 기존 flat retry 루프로 잔여 예산(effective−1)을 소진한다(`unitOutcomeWithNestedFirstAttempt`). 명시적 zero-retry 정책에서는 두 번째 시도 없이 배치 실패를 확정한다(감사 동등). 단계 사후검증·unavailable-완성 fallback·preserved(repair) 유닛 처리도 flat과 동일 — preserved는 배치에서 제외된다.
-  - **동시성(불변)**: 배치 wave 폭은 해당 단계의 flat worker-pool cap과 동일(`dispatch_width`); outer timeout은 wave 수에 비례해 산정된다.
+  - **동시성·타임아웃(불변)**: 배치 wave 폭은 해당 단계의 flat worker-pool cap과 동일(`dispatch_width`). per-unit timeout은 inner unit executor가 `--timeout-ms`로 **자기강제**한다(script에는 per-unit kill switch가 없으므로 — hang이 wave barrier를 잡고 outer 예산을 소모하는 것을 차단; flat의 부모-강제 timeout과 의미 동등). outer timeout은 wave 수 비례 backstop이다.
   - continuation/repair 재실행은 flat per-unit 루프(동일 unit-executor·동일 seat 계약).
 - **B (host)**: host는 라운드의 ready units를 통째로 NestingBatchWorker에 위임할 수 있다(reference driver `executeBatch`). 라운드 루프 소유·seat 검증·gate·assemble은 `host-orchestration-contract.md` §3–5 그대로 — 엔진은 topology를 모른다. settings의 host×nested 차단은 S2에서 해제됐다.
 
@@ -64,4 +64,5 @@ outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에
 
 - **범위(S2)**: 위 배치 계약 + codex/claude outer 실현 + A lens 단계 nested + B 라운드 배치 + settings host×nested 해제 + 4셀 동등성.
 - **범위(S2 후속 — A downstream)**: A의 downstream wide 3단계(issue-stance·per-issue deliberation·per-issue synthesis) nested 1차 시도 + flat retry fallback(§4). wave 분할(`dispatch_width`)과 단계별 스트림 로그(`nested-outer-<stage>-*.log`) 포함.
-- **비범위(후속)**: live-LLM nested E2E(계약은 mock으로 증명; live는 기존 live E2E 트랙과 함께), A 단일-유닛 체인 단계의 nesting(fan-out 부재 — 의도적 제외), A 루프의 frontier 엔진 rebase(4f), teammate 지속형·live 심의(S3).
+- **live 실증(2026-06-10)**: A×nested×codex full 9-lens live E2E `completed` + semantic gate 전 체크 통과 — outer 순응성(verbatim script·summary)·lens 3-wave parity·downstream stance/synthesis nested 배치까지 실 LLM으로 검증. 기록: `development-records/benchmark/20260610-nested-live-e2e-record.md`.
+- **비범위(후속)**: claude brand live nested(E2E route 단언의 brand-파라미터화 필요; spawn-surface·mock 동등성까지는 증명됨), A 단일-유닛 체인 단계의 nesting(fan-out 부재 — 의도적 제외), A 루프의 frontier 엔진 rebase(4f), teammate 지속형·live 심의(S3).

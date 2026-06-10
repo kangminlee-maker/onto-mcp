@@ -70,6 +70,77 @@ function validEmptyLensSidecarPayload(): Record<string, unknown> {
   };
 }
 
+function installHangingFakeCodex(): void {
+  const binDir = path.join(scratchDir, "bin");
+  mkdirSync(binDir, { recursive: true });
+  const scriptPath = path.join(binDir, "codex");
+  writeFileSync(
+    scriptPath,
+    `#!/usr/bin/env node
+// Hang long past any test timeout; exit only on signal.
+setTimeout(() => process.exit(0), 60_000);
+`,
+    "utf8",
+  );
+  chmodSync(scriptPath, 0o755);
+  process.env.PATH = `${binDir}${path.delimiter}${savedPath ?? ""}`;
+}
+
+describe("codex review unit executor — self-enforced timeout", () => {
+  it("kills a hung codex child and fails with a timeout error (--timeout-ms)", async () => {
+    installHangingFakeCodex();
+    const packetPath = path.join(sessionRoot, "logic.prompt.md");
+    const outputPath = path.join(sessionRoot, "round1", "logic.md");
+    writeFileSync(packetPath, "# Logic Lens\n", "utf8");
+
+    const startedAt = Date.now();
+    await expect(
+      runCodexReviewUnitExecutorCli([
+        "--project-root",
+        projectRoot,
+        "--session-root",
+        sessionRoot,
+        "--unit-id",
+        "logic",
+        "--unit-kind",
+        "lens",
+        "--packet-path",
+        packetPath,
+        "--output-path",
+        outputPath,
+        "--timeout-ms",
+        "400",
+      ]),
+    ).rejects.toThrow(/timed out after 400 ms/);
+    // The hang is bounded by the flag, not by the fake's 60s sleep.
+    expect(Date.now() - startedAt).toBeLessThan(10_000);
+    expect(existsSync(outputPath)).toBe(false);
+  });
+
+  it("rejects a non-positive --timeout-ms", async () => {
+    const packetPath = path.join(sessionRoot, "logic.prompt.md");
+    writeFileSync(packetPath, "# Logic Lens\n", "utf8");
+    await expect(
+      runCodexReviewUnitExecutorCli([
+        "--project-root",
+        projectRoot,
+        "--session-root",
+        sessionRoot,
+        "--unit-id",
+        "logic",
+        "--unit-kind",
+        "lens",
+        "--packet-path",
+        packetPath,
+        "--output-path",
+        path.join(sessionRoot, "round1", "logic.md"),
+        "--timeout-ms",
+        "0",
+      ]),
+    ).rejects.toThrow(/--timeout-ms must be a positive integer/);
+  });
+});
+
 describe("codex review unit executor", () => {
   it("rejects structured output when the Codex sandbox is writable", async () => {
     const packetPath = path.join(sessionRoot, "logic.prompt.md");

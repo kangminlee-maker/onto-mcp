@@ -170,9 +170,13 @@ describe("runNestedStageFirstAttempt — forwarding", () => {
       "issue-stance:coverage",
       "issue-stance:axiology",
     ]);
+    // Per-unit self-timeout rides in the executor args (the script has no
+    // per-unit kill switch) — same value the wave scaling uses.
     expect(call.units[0]!.extra_args).toEqual([
       "--output-format",
       "issue-stance-response",
+      "--timeout-ms",
+      "100000",
     ]);
 
     expect(attempt).toBeDefined();

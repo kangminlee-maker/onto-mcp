@@ -128,7 +128,7 @@ export interface DispatchNestedBatchArgs {
 export interface NestedBatchDispatchArgs
   extends Omit<
     DispatchNestedBatchArgs,
-    "stream_label" | "dispatch_width" | "ontoConfig" | "outer_config"
+    "stream_label" | "ontoConfig" | "outer_config"
   > {
   ontoConfig: OntoConfig;
 }
