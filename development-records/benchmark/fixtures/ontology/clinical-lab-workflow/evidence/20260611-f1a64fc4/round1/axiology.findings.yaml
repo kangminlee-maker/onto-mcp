@@ -1,0 +1,222 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml
+    evidence_anchor: "Embedded Materialized Input: Report.result_status note;
+      Result.status note; state_rules[2]"
+    claim: 보고 상태를 임상의 신뢰값으로 선언하면서 야간 1회 동기화 지연을 허용해 EMR/LIS 통합 권위 문서의 목적과 어긋납니다.
+    what: "`Result.status`는 LIS가 기록하는 결과 상태이고 `Report.result_status`는 임상의가 신뢰하는 권위
+      값이라고 선언되어 있습니다. 그러나 corrected 결과가 생겨도 `Report.result_status`의 amended 반영은
+      야간 배치 1회로 지연됩니다."
+    why: "이 온톨로지는 Order부터 Report까지의 엔티티·관계·상태를 정의하고 EMR/LIS 연동 설계의 개념 권위 문서로 쓰일
+      예정입니다. 그 목적에서는 임상의가 보는 보고 상태가 결과 상태의 임상적으로 중요한 변경을 즉시 또는 명확한 pending 상태로
+      반영해야 합니다. 현재 모델은 `Report.result_status`를 권위 값으로 만들면서도 corrected→amended
+      불일치 창을 정상 운영으로 수용하므로, 통합 시스템의 신뢰 경계와 환자/임상의 이해관계자 가치가 훼손됩니다. Role
+      authority anchor used: axiology role requires value judgments to be
+      grounded in declared purpose and authority chain; target declaration
+      states this artifact is intended as the conceptual authority document for
+      EMR/LIS integration."
+    how_to_fix: "`Result.status=corrected` 발생 시 `Report.result_status`의 즉시 전이, 동기화 전
+      `pending_amendment` 같은 명시 상태, 또는 `Report.result_status`가 파생/비권위 표시값이라는 권위
+      재배치를 모델에 반영하십시오. 임상의가 신뢰해야 하는 상태의 source of truth와 지연 허용 조건도 상태 규칙에 명시해야
+      합니다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 결과와 보고 상태의 권위·상태 모델을 신뢰 가능하게 정의하는 목적.
+      failure_condition: 결과가 corrected로 바뀐 뒤 야간 배치 전까지 Report.result_status가 amended가
+        아니거나 finalized로 남는 운영 구간.
+      impact: 임상의가 신뢰한다고 선언된 보고 상태가 LIS 결과의 중요한 정정 상태와 어긋나므로, 개념 권위 문서가 통합 구현에 위험한 지연
+        불일치를 정당화할 수 있습니다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: header declares EMR/LIS conceptual
+          authority use"
+        - "clinical-lab-ontology.yaml: Result.status note says LIS records
+          result status and same information is also maintained in
+          Report.result_status"
+        - "clinical-lab-ontology.yaml: Report.result_status note says clinicians
+          trust this authoritative displayed result status"
+        - "clinical-lab-ontology.yaml: state_rules says corrected changes
+          require amended but synchronization batch runs once nightly"
+    causal_path:
+      root_cause_candidate: The ontology assigns report-visible status authority to
+        Report.result_status while also allowing asynchronous nightly
+        synchronization from corrected Result.status.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: "`Report.result_status` is declared as the authoritative status value
+            trusted by clinicians."
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Report.result_status note"
+        - cause_id: axiology-candidate-001.cause-002
+          claim: "`Result.status` is independently maintained by LIS and is intended to
+            carry the same information into Report.result_status."
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Result.status note"
+        - cause_id: axiology-candidate-001.cause-003
+          claim: The state rule permits corrected Result.status to update
+            Report.result_status only through a once-nightly synchronization
+            batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules corrected/amended rule"
+        - cause_id: axiology-candidate-001.cause-004
+          claim: This creates a window where the clinician-trusted authority value can
+            misrepresent a corrected result.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Report.result_status note"
+            - "clinical-lab-ontology.yaml: state_rules corrected/amended rule"
+      unresolved_beyond_evidence: The exact clinical harm depends on downstream EMR
+        display and alert behavior, which is outside the bounded target.
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml
+    evidence_anchor: "Embedded Materialized Input: CriticalValue entity;
+      CriticalValue.notified note; absence of notification relation/state in
+      relations and state_rules"
+    claim: CriticalValue를 즉시 통보가 필요한 값으로 정의하면서 통보 권위를 외부 전화 기록 대장으로 밀어 개념 권위 문서의 목적을
+      약화합니다.
+    what: "`CriticalValue`는 즉시 통보가 필요한 위험 결과 범위로 정의되지만, 온톨로지 안에는 통보 시각, 수신자, 통보 주체,
+      Result와의 발생 인스턴스 관계, 통보 실패/대기 상태가 없습니다. 대신 `notified` 불리언과 외부 전화 기록 대장 메모만
+      있습니다."
+    why: "EMR/LIS 통합의 개념 권위 문서가 위험 결과의 운영 책임과 상태 권위를 명확히 해야 하는데, 가장
+      purpose-critical한 통보 이력을 외부 대장에 맡기고 내부 모델은 불리언만 보유합니다. 이는 즉시 통보라는 선언된
+      stakeholder commitment를 검증·감사·연동 가능한 개념으로 만들지 못하게 하며, 통합 구현자가 서로 다른 외부 절차를
+      임의로 해석할 위험을 남깁니다. Role authority anchor used: axiology role focuses on
+      value commitments, stakeholder boundaries, and hidden tradeoffs against
+      declared purpose; target declaration states the file will be the
+      conceptual authority document for EMR/LIS integration."
+    how_to_fix: "`CriticalNotification` 또는 유사 개념을 도입해 `CriticalValue`/`Result`와 연결하고
+      notified_at, notified_to, notified_by, acknowledgement/status,
+      failure/retry 상태를 모델링하십시오. 외부 전화 기록 대장이 계속 권위라면 해당 대장을 명시적 external
+      authority로 선언하고 EMR/LIS가 소비할 최소 동기화 계약을 적으십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 임상적으로 위험한 결과의 즉시 통보 책임과 상태를 개념적으로 정렬하는 목적.
+      failure_condition: CriticalValue 발생 후 통보의 시각·수신자·책임자·실패 상태가 온톨로지 권위 안에서 표현되거나 검증되지 않는 경우.
+      impact: 즉시 통보라는 핵심 이해관계자 약속이 단순 불리언과 외부 메모로 축소되어 운영 감사와 시스템 연동 설계의 신뢰성이 약해집니다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: CriticalValue definition says immediately
+          notifiable risky result range"
+        - "clinical-lab-ontology.yaml: CriticalValue.notified note says
+          notification time and recipient are in a phone log"
+        - "clinical-lab-ontology.yaml: relations list has no CriticalValue
+          notification relation"
+        - "clinical-lab-ontology.yaml: state_rules list has no critical
+          notification lifecycle"
+    causal_path:
+      root_cause_candidate: The ontology models critical notification as a boolean
+        attribute while delegating notification evidence to an external phone
+        log that is not represented as an authority boundary or relation.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: "`CriticalValue` is defined as requiring immediate notification."
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: CriticalValue definition"
+        - cause_id: axiology-candidate-002.cause-002
+          claim: "The only notification state in the ontology is `notified: boolean`; time
+            and recipient are stated to live in a phone log."
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: CriticalValue.notified note"
+        - cause_id: axiology-candidate-002.cause-003
+          claim: No relation or state rule connects CriticalValue notification to Result,
+            Staff, clinician recipient, acknowledgement, or failure handling.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: relations"
+            - "clinical-lab-ontology.yaml: state_rules"
+        - cause_id: axiology-candidate-002.cause-004
+          claim: The model therefore cannot serve as the conceptual authority for
+            immediate notification accountability in EMR/LIS integration.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: header declares EMR/LIS conceptual
+              authority use"
+            - "clinical-lab-ontology.yaml: CriticalValue definition and notified
+              note"
+      unresolved_beyond_evidence: The bounded target does not include hospital policy
+        or the actual phone log schema, so the finding is limited to the
+        ontology’s missing authority boundary.
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml
+    evidence_anchor: "Embedded Materialized Input: notes[turnaround_time];
+      Specimen.collected_at; Report.released_at"
+    claim: TAT 계산을 대시보드 팀의 자체 계산식으로 남겨 운영 지표 목적이 통합 권위 문서 밖으로 드리프트됩니다.
+    what: 노트는 TAT를 `collected_at`부터 `released_at`까지로 계산한다고 말하면서도 대시보드 팀이 자체 계산식을
+      유지한다고 합니다. 온톨로지에는 TAT의 권위 정의, 제외 조건, 우선순위/STAT별 변형, 재보고·정정 시 처리 기준이 없습니다.
+    why: "이 파일이 EMR/LIS 연동 설계의 개념 권위 문서라면 주요 운영 지표인 TAT의 의미는 시스템 간 일관성을 위해 이 문서 안에서
+      권위 있게 정의되어야 합니다. 현재 노트는 개념 정의를 제시하는 동시에 별도 팀의 로컬 계산을 수용해, 국소 최적화가 전체 통합
+      목적을 약화하는 숨은 트레이드오프를 만듭니다. Role authority anchor used: axiology role checks
+      local optimization that undermines declared purpose and unjustified
+      tradeoffs; target declaration states this artifact is a conceptual
+      authority document for EMR/LIS integration."
+    how_to_fix: TAT를 파생 지표로 명시하고 source fields, inclusion/exclusion rules,
+      STAT/urgent handling, corrected/amended report handling, dashboard
+      projection 권한을 정의하십시오. 대시보드 팀 계산식이 권위라면 그 권위 경계를 이 온톨로지에 명시적으로 연결해야 합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 주문-검체-보고 흐름의 운영 의미와 지표를 일관되게 정의하는 목적.
+      failure_condition: 대시보드, LIS, EMR 또는 부서가 TAT 시작·종료·정정 처리 기준을 서로 다르게 계산하는 경우.
+      impact: TAT가 임상검사 워크플로의 핵심 운영 지표인데 권위가 분산되어 통합 설계와 운영 의사결정의 비교 가능성이 약해집니다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: notes says TAT is calculated from
+          collected_at to released_at and dashboard team keeps its own formula"
+        - "clinical-lab-ontology.yaml: Specimen.collected_at attribute"
+        - "clinical-lab-ontology.yaml: Report.released_at attribute"
+        - "clinical-lab-ontology.yaml: header declares EMR/LIS conceptual
+          authority use"
+    causal_path:
+      root_cause_candidate: The ontology leaves a cross-system operational metric
+        under a local dashboard formula instead of defining it as a governed
+        derived concept or authority projection.
+      root_cause_step_id: axiology-candidate-003.cause-004
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: The ontology provides source timestamps `Specimen.collected_at` and
+            `Report.released_at`.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Specimen attributes"
+            - "clinical-lab-ontology.yaml: Report attributes"
+        - cause_id: axiology-candidate-003.cause-002
+          claim: The notes define TAT from those timestamps but also state that the
+            dashboard team maintains its own formula.
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes turnaround_time"
+        - cause_id: axiology-candidate-003.cause-003
+          claim: This leaves TAT’s authority and edge-case semantics outside the
+            conceptual authority document.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: header declares EMR/LIS conceptual
+              authority use"
+            - "clinical-lab-ontology.yaml: notes turnaround_time"
+        - cause_id: axiology-candidate-003.cause-004
+          claim: A local dashboard calculation can diverge from EMR/LIS workflow semantics
+            and undermine shared operational interpretation.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: notes turnaround_time"
+      unresolved_beyond_evidence: The actual dashboard formula is outside the allowed
+        bounded input, so divergence is a risk from missing authority rather
+        than directly observed mismatch.
+domain_constraints_used: []
+domain_context_assumptions:
+  - 대상 파일 자체의 선언에 따라 이 온톨로지는 EMR/LIS 연동 설계의 개념 권위 문서로 평가한다.
+  - session_domain이 none이므로 별도 의료 도메인 규정 문서는 사용하지 않았다.
+  - axiology 역할 정의의 권위 입력 파일들은 prompt packet에 인용되어 있으나, 현재 제출 스키마에 axiology 전용
+    value_authority_anchor 필드가 없어 판단 근거를 why와 materiality/evidence_refs에 보존했다.
+validation:
+  unaddressable_candidates: []

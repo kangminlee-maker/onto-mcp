@@ -77,7 +77,10 @@ npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.m
 
 - 한계: 보강 후 각 fixture 1 run — INV-BENCH-1 기준 PRELIMINARY. 게이트 통과·이슈 구성 변화는 ①+② 결합 효과로만 기록(단일 변수 run 미수행). CLW-10(종결 상태 의미의 시간 모순)은 부재형이 아니라 모순형이라 coverage probe로 안 잡히는 것일 수 있음 — logic lens 관점 보강이 후속 후보.
 
-## 후속 (갱신)
+## 후속 5 완료 — CLW-10 logic 시간 전개 probe (PRELIMINARY)
 
-1. ~~semantic gate 비코드 일반화~~ → 2. ~~부재형 보강~~ → 3. ~~파생 추론 보강~~ → 4. ~~CRT-5 재실행 검증~~ (모두 완료, 위 섹션)
-5. 잔여: CLW-10류(종결 후 사건의 상태 모순) — logic 관점 후보. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.
+`.onto/roles/logic.md`에 **시간 전개 만족 가능성 probe** 추가(단일 변수 — INV-EXP-1 충족): 종결·완료 판정 규칙이 가역 상태에 의존하는지, 허용된 후속 사건(정정·재발행·취소·소급 변경)이 판정된 종결 상태와 모순을 만드는지 — 스냅숏 만족 가능성을 넘어 상태 전개 경로 위 만족 가능성 점검.
+
+검증 재실행(clinical 세션 `20260611-f1a64fc4`): logic finding-011이 **CLW-10 모순 메커니즘을 최초 포착** — "completion status가 이후의 가역적 result 상태에 의존, corrected 후 finalized·amended 동시 요구 가능"(0/2 → 1/1). 앵커는 Report 재발행 경로 경유(ground truth의 Order.completed 명시 대비 한 단계 간접 — 메커니즘 정확). 회귀 0(기존 7종 어휘 전부 유지, material 12), pinned gate 12/12 통과. 재현: `evaluate-semantic-gate.mts clinical-lab-workflow:20260611-f1a64fc4`.
+
+이로써 seeded 30결함 중 미검출 잔여 없음(전부 caught 또는 partial+) — 단, 보강 후 run은 fixture당 1회로 PRELIMINARY. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.

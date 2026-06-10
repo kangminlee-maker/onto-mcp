@@ -1,0 +1,200 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result.status와 Report.result_status가 같은 임상 상태의 권위를 중복 보유하면서
+      다른 vocabulary와 지연 동기화를 허용합니다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 관련 렌즈가 high severity를 유지했고, corrected 이후 clinician-trusted report
+      상태가 지연 불일치할 수 있어 EMR/LIS 개념 권위의 핵심 상태 신뢰를 직접 훼손합니다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-012
+  - issue_id: issue-002
+    problem_definition: Critical notification이 boolean으로 축소되고 통보 증거와 lifecycle 권위가
+      모델 밖 전화 기록에 남아 있습니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 브로드한 authority/audit boundary failure는 대다수 렌즈가 지지하지만 semantics는
+      event-modeling 결함으로 좁혔습니다. 내부 event로 닫을지 외부 권위를 명시할지 결정이 필요합니다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: TAT가 governed derived metric이 아니라 대시보드 팀의 별도 계산식으로 남아 운영 지표 권위가 분산됩니다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: medium severity의 지표 거버넌스 문제로, source timestamp는 있으나 계산 의미와 projection
+      authority가 닫히지 않았습니다. 핵심 안전 상태보다 후순위지만 다음 설계 단계에서 추적되어야 합니다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: CriticalValue가 임계 기준과 환자별 통보 이벤트 상태를 한 개념에 합쳐 통보 감사와
+      acknowledgement를 표현하지 못합니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation에서 high severity가 확정되었고, safety-critical notification
+      audit coverage가 막히므로 개념 권위 문서로 쓰기 전에 target 안에서 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-015
+  - issue_id: issue-005
+    problem_definition: Test, Assay, specimen-kind가 mapping, version, ownership,
+      retirement rule 없이 병렬 표현으로 존재합니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: orderable, performable, specimen code 의미의 권위가 닫히지 않아 catalog
+      identity와 valid mapping 판단이 흔들립니다. medium severity지만 통합 설계 전 명시적 mapping
+      authority가 필요합니다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-014
+      - finding-008
+  - issue_id: issue-006
+    problem_definition: 새 catalog item 등록이 Test와 Assay 이중 입력에 의존하고 내부 mapping
+      authority나 lifecycle rule이 없습니다.
+    issue_role: enabler
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: catalog continuity failure는 high-impact 시나리오로 보존되었지만 일부 렌즈는 medium
+      mapping defect로 좁혔습니다. issue-005의 권위 문제를 catalog extension에서 현실화하는
+      enabler로 분류합니다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-007
+    problem_definition: Result와 Report 상태가 같은 정보라고 설명되지만 별도 enum과 지연 동기화로 확장 호환성이 약합니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: issue-001의 status-authority 문제가 future state/code 추가 시 드러나는 확장성
+      증상입니다. medium severity로 추적하되 핵심 권위 모델 정리와 함께 해소될 수 있습니다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-008
+    problem_definition: TAT 변경 권위가 ontology 내부 규칙이 아니라 외부 dashboard formula에 남아
+      metric versioning과 예외 처리가 분산됩니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: issue-003의 metric governance 결함이 change/evolution 상황에서 나타나는 증상입니다.
+      medium severity이나 source timestamps가 있어 governed derived metric으로 carrying
+      forward 가능합니다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: Report.result_status 하나가 release-time finalization과 later
+      amendment lifecycle을 동시에 담아 finalized 의미가 불안정합니다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: finalized가 stable completion인지 mutable display state인지 소비자가 다르게 해석할 수
+      있습니다. corrected-after-release path에서 completion predicate correctness가
+      약해집니다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: STAT urgent-order 의미가 priority enum, boolean flag, subtype에
+      동시에 존재해 canonical authority가 갈라집니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: urgent routing과 invalid-input behavior에 직접 영향을 주는 medium authority
+      split입니다. 서로 다른 시스템이 다른 STAT 표면을 권위로 삼을 수 있으므로 target에서 canonical
+      representation을 정해야 합니다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-011
+    problem_definition: Specimen produces Result 관계명이 specimen에 생산 agency를 부여해 graph
+      해석을 혼동시킬 수 있습니다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: bounded evidence상 material workflow failure가 아니라 low severity
+      relation-label clarity 문제입니다. 별도 독립 개선 항목으로 기록하되 핵심 closure를 막지는 않습니다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-012
+    problem_definition: 운영 workflow 표면이 명시 authority model 밖 attributes나 notes에 남아
+      relation projection과 specimen lifecycle closure가 불명확합니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 하나의 shared-root issue로 유지되었지만 coverage, logic, semantics는 relation
+      graph projection과 specimen lifecycle sub-concern으로 좁혔습니다. authority
+      closure 방식을 결정해야 합니다.
+    related_surface_finding_ids:
+      - finding-017
+      - finding-005
+  - issue_id: issue-013
+    problem_definition: Order completion rule이 어떤 Result 집합을 평가하는지 ordered Test와
+      Result membership 구조로 닫히지 않았습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: completion 상태는 EMR/LIS workflow의 핵심 predicate인데 bounded Result set이
+      없어 구현별 평가 집합이 달라질 수 있습니다. medium severity지만 target 안에서 구조적 path를 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-018

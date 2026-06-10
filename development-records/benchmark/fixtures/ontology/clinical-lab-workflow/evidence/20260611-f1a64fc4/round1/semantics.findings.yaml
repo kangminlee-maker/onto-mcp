@@ -1,0 +1,204 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: "clinical-lab-ontology.yaml: Result.status / Report.result_status"
+    evidence_anchor: materialized-input.md:69-83, materialized-input.md:121-123
+    claim: Result.status와 Report.result_status가 같은 정보라고 설명되지만 서로 다른 상태 어휘와 권위 주장을
+      사용한다.
+    what: Result.status는 [preliminary, final, corrected]이고 Report.result_status는
+      [prelim, finalized, amended]입니다. 동시에 Result.status의 설명은
+      Report.result_status에도 동일 정보가 유지된다고 하고, Report.result_status 설명은 임상의가 신뢰하는
+      권위 값이라고 합니다.
+    why: 동일 정보라면 상태 값의 의미와 이름이 일관되어야 하는데 preliminary/prelim, final/finalized,
+      corrected/amended가 서로 다른 어휘로 모델링되어 있습니다. 특히 corrected와 amended는 결과 자체의 정정
+      상태와 보고서의 수정 보고 상태를 구분할 수도 있는 용어인데, 현재 문서는 이를 같은 정보라고 하면서도 별도 권위 값으로 둡니다.
+      EMR/LIS 통합의 개념 권위 문서에서는 이 상태가 임상의에게 표시되는 값이라고 선언되어 있어, 상태 매핑·동기화·신뢰 경계가
+      흔들립니다.
+    how_to_fix: 하나의 권위 상태 개념을 정하고 Result와 Report가 같은 상태를 공유하는지, 아니면 결과 상태와 보고서 공개/수정
+      상태가 다른 개념인지 분리해 명명합니다. 분리한다면 명시적 매핑표와 전이 규칙을 두고 corrected/amended 같은 값의 의미
+      차이를 정의합니다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 결과 상태와 보고 상태의 의미·권위·전이 기준을 제공하는 목적.
+      failure_condition: Result.status와 Report.result_status 사이에서 같은 임상 상태가 서로 다른 라벨과
+        권위 주장으로 전달되거나 야간 동기화 전후에 의미가 달라지는 경우.
+      impact: 임상의가 신뢰한다고 선언된 Report.result_status가 LIS 기록 상태와 의미적으로 같은지 다른지 불명확해져 통합
+        구현자가 임의 매핑을 만들게 되고, 정정 결과·최종 보고 상태의 임상적 해석 오류로 이어질 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: 결과 상태와 보고서 상태의 개념 경계를 정하지 않은 상태에서 두 필드 모두를 동일 정보이자 권위 값으로 선언함.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: Result.status는 LIS가 기록하는 결과 상태이며 Report.result_status에도 동일 정보가 유지된다고
+            설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-72
+        - cause_id: semantics-candidate-001.cause-002
+          claim: Report.result_status는 임상의가 신뢰하는 권위 값이라고 설명되지만 Result.status와 다른 enum 값을
+            가진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: semantics-candidate-001.cause-003
+          claim: 상태 규칙은 Result.status corrected 변경 시 Report.result_status amended가 되어야 한다고
+            하여 서로 다른 값 사이의 의미 매핑을 운영 규칙에 의존시킨다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: "clinical-lab-ontology.yaml: Order.priority / Order.is_stat / StatOrder"
+    evidence_anchor: materialized-input.md:21-29
+    claim: STAT 주문 의미가 priority 값, boolean 속성, 하위 타입으로 동시에 표현되어 같은 개념의 권위가 세 갈래로 갈라진다.
+    what: Order에는 priority enum 값 stat와 is_stat boolean이 함께 있고, 별도로 StatOrder가
+      Order의 하위 타입으로 정의됩니다. 세 표현 모두 STAT 주문 여부를 가리킵니다.
+    why: STAT은 주문의 긴급도 상태 또는 우선순위 값으로 해석되는 속성인데, 이를 Order의 하위 타입으로도 모델링하면 동일 주문이
+      priority=stat인지, is_stat=true인지, StatOrder 인스턴스인지 중 어느 표현이 권위인지 불명확합니다. 또한
+      하위 타입은 더 고정적인 분류처럼 보이지만 STAT 여부는 운영상 주문 우선순위 속성으로 취급될 가능성이 높아 존재론적 유형이
+      어긋납니다.
+    how_to_fix: STAT의 권위 표현을 하나로 정합니다. 보통 priority enum의 stat 값으로 두고 is_stat는 제거하거나
+      derived projection으로 명시하며, StatOrder는 별도 타입이 아니라 stat_reason 같은 조건부 속성 또는
+      STAT-specific extension으로 표현합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문 상태와 우선순위의 의미를 통합 시스템에서 일관되게 해석하게 하는 목적.
+      failure_condition: 동일 주문에서 priority, is_stat, StatOrder 타입 중 하나 이상이 불일치하거나 시스템별로
+        다른 필드를 STAT 권위로 삼는 경우.
+      impact: 응급 주문 라우팅, SLA, 채혈·검사 우선순위가 시스템마다 다르게 판단될 수 있어 EMR/LIS 통합의 precedence 및
+        invalid-input behavior가 불명확해집니다.
+      evidence_refs:
+        - materialized-input.md:21-29
+    causal_path:
+      root_cause_candidate: STAT을 하나의 canonical concept로 정하지 않고 속성값, 파생 boolean, subtype으로 중복 모델링함.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Order.priority는 stat 값을 포함한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:21
+        - cause_id: semantics-candidate-002.cause-002
+          claim: Order.is_stat도 STAT 주문 여부를 별도 boolean으로 기록한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:22
+        - cause_id: semantics-candidate-002.cause-003
+          claim: StatOrder는 같은 STAT 주문 의미를 Order 하위 타입으로 다시 정의한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:25-29
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: "clinical-lab-ontology.yaml: Test / Assay"
+    evidence_anchor: materialized-input.md:46-60, materialized-input.md:126-127
+    claim: Test와 Assay의 의미 경계가 흐려 주문 가능한 카탈로그 항목과 분석기 수행 항목의 매핑 권위가 없다.
+    what: Test는 주문 가능한 카탈로그 단위인 단일 검사 항목으로, Assay는 분석기에서 수행되는 검사 항목이자 검사 카탈로그의 수행
+      단위로 정의됩니다. 노트는 신규 항목을 두 곳 모두 등록한다고 합니다.
+    why: 두 개념은 주문 카탈로그 항목과 분석 수행 단위로 구분될 수 있지만, 둘 다 '검사 항목'과 카탈로그 단위로 설명되어 의미 경계가
+      충분히 분리되지 않았습니다. Result는 Test만 참조하고 Assay와의 관계는 없어, 실제 LIS/분석기 수행 항목이 EMR
+      주문 항목과 어떻게 대응되는지 개념 권위 문서에서 닫히지 않습니다.
+    how_to_fix: Test를 orderable test, Assay를 performed analyzer assay처럼 역할이 드러나는
+      이름/정의로 분리하고, 1:1·1:N·N:1 매핑 관계와 권위 소스를 명시합니다. 두 개념이 실제 동의어라면 하나로 통합하고 코드
+      alias만 보존합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 항목과 LIS/분석기 수행 항목 사이의 의미 매핑을 제공하는 목적.
+      failure_condition: 신규 항목이 Test와 Assay에 별도 등록되거나 결과가 Test만 참조하면서 분석기 수행 단위와의 대응이 누락되는 경우.
+      impact: 주문-수행-결과 매핑이 구현자 해석에 맡겨져 코드 매핑 오류, 중복 카탈로그 드리프트, 결과 귀속 오류가 생길 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: 주문 가능한 검사 항목과 분석 수행 항목의 개념 분리를 선언했지만 두 개념의 의미 경계와 매핑 관계를 닫지 않음.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: Test는 주문 가능한 카탈로그 단위로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-52
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Assay도 검사 카탈로그의 수행 단위인 검사 항목으로 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:54-60
+        - cause_id: semantics-candidate-003.cause-003
+          claim: 노트는 신규 항목을 두 곳 모두 등록한다고 하여 두 카탈로그의 중복 운영을 전제한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: "clinical-lab-ontology.yaml: CriticalValue"
+    evidence_anchor: materialized-input.md:100-106
+    claim: CriticalValue라는 이름은 위험 결과값을 뜻하지만 모델은 임계 범위 정의와 통보 완료 상태를 한 엔티티에 섞고 있다.
+    what: CriticalValue는 '즉시 통보가 필요한 위험 결과 값 범위'로 정의되며 test_ref, lower_bound,
+      upper_bound를 갖습니다. 동시에 notified boolean은 통보 완료 여부를 나타내며 통보 시각과 수신자는 외부 전화
+      기록 대장에 있다고 설명됩니다.
+    why: 임계값 범위는 검사별 기준(rule/threshold)이고, 통보 완료 여부는 특정 환자 결과에서 발생하는 이벤트 상태입니다. 이를
+      CriticalValue라는 하나의 엔티티에 섞으면 해당 인스턴스가 기준값인지 실제 critical result event인지 의미가
+      모호해집니다. 이름도 '값'처럼 보이지만 실제 속성은 범위 기준과 통보 플래그입니다.
+    how_to_fix: CriticalValueRange 또는 CriticalThreshold를 기준 정의로 두고, 특정 Result가 기준을
+      위반한 사건은 CriticalResultNotification 같은 별도 개념으로 분리합니다. notified는 사건/통보 엔티티에
+      두고 시각·수신자 등 권위 기록과의 참조를 모델링합니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 위험 결과와 통보 상태의 의미를 안전하게 교환하기 위한 EMR/LIS 개념 권위 목적.
+      failure_condition: 검사별 임계 범위 설정과 특정 결과의 통보 완료 상태가 같은 CriticalValue 인스턴스로 해석되는 경우.
+      impact: 위험 결과 통보가 기준 설정인지 환자별 이벤트인지 구분되지 않아 통보 누락, 중복 통보, 감사 추적 불능 같은 운영 위험이 생길
+        수 있습니다.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: 기준 정의 개념과 환자별 통보 이벤트 개념을 CriticalValue 하나에 합침.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: CriticalValue 정의와 lower_bound/upper_bound 속성은 검사별 위험 범위 기준을 나타낸다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-105
+        - cause_id: semantics-candidate-004.cause-002
+          claim: notified 속성은 특정 통보 완료 상태를 나타내며, 통보 시각과 수신자는 별도 전화 기록 대장에 있다고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:106
+        - cause_id: semantics-candidate-004.cause-003
+          claim: 따라서 같은 엔티티가 기준 범위와 사건 상태를 동시에 맡아 의미적 유형이 혼합된다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: "clinical-lab-ontology.yaml: Specimen-to-Result relation"
+    evidence_anchor: materialized-input.md:118-119
+    claim: Specimen이 Result를 produces한다고 한 관계 이름은 검체의 실제 의미를 행위 주체처럼 왜곡한다.
+    what: 관계에는 Result가 Specimen에서 derived_from 된다는 항목과 Specimen이 Result를 produces한다는
+      항목이 함께 있습니다. produces 관계의 note는 '검체가 결과를 생산한다'고 설명합니다.
+    why: 검체는 결과의 원천 재료 또는 대상이지 결과를 생성하는 행위 주체가 아닙니다. 결과를 생산하는 행위는 분석 수행 또는 검사 프로세스에
+      가까운데, 현재 관계명은 물리적 실체인 Specimen에 생산 행위를 부여합니다. derived_from은 의미적으로 더 적절하므로
+      produces는 권위 문서에서 오해를 만듭니다.
+    how_to_fix: Specimen -> Result의 produces 관계를 제거하거나 source_for/input_to 같은 의미로
+      바꾸고, 결과 생성 행위는 Assay execution 또는 Test performance 같은 수행 개념이 담당하게 합니다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이라 별도 도메인 문서는 사용하지 않았고, 판단은 제공된 온톨로지 문구와 일반적인 임상검사 워크플로
+    의미에 한정했다.
+  - 외부 표준 매핑 검증은 web research denied 및 domain document 없음 경계 때문에 수행하지 않았다.
+validation:
+  unaddressable_candidates: []
