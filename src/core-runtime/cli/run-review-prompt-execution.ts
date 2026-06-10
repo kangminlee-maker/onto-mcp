@@ -111,7 +111,7 @@ import {
   REVIEW_PROGRESS_TOTAL_STEPS,
 } from "../review/review-progress-contract.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
-import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
+import { executeReviewViaNestedBatch } from "./nested-batch-dispatch.js";
 import {
   ReviewStructuredFailureError,
   writeAndThrowStructuredFailureRecord,
@@ -5455,15 +5455,26 @@ export async function executeReviewPromptExecution(
     "runner parallel dispatch policy",
     [`max_concurrent_lenses: ${maxConcurrentLenses}`],
   );
-  if (params.reviewExecutionProfile?.mode === "nested-workers") {
+  // nested-workers is served by the NestingBatchWorker path below: inner
+  // invocations are the SAME unit executors the flat loop spawns, so the
+  // structured-output / read-only / bounded-dispatch guarantees that the
+  // retired raw-`codex exec` nested path lacked now hold by code sharing.
+  // The only remaining fail-closed case is an executor brand without an
+  // outer worker realization (direct_call), rejected at the dispatch
+  // branch.
+  if (
+    params.reviewExecutionProfile?.mode === "nested-workers" &&
+    params.reviewExecutionProfile.worker_executor !== "codex" &&
+    params.reviewExecutionProfile.worker_executor !== "claude_code"
+  ) {
     await writeAndThrowStructuredFailureRecord({
       sessionRoot,
       phase: "pre_dispatch.actor_route",
-      reasonCode: "nested_workers_structured_output_unavailable",
+      reasonCode: "nested_workers_executor_unsupported",
       humanMessage:
-        "Review execution profile nested-workers is unavailable because it does not enforce sidecar structured output, read-only lens execution, or bounded runtime dispatch.",
+        "Review execution profile nested-workers requires an external OAuth worker executor (codex or claude_code); direct_call has no outer worker seat.",
       requiredUserAction:
-        "Use review.execution.topology=main-workers until nested-workers is rebuilt on the structured output runner.",
+        "Set review.execution.executor to codex or claude_code, or use review.execution.topology=main-workers.",
       retrySafety: "safe_after_input_change",
       artifactTrust: "manifest_artifacts_trusted",
       dispatchState: "dispatch_blocked",
@@ -5755,13 +5766,22 @@ export async function executeReviewPromptExecution(
     }
   }
 
+  // Nested batch dispatch covers the initial lens phase only (A-path
+  // scope). Continuation/repair passes re-dispatch remaining units through
+  // the flat per-unit loop — same unit-executor invocation, same artifact
+  // contract, so the seat truth is identical either way.
   if (
     !continuationMode &&
     params.reviewExecutionProfile?.mode === "nested-workers" &&
-    params.reviewExecutionProfile.worker_executor === "codex"
+    (params.reviewExecutionProfile.worker_executor === "codex" ||
+      params.reviewExecutionProfile.worker_executor === "claude_code")
   ) {
+    const nestedBrand =
+      params.reviewExecutionProfile.worker_executor === "codex"
+        ? ("codex" as const)
+        : ("claude" as const);
     console.log(
-      "[review runner] mode=nested-workers worker_executor=codex",
+      `[review runner] mode=nested-workers worker_executor=${params.reviewExecutionProfile.worker_executor}`,
     );
     await appendExecutionProgress(
       executionPlan.error_log_path,
@@ -5801,7 +5821,8 @@ export async function executeReviewPromptExecution(
           : []),
       ],
     }));
-    const nestedResult = await executeReviewViaCodexNested({
+    const nestedResult = await executeReviewViaNestedBatch({
+      brand: nestedBrand,
       sessionRoot,
       projectRoot,
       ontoConfig: params.ontoConfig ?? {},

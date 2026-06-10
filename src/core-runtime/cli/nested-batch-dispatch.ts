@@ -1,14 +1,15 @@
 /**
- * Codex Nested Dispatch Bridge.
+ * Nested Batch Dispatch Bridge (brand-aware).
  *
  * # What this module is
  *
- * The A-path bridge between review session artifacts and the codex nesting
- * batch worker. It receives the **caller-built** unit batch (the same
- * dispatch list the flat path would execute — parity by construction),
- * attaches session-scoped common args, invokes
- * `runCodexNestingBatchWorker`, and classifies per-unit outcomes into the
- * participating / degraded sets used downstream.
+ * The A-path bridge between review session artifacts and a brand outer
+ * nesting worker (codex `exec` | claude `-p`). It receives the
+ * **caller-built** unit batch (the same dispatch list the flat path would
+ * execute — parity by construction), attaches session-scoped common args,
+ * invokes the brand's NestingBatchWorker realization, and classifies
+ * per-unit outcomes into the participating / degraded sets used
+ * downstream.
  *
  * # Layering
  *
@@ -18,7 +19,7 @@
  *   the identical unit-executor invocation. The bridge never re-derives
  *   them from the plan (the retired bridge did, which is how nested lost
  *   structured-output parity and got fail-closed).
- * - The bridge owns: outer (teamlead seat) codex settings from
+ * - The bridge owns: outer (teamlead seat) brand settings from
  *   `.onto/settings.json`, sessionRoot-scoped stream/archive paths, output
  *   probing, and the downstream result shape.
  *
@@ -39,26 +40,45 @@ import {
 } from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
-import type { NestingBatchUnit } from "../review/nesting-batch.js";
-import {
-  type CodexNestingBatchWorkerResult,
-  runCodexNestingBatchWorker,
-} from "./codex-nesting-batch-worker.js";
-
-export interface CodexOuterSpawnConfig {
-  model?: string;
-  effort?: string;
-  service_tier?: string;
-}
+import type {
+  NestingBatchUnit,
+  NestingBatchUnitOutcome,
+} from "../review/nesting-batch.js";
+import { runCodexNestingBatchWorker } from "./codex-nesting-batch-worker.js";
+import { runClaudeNestingBatchWorker } from "./claude-nesting-batch-worker.js";
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-export interface CodexNestedDispatchArgs {
+/** Outer worker brands with a NestingBatchWorker realization. */
+export type NestedBatchBrand = "codex" | "claude";
+
+/**
+ * Brand-neutral outer worker run result — the structural shape both the
+ * codex and claude realizations return.
+ */
+export interface NestedBatchWorkerRunResult {
+  outcomes: NestingBatchUnitOutcome[];
+  outer_stdout: string;
+  outer_stderr: string;
+  outer_exit_code: number;
+  summary_parsed: boolean;
+}
+
+export interface NestedOuterSpawnConfig {
+  model?: string;
+  effort?: string;
+  /** codex-only — `claude -p` has no service_tier surface (API-only). */
+  service_tier?: string;
+}
+
+export interface NestedBatchDispatchArgs {
+  /** Which outer worker realization fans the batch out. */
+  brand: NestedBatchBrand;
   /** Absolute path to the review session directory. */
   sessionRoot: string;
-  /** Project root (outer codex cwd + `--project-root` for inner units). */
+  /** Project root (outer worker cwd + `--project-root` for inner units). */
   projectRoot: string;
   ontoConfig: OntoConfig;
   /**
@@ -73,16 +93,30 @@ export interface CodexNestedDispatchArgs {
    */
   inner_executor: { bin: string; args: string[] };
   /**
-   * Per-invocation timeout for the outer codex (ms). Defaults to 10
-   * minutes.
+   * Per-invocation timeout for the outer worker (ms). Defaults to 10
+   * minutes (worker-side default).
    */
   timeout_ms?: number;
   /**
-   * Codex binary override for tests / non-standard installations.
-   * Defaults to `"codex"` (PATH-resolved).
+   * Outer binary override (codex or claude binary path) for tests /
+   * non-standard installations. Defaults to the brand's PATH-resolved
+   * binary.
    */
-  codex_bin?: string;
+  outer_bin?: string;
 }
+
+/**
+ * Brand worker implementations — injectable for tests.
+ */
+export interface NestedBatchWorkers {
+  codex: typeof runCodexNestingBatchWorker;
+  claude: typeof runClaudeNestingBatchWorker;
+}
+
+const DEFAULT_WORKERS: NestedBatchWorkers = {
+  codex: runCodexNestingBatchWorker,
+  claude: runClaudeNestingBatchWorker,
+};
 
 /**
  * Result shape consumed by the downstream pipeline. `synthesis_executed`
@@ -90,7 +124,7 @@ export interface CodexNestedDispatchArgs {
  * batches `unit_id === lens_id`, so the participating/degraded sets keep
  * their established names.
  */
-export interface CodexNestedDispatchResult {
+export interface NestedBatchDispatchResult {
   session_root: string;
   executed_lens_count: number;
   participating_lens_ids: string[];
@@ -100,7 +134,7 @@ export interface CodexNestedDispatchResult {
   error_log_path: string | null;
   halt_reason?: string;
   /** Raw worker result — retained for debugging / artifact capture. */
-  nested_raw: CodexNestingBatchWorkerResult;
+  nested_raw: NestedBatchWorkerRunResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +159,7 @@ const defaultInspector: OutputFileInspector = async (p) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Archive for outer codex stdout/stderr when streaming did not already
+ * Archive for outer worker stdout/stderr when streaming did not already
  * write the files. Normally the worker is invoked with stream paths and
  * the on-disk files carry the authoritative content; in that case this
  * helper sees non-empty files and returns without writing (prevents
@@ -136,7 +170,7 @@ const defaultInspector: OutputFileInspector = async (p) => {
  */
 async function archiveOuterStreamsIfMissing(
   sessionRoot: string,
-  nestedResult: CodexNestingBatchWorkerResult,
+  nestedResult: NestedBatchWorkerRunResult,
 ): Promise<void> {
   const stdoutPath = path.join(sessionRoot, "nested-outer-stdout.log");
   const stderrPath = path.join(sessionRoot, "nested-outer-stderr.log");
@@ -165,31 +199,39 @@ async function archiveWriteIfMissing(targetPath: string, content: string): Promi
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve the codex model settings for the outer worker (teamlead seat)
- * from `.onto/settings.json`. Empty object means codex picks its
- * configured defaults. Inner unit LLM settings are NOT resolved here —
- * they ride inside the caller-built `inner_executor` args (flat parity).
+ * Resolve the outer worker (teamlead seat) settings from
+ * `.onto/settings.json` for the given brand. Empty object means the brand
+ * CLI picks its configured defaults. Inner unit LLM settings are NOT
+ * resolved here — they ride inside the caller-built `inner_executor`
+ * args (flat parity). `service_tier` only surfaces for codex.
  */
-export function resolveCodexOuterSpawnConfig(
+export function resolveNestedOuterSpawnConfig(
+  brand: NestedBatchBrand,
   config: OntoConfig,
-): CodexOuterSpawnConfig {
-  return codexConfigFromRef(config.review?.execution?.teamlead?.llm) ?? {};
+): NestedOuterSpawnConfig {
+  return (
+    outerConfigFromRef(brand, config.review?.execution?.teamlead?.llm) ?? {}
+  );
 }
 
-function codexConfigFromRef(
+function outerConfigFromRef(
+  brand: NestedBatchBrand,
   ref: ReviewLlmRef | undefined,
-): CodexOuterSpawnConfig | null {
+): NestedOuterSpawnConfig | null {
+  const expectedAdapter = brand === "codex" ? "codex_cli" : "claude_code";
   const selection = normalizeLlmModelSwitcher(ref);
   if (
     !isExternalOauthWorkerSelection(selection) ||
-    selection.execution_adapter !== "codex_cli"
+    selection.execution_adapter !== expectedAdapter
   ) {
     return null;
   }
   return {
     ...(selection.model_id ? { model: selection.model_id } : {}),
     ...(selection.reasoning_effort ? { effort: selection.reasoning_effort } : {}),
-    ...(selection.service_tier ? { service_tier: selection.service_tier } : {}),
+    ...(brand === "codex" && selection.service_tier
+      ? { service_tier: selection.service_tier }
+      : {}),
   };
 }
 
@@ -198,40 +240,41 @@ function codexConfigFromRef(
 // ---------------------------------------------------------------------------
 
 /**
- * Execute the lens phase via the nested codex batch worker. Dispatches the
- * caller-built units through one outer codex worker plus one inner
+ * Execute the lens phase via the brand's nesting batch worker. Dispatches
+ * the caller-built units through one outer worker plus one inner
  * unit-executor subprocess per unit, and classifies outcomes into
  * participating / degraded sets.
  *
  * A worker `status: "ok"` is NOT sufficient for `participating` — the
  * output file must exist AND be non-empty. This guards against the outer
- * codex reporting success when an inner executor failed to write its seat.
+ * worker reporting success when an inner executor failed to write its
+ * seat.
  *
  * Injection:
- *   - `runImpl`: replace the worker (default: `runCodexNestingBatchWorker`)
+ *   - `workers`: replace the brand realizations (default: real workers)
  *   - `inspector`: replace the file-existence probe (default: `fs.stat`)
  */
-export async function executeReviewViaCodexNested(
-  args: CodexNestedDispatchArgs,
-  runImpl: typeof runCodexNestingBatchWorker = runCodexNestingBatchWorker,
+export async function executeReviewViaNestedBatch(
+  args: NestedBatchDispatchArgs,
+  workers: NestedBatchWorkers = DEFAULT_WORKERS,
   inspector: OutputFileInspector = defaultInspector,
-): Promise<CodexNestedDispatchResult> {
+): Promise<NestedBatchDispatchResult> {
   const executionPlanPath = path.join(args.sessionRoot, "execution-plan.yaml");
   // `readYamlDocument` throws with a descriptive message when the file
   // is missing or malformed — let it propagate so the caller sees the
   // session artifact problem directly rather than a generic null check.
   const plan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
 
-  const outerConfig = resolveCodexOuterSpawnConfig(args.ontoConfig);
+  const outerConfig = resolveNestedOuterSpawnConfig(args.brand, args.ontoConfig);
 
   // Stream paths live under sessionRoot so the watcher pane can `tail -f`
-  // them from the moment the outer codex starts emitting. With streaming
+  // them from the moment the outer worker starts emitting. With streaming
   // active, these files are the single authority — no post-dispatch
   // overwrite (prevents dual-writer drift).
   const streamStdoutPath = path.join(args.sessionRoot, "nested-outer-stdout.log");
   const streamStderrPath = path.join(args.sessionRoot, "nested-outer-stderr.log");
 
-  const nestedResult = await runImpl({
+  const sharedInput = {
     batch: {
       units: args.units,
       inner_executor_argv: [args.inner_executor.bin, ...args.inner_executor.args],
@@ -244,15 +287,25 @@ export async function executeReviewViaCodexNested(
     },
     ...(outerConfig.model ? { teamlead_model: outerConfig.model } : {}),
     ...(outerConfig.effort ? { teamlead_reasoning_effort: outerConfig.effort } : {}),
-    ...(outerConfig.service_tier
-      ? { teamlead_service_tier: outerConfig.service_tier }
-      : {}),
     project_root: args.projectRoot,
     ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
-    ...(args.codex_bin ? { codex_bin: args.codex_bin } : {}),
     stream_stdout_path: streamStdoutPath,
     stream_stderr_path: streamStderrPath,
-  });
+  };
+
+  const nestedResult: NestedBatchWorkerRunResult =
+    args.brand === "codex"
+      ? await workers.codex({
+          ...sharedInput,
+          ...(outerConfig.service_tier
+            ? { teamlead_service_tier: outerConfig.service_tier }
+            : {}),
+          ...(args.outer_bin ? { codex_bin: args.outer_bin } : {}),
+        })
+      : await workers.claude({
+          ...sharedInput,
+          ...(args.outer_bin ? { claude_bin: args.outer_bin } : {}),
+        });
 
   // Archive step is a no-op when streaming already produced files.
   await archiveOuterStreamsIfMissing(args.sessionRoot, nestedResult);
@@ -281,7 +334,7 @@ export async function executeReviewViaCodexNested(
   let halt_reason: string | undefined;
   if (!nestedResult.summary_parsed && nestedResult.outer_exit_code !== 0) {
     halt_reason =
-      `codex-nested outer worker failed (exit=${nestedResult.outer_exit_code}, summary=${nestedResult.summary_parsed ? "parsed" : "missing"})`;
+      `nested outer worker (${args.brand}) failed (exit=${nestedResult.outer_exit_code}, summary=missing)`;
   }
 
   return {

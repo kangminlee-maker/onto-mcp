@@ -23,7 +23,7 @@
  *
  * - Script/prompt/summary semantics: `review/nesting-batch.ts` (shared,
  *   brand-neutral).
- * - A-path bridge: `codex-nested-dispatch.ts`.
+ * - A-path bridge: `nested-batch-dispatch.ts`.
  * - The retired teamlead executor piped packets straight into
  *   `codex exec -o` (bypassing structured output) — that inner realization
  *   is gone; only the outer spawn survives here.
