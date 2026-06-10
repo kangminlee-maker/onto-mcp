@@ -14,7 +14,9 @@
 
 ## 2. L3 결과 — done-when #1
 
-**live 심의로 `completed` ReviewRecord 도달.** record_status=completed, execution_status=completed, deliberation_status=performed, 참여 3 lens/degraded 0. 12개 `deliberation:<issue>:<lens>` live seat 전부 **controlled와 동일한 validator 코드 경로**(advance의 seat 검증 게이트)를 통과 — advance frontier gate는 비신뢰 유닛을 통과시키지 않으므로 assemble 도달 자체가 전 유닛 신뢰 증명이다.
+**live 심의로 `completed` ReviewRecord 도달.** record_status=completed, execution_status=completed, deliberation_status=performed, 참여 3 lens/degraded 0.
+
+**검증 증거의 정확한 범위** (Codex P1 반영): advance의 B 게이트는 심의 seat에 대해 얕은 검증(존재·비공백 + frontier 신뢰 부기)이고, 아래 관찰처럼 advance *이후* seat 2건이 보강되었으므로 "assemble 도달"만으로는 최종 바이트의 deep 검증을 주장할 수 없다. 따라서 **최종 디스크 바이트에 대해 controlled 경로의 deep validator(`validateIssueDeliberationResponseObject`)로 사후 재검증을 수행 — 12/12 통과** (`fixtures/s3-live-deliberation/validate-live-seats.mts`, 결과 `evidence/live-*/seat-revalidation.yaml`; allowedEvidenceRefs 검사는 packet 권위 미번들로 제외 명기). 이 경계는 계약 의무 5(교환 quiescence 후 advance + advance 후 seat 동결)로 승격했다.
 
 ### live 교환의 실질 (관찰)
 
@@ -37,17 +39,17 @@
 | planned 심의 / 심의 seat | 5 issues / 12 seats | 0 / 0 (stance 36/36 만장일치) | 내용 분산 |
 | material / non-material | 8 / 0 | 7 / 5 | 내용 분산 |
 
-- **계약 동등성 성립**: 동일 seat 스키마·동일 검증 통과·record 신뢰 통과·동일 단계 구조·동일 stamp. 내용 단어 수준 동일은 설계상 비목표(LLM 산출).
-- **주의(귀속)**: planned 심의 5 vs 0 차이는 **수송 변수와 무관** — stance는 양 arm 모두 격리 작성이므로 run간 내용 분산이다. controlled arm은 결과적으로 no-planned-issue 경로를 실증했고, live 심의 seat의 계약 동등성은 "동일 validator 통과" 사실로 입증된다.
+- **계약 동등성의 정확한 범위** (Codex P2 반영): 단계 구조·게이트·record 필드·stamp 수준의 동등성은 성립. 단, **controlled arm이 per-issue 심의 seat를 0건 실행**(planned=[])했으므로 *심의 계약의 인스턴스 수준 대조는 미달성*이다 — live 심의 seat의 계약 적합성은 인스턴스 대조가 아니라 "동일 deep validator를 최종 바이트가 통과"(§2 사후 재검증)로 입증된다. 인스턴스 대조는 stance 분기를 유도한 controlled 재실행이 후속 후보. 내용 단어 수준 동일은 설계상 비목표(LLM 산출).
+- **주의(귀속)**: planned 심의 5 vs 0 차이는 **수송 변수와 무관** — stance는 양 arm 모두 격리 작성이므로 run간 내용 분산이다. controlled arm은 결과적으로 no-planned-issue 경로를 실증했다.
 
 ## 4. done-when 판정 (roadmap §4 S3)
 
-1. teammate 팀 live 심의 → completed ReviewRecord: **달성** (1회 실증)
-2. controlled와 아티팩트 계약 동등: **달성** (위 표; 내용 분산은 비목표 명기)
+1. teammate 팀 live 심의 → completed ReviewRecord: **달성** (1회 실증; 심의 seat 최종 바이트 deep 재검증 12/12)
+2. controlled와 아티팩트 계약 동등: **구조·게이트 수준 달성 / 심의 인스턴스 대조 미달성** (controlled arm planned=0 — stance 분기 유도 재실행이 후속 후보)
 3. 실험 carve-out — 런타임 diff 0: **달성** (변경 = rank-5 계약 문서 + lexicon note + scripts/ CLI + 테스트뿐)
 
 ## 5. 한계·후속
 
-- 각 arm 1 run — PRELIMINARY. `flat+teamlead+peer` 토폴로지는 미실증(설계상 2차; flat+peer 성공으로 전제 충족).
-- live 운영 규율 후보(계약 갱신 후보): 교환 quiescence 확인 후 advance, advance 후 seat freeze. 현 계약 §3.3(교환=수송)은 유지.
+- 각 arm 1 run — PRELIMINARY. `flat+teamlead+peer` 토폴로지는 미실증(설계상 2차; flat+peer 성공으로 전제 충족). 심의 인스턴스 수준 controlled 대조 미달성(stance 분기 유도 재실행 후속).
+- live 운영 규율은 계약 의무 5로 승격 완료(교환 quiescence 후 advance + advance 후 seat 동결; 위반 시 deep 사후 재검증 없이는 증거 불성립).
 - host 평면의 teammate 도구(TeamCreate/SendMessage)는 실측 가용(스모크 + 본 실험). 설치형 MCP 서버의 round/advance 미노출은 L2 bridge로 해소 확인.

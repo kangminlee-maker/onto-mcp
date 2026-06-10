@@ -1,0 +1,31 @@
+purpose: post-hoc deep re-validation of FINAL live deliberation seat bytes
+  (advance gate is shallow for deliberation seats; two seats were enriched after
+  advance)
+validator: validateIssueDeliberationResponseObject (same deep validator as the
+  controlled path)
+limit: allowedEvidenceRefs check skipped (packet authority not bundled in evidence)
+results:
+  - unit: deliberation:issue-002:coverage
+    status: passed
+  - unit: deliberation:issue-002:logic
+    status: passed
+  - unit: deliberation:issue-002:semantics
+    status: passed
+  - unit: deliberation:issue-003:logic
+    status: passed
+  - unit: deliberation:issue-003:semantics
+    status: passed
+  - unit: deliberation:issue-004:coverage
+    status: passed
+  - unit: deliberation:issue-004:logic
+    status: passed
+  - unit: deliberation:issue-004:semantics
+    status: passed
+  - unit: deliberation:issue-005:coverage
+    status: passed
+  - unit: deliberation:issue-005:logic
+    status: passed
+  - unit: deliberation:issue-007:logic
+    status: passed
+  - unit: deliberation:issue-007:semantics
+    status: passed

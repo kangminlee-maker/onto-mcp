@@ -40,13 +40,16 @@ host = claude 세션 (B 라운드 드라이버: prepare → round → 실행 →
 2. **packet = 계약 권위** — live에서도 unit packet(스키마·allowed_evidence_refs·boundary)을 계약 권위로 사용한다. teammate는 packet을 읽고 응답 스키마를 지키되, 동료 관점만 packet 임베드 대신 live 교환에서 얻는다.
 3. **교환 = 수송** — SendMessage 교환은 컨텍스트 수송일 뿐 아티팩트가 아니다. 검증·ledger·trust 경로에 진입하지 않는다. 단, host가 실험 기록으로 transcript를 세션 외부에 보관할 수 있다.
 4. **orchestration stamp 준수** — 세션은 prepare 시 `orchestration: host`로 불변 각인되며, live/controlled 분기는 stamp를 바꾸지 않는다(실현 선택일 뿐).
+5. **교환 정착 후 advance, advance 후 seat 동결** — host는 해당 라운드의 live 교환이 완전히 정착(quiescence)된 뒤에만 advance를 호출하고, advance가 검증한 seat는 이후 변경하지 않는다. advance 이후 seat가 변경되면 다운스트림이 읽는 바이트가 게이트 수용 바이트와 어긋나므로, 해당 seat의 사후 재검증(동일 deep validator) 없이는 실험 증거로 사용할 수 없다. (L3 1회차에서 교차 전송 메시지로 이 경계가 2회 실측되어 의무로 승격.)
 
 ## 4. 토폴로지 2종
 
-| 토폴로지 | 참여 | resolution seat |
+| 토폴로지 | 참여 | resolution seat (canonical — 양쪽 모두 존재) |
 |---|---|---|
-| `flat+peer` | 이슈별 관련 lens teammate 전원 (대칭) | 없음 — 각 lens response seat만 |
-| `flat+teamlead+peer` | peer + teamlead teammate(교환 리드) | teamlead가 resolution seat 기록 |
+| `flat+peer` | 이슈별 관련 lens teammate 전원 (대칭) | 기존 실현(host의 one-shot 실행 등)으로 기록 — live 교환 리드 역할만 부재 |
+| `flat+teamlead+peer` | peer + teamlead teammate(교환 리드) | 교환을 리드한 teamlead teammate가 직접 기록 |
+
+resolution seat(`deliberation-resolution.yaml`)는 파이프라인의 canonical 유닛이라 토폴로지와 무관하게 항상 작성된다 — 두 토폴로지의 차이는 *누가* 그 seat를 쓰는가(그리고 live 교환을 리드하는가)뿐이다.
 
 1차 실증은 `flat+peer`. teamlead 변형은 성공 시 2차.
 
