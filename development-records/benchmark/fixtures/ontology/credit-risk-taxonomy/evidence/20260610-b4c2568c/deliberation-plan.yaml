@@ -1,0 +1,106 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+planned_issues:
+  - issue_id: issue-007
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - structure
+      - logic
+      - evolution
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: "Semantics and axiology frame Collateral.is_a: Exposure as a
+      high-severity semantic type-boundary failure, while structure supports the
+      same modeling defect but lowers severity, logic narrows it to a
+      conditional inference conflict, and evolution treats it only as a surface
+      issue. The issue also materially overlaps issue-009, which appears to rest
+      on the same Collateral/Exposure modeling error from the structure lens."
+    resolution_question: Should the Collateral/Exposure modeling defect be admitted
+      as one consolidated issue with issue-009, and if so should its root be the
+      semantic type-boundary error, the structural association-vs-subtype
+      conflict, or a narrower conditional inference problem, with what final
+      severity?
+  - issue_id: issue-009
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - semantics
+      - axiology
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+    conflict_summary: Structure and semantics support the issue as a valid
+      Collateral/Exposure subtype-versus-association defect, but axiology and
+      evolution treat it as a surface duplicate or sibling of issue-007 rather
+      than a distinct root issue, and logic narrows it to cases where subtype
+      inheritance or disjointness assumptions are used.
+    resolution_question: Should issue-009 remain a separate material issue, be
+      merged into issue-007 as a duplicate structural surface of the same
+      defect, or be retained only as a narrower graph-integrity consequence?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: "The non-supporting positions are lens-scope qualifications rather than
+      material disagreement: coverage accepts the canonical mapping/provenance
+      gap while rating its own evidence medium, structure narrows to
+      derivation/provenance paths, and logic is not applicable. The supporting
+      lenses preserve the same root sufficiently for synthesis without
+      controlled deliberation."
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the temporal aggregate/snapshot problem;
+      coverage and structure narrow their lens-specific root and logic lowers
+      its own severity contribution, but those positions are complementary to
+      the consolidated stale/current total conflict rather than a material
+      conflict requiring deliberation.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Coverage and axiology support the out-of-scope default/delinquency/NPL
+      gap, while evolution only narrows to lifecycle extensibility and lowers
+      its lens-specific severity. The other lenses are not applicable, so there
+      is no material disagreement over the coverage-led issue.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Coverage, axiology, and semantics support the missing
+      money/currency/conversion authority issue. Evolution narrows to the
+      temporal authority aspect and lowers its own severity, which does not
+      materially contradict the medium consolidated coverage and semantics
+      claim.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: The lenses converge on the need to model aggregate and RiskAppetite
+      scope dimensions. Evolution, semantics, and structure narrow to their
+      lens-specific facets, but all applicable positions preserve the same
+      medium issue and action direction.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Evolution directly supports the closed-enum taxonomy issue, while
+      coverage and semantics narrow it to classification-dimension coverage and
+      reference-concept meaning. These are compatible refinements of the same
+      medium change-resilience problem, not a material conflict.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Semantics and structure directly support the RiskAppetite
+      policy/scope/assessment separation issue, and coverage, evolution, and
+      logic narrow to compatible scope, temporal, and calculability aspects. The
+      narrowed positions do not dispute the material root or medium severity.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Structure and logic support the missing Exposure-to-RiskRating
+      derivation path, while coverage, evolution, and semantics narrow to
+      compatible derivation coverage, temporal history, and meaning-traceability
+      facets. The positions are aligned enough for synthesis without
+      deliberation.

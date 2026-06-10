@@ -3,6 +3,7 @@
 > 목적: 리뷰 파이프라인이 코드 밖의 복잡한 개념 문제에서도 의미 있는 발견을 하는지 검증(사용자 지시). 도메인 3종 × seeded 개념 결함 10개씩, live core-axis 리뷰(현 mixed effort 프로파일, codex OAuth) 각 1 run.
 > **PRELIMINARY** — INV-BENCH-1(runs≥3×fixtures≥2) 미충족. 결론은 방향 신호로만 사용.
 > fixture/ground truth: `development-records/benchmark/fixtures/ontology/` (ground truth는 리뷰 타깃 비포함 — 리뷰어 비노출 유지).
+> 채점 근거 아티팩트(영속화): 각 fixture의 `evidence/<session-id>/` (finding/issue ledger·problem-framing·record·final-output 등 — PR #28 P2 반영, 세션 tmp 의존 제거). 러너는 HOME 격리로 사용자 settings 혼입을 차단한다.
 
 ## 실행
 

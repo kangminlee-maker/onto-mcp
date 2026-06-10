@@ -1,0 +1,254 @@
+schema_version: 1
+session_id: 20260610-5fbe917f
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - logic
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+    conflict_summary: Most applicable lenses accept the duplicated
+      Result.status/Report.result_status authority root and keep high severity,
+      but coverage narrows the root to status-model coverage closure and logic
+      lowers the severity to the formal mapping/contract defect rather than the
+      full stale-authority operational consequence.
+    resolution_question: Should issue-001 be deliberated as a high-severity
+      authority/staleness defect requiring a single canonical status/projection
+      contract, or narrowed/lowered to a mapping coverage and formal contract
+      incompleteness problem?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - structure
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.structure
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: Coverage, axiology, and semantics support the broader missing
+      order-line/accession execution unit, while evolution and structure narrow
+      the root to the stable execution/mapping bridge needed from ordered Test
+      through Specimen/Assay to Result.
+    resolution_question: Should the accepted root remain the broader missing
+      intermediate order/accession execution unit, or be narrowed to the
+      explicit workflow bridge and mapping relation from ordered Test to
+      Specimen, Assay, and Result?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+    conflict_summary: Coverage and axiology support the pre-analytic
+      exception/quality-management gap, evolution and semantics narrow it to
+      lifecycle and state-meaning extension, and structure reports only surface
+      evidence with insufficient support for a graph-path defect.
+    resolution_question: Is issue-004 a medium material coverage defect across the
+      pre-analytic quality subdomain, or should it be narrowed to
+      lifecycle/state meaning while excluding unsupported structural claims?
+  - issue_id: issue-005
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - structure
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.evolution
+      - issue-stance-matrix.yaml#stances.issue-005.structure
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+    conflict_summary: Coverage, axiology, and semantics support a missing
+      amendment/audit event subdomain, evolution narrows the root to lack of an
+      evolvable amendment event model, and structure has only surface evidence
+      with insufficient basis for a structural graph defect.
+    resolution_question: Should the final issue preserve the full amendment
+      audit/version subdomain root, or narrow it to an amendment event extension
+      point and omit unsupported structural claims?
+  - issue_id: issue-007
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+      - coverage
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: Evolution, semantics, structure, and axiology support a
+      high-severity Test/Assay authority-boundary and mapping defect, while
+      coverage narrows it to missing order-to-result workflow bridge coverage
+      and logic narrows it to closed mapping cardinality/relation reasoning
+      while lowering severity.
+    resolution_question: Should issue-007 remain a high-severity cross-lens
+      authority and graph defect for Test-to-Assay mapping, or be
+      narrowed/lowered to a formal mapping closure or workflow-bridge coverage
+      issue?
+  - issue_id: issue-008
+    priority: 6
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+    conflict_summary: Evolution, axiology, and coverage support the post-analysis
+      specimen lifecycle/policy authority defect, semantics narrows it to
+      post-analysis state and disposition-policy meaning boundaries, and
+      structure reports insufficient evidence for a relation-graph path defect.
+    resolution_question: Should issue-008 be accepted as a medium lifecycle and
+      policy-authority issue, or narrowed to semantic post-analysis state
+      boundaries with structural claims excluded?
+  - issue_id: issue-009
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - logic
+      - coverage
+      - evolution
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+    conflict_summary: Logic, axiology, and semantics support an independent medium
+      timing-modality contract issue, coverage narrows it to amendment event and
+      time milestone coverage, and evolution treats it as a surface symptom of
+      the broader duplicated status model from issue-001 rather than an
+      independent evolution root.
+    resolution_question: Should issue-009 remain a distinct material timing-contract
+      issue, or be folded into the broader status authority/amendment coverage
+      cluster represented by issue-001 and related amendment issues?
+  - issue_id: issue-011
+    priority: 7
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - logic
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+    conflict_summary: Semantics and axiology support STAT canonical-source
+      duplication as a medium issue, evolution and logic narrow it to canonical
+      urgency representation and invariant/derivation contracts, while coverage
+      has insufficient evidence to classify it as a coverage gap.
+    resolution_question: Should issue-011 be accepted as a material semantic
+      canonical-source defect, and if so should the remediation focus on
+      semantic canonicalization or on explicit invariants and derived
+      projections?
+  - issue_id: issue-012
+    priority: 6
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+    conflict_summary: Semantics and axiology support the relation-meaning root that
+      Specimen produces Result conflates source object and execution act, while
+      coverage, evolution, and structure narrow the root toward the missing
+      AssayExecution/provenance concept and graph connection.
+    resolution_question: Should issue-012 be resolved as a semantic relation
+      naming/role defect, or as a broader missing execution/provenance concept
+      needed to separate derived_from Specimen from produces Result?
+  - issue_id: issue-013
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - evolution
+      - logic
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-013.structure
+      - issue-stance-matrix.yaml#stances.issue-013.evolution
+      - issue-stance-matrix.yaml#stances.issue-013.logic
+      - issue-stance-matrix.yaml#stances.issue-013.axiology
+      - issue-stance-matrix.yaml#stances.issue-013.coverage
+      - issue-stance-matrix.yaml#stances.issue-013.semantics
+    conflict_summary: Structure directly supports the missing
+      Result-to-CriticalValue-to-notification path, while evolution narrows it
+      to an evolvable notification event/path and logic narrows it to the formal
+      inference path needed for deterministic notification-obligation reasoning;
+      other lenses support the operational root.
+    resolution_question: Should issue-013 be accepted as a structural graph-path
+      defect, or narrowed to the missing notification event/inference path
+      required for critical-result obligation reasoning?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Applicable lenses broadly support the CriticalValue notification
+      event/workflow root and medium severity; structure only narrows to the
+      missing notification relationship path, which is compatible with rather
+      than materially conflicting with the proposed NotificationEvent-style
+      remediation.
+  - issue_id: issue-006
+    reason_code: non_material_issue
+    reason: The issue is low severity, marked non-material in the projection, has
+      low root confidence, and the projection states no material failure
+      condition is shown by current bounded evidence.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Most applicable lenses support the duplicated result-status semantic
+      authority root and high severity; coverage narrows to status
+      coverage/mapping closure, which is compatible with the canonical status
+      and projection action rather than a material deliberation conflict.

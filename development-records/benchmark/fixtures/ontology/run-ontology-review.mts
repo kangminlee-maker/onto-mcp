@@ -36,9 +36,38 @@ const FIXTURES: Record<string, { targetFile: string; intent: string }> = {
   },
 };
 
+/** 감사 가능성: 채점 근거가 되는 세션 아티팩트를 repo 증거 디렉토리로 영속화. */
+const EVIDENCE_ARTIFACTS = [
+  "finding-ledger.yaml",
+  "issue-ledger.yaml",
+  "problem-framing.yaml",
+  "review-record.yaml",
+  "final-output.md",
+  "execution-result.yaml",
+  "synthesis.md",
+  "deliberation-plan.yaml",
+];
+
+async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<string> {
+  const dst = path.join(FIXTURES_ROOT, fixtureId, "evidence", path.basename(sessionRoot));
+  await fs.mkdir(dst, { recursive: true });
+  for (const file of EVIDENCE_ARTIFACTS) {
+    try {
+      await fs.copyFile(path.join(sessionRoot, file), path.join(dst, file));
+    } catch {
+      // 해당 run에 없는 아티팩트는 건너뜀
+    }
+  }
+  return dst;
+}
+
 async function main(): Promise<void> {
   const requested = process.argv.slice(2);
   const ids = requested.length > 0 ? requested : Object.keys(FIXTURES);
+  // settings chain 격리: 사용자 ~/.onto 설정이 결과에 섞이지 않도록 HOME을
+  // 비운 tmp로 고정 — 커밋된 repo settings만이 실행 프로파일을 결정한다.
+  const isolatedHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ontology-eval-home-"));
+  process.env.HOME = isolatedHome;
   const { createOntoReviewCoreApi } = await import(
     path.join(REPO_ROOT, "src/core-api/review-api.ts")
   );
@@ -73,13 +102,15 @@ async function main(): Promise<void> {
         reviewMode: "core-axis",
       });
       const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+      const evidenceDir = await persistEvidence(id, run.sessionRoot);
       console.log(
-        `[${id}] status=${run.status} session=${run.sessionRoot} (${elapsedSec}s)`,
+        `[${id}] status=${run.status} session=${run.sessionRoot} evidence=${evidenceDir} (${elapsedSec}s)`,
       );
       results.push({
         fixture: id,
         status: run.status,
         session_root: run.sessionRoot,
+        evidence_dir: path.relative(REPO_ROOT, evidenceDir),
         project_root: projectRoot,
         elapsed_sec: elapsedSec,
       });

@@ -1,0 +1,212 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 제조 운영 핵심값의 권위와 precedence가 명시적 기준 개념과 graph path로 닫히지 않아 외부
+      수기·현장 판단이 기준 모델에 남아 있다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 최종 resolution은 high-severity authority/precedence 문제를 유지하되 evolution의
+      직접 근거 한계를 측정/UOM 및 명시 graph path 범위로 보존했다. PLM/MES 기준 문서의 신뢰성과 기준값 권위가 직접
+      약화되므로 target 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: ECO effectivity와 Part.rev 배치 동기화의 권위·시점 차이가 분리되지 않아 생산 시점의
+      유효 revision 판정이 흔들린다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 렌즈가 material root와 severity를 다투지 않았고, 생산오더 또는 BOM/라우팅 판단 시 잘못된
+      revision 선택으로 이어질 수 있다. 변경관리 기준의 실행 판정 정확성을 위해 target에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: 스크랩 재투입·회수 흐름을 BOM parent-child 자기참조 예외로 흡수해 제품 구조와 공정 흐름 및
+      BOM 비순환 규칙이 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 적용 stance가 scrap reinput/recovery flow를 BOM self-reference가 아닌 별도
+      process-flow concept으로 분리해야 한다고 수렴했다. BOM 무결성 규칙과 downstream 전개 신뢰를 깨는
+      구조·논리 충돌이다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-009
+      - finding-010
+  - issue_id: issue-004
+    problem_definition: MES 실행 주문 또는 작업지시 개념이 없어 master data 기준이 실제 생산 실행 단위로 전달되는 접점이 비어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: coverage 직접 finding이며 다른 적용 stance도 실행 주문 노드 추가 필요성을 지지했다. PLM/MES 통합
+      기준을 실행 단계로 넘기는 범위가 빠져 다음 통합 설계 전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: BOM이 독립 수명주기·버전·상태·효력 범위를 가진 기준 객체가 아니라 Assembly의 라인 목록 속성으로만 모델링되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 적용 stance가 독립 BOM lifecycle/version/effectivity object 필요성에 동의했다.
+      BOM 구조 변경의 release와 적용 범위가 target ontology의 핵심 기준성이므로 target 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: lot/serial/batch와 실행 이력·결과 개념이 없어 계획 master data와 실제 제조 이력 및
+      물리 추적 단위가 연결되지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 적용 stance가 추적성 개념 누락을 지지했다. 품질, 리콜, ECO 적용 오류, 스크랩 이상 같은 제조 운영 위험
+      검증에 필요한 연결이 빠져 다음 운영 통합 단계 전에는 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: 변경 가능성이 높은 단위·환산·capacity 측정 기준이 독립 reference 개념이 아니라 고정
+      enum 또는 단위 없는 숫자 속성으로 분산되어 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 적용 stance가 UOM, conversion, capacity measurement를 reference
+      concept으로 승격해야 한다고 동의했다. 새 단위와 설비 능력 범주 확장 시 데이터 재해석과 계산 신뢰 저하가 예상된다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: 변경관리 권한과 이력이 version/effectivity 개념이 아니라 최신값 속성과 단일
+      effective_date 규칙에 집중되어 버전 연속성이 부족하다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 적용 stance가 version/effectivity continuity 문제를 지지했다. Part, BOM,
+      Routing, InspectionPlan의 과거·현재·미래 적용 기준 재현에 필요한 핵심 lifecycle 구조다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: AlternatePart를 필수 대칭 관계로 정의하면서 direction 속성과 one_way 기본값을
+      동시에 둬 관계 양상이 충돌한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: logic 직접 finding이며 axiology, semantics, structure도 같은 directionality
+      defect를 지지했다. 대체부품 가능성의 양방향·단방향 판정이 흔들리므로 target 정의 안에서 정합성을 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: AlternatePart의 대칭성 여부가 관계 정의와 direction 속성 양쪽에서 서로 다르게 부여되어
+      대체 허용 범위 의미가 흔들린다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: semantics 직접 finding이며 logic, axiology, structure도 directionality
+      meaning defect를 지지했다. issue-009와 중복 맥락은 있으나 현재 ledger상 별도 issue로 보존되어 동일한
+      target-level 정합성 폐쇄가 필요하다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: InspectionPlan을 Operation 하위 유형으로 둔 taxonomy 오류가 검사 계획과 공정
+      실행 단계를 혼동시키며, 실행·결과 범위 포함 여부는 추가 범위 결정이 필요하다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: resolution은 직접 root를 InspectionPlan과 Operation의 is_a taxonomy 오류로
+      좁혔지만 coverage와 evolution은 plan-execution-result separation까지 completion
+      scope를 넓혔다. 우선 taxonomy correction을 해야 하며 최종 수리 범위 결정이 남아 있다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-012
+    problem_definition: 제품 구조 관계와 공정 수율·회수 흐름이 같은 BOM 표현 안에 배치되어 BOM 구성 의미와 process-flow 의미가 혼재한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: controlled resolution은 issue-003에 병합하지 않고 독립 semantic
+      BOM-versus-process-flow issue로 유지했다. 자재소요, 원가, 라우팅 수율 계산의 기준 의미가 흔들리므로
+      target에서 분리해 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-013
+    problem_definition: current_eco가 최신 접수·승인·적용·현재 생산 유효 변경 중 무엇인지 분리되지 않았지만
+      material failure evidence는 아직 부족하다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: governance_value
+    timing_class: defer_watch
+    closure_class: needs_evidence
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: projection과 resolution 모두 low severity non-material issue로 보존했고 여러
+      렌즈가 insufficient evidence를 표시했다. 변경관리 의미 모호성은 기록하되 material failure 근거가
+      확인될 때 후속 처리하는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-014
+    problem_definition: declared relations graph가 AlternatePart association entity를
+      우회해 Part-to-Part shortcut으로 대체 관계를 표현하므로 direction 속성이 관계 기반 소비자에게 전달되지 않을
+      수 있다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: controlled resolution은 AlternatePart directionality cluster에 흡수하지 않고
+      독립 medium structural issue로 유지했다. canonical relation graph의 completeness가
+      대체 방향 의미 전달을 좌우하므로 target 구조 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-016

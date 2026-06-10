@@ -1,0 +1,158 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 등급 스케일, 등급 변환, Exposure.risk_grade 도출·수동 조정 권위가 온톨로지 안에서
+      버전·provenance가 있는 공통 기준으로 닫히지 않은 문제다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 렌즈가 같은 canonical mapping/provenance 결핍을 지지하며, 등급 해석이 엔진·보고·심사
+      시스템별로 갈라질 수 있어 공유 기준의 일관성을 직접 약화한다. high severity이고 공통 권위 문서의 핵심 계약에 닿으므로
+      대상 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-013
+      - finding-002
+      - finding-006
+      - finding-008
+  - issue_id: issue-002
+    problem_definition: ExposureAggregate.total_amount가 현재 총계와 월말 배치 snapshot 의미를
+      동시에 가져 한도 소진율·RiskAppetite 준수 판단의 기준시점과 포함 범위가 닫히지 않은 문제다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 집계값의 시간성, snapshot kind, inclusion policy가 분리되지 않아 stale 또는 모순된 총액으로
+      준수 판단이 이뤄질 수 있다. high severity로 리스크 판단의 계산 정확성과 재현성을 흔드므로 우선 수정 대상이다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-010
+      - finding-011
+  - issue_id: issue-003
+    problem_definition: default·연체·부실 상태가 공유 온톨로지의 최소 참조 개념에서 제외되어 핵심 여신 리스크 상태의 공통 기준이 비어 있는 문제다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: projection은 해당 상태 영역이 명시적으로 범위 밖에 놓였다고 제시하며 coverage와 axiology가 이를
+      지지한다. 핵심 리스크 상태 coverage 결핍이므로 completeness 영향이 크고 대상에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-004
+    problem_definition: 금액 값에 통화, 기준통화, 환율 참조, 환산일이 공통 개념으로 붙지 않아 다통화 익스포저와 한도 소진율
+      계산 기준이 시스템별로 갈라질 수 있는 문제다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Exposure 금액과 Limit 통화, per-system FX 사용 규칙의 조합에서 환산 권위가 닫히지 않는다는 근거가
+      충분하다. 다통화 조건에서 공통 판단 기준을 약화하는 medium issue이므로 같은 대상 안에서 수정해야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-005
+    problem_definition: 집계와 RiskAppetite가 차주 단위 총액 및 단일 threshold/status 중심으로만 모델링되어
+      세그먼트·상품·등급·담보유형·적용기간별 판단 범위가 닫히지 않은 문제다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: coverage, semantics, structure가 적용 범위 차원 부족에 수렴한다. 보고와 정책 적용에 필요한
+      scope dimension이 빠져 있어 공통 분류·집계 기준의 완결성이 약해지므로 대상 수정이 필요하다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-006
+    problem_definition: 변경 가능한 세그먼트·상품·담보 유형 분류가 버전 가능한 taxonomy entity가 아니라 폐쇄 enum
+      attribute로 고정된 문제다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: evolution lens가 직접 지지한 변경 내성 문제이며, 신규 분류 추가 때 스키마 변경과 소비 시스템 배포 위험을
+      만든다. 현재 판단 자체를 즉시 불가능하게 하기보다 확장성과 유지보수성을 약화하므로 다음 단계에서 함께 운반해 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: Collateral을 Exposure의 하위 유형으로 두어 담보 자산과 여신 익스포저의 의미 유형 경계가 혼동되는 핵심 모델링 오류다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "controlled deliberation은 issue-009를 이 문제의 구조적 표면으로 통합해 해석한다.
+      Collateral.is_a: Exposure 자체가 hierarchy traversal, 집계, 검증의 잘못된 의미를 만들 수 있어
+      high severity의 correctness 결함이다."
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-008
+    problem_definition: RiskAppetite가 정책 기준, 적용 대상, 평가 결과로 분리되지 않고
+      ExposureAggregate와의 평가 관계도 닫히지 않아 준수 상태의 주체·시점·근거가 불명확한 문제다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: semantics와 structure가 직접 지지하고 다른 렌즈들도 compatible narrowing을 제시한다. 정책
+      기준과 평가 결과 혼합은 준수 상태의 감사 가능성과 운영 권위를 약화하므로 governance impact가 중심이다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-015
+  - issue_id: issue-009
+    problem_definition: Collateral/Exposure boundary defect가 구조적으로 나타난 표면 문제로,
+      subtype 관계와 secured_by association이 병존해 graph traversal 시 담보가 익스포저처럼 처리될 수
+      있다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: deliberation resolution은 issue-009를 별도 독립 root가 아니라 issue-007의 구조적
+      graph-integrity consequence로 좁혔다. 결함 자체는 유효하지만 독립 문제로 고정하기보다 issue-007 수정과
+      함께 추적하는 것이 적절하다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-010
+    problem_definition: Exposure.risk_grade가 RiskRating.grade에서 도출된다는 규칙은 있으나 이를
+      표현하는 Exposure-to-RiskRating derivation 관계나 객체가 없어 등급 도출·감사 경로가 끊긴 문제다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: structure와 logic이 직접 지지하며 issue-001의 등급 권위 결핍과 원인을 공유하는 구조적 증상이다. 도출
+      dependency를 공식 구조로 검증·감사할 수 없으므로 공유 권위와 추적성에 영향을 주며 대상 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-017
