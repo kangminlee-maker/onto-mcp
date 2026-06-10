@@ -1,0 +1,196 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: "clinical-lab-ontology.yaml: CriticalValue notification model"
+    evidence_anchor: materialized-input.md:100-106
+    claim: Critical-value notification is represented only as a boolean and omits
+      the notification event/audit evidence concept.
+    what: "`CriticalValue` defines thresholds and `notified`, but the ontology has
+      no entity or relation for the notification action, actor, timestamp,
+      recipient, channel, acknowledgement, or evidence. The note says the
+      notification time and recipient are in a phone log outside this model."
+    why: Critical-value notification is a control action in an EMR/LIS workflow. A
+      boolean cannot reconstruct who notified whom, when, by what basis, or
+      whether the clinician acknowledged it. As a concept authority document,
+      the ontology therefore leaves a required operational sub-area outside its
+      own model while still depending on it for safety-critical behavior.
+    how_to_fix: Add a `CriticalValueNotification` or equivalent event entity related
+      to `CriticalValue`, `Result`, `Order`/`Patient`, notifying `Staff`,
+      recipient/clinician, timestamp, channel, acknowledgement status/time, and
+      evidence/source reference. Replace or derive `notified` from this event
+      rather than making it the only concept.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use as the EMR/LIS integration concept authority for entities,
+        relations, and states from order through report.
+      failure_condition: When a critical result must be communicated or audited, the
+        authoritative ontology cannot represent the notification event or its
+        evidence beyond a boolean flag.
+      impact: Downstream systems can diverge on notification evidence,
+        acknowledgement, and audit requirements, weakening clinical safety and
+        operational accountability for a safety-critical workflow.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - materialized-input.md:6-8
+    causal_path:
+      root_cause_candidate: The ontology models notification completion as an
+        attribute of `CriticalValue` instead of modeling notification as a
+        first-class control event with audit dimensions.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: "`CriticalValue` contains only threshold fields and `notified`."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-001.cause-002
+          claim: The note places notification time and recipient in an external phone log
+            rather than in the ontology's concept model.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:106
+        - cause_id: coverage-candidate-001.cause-003
+          claim: Because the ontology is intended as the EMR/LIS concept authority,
+            leaving this event outside the model creates a coverage gap for
+            notification audit evidence.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:6-8
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: "clinical-lab-ontology.yaml: Specimen lifecycle"
+    evidence_anchor: materialized-input.md:37-44; materialized-input.md:121-124
+    claim: Specimen lifecycle stops at `analyzed` and does not cover retention,
+      storage, disposal, rejection, or post-analysis correction handling.
+    what: "`Specimen` lifecycle is `[collected, received, in_analysis, analyzed]`;
+      the only post-analysis rule says storage/disposal follows departmental
+      policy, without ontology states or events for those phases."
+    why: Specimens remain operationally relevant after analysis for retention,
+      rerun, add-on testing, chain-of-custody, disposal, and investigation. By
+      ending the lifecycle at `analyzed`, the ontology cannot express whether a
+      specimen is retained, unavailable, discarded, or governed by a
+      post-analysis event, even though the artifact explicitly acknowledges
+      storage/disposal.
+    how_to_fix: Extend the specimen lifecycle or add specimen disposition events
+      covering at least retained/stored, rejected/unsuitable if applicable,
+      disposed, and post-analysis retrieval/rerun eligibility. Tie departmental
+      policy to explicit state or event concepts instead of leaving it as an
+      unmodeled note.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as a workflow concept authority for laboratory entity and
+        state models.
+      failure_condition: After analysis, EMR/LIS integrations need to reason about
+        specimen availability, retention, disposal, or follow-up actions, but
+        the target model has no concepts for those states.
+      impact: Operational systems may implement incompatible post-analysis specimen
+        handling, and historical reconstruction of specimen disposition is not
+        supported by the ontology.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: The target delegates post-analysis specimen handling to
+        departmental policy without representing the lifecycle concepts in the
+        authority model.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: The declared specimen lifecycle ends at `analyzed`.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-002.cause-002
+          claim: The state rule acknowledges storage/disposal after `analyzed` but does
+            not define states, events, or relations for it.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: coverage-candidate-002.cause-003
+          claim: This leaves the post-analysis lifecycle outside the ontology despite
+            being part of the workflow's operational state space.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:37-44
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: "clinical-lab-ontology.yaml: Test and Assay catalog coverage"
+    evidence_anchor: materialized-input.md:46-60; materialized-input.md:126-128
+    claim: The model has parallel Test and Assay catalog concepts but lacks
+      authority, mapping, versioning, and effective-period concepts for
+      maintaining them.
+    what: "`Test` and `Assay` both describe catalog-like laboratory items with
+      overlapping department/specimen information. The notes say new items are
+      currently registered in both places and integration will be reconsidered
+      later, but there is no relation between them and no concept for
+      authoritative source, mapping validity, version, activation/retirement, or
+      effective dates."
+    why: Catalog definitions and mappings are time-dependent and
+      integration-critical. Without authority and lifecycle coverage, EMR
+      orderables and LIS analyzer assays can drift while still appearing valid
+      in the concept authority document.
+    how_to_fix: Introduce an explicit `TestAssayMapping` or catalog authority model
+      with source-of-truth ownership, version/effective date range,
+      active/retired status, and cardinality rules. Clarify whether `Test`
+      orderables, `Assay` performables, or a separate catalog service owns each
+      shared attribute.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as EMR/LIS integration authority for ordering and
+        laboratory execution concepts.
+      failure_condition: When a test orderable changes, maps to multiple assays, or is
+        retired/replaced, the ontology cannot determine which catalog value is
+        authoritative or valid for a given date.
+      impact: Integrations may maintain duplicate or inconsistent catalog definitions,
+        leading to wrong orderability, specimen requirements, or result mapping
+        across EMR and LIS.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-128
+    causal_path:
+      root_cause_candidate: The ontology preserves duplicate catalog concepts while
+        postponing consolidation and omitting the authority/mapping lifecycle
+        concepts needed to govern duplication.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: "`Test` and `Assay` each define catalog-like identifiers, names,
+            departments, and specimen type/kind information."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: coverage-candidate-003.cause-002
+          claim: The note states new items are registered in both places and consolidation
+            is deferred.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: coverage-candidate-003.cause-003
+          claim: No relation or entity defines mapping, ownership, version, effective
+            period, or retirement for the parallel catalog concepts.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:108-119
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The ontology is evaluated only against the embedded target and declared
+    purpose as an EMR/LIS integration concept authority; no external clinical
+    laboratory standard was used because the packet denies web research and sets
+    session_domain to none.
+  - Within that bounded context, critical-value communication, specimen
+    disposition, and test/assay catalog governance are treated as expected
+    operational sub-areas of a clinical laboratory workflow because the target
+    itself names or depends on them.
+validation:
+  unaddressable_candidates: []

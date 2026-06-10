@@ -1,0 +1,102 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules / Report.result_status
+      synchronization
+    evidence_anchor: "clinical-lab-ontology.yaml: Report.result_status values
+      [prelim, finalized, amended]; state_rules second rule: released_at makes
+      Report finalized, but corrected Result requires Report.result_status
+      amended via nightly batch"
+    claim: A report can be required to be both finalized and amended after a
+      corrected result, so the completion status depends on a later reversible
+      result state.
+    what: The model declares a release-time finalized state, then also declares a
+      later mandatory transition to amended when any Result.status becomes
+      corrected. If `finalized` is treated as the report's terminal/completed
+      status, the same report's status obligation is contradicted by the allowed
+      later correction path.
+    why: "The conflict is temporal rather than only a naming issue: the rule set
+      first makes finalized true at `released_at`, then permits a later
+      `Result.status=corrected` event that requires the report status to become
+      amended. That makes a completion/terminal interpretation of `finalized`
+      unstable on an allowed state path, weakening the ontology as an EMR/LIS
+      authority document for status precedence and caller-facing state
+      contracts. Logic-specific verdict: fail. conflict_pair:
+      `clinical-lab-ontology.yaml: Report.result_status enum values [prelim,
+      finalized, amended]` vs `clinical-lab-ontology.yaml: state_rules[2]`.
+      satisfiability_note: inter-claim; the release rule and correction rule can
+      both apply to the same Report over time. modality_note: mixed
+      necessary/obligatory; finalized is assigned necessarily at release while
+      amended is obligatory after correction. boundary_handoff_note: semantics
+      may need to decide whether `finalized` means terminal finality or merely
+      released-final display, but the temporal contradiction remains unless that
+      meaning is explicitly constrained."
+    how_to_fix: Separate immutable release/finalization facts from mutable amendment
+      display state, for example keep `released_at`/`finalized_at` as release
+      facts and model `report_status` as a lifecycle that allows `finalized ->
+      amended`; or define `finalized` as non-terminal and add explicit
+      precedence rules for corrected/amended states.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the conceptual authority for EMR/LIS
+        status integration and invalid/edge-case behavior.
+      failure_condition: A result is corrected after a report has already been
+        released/finalized, which the ontology explicitly allows by requiring a
+        later amended status update.
+      impact: Consumers cannot know whether finalized is a stable completion state or
+        a mutable display status, so EMR/LIS integrations may cache, close, or
+        display reports under mutually incompatible status assumptions.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml: Report.result_status enum values [prelim,
+          finalized, amended]"
+        - "clinical-lab-ontology.yaml: state_rules second rule"
+    causal_path:
+      root_cause_candidate: The ontology uses one mutable Report.result_status field
+        for both release-time finalization and later amendment obligations.
+      root_cause_step_id: logic-candidate-001.cause-004
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Report.result_status is the authority value clinicians trust and has
+            values `prelim`, `finalized`, and `amended`.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Report.result_status attribute note
+              and values"
+        - cause_id: logic-candidate-001.cause-002
+          claim: The state rule assigns finalized at the time `released_at` is recorded.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules second rule"
+        - cause_id: logic-candidate-001.cause-003
+          claim: The same rule requires a later corrected Result.status to make
+            Report.result_status amended, with synchronization delayed to a
+            nightly batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: state_rules second rule"
+        - cause_id: logic-candidate-001.cause-004
+          claim: Therefore a report that was already finalized can later be obligated to
+            stop being finalized and become amended, unless finalization is
+            explicitly non-terminal or split from amendment status.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml: Report.result_status values"
+            - "clinical-lab-ontology.yaml: state_rules second rule"
+      unresolved_beyond_evidence: The target does not formally state whether
+        `finalized` is terminal; materiality is based on the rule wording that
+        uses finalized as the release-time report state and authority display
+        value.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so only self-contained formal consistency checks
+    were applied.
+  - No external clinical laboratory domain rules were used.
+  - "`finalized` was treated as a completion-like status because the rule says
+    the report becomes finalized at release and the attribute note says
+    clinicians trust this authority value."
+validation:
+  unaddressable_candidates: []

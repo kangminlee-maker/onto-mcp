@@ -1,0 +1,151 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml explicit relation graph
+    evidence_anchor: clinical-lab-ontology.yaml:95-114;
+      clinical-lab-ontology.yaml:14-15; clinical-lab-ontology.yaml:49-55;
+      clinical-lab-ontology.yaml:95-101
+    claim: Declared entities and ref attributes are not consistently represented in
+      the top-level relations graph.
+    what: Patient, Assay, and CriticalValue are declared entities with relation-like
+      references or workflow relevance, but none appears as from/to in the
+      relations list. Order.patient_ref, Order.ordered_tests, Assay.department,
+      and CriticalValue.test_ref are modeled only as attributes, while the
+      top-level relation graph omits Order-Patient, Order-Test,
+      Assay-Test/Specimen/Result, and CriticalValue-Result/Test links.
+    why: "The artifact is intended as the concept authority for EMR/LIS integration,
+      and its explicit relations section is the structural graph consumers are
+      likely to traverse. Because several declared concepts are absent from that
+      graph, a consumer using relations as the canonical topology can miss
+      patient ownership, ordered-test membership, assay execution linkage, and
+      critical-value routing even though those concepts exist elsewhere in
+      attributes or notes. This is a structural completeness problem rather than
+      a domain expansion request: the target already declares the entities and
+      reference attributes, but does not close them in the relation graph."
+    how_to_fix: "Make the relationship authority explicit and complete: either add
+      top-level relations for the declared refs and workflow links, such as
+      Order belongs_to Patient, Order has_many Test, Test maps_to/realized_by
+      Assay, Result evaluated_against CriticalValue, and Assay belongs_to
+      Department, or state that ref attributes are authoritative relationships
+      and provide a deterministic projection rule that includes them in the
+      graph."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as the EMR/LIS integration concept authority for entities,
+        relationships, and state/workflow structure.
+      failure_condition: A downstream implementer or validator treats the top-level
+        relations list as the canonical relationship topology and therefore
+        omits declared concepts that are only connected through attributes or
+        notes.
+      impact: The ontology can produce incomplete integration mappings and graph
+        validations even though the missing links are already implied by
+        declared attributes. This weakens trust in the artifact as a bounded
+        concept authority.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:1-3
+        - clinical-lab-ontology.yaml:14-15
+        - clinical-lab-ontology.yaml:49-55
+        - clinical-lab-ontology.yaml:95-114
+    causal_path:
+      root_cause_candidate: "The ontology has two unmerged relationship surfaces:
+        typed ref attributes and the top-level relations list, without a rule
+        that projects refs into relations."
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "Several entity references are declared as attributes: Order.patient_ref
+            targets Patient, Order.ordered_tests targets Test, Assay.department
+            targets Department, and CriticalValue.test_ref targets Test."
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:14-15
+            - clinical-lab-ontology.yaml:54
+            - clinical-lab-ontology.yaml:98
+        - cause_id: structure-candidate-001.cause-002
+          claim: The top-level relations list omits Patient, Assay, and CriticalValue
+            entirely, and it does not include Order-to-Test despite
+            Order.ordered_tests.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:103-114
+        - cause_id: structure-candidate-001.cause-003
+          claim: The declared relationship topology is therefore incomplete for consumers
+            that use relations as the structural authority.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:1-3
+            - clinical-lab-ontology.yaml:103-114
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml state rule dependencies
+    evidence_anchor: clinical-lab-ontology.yaml:103-118
+    claim: The Order completion rule depends on Result membership that is not
+      structurally anchored to ordered tests.
+    what: The state rule says an Order transitions to completed when all Result
+      values are final, but the relations graph does not define which Result set
+      belongs to the Order's ordered_tests. Existing paths connect Order to
+      Specimen and Report, and Test to Result, but no relation closes the
+      ordered test set to the resulting results for completion evaluation.
+    why: A completion rule that says 'all Result' needs a bounded result set. In the
+      current graph, Order has ordered_tests as an attribute, Test has_many
+      Result, Specimen produces Result, and Report contains Result, but there is
+      no explicit relation tying an Order's ordered_tests to the Result
+      instances that satisfy that order. This can let implementations choose
+      different traversal paths or count unrelated results when evaluating
+      completion.
+    how_to_fix: Add an explicit structural path for completion evaluation, for
+      example Order has_many ordered_tests Test, Result fulfills Test within
+      Order, or Order has_many Result through ordered_tests/specimens. Then
+      rewrite the state rule to reference that bounded path, such as
+      'Order.completed when every Result fulfilling this Order's ordered_tests
+      is final or corrected according to the chosen terminal-result policy.'
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as a workflow/state concept authority for EMR/LIS integration.
+      failure_condition: Systems evaluate Order.completed from different Result
+        collections because the ontology does not structurally identify the
+        Result set governed by an Order.
+      impact: Completion status can diverge across EMR, LIS, and reporting
+        integrations, undermining state consistency in the workflow model.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:15
+        - clinical-lab-ontology.yaml:103-114
+        - clinical-lab-ontology.yaml:117
+    causal_path:
+      root_cause_candidate: The relation graph lacks an explicit
+        Order-to-ordered-Test-to-Result membership closure for the completion
+        rule.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Order declares ordered_tests as a list of Test refs.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:15
+        - cause_id: structure-candidate-002.cause-002
+          claim: The relations graph includes Test to Result and Order to Specimen/Report,
+            but no Order to Test relation and no Result fulfills Order relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:103-114
+        - cause_id: structure-candidate-002.cause-003
+          claim: The state rule requires all Result values to be final before
+            Order.completed, but the graph does not define the exact result set
+            for that Order.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:117
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Top-level relations are treated as the ontology's explicit structural graph
+    because the artifact separates entity attributes from a relations section.
+  - Typed ref attributes are treated as evidence of intended links, but not as
+    sufficient closure for consumers that rely on the relations list.
+validation:
+  unaddressable_candidates: []

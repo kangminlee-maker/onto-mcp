@@ -1,0 +1,221 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml / entities.Test, entities.Assay, notes[0]
+    evidence_anchor: 'materialized-input.md: entities.Test defines orderable catalog
+      attributes; entities.Assay defines analyzer execution attributes; notes:
+      "Test와 Assay는 카탈로그 정비 후 통합 여부를 재검토한다. 현재 신규 항목은 두 곳 모두에 등록한다."'
+    claim: 신규 검사 항목 추가가 Test와 Assay의 이중 등록에 의존해 카탈로그 확장 시 연속성이 깨질 수 있다.
+    what: 주문 가능한 검사(Test)와 분석기 수행 항목(Assay)이 별도 엔티티로 존재하지만 두 엔티티를 연결하는 관계나 단일 카탈로그
+      권위가 없다. 오히려 신규 항목을 두 곳 모두에 등록한다고 명시되어 있다.
+    why: EMR/LIS 통합의 개념 권위 문서라면 새 검사 항목이 추가될 때 주문 단위와 수행 단위 사이의 대응이 안정적으로 확장되어야 한다.
+      현재 구조에서는 새 항목마다 두 엔티티를 수동으로 맞춰야 하며, 코드·부서·검체 표현이 어긋나도 이를 판정할 권위 관계가 없다.
+      따라서 카탈로그 확장 시 기존 구조를 계속 수정하거나 운영 규칙 밖 매핑에 의존하게 된다.
+    how_to_fix: "Test와 Assay 사이에 명시적 매핑 관계를 추가하고, 신규 항목 등록의 단일 권위 위치를 정한다. 예: Test
+      has_many Assay 또는 Assay implements Test 관계, 매핑 cardinality, 코드 체계, 활성/폐기
+      버전, 검체 조건의 상속 또는 override 규칙을 target 안에서 닫는다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 카탈로그 변경을 안정적으로 수용하는 목적.
+      failure_condition: 신규 검사 항목 또는 장비별 수행 항목이 추가될 때 Test와 Assay를 각각 등록해야 하지만 두 항목의
+        대응 관계와 우선 권위가 target 안에 없다.
+      impact: 주문 가능 항목과 수행 항목의 연속성이 운영자 기억이나 외부 카탈로그 정비에 의존하게 되어, 통합 설계에서 어떤 코드가 권위인지
+        판단하기 어렵다.
+      evidence_refs:
+        - entities.Test
+        - entities.Assay
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 검사 카탈로그의 주문 단위와 수행 단위를 분리했지만, 분리된 개념을 연결하는 권위 관계와 변경 규칙을
+        target 안에 정의하지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신규 항목은 Test와 Assay 두 곳 모두에 등록하도록 notes가 요구한다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Test와 Assay는 각각 코드와 부서, 검체 관련 속성을 갖지만 relations 목록에는 두 엔티티 사이의 관계가 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities.Test
+            - entities.Assay
+            - relations
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 두 권위 위치가 병렬로 존재하므로 새 카탈로그 항목 추가 시 대응 누락이나 불일치가 발생해도 target 내부에서 판정할 기준이
+            없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Test
+            - entities.Assay
+            - notes[0]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml / specimen type modeling across Specimen,
+      Test, Assay
+    evidence_anchor: "materialized-input.md: Specimen.specimen_type enum [blood,
+      urine, tissue, swab]; Test.requires_specimen_type enum [blood, urine,
+      tissue, swab]; Assay.specimen_kind string note examples 'WB', 'Serum',
+      'Urine-random'."
+    claim: 검체 종류 모델이 폐쇄 enum과 자유 문자열로 갈라져 새 검체·외부 코드 추가 시 기존 구조 수정과 매핑 단절을 유발한다.
+    what: Specimen과 Test는 동일한 네 가지 검체 enum을 고정값으로 갖지만, Assay는 다른 표현 체계의 문자열을 사용한다.
+      혈청, 전혈, 랜덤뇨처럼 수행 단위에서 필요한 실제 표기는 enum 값과 직접 연결되지 않는다.
+    why: 새 검체 유형이나 외부 LIS/장비 코드가 들어오면 Specimen.specimen_type과
+      Test.requires_specimen_type enum을 수정해야 하고, Assay.specimen_kind 문자열과의 대응은
+      target 내부에서 검증할 수 없다. 변경 내성 관점에서는 표준 코드 변경이나 장비별 세분화가 발생할 때 기존 데이터의 의미
+      연속성을 유지하기 어렵다.
+    how_to_fix: 검체 종류를 별도 개념 또는 코드셋으로 승격하고 버전·alias·상위/하위 분류를 정의한다. Specimen, Test,
+      Assay가 같은 SpecimenKind 권위를 참조하게 하며, 외부 장비 문자열은 alias 또는 mapping으로 흡수한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 검체 기반 주문 가능성, 수행 가능성, 결과 추적을 확장 가능한 공통 개념으로 유지하는 목적.
+      failure_condition: 새 검체 종류나 장비별 검체 코드가 추가될 때 폐쇄 enum 수정과 자유 문자열 매핑이 동시에 필요하다.
+      impact: 기존 데이터와 새 코드의 의미 연결이 target 내부에서 보장되지 않아 검체 기반 라우팅·검증·결과 해석의 확장 신뢰도가
+        낮아진다.
+      evidence_refs:
+        - entities.Specimen.attributes.specimen_type
+        - entities.Test.attributes.requires_specimen_type
+        - entities.Assay.attributes.specimen_kind
+    causal_path:
+      root_cause_candidate: 검체 종류를 하나의 확장 가능한 권위 개념으로 모델링하지 않고, 일부 위치에는 폐쇄 enum, 일부
+        위치에는 자유 문자열을 사용했다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Specimen.specimen_type과 Test.requires_specimen_type은 [blood, urine,
+            tissue, swab]로 닫힌 enum이다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Assay.specimen_kind는 문자열이며 예시가 enum 값과 다른 세분화 표현을 사용한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities.Assay.attributes.specimen_kind
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 동일 도메인 개념이 서로 다른 확장 메커니즘을 가지므로 새 검체 표현 추가 시 enum 변경과 문자열 매핑을 함께 관리해야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Specimen.attributes.specimen_type
+            - entities.Test.attributes.requires_specimen_type
+            - entities.Assay.attributes.specimen_kind
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml / Result.status, Report.result_status,
+      state_rules[1]
+    evidence_anchor: "materialized-input.md: Result.status enum [preliminary, final,
+      corrected] note says Report.result_status에도 동일 정보 유지; Report.result_status
+      enum [prelim, finalized, amended] note says 권위 값; state_rules: corrected
+      changes Report.result_status to amended via nightly sync."
+    claim: 결과 상태와 보고 상태가 서로 다른 enum 및 지연 동기화로 분리되어 상태 체계 확장 시 호환성이 약하다.
+    what: Result.status와 Report.result_status가 같은 정보를 유지한다고 하면서도 서로 다른 값 집합을 사용한다.
+      Report.result_status는 임상의가 신뢰하는 권위 값이라고 되어 있고, corrected 변경은 야간 배치로
+      amended에 반영된다.
+    why: 새 상태가 추가되거나 외부 LIS 상태 코드가 바뀌면 두 enum과 동기화 규칙을 함께 확장해야 한다. 또한 어떤 상태가 권위인지
+      Result와 Report 사이에서 분리되어 있어 기존 데이터가 새 상태 체계로 이동할 때 의미 보존 규칙이 불명확하다.
+    how_to_fix: 상태 권위를 하나로 정하고 Report는 그 권위 상태의 projection인지, 별도 임상 표시 상태인지 구분한다. 별도
+      상태가 필요하면 명시적 상태 매핑 테이블, 버전, unmapped 상태 처리, 동기화 지연 중 사용자에게 보이는 상태 규칙을
+      정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동에서 결과 및 보고 상태 변경을 안정적으로 수용하고 임상의가 신뢰할 상태 권위를 유지하는 목적.
+      failure_condition: 새 결과 상태, 정정 상태 세분화, 외부 LIS 상태 코드가 추가될 때 Result와 Report의 enum
+        및 배치 동기화 규칙을 동시에 수정해야 한다.
+      impact: 상태 확장 시 기존 결과와 보고서의 의미 연속성이 깨지고, 임상 표시 상태의 권위 판단이 어려워진다.
+      evidence_refs:
+        - entities.Result.attributes.status
+        - entities.Report.attributes.result_status
+        - state_rules[1]
+    causal_path:
+      root_cause_candidate: 동일 정보라고 설명되는 상태를 두 개의 별도 enum과 지연 동기화 규칙으로 모델링했다.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Result.status는 preliminary, final, corrected 값을 갖고 Report.result_status에도
+            동일 정보가 유지된다고 설명된다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Result.attributes.status
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Report.result_status는 prelim, finalized, amended라는 다른 값 집합을 가지며 임상의가 신뢰하는
+            권위 값이라고 설명된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities.Report.attributes.result_status
+        - cause_id: evolution-candidate-003.cause-003
+          claim: corrected에서 amended로의 반영은 야간 1회 동기화 배치에 의존한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - state_rules[1]
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 상태 추가나 외부 상태 변경 시 두 enum과 동기화 규칙을 동시에 바꿔야 하므로 변경 연속성이 약해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Result.attributes.status
+            - entities.Report.attributes.result_status
+            - state_rules[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: clinical-lab-ontology.yaml / notes[1] and TAT-related attributes
+    evidence_anchor: 'materialized-input.md: notes: "turnaround_time(TAT)은
+      collected_at부터 released_at까지로 계산하며, 대시보드 팀이 자체 계산식을 유지한다."
+      Specimen.collected_at and Report.released_at are the source attributes.'
+    claim: TAT 정의가 온톨로지 밖 대시보드 계산식에 맡겨져 운영 지표 변경 시 개념 권위가 분산된다.
+    what: TAT가 Specimen.collected_at부터 Report.released_at까지라고 적혀 있지만, 실제 계산식은 대시보드
+      팀이 자체 유지한다고 되어 있다. TAT 자체가 속성, 파생 지표, 관계, 또는 규칙으로 닫혀 있지 않다.
+    why: 향후 TAT 기준이 부서별, 우선순위별, 재검/정정 포함 여부별로 바뀌면 외부 대시보드 계산식이 권위가 된다. EMR/LIS 통합의
+      개념 권위 문서에서는 지표의 출처와 파생 규칙이 target 안에서 관리되어야 변경 시 기존 지표와 새 지표의 연속성을 설명할 수
+      있다.
+    how_to_fix: TAT를 파생 지표로 명시하고 source timestamps, start/end event, 제외 조건, 버전, 부서별
+      override 가능 범위를 정의한다. 대시보드는 이 규칙의 consumer로 두고 자체 권위 계산식은 제거하거나
+      projection으로 한정한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 운영 지표까지 포함한 EMR/LIS 통합 개념 권위 문서로서 변경 가능한 TAT 규칙을 일관되게 관리하는 목적.
+      failure_condition: TAT 계산 기준이 바뀔 때 target이 아닌 대시보드 팀의 자체 계산식이 변경 권위가 된다.
+      impact: 기존 TAT 데이터와 변경 후 TAT 데이터의 비교 가능성, 버전 구분, 부서별 예외 처리가 온톨로지 밖으로 밀려 통합 설계의
+        신뢰가 약해진다.
+      evidence_refs:
+        - notes[1]
+        - entities.Specimen.attributes.collected_at
+        - entities.Report.attributes.released_at
+    causal_path:
+      root_cause_candidate: TAT를 target 내부의 파생 개념이나 규칙으로 닫지 않고 외부 팀의 자체 계산식에 맡겼다.
+      root_cause_step_id: evolution-candidate-004.cause-003
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: TAT는 collected_at부터 released_at까지로 계산한다고 notes에 명시되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - notes[1]
+        - cause_id: evolution-candidate-004.cause-002
+          claim: 동시에 대시보드 팀이 자체 계산식을 유지한다고 되어 있어 계산 권위가 target 밖에 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - notes[1]
+        - cause_id: evolution-candidate-004.cause-003
+          claim: TAT 기준 변경 시 target 내부 규칙만으로 기존/신규 계산의 연속성을 관리할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+            - entities.Specimen.attributes.collected_at
+            - entities.Report.attributes.released_at
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았다.
+  - 검토는 evolution lens 범위에 맞춰 새 검사 항목, 새 검체 표현, 상태 코드 변경, 운영 지표 변경 같은 변경 시나리오에서
+    기존 구조 수정 필요성과 연속성 단절 위험만 판단했다.
+  - materialized input이 권위 target이며, 외부 LIS/EMR 표준이나 병원별 실제 운영 규정은 boundary 밖으로
+    보았다.
+validation:
+  unaddressable_candidates: []

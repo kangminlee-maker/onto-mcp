@@ -1,0 +1,136 @@
+schema_version: 1
+session_id: 20260611-f1a64fc4
+planned_issues:
+  - issue_id: issue-002
+    priority: 80
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - semantics
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: Coverage raises the severity of the CriticalValue notification
+      gap, while semantics narrows the root to the boolean field's inability to
+      represent event meaning; other lenses preserve the broader
+      authority-boundary and accountability framing.
+    resolution_question: Should issue-002 be resolved as a broader authority/audit
+      boundary failure for critical notification evidence with raised severity,
+      or as a narrower semantic modeling gap around replacing a boolean with a
+      notification event concept?
+  - issue_id: issue-004
+    priority: 90
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: Coverage keeps high severity because the CriticalValue
+      threshold/event conflation omits safety-critical notification audit
+      coverage, while semantics accepts the root but lowers severity based on
+      semantic ambiguity rather than full workflow audit failure.
+    resolution_question: Does the threshold/event conflation in CriticalValue
+      warrant high severity because it blocks notification audit coverage, or
+      should severity be lowered because the bounded semantic evidence mainly
+      establishes concept ambiguity?
+  - issue_id: issue-006
+    priority: 85
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - logic
+      - semantics
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+    conflict_summary: Evolution and coverage preserve the high-severity catalog
+      continuity failure, while axiology lowers severity and logic, semantics,
+      and structure narrow the root to missing Test/Assay mapping or precedence
+      rather than the full evolution failure mode.
+    resolution_question: Should issue-006 remain a high-severity catalog evolution
+      continuity failure, or be narrowed/lowered to a medium mapping-authority
+      defect between Test and Assay?
+  - issue_id: issue-012
+    priority: 70
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - coverage
+      - logic
+      - semantics
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+    conflict_summary: "The issue clusters two related but distinct workflow-closure
+      concerns: structure emphasizes implicit relationship topology not promoted
+      to the relation graph, while coverage emphasizes post-analysis specimen
+      lifecycle gaps; logic and semantics narrow the root to projection and
+      relationship-meaning closure."
+    resolution_question: Should issue-012 remain one shared-root workflow
+      authority-closure issue, or be split into separate issues for relation
+      graph projection closure and specimen lifecycle coverage?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating lenses support the same root hypothesis and keep high
+      severity; no material deliberation conflict is present.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Semantics narrows the basis to derived-metric meaning, but all
+      applicable lenses support the TAT governance concern and keep medium
+      severity; the narrower view is compatible with the proposed action.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Logic narrows the root to deterministic mapping and validity rules, but
+      all lenses support the catalog/specimen mapping authority issue and keep
+      medium severity; the narrowed logic basis does not require controlled
+      deliberation.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All lenses support the result/report status expansion issue and keep
+      medium severity; no material conflict is signaled.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Semantics narrows the basis to missing TAT calculation semantics, but
+      applicable lenses agree on medium severity and the governance action
+      remains compatible.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Coverage narrows the issue to missing lifecycle surfaces, but all
+      applicable lenses keep medium severity and support separating finalization
+      facts from amendment/display lifecycle.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Evolution narrows the issue to canonical STAT concept and projection
+      stability, but all applicable lenses support the authority-split concern
+      and keep medium severity.
+  - issue_id: issue-011
+    reason_code: non_material_issue
+    reason: The issue is explicitly low severity and non-material; most lenses treat
+      it as a surface naming problem rather than a material workflow failure.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Semantics narrows the concern to the ambiguous referent of 'all Result',
+      while other lenses support the structural membership-closure root;
+      severity and action remain aligned.
