@@ -6,6 +6,9 @@
  * 리뷰를 순차 실행한다. 세션 경로를 결과 JSON에 남겨 ground-truth 채점에
  * 사용한다. 사용:
  *   npx tsx development-records/benchmark/fixtures/ontology/run-ontology-review.mts [fixtureId ...]
+ *
+ * settings 오버라이드(모델 벤치마크용): ONTO_EVAL_SETTINGS=<settings.json 절대경로>
+ * — 예: settings-claude-fable.json(executor 번들만 변수, INV-EXP-1).
  */
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -96,22 +99,28 @@ async function main(): Promise<void> {
   // 비운 tmp로 고정 — 커밋된 repo settings만이 실행 프로파일을 결정한다.
   const realHome = process.env.HOME ?? os.homedir();
   const isolatedHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ontology-eval-home-"));
-  // 격리 대상은 settings(~/.onto)뿐이다 — codex OAuth 자격증명($HOME/.codex)은
-  // worker 경로 탐지에 필요하므로 실제 홈으로 연결한다. 없으면 런타임이
-  // 자체적으로 경로 해소 실패를 보고한다.
-  try {
-    await fs.symlink(path.join(realHome, ".codex"), path.join(isolatedHome, ".codex"));
-  } catch {
-    // 실제 홈에 ~/.codex가 없는 환경: 연결 생략
+  // 격리 대상은 settings(~/.onto)뿐이다 — worker 자격증명($HOME/.codex,
+  // $HOME/.claude)은 경로 탐지에 필요하므로 실제 홈으로 연결한다. 없으면
+  // 런타임이 자체적으로 경로 해소 실패를 보고한다.
+  for (const credentialDir of [".codex", ".claude"]) {
+    try {
+      await fs.symlink(
+        path.join(realHome, credentialDir),
+        path.join(isolatedHome, credentialDir),
+      );
+    } catch {
+      // 실제 홈에 해당 자격증명이 없는 환경: 연결 생략
+    }
   }
   process.env.HOME = isolatedHome;
   const { createOntoReviewCoreApi } = await import(
     path.join(REPO_ROOT, "src/core-api/review-api.ts")
   );
-  const repoSettings = await fs.readFile(
-    path.join(REPO_ROOT, ".onto/settings.json"),
-    "utf8",
-  );
+  const settingsPath = process.env.ONTO_EVAL_SETTINGS
+    ? path.resolve(process.env.ONTO_EVAL_SETTINGS)
+    : path.join(REPO_ROOT, ".onto/settings.json");
+  console.log(`[settings] ${settingsPath}`);
+  const repoSettings = await fs.readFile(settingsPath, "utf8");
 
   const results: Array<Record<string, unknown>> = [];
   for (const id of ids) {
