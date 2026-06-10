@@ -49,7 +49,7 @@ A (rebase 후) = prepare 산출물 위에서:
 | Step | 내용 | 게이트 |
 |---|---|---|
 | **F1** | **골든 하니스**: 결정론 mock A full run(기존 mock realization)으로 execution-result/manifest/record의 정규화 스냅샷 + halt 시나리오(취소·barrier 차단·synthesis 실패) 골든 테스트. **코드 무접촉** | 골든 자체가 main에서 green |
-| **F2** | **unit-execution layer 추출**: `executeRuntimeUnit(dispatch)` — kind별 dispatch+검증+fallback을 한 함수로 재조립(순수 재배치, 시퀀싱 무접촉) | full vitest + F1 골든 동일 |
+| **F2** | **unit-execution layer 추출**: `executeRuntimeUnit(dispatch)` — kind별 dispatch+검증+fallback을 한 함수로 재조립(순수 재배치, 시퀀싱 무접촉) **[landed — 정제: kind별 per-unit 함수 5개(`executeIssueStanceUnit`/`executeDeliberationResponseUnit`/`executeSynthesisResponseUnit` + unavailable-완성 2개)를 module-level로 추출, worker pool들이 호출. `runIssueArtifactDispatch`는 이미 per-unit이라 그대로 재사용. 단일 switch(`executeRuntimeUnit`)는 죽은 코드를 피해 소비자(F3 루프)와 함께 도입. teamlead·lens 본문은 F3/F4에서.]** | full vitest + F1 골든 동일 |
 | **F3** | **post-lens 파이프라인을 frontier 루프로 교체**: PRE_DELIBERATION 루프+delib+framing+synthesis 시퀀싱 삭제 → §2 루프(lens 이후만). 취소/halt wrapper 보존 | F1 골든 동일 + full vitest + conformance |
 | **F4** | **lens 단계 합류**: lens dispatch(flat pool/nested batch)+barrier를 루프의 첫 라운드로. `finalizeStageGate` 직결 | 동일 게이트 + nested 4셀 게이트 green |
 | **F5** | **continuation을 frontier로**: preserved 시드 주입 → `shouldRunUnit` threading 삭제 | continuation 테스트 + 골든 |

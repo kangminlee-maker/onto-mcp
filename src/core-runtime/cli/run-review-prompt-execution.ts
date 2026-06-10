@@ -100,6 +100,7 @@ import {
   validateDeliberationResolutionObject,
   validateIssueDeliberationResponseObject,
   type IssueDeliberationResponseArtifact,
+  type IssueScopedDeliberationWorkItem,
 } from "../review/controlled-lens-deliberation.js";
 import {
   computeLensCompletionBarrier,
@@ -3780,6 +3781,351 @@ export async function unitOutcomeWithNestedFirstAttempt(args: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Unit-execution layer (4f F2) — per-unit execution functions extracted from
+// the stage worker closures. Each owns the full A semantics for ONE unit:
+// dispatch (nested first-attempt + flat retry budget), stage validation, and
+// unavailable-completion fallback. Stage sequencing still calls them from the
+// existing worker pools; the frontier loop (F3) becomes their second caller
+// with kind context derived from durable state instead of stage locals.
+// ---------------------------------------------------------------------------
+
+/** Shared per-unit execution inputs (stage- and frontier-agnostic). */
+export interface RuntimeUnitExecutionContext {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  retryPolicy: ReviewRuntimeRetryPolicy;
+  unitTimeoutMs?: number | undefined;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+}
+
+/**
+ * Issue-stance unit: dispatch + on-disk stance validation. A validation
+ * failure is terminal for the unit (flat semantics: no retry on stage
+ * validation), recorded as an output-contract failure with the seat removed.
+ */
+export async function executeIssueStanceUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  participatingLensIds: string[];
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<ExecutionOutcome> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.issueArtifactMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    return outcome;
+  }
+  const lensId = dispatch.unit_id.slice("issue-stance:".length);
+  try {
+    await validateIssueStanceResponseOnDisk({
+      executionPlan: ctx.executionPlan,
+      projectRoot: ctx.projectRoot,
+      responsePath: dispatch.output_path,
+      lensId,
+      participatingLensIds: args.participatingLensIds,
+    });
+    return outcome;
+  } catch (error) {
+    const failure: ExecutionFailure = {
+      unit_id: dispatch.unit_id,
+      unit_kind: dispatch.unit_kind,
+      packet_path: dispatch.packet_path,
+      output_path: dispatch.output_path,
+      message: error instanceof Error ? error.message : String(error),
+      failure_kind: failureKindFromError(error),
+    };
+    await removeFileIfExists(dispatch.output_path);
+    await appendExecutionFailure(
+      ctx.executionPlan.error_log_path,
+      failure,
+      ctx.executionPlan.effective_boundary_state,
+    );
+    return {
+      ...outcome,
+      success: false as const,
+      completedAtMs: Date.now(),
+      outputBytes: await fileSizeIfPresent(dispatch.output_path),
+      failure,
+    };
+  }
+}
+
+/**
+ * Runtime fallback for an unavailable per-issue deliberation participant:
+ * preserve the source stance and record an unavailable-participant response
+ * at the unit's seat. Null when completion itself fails (caller keeps the
+ * original failed outcome).
+ */
+export async function completeUnavailableDeliberationResponseUnit(args: {
+  executionPlan: ReviewExecutionPlan;
+  dispatch: ExecutionDispatchResult;
+  workItem: IssueScopedDeliberationWorkItem;
+  reason: string;
+  failedOutcome?: ExecutionOutcome | undefined;
+}): Promise<ExecutionOutcome | null> {
+  const { executionPlan, dispatch, workItem, reason, failedOutcome } = args;
+  try {
+    const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
+      await fs.readFile(dispatch.packet_path, "utf8"),
+    ).allowed_evidence_refs;
+    const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
+      sessionId: executionPlan.session_id,
+      workItem,
+      reason,
+      allowedEvidenceRefs,
+    });
+    await writeYamlDocument(dispatch.output_path, artifact);
+    validateIssueDeliberationResponseObject({
+      parsed: artifact,
+      sessionId: executionPlan.session_id,
+      issueId: workItem.issue_id,
+      lensId: workItem.lens_id,
+      allowedEvidenceRefs,
+    });
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue deliberation runtime completion",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        "completion_rule: preserve source stance; record unavailable participant response",
+      ],
+    );
+    return {
+      dispatch,
+      success: true,
+      startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+      completedAtMs: Date.now(),
+      attemptCount: failedOutcome?.attemptCount ?? 1,
+      packetBytes:
+        failedOutcome?.packetBytes ?? (await fileSizeIfPresent(dispatch.packet_path)),
+      outputBytes: await fileSizeIfPresent(dispatch.output_path),
+      ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+      ...(failedOutcome?.artifactGenerationRealization !== undefined
+        ? {
+            artifactGenerationRealization:
+              failedOutcome.artifactGenerationRealization,
+          }
+        : {}),
+      ...(failedOutcome?.semanticQualityEvidence !== undefined
+        ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+        : {}),
+    };
+  } catch (completionError) {
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue deliberation runtime completion failed",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+      ],
+    );
+    return null;
+  }
+}
+
+/**
+ * Per-issue deliberation unit: dispatch; an executor failure falls back to
+ * the runtime unavailable-completion (degraded-but-progressing semantics).
+ */
+export async function executeDeliberationResponseUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  workItem: IssueScopedDeliberationWorkItem;
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<ExecutionOutcome> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.deliberationMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    return (
+      (await completeUnavailableDeliberationResponseUnit({
+        executionPlan: ctx.executionPlan,
+        dispatch,
+        workItem: args.workItem,
+        reason: outcome.failure?.message ?? "unknown executor failure",
+        failedOutcome: outcome,
+      })) ?? outcome
+    );
+  }
+  return outcome;
+}
+
+/**
+ * Runtime fallback for an unavailable per-issue synthesis worker: a
+ * conservative projection from synthesis-work-items.yaml written at the
+ * unit's seat. Null when completion itself fails.
+ */
+export async function completeUnavailableSynthesisResponseUnit(args: {
+  executionPlan: ReviewExecutionPlan;
+  dispatch: ExecutionDispatchResult;
+  workItem: ReviewSynthesisWorkItem;
+  sourceWorkItemsRef: string;
+  reason: string;
+  failedOutcome?: ExecutionOutcome | undefined;
+}): Promise<{
+  outcome: ExecutionOutcome;
+  response: IssueSynthesisResponseArtifact;
+} | null> {
+  const { executionPlan, dispatch, workItem, reason, failedOutcome } = args;
+  try {
+    const response = buildRuntimeIssueSynthesisUnavailableResponse({
+      sessionId: executionPlan.session_id,
+      workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason,
+    });
+    await writeYamlDocument(dispatch.output_path, response);
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue synthesis runtime completion",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        "completion_rule: conservative projection from synthesis-work-items.yaml",
+      ],
+    );
+    return {
+      outcome: {
+        dispatch,
+        success: true,
+        startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+        completedAtMs: Date.now(),
+        attemptCount: failedOutcome?.attemptCount ?? 1,
+        packetBytes:
+          failedOutcome?.packetBytes ??
+          (await fileSizeIfPresent(dispatch.packet_path)),
+        outputBytes: await fileSizeIfPresent(dispatch.output_path),
+        ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+        ...(failedOutcome?.artifactGenerationRealization !== undefined
+          ? {
+              artifactGenerationRealization:
+                failedOutcome.artifactGenerationRealization,
+            }
+          : {}),
+        ...(failedOutcome?.semanticQualityEvidence !== undefined
+          ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+          : {}),
+      },
+      response,
+    };
+  } catch (completionError) {
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue synthesis runtime completion failed",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+      ],
+    );
+    return null;
+  }
+}
+
+/**
+ * Per-issue synthesis unit: dispatch + on-disk response validation; both
+ * executor failure and validation failure fall back to the runtime
+ * unavailable-completion. `response` is null only when the unit terminally
+ * failed (no fallback possible).
+ */
+export async function executeSynthesisResponseUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  workItem: ReviewSynthesisWorkItem;
+  sourceWorkItemsRef: string;
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<{
+  outcome: ExecutionOutcome;
+  response: IssueSynthesisResponseArtifact | null;
+}> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.synthesisMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    const completed = await completeUnavailableSynthesisResponseUnit({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason: outcome.failure?.message ?? "unknown synthesis worker failure",
+      failedOutcome: outcome,
+    });
+    return completed ?? { outcome, response: null };
+  }
+  try {
+    const response = await validateIssueSynthesisResponseOnDisk({
+      responsePath: dispatch.output_path,
+      sessionId: ctx.executionPlan.session_id,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+    });
+    return { outcome, response };
+  } catch (error) {
+    const failedOutcome = await synthesisValidationFailureOutcome({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      priorOutcome: outcome,
+      error,
+    });
+    const completed = await completeUnavailableSynthesisResponseUnit({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason: errorMessage(error),
+      failedOutcome,
+    });
+    return completed ?? { outcome: failedOutcome, response: null };
+  }
+}
+
 function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
   step: number;
   label: string;
@@ -3931,57 +4277,20 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       nextDispatchIndex += 1;
       if (dispatchIndex >= dispatches.length) return;
       const dispatch = dispatches[dispatchIndex]!;
-      const outcome = await unitOutcomeWithNestedFirstAttempt({
-        batch: stanceNestedBatch,
-        flat: {
+      outcomes[dispatchIndex] = await executeIssueStanceUnit({
+        ctx: {
           projectRoot: args.projectRoot,
           sessionRoot: args.sessionRoot,
           executionPlan: args.executionPlan,
           executorConfig: args.executorConfig,
-          dispatch,
-          maxRetries: args.retryPolicy.issueArtifactMaxRetries,
-          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          retryPolicy: args.retryPolicy,
           unitTimeoutMs: args.unitTimeoutMs,
           reviewExecutionProfile: args.reviewExecutionProfile,
         },
+        dispatch,
+        participatingLensIds,
+        nestedBatch: stanceNestedBatch,
       });
-      if (!outcome.success) {
-        outcomes[dispatchIndex] = outcome;
-        continue;
-      }
-      const lensId = dispatch.unit_id.slice("issue-stance:".length);
-      try {
-        await validateIssueStanceResponseOnDisk({
-          executionPlan: args.executionPlan,
-          projectRoot: args.projectRoot,
-          responsePath: dispatch.output_path,
-          lensId,
-          participatingLensIds,
-        });
-        outcomes[dispatchIndex] = outcome;
-      } catch (error) {
-        const failure: ExecutionFailure = {
-          unit_id: dispatch.unit_id,
-          unit_kind: dispatch.unit_kind,
-          packet_path: dispatch.packet_path,
-          output_path: dispatch.output_path,
-          message: error instanceof Error ? error.message : String(error),
-          failure_kind: failureKindFromError(error),
-        };
-        await removeFileIfExists(dispatch.output_path);
-        await appendExecutionFailure(
-          args.executionPlan.error_log_path,
-          failure,
-          args.executionPlan.effective_boundary_state,
-        );
-        outcomes[dispatchIndex] = {
-          ...outcome,
-          success: false as const,
-          completedAtMs: Date.now(),
-          outputBytes: await fileSizeIfPresent(dispatch.output_path),
-          failure,
-        };
-      }
     }
   }
   await Promise.all(
@@ -4465,73 +4774,9 @@ async function runControlledLensDeliberation(args: {
       failure,
     };
   };
-  const completeUnavailableDeliberationResponse = async (
-    dispatch: ExecutionDispatchResult,
-    reason: string,
-    failedOutcome?: ExecutionOutcome,
-  ): Promise<ExecutionOutcome | null> => {
-    const workItem = workItemByUnitId.get(dispatch.unit_id);
-    if (!workItem) return null;
-    try {
-      const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
-        await fs.readFile(dispatch.packet_path, "utf8"),
-      ).allowed_evidence_refs;
-      const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
-        sessionId: executionPlan.session_id,
-        workItem,
-        reason,
-        allowedEvidenceRefs,
-      });
-      await writeYamlDocument(dispatch.output_path, artifact);
-      validateIssueDeliberationResponseObject({
-        parsed: artifact,
-        sessionId: executionPlan.session_id,
-        issueId: workItem.issue_id,
-        lensId: workItem.lens_id,
-        allowedEvidenceRefs,
-      });
-      await appendExecutionProgress(
-        executionPlan.error_log_path,
-        "runner issue deliberation runtime completion",
-        [
-          `unit_id: ${dispatch.unit_id}`,
-          `reason: ${reason.slice(0, 500)}`,
-          "completion_rule: preserve source stance; record unavailable participant response",
-        ],
-      );
-      return {
-        dispatch,
-        success: true,
-        startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
-        completedAtMs: Date.now(),
-        attemptCount: failedOutcome?.attemptCount ?? 1,
-        packetBytes:
-          failedOutcome?.packetBytes ?? (await fileSizeIfPresent(dispatch.packet_path)),
-        outputBytes: await fileSizeIfPresent(dispatch.output_path),
-        ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
-        ...(failedOutcome?.artifactGenerationRealization !== undefined
-          ? {
-              artifactGenerationRealization:
-                failedOutcome.artifactGenerationRealization,
-            }
-          : {}),
-        ...(failedOutcome?.semanticQualityEvidence !== undefined
-          ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
-          : {}),
-      };
-    } catch (completionError) {
-      await appendExecutionProgress(
-        executionPlan.error_log_path,
-        "runner issue deliberation runtime completion failed",
-        [
-          `unit_id: ${dispatch.unit_id}`,
-          `reason: ${reason.slice(0, 500)}`,
-          `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
-        ],
-      );
-      return null;
-    }
-  };
+  // Unavailable-completion now lives at module level
+  // (completeUnavailableDeliberationResponseUnit) — shared by the worker
+  // path (via executeDeliberationResponseUnit) and the validation loop.
   for (const dispatch of deliberationDispatches) {
     if (!shouldRunUnit(dispatch.unit_id)) continue;
     const workItem = workItemByUnitId.get(dispatch.unit_id);
@@ -4596,30 +4841,26 @@ async function runControlledLensDeliberation(args: {
         deliberationOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
         continue;
       }
-      const outcome = await unitOutcomeWithNestedFirstAttempt({
-        batch: deliberationNestedBatch,
-        flat: {
+      const workItem = workItemByUnitId.get(dispatch.unit_id);
+      if (!workItem) {
+        // Dispatches are built 1:1 from the worklist; the validation loop
+        // below would throw on the same absence — fail loud here too.
+        throw new Error(`Missing deliberation work item: ${dispatch.unit_id}`);
+      }
+      deliberationOutcomes[currentIndex] = await executeDeliberationResponseUnit({
+        ctx: {
           projectRoot,
           sessionRoot,
           executionPlan,
           executorConfig: lensExecutorConfig,
-          dispatch,
-          maxRetries: args.retryPolicy.deliberationMaxRetries,
-          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          retryPolicy: args.retryPolicy,
           unitTimeoutMs,
           reviewExecutionProfile: args.reviewExecutionProfile,
         },
+        dispatch,
+        workItem,
+        nestedBatch: deliberationNestedBatch,
       });
-      if (!outcome.success) {
-        deliberationOutcomes[currentIndex] =
-          (await completeUnavailableDeliberationResponse(
-            dispatch,
-            outcome.failure?.message ?? "unknown executor failure",
-            outcome,
-          )) ?? outcome;
-        continue;
-      }
-      deliberationOutcomes[currentIndex] = outcome;
     }
   }
 
@@ -4668,11 +4909,13 @@ async function runControlledLensDeliberation(args: {
           (outcome) => outcome.dispatch.unit_id === dispatch.unit_id,
         ),
       );
-      const completedOutcome = await completeUnavailableDeliberationResponse(
+      const completedOutcome = await completeUnavailableDeliberationResponseUnit({
+        executionPlan,
         dispatch,
-        errorMessage(error),
+        workItem,
+        reason: errorMessage(error),
         failedOutcome,
-      );
+      });
       if (completedOutcome) {
         const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
           await fs.readFile(dispatch.packet_path, "utf8"),
@@ -5318,71 +5561,9 @@ async function runSynthesisMapReduceDispatch(args: {
     const workItemByUnitId = new Map(
       workItems.work_items.map((workItem) => [workItem.work_item_id, workItem]),
     );
-    const completeUnavailableSynthesisResponse = async (
-      dispatch: ExecutionDispatchResult,
-      reason: string,
-      failedOutcome?: ExecutionOutcome,
-    ): Promise<{
-      outcome: ExecutionOutcome;
-      response: IssueSynthesisResponseArtifact;
-    } | null> => {
-      const workItem = workItemByUnitId.get(dispatch.unit_id);
-      if (!workItem) return null;
-      try {
-        const sourceWorkItemsRef = sourceWorkItemRef(workItem);
-        const response = buildRuntimeIssueSynthesisUnavailableResponse({
-          sessionId: args.executionPlan.session_id,
-          workItem,
-          sourceWorkItemsRef,
-          reason,
-        });
-        await writeYamlDocument(dispatch.output_path, response);
-        await appendExecutionProgress(
-          args.executionPlan.error_log_path,
-          "runner issue synthesis runtime completion",
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `reason: ${reason.slice(0, 500)}`,
-            "completion_rule: conservative projection from synthesis-work-items.yaml",
-          ],
-        );
-        return {
-          outcome: {
-            dispatch,
-            success: true,
-            startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
-            completedAtMs: Date.now(),
-            attemptCount: failedOutcome?.attemptCount ?? 1,
-            packetBytes:
-              failedOutcome?.packetBytes ??
-              await fileSizeIfPresent(dispatch.packet_path),
-            outputBytes: await fileSizeIfPresent(dispatch.output_path),
-            ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
-            ...(failedOutcome?.artifactGenerationRealization !== undefined
-              ? {
-                  artifactGenerationRealization:
-                    failedOutcome.artifactGenerationRealization,
-                }
-              : {}),
-            ...(failedOutcome?.semanticQualityEvidence !== undefined
-              ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
-              : {}),
-          },
-          response,
-        };
-      } catch (completionError) {
-        await appendExecutionProgress(
-          args.executionPlan.error_log_path,
-          "runner issue synthesis runtime completion failed",
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `reason: ${reason.slice(0, 500)}`,
-            `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
-          ],
-        );
-        return null;
-      }
-    };
+    // Unavailable-completion now lives at module level
+    // (completeUnavailableSynthesisResponseUnit) — consumed via
+    // executeSynthesisResponseUnit in the worker.
     const synthesisReadRefs = uniqueAllowedReadRefs(args.projectRoot, [
       workItemsPath,
       args.executionPlan.finding_ledger_path,
@@ -5466,60 +5647,24 @@ async function runSynthesisMapReduceDispatch(args: {
           });
           continue;
         }
-        const outcome = await unitOutcomeWithNestedFirstAttempt({
-          batch: synthesisNestedBatch,
-          flat: {
+        const { outcome, response } = await executeSynthesisResponseUnit({
+          ctx: {
             projectRoot: args.projectRoot,
             sessionRoot: args.sessionRoot,
             executionPlan: args.executionPlan,
             executorConfig: args.executorConfig,
-            dispatch,
-            maxRetries: args.retryPolicy.synthesisMaxRetries,
-            retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+            retryPolicy: args.retryPolicy,
             unitTimeoutMs: args.unitTimeoutMs,
             reviewExecutionProfile: args.reviewExecutionProfile,
           },
+          dispatch,
+          workItem,
+          sourceWorkItemsRef: sourceWorkItemRef(workItem),
+          nestedBatch: synthesisNestedBatch,
         });
-        if (!outcome.success) {
-          const completed = await completeUnavailableSynthesisResponse(
-            dispatch,
-            outcome.failure?.message ?? "unknown synthesis worker failure",
-            outcome,
-          );
-          if (completed) {
-            responses[currentIndex] = completed.response;
-            issueOutcomes[currentIndex] = completed.outcome;
-          } else {
-            issueOutcomes[currentIndex] = outcome;
-          }
-          continue;
-        }
-        try {
-          responses[currentIndex] = await validateIssueSynthesisResponseOnDisk({
-            responsePath: dispatch.output_path,
-            sessionId: args.executionPlan.session_id,
-            workItem,
-            sourceWorkItemsRef: sourceWorkItemRef(workItem),
-          });
-          issueOutcomes[currentIndex] = outcome;
-        } catch (error) {
-          const failedOutcome = await synthesisValidationFailureOutcome({
-            executionPlan: args.executionPlan,
-            dispatch,
-            priorOutcome: outcome,
-            error,
-          });
-          const completed = await completeUnavailableSynthesisResponse(
-            dispatch,
-            errorMessage(error),
-            failedOutcome,
-          );
-          if (completed) {
-            responses[currentIndex] = completed.response;
-            issueOutcomes[currentIndex] = completed.outcome;
-          } else {
-            issueOutcomes[currentIndex] = failedOutcome;
-          }
+        issueOutcomes[currentIndex] = outcome;
+        if (response) {
+          responses[currentIndex] = response;
         }
       }
     };
