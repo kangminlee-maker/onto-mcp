@@ -38,6 +38,7 @@ const FIXTURES: Record<string, { targetFile: string; intent: string }> = {
 
 /** 감사 가능성: 채점 근거가 되는 세션 아티팩트를 repo 증거 디렉토리로 영속화. */
 const EVIDENCE_ARTIFACTS = [
+  "session-metadata.yaml",
   "finding-ledger.yaml",
   "finding-relation-graph.yaml",
   "issue-ledger.yaml",
@@ -70,6 +71,20 @@ async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<
     }
   } catch {
     // round1 부재 run은 건너뜀
+  }
+  // review-record가 참조하는 준비 입력(target_snapshot_ref/materialized_input_ref)도
+  // 상대 구조를 유지해 영속화 — finding의 materialized-input.md:NN 인용을 repo만으로 추적.
+  for (const prep of ["target-snapshot.md", "materialized-input.md"]) {
+    try {
+      const prepDst = path.join(dst, "execution-preparation");
+      await fs.mkdir(prepDst, { recursive: true });
+      await fs.copyFile(
+        path.join(sessionRoot, "execution-preparation", prep),
+        path.join(prepDst, prep),
+      );
+    } catch {
+      // 해당 run에 없는 준비 아티팩트는 건너뜀
+    }
   }
   return dst;
 }

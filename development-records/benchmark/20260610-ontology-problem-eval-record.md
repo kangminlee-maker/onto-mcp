@@ -81,6 +81,6 @@ npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.m
 
 `.onto/roles/logic.md`에 **시간 전개 만족 가능성 probe** 추가(단일 변수 — INV-EXP-1 충족): 종결·완료 판정 규칙이 가역 상태에 의존하는지, 허용된 후속 사건(정정·재발행·취소·소급 변경)이 판정된 종결 상태와 모순을 만드는지 — 스냅숏 만족 가능성을 넘어 상태 전개 경로 위 만족 가능성 점검.
 
-검증 재실행(clinical 세션 `20260611-f1a64fc4`): logic finding-011이 **CLW-10 모순 메커니즘을 최초 포착** — "completion status가 이후의 가역적 result 상태에 의존, corrected 후 finalized·amended 동시 요구 가능"(0/2 → 1/1). 앵커는 Report 재발행 경로 경유(ground truth의 Order.completed 명시 대비 한 단계 간접 — 메커니즘 정확). 회귀 0(기존 7종 어휘 전부 유지, material 12), pinned gate 12/12 통과. 재현: `evaluate-semantic-gate.mts clinical-lab-workflow:20260611-f1a64fc4`.
+검증 재실행(clinical 세션 `20260611-f1a64fc4`): logic finding-011이 시간 전개 모순을 발화 — 단, **conflict_pair 앵커는 `state_rules[2]`(Report finalized↔amended)**이고 CLW-10의 정의 앵커는 `state_rules[1]`(Order completed 조건)이다. 즉 **probe의 클래스 효력은 실증**(스냅숏이 아닌 상태 전개 경로 모순을 fail verdict로 정확히 형식화 — "finalized가 허용된 경로 위에서 종결 해석 불안정")됐으나, **CLW-10 자체는 표적 앵커 기준 여전히 miss**(0/3). 회귀 0(기존 7종 어휘 전부 유지, material 12), pinned gate 12/12 통과 — 단 gate expectations는 material 결함 어휘만 검증하므로 **gate 통과는 CLW-10(medium_or_above) 회수를 검증하지 않는다**. 재현: `evaluate-semantic-gate.mts clinical-lab-workflow:20260611-f1a64fc4`.
 
-이로써 seeded 30결함 중 미검출 잔여 없음(전부 caught 또는 partial+) — 단, 보강 후 run은 fixture당 1회로 PRELIMINARY. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.
+잔여 현황: seeded 30결함 중 표적 앵커 기준 잔여 miss = **CLW-10 1건**(동일 클래스 모순을 한 줄 옆 규칙에서 발화한 만큼, 다음 후보는 probe 강화가 아니라 분산 확인 재실행). 보강 후 run은 fixture당 1회로 PRELIMINARY. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.
