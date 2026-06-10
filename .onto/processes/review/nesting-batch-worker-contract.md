@@ -64,4 +64,5 @@ outer(teamlead seat) model/effort는 settings `review.execution.teamlead.llm`에
 
 - **범위(S2)**: 위 배치 계약 + codex/claude outer 실현 + A lens 단계 nested + B 라운드 배치 + settings host×nested 해제 + 4셀 동등성.
 - **범위(S2 후속 — A downstream)**: A의 downstream wide 3단계(issue-stance·per-issue deliberation·per-issue synthesis) nested 1차 시도 + flat retry fallback(§4). wave 분할(`dispatch_width`)과 단계별 스트림 로그(`nested-outer-<stage>-*.log`) 포함.
-- **비범위(후속)**: live-LLM nested E2E(계약은 mock으로 증명; live는 기존 live E2E 트랙과 함께), A 단일-유닛 체인 단계의 nesting(fan-out 부재 — 의도적 제외), A 루프의 frontier 엔진 rebase(4f), teammate 지속형·live 심의(S3).
+- **live 실증(2026-06-10)**: A×nested×codex full 9-lens live E2E `completed` + semantic gate 전 체크 통과 — outer 순응성(verbatim script·summary)·lens 3-wave parity·downstream stance/synthesis nested 배치까지 실 LLM으로 검증. 기록: `development-records/benchmark/20260610-nested-live-e2e-record.md`.
+- **비범위(후속)**: claude brand live nested(E2E route 단언의 brand-파라미터화 필요; spawn-surface·mock 동등성까지는 증명됨), A 단일-유닛 체인 단계의 nesting(fan-out 부재 — 의도적 제외), A 루프의 frontier 엔진 rebase(4f), teammate 지속형·live 심의(S3).
