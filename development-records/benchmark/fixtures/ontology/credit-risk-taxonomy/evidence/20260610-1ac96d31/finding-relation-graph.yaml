@@ -1,0 +1,219 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: 등급·한도·환율처럼 병행 관리되는 핵심 값의 canonical source, precedence,
+      conflict-resolution rule이 온톨로지 내부에 정의되지 않았기 때문에 등급 권위 분산과 병행 값 권위 결손이 함께
+      발생한다.
+    shared_cause: null
+    rationale: finding-001은 엔진 등급, 보고 등급, 내부 등급의 authoritative value를 target 안에서 결정할
+      수 없다고 보고하고, finding-006은 등급·한도·환율 전반에서 단일 원본 권위와 우선순위 개념이 없다고 보고한다. 두
+      causal path 모두 병존 값 체계와 외부 소비 시스템 변환을 원인으로 삼아 같은 권위/precedence 결손을 가리킨다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: 등급 변환과 수동 조정 정책을 버전드 canonical ontology concept로 닫지 않고 외부 위키·소비
+      시스템·보고팀 조정에 맡긴 것이 현재 권위 불명확성과 변경 후 재현성 결손의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-001은 등급 권위가 엔진·보고·소비 시스템으로 분산된 현재 운영 판단 문제를 지적하고,
+      finding-008은 같은 외부화된 등급 매핑/조정 권위가 등급 체계 변경 시 연속성을 깨뜨린다고 지적한다. 둘 다
+      RiskRating.grade, Borrower.internal_rating, Exposure.risk_grade 간 변환과 수동
+      조정이 target 내부 권위로 닫히지 않은 점에 근거한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 엔진 산출 등급, 변환 등급, 보고 조정 등급을 별도 권위와 이름으로 분리하지 않고
+      Exposure.risk_grade 및 외부 변환 규칙에 결합한 것이 의미 혼동과 권위 분산을 동시에 만든다.
+    shared_cause: null
+    rationale: finding-013은 Exposure.risk_grade가 엔진 도출값과 보고팀 수동 조정값을 한 개념명으로 겸한다고
+      설명하고, finding-001은 그 결과 어느 등급이 authoritative한지 결정할 수 없다고 설명한다. semantic
+      conflation과 authority dispersion은 같은 등급 모델링 결손의 두 표현이다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 등급 값을 시점·버전·유효기간이 있는 기록 개념으로 승격하지 않은 것이 과거 시점 재구성과 등급 체계 변경 연속성을 모두 훼손한다.
+    shared_cause:
+      cause_claim: 시점 의존 등급과 등급 변환/조정 정책을 version, effective_from/effective_to,
+        applied_at이 있는 ontology concept로 모델링하지 않았다.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-008.cause-004
+    rationale: finding-004는 Borrower.internal_rating, RiskRating.grade/score,
+      Exposure.risk_grade에 유효기간 또는 이력이 없어 과거 보고일 등급을 재구성할 수 없다고 한다. finding-008은
+      등급 매핑·수동 조정의 버전과 적용일이 target 내부에 없어 변경 후 기존 데이터 해석을 재현하기 어렵다고 한다. 둘의 직접
+      원인은 등급 시간/버전 모델 부재로 겹친다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-005
+    to_finding_id: finding-013
+    relation: enables
+    root_hypothesis: 수동 조정 행위의 actor, acted_at, reason, previous_value, new_value가
+      없으면 Exposure.risk_grade가 엔진 도출 등급인지 보고 조정 등급인지 구분하고 추적할 구조가 사라진다.
+    shared_cause: null
+    rationale: finding-005는 보고서 팀의 Exposure.risk_grade 수동 조정에 이력과 근거 개념이 없다고 보고한다.
+      finding-013은 Exposure.risk_grade가 엔진 도출값과 보고 조정값을 한 필드에 결합한다고 보고한다. 수동 조정
+      증거 모델 부재는 이 결합된 필드의 의미와 권위 식별 실패를 강화한다.
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: ExposureAggregate.total_amount가 실시간 전체 합계와 월말 배치 스냅샷이라는 서로 다른
+      시간 권위를 하나의 개념으로 겹쳐 선언되어 stale 값 전파와 논리 충돌이 함께 발생한다.
+    shared_cause: null
+    rationale: finding-002는 월말 배치 total_amount가 Limit utilization과 RiskAppetite
+      compliance 판단에 stale 값으로 전파된다고 설명한다. finding-010은 같은 total_amount가 '모든
+      Exposure.amount의 합'과 '일중 신규 여신 미반영 배치값'을 동시에 만족할 수 없다는 논리 충돌을 지적한다. 둘 다
+      총익스포저의 시점 권위와 포함 범위 미분리에서 나온다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: 월말 배치 스냅샷 값을 current total exposure처럼 명명하고 사용하는 모델링이 시간성 숨김과
+      stale compliance 판단을 동시에 만든다.
+    shared_cause: null
+    rationale: finding-014는 ExposureAggregate.total_amount의 이름과 정의가 총익스포저를 뜻하지만 실제
+      값은 월말 배치 기준 부분 시점 값이라고 한다. finding-002는 그 값이 한도 소진율과 RiskAppetite 준수 판단에
+      사용되어 일중 신규 여신을 반영하지 못한다고 한다. semantic naming issue와 axiology time-purpose
+      issue가 같은 snapshot/current 구분 부재에 연결된다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-010
+    to_finding_id: finding-014
+    relation: duplicates
+    root_hypothesis: 두 findings 모두 ExposureAggregate.total_amount의 '모든 Exposure 합계'
+      정의와 월말 배치 미반영 note가 같은 개념에 결합된 문제를 다룬다.
+    shared_cause: null
+    rationale: finding-010은 이를 논리적 동시 만족 불가능성으로 표현하고, finding-014는 이름·정의와 실제 월말 배치 값
+      사이의 의미 불일치로 표현한다. 렌즈는 다르지만 evidence와 proposed action이 모두 real-time/current
+      total과 month-end snapshot 분리를 요구하므로 사실상 같은 결함의 중복 보고다.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-002
+    to_finding_id: finding-016
+    relation: enables
+    root_hypothesis: RiskAppetite가 ExposureAggregate와 관계 그래프에서 연결되지 않으면, stale
+      ExposureAggregate가 준수 판단에 쓰이는지 여부와 어떤 aggregate가 어떤 appetite를 평가하는지 구조적으로
+      검증하기 어렵다.
+    shared_cause: null
+    rationale: finding-002는 RiskAppetite compliance가 ExposureAggregate를 사용하면서
+      freshness 요구가 분리되지 않아 stale 값이 전파된다고 한다. finding-016은 RiskAppetite와
+      ExposureAggregate 사이의 관계가 relations 섹션에 없어 준수/위반 판단 경로가 구조적으로 도달 가능하지 않다고
+      한다. 구조적 연결 부재는 시간성 있는 aggregate 사용 계약을 검증하지 못하게 하는 enabling defect다.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-015
+    to_finding_id: finding-016
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite 준수 판정을 ExposureAggregate, RiskAppetite, as_of가 연결된
+      별도 assessment relation/entity로 모델링하지 않은 것이 의미상 파생값 위치 오류와 구조상 고아 엔티티 문제를
+      함께 만든다.
+    shared_cause: null
+    rationale: finding-015는 compliance_status가 RiskAppetite 자체 속성이 아니라 특정
+      ExposureAggregate와 threshold 비교에서 파생되는 판정이라고 한다. finding-016은 그 비교를 전제로
+      하면서도 RiskAppetite가 ExposureAggregate와 관계로 연결되지 않는다고 한다. 둘 다
+      RiskAppetiteAssessment 또는 checked_against 관계 같은 평가 개념 부재를 가리킨다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: 한도·환율 계산에 대한 authoritative source, precedence, conversion
+      policy를 온톨로지 안에 닫지 않은 것이 한도 소진율 계산 분산과 병행 값 권위 결손의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-003은 승인 한도, CRM available_limit, 시스템별 환율 테이블 때문에 한도 소진율 기준이
+      분산된다고 한다. finding-006은 병행 관리되는 등급·한도·환율 값 전반에 단일 원본 권위와 우선순위 개념이 없다고 한다.
+      finding-003은 finding-006의 broader authority defect 중 limit/FX slice에 해당한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-002
+    relation: enables
+    root_hypothesis: Limit utilization은 ExposureAggregate.total_amount와
+      Limit.approved_amount의 결합 산식이므로, exposure freshness 결손과 limit/FX authority
+      결손이 함께 있으면 같은 지표의 시간 기준과 금액 기준이 모두 소비 시스템별로 달라진다.
+    shared_cause: null
+    rationale: finding-002는 분자인 ExposureAggregate.total_amount의 시점/freshness 결손이 한도
+      소진율에 전파된다고 한다. finding-003은 분모인 Limit.approved_amount 및 환율 변환 권위가 시스템별로
+      분산되어 같은 소진율이 달라질 수 있다고 한다. 둘은 같은 Limit utilization 산식의 서로 다른 입력 권위 결손이며,
+      limit/FX 분산은 stale aggregate 문제와 결합되어 지표 불일치를 가능하게 한다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-017
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: Exposure.risk_grade가 RiskRating.grade에서 어떻게 도출되고 수동 조정과 어떻게
+      분리되는지 관계/제약으로 닫히지 않은 것이 구조적 산출 의존성 누락과 의미적 등급 혼합을 함께 만든다.
+    shared_cause:
+      cause_claim: classification_rules의 RiskRating.grade -> Exposure.risk_grade 산출 및
+        보고팀 수동 조정 규칙을 별도 관계, 권위, 조정 개념으로 구조화하지 않았다.
+      from_cause_ref: finding-017.cause-003
+      to_cause_ref: finding-013.cause-003
+    rationale: finding-017은 Exposure.risk_grade 산출 의존성이 relations 섹션에 명시되지 않았다고 한다.
+      finding-013은 같은 risk_grade가 엔진 도출 등급과 보고팀 수동 조정 등급을 겸한다고 한다. 둘은
+      classification_rules의 산출/조정 의미가 온톨로지 구조 안에서 분리·연결되지 않은 데서 함께 발생한다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-001
+    to_finding_id: finding-017
+    relation: enables
+    root_hypothesis: Exposure와 RiskRating 사이의 산출 의존성이 관계로 명시되지 않으면 엔진 등급과 보고 등급의
+      authoritative 연결 규칙을 소비 시스템이 임의로 해석하게 된다.
+    shared_cause: null
+    rationale: finding-017은 RiskRating.grade가 어떤 Exposure.risk_grade의 근거인지 관계 그래프상
+      닫히지 않는다고 한다. finding-001은 등급 의미와 변환 권위가 온톨로지 내부에 닫혀 있지 않아 엔진 판단과 보고 판단이 다른
+      값으로 정당화될 수 있다고 한다. 구조적 산출 의존성 누락은 broader rating authority dispersion을
+      가능하게 하는 한 원인이다.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: enables
+    root_hypothesis: Collateral을 Exposure 하위 유형으로 잘못 배치하면 담보 가치와 여신 금액의 관계가 흐려져 LTV를
+      원천값에서 계산되는 파생 비율인지 독립 입력값인지 구분하기 더 어려워진다.
+    shared_cause: null
+    rationale: finding-011은 Collateral이 Exposure의 하위 유형으로 선언되어 담보 자산과 여신 익스포저의 유형이
+      섞인다고 한다. finding-012는 LTV가 Exposure.amount와 Collateral.appraised_value 기반
+      산식성 비율인지 심사역 입력값인지 불명확하다고 한다. 담보와 익스포저의 존재론적 분리가 약하면 LTV 원천값과 파생값 관계도
+      안정적으로 닫히기 어렵다.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-004
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: 시점 의존 리스크 값을 기준일과 유효기간이 있는 snapshot/history concept로 일관되게 모델링하지
+      않아 등급과 익스포저 집계 모두 과거 기준 재현성이 약해진다.
+    shared_cause:
+      cause_claim: 시점 의존 값에 as_of/effective period와 현재값·스냅샷 구분을 일관되게 부여하지 않았다.
+      from_cause_ref: finding-004.cause-002
+      to_cause_ref: finding-014.cause-002
+    rationale: finding-004는 ExposureAggregate에는 as_of가 있지만 등급 쪽에는 같은 기준일에 적용될 시점 개념이
+      없다고 한다. finding-014는 ExposureAggregate.total_amount 자체도 월말 배치 스냅샷임이 이름과
+      정의에서 충분히 분리되지 않는다고 한다. 둘은 리스크 값의 temporal contract가 부분적이고 불균일하게 모델링된다는 공통
+      원인을 공유한다.
+    confidence: medium
+  - relation_id: rel-017
+    from_finding_id: finding-007
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: 리스크 상태와 분류값을 lifecycle이 있는 외부 참조/코드셋 개념으로 모델링하지 않고 고정 범위 또는 범위
+      밖 메모로 처리해 상태 추가와 변경 흡수가 어렵다.
+    shared_cause:
+      cause_claim: 도메인 상태·분류값에 source authority, valid period, lifecycle status,
+        unknown/extension handling을 갖는 코드셋 또는 외부 참조 개념이 없다.
+      from_cause_ref: finding-007.cause-003
+      to_cause_ref: finding-009.cause-002
+    rationale: finding-007은 연체/부실 상태가 별도 시스템 소관이라는 메모만 있고 외부 상태 참조와 발생/해소 시점이 모델에
+      없다고 한다. finding-009는 핵심 분류축이 닫힌 enum으로만 정의되어 새 상태나 분류값 추가 시 호환 정책이 없다고 한다.
+      둘 다 상태/분류 lifecycle을 확장 가능한 권위 개념으로 다루지 않는 문제다.
+    confidence: medium
+singleton_findings: []

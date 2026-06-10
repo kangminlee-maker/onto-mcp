@@ -1,0 +1,162 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: AlternatePart
+    evidence_anchor: manufacturing-bom-ontology.yaml:32-40; manufacturing-bom-ontology.yaml:86
+    claim: AlternatePart는 대체 관계를 대칭 관계로 정의하면서 방향성 속성은 기본 one_way로 둔다.
+    what: 정의는 "A의 대체가 B이면 B의 대체도 A"라고 하여 대체 가능성을 항상 양방향 의미로 설명하지만, 같은 엔티티의
+      direction은 one_way와 bidirectional을 허용하고 기본값을 one_way로 둔다. relations의
+      alternate_of 단축 표기도 방향 의미를 보존하지 않는다.
+    why: 대체부품은 제조 실행에서 승인된 방향이 의미적으로 중요하다. 한쪽 대체만 허용되는 경우와 상호 대체가 가능한 경우는 생산 지시, 자재
+      피킹, 품질 승인에서 다른 의미인데, 정의와 속성이 서로 반대 의미를 주면 PLM/MES 통합 기준 문서가 대체 허용 범위를 잘못
+      전달할 수 있다.
+    how_to_fix: AlternatePart 정의를 방향성 관계로 고치고, bidirectional일 때만 상호 대체라고 명시한다.
+      alternate_of 단축 표기는 direction을 포함하거나, 방향 정보를 잃는 단축 관계라면 제거/비권장으로 표시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 품목·BOM 개념 기준, 특히 대체부품 사용 가능성의 의미 기준.
+      failure_condition: one_way 대체를 정의한 데이터가 정의 문구 또는 alternate_of 단축 표기에 의해 양방향 대체로 해석될 때.
+      impact: 승인되지 않은 역방향 부품 대체가 생산 오더나 현장 자재 대체 판단에 반영될 수 있어 제조 운영 신뢰를 약화한다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:32-40
+        - manufacturing-bom-ontology.yaml:86
+    causal_path:
+      root_cause_candidate: 대체 관계의 대칭성 여부를 관계 정의와 속성 양쪽에서 서로 다르게 부여했다.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: AlternatePart 정의는 대체 관계를 항상 대칭으로 설명한다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:32-33
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 같은 엔티티의 direction 속성은 one_way를 허용하고 기본값도 one_way로 설명한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:37-40
+        - cause_id: semantics-candidate-001.cause-003
+          claim: Part-to-Part alternate_of 단축 관계는 AlternatePart를 통해 표현된다고만 하며 direction
+            의미를 드러내지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:86
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: InspectionPlan
+    evidence_anchor: manufacturing-bom-ontology.yaml:72-77;
+      manufacturing-bom-ontology.yaml:42-48; manufacturing-bom-ontology.yaml:55
+    claim: InspectionPlan을 Operation의 하위 유형으로 둔 것은 검사 계획과 공정 실행 단계의 존재론적 유형을 혼동한다.
+    what: "Operation은 라우팅의 한 공정 단계로 정의되고 work_center와 std_time_min을 가진다. 반면
+      InspectionPlan은 sampling_rule과 acceptance_criteria를 담는 검사 계획/파라미터 문서 성격인데
+      is_a: Operation으로 모델링되어 모든 InspectionPlan이 라우팅 단계인 것처럼 해석된다."
+    why: 검사가 Operation일 수 있다는 말은 '검사 작업 단계'가 Operation이라는 뜻이지, '검사 계획' 자체가
+      Operation이라는 뜻은 아니다. 계획/기준 문서와 실행 공정 단계를 같은 유형으로 두면 라우팅 순서, 작업장 배정, 표준시간의
+      의미가 검사 기준 문서에 부당하게 상속된다.
+    how_to_fix: InspectionPlan을 별도 계획 엔티티로 두고 InspectionOperation 또는 Operation이
+      inspection_plan_ref로 참조하게 한다. 검사 작업 단계를 표현하려면 Operation의 subtype을
+      InspectionOperation으로 분리하고, sampling_rule/acceptance_criteria는 연결된 계획/품질
+      기준으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 라우팅·검사 개념 기준.
+      failure_condition: 검사 계획 레코드가 Operation 하위 유형으로 처리되어 라우팅 순서, work_center,
+        std_time_min 등 실행 단계 속성을 가져야 하는 대상으로 해석될 때.
+      impact: 품질 기준 문서와 제조 실행 공정이 혼재되어 MES 라우팅 생성, 검사 기준 적용, 작업장/시간 배정의 의미가 흐려진다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:42-48
+        - manufacturing-bom-ontology.yaml:72-77
+        - manufacturing-bom-ontology.yaml:55
+    causal_path:
+      root_cause_candidate: 검사라는 활동(Operation)과 검사 계획이라는 제도적/문서적 기준(InspectionPlan)을
+        같은 is_a 계층에 배치했다.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Operation은 라우팅의 한 공정 단계로 정의되고 작업장과 표준시간 속성을 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:42-48
+        - cause_id: semantics-candidate-002.cause-002
+          claim: InspectionPlan은 검사 파라미터와 합격 기준을 담는 계획으로 정의되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:72-77
+        - cause_id: semantics-candidate-002.cause-003
+          claim: "InspectionPlan에 is_a: Operation을 부여해 계획 문서 성격의 개념을 실행 공정 단계로 분류한다."
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:72-74
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: BomLine.scrap_rate 및 BOM 비순환 예외
+    evidence_anchor: manufacturing-bom-ontology.yaml:24-30;
+      manufacturing-bom-ontology.yaml:88-89
+    claim: 스크랩/회수 공정 의미가 BOM 구성 관계 안으로 들어와 BOM의 '상위 품목이 하위 품목을 사용한다'는 의미를 흐린다.
+    what: BomLine은 상위 품목이 하위 품목을 얼마나 쓰는지로 정의되지만 scrap_rate는 공정 불량 감안 계수로 설명된다. 또한
+      비순환이어야 할 BOM의 예외로 재생 원료 회수 공정을 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 한다.
+    why: BOM 구성 관계는 제품 구조의 사용량 의미이고, 스크랩률·재투입은 공정 수율/회수 흐름의 의미다. 이를 자기 하위 BOM 라인으로
+      표현하면 '부품 구성'과 '공정 회수'가 같은 관계로 해석되어 품목 구조 기준 문서로서 의미가 불안정해진다.
+    how_to_fix: BOM은 제품 구조 사용량으로 제한하고, scrap_rate와 재투입은 Routing/Operation의 yield,
+      byproduct, rework/recycle flow 같은 별도 공정 개념으로 분리한다. 재생 원료가 실제 투입 품목이면 별도
+      Part로 참조하고 자기 포함 BOM으로 표현하지 않는다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 BOM·라우팅 개념 기준과 생산계획/자재소요 의미 기준.
+      failure_condition: 스크랩 재투입이나 공정 불량률을 BOM 구성 관계로 해석해 제품 구조와 공정 수율을 같은 관계로 처리할 때.
+      impact: 자재소요, 원가, 라우팅 수율 계산에서 제품 구성량과 공정 손실/회수량이 혼동되어 운영 판단의 기준이 흔들린다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:24-30
+        - manufacturing-bom-ontology.yaml:88-89
+    causal_path:
+      root_cause_candidate: 제품 구조 관계와 공정 수율/회수 흐름을 같은 BOM 표현 안에 배치했다.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: BomLine은 상위 품목이 하위 품목을 얼마나 쓰는지라는 구성 관계로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:24-30
+        - cause_id: semantics-candidate-003.cause-002
+          claim: BomLine.scrap_rate는 공정 불량 감안 계수로 정의되어 구성 관계가 아닌 공정 손실 의미를 가진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:29-30
+        - cause_id: semantics-candidate-003.cause-003
+          claim: 무순환 BOM 규칙의 예외로 재생 원료 회수 공정을 자기 하위 Assembly로 모델링한다고 하여 공정 회수 흐름을 BOM 포함
+            관계로 표현한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:88-89
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: Part.current_eco
+    evidence_anchor: manufacturing-bom-ontology.yaml:15-16;
+      manufacturing-bom-ontology.yaml:64-70; manufacturing-bom-ontology.yaml:91
+    claim: current_eco의 '최신 설계변경' 의미는 ECO 상태·효력일과 맞물릴 때 현재 적용 변경인지 최신 접수 변경인지 불명확하다.
+    what: Part.current_eco는 최신 설계변경을 가리킨다고 되어 있고 ECO에는 open, approved, applied 상태와
+      effective_date가 있다. 무결성 규칙은 effective_date 이후 생산분은 신규 rev를 따르지만 Part.rev는
+      도면 관리대장 반영 후 주간 배치로 동기화된다고 한다.
+    why: 최신 ECO, 승인된 ECO, 적용된 ECO, 현재 생산에 유효한 ECO는 서로 다른 의미다. current_eco라는 이름이 이
+      구분을 하지 않으면 생산 시점 기준의 rev 판정과 설계변경 추적 의미가 섞인다.
+    how_to_fix: current_eco를 latest_eco, effective_eco, applied_eco 등 의도별 의미로 분리하거나
+      이름/정의에 상태와 effective_date 기준을 명시한다. 생산 적용 기준은 ECO.status와 effective_date의
+      조합으로 정의하고 Part.rev 동기화 지연과 구분한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았고, 제조 BOM/라우팅/변경관리의 일반적 PLM/MES 의미
+    기준에 근거해 판단했다.
+  - 웹 리서치는 Boundary Policy에 따라 사용하지 않았다.
+  - 역할 정의 파일은 허용 참조로 명시되었으나 현재 파일시스템에서 직접 경로 읽기에 실패했고, 프롬프트 패킷에 포함된 Role
+    Definition Source 본문을 기준으로 semantics lens 범위를 적용했다.
+validation:
+  unaddressable_candidates: []

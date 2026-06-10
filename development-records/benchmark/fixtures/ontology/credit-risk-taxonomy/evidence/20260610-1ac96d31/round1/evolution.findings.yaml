@@ -1,0 +1,135 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml rating scale authority and derivation rules
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:20-22,48-56,92-98
+    claim: 세 등급 스케일의 변환 권위가 온톨로지 밖의 소비 시스템과 위키로 분산되어 등급 체계 변경 시 연속성이 깨진다.
+    what: Borrower.internal_rating은 1~10 문자열, RiskRating.grade는 R1~R5 enum,
+      Exposure.risk_grade는 AAA~CCC enum으로 별도 정의되어 있고, 변환은 리스크팀 위키 또는 각 소비 시스템이
+      수행한다고 되어 있다. 동시에 Exposure.risk_grade는 RiskRating.grade에서 도출되지만 보고서 팀이 수동
+      조정할 수 있다.
+    why: 이 온톨로지가 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서라면 등급 간 매핑, 수동 조정의 버전, 적용일, 소급 여부가
+      target 내부에서 닫혀 있어야 한다. 현재 구조에서는 새 등급 추가, 매핑 변경, 시장 상황별 조정 정책 변경이 발생할 때 기존
+      데이터가 어떤 매핑 버전으로 해석되었는지 재현할 수 없고, 엔진과 보고서 시스템이 서로 다른 변환을 적용할 수 있다.
+    how_to_fix: 등급 스케일을 별도 개념으로 승격하고 version, effective_from/effective_to,
+      source_grade, target_grade, mapping_policy, override_authority,
+      override_reason, applied_at 같은 필드를 가진 canonical
+      RatingMapping/RatingOverride를 온톨로지 안에 정의한다. 소비 시스템별 임의 변환 대신 모든 등급 파생은 이
+      버전드 매핑을 참조하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서 등급 분류와 보고 해석을 일관되게 유지하는 목적.
+      failure_condition: 등급 스케일, 등급 매핑, 또는 보고서 팀 수동 조정 정책이 변경되거나 과거 보고서를 재계산해야 하는 경우.
+      impact: 같은 차주/익스포저가 시스템별 또는 시점별로 다른 등급으로 해석될 수 있어 변경 후에도 기존 데이터와 규칙의 해석 연속성을
+        보장하지 못한다.
+      evidence_refs:
+        - materialized-input.md:20-22
+        - materialized-input.md:53-56
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 등급 변환과 조정 정책을 버전드 온톨로지 개념으로 모델링하지 않고 외부 위키와 소비 시스템 수행 규칙에 맡긴다.
+      root_cause_step_id: evolution-candidate-001.cause-004
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 대상 온톨로지는 세 개의 등급 스케일을 별도 속성/enum/string으로 병존시킨다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:31-34
+            - materialized-input.md:53-56
+            - materialized-input.md:97-98
+        - cause_id: evolution-candidate-001.cause-002
+          claim: RiskRating.grade와 Borrower.internal_rating의 매핑은 리스크팀 위키를 참조하고, 변환은 각 소비
+            시스템이 수행한다고 명시되어 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:53-56
+            - materialized-input.md:97-98
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Exposure.risk_grade는 RiskRating.grade에서 도출되지만 보고서 팀이 시장 상황에 따라 수동 조정할 수
+            있어 동일 원천 등급의 파생 결과가 변경 가능하다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:92-93
+        - cause_id: evolution-candidate-001.cause-004
+          claim: 따라서 등급 체계나 조정 정책이 바뀔 때 기존 데이터의 적용 매핑과 보고 결과를 target 내부 증거만으로 재현하기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:53-56
+            - materialized-input.md:92-98
+      unresolved_beyond_evidence: 실제 리스크팀 위키나 소비 시스템 매핑 구현은 경계 밖이라 확인하지 않았다. 이
+        finding은 target 내부가 공유 권위 문서로 닫혀 있지 않다는 점에 한정된다.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml categorical enum extension surfaces
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:18-19,30-33,43-45,53-55,80-83
+    claim: 핵심 분류축이 닫힌 enum으로만 정의되어 새 세그먼트·상품·담보·등급 상태 추가 시 기존 구조 수정과 소비자 동시 변경이 필요하다.
+    what: Borrower.segment, Exposure.product_type, Exposure.risk_grade,
+      Collateral.collateral_type, RiskRating.grade,
+      RiskAppetite.compliance_status가 모두 고정 enum 값 목록으로 정의되어 있으나, enum 값의
+      lifecycle, deprecated/alias 처리, unknown/pending 값, 외부 코드 매핑, 유효기간이 없다.
+    why: 리스크 분류 온톨로지는 새 대출 상품, 새 담보 유형, 세그먼트 세분화, 등급 체계 확장 같은 변경을 자연스럽게 흡수해야 한다. 현재는
+      값 추가가 곧 schema/ontology 변경이며, 변경 전 데이터를 어떻게 해석할지와 변경 중 미인식 값을 어떻게 처리할지가
+      정의되어 있지 않다. 보고 시스템과 리스크 엔진이 같은 enum을 검증 기준으로 쓰면 한쪽이 먼저 새 값을 내보내는 순간 다른 쪽은
+      invalid input으로 취급할 위험이 있다.
+    how_to_fix: 고정 enum을 코드셋 개념으로 승격하고 code, label, status(active/deprecated),
+      valid_from, valid_to, parent_code, external_aliases, unknown_handling을
+      정의한다. 신규 값은 기존 스키마 수정이 아니라 코드셋 버전 추가로 수용하고, 소비 시스템의 호환 정책을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 분류체계 변경에도 리스크 엔진과 보고 시스템이 공유 기준을 유지하고 invalid input behavior를
+        예측 가능하게 하는 목적.
+      failure_condition: 새 상품 유형, 새 담보 유형, 새 차주 세그먼트, 새 등급 또는 중간 준수 상태가 추가되는 경우.
+      impact: 새 분류값 도입이 기존 enum 수정과 소비자 동시 배포를 요구하여 확장 내성이 낮고, 변경 순서에 따라 입력 거부나 누락 보고가
+        발생할 수 있다.
+      evidence_refs:
+        - materialized-input.md:18-19
+        - materialized-input.md:30-33
+        - materialized-input.md:43-45
+        - materialized-input.md:53-55
+        - materialized-input.md:80-83
+    causal_path:
+      root_cause_candidate: 분류값을 lifecycle이 있는 확장 가능 코드셋이 아니라 닫힌 enum 목록으로 직접 모델링한다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 여러 핵심 분류축이 고정 enum values 배열로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:18-19
+            - materialized-input.md:30-33
+            - materialized-input.md:43-45
+            - materialized-input.md:53-55
+            - materialized-input.md:80-83
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 해당 enum들에는 유효기간, deprecated 상태, alias, unknown 값 처리, 버전별 호환 정책이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:18-19
+            - materialized-input.md:30-33
+            - materialized-input.md:43-45
+            - materialized-input.md:53-55
+            - materialized-input.md:80-83
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 새 분류값을 받으려면 enum 목록 자체를 변경해야 하므로 기존 구조와 소비자 검증 로직 수정이 필요하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:18-19
+            - materialized-input.md:30-33
+            - materialized-input.md:43-45
+            - materialized-input.md:53-55
+            - materialized-input.md:80-83
+      unresolved_beyond_evidence: 소비 시스템이 enum을 엄격 검증하는지 여부는 경계 밖이다. 다만 review target
+        profile이 이 YAML을 configuration_artifact로 보며 invalid_input_behavior를 검토
+        목표에 포함하므로, target 내부에 호환 처리 규칙이 없는 점은 bounded evidence로 충분하다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서 없이 패킷에 포함된 target 및 review context만 사용했다.
+  - 이 YAML 온톨로지는 리스크 엔진과 보고 시스템이 참조하는 configuration_artifact이며, 선언된 enum/type이
+    소비자 입력 검증과 보고 해석에 영향을 준다고 보았다.
+validation:
+  unaddressable_candidates: []

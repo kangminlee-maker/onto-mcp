@@ -4,7 +4,10 @@
  * 각 fixture의 semantic-expectations.yaml(ground-truth 도출 기대값)을 주입해
  * 코드 fixture preset 없이 gate를 평가한다 — gate 비코드 일반화 검증 경로.
  * 사용:
- *   npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.mts [fixtureId ...]
+ *   npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.mts [fixtureId[:sessionId] ...]
+ *
+ * `fixtureId:sessionId`로 세션을 고정하면 git이 보존하지 않는 mtime에 의존하지
+ * 않고 재현 가능하다. sessionId 생략 시 mtime 최신 run을 고른다(탐색용).
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -112,9 +115,14 @@ async function main(): Promise<void> {
   );
 
   const results: Array<Record<string, unknown>> = [];
-  for (const id of ids) {
+  for (const token of ids) {
+    const [id, pinnedSession] = token.split(":");
+    if (!id) throw new Error(`invalid fixture token: ${token}`);
     const expectations = await loadExpectations(id);
-    const evidenceDir = await latestEvidenceDir(id);
+    const evidenceDir = pinnedSession
+      ? path.join(FIXTURES_ROOT, id, "evidence", pinnedSession)
+      : await latestEvidenceDir(id);
+    await fs.access(evidenceDir);
     const result = evaluateReviewPipelineSemanticQualityGate({
       expectations,
       reviewRecord: await readYaml(path.join(evidenceDir, "review-record.yaml")),

@@ -1,0 +1,144 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Rating-scale conversion and report-grade adjustment are
+      outside the ontology's canonical authority, so engine and reporting
+      consumers can create divergent risk grades while still appearing
+      compliant.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue is framed as an authority and precedence defect in the
+      shared classification standard, not merely a downstream symptom. Multiple
+      stances support the root that canonical rating authority and governed
+      projections are missing; the narrow stances still preserve severity, so
+      the problem should be closed in the target ontology before relying on it
+      as the shared authority.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: Cross-currency limit utilization depends on per-system FX
+      tables, leaving a core risk metric without a governed shared valuation
+      authority.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The problem directly affects reproducible calculation and
+      reconciliation of limit utilization across engine and reporting systems.
+      The issue is supported as a shared-authority gap, with coverage narrowing
+      only to missing governed conversion concepts, so it is a root modeling
+      problem that must be closed in the ontology.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Exposure-derived calculations lack governed temporal and
+      monetary valuation bases, so freshness, effective timing, and replayable
+      currency meaning are not shared across systems.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue combines supported findings about time, freshness, and
+      valuation authority into a common reproducibility root. Because exposure
+      aggregates, limit utilization, and appetite compliance depend on these
+      bases, leaving them implicit would weaken current and historical decision
+      consistency.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-005
+      - finding-009
+  - issue_id: issue-004
+    problem_definition: Core classification axes such as ratings, statuses,
+      lifecycle states, and exposure-total boundaries are not governed
+      first-class concepts, forcing consumer-local interpretation or extension.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: This is the broadest first-class concept and boundary gap, supported
+      by coverage, evolution, semantics, structure, and axiology without
+      remaining disagreement. It blocks the ontology from serving as a complete
+      shared taxonomy for rating, status, lifecycle, and exposure boundary
+      interpretation.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-006
+      - finding-007
+      - finding-008
+      - finding-011
+      - finding-012
+  - issue_id: issue-005
+    problem_definition: Collateral is typed as an Exposure subtype despite being
+      defined as a secured asset, collapsing the boundary between credit
+      exposure and collateral asset.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The deliberation resolution preserves this as a high-severity
+      semantic and structural type-boundary defect while qualifying that it is
+      not proven as formal unsatisfiability absent explicit disjointness. It is
+      independent of the authority and coverage clusters and should be corrected
+      directly in the target ontology.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-006
+    problem_definition: RiskAppetite combines policy threshold authority and
+      evaluated compliance status in one concept, making the object ambiguous
+      between criterion and result.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The problem is a concept-boundary error: policy authority and
+      assessment output have different ownership, lifecycle, and audit meaning.
+      Narrow stances only recast it as missing assessment/result structure, so
+      the classification remains a direct root issue that should be fixed in the
+      target model."
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-007
+    problem_definition: RiskAppetite has no structural relation to the
+      ExposureAggregate it governs, leaving compliance assessment dependent on
+      implicit or external joins.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The missing edge is directly observed as structural orphaning. It is
+      best classified as a symptom of the broader appetite assessment modeling
+      gap shared with issue-006, while still requiring a target-level fix
+      because the ontology lacks the explicit relation needed for shared
+      compliance interpretation.
+    related_surface_finding_ids:
+      - finding-014

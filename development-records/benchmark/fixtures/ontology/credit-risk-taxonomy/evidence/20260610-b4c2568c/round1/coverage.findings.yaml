@@ -1,0 +1,246 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: credit-risk-ontology.yaml / entities
+    evidence_anchor: "Embedded Materialized Input: entities include Borrower,
+      Exposure, Collateral, RiskRating, Limit, ExposureAggregate, RiskAppetite;
+      notes state default status is out of scope"
+    claim: 연체/부실(default) 상태 영역이 공유 온톨로지 범위에서 빠져 있어 리스크 엔진과 보고 시스템의 여신 리스크 기준으로는 포괄
+      범위가 부족하다.
+    what: 온톨로지는 익스포저, 등급, 한도, 담보, 총익스포저, 리스크 성향은 정의하지만 여신 리스크 관리에서 핵심 상태인 연체,
+      부도/default, 부실/NPL, 손상 또는 부실 전이 상태를 범위 밖으로 둔다.
+    why: 대상 문서는 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향한다고 선언한다. 그러나 default 상태를 별도
+      시스템으로만 밀어내면 같은 차주나 익스포저가 정상/연체/부도/부실 중 어디에 있는지 이 문서의 공통 기준으로 판정하거나 보고할 수
+      없다. 이는 포괄 범위 관점에서 주요 하위 영역의 부재이며, 리스크 엔진 산출과 보고 분류가 서로 다른 외부 상태 정의에 의존하게
+      만든다.
+    how_to_fix: DefaultStatus 또는 CreditEvent 같은 공통 상위 개념을 추가하고, 최소한 연체 단계,
+      부도/default 여부, 부실/NPL 여부, 상태 기준일, 상태 권위 시스템을 Exposure 또는 Borrower와 연결한다.
+      별도 연체관리 시스템이 원천이라도 이 온톨로지에는 공유 참조 개념과 관계를 포함한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유할 여신 리스크 개념 기준 제공
+      failure_condition: 차주 또는 익스포저의 연체/default/부실 상태가 리스크 엔진과 보고 시스템 양쪽에서 필요한 경우
+      impact: 핵심 여신 리스크 상태가 공통 개념으로 닫히지 않아 엔진 결과와 보고 분류가 외부 시스템별 정의에 흩어지고, 공유 권위 문서로서의
+        신뢰가 약해진다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml header comment: '리스크 엔진과 보고서 시스템이 공유하는 개념
+          권위 문서'"
+        - "credit-risk-ontology.yaml entities list: Borrower, Exposure,
+          Collateral, RiskRating, Limit, ExposureAggregate, RiskAppetite only"
+        - "credit-risk-ontology.yaml notes: '연체/부실(default) 상태는 별도 시스템(연체관리)에서
+          다루므로 이 온톨로지의 범위 밖이다.'"
+    causal_path:
+      root_cause_candidate: 온톨로지 범위가 익스포저·등급·한도·담보 중심으로 제한되고 default 상태를 명시적으로 out-of-scope 처리한다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 현재 엔티티 집합에는 연체, default, 부실 상태를 표현하는 개념이 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml entities list: Borrower, Exposure,
+              Collateral, RiskRating, Limit, ExposureAggregate, RiskAppetite
+              only"
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 노트가 연체/부실(default) 상태를 별도 시스템의 범위로 선언한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml notes: '연체/부실(default) 상태는 별도
+              시스템(연체관리)에서 다루므로 이 온톨로지의 범위 밖이다.'"
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 공유 권위 문서 목적에서는 해당 상태의 공통 참조 개념도 부재하게 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml header comment: '리스크 엔진과 보고서 시스템이 공유하는
+              개념 권위 문서'"
+            - "credit-risk-ontology.yaml notes: default state out of scope"
+      unresolved_beyond_evidence: 별도 연체관리 시스템의 실제 정의는 경계 밖이라 확인하지 않았다. 다만 이 온톨로지 안에 공유
+        참조 개념이 없다는 부재는 현재 증거로 닫힌다.
+  - candidate_id: coverage-candidate-002
+    target: credit-risk-ontology.yaml / entities and classification_rules
+    evidence_anchor: "Embedded Materialized Input: Exposure.amount,
+      Limit.approved_amount/currency, ExposureAggregate.total_amount/as_of;
+      classification rule uses per-system daily FX tables"
+    claim: 통화 및 환산 기준 영역이 별도 개념으로 커버되지 않아 다통화 익스포저와 한도 소진율의 공통 분류 기준이 비어 있다.
+    what: Limit에는 currency가 있지만 Exposure.amount와 ExposureAggregate.total_amount에는
+      currency가 없고, 환율·환산일·기준통화·환산 금액을 나타내는 개념도 없다. 규칙은 통화가 다른 경우 각 시스템의 당일 환율
+      테이블을 사용한다고만 한다.
+    why: 한도 소진율은 ExposureAggregate.total_amount / Limit.approved_amount로 정의되어 보고와
+      엔진이 함께 쓰는 핵심 산식이다. 그런데 분자·분모의 통화 권위와 환산 기준이 온톨로지 안에 포괄되지 않으면 같은 익스포저와 한도도
+      시스템별 환율 테이블에 따라 서로 다른 소진율과 위반 상태로 분류될 수 있다. 이는 coverage 관점에서 금액 측정과 환산이라는
+      필수 하위 영역의 누락이다.
+    how_to_fix: MoneyAmount 또는 CurrencyConversion 같은 공통 개념을 추가해 amount, currency,
+      base_currency, fx_rate_ref, conversion_date, converted_amount를 모델링한다.
+      Exposure.amount와 ExposureAggregate.total_amount도 통화 속성을 갖도록 하고, 한도 소진율 산식은
+      단일 환산 권위 또는 명시적 환율 참조를 사용하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 한도 소진율 및 리스크 성향 위반 판단 기준
+      failure_condition: ExposureAggregate와 Limit의 통화가 다르거나 Exposure들이 여러 통화로 구성된 경우
+      impact: 환산 기준이 시스템별로 갈라져 같은 여신 포트폴리오에 대해 소진율, 한도 초과, RiskAppetite 위반 여부가 다르게 산출될
+        수 있다.
+      evidence_refs:
+        - credit-risk-ontology.yaml Exposure.attributes.amount has no currency
+          attribute
+        - credit-risk-ontology.yaml Limit.attributes.currency exists only on
+          Limit
+        - "credit-risk-ontology.yaml classification_rules: '통화가 다른 경우 환산은 각 시스템의
+          당일 환율 테이블을 사용한다.'"
+    causal_path:
+      root_cause_candidate: 금액 값을 독립 숫자로 두고 통화·환산을 공통 온톨로지 개념으로 승격하지 않았다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Exposure.amount와 ExposureAggregate.total_amount는 number로만 정의되어 통화 기준을
+            포함하지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml Exposure.attributes.amount: type number"
+            - "credit-risk-ontology.yaml
+              ExposureAggregate.attributes.total_amount: type number"
+        - cause_id: coverage-candidate-002.cause-002
+          claim: Limit만 currency를 갖고 한도 소진율 산식은 total_amount와 approved_amount를 직접 나눈다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml Limit.attributes.currency: type string"
+            - "credit-risk-ontology.yaml classification_rules: 'Limit 소진율 =
+              ExposureAggregate.total_amount / Limit.approved_amount.'"
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 통화가 다를 때 환산 권위가 각 시스템의 당일 환율 테이블로 분산된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml classification_rules: '통화가 다른 경우 환산은 각
+              시스템의 당일 환율 테이블을 사용한다.'"
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: credit-risk-ontology.yaml / classification_rules and entities.RiskRating
+    evidence_anchor: "Embedded Materialized Input: RiskRating.grade R1-R5,
+      Exposure.risk_grade AAA-CCC, Borrower.internal_rating 1-10; mapping table
+      is outside ontology"
+    claim: 등급 스케일 간 매핑/전이 기준이 온톨로지에 표현되지 않아 등급 분류 영역의 하위 세분화가 부족하다.
+    what: Borrower.internal_rating, RiskRating.grade, Exposure.risk_grade의 세 등급 스케일은
+      존재하지만, 스케일 간 매핑, 유효기간, 조정 사유, 수동 조정 권한, 매핑 버전 같은 하위 개념은 없다. 문서는 변환을 외부 위키나
+      각 소비 시스템에 맡긴다.
+    why: 리스크 엔진과 보고 시스템이 공유하는 기준이라면 엔진 등급에서 보고 등급으로 어떻게 변환되는지가 핵심 분류 범위다. 현재는 상위 개념인
+      등급만 있고 등급 전이/매핑 기준이 빠져 있어 보고서 팀의 수동 조정이나 소비 시스템별 변환 결과가 공통 온톨로지로 검증되지 않는다.
+    how_to_fix: RatingScale, RatingMapping, MappingVersion, AdjustmentReason,
+      AdjustmentAuthority 같은 최소 개념을 추가하고 RiskRating.grade,
+      Borrower.internal_rating, Exposure.risk_grade 사이의 변환 규칙과 수동 조정 이력을 온톨로지
+      안에서 참조 가능하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진 산출 등급과 보고 시스템 등급의 공유 분류 기준
+      failure_condition: RiskRating.grade를 Exposure.risk_grade 또는
+        Borrower.internal_rating으로 변환하거나 보고서 팀이 수동 조정하는 경우
+      impact: 등급 변환의 공통 기준이 온톨로지 밖으로 흩어져 같은 리스크 결과가 소비 시스템별로 다른 보고 등급이 될 수 있고, 공유 개념
+        기준으로 검토하기 어렵다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml Borrower.attributes.internal_rating note:
+          '1~10 숫자 등급 체계'"
+        - "credit-risk-ontology.yaml RiskRating.attributes.grade note:
+          'Borrower.internal_rating과 매핑 테이블은 리스크팀 위키 참조.'"
+        - "credit-risk-ontology.yaml classification_rules: 'Exposure.risk_grade는
+          RiskRating.grade에서 도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수 있다.'"
+        - "credit-risk-ontology.yaml notes: '변환은 각 소비 시스템이 수행한다.'"
+    causal_path:
+      root_cause_candidate: 등급 개념은 세 개로 분리했지만 그 사이의 매핑과 조정 개념을 온톨로지 범위 안에 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: 온톨로지는 세 개의 등급 스케일을 별도 속성으로 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Borrower.internal_rating
+            - credit-risk-ontology.yaml RiskRating.grade
+            - credit-risk-ontology.yaml Exposure.risk_grade
+        - cause_id: coverage-candidate-003.cause-002
+          claim: RiskRating.grade와 Borrower.internal_rating의 매핑은 리스크팀 위키 참조로 외부화되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml RiskRating.attributes.grade note: '매핑
+              테이블은 리스크팀 위키 참조.'"
+        - cause_id: coverage-candidate-003.cause-003
+          claim: Exposure.risk_grade 도출과 수동 조정 규칙도 매핑 개념이나 조정 이력 없이 문장 규칙으로만 존재한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml classification_rules: '보고서 팀이 시장 상황에 따라
+              수동 조정할 수 있다.'"
+        - cause_id: coverage-candidate-003.cause-004
+          claim: 노트는 변환을 각 소비 시스템이 수행한다고 하여 공유 온톨로지의 등급 변환 coverage를 비워 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml notes: '변환은 각 소비 시스템이 수행한다.'"
+      unresolved_beyond_evidence: 외부 위키의 매핑 품질은 경계 밖이라 확인하지 않았다. 현재 finding은 온톨로지 자체의 매핑 개념 부재에 한정된다.
+  - candidate_id: coverage-candidate-004
+    target: credit-risk-ontology.yaml / ExposureAggregate and RiskAppetite
+    evidence_anchor: "Embedded Materialized Input: ExposureAggregate.total_amount
+      monthly batch/as_of; RiskAppetite threshold/compliance_status without
+      segment/product/effective period"
+    claim: 포트폴리오·세그먼트별 집계와 리스크 성향 범위 기준이 부족해 보고용 리스크 coverage가 차주 단위 총액에 편중되어 있다.
+    what: 집계 개념은 차주 단위 총익스포저 하나뿐이며 세그먼트, 상품, 담보유형, 등급, 산업, 지역, 만기, 기준통화 등으로 나눈 포트폴리오
+      집계가 없다. RiskAppetite도 단일 threshold와 compliance_status만 있어 적용 범위, 대상 세그먼트,
+      기간, 기준일, 통화 기준이 없다.
+    why: 요청된 검토 목적은 분류체계와 운영 위험 관점에서 리스크 엔진과 보고 시스템이 공유할 기준의 적절성이다. 보고 시스템이 사용할 리스크
+      분류 기준으로는 차주 단위 합계만으로는 포트폴리오 분포나 리스크 성향 적용 대상을 표현하기 어렵다. 이는 특정 영역에 편중된 개념
+      분포와 하위 영역 누락에 해당한다.
+    how_to_fix: ExposureAggregate를 PortfolioAggregate로 일반화하거나 별도 개념을 추가해
+      aggregation_dimension, segment, product_type, rating_bucket,
+      collateral_type, as_of, currency/base_currency를 포함한다. RiskAppetite에는
+      scope_dimension, applicable_segment/product/rating, effective_from/to,
+      threshold_basis를 추가한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 보고 시스템과 리스크 엔진이 공유하는 분류·집계 기준 및 리스크 성향 준수 판단
+      failure_condition: 보고나 엔진이 차주 단위가 아닌 세그먼트/상품/등급/담보 유형별 익스포저 분포 또는 리스크 성향 한도를 판단해야 하는 경우
+      impact: 공유 온톨로지가 차주 단위 총액 외의 집계 범위를 표현하지 못해 보고 분류와 RiskAppetite 적용 기준이 시스템별 임의
+        구현으로 이동한다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml ExposureAggregate.definition: '차주 단위 총익스포저.
+          모든 Exposure.amount의 합.'"
+        - "credit-risk-ontology.yaml ExposureAggregate.attributes: borrower_ref,
+          total_amount, as_of"
+        - "credit-risk-ontology.yaml RiskAppetite.attributes: appetite_id,
+          threshold, compliance_status"
+    causal_path:
+      root_cause_candidate: 집계와 리스크 성향 개념을 차주 단위 총액과 단일 threshold 중심으로만 모델링했다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: ExposureAggregate는 borrower_ref 기준의 total_amount와 as_of만 갖는다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml ExposureAggregate.attributes:
+              borrower_ref, total_amount, as_of"
+        - cause_id: coverage-candidate-004.cause-002
+          claim: RiskAppetite는 적용 범위나 기간 없이 threshold와 compliance_status만 갖는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml RiskAppetite.attributes: threshold,
+              compliance_status"
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 따라서 세그먼트, 상품, 등급, 담보 유형 등 기존 엔티티 속성을 기준으로 한 보고 집계나 appetite 범위가 개념상 닫히지
+            않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml Borrower.segment values: retail, sme,
+              corporate"
+            - "credit-risk-ontology.yaml Exposure.product_type values:
+              term_loan, revolving, guarantee"
+            - "credit-risk-ontology.yaml Exposure.risk_grade values: AAA, AA, A,
+              BBB, BB, B, CCC"
+            - "credit-risk-ontology.yaml Collateral.collateral_type values:
+              real_estate, deposit, securities"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 외부 도메인 표준이나 웹 자료를 사용하지 않았고, materialized input의 선언
+    목적과 여신 리스크 분류 온톨로지라는 일반적 문맥만 사용했다.
+  - coverage lens 범위에 맞춰 존재하는 개념 간 논리 오류보다 주요 하위 영역의 부재와 세분화 부족에 한정해 판단했다.
+validation:
+  unaddressable_candidates: []

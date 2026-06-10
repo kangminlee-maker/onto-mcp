@@ -1,0 +1,249 @@
+schema_version: 1
+session_id: 20260610-36ef1faa
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules / BomLine model
+    evidence_anchor: 'integrity_rules[0]: "BOM은 비순환이어야 한다. 단, 재생 원료 회수 공정(스크랩 재투입)은
+      Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다."; BomLine.attributes.parent_ref ->
+      Assembly, child_ref -> Part'
+    claim: BOM 비순환 규칙이 스크랩 재투입 예외를 자기참조 BOM으로 흡수해, 순환 정책 확장 시 기존 BOM 구조와 검증 규칙을 동시에
+      흔들 수 있다.
+    what: 온톨로지는 BOM을 원칙적으로 비순환으로 선언하면서도 재생 원료 회수 공정은 Assembly가 자기 하위에 자신을 포함하는 예외로
+      모델링한다고 한다. 이 예외는 재투입, 부산물, 재작업, 회수율처럼 향후 늘어날 제조 흐름을 별도 공정/흐름 개념으로 확장하지 않고
+      BOM 그래프의 순환 예외로 넣는다.
+    why: PLM/MES 통합 기준 문서에서 BOM 그래프의 비순환성은 전개, 소요량 계산, 변경 영향 분석의 기본 전제다. 같은 구조에 자기참조
+      예외를 넣으면 새 회수/재작업 유형을 추가할 때마다 비순환 검증, BOM 전개, 소요량 계산, ECO 영향 범위 판단이 예외를 알아야
+      한다. 이는 새 제조 흐름 추가가 기존 구조 수정 없이 수용되는지라는 evolution 관점에서 취약하다.
+    how_to_fix: "스크랩 재투입을 BOM parent-child 자기참조로 표현하지 말고 별도 개념으로 분리한다. 예:
+      ScrapReturnFlow 또는 MaterialRecoveryOperation을 Routing/Operation에 연결하고, 회수
+      대상 Part, 산출/투입 수량, 회수율, 적용 조건을 명시한다. BOM은 비순환 규칙을 유지하고, 순환성 있는 물질 흐름은 공정
+      흐름 쪽 확장 포인트로 둔다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM 전개, 라우팅, 변경 영향 분석이 안정적으로 확장되는 것.
+      failure_condition: 스크랩 재투입 외에 재작업, 부산물 회수, 순환 투입 등 새 제조 흐름을 추가하거나 BOM 전개/소요량 계산을
+        자동화할 때 자기참조 예외를 각 소비 시스템이 별도로 해석해야 하는 경우.
+      impact: BOM의 핵심 불변식인 비순환성이 예외에 의해 약해져, 새 공정 유형 추가 시 기존 검증/계산/변경관리 로직을 수정해야 하고
+        PLM과 MES 간 해석 불일치 위험이 커진다.
+      evidence_refs:
+        - integrity_rules[0]
+        - BomLine.attributes.parent_ref
+        - BomLine.attributes.child_ref
+    causal_path:
+      root_cause_candidate: 스크랩 재투입이라는 공정/물질 흐름 확장 사례를 별도 확장 개념이 아니라 BOM 자기참조 예외로 모델링했다.
+      root_cause_step_id: evolution-candidate-001.cause-004
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: BOM은 비순환이어야 한다고 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - integrity_rules[0]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 동시에 재생 원료 회수 공정은 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 예외를 둔다.
+          relation_to_previous: enables
+          evidence_refs:
+            - integrity_rules[0]
+        - cause_id: evolution-candidate-001.cause-003
+          claim: BomLine은 parent_ref와 child_ref로 Assembly-Part 구성 관계를 표현하므로, 이 예외는 BOM 구성
+            그래프 자체에 순환을 주입한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - BomLine.attributes.parent_ref
+            - BomLine.attributes.child_ref
+        - cause_id: evolution-candidate-001.cause-004
+          claim: 따라서 새 순환성 제조 흐름이 생길 때 독립 확장 개념을 추가하는 대신 기존 BOM 검증과 소비 로직에 예외 처리를 누적하게 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - integrity_rules[0]
+            - BomLine.attributes.parent_ref
+            - BomLine.attributes.child_ref
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml Part revision / ECO effective-date model
+    evidence_anchor: 'Part.attributes.rev note: "도면 리비전. 도면 관리대장이 원본.";
+      Part.attributes.current_eco note: "최신 설계변경. ECO 시스템이 원본.";
+      ECO.attributes.effective_date; integrity_rules[2]: "ECO.effective_date 이후
+      생산분은 신규 rev를 따른다. 단 Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로 동기화한다."'
+    claim: 리비전 유효성은 시간 이력 없이 Part.rev와 최신 ECO에 의존해, 변경관리 버전 확장 시 과거/미래 생산분의 해석 연속성이
+      깨질 수 있다.
+    what: Part는 단일 rev와 current_eco만 갖고, ECO는 effective_date를 갖는다. 규칙은
+      effective_date 이후 생산분이 신규 rev를 따른다고 하지만 Part.rev 갱신은 외부 도면 관리대장 반영 후 주간
+      배치로 동기화된다고 한다. 온톨로지 안에는 rev별 유효기간, ECO별 적용 범위, 생산시점 기준 리비전 선택을 담는 이력 엔티티가
+      없다.
+    why: PLM/MES 통합에서는 설계 변경이 과거 오더, 진행 중 오더, effective_date 이후 오더에 다르게 적용될 수 있다. 현재
+      구조는 최신 상태 필드와 배치 동기화에 기대므로, ECO가 연속으로 발생하거나 effective_date와 Part.rev 반영
+      시점이 어긋나면 기존 생산 데이터가 어떤 rev를 따라야 했는지 재구성하기 어렵다. 향후 변경관리 정책이 늘어날수록 기존
+      Part/ECO 구조를 수정하거나 외부 원본에 의존해야 한다.
+    how_to_fix: Part의 현재 rev와 별도로 RevisionEffectivity 같은 이력 개념을 추가한다. 필드에는 part_ref,
+      rev, eco_ref, valid_from, valid_to 또는 lot/order/serial 기준, source_system,
+      sync_status를 둔다. 생산 오더 생성과 변경 영향 분석은 Part.rev 최신값이 아니라
+      RevisionEffectivity에서 기준 시점/대상을 조회하도록 규칙을 바꾼다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합에서 ECO effective-date 이후 생산분과 품목 리비전의 기준을 일관되게 해석하는 것.
+      failure_condition: 주간 배치 동기화 전후, 연속 ECO, 소급/미래 적용 ECO, 진행 중 생산오더가 존재해 생산 시점별 적용
+        rev를 재구성해야 하는 경우.
+      impact: 시간 이력 없는 최신값 모델은 변경관리 확장 시 기존 생산/품질/원가 데이터의 rev 해석 연속성을 약화시키며, PLM과 MES
+        사이 기준일 불일치를 제조 운영 리스크로 만든다.
+      evidence_refs:
+        - Part.attributes.rev
+        - Part.attributes.current_eco
+        - ECO.attributes.effective_date
+        - integrity_rules[2]
+    causal_path:
+      root_cause_candidate: 리비전 유효성을 이력/효력 개념으로 모델링하지 않고 Part의 단일 rev 및 current_eco 최신 상태 필드에 둔다.
+      root_cause_step_id: evolution-candidate-002.cause-004
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Part.rev는 도면 리비전 단일 속성이고 도면 관리대장이 원본이라고 명시되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - Part.attributes.rev
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Part.current_eco는 최신 설계변경만 참조하며 ECO 시스템이 원본이라고 명시되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - Part.attributes.current_eco
+        - cause_id: evolution-candidate-002.cause-003
+          claim: ECO에는 effective_date가 있지만 Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로 동기화된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - ECO.attributes.effective_date
+            - integrity_rules[2]
+        - cause_id: evolution-candidate-002.cause-004
+          claim: 따라서 effective_date 기준 적용 rev와 Part.rev 최신값이 시간적으로 불일치할 수 있고, 이 불일치를 온톨로지
+            내부의 이력 구조로 보존하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.attributes.rev
+            - ECO.attributes.effective_date
+            - integrity_rules[2]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml WorkCenter.capacity_per_shift and UOM model
+    evidence_anchor: 'WorkCenter.attributes.capacity_per_shift note: "교대당 처리 능력. 단위는
+      작업장마다 다르다(개수 또는 시간)."; Part.attributes.uom values: [ea, kg, m]; notes[1]:
+      "uom 변환(kg↔ea 등)은 품목별 환산계수 마스터가 없고, 필요 시 현장에서 환산한다."'
+    claim: 단위와 능력 단위가 고정 enum/자유 해석에 머물러 새 품목·작업장 유형 추가 시 표준 확장이 구조적으로 막힌다.
+    what: Part.uom은 ea, kg, m 세 값만 허용한다. WorkCenter.capacity_per_shift는 숫자만 있고 단위는
+      작업장마다 개수 또는 시간이라고 note에만 적혀 있다. 또한 품목별 환산계수 마스터가 없어 kg과 ea 같은 변환은 현장에서 필요
+      시 환산한다고 한다.
+    why: 새 품목 유형, 포장 단위, 면적/부피/시간 기반 공정, 외주 공정, 설비별 처리능력 기준이 추가되면 현재 enum과 숫자 필드만으로는
+      의미를 보존할 수 없다. 단위를 note나 현장 환산에 맡기면 MES 계획, 표준원가, 생산능력 계산이 확장될 때 기존 데이터의 단위
+      해석을 수정하거나 수작업 보정해야 한다.
+    how_to_fix: Uom과 UnitConversion을 별도 기준 개념으로 승격한다. WorkCenterCapacity에는
+      capacity_value, capacity_uom, basis(시간/수량/중량 등), valid_from,
+      work_center_ref를 둔다. Part.uom enum은 기준 Uom 참조로 바꾸거나 최소한 확장 가능한 코드 마스터로
+      분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·공정·작업장 데이터가 PLM/MES와 계획·원가 계산에서 확장 가능한 기준으로 쓰이는 것.
+      failure_condition: ea/kg/m 외 단위, 품목별 환산, 작업장별 시간/수량 혼합 능력, 설비 능력 변경 이력이 필요한 제조 범위로 확장하는 경우.
+      impact: 단위 의미가 구조화되지 않아 새 품목과 작업장 유형을 추가할 때 기존 enum, 계산 로직, 수작업 환산 관행을 수정해야 하며
+        운영 계산의 재현성이 낮아진다.
+      evidence_refs:
+        - Part.attributes.uom
+        - WorkCenter.attributes.capacity_per_shift
+        - notes[1]
+    causal_path:
+      root_cause_candidate: 단위와 환산 기준을 독립 기준 데이터로 모델링하지 않고 제한 enum, 숫자 필드, note/현장 환산에 분산했다.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Part.uom은 ea, kg, m 세 값의 enum으로 제한되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - Part.attributes.uom
+        - cause_id: evolution-candidate-003.cause-002
+          claim: WorkCenter.capacity_per_shift는 number 타입이며 단위가 작업장마다 다르다는 설명만 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - WorkCenter.attributes.capacity_per_shift
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 품목별 환산계수 마스터가 없고 필요 시 현장에서 환산한다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 단위 종류나 환산 규칙이 늘어나는 확장 시 기존 enum과 계산 소비자가 의미를 직접 보정해야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.attributes.uom
+            - WorkCenter.attributes.capacity_per_shift
+            - notes[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-004
+    target: manufacturing-bom-ontology.yaml Routing / Operation versioning model
+    evidence_anchor: 'Routing.attributes.part_ref -> Part;
+      Routing.attributes.operations ordered_list -> Operation;
+      Routing.attributes.status values: [draft, released];
+      Operation.attributes.std_time_min; notes[0]: "원가 계산용 누적 std_time은 MES가
+      Routing에서 계산하지만, 표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사한다."'
+    claim: 라우팅과 공정에는 released 상태만 있고 버전·효력 이력이 없어 공정 변경 확장 시 원가/MES 연속성이 약하다.
+    what: Routing은 part_ref, operations, status만 가지며 status는 draft와 released뿐이다.
+      Operation은 표준시간을 갖지만 Operation이나 Routing에 revision, effective date,
+      supersedes, valid interval 같은 이력 속성이 없다. 누적 std_time은 MES가 Routing에서 계산하지만
+      표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사한다고 되어 있다.
+    why: 공정 순서, 표준시간, 작업장 배정은 변경될 수 있고 변경 시점에 따라 생산 오더와 원가 계산 결과가 달라진다. 현재 구조는
+      released 라우팅의 현재 상태만 표현하므로 새 공정 버전이나 단계적 적용 정책을 추가할 때 기존 Routing/Operation
+      구조와 외부 원가 대사 방식을 재작업해야 한다.
+    how_to_fix: RoutingRevision 또는 ProcessEffectivity를 추가해 routing_id, rev,
+      part_ref, operations snapshot, valid_from/valid_to, change_ref,
+      release_status를 보존한다. 표준시간 변경도 OperationRevision 또는 routing snapshot 안의
+      versioned operation 속성으로 관리하고 원가 계산은 해당 효력 버전을 기준으로 산출하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅과 표준시간을 MES 생산 실행 및 표준원가 계산의 안정적인 통합 기준으로 쓰는 것.
+      failure_condition: 공정 순서, 작업장, 표준시간이 변경되거나 과거 생산분의 원가/공정 기준을 재현해야 하는 경우.
+      impact: 버전/효력 없는 released 상태 모델은 공정 변경이 누적될 때 과거 데이터 연속성과 원가 대사 재현성을 약화시키며, 새 변경
+        정책 수용에 기존 구조 수정이 필요해진다.
+      evidence_refs:
+        - Routing.attributes.status
+        - Routing.attributes.operations
+        - Operation.attributes.std_time_min
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 라우팅과 공정의 변경 가능 속성을 버전/효력 엔티티가 아닌 현재 released 상태의 속성으로만 표현한다.
+      root_cause_step_id: evolution-candidate-004.cause-004
+      steps:
+        - cause_id: evolution-candidate-004.cause-001
+          claim: Routing.status는 draft와 released만 제공한다.
+          relation_to_previous: null
+          evidence_refs:
+            - Routing.attributes.status
+        - cause_id: evolution-candidate-004.cause-002
+          claim: Routing.operations는 Operation 참조의 ordered_list이고 Operation에는
+            std_time_min이 현재 속성으로 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - Routing.attributes.operations
+            - Operation.attributes.std_time_min
+        - cause_id: evolution-candidate-004.cause-003
+          claim: 원가 계산용 누적 std_time은 MES가 Routing에서 계산하지만 표준원가 시스템 수기 입력 필드와 분기마다 대사한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[0]
+        - cause_id: evolution-candidate-004.cause-004
+          claim: 따라서 라우팅이나 표준시간 변경 시 어떤 released 버전이 특정 생산분/원가분에 적용됐는지 온톨로지 내부에서 보존할 구조가
+            부족하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Routing.attributes.status
+            - Routing.attributes.operations
+            - Operation.attributes.std_time_min
+            - notes[0]
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준 문서는 BOM 전개, 생산오더 생성, 공정 실행, 변경 영향 분석, 원가/능력 계산의 개념 기준으로 사용된다고
+    보았다.
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았고, 제조 BOM/라우팅의 일반적인 변경 시나리오만 렌즈
+    관점의 가정으로 사용했다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,18 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+lens_id: logic
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 임상검사 도메인 규칙은 사용하지 않고, 문서 내부의 명시 claim/rule 집합만으로 형식적
+    동시 만족 가능성을 판단했습니다.
+  - Result.status와 Report.result_status의 값 이름 차이는 명시 매핑 부재 또는 의미 정렬 문제일 수 있으나,
+    preliminary→prelim, final→finalized, corrected→amended 같은 매핑이 가능하므로 logic
+    lens 기준의 직접적인 unsatisfiability로 보지는 않았습니다.
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: 경계 내 materialized input과 role definition에 따라 단일 claim 내부
+    모순 및 명시 claim 집합의 형식적 양립 불가능성을 점검했습니다. Order/Specimen/Result/Report 상태 규칙과
+    관계 선언은 일부 매핑·권위·운영 위험을 남기지만, domain-none logic 기준에서 서로 동시에 만족 불가능한 필수/금지,
+    타입/range, enum 값의 직접 충돌은 관찰되지 않았습니다.

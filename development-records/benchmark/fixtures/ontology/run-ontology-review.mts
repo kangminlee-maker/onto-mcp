@@ -59,6 +59,18 @@ async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<
       // 해당 run에 없는 아티팩트는 건너뜀
     }
   }
+  // ledger의 source_ref/evidence_refs가 round1 lens 산출물을 가리키므로
+  // round1을 함께 영속화해야 evidence 번들이 자급자족한다.
+  try {
+    const round1Src = path.join(sessionRoot, "round1");
+    const round1Dst = path.join(dst, "round1");
+    await fs.mkdir(round1Dst, { recursive: true });
+    for (const file of await fs.readdir(round1Src)) {
+      await fs.copyFile(path.join(round1Src, file), path.join(round1Dst, file));
+    }
+  } catch {
+    // round1 부재 run은 건너뜀
+  }
   return dst;
 }
 
@@ -67,7 +79,16 @@ async function main(): Promise<void> {
   const ids = requested.length > 0 ? requested : Object.keys(FIXTURES);
   // settings chain 격리: 사용자 ~/.onto 설정이 결과에 섞이지 않도록 HOME을
   // 비운 tmp로 고정 — 커밋된 repo settings만이 실행 프로파일을 결정한다.
+  const realHome = process.env.HOME ?? os.homedir();
   const isolatedHome = await fs.mkdtemp(path.join(os.tmpdir(), "onto-ontology-eval-home-"));
+  // 격리 대상은 settings(~/.onto)뿐이다 — codex OAuth 자격증명($HOME/.codex)은
+  // worker 경로 탐지에 필요하므로 실제 홈으로 연결한다. 없으면 런타임이
+  // 자체적으로 경로 해소 실패를 보고한다.
+  try {
+    await fs.symlink(path.join(realHome, ".codex"), path.join(isolatedHome, ".codex"));
+  } catch {
+    // 실제 홈에 ~/.codex가 없는 환경: 연결 생략
+  }
   process.env.HOME = isolatedHome;
   const { createOntoReviewCoreApi } = await import(
     path.join(REPO_ROOT, "src/core-api/review-api.ts")

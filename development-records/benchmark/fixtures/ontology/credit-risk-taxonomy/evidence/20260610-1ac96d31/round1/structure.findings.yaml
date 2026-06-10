@@ -1,0 +1,107 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml / entities.RiskAppetite
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:78
+      and
+      .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85
+    claim: RiskAppetite가 관계 그래프에서 고아 엔티티로 남아 있습니다.
+    what: RiskAppetite는 ExposureAggregate 초과 여부와 compliance_status를 정의하지만, relations
+      목록에는 RiskAppetite를 from 또는 to로 연결하는 관계가 없습니다.
+    why: RiskAppetite 정의는 ExposureAggregate와의 비교를 전제로 하지만, 선언된 관계는 Borrower,
+      Exposure, Collateral, RiskRating, Limit, ExposureAggregate까지만 연결합니다. 따라서
+      리스크 성향 한도 위반 판단이 온톨로지의 구조적 경로 안에서 도달 가능하지 않습니다.
+    how_to_fix: "RiskAppetite를 ExposureAggregate에 연결하는 명시 관계를 추가하십시오. 예: `{ from:
+      ExposureAggregate, to: RiskAppetite, kind: checked_against }` 또는 `{ from:
+      RiskAppetite, to: ExposureAggregate, kind: constrains }`. 관계 방향과 kind는 실제
+      판정 권위가 어느 쪽인지에 맞춰 하나로 고정하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서의 여신 리스크 분류 온톨로지
+      failure_condition: RiskAppetite 준수 상태나 위반 여부를 엔진 또는 보고 시스템이 관계 그래프 기반으로 탐색하거나
+        검증할 때 RiskAppetite로 가는 선언 경로가 없습니다.
+      impact: 핵심 통제 개념인 리스크 성향 한도가 구조적으로 연결되지 않아 한도 위반 보고나 엔진 판정의 공통 기준으로 사용하기 어렵습니다.
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:78
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+    causal_path:
+      root_cause_candidate: RiskAppetite와 ExposureAggregate 사이의 필수 관계가 relations 섹션에 선언되지 않았습니다.
+      root_cause_step_id: structure-candidate-001.cause-002
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite 정의는 ExposureAggregate가 RiskAppetite를 초과하면 위반이라고 설명합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:78-83
+        - cause_id: structure-candidate-001.cause-002
+          claim: relations 섹션은 Borrower, Exposure, Collateral, RiskRating, Limit,
+            ExposureAggregate의 관계만 포함하고 RiskAppetite를 연결하지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml / classification_rules[0]
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:31
+      and
+      .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:93
+    claim: Exposure.risk_grade 산출 의존성이 관계 구조에 명시되어 있지 않습니다.
+    what: classification_rules는 Exposure.risk_grade가 RiskRating.grade에서 도출된다고 선언하지만,
+      relations에는 Exposure와 RiskRating 사이의 산출 또는 사용 관계가 없습니다.
+    why: 현재 구조에서는 Borrower가 Exposure와 RiskRating에 각각 연결되어 있을 뿐, 어떤 RiskRating이 어떤
+      Exposure.risk_grade의 근거인지가 관계로 닫히지 않습니다. 공유 기준 문서에서 산출 의존성이 구조화되지 않으면 엔진과
+      보고 시스템이 동일한 연결 규칙을 사용한다고 보장하기 어렵습니다.
+    how_to_fix: "Exposure와 RiskRating 사이에 산출 의존 관계를 추가하거나, Borrower를 통한 조인 규칙을
+      관계/제약으로 명시하십시오. 예: `{ from: Exposure, to: RiskRating, kind:
+      risk_grade_derived_from }` 또는 Borrower 기준 rating 선택 규칙을 별도 관계/constraint로
+      선언하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 등급 산출 기준
+      failure_condition: 보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서 재현하거나 검증해야 할
+        때, 관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생합니다.
+      impact: 핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해집니다.
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:31-34
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:48-56
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:92-93
+    causal_path:
+      root_cause_candidate: classification_rules에 선언된 산출 의존성을 relations 섹션이 관계로 표현하지 않습니다.
+      root_cause_step_id: structure-candidate-002.cause-004
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Exposure.risk_grade는 보고서 팀이 사용하는 익스포저 단위 리스크 등급입니다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:31-34
+        - cause_id: structure-candidate-002.cause-002
+          claim: RiskRating.grade는 리스크 엔진 등급으로 정의되어 있습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:48-56
+        - cause_id: structure-candidate-002.cause-003
+          claim: classification_rules는 Exposure.risk_grade가 RiskRating.grade에서 도출된다고
+            선언합니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:92-93
+        - cause_id: structure-candidate-002.cause-004
+          claim: relations 섹션에는 Exposure와 RiskRating을 직접 연결하거나 risk_grade 산출 의존성을 나타내는 관계가
+            없습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+      unresolved_beyond_evidence: Borrower를 통한 간접 조인을 의도했을 수 있으나, 현재 bounded evidence
+        안에서는 그 조인 규칙이 관계 또는 제약으로 선언되어 있지 않습니다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았습니다.
+  - 구조 lens 범위에 맞춰 도메인 누락 자체가 아니라 이미 선언된 엔티티와 규칙 사이의 관계 연결 완결성만 판단했습니다.
+validation:
+  unaddressable_candidates: []

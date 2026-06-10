@@ -52,7 +52,32 @@ note-한-줄 결함 자체는 약점이 아님(MBO-5·9 검출이 반례) — 1�
 - **일반화로 드러난 게이트 결함 1건 수정**: `issue_dependency_preservation`이 same_root 병합으로 동일 issue에 합류한 finding 쌍의 shared_cause 관계(교차-issue 의존이 구성상 불가능)를 실패 처리 — 코드 fixture의 2~3 finding 위상에서는 노출 불가. co-location을 보존으로 인정하도록 수정(shared_cause를 병합 증거로 쓰는 위반은 기존대로 실패).
 - 한계: 온톨로지 expectations에는 seeded non-material decoy가 없어 boundary 계열 체크는 공허 통과 — decoy 주입은 부재형 보강(후속 2)과 함께 설계 후보.
 
-## 후속 (사용자 확정 순서)
+## 후속 2·3·4 완료 — lens 보강과 검증 (PRELIMINARY)
 
-1. ~~semantic gate의 비코드 일반화~~ (완료 — 위 섹션)
-2. 부재형 결함 감지 보강 → 3. 파생 추론/도메인 신호 보강 → 4. CRT-5 재실행 검증
+**③ baseline 재실행** (무변경, credit-risk 세션 `20260610-4bfe81da`): CRT-5 **2/2 miss → 구조적 맹점 확정**, CRT-3 재실행에서 검출(분산이었음 — ② 목표를 "불가능"이 아닌 "불안정→안정화"로 수정), CRT-8 신규 miss(분산). *어떤* 결함이 잡히는지의 run간 분산이 실재함.
+
+**① coverage 차원-결손 probe** (`.onto/roles/coverage.md`): 시점 의존 값의 유효기간·이력, lifecycle 전 구간(종결 후 정정·재발행 포함), 통제 행위의 감사 증거, **병행 관리 값의 단일 권위 지정 부재**(CRT-5류를 부재형으로 귀속). **② semantics 파생값-입력 probe** (`.onto/roles/semantics.md`): 이름이 도메인 산식을 내포한 속성의 독립 입력 모델링 + 원천 공존 점검. fixture 어휘는 role 문서에 미포함(오염 방지). 귀속 분리의 정확한 범위: ①②를 한 배치로 적용했으므로 **round1 finding 수준만 분리 가능**하다 — 각 lens 프롬프트는 자기 role 문서만 임베드하므로 coverage finding은 semantics.md 변경의 영향을 받을 수 없다(역도 동일). 반면 **다운스트림 결과(이슈 병합·심의·게이트 통과)는 ①+② 결합 효과**이며 단일 변수 run 없이는 분리되지 않는다(아래 표의 귀속은 round1 finding-ledger 수준).
+
+**보강 후 3-fixture 재실행** (세션: clinical `20260610-e661bc6c`, credit `20260610-1ac96d31`, bom `20260610-36ef1faa`) — **게이트 3/3 통과**. 재현(세션 고정, mtime 비의존):
+
+```
+npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.mts \
+  clinical-lab-workflow:20260610-e661bc6c credit-risk-taxonomy:20260610-1ac96d31 manufacturing-bom:20260610-36ef1faa
+```
+
+| 표적 | 이전 | 보강 후 | 귀속 |
+|---|---|---|---|
+| CRT-5 한도 이원화 (구조적) | 0/2 | **CAUGHT** | axiology + **coverage(① 권위 probe)** 독립 검출 |
+| CRT-3 LTV | 1/2 (분산) | **CAUGHT** | coverage + **semantics(② probe)** |
+| MBO-8 Part lifecycle | 0/1 | **CAUGHT** | **coverage(① lifecycle probe)** |
+| CRT-8 환율 (분산) | 1/2 | CAUGHT | axiology+coverage |
+| CRT-6 순환 정의 | partial | partial+ — semantics가 "파생되는 준수 판정"으로 포착(② 일반화) | semantics |
+| CLW-10 completed↔corrected | partial | **여전히 miss** — probe에 명시했음에도 Order.completed와 연결 실패 | 잔여 약점 |
+| 기존 검출 회귀 (3 fixture 19종 어휘) | — | **전부 유지** + MBO-4 이중경로 신규 검출(structure) | |
+
+- 한계: 보강 후 각 fixture 1 run — INV-BENCH-1 기준 PRELIMINARY. 게이트 통과·이슈 구성 변화는 ①+② 결합 효과로만 기록(단일 변수 run 미수행). CLW-10(종결 상태 의미의 시간 모순)은 부재형이 아니라 모순형이라 coverage probe로 안 잡히는 것일 수 있음 — logic lens 관점 보강이 후속 후보.
+
+## 후속 (갱신)
+
+1. ~~semantic gate 비코드 일반화~~ → 2. ~~부재형 보강~~ → 3. ~~파생 추론 보강~~ → 4. ~~CRT-5 재실행 검증~~ (모두 완료, 위 섹션)
+5. 잔여: CLW-10류(종결 후 사건의 상태 모순) — logic 관점 후보. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.

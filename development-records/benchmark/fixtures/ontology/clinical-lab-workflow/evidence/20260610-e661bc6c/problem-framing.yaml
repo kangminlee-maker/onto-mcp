@@ -1,0 +1,192 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Result.status and Report.result_status duplicate
+      clinician-facing status authority without a canonical status concept or
+      explicit mapping/synchronization invariant for corrections, lag, and
+      pending or failed sync states.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The resolved issue preserves this as a high authority/trust problem:
+      the ontology can appear to authorize clinician-facing result state while
+      allowing divergence from LIS truth. Because it affects the core EMR/LIS
+      concept-authority purpose, it should be closed in the target rather than
+      carried as later work."
+    related_surface_finding_ids:
+      - finding-001
+      - finding-010
+      - finding-011
+  - issue_id: issue-002
+    problem_definition: CriticalValue.notified is a lossy boolean that does not
+      encode or link the notification act, timestamp, notifier, recipient,
+      channel, acknowledgement, evidence, or reconciliation authority.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue is a narrower evidence facet of the broader critical-value
+      workflow problem. The boolean representation is directly observed in the
+      artifact projection and enables unsafe audit and notification ambiguity,
+      so it must be fixed as part of the target's critical-result authority
+      model.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: TAT is defined from ontology timestamps while calculation
+      authority, policy, versioning, and precedence are delegated to external
+      dashboard formulas.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: "The issue weakens metric governance, auditability, and precedence
+      rather than blocking the immediate entity graph. It primarily requires a
+      scope decision: either declare TAT non-authoritative or model canonical
+      calculation policy and versioning."
+    related_surface_finding_ids:
+      - finding-003
+      - finding-007
+  - issue_id: issue-004
+    problem_definition: CriticalValue is modeled as a standalone safety range/status
+      flag instead of a connected Result/Report notification workflow event with
+      auditable evidence.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolved finding identifies a direct graph disconnection that
+      blocks shared validation of critical-result responsibility, timing,
+      acknowledgement, and proof. Because this is safety-relevant and central to
+      EMR/LIS workflow authority, it is a current blocker for accepting the
+      target.
+    related_surface_finding_ids:
+      - finding-004
+      - finding-016
+  - issue_id: issue-005
+    problem_definition: Specimen lifecycle stops at analysis and leaves
+      post-analysis retention, transfer, availability, and disposal outside the
+      ontology state model.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue is a material lifecycle coverage gap for retest,
+      correction, disposal responsibility, and audit reconstruction. It does not
+      appear as an unresolved conflict, but the target cannot serve as a
+      complete workflow authority without representing these post-analysis
+      states or explicitly bounding them.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: The ontology has not resolved Test/Assay identity, mapping,
+      lifecycle semantics, workflow integration, or execution/provenance path to
+      Result.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The combined issue is the primary Test/Assay authority and provenance
+      problem. It is not a proven formal contradiction, but it leaves EMR order
+      catalog, LIS execution catalog, and result provenance underconstrained, so
+      the target needs a modeling decision before it can function as a shared
+      authority.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-013
+      - finding-015
+      - finding-014
+  - issue_id: issue-007
+    problem_definition: Missing authoritative Test-to-Assay mapping causes double
+      registration and catalog change-continuity risk as a downstream facet of
+      issue-006.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed this issue so it should not stand as an
+      independent root-level defect. Its requirements should be preserved under
+      issue-006, especially versioned mapping, effective dates, conditions, and
+      non-1:1 catalog changes.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-008
+    problem_definition: Specimen type is encoded as field-local enums or free
+      strings instead of a reusable SpecimenKind reference concept.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is a stable reference-data gap that affects future specimen
+      kinds, external codes, and historical interpretation. It is material but
+      less immediately blocking than safety or core workflow authority issues,
+      so it can be carried into the next modeling pass if explicitly tracked.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-009
+    problem_definition: STAT order meaning is represented as priority value, is_stat
+      boolean, and StatOrder subtype without canonical source, precedence,
+      derivation invariant, transition rule, or synchronization rule.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The resolved issue preserves materiality while narrowing away from a
+      formal contradiction claim. Because STAT semantics can affect routing,
+      urgency, notification, and metric interpretation, the target needs one
+      canonical representation with bounded projections.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-010
+    problem_definition: Pairwise Order, Specimen, Result, and Report edges omit
+      lifecycle or membership invariants binding Report contents back to the
+      same order, tests, and specimens.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "The issue is a structural correctness gap: implementations could
+      accept cross-order results while remaining graph-compliant. Since the
+      review purpose includes validating Order-to-Report workflow structure,
+      same-order/test/specimen membership constraints should be closed in the
+      target."
+    related_surface_finding_ids:
+      - finding-017

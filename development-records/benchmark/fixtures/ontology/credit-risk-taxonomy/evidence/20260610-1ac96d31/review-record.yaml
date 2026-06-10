@@ -1,0 +1,1954 @@
+review_record_id: 20260610-1ac96d31
+session_id: 20260610-1ac96d31
+entrypoint: review
+record_status: completed
+created_at: 2026-06-10T23:44:37+09:00
+updated_at: 2026-06-10T23:55:45+09:00
+request_text: 이 여신 리스크 분류 온톨로지가 리스크 엔진과 보고 시스템이 공유할 개념 기준으로 적절한지 검토해 달라.
+  분류체계·권위·시간성 관점의 개념 결함과 운영 위험을 중심으로.
+review_target_scope_ref: .onto/review/20260610-1ac96d31/binding.yaml
+interpretation_ref: .onto/review/20260610-1ac96d31/interpretation.yaml
+binding_ref: .onto/review/20260610-1ac96d31/binding.yaml
+domain_final_selection_ref: .onto/review/20260610-1ac96d31/binding.yaml
+resolved_review_mode: core-axis
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+execution_result_ref: .onto/review/20260610-1ac96d31/execution-result.yaml
+session_metadata_ref: .onto/review/20260610-1ac96d31/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260610-1ac96d31/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260610-1ac96d31/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260610-1ac96d31/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  axiology: .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml
+  coverage: .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml
+  evolution: .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml
+  logic: .onto/review/20260610-1ac96d31/round1/logic.findings.yaml
+  semantics: .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml
+  structure: .onto/review/20260610-1ac96d31/round1/structure.findings.yaml
+lens_output_schema_version: 2
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: null
+per_lens_provenance:
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none으로 명시되어 도메인 전용 규정 문서는 사용하지 않았습니다.
+      - 가치 판단의 기준은 허용된 review-value-alignment-criteria의 사용자 의도와 materialized
+        input에 포함된 대상의 선언 목적에 한정했습니다.
+      - 역할 정의 파일은 상대 경로 해석상 읽기에 실패했으나, prompt packet에 동일 역할 정의가 임베드되어 있어 그 범위
+        안에서 axiology 관점을 적용했습니다.
+  coverage:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 여신 리스크 엔진과 보고 시스템의 공유 기준은 과거 기준일의 등급·익스포저·상태를 재현할 수 있어야 한다.
+      - 수동 조정, 심사 입력, 승인 한도는 리스크 산출 또는 보고 수치에 영향을 주는 통제 대상 행위로 보았다.
+      - 별도 시스템이 원천인 값도 공유 온톨로지에서는 최소한 참조 경계와 원천 권위가 표현되어야 한다.
+  evolution:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 문서 없이 패킷에 포함된 target 및 review context만
+        사용했다.
+      - 이 YAML 온톨로지는 리스크 엔진과 보고 시스템이 참조하는 configuration_artifact이며, 선언된
+        enum/type이 소비자 입력 검증과 보고 해석에 영향을 준다고 보았다.
+  logic:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 규칙 없이 문서 내 명시 claim의 형식적 동시 만족 가능성만
+        판단했습니다.
+      - "'모든 Exposure.amount의 합'은 별도 제한이 없는 한 현재 온톨로지 범위의 Exposure 전체를 포함하는
+        necessary 정의로 해석했습니다."
+  semantics:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - 세션 도메인이 none이므로 별도 도메인 문서는 사용하지 않았고, 제공된 온톨로지 텍스트와 역할 정의만 근거로 판단했습니다.
+      - 파일 주석의 '리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서'를 검토 목적의 공유 개념 기준으로 보았습니다.
+      - 외부 표준이나 기관별 신용등급 체계의 정확성은 웹/외부 자료 접근이 금지되어 검증하지 않았습니다.
+  structure:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았습니다.
+      - 구조 lens 범위에 맞춰 도메인 누락 자체가 아니라 이미 선언된 엔티티와 규칙 사이의 관계 연결 완결성만 판단했습니다.
+finding_ledger_ref: .onto/review/20260610-1ac96d31/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260610-1ac96d31/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260610-1ac96d31/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260610-1ac96d31/issue-stance-matrix.yaml
+deliberation_plan_ref: .onto/review/20260610-1ac96d31/deliberation-plan.yaml
+problem_framing_ref: .onto/review/20260610-1ac96d31/problem-framing.yaml
+issue_resolution_summary:
+  - issue_id: issue-001
+    problem_definition: 병행 관리되는 등급·한도·환율 값의 canonical source, 우선순위, 충돌 해결, 버전형 매핑·환산
+      정책이 온톨로지 내부에 닫혀 있지 않아 공유 권위와 산출 재현성이 약해진다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 렌즈와 deliberation resolution이 broad authority-policy root를 수용했고, 특히
+      등급 산출·보고 조정 hot path의 결정성 요구까지 최종 root에 통합되었다. 공유 개념 기준의 권위와 precedence를
+      직접 훼손하므로 target 안에서 닫아야 하는 root cause로 본다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-003
+      - finding-006
+      - finding-008
+      - finding-013
+  - issue_id: issue-002
+    problem_definition: ExposureAggregate.total_amount가 현재 총익스포저와 월말 배치 스냅샷이라는 서로 다른
+      시간 권위를 겹쳐 선언해 stale 값이 한도 소진율과 RiskAppetite 판단에 전파된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 최종 resolution에서 시간 권위 혼합이 그대로 확정되었고, 일중 신규 여신 이후 stale snapshot이 현재
+      판단값처럼 쓰이는 실패 조건이 구체적이다. 운영 판단 지연 위험이 있어 현재 공유 기준으로 쓰기 전 target에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-010
+      - finding-014
+  - issue_id: issue-003
+    problem_definition: 차주·엔진·보고 등급을 현재값 속성으로만 두어 기준시점별 등급 선택, 유효기간, 이력 또는 버전 의미가 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: deliberation은 full RatingHistory 명칭에 고정하지 않되 time-qualified
+      snapshot/history 개념이 필요하다고 해결했다. 과거 보고일 기준 재구성과 감사 가능성을 막는 시간성 root이므로 다음
+      단계의 보고·감사 사용 전 해소가 필요하다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-004
+    problem_definition: 수동 조정, 심사 입력, 승인 기록이 별도 행위·증거 엔티티가 아니라 값 속성의 메모 수준에 머물러
+      actor, 시각, 사유, 증거, 전후 값 기반 감사 추적이 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 최종 resolution은 이를 독립 control-act provenance issue로 유지했다. 논리 모순이나 의미
+      타입 오류로 과장하지 않더라도, 값 변경의 통제 가능성과 재처리 근거를 좌우하므로 운영 공유 기준 이전에 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-005
+    problem_definition: 연체·부실 상태를 최소 외부 권위 참조나 lifecycle 경계 개념 없이 범위 밖으로만 배제해 부실 이벤트
+      이후 상태 해석 기준이 부족하다.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: projection상 competing material claim은 없고 medium coverage/evolution
+      boundary issue로 정리되었다. 현 target의 핵심 권위·시간 hot path보다는 도메인 포괄성 보강에 가까워 독립
+      issue로 carry forward하되 다음 단계에서 닫을 수 있다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-006
+    problem_definition: 핵심 분류값이 lifecycle-aware code-set이 아니라 닫힌 enum으로 모델링되어 새 값,
+      미인식 값, 유효기간 경계의 처리 안정성이 낮다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: deliberation은 full code-set promotion과 deterministic
+      unknown/extension handling을 통합했다. 현재 산출을 즉시 막는 결함보다는 분류체계 변경 시 공유 기준과 소비자
+      검증을 흔드는 evolvability root이므로 계획된 후속 폐쇄가 적절하다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: Collateral을 Exposure 하위 유형으로 선언해 담보 자산이 여신 익스포저의 속성, 분류, 집계 대상으로 해석될 수 있다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 최종 resolution은 standalone semantic/logical type classification issue로
+      유지했다. is_a 배치 자체가 target의 개념 구조 오류이므로 현재 모델의 정확성을 위해 target 안에서 바로 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-008
+    problem_definition: LTV가 계산 파생값인지 심사역 제출 입력값인지 권위가 닫히지 않아 동일 명칭 아래 서로 다른 값이 공존할 수 있다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 적용 렌즈들은 submitted versus calculated LTV의 분리 또는 명시적 권위화를 지지했다. 같은 LTV
+      명칭이 계산값과 입력값을 동시에 뜻하는 해석 충돌이므로 엔진·보고 사용 전 의미 권위를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-009
+    problem_definition: RiskAppetite 준수 판정이 특정 ExposureAggregate, RiskAppetite,
+      as_of가 연결된 평가 개념이 아니라 정책 속성처럼 남아 대상과 기준시점이 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: semantics와 structure가 모두 time-bound assessment 분리를 지지했고, 관계 그래프상 고아
+      엔티티 문제도 함께 확인되었다. 준수 상태의 대상과 시점을 구조적으로 닫지 못하므로 target의 공유 판정 기준 안에서 해소해야
+      한다.
+    related_surface_finding_ids:
+      - finding-015
+      - finding-016
+  - issue_id: issue-010
+    problem_definition: classification_rules의 RiskRating.grade에서
+      Exposure.risk_grade로 이어지는 산출 의존성이 relations나 constraint로 표현되지 않아 등급 근거가
+      닫히지 않는다.
+    issue_role: enabler
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 최종 resolution은 explicit derivation lineage 필요성을 유지했다. 이 누락은
+      issue-001의 등급 권위 문제와 연결되며 시스템별 임의 조인을 가능하게 하는 구조적 enabler이므로 target에서 산출
+      의존성을 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-017
+result_classification_summary:
+  highest_severity: high
+  finding_count: 17
+  issue_count: 10
+  finding_severity_counts:
+    blocker: 0
+    high: 5
+    medium: 12
+    low: 0
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 4
+    medium: 6
+    low: 0
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 10
+  non_material_finding_count: 0
+  material_issues:
+    - issue_id: issue-001
+      severity: high
+      material: true
+      affected_purpose: "리스크 엔진과 보고 시스템이 동일한 등급 분류, 한도 소진율, 환산 기준을 공유하게 하는 개념 권위 문서
+        목적. Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로서의 등급 기준과
+        precedence 제공. Source finding context: 리스크 엔진과 보고 시스템이 동일한 한도 소진율 계산 기준을
+        공유하게 하는 목적. Source finding context: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서 Source
+        finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서 등급 분류와 보고 해석을 일관되게 유지하는
+        목적. Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 분류 기준"
+      failure_condition: "엔진 등급, 내부 등급, 보고 등급, CRM 한도, 승인 한도, 시스템별 환율 테이블 또는 보고팀 수동
+        조정이 함께 쓰여 등급이나 한도 소진율을 산출할 때. Source finding context: 엔진 등급, 보고 등급, 내부
+        등급 또는 소비 시스템별 변환이 서로 다른 결과를 만들 때 어느 값이 authoritative한지 target 안에서 결정할 수
+        없습니다. Source finding context: 통화가 다르거나 승인 시스템 한도와 CRM available_limit이
+        함께 쓰이는 경우, 시스템별 환율 테이블 또는 합산 방식 차이로 서로 다른 소진율이 계산됩니다. Source finding
+        context: 엔진 등급, 내부 등급, 보고 등급, CRM 한도, 승인 한도, 시스템별 환율 테이블이 함께 사용되어 리스크 등급
+        또는 한도 소진율을 산출하는 경우 Source finding context: 등급 스케일, 등급 매핑, 또는 보고서 팀 수동 조정
+        정책이 변경되거나 과거 보고서를 재계산해야 하는 경우. Source finding context: 소비자가
+        `Exposure.risk_grade`를 엔진 도출 등급으로 해석하거나 보고팀 조정 후 등급으로 해석하는 경우"
+      impact: "동일 차주·익스포저에 대해 시스템별로 다른 등급, 변환, 환산 결과가 정당화될 수 있어 보고 수치와 엔진 판단의 비교 가능성,
+        변경 후 재현성, 공유 기준 신뢰가 약해진다. Source finding context: 공유 기준을 제공해야 할 온톨로지가 등급
+        해석과 조정 권한을 외부 소비자에게 넘기므로 보고 수치, 엔진 판단, 운영 의사결정 간 불일치가 정상 상태로 허용됩니다.
+        Source finding context: 한도 관리 지표가 공유 기준이 아니라 시스템별 계산 결과가 되어 운영 보고와 엔진
+        판단의 비교 가능성이 낮아집니다. Source finding context: 동일 개념의 원본과 우선순위가 닫히지 않아 시스템별로
+        다른 변환·환산 결과가 생성될 수 있고, 공유 기준 문서가 충돌 해결 권위를 제공하지 못한다. Source finding
+        context: 같은 차주/익스포저가 시스템별 또는 시점별로 다른 등급으로 해석될 수 있어 변경 후에도 기존 데이터와 규칙의 해석
+        연속성을 보장하지 못한다. Source finding context: 동일 등급 필드의 의미가 소비자별로 달라져 분류 재현성,
+        보고 설명력, 시스템 간 매핑 신뢰가 약화됩니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-candidate-001
+        - review-value-alignment-criteria.yaml:7-8
+        - materialized-input.md:6-8
+        - materialized-input.md:31-34
+        - materialized-input.md:48-56
+        - materialized-input.md:92-98
+        - .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-candidate-003
+        - materialized-input.md:59-67
+        - materialized-input.md:93-94
+        - .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-candidate-003
+        - materialized-input.md:53
+        - materialized-input.md:64
+        - materialized-input.md:92
+        - materialized-input.md:97
+        - .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution-candidate-001
+        - materialized-input.md:20-22
+        - materialized-input.md:53-56
+        - .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics-candidate-003
+        - materialized-input.md:48-57
+      source_lens_ids:
+        - axiology
+        - coverage
+        - evolution
+        - semantics
+      action_candidates: &a2
+        - fix_before_release
+        - fix_now
+      rationale: "여러 렌즈와 deliberation resolution이 broad authority-policy root를 수용했고,
+        특히 등급 산출·보고 조정 hot path의 결정성 요구까지 최종 root에 통합되었다. 공유 개념 기준의 권위와
+        precedence를 직접 훼손하므로 target 안에서 닫아야 하는 root cause로 본다. Source finding
+        context: credit-risk-ontology.yaml / rating authority model Source
+        finding context: review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:6-8,31-34,48-56,92-98 Source finding context: 등급
+        권위가 엔진·보고·소비 시스템으로 분산되어 공유 개념 기준이라는 목적에서 벗어납니다. Source finding context:
+        권위 문서의 목적은 리스크 엔진과 보고 시스템이 같은 개념 기준을 쓰게 하는 것입니다. 그런데 등급 의미와 변환 권위가 온톨로지
+        내부에 닫혀 있지 않고 보고서 팀 수동 조정 및 각 소비 시스템 변환으로 흩어져 있어, 동일 차주·익스포저에 대해 엔진 판단과
+        보고 판단이 다른 값으로 정당화될 수 있습니다. 이는 단순한 구조 취향 문제가 아니라 권위·precedence 목적 자체를
+        약화합니다. Source finding context: 등급의 canonical source를 하나로 지정하고,
+        internal_rating/RiskRating.grade/Exposure.risk_grade 사이의 변환표·유효일·예외
+        승인권자·수동 조정 감사 필드를 온톨로지 안에 닫으십시오. 보고용 조정이 필요하다면 원천 등급과 조정 등급을 분리하고 조정 사유
+        및 우선순위를 명시하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로서의 등급
+        기준과 precedence 제공. Source finding context: 엔진 등급, 보고 등급, 내부 등급 또는 소비
+        시스템별 변환이 서로 다른 결과를 만들 때 어느 값이 authoritative한지 target 안에서 결정할 수 없습니다.
+        Source finding context: 공유 기준을 제공해야 할 온톨로지가 등급 해석과 조정 권한을 외부 소비자에게 넘기므로
+        보고 수치, 엔진 판단, 운영 의사결정 간 불일치가 정상 상태로 허용됩니다. Source finding context: 등급
+        체계의 canonical authority와 변환/override precedence가 온톨로지 안에 정의되지 않았습니다.
+        Source finding context: 대상은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향합니다.
+        Source finding context: Borrower.internal_rating, RiskRating.grade,
+        Exposure.risk_grade가 서로 다른 스케일로 존재하고 변환은 각 소비 시스템이 수행한다고 명시되어 있습니다.
+        Source finding context: 보고서 팀이 Exposure.risk_grade를 시장 상황에 따라 수동 조정할 수
+        있어 엔진 산출 등급과 보고 등급의 우선순위가 불명확해집니다. Source finding context:
+        credit-risk-ontology.yaml / Limit.approved_amount and FX conversion
+        authority Source finding context:
+        review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:59-67,92-94 Source finding context: 한도 소진율 계산의 외부
+        권위가 분산되어 보고·엔진 간 공유 기준을 약화합니다. Source finding context: 한도 소진율은 리스크 엔진과
+        보고 시스템이 모두 사용할 핵심 운영 지표입니다. 그런데 승인 한도와 available_limit의 관계, 중복/차감 규칙, 환율
+        테이블 우선순위가 온톨로지 내부에 없습니다. 각 시스템이 자기 환율 테이블과 합산 규칙을 쓰면 같은 borrower/product
+        조합에 대해 서로 다른 소진율이 산출될 수 있어 공유 개념 기준이라는 목적에 맞지 않습니다. Source finding
+        context: Limit의 authoritative source, available_limit과의 관계, 합산/차감 규칙, 환율
+        기준 테이블, 환율 적용 시각을 온톨로지에 명시하십시오. 시스템별 환율 사용이 불가피하면 report_value와
+        engine_value를 별도 projection으로 분리하고 reconcile 규칙을 추가하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 동일한 한도 소진율 계산 기준을
+        공유하게 하는 목적. Source finding context: 통화가 다르거나 승인 시스템 한도와 CRM
+        available_limit이 함께 쓰이는 경우, 시스템별 환율 테이블 또는 합산 방식 차이로 서로 다른 소진율이 계산됩니다.
+        Source finding context: 한도 관리 지표가 공유 기준이 아니라 시스템별 계산 결과가 되어 운영 보고와 엔진
+        판단의 비교 가능성이 낮아집니다. Source finding context: 한도와 환산 계산의 authoritative
+        source 및 precedence가 온톨로지 내부에 닫혀 있지 않습니다. Source finding context:
+        Limit.approved_amount는 승인 시스템이 기록하고 CRM available_limit과 합산 관리된다고 되어
+        있습니다. Source finding context: Limit 소진율은 ExposureAggregate.total_amount
+        / Limit.approved_amount로 정의됩니다. Source finding context: 통화가 다른 경우 각 시스템의
+        당일 환율 테이블을 사용한다고 하여 동일 지표의 계산 권위가 시스템별로 분산됩니다. Source finding context:
+        credit-risk-ontology.yaml authority coverage for parallel managed values
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:53,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 병행 관리되는 등급·한도·환율 값에 단일 원본 권위와 우선순위 개념이
+        없다. Source finding context: 리스크 엔진과 보고 시스템이 공유할 기준이라면 여러 시스템이 같은 의미의 값
+        또는 파생값을 관리할 때 어느 값이 기준인지, 매핑·환산 충돌 시 어떤 원본을 따르는지 닫혀 있어야 한다. 현재는 변환과 환산을
+        각 소비 시스템에 맡기므로 동일 차주와 익스포저에 대해 시스템별 등급·한도 소진율·통화 환산 결과가 달라질 수 있다. Source
+        finding context: RatingScaleMapping, SourceAuthority,
+        FxRateSource/ConversionPolicy 같은 개념을 추가한다. 각 병행 값에
+        canonical_source_system, precedence_order,
+        mapping_version/effective_date, conflict_resolution_rule을 붙이고, 소비 시스템별
+        변환은 권위 있는 매핑의 projection으로 제한한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서
+        Source finding context: 엔진 등급, 내부 등급, 보고 등급, CRM 한도, 승인 한도, 시스템별 환율 테이블이
+        함께 사용되어 리스크 등급 또는 한도 소진율을 산출하는 경우 Source finding context: 동일 개념의 원본과
+        우선순위가 닫히지 않아 시스템별로 다른 변환·환산 결과가 생성될 수 있고, 공유 기준 문서가 충돌 해결 권위를 제공하지 못한다.
+        Source finding context: 병존하는 값 체계와 외부 원천을 인정하지만 단일 권위·우선순위·버전 개념을 온톨로지에
+        포함하지 않았다. Source finding context: 세 등급 스케일이 병존하고 변환은 각 소비 시스템이 수행한다고 되어
+        있다. Source finding context: 한도 소진율 산식은 통화 환산에 각 시스템의 당일 환율 테이블을 사용한다고 되어
+        있다. Source finding context: 승인 한도는 승인 시스템 값이면서 CRM의 available_limit과 합산
+        관리된다고 되어 있다. Source finding context: 그러나 어느 시스템 또는 매핑이 권위인지와 충돌 시 우선순위를
+        표현하는 엔티티나 속성이 없다. Source finding context: credit-risk-ontology.yaml
+        rating scale authority and derivation rules Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20-22,48-56,92-98 Source finding context: 세 등급 스케일의 변환 권위가 온톨로지 밖의
+        소비 시스템과 위키로 분산되어 등급 체계 변경 시 연속성이 깨진다. Source finding context: 이 온톨로지가
+        리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서라면 등급 간 매핑, 수동 조정의 버전, 적용일, 소급 여부가 target
+        내부에서 닫혀 있어야 한다. 현재 구조에서는 새 등급 추가, 매핑 변경, 시장 상황별 조정 정책 변경이 발생할 때 기존 데이터가
+        어떤 매핑 버전으로 해석되었는지 재현할 수 없고, 엔진과 보고서 시스템이 서로 다른 변환을 적용할 수 있다. Source
+        finding context: 등급 스케일을 별도 개념으로 승격하고 version,
+        effective_from/effective_to, source_grade, target_grade, mapping_policy,
+        override_authority, override_reason, applied_at 같은 필드를 가진 canonical
+        RatingMapping/RatingOverride를 온톨로지 안에 정의한다. 소비 시스템별 임의 변환 대신 모든 등급 파생은 이
+        버전드 매핑을 참조하도록 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서 등급
+        분류와 보고 해석을 일관되게 유지하는 목적. Source finding context: 등급 스케일, 등급 매핑, 또는 보고서 팀
+        수동 조정 정책이 변경되거나 과거 보고서를 재계산해야 하는 경우. Source finding context: 같은 차주/익스포저가
+        시스템별 또는 시점별로 다른 등급으로 해석될 수 있어 변경 후에도 기존 데이터와 규칙의 해석 연속성을 보장하지 못한다.
+        Source finding context: 등급 변환과 조정 정책을 버전드 온톨로지 개념으로 모델링하지 않고 외부 위키와 소비
+        시스템 수행 규칙에 맡긴다. Source finding context: 대상 온톨로지는 세 개의 등급 스케일을 별도
+        속성/enum/string으로 병존시킨다. Source finding context: RiskRating.grade와
+        Borrower.internal_rating의 매핑은 리스크팀 위키를 참조하고, 변환은 각 소비 시스템이 수행한다고 명시되어
+        있다. Source finding context: Exposure.risk_grade는 RiskRating.grade에서
+        도출되지만 보고서 팀이 시장 상황에 따라 수동 조정할 수 있어 동일 원천 등급의 파생 결과가 변경 가능하다. Source
+        finding context: 따라서 등급 체계나 조정 정책이 바뀔 때 기존 데이터의 적용 매핑과 보고 결과를 target 내부
+        증거만으로 재현하기 어렵다. Source finding context: credit-risk-ontology.yaml
+        Exposure.risk_grade and RiskRating.grade Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31-34,48-57,92-98 Source finding context: `Exposure.risk_grade`가 엔진
+        등급에서 도출되는 값과 보고팀 수동 조정 등급을 한 개념명으로 겸하고 있습니다. Source finding context: 도출
+        등급과 수동 조정 등급은 권위, 의미, 사용 시점이 다릅니다. 둘을 `risk_grade` 하나로 표현하면 엔진 산출값인지 보고
+        조정값인지 구별되지 않아 등급 변환·보고 조정·엔진 재현성의 의미가 흐려집니다. Source finding context: 엔진
+        산출 등급, 변환 등급, 보고 조정 등급을 이름과 권위로 분리하십시오. 예: `RiskRating.engine_grade`,
+        `Exposure.report_grade`, `grade_override_reason`, `grade_as_of`,
+        `grade_source`. 변환표는 외부 위키 참조가 아니라 온톨로지 내 권위 개념 또는 명시적 참조로 관리하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 분류 기준
+        Source finding context: 소비자가 `Exposure.risk_grade`를 엔진 도출 등급으로 해석하거나 보고팀
+        조정 후 등급으로 해석하는 경우 Source finding context: 동일 등급 필드의 의미가 소비자별로 달라져 분류
+        재현성, 보고 설명력, 시스템 간 매핑 신뢰가 약화됩니다. Source finding context: 도출 등급과 수동 조정
+        등급의 의미·권위를 하나의 `risk_grade` 속성에 결합함 Source finding context: RiskRating은
+        리스크 엔진이 산출하는 차주 신용등급으로 정의됩니다. Source finding context:
+        Exposure.risk_grade는 보고서 팀이 사용하는 익스포저 단위 등급입니다. Source finding context:
+        분류 규칙은 Exposure.risk_grade가 RiskRating.grade에서 도출되면서도 보고서 팀이 수동 조정할 수
+        있다고 선언합니다. Source finding context: 노트는 세 개 등급 스케일의 변환을 각 소비 시스템이 수행한다고
+        하여 공유 권위 기준이 분산됩니다."
+      problem_definition: 병행 관리되는 등급·한도·환율 값의 canonical source, 우선순위, 충돌 해결, 버전형 매핑·환산
+        정책이 온톨로지 내부에 닫혀 있지 않아 공유 권위와 산출 재현성이 약해진다.
+      issue_statement: "병행 관리되는 등급·한도·환율 값의 권위와 변환 규칙이 외부 소비 시스템, 위키, 보고팀 조정에 분산되어 공유
+        개념 기준으로서의 온톨로지 권위가 약해진다. Source finding context:
+        credit-risk-ontology.yaml / rating authority model Source finding
+        context: review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:6-8,31-34,48-56,92-98 Source finding context: 등급
+        권위가 엔진·보고·소비 시스템으로 분산되어 공유 개념 기준이라는 목적에서 벗어납니다. Source finding context:
+        권위 문서의 목적은 리스크 엔진과 보고 시스템이 같은 개념 기준을 쓰게 하는 것입니다. 그런데 등급 의미와 변환 권위가 온톨로지
+        내부에 닫혀 있지 않고 보고서 팀 수동 조정 및 각 소비 시스템 변환으로 흩어져 있어, 동일 차주·익스포저에 대해 엔진 판단과
+        보고 판단이 다른 값으로 정당화될 수 있습니다. 이는 단순한 구조 취향 문제가 아니라 권위·precedence 목적 자체를
+        약화합니다. Source finding context: 등급의 canonical source를 하나로 지정하고,
+        internal_rating/RiskRating.grade/Exposure.risk_grade 사이의 변환표·유효일·예외
+        승인권자·수동 조정 감사 필드를 온톨로지 안에 닫으십시오. 보고용 조정이 필요하다면 원천 등급과 조정 등급을 분리하고 조정 사유
+        및 우선순위를 명시하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로서의 등급
+        기준과 precedence 제공. Source finding context: 엔진 등급, 보고 등급, 내부 등급 또는 소비
+        시스템별 변환이 서로 다른 결과를 만들 때 어느 값이 authoritative한지 target 안에서 결정할 수 없습니다.
+        Source finding context: 공유 기준을 제공해야 할 온톨로지가 등급 해석과 조정 권한을 외부 소비자에게 넘기므로
+        보고 수치, 엔진 판단, 운영 의사결정 간 불일치가 정상 상태로 허용됩니다. Source finding context: 등급
+        체계의 canonical authority와 변환/override precedence가 온톨로지 안에 정의되지 않았습니다.
+        Source finding context: 대상은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향합니다.
+        Source finding context: Borrower.internal_rating, RiskRating.grade,
+        Exposure.risk_grade가 서로 다른 스케일로 존재하고 변환은 각 소비 시스템이 수행한다고 명시되어 있습니다.
+        Source finding context: 보고서 팀이 Exposure.risk_grade를 시장 상황에 따라 수동 조정할 수
+        있어 엔진 산출 등급과 보고 등급의 우선순위가 불명확해집니다. Source finding context:
+        credit-risk-ontology.yaml / Limit.approved_amount and FX conversion
+        authority Source finding context:
+        review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:59-67,92-94 Source finding context: 한도 소진율 계산의 외부
+        권위가 분산되어 보고·엔진 간 공유 기준을 약화합니다. Source finding context: 한도 소진율은 리스크 엔진과
+        보고 시스템이 모두 사용할 핵심 운영 지표입니다. 그런데 승인 한도와 available_limit의 관계, 중복/차감 규칙, 환율
+        테이블 우선순위가 온톨로지 내부에 없습니다. 각 시스템이 자기 환율 테이블과 합산 규칙을 쓰면 같은 borrower/product
+        조합에 대해 서로 다른 소진율이 산출될 수 있어 공유 개념 기준이라는 목적에 맞지 않습니다. Source finding
+        context: Limit의 authoritative source, available_limit과의 관계, 합산/차감 규칙, 환율
+        기준 테이블, 환율 적용 시각을 온톨로지에 명시하십시오. 시스템별 환율 사용이 불가피하면 report_value와
+        engine_value를 별도 projection으로 분리하고 reconcile 규칙을 추가하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 동일한 한도 소진율 계산 기준을
+        공유하게 하는 목적. Source finding context: 통화가 다르거나 승인 시스템 한도와 CRM
+        available_limit이 함께 쓰이는 경우, 시스템별 환율 테이블 또는 합산 방식 차이로 서로 다른 소진율이 계산됩니다.
+        Source finding context: 한도 관리 지표가 공유 기준이 아니라 시스템별 계산 결과가 되어 운영 보고와 엔진
+        판단의 비교 가능성이 낮아집니다. Source finding context: 한도와 환산 계산의 authoritative
+        source 및 precedence가 온톨로지 내부에 닫혀 있지 않습니다. Source finding context:
+        Limit.approved_amount는 승인 시스템이 기록하고 CRM available_limit과 합산 관리된다고 되어
+        있습니다. Source finding context: Limit 소진율은 ExposureAggregate.total_amount
+        / Limit.approved_amount로 정의됩니다. Source finding context: 통화가 다른 경우 각 시스템의
+        당일 환율 테이블을 사용한다고 하여 동일 지표의 계산 권위가 시스템별로 분산됩니다. Source finding context:
+        credit-risk-ontology.yaml authority coverage for parallel managed values
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:53,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 병행 관리되는 등급·한도·환율 값에 단일 원본 권위와 우선순위 개념이
+        없다. Source finding context: 리스크 엔진과 보고 시스템이 공유할 기준이라면 여러 시스템이 같은 의미의 값
+        또는 파생값을 관리할 때 어느 값이 기준인지, 매핑·환산 충돌 시 어떤 원본을 따르는지 닫혀 있어야 한다. 현재는 변환과 환산을
+        각 소비 시스템에 맡기므로 동일 차주와 익스포저에 대해 시스템별 등급·한도 소진율·통화 환산 결과가 달라질 수 있다. Source
+        finding context: RatingScaleMapping, SourceAuthority,
+        FxRateSource/ConversionPolicy 같은 개념을 추가한다. 각 병행 값에
+        canonical_source_system, precedence_order,
+        mapping_version/effective_date, conflict_resolution_rule을 붙이고, 소비 시스템별
+        변환은 권위 있는 매핑의 projection으로 제한한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서
+        Source finding context: 엔진 등급, 내부 등급, 보고 등급, CRM 한도, 승인 한도, 시스템별 환율 테이블이
+        함께 사용되어 리스크 등급 또는 한도 소진율을 산출하는 경우 Source finding context: 동일 개념의 원본과
+        우선순위가 닫히지 않아 시스템별로 다른 변환·환산 결과가 생성될 수 있고, 공유 기준 문서가 충돌 해결 권위를 제공하지 못한다.
+        Source finding context: 병존하는 값 체계와 외부 원천을 인정하지만 단일 권위·우선순위·버전 개념을 온톨로지에
+        포함하지 않았다. Source finding context: 세 등급 스케일이 병존하고 변환은 각 소비 시스템이 수행한다고 되어
+        있다. Source finding context: 한도 소진율 산식은 통화 환산에 각 시스템의 당일 환율 테이블을 사용한다고 되어
+        있다. Source finding context: 승인 한도는 승인 시스템 값이면서 CRM의 available_limit과 합산
+        관리된다고 되어 있다. Source finding context: 그러나 어느 시스템 또는 매핑이 권위인지와 충돌 시 우선순위를
+        표현하는 엔티티나 속성이 없다. Source finding context: credit-risk-ontology.yaml
+        rating scale authority and derivation rules Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20-22,48-56,92-98 Source finding context: 세 등급 스케일의 변환 권위가 온톨로지 밖의
+        소비 시스템과 위키로 분산되어 등급 체계 변경 시 연속성이 깨진다. Source finding context: 이 온톨로지가
+        리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서라면 등급 간 매핑, 수동 조정의 버전, 적용일, 소급 여부가 target
+        내부에서 닫혀 있어야 한다. 현재 구조에서는 새 등급 추가, 매핑 변경, 시장 상황별 조정 정책 변경이 발생할 때 기존 데이터가
+        어떤 매핑 버전으로 해석되었는지 재현할 수 없고, 엔진과 보고서 시스템이 서로 다른 변환을 적용할 수 있다. Source
+        finding context: 등급 스케일을 별도 개념으로 승격하고 version,
+        effective_from/effective_to, source_grade, target_grade, mapping_policy,
+        override_authority, override_reason, applied_at 같은 필드를 가진 canonical
+        RatingMapping/RatingOverride를 온톨로지 안에 정의한다. 소비 시스템별 임의 변환 대신 모든 등급 파생은 이
+        버전드 매핑을 참조하도록 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서 등급
+        분류와 보고 해석을 일관되게 유지하는 목적. Source finding context: 등급 스케일, 등급 매핑, 또는 보고서 팀
+        수동 조정 정책이 변경되거나 과거 보고서를 재계산해야 하는 경우. Source finding context: 같은 차주/익스포저가
+        시스템별 또는 시점별로 다른 등급으로 해석될 수 있어 변경 후에도 기존 데이터와 규칙의 해석 연속성을 보장하지 못한다.
+        Source finding context: 등급 변환과 조정 정책을 버전드 온톨로지 개념으로 모델링하지 않고 외부 위키와 소비
+        시스템 수행 규칙에 맡긴다. Source finding context: 대상 온톨로지는 세 개의 등급 스케일을 별도
+        속성/enum/string으로 병존시킨다. Source finding context: RiskRating.grade와
+        Borrower.internal_rating의 매핑은 리스크팀 위키를 참조하고, 변환은 각 소비 시스템이 수행한다고 명시되어
+        있다. Source finding context: Exposure.risk_grade는 RiskRating.grade에서
+        도출되지만 보고서 팀이 시장 상황에 따라 수동 조정할 수 있어 동일 원천 등급의 파생 결과가 변경 가능하다. Source
+        finding context: 따라서 등급 체계나 조정 정책이 바뀔 때 기존 데이터의 적용 매핑과 보고 결과를 target 내부
+        증거만으로 재현하기 어렵다. Source finding context: credit-risk-ontology.yaml
+        Exposure.risk_grade and RiskRating.grade Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31-34,48-57,92-98 Source finding context: `Exposure.risk_grade`가 엔진
+        등급에서 도출되는 값과 보고팀 수동 조정 등급을 한 개념명으로 겸하고 있습니다. Source finding context: 도출
+        등급과 수동 조정 등급은 권위, 의미, 사용 시점이 다릅니다. 둘을 `risk_grade` 하나로 표현하면 엔진 산출값인지 보고
+        조정값인지 구별되지 않아 등급 변환·보고 조정·엔진 재현성의 의미가 흐려집니다. Source finding context: 엔진
+        산출 등급, 변환 등급, 보고 조정 등급을 이름과 권위로 분리하십시오. 예: `RiskRating.engine_grade`,
+        `Exposure.report_grade`, `grade_override_reason`, `grade_as_of`,
+        `grade_source`. 변환표는 외부 위키 참조가 아니라 온톨로지 내 권위 개념 또는 명시적 참조로 관리하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 분류 기준
+        Source finding context: 소비자가 `Exposure.risk_grade`를 엔진 도출 등급으로 해석하거나 보고팀
+        조정 후 등급으로 해석하는 경우 Source finding context: 동일 등급 필드의 의미가 소비자별로 달라져 분류
+        재현성, 보고 설명력, 시스템 간 매핑 신뢰가 약화됩니다. Source finding context: 도출 등급과 수동 조정
+        등급의 의미·권위를 하나의 `risk_grade` 속성에 결합함 Source finding context: RiskRating은
+        리스크 엔진이 산출하는 차주 신용등급으로 정의됩니다. Source finding context:
+        Exposure.risk_grade는 보고서 팀이 사용하는 익스포저 단위 등급입니다. Source finding context:
+        분류 규칙은 Exposure.risk_grade가 RiskRating.grade에서 도출되면서도 보고서 팀이 수동 조정할 수
+        있다고 선언합니다. Source finding context: 노트는 세 개 등급 스케일의 변환을 각 소비 시스템이 수행한다고
+        하여 공유 권위 기준이 분산됩니다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: inferred
+    - issue_id: issue-002
+      severity: high
+      material: true
+      affected_purpose: "리스크 엔진과 보고 시스템이 같은 기준 시점의 익스포저 총액, 한도 소진율, 리스크 성향 준수 상태를 공유하게
+        하는 목적. Source finding context: 시간성 관점에서 리스크 엔진과 보고 시스템이 같은 기준 시점의
+        익스포저·한도·준수 상태를 공유하게 하는 목적. Source finding context: 리스크 엔진과 보고 시스템이 공유하는
+        총익스포저 개념 기준 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 익스포저 총액 및 한도
+        소진율 기준"
+      failure_condition: "일중 신규 여신 발생 후 다음 월말 배치 전까지 total_amount를 현재 모든
+        Exposure.amount의 합으로 해석하거나 Limit utilization 및 RiskAppetite compliance에
+        사용할 때. Source finding context: 일중 신규 여신 발생 후 다음 월말 배치 전까지 Limit 소진율 또는
+        RiskAppetite compliance를 조회할 때 stale total_amount가 사용됩니다. Source finding
+        context: 일중 신규 여신이 생성된 뒤 다음 배치가 실행되기 전 Source finding context: 월말 배치
+        스냅샷을 현재 모든 Exposure.amount의 합으로 해석하여 한도 소진율이나 리스크 앱타이트 판단에 사용할 때"
+      impact: "오래된 배치 스냅샷이 현재 리스크 상태처럼 authoritative하게 사용되어 한도 초과와 리스크 성향 위반 발견·보고가
+        지연되고 총익스포저 개념의 논리적 일관성이 약해진다. Source finding context: 공유 개념 기준이 현재 리스크
+        상태가 아니라 오래된 배치 상태를 authoritative하게 만들 수 있어 한도 초과와 리스크 성향 위반의 발견·보고가
+        지연됩니다. Source finding context: 같은 ExposureAggregate.total_amount를 리스크
+        엔진은 전체 익스포저 합계로, 보고 시스템은 배치 스냅샷 값으로 해석할 수 있어 한도 소진율과 RiskAppetite 판단의 입력
+        권위가 약해집니다. Source finding context: 시간성이 숨겨져 총익스포저 의미가 소비 시스템별로 달라지고 일중
+        리스크가 누락될 수 있습니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-candidate-002
+        - review-value-alignment-criteria.yaml:7-8
+        - materialized-input.md:69-75
+        - materialized-input.md:78-83
+        - materialized-input.md:92-95
+        - .onto/review/20260610-1ac96d31/round1/logic.findings.yaml#logic-candidate-001
+        - credit-risk-ontology.yaml:64-70
+        - credit-risk-ontology.yaml:87-89
+        - .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics-candidate-004
+        - materialized-input.md:69-76
+        - materialized-input.md:92-94
+      source_lens_ids:
+        - axiology
+        - logic
+        - semantics
+      action_candidates: &a3
+        - fix_now
+      rationale: "최종 resolution에서 시간 권위 혼합이 그대로 확정되었고, 일중 신규 여신 이후 stale snapshot이 현재
+        판단값처럼 쓰이는 실패 조건이 구체적이다. 운영 판단 지연 위험이 있어 현재 공유 기준으로 쓰기 전 target에서 닫아야 한다.
+        Source finding context: credit-risk-ontology.yaml / ExposureAggregate,
+        Limit utilization, RiskAppetite compliance Source finding context:
+        review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:69-83,92-95 Source finding context: 월말 배치 총익스포저를
+        한도 소진율과 리스크 성향 준수 판단에 쓰게 하여 시간성 목적을 훼손합니다. Source finding context: 리스크
+        엔진과 보고 시스템이 공유하는 기준이라면 같은 수치가 어떤 시점의 사실을 대표하는지 닫혀 있어야 합니다. 현재 모델은 월말
+        스냅샷을 일중 한도 소진·리스크 성향 준수 판단에 연결하면서도 staleness 허용 범위나 실시간/배치 권위 구분을 두지
+        않습니다. 이 때문에 신규 여신이 발생한 당일에는 준수 상태가 실제 익스포저보다 낙관적으로 보고될 수 있습니다. Source
+        finding context: ExposureAggregate에 calculation_window, freshness_sla,
+        includes_intraday 여부를 추가하고, Limit utilization 및 RiskAppetite compliance가
+        사용할 authoritative exposure source를 배치용과 일중용으로 분리하십시오. 일중 판단이 필요 없으면 해당
+        지표가 월말 보고용임을 명시하고 운영 판단 사용을 금지하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 시간성 관점에서 리스크 엔진과 보고 시스템이 같은 기준 시점의
+        익스포저·한도·준수 상태를 공유하게 하는 목적. Source finding context: 일중 신규 여신 발생 후 다음 월말
+        배치 전까지 Limit 소진율 또는 RiskAppetite compliance를 조회할 때 stale total_amount가
+        사용됩니다. Source finding context: 공유 개념 기준이 현재 리스크 상태가 아니라 오래된 배치 상태를
+        authoritative하게 만들 수 있어 한도 초과와 리스크 성향 위반의 발견·보고가 지연됩니다. Source finding
+        context: 집계값의 시점 권위와 사용처별 freshness 요구가 온톨로지에 분리되어 있지 않습니다. Source
+        finding context: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로
+        정의됩니다. Source finding context: 같은 total_amount가 월말 배치로 저장되고 일중 신규 여신은 다음
+        배치까지 미반영됩니다. Source finding context: Limit 소진율과 RiskAppetite 위반 판단이 이
+        ExposureAggregate를 사용하도록 정의되어 stale 값이 준수 판단에 전파됩니다. Source finding
+        context: credit-risk-ontology.yaml / ExposureAggregate.total_amount
+        Source finding context: credit-risk-ontology.yaml:64-70 Source finding
+        context: ExposureAggregate의 '모든 Exposure.amount의 합' 정의와 '일중 신규 여신은 다음
+        배치까지 미반영' 저장 규칙은 일중 신규 Exposure가 존재하는 동안 동시 만족될 수 없습니다. Source finding
+        context: 형식적으로는 같은 속성 total_amount가 항상 모든 Exposure.amount의 합이어야 한다는
+        necessary claim과, 특정 기간에는 일부 Exposure.amount가 포함되지 않는다는 temporal/batch
+        claim이 충돌합니다. 일중 신규 여신이 발생하고 다음 배치 전인 상태에서는 total_amount가 동시에 '모든
+        Exposure.amount의 합'이면서 '신규 여신 미반영 값'일 수 없습니다. conflict_pair:
+        credit-risk-ontology.yaml:64-65 / credit-risk-ontology.yaml:68-70.
+        satisfiability_note: inter-claim; ExposureAggregate 정의와 total_amount 저장
+        규칙의 상호작용에서 조건부 불만족 상태가 생깁니다. modality_note: mixed; 정의상 necessary 집계 기준과
+        배치 저장 가능 상태가 구분되지 않았습니다. boundary_handoff_note: 시간성·운영 주기 표현은
+        evolution/structure 관점과 인접하지만, 명시 claim 집합 자체가 특정 상태에서 불만족 가능하므로 logic
+        finding으로 소유합니다. Source finding context: ExposureAggregate의 정의를 as_of
+        기준의 배치 스냅샷 합계로 좁히거나, 실시간 총익스포저와 배치 저장 총익스포저를 별도 속성/엔티티로 분리해 각각의 포함 범위와
+        as_of 의미를 명시하세요. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준 Source
+        finding context: 일중 신규 여신이 생성된 뒤 다음 배치가 실행되기 전 Source finding context:
+        같은 ExposureAggregate.total_amount를 리스크 엔진은 전체 익스포저 합계로, 보고 시스템은 배치 스냅샷
+        값으로 해석할 수 있어 한도 소진율과 RiskAppetite 판단의 입력 권위가 약해집니다. Source finding
+        context: ExposureAggregate.total_amount가 실시간 전체 합계 개념과 월말 배치 스냅샷 저장 개념을
+        하나의 necessary 정의로 겹쳐 선언한 것 Source finding context: ExposureAggregate는
+        '모든 Exposure.amount의 합'으로 정의됩니다. Source finding context: 같은
+        total_amount는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다고 선언됩니다. Source
+        finding context: Limit 소진율은 ExposureAggregate.total_amount를 직접 입력으로
+        사용하므로, 충돌한 총익스포저 정의가 공유 계산 계약에 전파됩니다. Source finding context:
+        credit-risk-ontology.yaml entities.ExposureAggregate.total_amount Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69-76,92-94 Source finding context:
+        `ExposureAggregate.total_amount`의 이름과 정의는 총익스포저를 뜻하지만 실제 값은 월말 배치 기준 부분
+        시점 값입니다. Source finding context: 총액이라는 이름은 모든 현재 Exposure.amount 합계를
+        기대하게 하지만 실제 권위 값은 월말 배치 스냅샷입니다. Limit 소진율 산식이 이 값을 사용하므로 일중 여신이 제외된 값을
+        현재 총익스포저로 해석할 수 있습니다. Source finding context: 개념명을
+        `ExposureAggregateSnapshot` 또는 `month_end_total_amount`처럼 기준시점이 드러나게
+        바꾸고, `as_of`, 포함 범위, 배치 기준, 일중 제외 여부를 정의에 포함하십시오. 현재 총액이 필요하면 별도
+        `current_total_amount` 계산 권위를 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 익스포저 총액 및 한도
+        소진율 기준 Source finding context: 월말 배치 스냅샷을 현재 모든 Exposure.amount의 합으로
+        해석하여 한도 소진율이나 리스크 앱타이트 판단에 사용할 때 Source finding context: 시간성이 숨겨져 총익스포저
+        의미가 소비 시스템별로 달라지고 일중 리스크가 누락될 수 있습니다. Source finding context: 스냅샷/배치 기준
+        값을 현재 총액처럼 명명하고 정의함 Source finding context: ExposureAggregate 정의는 모든
+        Exposure.amount의 합인 차주 단위 총익스포저라고 말합니다. Source finding context:
+        total_amount note는 월말 배치 계산값이며 일중 신규 여신은 미반영된다고 밝힙니다. Source finding
+        context: Limit 소진율 규칙은 ExposureAggregate.total_amount를 분자로 사용합니다."
+      problem_definition: ExposureAggregate.total_amount가 현재 총익스포저와 월말 배치 스냅샷이라는 서로 다른
+        시간 권위를 겹쳐 선언해 stale 값이 한도 소진율과 RiskAppetite 판단에 전파된다.
+      issue_statement: "월말 배치 총익스포저가 현재 총익스포저처럼 명명·정의되고 한도 소진율 및 RiskAppetite 판단에 사용되어
+        stale 값이 운영 판단에 전파된다. Source finding context: credit-risk-ontology.yaml
+        / ExposureAggregate, Limit utilization, RiskAppetite compliance Source
+        finding context: review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:69-83,92-95 Source finding context: 월말 배치 총익스포저를
+        한도 소진율과 리스크 성향 준수 판단에 쓰게 하여 시간성 목적을 훼손합니다. Source finding context: 리스크
+        엔진과 보고 시스템이 공유하는 기준이라면 같은 수치가 어떤 시점의 사실을 대표하는지 닫혀 있어야 합니다. 현재 모델은 월말
+        스냅샷을 일중 한도 소진·리스크 성향 준수 판단에 연결하면서도 staleness 허용 범위나 실시간/배치 권위 구분을 두지
+        않습니다. 이 때문에 신규 여신이 발생한 당일에는 준수 상태가 실제 익스포저보다 낙관적으로 보고될 수 있습니다. Source
+        finding context: ExposureAggregate에 calculation_window, freshness_sla,
+        includes_intraday 여부를 추가하고, Limit utilization 및 RiskAppetite compliance가
+        사용할 authoritative exposure source를 배치용과 일중용으로 분리하십시오. 일중 판단이 필요 없으면 해당
+        지표가 월말 보고용임을 명시하고 운영 판단 사용을 금지하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 시간성 관점에서 리스크 엔진과 보고 시스템이 같은 기준 시점의
+        익스포저·한도·준수 상태를 공유하게 하는 목적. Source finding context: 일중 신규 여신 발생 후 다음 월말
+        배치 전까지 Limit 소진율 또는 RiskAppetite compliance를 조회할 때 stale total_amount가
+        사용됩니다. Source finding context: 공유 개념 기준이 현재 리스크 상태가 아니라 오래된 배치 상태를
+        authoritative하게 만들 수 있어 한도 초과와 리스크 성향 위반의 발견·보고가 지연됩니다. Source finding
+        context: 집계값의 시점 권위와 사용처별 freshness 요구가 온톨로지에 분리되어 있지 않습니다. Source
+        finding context: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로
+        정의됩니다. Source finding context: 같은 total_amount가 월말 배치로 저장되고 일중 신규 여신은 다음
+        배치까지 미반영됩니다. Source finding context: Limit 소진율과 RiskAppetite 위반 판단이 이
+        ExposureAggregate를 사용하도록 정의되어 stale 값이 준수 판단에 전파됩니다. Source finding
+        context: credit-risk-ontology.yaml / ExposureAggregate.total_amount
+        Source finding context: credit-risk-ontology.yaml:64-70 Source finding
+        context: ExposureAggregate의 '모든 Exposure.amount의 합' 정의와 '일중 신규 여신은 다음
+        배치까지 미반영' 저장 규칙은 일중 신규 Exposure가 존재하는 동안 동시 만족될 수 없습니다. Source finding
+        context: 형식적으로는 같은 속성 total_amount가 항상 모든 Exposure.amount의 합이어야 한다는
+        necessary claim과, 특정 기간에는 일부 Exposure.amount가 포함되지 않는다는 temporal/batch
+        claim이 충돌합니다. 일중 신규 여신이 발생하고 다음 배치 전인 상태에서는 total_amount가 동시에 '모든
+        Exposure.amount의 합'이면서 '신규 여신 미반영 값'일 수 없습니다. conflict_pair:
+        credit-risk-ontology.yaml:64-65 / credit-risk-ontology.yaml:68-70.
+        satisfiability_note: inter-claim; ExposureAggregate 정의와 total_amount 저장
+        규칙의 상호작용에서 조건부 불만족 상태가 생깁니다. modality_note: mixed; 정의상 necessary 집계 기준과
+        배치 저장 가능 상태가 구분되지 않았습니다. boundary_handoff_note: 시간성·운영 주기 표현은
+        evolution/structure 관점과 인접하지만, 명시 claim 집합 자체가 특정 상태에서 불만족 가능하므로 logic
+        finding으로 소유합니다. Source finding context: ExposureAggregate의 정의를 as_of
+        기준의 배치 스냅샷 합계로 좁히거나, 실시간 총익스포저와 배치 저장 총익스포저를 별도 속성/엔티티로 분리해 각각의 포함 범위와
+        as_of 의미를 명시하세요. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준 Source
+        finding context: 일중 신규 여신이 생성된 뒤 다음 배치가 실행되기 전 Source finding context:
+        같은 ExposureAggregate.total_amount를 리스크 엔진은 전체 익스포저 합계로, 보고 시스템은 배치 스냅샷
+        값으로 해석할 수 있어 한도 소진율과 RiskAppetite 판단의 입력 권위가 약해집니다. Source finding
+        context: ExposureAggregate.total_amount가 실시간 전체 합계 개념과 월말 배치 스냅샷 저장 개념을
+        하나의 necessary 정의로 겹쳐 선언한 것 Source finding context: ExposureAggregate는
+        '모든 Exposure.amount의 합'으로 정의됩니다. Source finding context: 같은
+        total_amount는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다고 선언됩니다. Source
+        finding context: Limit 소진율은 ExposureAggregate.total_amount를 직접 입력으로
+        사용하므로, 충돌한 총익스포저 정의가 공유 계산 계약에 전파됩니다. Source finding context:
+        credit-risk-ontology.yaml entities.ExposureAggregate.total_amount Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69-76,92-94 Source finding context:
+        `ExposureAggregate.total_amount`의 이름과 정의는 총익스포저를 뜻하지만 실제 값은 월말 배치 기준 부분
+        시점 값입니다. Source finding context: 총액이라는 이름은 모든 현재 Exposure.amount 합계를
+        기대하게 하지만 실제 권위 값은 월말 배치 스냅샷입니다. Limit 소진율 산식이 이 값을 사용하므로 일중 여신이 제외된 값을
+        현재 총익스포저로 해석할 수 있습니다. Source finding context: 개념명을
+        `ExposureAggregateSnapshot` 또는 `month_end_total_amount`처럼 기준시점이 드러나게
+        바꾸고, `as_of`, 포함 범위, 배치 기준, 일중 제외 여부를 정의에 포함하십시오. 현재 총액이 필요하면 별도
+        `current_total_amount` 계산 권위를 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 익스포저 총액 및 한도
+        소진율 기준 Source finding context: 월말 배치 스냅샷을 현재 모든 Exposure.amount의 합으로
+        해석하여 한도 소진율이나 리스크 앱타이트 판단에 사용할 때 Source finding context: 시간성이 숨겨져 총익스포저
+        의미가 소비 시스템별로 달라지고 일중 리스크가 누락될 수 있습니다. Source finding context: 스냅샷/배치 기준
+        값을 현재 총액처럼 명명하고 정의함 Source finding context: ExposureAggregate 정의는 모든
+        Exposure.amount의 합인 차주 단위 총익스포저라고 말합니다. Source finding context:
+        total_amount note는 월말 배치 계산값이며 일중 신규 여신은 미반영된다고 밝힙니다. Source finding
+        context: Limit 소진율 규칙은 ExposureAggregate.total_amount를 분자로 사용합니다."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-003
+      severity: high
+      material: true
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 분류 기준의 재현성과 감사 가능성.
+      failure_condition: "과거 보고일 또는 월말 배치 기준으로 차주·익스포저 등급을 재현하거나 엔진 산출 등급과 보고 등급을 대조해야
+        할 때. Source finding context: 과거 보고일 또는 월말 배치 기준으로 차주/익스포저 등급을 재현하거나 엔진
+        산출 등급과 보고 등급을 대조해야 하는 경우"
+      impact: "핵심 분류값의 시간축이 닫히지 않아 어느 시점에 어떤 등급으로 보고되었는지 검증할 수 없다. Source finding
+        context: 핵심 분류값의 시간축이 닫히지 않아 동일 익스포저가 어느 시점에 어떤 등급으로 보고되었는지 검증할 수 없고, 공유
+        권위 문서로서의 재현성과 감사 가능성이 약해진다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-candidate-001
+        - materialized-input.md:20
+        - materialized-input.md:31
+        - materialized-input.md:48
+        - materialized-input.md:69
+        - materialized-input.md:92
+      source_lens_ids:
+        - coverage
+      action_candidates: &a4
+        - fix_before_release
+        - fix_now
+      rationale: "deliberation은 full RatingHistory 명칭에 고정하지 않되 time-qualified
+        snapshot/history 개념이 필요하다고 해결했다. 과거 보고일 기준 재구성과 감사 가능성을 막는 시간성 root이므로
+        다음 단계의 보고·감사 사용 전 해소가 필요하다. Source finding context:
+        credit-risk-ontology.yaml rating and risk value coverage Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:48,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69 Source finding context: 시점 의존 리스크 값에 유효기간과 이력 개념이 빠져 있어 과거 시점 기준
+        등급을 재구성할 수 없다. Source finding context: 이 온톨로지는 리스크 엔진과 보고서 시스템이 공유하는 개념
+        권위 문서를 지향한다. 그런데 핵심 분류값인 차주 등급, 엔진 등급, 보고 등급에 이력 또는 유효기간이 없으면 보고 시스템은 과거
+        보고일의 등급을 재현할 수 없고, 리스크 엔진 산출과 보고 등급 사이의 시점 불일치를 설명할 개념도 없다.
+        ExposureAggregate.as_of가 존재한다는 점은 시점 기준 보고가 필요한 모델임을 보여주지만, 같은 시점성이 등급
+        쪽에는 누락되어 있다. Source finding context: RatingSnapshot 또는 RatingHistory 같은
+        개념을 추가하고, Borrower.internal_rating, RiskRating.grade/score,
+        Exposure.risk_grade에 산출시각, 적용시작일, 적용종료일, 원천, 이전/다음 버전 참조를 부여한다.
+        ExposureAggregate.as_of와 동일한 기준일로 조인 가능한 시점 계약도 명시한다. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 분류 기준
+        Source finding context: 과거 보고일 또는 월말 배치 기준으로 차주/익스포저 등급을 재현하거나 엔진 산출 등급과
+        보고 등급을 대조해야 하는 경우 Source finding context: 핵심 분류값의 시간축이 닫히지 않아 동일 익스포저가
+        어느 시점에 어떤 등급으로 보고되었는지 검증할 수 없고, 공유 권위 문서로서의 재현성과 감사 가능성이 약해진다. Source
+        finding context: 시점 의존 분류값을 현재값 속성으로만 모델링하고 이력/유효기간 개념을 분리하지 않았다. Source
+        finding context: Borrower.internal_rating, Exposure.risk_grade,
+        RiskRating.grade/score는 속성으로만 정의되어 있고 유효기간 또는 이력 속성이 없다. Source finding
+        context: ExposureAggregate.total_amount에는 as_of가 있어 월말 기준 산출값을 표현하지만, 같은
+        기준일에 적용될 등급 값의 시점 개념은 없다. Source finding context: 따라서 월말 또는 과거 보고 시점 기준의
+        등급 재구성은 온톨로지 내부 개념만으로 닫히지 않는다."
+      problem_definition: 차주·엔진·보고 등급을 현재값 속성으로만 두어 기준시점별 등급 선택, 유효기간, 이력 또는 버전 의미가 닫히지 않는다.
+      issue_statement: "차주 등급, 엔진 등급, 보고 등급에 유효기간과 이력 개념이 없어 과거 보고일 기준 등급을 온톨로지 내부에서
+        재구성하기 어렵다. Source finding context: credit-risk-ontology.yaml rating and
+        risk value coverage Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:48,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69 Source finding context: 시점 의존 리스크 값에 유효기간과 이력 개념이 빠져 있어 과거 시점 기준
+        등급을 재구성할 수 없다. Source finding context: 이 온톨로지는 리스크 엔진과 보고서 시스템이 공유하는 개념
+        권위 문서를 지향한다. 그런데 핵심 분류값인 차주 등급, 엔진 등급, 보고 등급에 이력 또는 유효기간이 없으면 보고 시스템은 과거
+        보고일의 등급을 재현할 수 없고, 리스크 엔진 산출과 보고 등급 사이의 시점 불일치를 설명할 개념도 없다.
+        ExposureAggregate.as_of가 존재한다는 점은 시점 기준 보고가 필요한 모델임을 보여주지만, 같은 시점성이 등급
+        쪽에는 누락되어 있다. Source finding context: RatingSnapshot 또는 RatingHistory 같은
+        개념을 추가하고, Borrower.internal_rating, RiskRating.grade/score,
+        Exposure.risk_grade에 산출시각, 적용시작일, 적용종료일, 원천, 이전/다음 버전 참조를 부여한다.
+        ExposureAggregate.as_of와 동일한 기준일로 조인 가능한 시점 계약도 명시한다. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 분류 기준
+        Source finding context: 과거 보고일 또는 월말 배치 기준으로 차주/익스포저 등급을 재현하거나 엔진 산출 등급과
+        보고 등급을 대조해야 하는 경우 Source finding context: 핵심 분류값의 시간축이 닫히지 않아 동일 익스포저가
+        어느 시점에 어떤 등급으로 보고되었는지 검증할 수 없고, 공유 권위 문서로서의 재현성과 감사 가능성이 약해진다. Source
+        finding context: 시점 의존 분류값을 현재값 속성으로만 모델링하고 이력/유효기간 개념을 분리하지 않았다. Source
+        finding context: Borrower.internal_rating, Exposure.risk_grade,
+        RiskRating.grade/score는 속성으로만 정의되어 있고 유효기간 또는 이력 속성이 없다. Source finding
+        context: ExposureAggregate.total_amount에는 as_of가 있어 월말 기준 산출값을 표현하지만, 같은
+        기준일에 적용될 등급 값의 시점 개념은 없다. Source finding context: 따라서 월말 또는 과거 보고 시점 기준의
+        등급 재구성은 온톨로지 내부 개념만으로 닫히지 않는다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: inferred
+    - issue_id: issue-004
+      severity: high
+      material: true
+      affected_purpose: 리스크 엔진과 보고 시스템 간 수동 조정 및 승인값의 통제 가능한 공유 기준.
+      failure_condition: "보고서 팀의 등급 수동 조정, 심사역 LTV 입력, 승인 한도 기록이 리스크 산출이나 보고 수치에 영향을 줄
+        때. Source finding context: 보고서 팀의 등급 수동 조정, 심사역의 LTV 입력, 승인 한도 기록이 리스크
+        산출이나 보고 수치에 영향을 주는 경우"
+      impact: "값 변경의 행위자·시각·근거가 빠져 감사 추적, 이의 제기, 재처리, 운영 통제가 온톨로지 내부에서 지원되지 않는다.
+        Source finding context: 값 변경의 행위자·시각·근거가 개념 모델에서 빠져 감사 추적, 이의 제기, 재처리,
+        운영 통제가 온톨로지 내부에서 지원되지 않는다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-candidate-002
+        - materialized-input.md:35
+        - materialized-input.md:64
+        - materialized-input.md:92
+      source_lens_ids:
+        - coverage
+      action_candidates: &a5
+        - fix_before_release
+        - fix_now
+      rationale: "최종 resolution은 이를 독립 control-act provenance issue로 유지했다. 논리 모순이나 의미
+        타입 오류로 과장하지 않더라도, 값 변경의 통제 가능성과 재처리 근거를 좌우하므로 운영 공유 기준 이전에 닫아야 한다.
+        Source finding context: credit-risk-ontology.yaml controlled-action
+        evidence coverage Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:35,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92 Source finding context: 수동 조정·심사 입력·승인 행위에 행위자, 시각, 근거를 추적하는 감사
+        증거 개념이 없다. Source finding context: 수동 조정과 승인 입력은 리스크 분류와 한도 사용률에 직접 영향을
+        주는 통제 행위다. 이 행위들의 증거 개념이 없으면 리스크 엔진 결과와 보고 등급이 달라졌을 때 누가 언제 어떤 근거로 바꾸었는지
+        온톨로지 차원에서 추적할 수 없다. 이는 공유 기준 문서가 운영 통제와 감사 추적까지 포괄해야 하는 범위에서 중요한 결손이다.
+        Source finding context: ManualRiskGradeAdjustment, LtvAssessmentInput,
+        LimitApprovalEvent 같은 행위 엔티티를 추가하고 actor_ref, acted_at, reason,
+        evidence_ref, source_system, previous_value, new_value를 포함한다.
+        Exposure.risk_grade, Exposure.ltv, Limit.approved_amount와 해당 행위 엔티티의 관계를
+        명시한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 리스크 엔진과 보고 시스템 간 수동 조정 및 승인값의 통제
+        가능한 공유 기준 Source finding context: 보고서 팀의 등급 수동 조정, 심사역의 LTV 입력, 승인 한도
+        기록이 리스크 산출이나 보고 수치에 영향을 주는 경우 Source finding context: 값 변경의 행위자·시각·근거가
+        개념 모델에서 빠져 감사 추적, 이의 제기, 재처리, 운영 통제가 온톨로지 내부에서 지원되지 않는다. Source finding
+        context: 통제 행위를 값 속성의 메모로만 설명하고 별도 행위/증거 엔티티로 모델링하지 않았다. Source finding
+        context: Exposure.ltv는 심사역 입력값으로 설명되지만 입력 행위와 근거를 담는 엔티티가 없다. Source
+        finding context: Limit.approved_amount는 승인 시스템 기록값으로 설명되지만 승인 사건, 승인자,
+        승인시각, 근거 개념이 없다. Source finding context: Exposure.risk_grade는 보고서 팀이 수동
+        조정할 수 있으나 조정 행위의 이력과 근거 개념이 없다. Source finding context: 그 결과 통제 대상 행위가
+        핵심 리스크 값에 영향을 주어도 감사 가능한 증거 범위가 온톨로지에 포함되지 않는다."
+      problem_definition: 수동 조정, 심사 입력, 승인 기록이 별도 행위·증거 엔티티가 아니라 값 속성의 메모 수준에 머물러
+        actor, 시각, 사유, 증거, 전후 값 기반 감사 추적이 닫히지 않는다.
+      issue_statement: "리스크 값에 영향을 주는 수동 조정·심사 입력·승인 행위의 actor, acted_at, reason,
+        evidence, previous/new value가 없어 감사 추적이 닫히지 않는다. Source finding context:
+        credit-risk-ontology.yaml controlled-action evidence coverage Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:35,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92 Source finding context: 수동 조정·심사 입력·승인 행위에 행위자, 시각, 근거를 추적하는 감사
+        증거 개념이 없다. Source finding context: 수동 조정과 승인 입력은 리스크 분류와 한도 사용률에 직접 영향을
+        주는 통제 행위다. 이 행위들의 증거 개념이 없으면 리스크 엔진 결과와 보고 등급이 달라졌을 때 누가 언제 어떤 근거로 바꾸었는지
+        온톨로지 차원에서 추적할 수 없다. 이는 공유 기준 문서가 운영 통제와 감사 추적까지 포괄해야 하는 범위에서 중요한 결손이다.
+        Source finding context: ManualRiskGradeAdjustment, LtvAssessmentInput,
+        LimitApprovalEvent 같은 행위 엔티티를 추가하고 actor_ref, acted_at, reason,
+        evidence_ref, source_system, previous_value, new_value를 포함한다.
+        Exposure.risk_grade, Exposure.ltv, Limit.approved_amount와 해당 행위 엔티티의 관계를
+        명시한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 리스크 엔진과 보고 시스템 간 수동 조정 및 승인값의 통제
+        가능한 공유 기준 Source finding context: 보고서 팀의 등급 수동 조정, 심사역의 LTV 입력, 승인 한도
+        기록이 리스크 산출이나 보고 수치에 영향을 주는 경우 Source finding context: 값 변경의 행위자·시각·근거가
+        개념 모델에서 빠져 감사 추적, 이의 제기, 재처리, 운영 통제가 온톨로지 내부에서 지원되지 않는다. Source finding
+        context: 통제 행위를 값 속성의 메모로만 설명하고 별도 행위/증거 엔티티로 모델링하지 않았다. Source finding
+        context: Exposure.ltv는 심사역 입력값으로 설명되지만 입력 행위와 근거를 담는 엔티티가 없다. Source
+        finding context: Limit.approved_amount는 승인 시스템 기록값으로 설명되지만 승인 사건, 승인자,
+        승인시각, 근거 개념이 없다. Source finding context: Exposure.risk_grade는 보고서 팀이 수동
+        조정할 수 있으나 조정 행위의 이력과 근거 개념이 없다. Source finding context: 그 결과 통제 대상 행위가
+        핵심 리스크 값에 영향을 주어도 감사 가능한 증거 범위가 온톨로지에 포함되지 않는다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: inferred
+    - issue_id: issue-005
+      severity: medium
+      material: true
+      affected_purpose: 여신 리스크 분류 온톨로지의 도메인 포괄성과 상태 기준.
+      failure_condition: "차주 또는 익스포저가 연체·부실 상태에 진입하거나 해소된 뒤 리스크 엔진 산출 및 보고 상태를 함께 해석해야
+        할 때. Source finding context: 차주 또는 익스포저가 연체·부실 상태에 진입하거나 해소된 뒤 리스크 엔진 산출
+        및 보고 상태를 함께 해석해야 하는 경우"
+      impact: "주요 신용 리스크 상태가 모델 밖으로만 선언되어 상태 lifecycle과 외부 권위 경계가 닫히지 않는다. Source
+        finding context: 주요 신용 리스크 상태가 모델 밖으로만 선언되어 상태 lifecycle과 외부 권위 경계가 닫히지
+        않고, 보고 시스템이 부실 이벤트를 등급·익스포저·한도 기준과 일관되게 결합하기 어렵다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-candidate-004
+        - materialized-input.md:6
+        - materialized-input.md:78
+        - materialized-input.md:97
+      source_lens_ids:
+        - coverage
+      action_candidates: &a6
+        - follow_up
+      rationale: "projection상 competing material claim은 없고 medium coverage/evolution
+        boundary issue로 정리되었다. 현 target의 핵심 권위·시간 hot path보다는 도메인 포괄성 보강에 가까워 독립
+        issue로 carry forward하되 다음 단계에서 닫을 수 있다. Source finding context:
+        credit-risk-ontology.yaml default/delinquency scope coverage Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:6,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 연체·부실 상태가 완전히 범위 밖으로 빠져 리스크 분류의 상태
+        lifecycle이 닫히지 않는다. Source finding context: 연체/부실은 리스크 엔진과 보고 시스템이 함께
+        해석해야 하는 대표적인 상태 차원이다. 별도 시스템이 원천일 수는 있지만, 공유 온톨로지가 그 상태를 전혀 표현하지 않으면 등급,
+        익스포저, 한도, 리스크 성향 위반 상태가 부실 이벤트 이후 어떻게 해석되어야 하는지 개념 기준이 비어 있다. Source
+        finding context: DefaultStatus 또는 CreditEvent 같은 최소 경계 개념을 추가하고
+        source_system을 연체관리로 지정한다. 상태값, 발생일, 해소일, 상태 원천, 익스포저/차주 연결, 보고 반영 기준을
+        포함해 외부 시스템이 권위인 경우에도 공유 모델 안에서 참조 가능하게 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: 여신 리스크 분류 온톨로지의 도메인 포괄성과 상태 기준
+        Source finding context: 차주 또는 익스포저가 연체·부실 상태에 진입하거나 해소된 뒤 리스크 엔진 산출 및 보고
+        상태를 함께 해석해야 하는 경우 Source finding context: 주요 신용 리스크 상태가 모델 밖으로만 선언되어 상태
+        lifecycle과 외부 권위 경계가 닫히지 않고, 보고 시스템이 부실 이벤트를 등급·익스포저·한도 기준과 일관되게 결합하기
+        어렵다. Source finding context: 별도 시스템 소관인 주요 리스크 상태를 외부 권위 참조로 모델링하지 않고
+        온톨로지 범위 밖으로만 배제했다. Source finding context: 대상 문서는 여신 리스크 관리의 개념 모델이며 리스크
+        엔진과 보고서 시스템의 공유 권위 문서를 지향한다고 선언한다. Source finding context:
+        RiskAppetite에는 compliant/breached 상태가 있지만 차주 또는 익스포저의 연체·부실 상태 개념은 없다.
+        Source finding context: 연체/부실은 별도 시스템에서 다룬다는 메모만 있고 외부 상태 참조, 원천 시스템,
+        발생/해소 시점이 모델에 포함되지 않는다."
+      problem_definition: 연체·부실 상태를 최소 외부 권위 참조나 lifecycle 경계 개념 없이 범위 밖으로만 배제해 부실 이벤트
+        이후 상태 해석 기준이 부족하다.
+      issue_statement: "연체·부실 상태와 그 lifecycle이 공유 모델에 없어 부실 이벤트 이후 등급, 익스포저, 한도, 리스크
+        성향 상태를 일관되게 해석하기 어렵다. Source finding context: credit-risk-ontology.yaml
+        default/delinquency scope coverage Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:6,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 연체·부실 상태가 완전히 범위 밖으로 빠져 리스크 분류의 상태
+        lifecycle이 닫히지 않는다. Source finding context: 연체/부실은 리스크 엔진과 보고 시스템이 함께
+        해석해야 하는 대표적인 상태 차원이다. 별도 시스템이 원천일 수는 있지만, 공유 온톨로지가 그 상태를 전혀 표현하지 않으면 등급,
+        익스포저, 한도, 리스크 성향 위반 상태가 부실 이벤트 이후 어떻게 해석되어야 하는지 개념 기준이 비어 있다. Source
+        finding context: DefaultStatus 또는 CreditEvent 같은 최소 경계 개념을 추가하고
+        source_system을 연체관리로 지정한다. 상태값, 발생일, 해소일, 상태 원천, 익스포저/차주 연결, 보고 반영 기준을
+        포함해 외부 시스템이 권위인 경우에도 공유 모델 안에서 참조 가능하게 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: 여신 리스크 분류 온톨로지의 도메인 포괄성과 상태 기준
+        Source finding context: 차주 또는 익스포저가 연체·부실 상태에 진입하거나 해소된 뒤 리스크 엔진 산출 및 보고
+        상태를 함께 해석해야 하는 경우 Source finding context: 주요 신용 리스크 상태가 모델 밖으로만 선언되어 상태
+        lifecycle과 외부 권위 경계가 닫히지 않고, 보고 시스템이 부실 이벤트를 등급·익스포저·한도 기준과 일관되게 결합하기
+        어렵다. Source finding context: 별도 시스템 소관인 주요 리스크 상태를 외부 권위 참조로 모델링하지 않고
+        온톨로지 범위 밖으로만 배제했다. Source finding context: 대상 문서는 여신 리스크 관리의 개념 모델이며 리스크
+        엔진과 보고서 시스템의 공유 권위 문서를 지향한다고 선언한다. Source finding context:
+        RiskAppetite에는 compliant/breached 상태가 있지만 차주 또는 익스포저의 연체·부실 상태 개념은 없다.
+        Source finding context: 연체/부실은 별도 시스템에서 다룬다는 메모만 있고 외부 상태 참조, 원천 시스템,
+        발생/해소 시점이 모델에 포함되지 않는다."
+      issue_role: independent_issue
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: inferred
+    - issue_id: issue-006
+      severity: medium
+      material: true
+      affected_purpose: 분류체계 변경에도 리스크 엔진과 보고 시스템이 공유 기준을 유지하고 invalid input behavior를
+        예측 가능하게 하는 목적.
+      failure_condition: "새 상품 유형, 담보 유형, 차주 세그먼트, 등급 또는 중간 준수 상태가 추가되는 경우. Source
+        finding context: 새 상품 유형, 새 담보 유형, 새 차주 세그먼트, 새 등급 또는 중간 준수 상태가 추가되는
+        경우."
+      impact: "분류값 추가가 스키마 수정과 소비자 동시 배포를 요구해 확장 내성이 낮고, 변경 순서에 따라 입력 거부나 누락 보고가 발생할 수
+        있다. Source finding context: 새 분류값 도입이 기존 enum 수정과 소비자 동시 배포를 요구하여 확장 내성이
+        낮고, 변경 순서에 따라 입력 거부나 누락 보고가 발생할 수 있다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution-candidate-002
+        - materialized-input.md:18-19
+        - materialized-input.md:30-33
+        - materialized-input.md:43-45
+        - materialized-input.md:53-55
+        - materialized-input.md:80-83
+      source_lens_ids:
+        - evolution
+      action_candidates: &a7
+        - follow_up
+      rationale: "deliberation은 full code-set promotion과 deterministic
+        unknown/extension handling을 통합했다. 현재 산출을 즉시 막는 결함보다는 분류체계 변경 시 공유 기준과
+        소비자 검증을 흔드는 evolvability root이므로 계획된 후속 폐쇄가 적절하다. Source finding
+        context: credit-risk-ontology.yaml categorical enum extension surfaces
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:18-19,30-33,43-45,53-55,80-83 Source finding context: 핵심 분류축이 닫힌
+        enum으로만 정의되어 새 세그먼트·상품·담보·등급 상태 추가 시 기존 구조 수정과 소비자 동시 변경이 필요하다. Source
+        finding context: 리스크 분류 온톨로지는 새 대출 상품, 새 담보 유형, 세그먼트 세분화, 등급 체계 확장 같은
+        변경을 자연스럽게 흡수해야 한다. 현재는 값 추가가 곧 schema/ontology 변경이며, 변경 전 데이터를 어떻게 해석할지와
+        변경 중 미인식 값을 어떻게 처리할지가 정의되어 있지 않다. 보고 시스템과 리스크 엔진이 같은 enum을 검증 기준으로 쓰면
+        한쪽이 먼저 새 값을 내보내는 순간 다른 쪽은 invalid input으로 취급할 위험이 있다. Source finding
+        context: 고정 enum을 코드셋 개념으로 승격하고 code, label, status(active/deprecated),
+        valid_from, valid_to, parent_code, external_aliases, unknown_handling을
+        정의한다. 신규 값은 기존 스키마 수정이 아니라 코드셋 버전 추가로 수용하고, 소비 시스템의 호환 정책을 명시한다. Source
+        finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 분류체계 변경에도 리스크 엔진과 보고 시스템이 공유 기준을
+        유지하고 invalid input behavior를 예측 가능하게 하는 목적. Source finding context: 새 상품
+        유형, 새 담보 유형, 새 차주 세그먼트, 새 등급 또는 중간 준수 상태가 추가되는 경우. Source finding
+        context: 새 분류값 도입이 기존 enum 수정과 소비자 동시 배포를 요구하여 확장 내성이 낮고, 변경 순서에 따라 입력
+        거부나 누락 보고가 발생할 수 있다. Source finding context: 분류값을 lifecycle이 있는 확장 가능
+        코드셋이 아니라 닫힌 enum 목록으로 직접 모델링한다. Source finding context: 여러 핵심 분류축이 고정
+        enum values 배열로 선언되어 있다. Source finding context: 해당 enum들에는 유효기간,
+        deprecated 상태, alias, unknown 값 처리, 버전별 호환 정책이 없다. Source finding
+        context: 새 분류값을 받으려면 enum 목록 자체를 변경해야 하므로 기존 구조와 소비자 검증 로직 수정이 필요하다."
+      problem_definition: 핵심 분류값이 lifecycle-aware code-set이 아니라 닫힌 enum으로 모델링되어 새 값,
+        미인식 값, 유효기간 경계의 처리 안정성이 낮다.
+      issue_statement: "새 세그먼트, 상품, 담보, 등급, 준수 상태가 추가될 때 기존 enum 구조와 소비자 검증 로직을 동시에
+        바꾸어야 한다. Source finding context: credit-risk-ontology.yaml categorical
+        enum extension surfaces Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:18-19,30-33,43-45,53-55,80-83 Source finding context: 핵심 분류축이 닫힌
+        enum으로만 정의되어 새 세그먼트·상품·담보·등급 상태 추가 시 기존 구조 수정과 소비자 동시 변경이 필요하다. Source
+        finding context: 리스크 분류 온톨로지는 새 대출 상품, 새 담보 유형, 세그먼트 세분화, 등급 체계 확장 같은
+        변경을 자연스럽게 흡수해야 한다. 현재는 값 추가가 곧 schema/ontology 변경이며, 변경 전 데이터를 어떻게 해석할지와
+        변경 중 미인식 값을 어떻게 처리할지가 정의되어 있지 않다. 보고 시스템과 리스크 엔진이 같은 enum을 검증 기준으로 쓰면
+        한쪽이 먼저 새 값을 내보내는 순간 다른 쪽은 invalid input으로 취급할 위험이 있다. Source finding
+        context: 고정 enum을 코드셋 개념으로 승격하고 code, label, status(active/deprecated),
+        valid_from, valid_to, parent_code, external_aliases, unknown_handling을
+        정의한다. 신규 값은 기존 스키마 수정이 아니라 코드셋 버전 추가로 수용하고, 소비 시스템의 호환 정책을 명시한다. Source
+        finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 분류체계 변경에도 리스크 엔진과 보고 시스템이 공유 기준을
+        유지하고 invalid input behavior를 예측 가능하게 하는 목적. Source finding context: 새 상품
+        유형, 새 담보 유형, 새 차주 세그먼트, 새 등급 또는 중간 준수 상태가 추가되는 경우. Source finding
+        context: 새 분류값 도입이 기존 enum 수정과 소비자 동시 배포를 요구하여 확장 내성이 낮고, 변경 순서에 따라 입력
+        거부나 누락 보고가 발생할 수 있다. Source finding context: 분류값을 lifecycle이 있는 확장 가능
+        코드셋이 아니라 닫힌 enum 목록으로 직접 모델링한다. Source finding context: 여러 핵심 분류축이 고정
+        enum values 배열로 선언되어 있다. Source finding context: 해당 enum들에는 유효기간,
+        deprecated 상태, alias, unknown 값 처리, 버전별 호환 정책이 없다. Source finding
+        context: 새 분류값을 받으려면 enum 목록 자체를 변경해야 하므로 기존 구조와 소비자 검증 로직 수정이 필요하다."
+      issue_role: root_cause
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: inferred
+    - issue_id: issue-007
+      severity: medium
+      material: true
+      affected_purpose: "리스크 엔진과 보고 시스템이 공유하는 익스포저·담보 개념 기준. Source finding context:
+        리스크 엔진과 보고서 시스템이 공유하는 익스포저·담보 개념 기준"
+      failure_condition: 담보가 Exposure 하위 유형으로 해석되어 Exposure 속성·분류·집계 대상에 포함될 때.
+      impact: "담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진 입력의 의미 신뢰가 약해진다. Source finding
+        context: 담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진 입력의 의미 신뢰가 약해집니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics-candidate-001
+        - materialized-input.md:24-37
+        - materialized-input.md:39-46
+        - materialized-input.md:85-88
+      source_lens_ids:
+        - semantics
+      action_candidates: &a8
+        - fix_now
+      rationale: "최종 resolution은 standalone semantic/logical type classification
+        issue로 유지했다. is_a 배치 자체가 target의 개념 구조 오류이므로 현재 모델의 정확성을 위해 target 안에서
+        바로 닫아야 한다. Source finding context: credit-risk-ontology.yaml
+        entities.Collateral.is_a Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:39-46,85-88 Source finding context: Collateral을 Exposure의 하위 유형으로 둔
+        관계가 담보 자산의 실제 의미와 맞지 않습니다. Source finding context: 담보 자산은 대출/한도성 여신인
+        Exposure의 종류가 아니라 Exposure에 붙는 보전 자산입니다. 하위 유형으로 두면 담보가 `amount`,
+        `product_type`, `risk_grade`, `ltv` 같은 Exposure 속성을 상속받는 의미가 되어 리스크 엔진과
+        보고 시스템이 담보를 여신 익스포저로 집계하거나 분류할 위험이 생깁니다. Source finding context:
+        `Collateral.is_a: Exposure`를 제거하고 `Exposure secured_by Collateral` 관계를
+        권위 관계로 유지하십시오. 담보 평가 단위가 필요하면 `Collateral` 자체 속성과 `CollateralValuation`
+        같은 평가 개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: 리스크 엔진과 보고서 시스템이 공유하는 익스포저·담보 개념
+        기준 Source finding context: 담보가 Exposure 하위 유형으로 해석되어 Exposure 속성·분류·집계
+        대상에 포함될 때 Source finding context: 담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진
+        입력의 의미 신뢰가 약해집니다. Source finding context: 담보 자산을 Exposure의 하위 유형으로 선언한
+        개념 유형 분류 오류 Source finding context: Collateral은 '익스포저를 담보하는 자산'으로 정의되어
+        있습니다. Source finding context: 같은 Collateral이 `is_a: Exposure`로 선언되어
+        Exposure의 종류처럼 모델링됩니다. Source finding context: Exposure와 Collateral 사이에는
+        이미 `secured_by` 관계가 있어 담보 관계를 표현할 수 있습니다."
+      problem_definition: Collateral을 Exposure 하위 유형으로 선언해 담보 자산이 여신 익스포저의 속성, 분류, 집계
+        대상으로 해석될 수 있다.
+      issue_statement: "Collateral을 Exposure 하위 유형으로 두어 담보 자산이 여신 익스포저 속성, 분류, 집계 대상처럼
+        해석될 수 있다. Source finding context: credit-risk-ontology.yaml
+        entities.Collateral.is_a Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:39-46,85-88 Source finding context: Collateral을 Exposure의 하위 유형으로 둔
+        관계가 담보 자산의 실제 의미와 맞지 않습니다. Source finding context: 담보 자산은 대출/한도성 여신인
+        Exposure의 종류가 아니라 Exposure에 붙는 보전 자산입니다. 하위 유형으로 두면 담보가 `amount`,
+        `product_type`, `risk_grade`, `ltv` 같은 Exposure 속성을 상속받는 의미가 되어 리스크 엔진과
+        보고 시스템이 담보를 여신 익스포저로 집계하거나 분류할 위험이 생깁니다. Source finding context:
+        `Collateral.is_a: Exposure`를 제거하고 `Exposure secured_by Collateral` 관계를
+        권위 관계로 유지하십시오. 담보 평가 단위가 필요하면 `Collateral` 자체 속성과 `CollateralValuation`
+        같은 평가 개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: 리스크 엔진과 보고서 시스템이 공유하는 익스포저·담보 개념
+        기준 Source finding context: 담보가 Exposure 하위 유형으로 해석되어 Exposure 속성·분류·집계
+        대상에 포함될 때 Source finding context: 담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진
+        입력의 의미 신뢰가 약해집니다. Source finding context: 담보 자산을 Exposure의 하위 유형으로 선언한
+        개념 유형 분류 오류 Source finding context: Collateral은 '익스포저를 담보하는 자산'으로 정의되어
+        있습니다. Source finding context: 같은 Collateral이 `is_a: Exposure`로 선언되어
+        Exposure의 종류처럼 모델링됩니다. Source finding context: Exposure와 Collateral 사이에는
+        이미 `secured_by` 관계가 있어 담보 관계를 표현할 수 있습니다."
+      issue_role: independent_issue
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-008
+      severity: medium
+      material: true
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 담보 인정 비율의 개념 권위.
+      failure_condition: 심사 입력 LTV와 Exposure.amount/Collateral.appraised_value 기반 계산
+        LTV가 서로 다른 상태로 엔진 또는 보고서에 사용될 때.
+      impact: "동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크 분류, 담보 재평가, 보고 수치의 일관성이 깨질 수 있다.
+        Source finding context: 동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크 분류, 담보 재평가,
+        보고 수치의 일관성이 깨질 수 있습니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics-candidate-002
+        - materialized-input.md:29
+        - materialized-input.md:35-37
+        - materialized-input.md:45-46
+        - materialized-input.md:95
+      source_lens_ids:
+        - semantics
+      action_candidates: &a9
+        - fix_before_release
+        - fix_now
+      rationale: "적용 렌즈들은 submitted versus calculated LTV의 분리 또는 명시적 권위화를 지지했다. 같은 LTV
+        명칭이 계산값과 입력값을 동시에 뜻하는 해석 충돌이므로 엔진·보고 사용 전 의미 권위를 닫아야 한다. Source finding
+        context: credit-risk-ontology.yaml entities.Exposure.attributes.ltv
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:24-37,39-46 Source finding context: `ltv`는 산식성 비율인데 원천값과 별개로 심사역
+        입력값으로 모델링되어 파생값-입력 불일치가 발생할 수 있습니다. Source finding context: LTV는 통상
+        여신금액과 담보가치의 관계로 해석되는 비율 이름입니다. 온톨로지 안에 원천 후보인 Exposure.amount와
+        Collateral.appraised_value가 공존하는데 LTV를 독립 입력으로 두면 엔진 계산값, 심사 입력값, 담보 재평가
+        이후 값이 서로 달라질 수 있습니다. Source finding context: `ltv`를 권위 입력값으로 둘지 계산 파생값으로
+        둘지 명시하십시오. 파생값이면 산식, 원천 속성, 기준시점, 담보 다건 처리 규칙을 정의하고, 입력값이면
+        `submitted_ltv`처럼 입력 성격을 이름에 드러내며 계산 LTV와 구분하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 담보 인정 비율의 개념
+        권위 Source finding context: 심사 입력 LTV와
+        Exposure.amount/Collateral.appraised_value 기반 계산 LTV가 서로 다른 상태로 엔진 또는
+        보고서에 사용될 때 Source finding context: 동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크
+        분류, 담보 재평가, 보고 수치의 일관성이 깨질 수 있습니다. Source finding context: 산식성 비율 명칭을
+        원천값과 공존시키면서 독립 입력 속성으로 정의함 Source finding context: Exposure.amount와
+        Collateral.appraised_value가 모델에 존재합니다. Source finding context: `ltv`는
+        '담보인정비율'이라는 비율 이름이지만 심사역 입력값으로 선언되어 있습니다. Source finding context:
+        Collateral.appraised_value에는 1년 이상 경과 시 재평가 규칙이 있어 LTV 원천값이 시간에 따라 바뀔 수
+        있습니다."
+      problem_definition: LTV가 계산 파생값인지 심사역 제출 입력값인지 권위가 닫히지 않아 동일 명칭 아래 서로 다른 값이 공존할 수 있다.
+      issue_statement: "ltv가 계산 파생값인지 심사역 입력값인지 닫히지 않아 Exposure.amount와
+        Collateral.appraised_value 기반 계산값과 불일치할 수 있다. Source finding context:
+        credit-risk-ontology.yaml entities.Exposure.attributes.ltv Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:24-37,39-46 Source finding context: `ltv`는 산식성 비율인데 원천값과 별개로 심사역
+        입력값으로 모델링되어 파생값-입력 불일치가 발생할 수 있습니다. Source finding context: LTV는 통상
+        여신금액과 담보가치의 관계로 해석되는 비율 이름입니다. 온톨로지 안에 원천 후보인 Exposure.amount와
+        Collateral.appraised_value가 공존하는데 LTV를 독립 입력으로 두면 엔진 계산값, 심사 입력값, 담보 재평가
+        이후 값이 서로 달라질 수 있습니다. Source finding context: `ltv`를 권위 입력값으로 둘지 계산 파생값으로
+        둘지 명시하십시오. 파생값이면 산식, 원천 속성, 기준시점, 담보 다건 처리 규칙을 정의하고, 입력값이면
+        `submitted_ltv`처럼 입력 성격을 이름에 드러내며 계산 LTV와 구분하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 담보 인정 비율의 개념
+        권위 Source finding context: 심사 입력 LTV와
+        Exposure.amount/Collateral.appraised_value 기반 계산 LTV가 서로 다른 상태로 엔진 또는
+        보고서에 사용될 때 Source finding context: 동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크
+        분류, 담보 재평가, 보고 수치의 일관성이 깨질 수 있습니다. Source finding context: 산식성 비율 명칭을
+        원천값과 공존시키면서 독립 입력 속성으로 정의함 Source finding context: Exposure.amount와
+        Collateral.appraised_value가 모델에 존재합니다. Source finding context: `ltv`는
+        '담보인정비율'이라는 비율 이름이지만 심사역 입력값으로 선언되어 있습니다. Source finding context:
+        Collateral.appraised_value에는 1년 이상 경과 시 재평가 규칙이 있어 LTV 원천값이 시간에 따라 바뀔 수
+        있습니다."
+      issue_role: conflicting_interpretation
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: observed
+    - issue_id: issue-009
+      severity: medium
+      material: true
+      affected_purpose: "리스크 엔진과 보고 시스템이 공유하는 리스크 성향 한도 및 위반 판정 기준. Source finding
+        context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서의 여신 리스크 분류 온톨로지"
+      failure_condition: "RiskAppetite 준수 상태나 위반 여부를 관계 그래프 기반으로 탐색, 검증, 보고하거나 특정
+        집계·시점 없이 compliance_status를 사용할 때. Source finding context:
+        `RiskAppetite.compliance_status`가 특정 집계·시점과 연결되지 않은 채 보고 또는 엔진 판단에 사용될 때
+        Source finding context: RiskAppetite 준수 상태나 위반 여부를 엔진 또는 보고 시스템이 관계 그래프
+        기반으로 탐색하거나 검증할 때 RiskAppetite로 가는 선언 경로가 없습니다."
+      impact: "준수 상태의 대상과 시간 기준이 불분명하고 구조적으로 도달 가능하지 않아 소비 시스템별로 다른 위반 의미를 부여할 수 있다.
+        Source finding context: 준수 상태의 대상과 시간 기준이 불분명해 같은 RiskAppetite에 대해 소비
+        시스템별로 다른 위반 의미를 부여할 수 있습니다. Source finding context: 핵심 통제 개념인 리스크 성향 한도가
+        구조적으로 연결되지 않아 한도 위반 보고나 엔진 판정의 공통 기준으로 사용하기 어렵습니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics-candidate-005
+        - materialized-input.md:78-83
+        - .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure-candidate-001
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:78
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+      source_lens_ids:
+        - semantics
+        - structure
+      action_candidates: &a10
+        - fix_before_release
+        - fix_now
+      rationale: "semantics와 structure가 모두 time-bound assessment 분리를 지지했고, 관계 그래프상 고아
+        엔티티 문제도 함께 확인되었다. 준수 상태의 대상과 시점을 구조적으로 닫지 못하므로 target의 공유 판정 기준 안에서 해소해야
+        한다. Source finding context: credit-risk-ontology.yaml
+        entities.RiskAppetite.attributes.compliance_status Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78-83 Source finding context: `compliance_status`는 RiskAppetite 자체
+        속성이 아니라 ExposureAggregate와 threshold 비교에서 파생되는 준수 판정입니다. Source finding
+        context: RiskAppetite는 한도 또는 임계값 성격의 개념이고 준수 여부는 특정 차주/포트폴리오의 익스포저 총액,
+        기준시점, threshold 비교 결과입니다. 상태를 RiskAppetite 자체 속성으로 두면 어떤
+        ExposureAggregate에 대한 상태인지, 언제의 상태인지, 어떤 한도 기준인지가 의미적으로 고정되지 않습니다.
+        Source finding context: `RiskAppetite`에는 appetite 식별자와 threshold 같은 정책
+        기준만 두고, 준수 판정은 `RiskAppetiteAssessment` 또는 `AppetiteBreach`처럼
+        ExposureAggregate, RiskAppetite, as_of, computed_status를 함께 가진 파생 평가
+        개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-005 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 리스크 성향 한도 및
+        위반 판정 기준 Source finding context: `RiskAppetite.compliance_status`가 특정
+        집계·시점과 연결되지 않은 채 보고 또는 엔진 판단에 사용될 때 Source finding context: 준수 상태의 대상과
+        시간 기준이 불분명해 같은 RiskAppetite에 대해 소비 시스템별로 다른 위반 의미를 부여할 수 있습니다. Source
+        finding context: 비교 결과인 준수 상태를 정책 기준 개념의 독립 속성으로 배치함 Source finding
+        context: RiskAppetite는 threshold를 가진 리스크 성향 한도로 정의됩니다. Source finding
+        context: 정의는 ExposureAggregate가 RiskAppetite를 초과할 때 위반이라고 하여 준수 상태가 비교
+        결과임을 밝힙니다. Source finding context: 하지만 compliance_status는 비교 대상이나 기준시점
+        없이 RiskAppetite의 enum 속성으로 저장됩니다. Source finding context:
+        credit-risk-ontology.yaml / entities.RiskAppetite Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:85 Source finding context: RiskAppetite가 관계 그래프에서 고아 엔티티로 남아 있습니다.
+        Source finding context: RiskAppetite 정의는 ExposureAggregate와의 비교를 전제로
+        하지만, 선언된 관계는 Borrower, Exposure, Collateral, RiskRating, Limit,
+        ExposureAggregate까지만 연결합니다. 따라서 리스크 성향 한도 위반 판단이 온톨로지의 구조적 경로 안에서 도달
+        가능하지 않습니다. Source finding context: RiskAppetite를 ExposureAggregate에 연결하는
+        명시 관계를 추가하십시오. 예: `{ from: ExposureAggregate, to: RiskAppetite, kind:
+        checked_against }` 또는 `{ from: RiskAppetite, to: ExposureAggregate,
+        kind: constrains }`. 관계 방향과 kind는 실제 판정 권위가 어느 쪽인지에 맞춰 하나로 고정하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서의 여신
+        리스크 분류 온톨로지 Source finding context: RiskAppetite 준수 상태나 위반 여부를 엔진 또는 보고
+        시스템이 관계 그래프 기반으로 탐색하거나 검증할 때 RiskAppetite로 가는 선언 경로가 없습니다. Source
+        finding context: 핵심 통제 개념인 리스크 성향 한도가 구조적으로 연결되지 않아 한도 위반 보고나 엔진 판정의 공통
+        기준으로 사용하기 어렵습니다. Source finding context: RiskAppetite와 ExposureAggregate
+        사이의 필수 관계가 relations 섹션에 선언되지 않았습니다. Source finding context:
+        RiskAppetite 정의는 ExposureAggregate가 RiskAppetite를 초과하면 위반이라고 설명합니다.
+        Source finding context: relations 섹션은 Borrower, Exposure, Collateral,
+        RiskRating, Limit, ExposureAggregate의 관계만 포함하고 RiskAppetite를 연결하지 않습니다."
+      problem_definition: RiskAppetite 준수 판정이 특정 ExposureAggregate, RiskAppetite,
+        as_of가 연결된 평가 개념이 아니라 정책 속성처럼 남아 대상과 기준시점이 닫히지 않는다.
+      issue_statement: "RiskAppetite.compliance_status가 특정 ExposureAggregate 및 기준시점과
+        연결되지 않은 정책 속성처럼 배치되고 관계 그래프에서도 RiskAppetite가 고아 엔티티로 남아 있다. Source
+        finding context: credit-risk-ontology.yaml
+        entities.RiskAppetite.attributes.compliance_status Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78-83 Source finding context: `compliance_status`는 RiskAppetite 자체
+        속성이 아니라 ExposureAggregate와 threshold 비교에서 파생되는 준수 판정입니다. Source finding
+        context: RiskAppetite는 한도 또는 임계값 성격의 개념이고 준수 여부는 특정 차주/포트폴리오의 익스포저 총액,
+        기준시점, threshold 비교 결과입니다. 상태를 RiskAppetite 자체 속성으로 두면 어떤
+        ExposureAggregate에 대한 상태인지, 언제의 상태인지, 어떤 한도 기준인지가 의미적으로 고정되지 않습니다.
+        Source finding context: `RiskAppetite`에는 appetite 식별자와 threshold 같은 정책
+        기준만 두고, 준수 판정은 `RiskAppetiteAssessment` 또는 `AppetiteBreach`처럼
+        ExposureAggregate, RiskAppetite, as_of, computed_status를 함께 가진 파생 평가
+        개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-005 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 리스크 성향 한도 및
+        위반 판정 기준 Source finding context: `RiskAppetite.compliance_status`가 특정
+        집계·시점과 연결되지 않은 채 보고 또는 엔진 판단에 사용될 때 Source finding context: 준수 상태의 대상과
+        시간 기준이 불분명해 같은 RiskAppetite에 대해 소비 시스템별로 다른 위반 의미를 부여할 수 있습니다. Source
+        finding context: 비교 결과인 준수 상태를 정책 기준 개념의 독립 속성으로 배치함 Source finding
+        context: RiskAppetite는 threshold를 가진 리스크 성향 한도로 정의됩니다. Source finding
+        context: 정의는 ExposureAggregate가 RiskAppetite를 초과할 때 위반이라고 하여 준수 상태가 비교
+        결과임을 밝힙니다. Source finding context: 하지만 compliance_status는 비교 대상이나 기준시점
+        없이 RiskAppetite의 enum 속성으로 저장됩니다. Source finding context:
+        credit-risk-ontology.yaml / entities.RiskAppetite Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:85 Source finding context: RiskAppetite가 관계 그래프에서 고아 엔티티로 남아 있습니다.
+        Source finding context: RiskAppetite 정의는 ExposureAggregate와의 비교를 전제로
+        하지만, 선언된 관계는 Borrower, Exposure, Collateral, RiskRating, Limit,
+        ExposureAggregate까지만 연결합니다. 따라서 리스크 성향 한도 위반 판단이 온톨로지의 구조적 경로 안에서 도달
+        가능하지 않습니다. Source finding context: RiskAppetite를 ExposureAggregate에 연결하는
+        명시 관계를 추가하십시오. 예: `{ from: ExposureAggregate, to: RiskAppetite, kind:
+        checked_against }` 또는 `{ from: RiskAppetite, to: ExposureAggregate,
+        kind: constrains }`. 관계 방향과 kind는 실제 판정 권위가 어느 쪽인지에 맞춰 하나로 고정하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서의 여신
+        리스크 분류 온톨로지 Source finding context: RiskAppetite 준수 상태나 위반 여부를 엔진 또는 보고
+        시스템이 관계 그래프 기반으로 탐색하거나 검증할 때 RiskAppetite로 가는 선언 경로가 없습니다. Source
+        finding context: 핵심 통제 개념인 리스크 성향 한도가 구조적으로 연결되지 않아 한도 위반 보고나 엔진 판정의 공통
+        기준으로 사용하기 어렵습니다. Source finding context: RiskAppetite와 ExposureAggregate
+        사이의 필수 관계가 relations 섹션에 선언되지 않았습니다. Source finding context:
+        RiskAppetite 정의는 ExposureAggregate가 RiskAppetite를 초과하면 위반이라고 설명합니다.
+        Source finding context: relations 섹션은 Borrower, Exposure, Collateral,
+        RiskRating, Limit, ExposureAggregate의 관계만 포함하고 RiskAppetite를 연결하지 않습니다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-010
+      severity: medium
+      material: true
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 등급 산출 기준.
+      failure_condition: "보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서 재현하거나 검증해야 할
+        때 관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생하는 경우. Source finding
+        context: 보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서 재현하거나 검증해야 할 때,
+        관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생합니다."
+      impact: "핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해진다. Source finding
+        context: 핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해집니다."
+      evidence_refs:
+        - .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure-candidate-002
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:31-34
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:48-56
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:85-90
+        - .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:92-93
+      source_lens_ids:
+        - structure
+      action_candidates: &a11
+        - fix_before_release
+        - fix_now
+      rationale: "최종 resolution은 explicit derivation lineage 필요성을 유지했다. 이 누락은
+        issue-001의 등급 권위 문제와 연결되며 시스템별 임의 조인을 가능하게 하는 구조적 enabler이므로 target에서 산출
+        의존성을 닫아야 한다. Source finding context: credit-risk-ontology.yaml /
+        classification_rules[0] Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:93 Source finding context: Exposure.risk_grade 산출 의존성이 관계 구조에 명시되어
+        있지 않습니다. Source finding context: 현재 구조에서는 Borrower가 Exposure와
+        RiskRating에 각각 연결되어 있을 뿐, 어떤 RiskRating이 어떤 Exposure.risk_grade의 근거인지가
+        관계로 닫히지 않습니다. 공유 기준 문서에서 산출 의존성이 구조화되지 않으면 엔진과 보고 시스템이 동일한 연결 규칙을 사용한다고
+        보장하기 어렵습니다. Source finding context: Exposure와 RiskRating 사이에 산출 의존 관계를
+        추가하거나, Borrower를 통한 조인 규칙을 관계/제약으로 명시하십시오. 예: `{ from: Exposure, to:
+        RiskRating, kind: risk_grade_derived_from }` 또는 Borrower 기준 rating 선택
+        규칙을 별도 관계/constraint로 선언하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 산출 기준
+        Source finding context: 보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서
+        재현하거나 검증해야 할 때, 관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생합니다. Source
+        finding context: 핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해집니다.
+        Source finding context: classification_rules에 선언된 산출 의존성을 relations 섹션이
+        관계로 표현하지 않습니다. Source finding context: Exposure.risk_grade는 보고서 팀이 사용하는
+        익스포저 단위 리스크 등급입니다. Source finding context: RiskRating.grade는 리스크 엔진 등급으로
+        정의되어 있습니다. Source finding context: classification_rules는
+        Exposure.risk_grade가 RiskRating.grade에서 도출된다고 선언합니다. Source finding
+        context: relations 섹션에는 Exposure와 RiskRating을 직접 연결하거나 risk_grade 산출
+        의존성을 나타내는 관계가 없습니다."
+      problem_definition: classification_rules의 RiskRating.grade에서
+        Exposure.risk_grade로 이어지는 산출 의존성이 relations나 constraint로 표현되지 않아 등급 근거가
+        닫히지 않는다.
+      issue_statement: "Exposure.risk_grade 산출 의존성이 관계 구조에 명시되지 않아 어떤 RiskRating이 어떤
+        Exposure.risk_grade의 근거인지 닫히지 않는다. Source finding context:
+        credit-risk-ontology.yaml / classification_rules[0] Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:93 Source finding context: Exposure.risk_grade 산출 의존성이 관계 구조에 명시되어
+        있지 않습니다. Source finding context: 현재 구조에서는 Borrower가 Exposure와
+        RiskRating에 각각 연결되어 있을 뿐, 어떤 RiskRating이 어떤 Exposure.risk_grade의 근거인지가
+        관계로 닫히지 않습니다. 공유 기준 문서에서 산출 의존성이 구조화되지 않으면 엔진과 보고 시스템이 동일한 연결 규칙을 사용한다고
+        보장하기 어렵습니다. Source finding context: Exposure와 RiskRating 사이에 산출 의존 관계를
+        추가하거나, Borrower를 통한 조인 규칙을 관계/제약으로 명시하십시오. 예: `{ from: Exposure, to:
+        RiskRating, kind: risk_grade_derived_from }` 또는 Borrower 기준 rating 선택
+        규칙을 별도 관계/constraint로 선언하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 산출 기준
+        Source finding context: 보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서
+        재현하거나 검증해야 할 때, 관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생합니다. Source
+        finding context: 핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해집니다.
+        Source finding context: classification_rules에 선언된 산출 의존성을 relations 섹션이
+        관계로 표현하지 않습니다. Source finding context: Exposure.risk_grade는 보고서 팀이 사용하는
+        익스포저 단위 리스크 등급입니다. Source finding context: RiskRating.grade는 리스크 엔진 등급으로
+        정의되어 있습니다. Source finding context: classification_rules는
+        Exposure.risk_grade가 RiskRating.grade에서 도출된다고 선언합니다. Source finding
+        context: relations 섹션에는 Exposure와 RiskRating을 직접 연결하거나 risk_grade 산출
+        의존성을 나타내는 관계가 없습니다."
+      issue_role: enabler
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+  non_material_findings: []
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "여러 렌즈와 deliberation resolution이 broad authority-policy root를 수용했고,
+        특히 등급 산출·보고 조정 hot path의 결정성 요구까지 최종 root에 통합되었다. 공유 개념 기준의 권위와
+        precedence를 직접 훼손하므로 target 안에서 닫아야 하는 root cause로 본다. Source finding
+        context: credit-risk-ontology.yaml / rating authority model Source
+        finding context: review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:6-8,31-34,48-56,92-98 Source finding context: 등급
+        권위가 엔진·보고·소비 시스템으로 분산되어 공유 개념 기준이라는 목적에서 벗어납니다. Source finding context:
+        권위 문서의 목적은 리스크 엔진과 보고 시스템이 같은 개념 기준을 쓰게 하는 것입니다. 그런데 등급 의미와 변환 권위가 온톨로지
+        내부에 닫혀 있지 않고 보고서 팀 수동 조정 및 각 소비 시스템 변환으로 흩어져 있어, 동일 차주·익스포저에 대해 엔진 판단과
+        보고 판단이 다른 값으로 정당화될 수 있습니다. 이는 단순한 구조 취향 문제가 아니라 권위·precedence 목적 자체를
+        약화합니다. Source finding context: 등급의 canonical source를 하나로 지정하고,
+        internal_rating/RiskRating.grade/Exposure.risk_grade 사이의 변환표·유효일·예외
+        승인권자·수동 조정 감사 필드를 온톨로지 안에 닫으십시오. 보고용 조정이 필요하다면 원천 등급과 조정 등급을 분리하고 조정 사유
+        및 우선순위를 명시하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로서의 등급
+        기준과 precedence 제공. Source finding context: 엔진 등급, 보고 등급, 내부 등급 또는 소비
+        시스템별 변환이 서로 다른 결과를 만들 때 어느 값이 authoritative한지 target 안에서 결정할 수 없습니다.
+        Source finding context: 공유 기준을 제공해야 할 온톨로지가 등급 해석과 조정 권한을 외부 소비자에게 넘기므로
+        보고 수치, 엔진 판단, 운영 의사결정 간 불일치가 정상 상태로 허용됩니다. Source finding context: 등급
+        체계의 canonical authority와 변환/override precedence가 온톨로지 안에 정의되지 않았습니다.
+        Source finding context: 대상은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향합니다.
+        Source finding context: Borrower.internal_rating, RiskRating.grade,
+        Exposure.risk_grade가 서로 다른 스케일로 존재하고 변환은 각 소비 시스템이 수행한다고 명시되어 있습니다.
+        Source finding context: 보고서 팀이 Exposure.risk_grade를 시장 상황에 따라 수동 조정할 수
+        있어 엔진 산출 등급과 보고 등급의 우선순위가 불명확해집니다. Source finding context:
+        credit-risk-ontology.yaml / Limit.approved_amount and FX conversion
+        authority Source finding context:
+        review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:59-67,92-94 Source finding context: 한도 소진율 계산의 외부
+        권위가 분산되어 보고·엔진 간 공유 기준을 약화합니다. Source finding context: 한도 소진율은 리스크 엔진과
+        보고 시스템이 모두 사용할 핵심 운영 지표입니다. 그런데 승인 한도와 available_limit의 관계, 중복/차감 규칙, 환율
+        테이블 우선순위가 온톨로지 내부에 없습니다. 각 시스템이 자기 환율 테이블과 합산 규칙을 쓰면 같은 borrower/product
+        조합에 대해 서로 다른 소진율이 산출될 수 있어 공유 개념 기준이라는 목적에 맞지 않습니다. Source finding
+        context: Limit의 authoritative source, available_limit과의 관계, 합산/차감 규칙, 환율
+        기준 테이블, 환율 적용 시각을 온톨로지에 명시하십시오. 시스템별 환율 사용이 불가피하면 report_value와
+        engine_value를 별도 projection으로 분리하고 reconcile 규칙을 추가하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 동일한 한도 소진율 계산 기준을
+        공유하게 하는 목적. Source finding context: 통화가 다르거나 승인 시스템 한도와 CRM
+        available_limit이 함께 쓰이는 경우, 시스템별 환율 테이블 또는 합산 방식 차이로 서로 다른 소진율이 계산됩니다.
+        Source finding context: 한도 관리 지표가 공유 기준이 아니라 시스템별 계산 결과가 되어 운영 보고와 엔진
+        판단의 비교 가능성이 낮아집니다. Source finding context: 한도와 환산 계산의 authoritative
+        source 및 precedence가 온톨로지 내부에 닫혀 있지 않습니다. Source finding context:
+        Limit.approved_amount는 승인 시스템이 기록하고 CRM available_limit과 합산 관리된다고 되어
+        있습니다. Source finding context: Limit 소진율은 ExposureAggregate.total_amount
+        / Limit.approved_amount로 정의됩니다. Source finding context: 통화가 다른 경우 각 시스템의
+        당일 환율 테이블을 사용한다고 하여 동일 지표의 계산 권위가 시스템별로 분산됩니다. Source finding context:
+        credit-risk-ontology.yaml authority coverage for parallel managed values
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:53,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 병행 관리되는 등급·한도·환율 값에 단일 원본 권위와 우선순위 개념이
+        없다. Source finding context: 리스크 엔진과 보고 시스템이 공유할 기준이라면 여러 시스템이 같은 의미의 값
+        또는 파생값을 관리할 때 어느 값이 기준인지, 매핑·환산 충돌 시 어떤 원본을 따르는지 닫혀 있어야 한다. 현재는 변환과 환산을
+        각 소비 시스템에 맡기므로 동일 차주와 익스포저에 대해 시스템별 등급·한도 소진율·통화 환산 결과가 달라질 수 있다. Source
+        finding context: RatingScaleMapping, SourceAuthority,
+        FxRateSource/ConversionPolicy 같은 개념을 추가한다. 각 병행 값에
+        canonical_source_system, precedence_order,
+        mapping_version/effective_date, conflict_resolution_rule을 붙이고, 소비 시스템별
+        변환은 권위 있는 매핑의 projection으로 제한한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서
+        Source finding context: 엔진 등급, 내부 등급, 보고 등급, CRM 한도, 승인 한도, 시스템별 환율 테이블이
+        함께 사용되어 리스크 등급 또는 한도 소진율을 산출하는 경우 Source finding context: 동일 개념의 원본과
+        우선순위가 닫히지 않아 시스템별로 다른 변환·환산 결과가 생성될 수 있고, 공유 기준 문서가 충돌 해결 권위를 제공하지 못한다.
+        Source finding context: 병존하는 값 체계와 외부 원천을 인정하지만 단일 권위·우선순위·버전 개념을 온톨로지에
+        포함하지 않았다. Source finding context: 세 등급 스케일이 병존하고 변환은 각 소비 시스템이 수행한다고 되어
+        있다. Source finding context: 한도 소진율 산식은 통화 환산에 각 시스템의 당일 환율 테이블을 사용한다고 되어
+        있다. Source finding context: 승인 한도는 승인 시스템 값이면서 CRM의 available_limit과 합산
+        관리된다고 되어 있다. Source finding context: 그러나 어느 시스템 또는 매핑이 권위인지와 충돌 시 우선순위를
+        표현하는 엔티티나 속성이 없다. Source finding context: credit-risk-ontology.yaml
+        rating scale authority and derivation rules Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20-22,48-56,92-98 Source finding context: 세 등급 스케일의 변환 권위가 온톨로지 밖의
+        소비 시스템과 위키로 분산되어 등급 체계 변경 시 연속성이 깨진다. Source finding context: 이 온톨로지가
+        리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서라면 등급 간 매핑, 수동 조정의 버전, 적용일, 소급 여부가 target
+        내부에서 닫혀 있어야 한다. 현재 구조에서는 새 등급 추가, 매핑 변경, 시장 상황별 조정 정책 변경이 발생할 때 기존 데이터가
+        어떤 매핑 버전으로 해석되었는지 재현할 수 없고, 엔진과 보고서 시스템이 서로 다른 변환을 적용할 수 있다. Source
+        finding context: 등급 스케일을 별도 개념으로 승격하고 version,
+        effective_from/effective_to, source_grade, target_grade, mapping_policy,
+        override_authority, override_reason, applied_at 같은 필드를 가진 canonical
+        RatingMapping/RatingOverride를 온톨로지 안에 정의한다. 소비 시스템별 임의 변환 대신 모든 등급 파생은 이
+        버전드 매핑을 참조하도록 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서 등급
+        분류와 보고 해석을 일관되게 유지하는 목적. Source finding context: 등급 스케일, 등급 매핑, 또는 보고서 팀
+        수동 조정 정책이 변경되거나 과거 보고서를 재계산해야 하는 경우. Source finding context: 같은 차주/익스포저가
+        시스템별 또는 시점별로 다른 등급으로 해석될 수 있어 변경 후에도 기존 데이터와 규칙의 해석 연속성을 보장하지 못한다.
+        Source finding context: 등급 변환과 조정 정책을 버전드 온톨로지 개념으로 모델링하지 않고 외부 위키와 소비
+        시스템 수행 규칙에 맡긴다. Source finding context: 대상 온톨로지는 세 개의 등급 스케일을 별도
+        속성/enum/string으로 병존시킨다. Source finding context: RiskRating.grade와
+        Borrower.internal_rating의 매핑은 리스크팀 위키를 참조하고, 변환은 각 소비 시스템이 수행한다고 명시되어
+        있다. Source finding context: Exposure.risk_grade는 RiskRating.grade에서
+        도출되지만 보고서 팀이 시장 상황에 따라 수동 조정할 수 있어 동일 원천 등급의 파생 결과가 변경 가능하다. Source
+        finding context: 따라서 등급 체계나 조정 정책이 바뀔 때 기존 데이터의 적용 매핑과 보고 결과를 target 내부
+        증거만으로 재현하기 어렵다. Source finding context: credit-risk-ontology.yaml
+        Exposure.risk_grade and RiskRating.grade Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31-34,48-57,92-98 Source finding context: `Exposure.risk_grade`가 엔진
+        등급에서 도출되는 값과 보고팀 수동 조정 등급을 한 개념명으로 겸하고 있습니다. Source finding context: 도출
+        등급과 수동 조정 등급은 권위, 의미, 사용 시점이 다릅니다. 둘을 `risk_grade` 하나로 표현하면 엔진 산출값인지 보고
+        조정값인지 구별되지 않아 등급 변환·보고 조정·엔진 재현성의 의미가 흐려집니다. Source finding context: 엔진
+        산출 등급, 변환 등급, 보고 조정 등급을 이름과 권위로 분리하십시오. 예: `RiskRating.engine_grade`,
+        `Exposure.report_grade`, `grade_override_reason`, `grade_as_of`,
+        `grade_source`. 변환표는 외부 위키 참조가 아니라 온톨로지 내 권위 개념 또는 명시적 참조로 관리하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 분류 기준
+        Source finding context: 소비자가 `Exposure.risk_grade`를 엔진 도출 등급으로 해석하거나 보고팀
+        조정 후 등급으로 해석하는 경우 Source finding context: 동일 등급 필드의 의미가 소비자별로 달라져 분류
+        재현성, 보고 설명력, 시스템 간 매핑 신뢰가 약화됩니다. Source finding context: 도출 등급과 수동 조정
+        등급의 의미·권위를 하나의 `risk_grade` 속성에 결합함 Source finding context: RiskRating은
+        리스크 엔진이 산출하는 차주 신용등급으로 정의됩니다. Source finding context:
+        Exposure.risk_grade는 보고서 팀이 사용하는 익스포저 단위 등급입니다. Source finding context:
+        분류 규칙은 Exposure.risk_grade가 RiskRating.grade에서 도출되면서도 보고서 팀이 수동 조정할 수
+        있다고 선언합니다. Source finding context: 노트는 세 개 등급 스케일의 변환을 각 소비 시스템이 수행한다고
+        하여 공유 권위 기준이 분산됩니다."
+    - issue_id: issue-002
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "최종 resolution에서 시간 권위 혼합이 그대로 확정되었고, 일중 신규 여신 이후 stale snapshot이 현재
+        판단값처럼 쓰이는 실패 조건이 구체적이다. 운영 판단 지연 위험이 있어 현재 공유 기준으로 쓰기 전 target에서 닫아야 한다.
+        Source finding context: credit-risk-ontology.yaml / ExposureAggregate,
+        Limit utilization, RiskAppetite compliance Source finding context:
+        review-value-alignment-criteria.yaml:7-8;
+        materialized-input.md:69-83,92-95 Source finding context: 월말 배치 총익스포저를
+        한도 소진율과 리스크 성향 준수 판단에 쓰게 하여 시간성 목적을 훼손합니다. Source finding context: 리스크
+        엔진과 보고 시스템이 공유하는 기준이라면 같은 수치가 어떤 시점의 사실을 대표하는지 닫혀 있어야 합니다. 현재 모델은 월말
+        스냅샷을 일중 한도 소진·리스크 성향 준수 판단에 연결하면서도 staleness 허용 범위나 실시간/배치 권위 구분을 두지
+        않습니다. 이 때문에 신규 여신이 발생한 당일에는 준수 상태가 실제 익스포저보다 낙관적으로 보고될 수 있습니다. Source
+        finding context: ExposureAggregate에 calculation_window, freshness_sla,
+        includes_intraday 여부를 추가하고, Limit utilization 및 RiskAppetite compliance가
+        사용할 authoritative exposure source를 배치용과 일중용으로 분리하십시오. 일중 판단이 필요 없으면 해당
+        지표가 월말 보고용임을 명시하고 운영 판단 사용을 금지하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 시간성 관점에서 리스크 엔진과 보고 시스템이 같은 기준 시점의
+        익스포저·한도·준수 상태를 공유하게 하는 목적. Source finding context: 일중 신규 여신 발생 후 다음 월말
+        배치 전까지 Limit 소진율 또는 RiskAppetite compliance를 조회할 때 stale total_amount가
+        사용됩니다. Source finding context: 공유 개념 기준이 현재 리스크 상태가 아니라 오래된 배치 상태를
+        authoritative하게 만들 수 있어 한도 초과와 리스크 성향 위반의 발견·보고가 지연됩니다. Source finding
+        context: 집계값의 시점 권위와 사용처별 freshness 요구가 온톨로지에 분리되어 있지 않습니다. Source
+        finding context: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로
+        정의됩니다. Source finding context: 같은 total_amount가 월말 배치로 저장되고 일중 신규 여신은 다음
+        배치까지 미반영됩니다. Source finding context: Limit 소진율과 RiskAppetite 위반 판단이 이
+        ExposureAggregate를 사용하도록 정의되어 stale 값이 준수 판단에 전파됩니다. Source finding
+        context: credit-risk-ontology.yaml / ExposureAggregate.total_amount
+        Source finding context: credit-risk-ontology.yaml:64-70 Source finding
+        context: ExposureAggregate의 '모든 Exposure.amount의 합' 정의와 '일중 신규 여신은 다음
+        배치까지 미반영' 저장 규칙은 일중 신규 Exposure가 존재하는 동안 동시 만족될 수 없습니다. Source finding
+        context: 형식적으로는 같은 속성 total_amount가 항상 모든 Exposure.amount의 합이어야 한다는
+        necessary claim과, 특정 기간에는 일부 Exposure.amount가 포함되지 않는다는 temporal/batch
+        claim이 충돌합니다. 일중 신규 여신이 발생하고 다음 배치 전인 상태에서는 total_amount가 동시에 '모든
+        Exposure.amount의 합'이면서 '신규 여신 미반영 값'일 수 없습니다. conflict_pair:
+        credit-risk-ontology.yaml:64-65 / credit-risk-ontology.yaml:68-70.
+        satisfiability_note: inter-claim; ExposureAggregate 정의와 total_amount 저장
+        규칙의 상호작용에서 조건부 불만족 상태가 생깁니다. modality_note: mixed; 정의상 necessary 집계 기준과
+        배치 저장 가능 상태가 구분되지 않았습니다. boundary_handoff_note: 시간성·운영 주기 표현은
+        evolution/structure 관점과 인접하지만, 명시 claim 집합 자체가 특정 상태에서 불만족 가능하므로 logic
+        finding으로 소유합니다. Source finding context: ExposureAggregate의 정의를 as_of
+        기준의 배치 스냅샷 합계로 좁히거나, 실시간 총익스포저와 배치 저장 총익스포저를 별도 속성/엔티티로 분리해 각각의 포함 범위와
+        as_of 의미를 명시하세요. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준 Source
+        finding context: 일중 신규 여신이 생성된 뒤 다음 배치가 실행되기 전 Source finding context:
+        같은 ExposureAggregate.total_amount를 리스크 엔진은 전체 익스포저 합계로, 보고 시스템은 배치 스냅샷
+        값으로 해석할 수 있어 한도 소진율과 RiskAppetite 판단의 입력 권위가 약해집니다. Source finding
+        context: ExposureAggregate.total_amount가 실시간 전체 합계 개념과 월말 배치 스냅샷 저장 개념을
+        하나의 necessary 정의로 겹쳐 선언한 것 Source finding context: ExposureAggregate는
+        '모든 Exposure.amount의 합'으로 정의됩니다. Source finding context: 같은
+        total_amount는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다고 선언됩니다. Source
+        finding context: Limit 소진율은 ExposureAggregate.total_amount를 직접 입력으로
+        사용하므로, 충돌한 총익스포저 정의가 공유 계산 계약에 전파됩니다. Source finding context:
+        credit-risk-ontology.yaml entities.ExposureAggregate.total_amount Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69-76,92-94 Source finding context:
+        `ExposureAggregate.total_amount`의 이름과 정의는 총익스포저를 뜻하지만 실제 값은 월말 배치 기준 부분
+        시점 값입니다. Source finding context: 총액이라는 이름은 모든 현재 Exposure.amount 합계를
+        기대하게 하지만 실제 권위 값은 월말 배치 스냅샷입니다. Limit 소진율 산식이 이 값을 사용하므로 일중 여신이 제외된 값을
+        현재 총익스포저로 해석할 수 있습니다. Source finding context: 개념명을
+        `ExposureAggregateSnapshot` 또는 `month_end_total_amount`처럼 기준시점이 드러나게
+        바꾸고, `as_of`, 포함 범위, 배치 기준, 일중 제외 여부를 정의에 포함하십시오. 현재 총액이 필요하면 별도
+        `current_total_amount` 계산 권위를 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 익스포저 총액 및 한도
+        소진율 기준 Source finding context: 월말 배치 스냅샷을 현재 모든 Exposure.amount의 합으로
+        해석하여 한도 소진율이나 리스크 앱타이트 판단에 사용할 때 Source finding context: 시간성이 숨겨져 총익스포저
+        의미가 소비 시스템별로 달라지고 일중 리스크가 누락될 수 있습니다. Source finding context: 스냅샷/배치 기준
+        값을 현재 총액처럼 명명하고 정의함 Source finding context: ExposureAggregate 정의는 모든
+        Exposure.amount의 합인 차주 단위 총익스포저라고 말합니다. Source finding context:
+        total_amount note는 월말 배치 계산값이며 일중 신규 여신은 미반영된다고 밝힙니다. Source finding
+        context: Limit 소진율 규칙은 ExposureAggregate.total_amount를 분자로 사용합니다."
+    - issue_id: issue-003
+      candidates: *a4
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "deliberation은 full RatingHistory 명칭에 고정하지 않되 time-qualified
+        snapshot/history 개념이 필요하다고 해결했다. 과거 보고일 기준 재구성과 감사 가능성을 막는 시간성 root이므로
+        다음 단계의 보고·감사 사용 전 해소가 필요하다. Source finding context:
+        credit-risk-ontology.yaml rating and risk value coverage Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:20,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:48,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:69 Source finding context: 시점 의존 리스크 값에 유효기간과 이력 개념이 빠져 있어 과거 시점 기준
+        등급을 재구성할 수 없다. Source finding context: 이 온톨로지는 리스크 엔진과 보고서 시스템이 공유하는 개념
+        권위 문서를 지향한다. 그런데 핵심 분류값인 차주 등급, 엔진 등급, 보고 등급에 이력 또는 유효기간이 없으면 보고 시스템은 과거
+        보고일의 등급을 재현할 수 없고, 리스크 엔진 산출과 보고 등급 사이의 시점 불일치를 설명할 개념도 없다.
+        ExposureAggregate.as_of가 존재한다는 점은 시점 기준 보고가 필요한 모델임을 보여주지만, 같은 시점성이 등급
+        쪽에는 누락되어 있다. Source finding context: RatingSnapshot 또는 RatingHistory 같은
+        개념을 추가하고, Borrower.internal_rating, RiskRating.grade/score,
+        Exposure.risk_grade에 산출시각, 적용시작일, 적용종료일, 원천, 이전/다음 버전 참조를 부여한다.
+        ExposureAggregate.as_of와 동일한 기준일로 조인 가능한 시점 계약도 명시한다. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 여신 리스크 분류 기준
+        Source finding context: 과거 보고일 또는 월말 배치 기준으로 차주/익스포저 등급을 재현하거나 엔진 산출 등급과
+        보고 등급을 대조해야 하는 경우 Source finding context: 핵심 분류값의 시간축이 닫히지 않아 동일 익스포저가
+        어느 시점에 어떤 등급으로 보고되었는지 검증할 수 없고, 공유 권위 문서로서의 재현성과 감사 가능성이 약해진다. Source
+        finding context: 시점 의존 분류값을 현재값 속성으로만 모델링하고 이력/유효기간 개념을 분리하지 않았다. Source
+        finding context: Borrower.internal_rating, Exposure.risk_grade,
+        RiskRating.grade/score는 속성으로만 정의되어 있고 유효기간 또는 이력 속성이 없다. Source finding
+        context: ExposureAggregate.total_amount에는 as_of가 있어 월말 기준 산출값을 표현하지만, 같은
+        기준일에 적용될 등급 값의 시점 개념은 없다. Source finding context: 따라서 월말 또는 과거 보고 시점 기준의
+        등급 재구성은 온톨로지 내부 개념만으로 닫히지 않는다."
+    - issue_id: issue-004
+      candidates: *a5
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "최종 resolution은 이를 독립 control-act provenance issue로 유지했다. 논리 모순이나 의미
+        타입 오류로 과장하지 않더라도, 값 변경의 통제 가능성과 재처리 근거를 좌우하므로 운영 공유 기준 이전에 닫아야 한다.
+        Source finding context: credit-risk-ontology.yaml controlled-action
+        evidence coverage Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:35,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:64,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:92 Source finding context: 수동 조정·심사 입력·승인 행위에 행위자, 시각, 근거를 추적하는 감사
+        증거 개념이 없다. Source finding context: 수동 조정과 승인 입력은 리스크 분류와 한도 사용률에 직접 영향을
+        주는 통제 행위다. 이 행위들의 증거 개념이 없으면 리스크 엔진 결과와 보고 등급이 달라졌을 때 누가 언제 어떤 근거로 바꾸었는지
+        온톨로지 차원에서 추적할 수 없다. 이는 공유 기준 문서가 운영 통제와 감사 추적까지 포괄해야 하는 범위에서 중요한 결손이다.
+        Source finding context: ManualRiskGradeAdjustment, LtvAssessmentInput,
+        LimitApprovalEvent 같은 행위 엔티티를 추가하고 actor_ref, acted_at, reason,
+        evidence_ref, source_system, previous_value, new_value를 포함한다.
+        Exposure.risk_grade, Exposure.ltv, Limit.approved_amount와 해당 행위 엔티티의 관계를
+        명시한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 리스크 엔진과 보고 시스템 간 수동 조정 및 승인값의 통제
+        가능한 공유 기준 Source finding context: 보고서 팀의 등급 수동 조정, 심사역의 LTV 입력, 승인 한도
+        기록이 리스크 산출이나 보고 수치에 영향을 주는 경우 Source finding context: 값 변경의 행위자·시각·근거가
+        개념 모델에서 빠져 감사 추적, 이의 제기, 재처리, 운영 통제가 온톨로지 내부에서 지원되지 않는다. Source finding
+        context: 통제 행위를 값 속성의 메모로만 설명하고 별도 행위/증거 엔티티로 모델링하지 않았다. Source finding
+        context: Exposure.ltv는 심사역 입력값으로 설명되지만 입력 행위와 근거를 담는 엔티티가 없다. Source
+        finding context: Limit.approved_amount는 승인 시스템 기록값으로 설명되지만 승인 사건, 승인자,
+        승인시각, 근거 개념이 없다. Source finding context: Exposure.risk_grade는 보고서 팀이 수동
+        조정할 수 있으나 조정 행위의 이력과 근거 개념이 없다. Source finding context: 그 결과 통제 대상 행위가
+        핵심 리스크 값에 영향을 주어도 감사 가능한 증거 범위가 온톨로지에 포함되지 않는다."
+    - issue_id: issue-005
+      candidates: *a6
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "projection상 competing material claim은 없고 medium coverage/evolution
+        boundary issue로 정리되었다. 현 target의 핵심 권위·시간 hot path보다는 도메인 포괄성 보강에 가까워 독립
+        issue로 carry forward하되 다음 단계에서 닫을 수 있다. Source finding context:
+        credit-risk-ontology.yaml default/delinquency scope coverage Source
+        finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:6,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78,
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:97 Source finding context: 연체·부실 상태가 완전히 범위 밖으로 빠져 리스크 분류의 상태
+        lifecycle이 닫히지 않는다. Source finding context: 연체/부실은 리스크 엔진과 보고 시스템이 함께
+        해석해야 하는 대표적인 상태 차원이다. 별도 시스템이 원천일 수는 있지만, 공유 온톨로지가 그 상태를 전혀 표현하지 않으면 등급,
+        익스포저, 한도, 리스크 성향 위반 상태가 부실 이벤트 이후 어떻게 해석되어야 하는지 개념 기준이 비어 있다. Source
+        finding context: DefaultStatus 또는 CreditEvent 같은 최소 경계 개념을 추가하고
+        source_system을 연체관리로 지정한다. 상태값, 발생일, 해소일, 상태 원천, 익스포저/차주 연결, 보고 반영 기준을
+        포함해 외부 시스템이 권위인 경우에도 공유 모델 안에서 참조 가능하게 한다. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: 여신 리스크 분류 온톨로지의 도메인 포괄성과 상태 기준
+        Source finding context: 차주 또는 익스포저가 연체·부실 상태에 진입하거나 해소된 뒤 리스크 엔진 산출 및 보고
+        상태를 함께 해석해야 하는 경우 Source finding context: 주요 신용 리스크 상태가 모델 밖으로만 선언되어 상태
+        lifecycle과 외부 권위 경계가 닫히지 않고, 보고 시스템이 부실 이벤트를 등급·익스포저·한도 기준과 일관되게 결합하기
+        어렵다. Source finding context: 별도 시스템 소관인 주요 리스크 상태를 외부 권위 참조로 모델링하지 않고
+        온톨로지 범위 밖으로만 배제했다. Source finding context: 대상 문서는 여신 리스크 관리의 개념 모델이며 리스크
+        엔진과 보고서 시스템의 공유 권위 문서를 지향한다고 선언한다. Source finding context:
+        RiskAppetite에는 compliant/breached 상태가 있지만 차주 또는 익스포저의 연체·부실 상태 개념은 없다.
+        Source finding context: 연체/부실은 별도 시스템에서 다룬다는 메모만 있고 외부 상태 참조, 원천 시스템,
+        발생/해소 시점이 모델에 포함되지 않는다."
+    - issue_id: issue-006
+      candidates: *a7
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "deliberation은 full code-set promotion과 deterministic
+        unknown/extension handling을 통합했다. 현재 산출을 즉시 막는 결함보다는 분류체계 변경 시 공유 기준과
+        소비자 검증을 흔드는 evolvability root이므로 계획된 후속 폐쇄가 적절하다. Source finding
+        context: credit-risk-ontology.yaml categorical enum extension surfaces
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:18-19,30-33,43-45,53-55,80-83 Source finding context: 핵심 분류축이 닫힌
+        enum으로만 정의되어 새 세그먼트·상품·담보·등급 상태 추가 시 기존 구조 수정과 소비자 동시 변경이 필요하다. Source
+        finding context: 리스크 분류 온톨로지는 새 대출 상품, 새 담보 유형, 세그먼트 세분화, 등급 체계 확장 같은
+        변경을 자연스럽게 흡수해야 한다. 현재는 값 추가가 곧 schema/ontology 변경이며, 변경 전 데이터를 어떻게 해석할지와
+        변경 중 미인식 값을 어떻게 처리할지가 정의되어 있지 않다. 보고 시스템과 리스크 엔진이 같은 enum을 검증 기준으로 쓰면
+        한쪽이 먼저 새 값을 내보내는 순간 다른 쪽은 invalid input으로 취급할 위험이 있다. Source finding
+        context: 고정 enum을 코드셋 개념으로 승격하고 code, label, status(active/deprecated),
+        valid_from, valid_to, parent_code, external_aliases, unknown_handling을
+        정의한다. 신규 값은 기존 스키마 수정이 아니라 코드셋 버전 추가로 수용하고, 소비 시스템의 호환 정책을 명시한다. Source
+        finding context:
+        .onto/review/20260610-1ac96d31/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 분류체계 변경에도 리스크 엔진과 보고 시스템이 공유 기준을
+        유지하고 invalid input behavior를 예측 가능하게 하는 목적. Source finding context: 새 상품
+        유형, 새 담보 유형, 새 차주 세그먼트, 새 등급 또는 중간 준수 상태가 추가되는 경우. Source finding
+        context: 새 분류값 도입이 기존 enum 수정과 소비자 동시 배포를 요구하여 확장 내성이 낮고, 변경 순서에 따라 입력
+        거부나 누락 보고가 발생할 수 있다. Source finding context: 분류값을 lifecycle이 있는 확장 가능
+        코드셋이 아니라 닫힌 enum 목록으로 직접 모델링한다. Source finding context: 여러 핵심 분류축이 고정
+        enum values 배열로 선언되어 있다. Source finding context: 해당 enum들에는 유효기간,
+        deprecated 상태, alias, unknown 값 처리, 버전별 호환 정책이 없다. Source finding
+        context: 새 분류값을 받으려면 enum 목록 자체를 변경해야 하므로 기존 구조와 소비자 검증 로직 수정이 필요하다."
+    - issue_id: issue-007
+      candidates: *a8
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "최종 resolution은 standalone semantic/logical type classification
+        issue로 유지했다. is_a 배치 자체가 target의 개념 구조 오류이므로 현재 모델의 정확성을 위해 target 안에서
+        바로 닫아야 한다. Source finding context: credit-risk-ontology.yaml
+        entities.Collateral.is_a Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:39-46,85-88 Source finding context: Collateral을 Exposure의 하위 유형으로 둔
+        관계가 담보 자산의 실제 의미와 맞지 않습니다. Source finding context: 담보 자산은 대출/한도성 여신인
+        Exposure의 종류가 아니라 Exposure에 붙는 보전 자산입니다. 하위 유형으로 두면 담보가 `amount`,
+        `product_type`, `risk_grade`, `ltv` 같은 Exposure 속성을 상속받는 의미가 되어 리스크 엔진과
+        보고 시스템이 담보를 여신 익스포저로 집계하거나 분류할 위험이 생깁니다. Source finding context:
+        `Collateral.is_a: Exposure`를 제거하고 `Exposure secured_by Collateral` 관계를
+        권위 관계로 유지하십시오. 담보 평가 단위가 필요하면 `Collateral` 자체 속성과 `CollateralValuation`
+        같은 평가 개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: 리스크 엔진과 보고서 시스템이 공유하는 익스포저·담보 개념
+        기준 Source finding context: 담보가 Exposure 하위 유형으로 해석되어 Exposure 속성·분류·집계
+        대상에 포함될 때 Source finding context: 담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진
+        입력의 의미 신뢰가 약해집니다. Source finding context: 담보 자산을 Exposure의 하위 유형으로 선언한
+        개념 유형 분류 오류 Source finding context: Collateral은 '익스포저를 담보하는 자산'으로 정의되어
+        있습니다. Source finding context: 같은 Collateral이 `is_a: Exposure`로 선언되어
+        Exposure의 종류처럼 모델링됩니다. Source finding context: Exposure와 Collateral 사이에는
+        이미 `secured_by` 관계가 있어 담보 관계를 표현할 수 있습니다."
+    - issue_id: issue-008
+      candidates: *a9
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "적용 렌즈들은 submitted versus calculated LTV의 분리 또는 명시적 권위화를 지지했다. 같은 LTV
+        명칭이 계산값과 입력값을 동시에 뜻하는 해석 충돌이므로 엔진·보고 사용 전 의미 권위를 닫아야 한다. Source finding
+        context: credit-risk-ontology.yaml entities.Exposure.attributes.ltv
+        Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:24-37,39-46 Source finding context: `ltv`는 산식성 비율인데 원천값과 별개로 심사역
+        입력값으로 모델링되어 파생값-입력 불일치가 발생할 수 있습니다. Source finding context: LTV는 통상
+        여신금액과 담보가치의 관계로 해석되는 비율 이름입니다. 온톨로지 안에 원천 후보인 Exposure.amount와
+        Collateral.appraised_value가 공존하는데 LTV를 독립 입력으로 두면 엔진 계산값, 심사 입력값, 담보 재평가
+        이후 값이 서로 달라질 수 있습니다. Source finding context: `ltv`를 권위 입력값으로 둘지 계산 파생값으로
+        둘지 명시하십시오. 파생값이면 산식, 원천 속성, 기준시점, 담보 다건 처리 규칙을 정의하고, 입력값이면
+        `submitted_ltv`처럼 입력 성격을 이름에 드러내며 계산 LTV와 구분하십시오. Source finding
+        context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 담보 인정 비율의 개념
+        권위 Source finding context: 심사 입력 LTV와
+        Exposure.amount/Collateral.appraised_value 기반 계산 LTV가 서로 다른 상태로 엔진 또는
+        보고서에 사용될 때 Source finding context: 동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크
+        분류, 담보 재평가, 보고 수치의 일관성이 깨질 수 있습니다. Source finding context: 산식성 비율 명칭을
+        원천값과 공존시키면서 독립 입력 속성으로 정의함 Source finding context: Exposure.amount와
+        Collateral.appraised_value가 모델에 존재합니다. Source finding context: `ltv`는
+        '담보인정비율'이라는 비율 이름이지만 심사역 입력값으로 선언되어 있습니다. Source finding context:
+        Collateral.appraised_value에는 1년 이상 경과 시 재평가 규칙이 있어 LTV 원천값이 시간에 따라 바뀔 수
+        있습니다."
+    - issue_id: issue-009
+      candidates: *a10
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "semantics와 structure가 모두 time-bound assessment 분리를 지지했고, 관계 그래프상 고아
+        엔티티 문제도 함께 확인되었다. 준수 상태의 대상과 시점을 구조적으로 닫지 못하므로 target의 공유 판정 기준 안에서 해소해야
+        한다. Source finding context: credit-risk-ontology.yaml
+        entities.RiskAppetite.attributes.compliance_status Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78-83 Source finding context: `compliance_status`는 RiskAppetite 자체
+        속성이 아니라 ExposureAggregate와 threshold 비교에서 파생되는 준수 판정입니다. Source finding
+        context: RiskAppetite는 한도 또는 임계값 성격의 개념이고 준수 여부는 특정 차주/포트폴리오의 익스포저 총액,
+        기준시점, threshold 비교 결과입니다. 상태를 RiskAppetite 자체 속성으로 두면 어떤
+        ExposureAggregate에 대한 상태인지, 언제의 상태인지, 어떤 한도 기준인지가 의미적으로 고정되지 않습니다.
+        Source finding context: `RiskAppetite`에는 appetite 식별자와 threshold 같은 정책
+        기준만 두고, 준수 판정은 `RiskAppetiteAssessment` 또는 `AppetiteBreach`처럼
+        ExposureAggregate, RiskAppetite, as_of, computed_status를 함께 가진 파생 평가
+        개념으로 분리하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/semantics.findings.yaml#semantics\
+        -candidate-005 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 리스크 성향 한도 및
+        위반 판정 기준 Source finding context: `RiskAppetite.compliance_status`가 특정
+        집계·시점과 연결되지 않은 채 보고 또는 엔진 판단에 사용될 때 Source finding context: 준수 상태의 대상과
+        시간 기준이 불분명해 같은 RiskAppetite에 대해 소비 시스템별로 다른 위반 의미를 부여할 수 있습니다. Source
+        finding context: 비교 결과인 준수 상태를 정책 기준 개념의 독립 속성으로 배치함 Source finding
+        context: RiskAppetite는 threshold를 가진 리스크 성향 한도로 정의됩니다. Source finding
+        context: 정의는 ExposureAggregate가 RiskAppetite를 초과할 때 위반이라고 하여 준수 상태가 비교
+        결과임을 밝힙니다. Source finding context: 하지만 compliance_status는 비교 대상이나 기준시점
+        없이 RiskAppetite의 enum 속성으로 저장됩니다. Source finding context:
+        credit-risk-ontology.yaml / entities.RiskAppetite Source finding
+        context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:78 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:85 Source finding context: RiskAppetite가 관계 그래프에서 고아 엔티티로 남아 있습니다.
+        Source finding context: RiskAppetite 정의는 ExposureAggregate와의 비교를 전제로
+        하지만, 선언된 관계는 Borrower, Exposure, Collateral, RiskRating, Limit,
+        ExposureAggregate까지만 연결합니다. 따라서 리스크 성향 한도 위반 판단이 온톨로지의 구조적 경로 안에서 도달
+        가능하지 않습니다. Source finding context: RiskAppetite를 ExposureAggregate에 연결하는
+        명시 관계를 추가하십시오. 예: `{ from: ExposureAggregate, to: RiskAppetite, kind:
+        checked_against }` 또는 `{ from: RiskAppetite, to: ExposureAggregate,
+        kind: constrains }`. 관계 방향과 kind는 실제 판정 권위가 어느 쪽인지에 맞춰 하나로 고정하십시오.
+        Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: 리스크 엔진과 보고 시스템이 공유할 개념 기준으로서의 여신
+        리스크 분류 온톨로지 Source finding context: RiskAppetite 준수 상태나 위반 여부를 엔진 또는 보고
+        시스템이 관계 그래프 기반으로 탐색하거나 검증할 때 RiskAppetite로 가는 선언 경로가 없습니다. Source
+        finding context: 핵심 통제 개념인 리스크 성향 한도가 구조적으로 연결되지 않아 한도 위반 보고나 엔진 판정의 공통
+        기준으로 사용하기 어렵습니다. Source finding context: RiskAppetite와 ExposureAggregate
+        사이의 필수 관계가 relations 섹션에 선언되지 않았습니다. Source finding context:
+        RiskAppetite 정의는 ExposureAggregate가 RiskAppetite를 초과하면 위반이라고 설명합니다.
+        Source finding context: relations 섹션은 Borrower, Exposure, Collateral,
+        RiskRating, Limit, ExposureAggregate의 관계만 포함하고 RiskAppetite를 연결하지 않습니다."
+    - issue_id: issue-010
+      candidates: *a11
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "최종 resolution은 explicit derivation lineage 필요성을 유지했다. 이 누락은
+        issue-001의 등급 권위 문제와 연결되며 시스템별 임의 조인을 가능하게 하는 구조적 enabler이므로 target에서 산출
+        의존성을 닫아야 한다. Source finding context: credit-risk-ontology.yaml /
+        classification_rules[0] Source finding context:
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:31 and
+        .onto/review/20260610-1ac96d31/execution-preparation/materialized-input\
+        .md:93 Source finding context: Exposure.risk_grade 산출 의존성이 관계 구조에 명시되어
+        있지 않습니다. Source finding context: 현재 구조에서는 Borrower가 Exposure와
+        RiskRating에 각각 연결되어 있을 뿐, 어떤 RiskRating이 어떤 Exposure.risk_grade의 근거인지가
+        관계로 닫히지 않습니다. 공유 기준 문서에서 산출 의존성이 구조화되지 않으면 엔진과 보고 시스템이 동일한 연결 규칙을 사용한다고
+        보장하기 어렵습니다. Source finding context: Exposure와 RiskRating 사이에 산출 의존 관계를
+        추가하거나, Borrower를 통한 조인 규칙을 관계/제약으로 명시하십시오. 예: `{ from: Exposure, to:
+        RiskRating, kind: risk_grade_derived_from }` 또는 Borrower 기준 rating 선택
+        규칙을 별도 관계/constraint로 선언하십시오. Source finding context:
+        .onto/review/20260610-1ac96d31/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: 리스크 엔진과 보고 시스템이 공유하는 등급 산출 기준
+        Source finding context: 보고 시스템이 Exposure.risk_grade를 RiskRating.grade에서
+        재현하거나 검증해야 할 때, 관계 그래프상 직접 산출 의존성이 없어 시스템별 임의 조인 또는 해석이 발생합니다. Source
+        finding context: 핵심 분류 값의 근거 연결이 구조적으로 누락되어 등급 산출과 보고 검증의 일관성이 약해집니다.
+        Source finding context: classification_rules에 선언된 산출 의존성을 relations 섹션이
+        관계로 표현하지 않습니다. Source finding context: Exposure.risk_grade는 보고서 팀이 사용하는
+        익스포저 단위 리스크 등급입니다. Source finding context: RiskRating.grade는 리스크 엔진 등급으로
+        정의되어 있습니다. Source finding context: classification_rules는
+        Exposure.risk_grade가 RiskRating.grade에서 도출된다고 선언합니다. Source finding
+        context: relations 섹션에는 Exposure와 RiskRating을 직접 연결하거나 risk_grade 산출
+        의존성을 나타내는 관계가 없습니다."
+synthesis_result_ref: .onto/review/20260610-1ac96d31/synthesis-ledger.yaml
+synthesis_result_sha256: 725d9e23edca041da08288b2856c24e644aa62fda06dea79d4ad8f99883d1c16
+synthesis_output_sha256: 07def588b47c82917704628f69487fa398b4bb7a4943195688b040d559f75ee6
+deliberation_status: performed
+deliberation_result_ref: .onto/review/20260610-1ac96d31/deliberation-resolution.yaml
+deliberation_result_sha256: 997256bc21424b7db298a39ea3e49ca92ebac617013d813d642ba6f4fd7fbdc6
+final_output_ref: .onto/review/20260610-1ac96d31/final-output.md
+final_output_sha256: 95b177c3b1409bfce1f20038f772d4e39d66dbbdb7ff2282bf6f519964f2ffdb
+shared_phenomenon_summary: []

@@ -1,0 +1,14 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+lens_id: logic
+human_output_ref: null
+findings: []
+domain_constraints_used: []
+domain_context_assumptions: []
+validation:
+  unaddressable_candidates: []
+  no_findings_rationale: "검토 범위를 형식 논리 모순으로만 제한했습니다. Collateral의 `is_a: Exposure`,
+    여러 등급 스케일 병존, `risk_grade` 도출/수동조정, 한도 소진율 산식의 0 나눗셈 가능성 등은 의미·구조·검증 규칙 부재
+    관점의 위험은 될 수 있지만, 현재 문서 안에 `Exposure`와 `Collateral`의 명시적 disjoint 선언, 등급 매핑의
+    동일 값 요구, 수동조정 값 범위 금지, `approved_amount`의 0 허용/금지 같은 상충 claim이 함께 선언되어 있지 않아
+    domain-none logic lens 기준으로 동시 만족 불가능성을 입증할 수 없습니다."

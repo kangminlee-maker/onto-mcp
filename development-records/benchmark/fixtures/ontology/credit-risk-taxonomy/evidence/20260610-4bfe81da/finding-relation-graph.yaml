@@ -1,0 +1,242 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: If rating conversion authority remains outside the ontology,
+      both present classification authority and future rating-scale evolution
+      depend on consumer-local mappings rather than a shared canonical model.
+    shared_cause:
+      cause_claim: The ontology delegates rating-scale conversion to external or
+        consumer-local authorities instead of modeling a canonical, versioned
+        rating mapping concept.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-007.cause-002
+    rationale: finding-001 identifies current shared-authority failure from
+      consumer-local rating conversion and reporting overrides; finding-007
+      identifies the same delegation as an evolution risk when scales change or
+      history must be replayed.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: If the ontology does not close the meaning and authority of the
+      three rating scales internally, both governance authority and semantic
+      interpretation of credit grades fail across engine and reporting uses.
+    shared_cause:
+      cause_claim: Three rating scales coexist while canonical conversion meaning and
+        authority are left to consuming systems or external references.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-011.cause-003
+    rationale: finding-001 frames the problem as weakened shared classification
+      authority; finding-011 frames it as semantic ambiguity over the same
+      Borrower/RiskRating/Exposure rating scales and conversion authority.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-007
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: Both findings would be resolved by modeling rating scales,
+      mappings, ownership, effective dates, and override semantics as
+      first-class ontology concepts rather than external or local conventions.
+    shared_cause: null
+    rationale: finding-007 concerns rating-scale change management and replay;
+      finding-011 concerns present semantic boundaries. Both causal paths
+      identify unmodeled canonical rating mapping/authority as the root
+      condition.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-009
+    relation: symptom_of
+    root_hypothesis: Limit-utilization FX divergence is a concrete symptom of the
+      broader absence of shared currency-conversion and temporal valuation
+      concepts.
+    shared_cause: null
+    rationale: finding-002 focuses on per-system FX tables for limit utilization.
+      finding-009 generalizes the root to missing Money/Valuation, FX authority,
+      and cutoff concepts for multi-currency or intraday risk continuity.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-003
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: If ExposureAggregate remains a month-end stored snapshot
+      without explicit freshness semantics, both operational control trust and
+      term meaning for total exposure are weakened.
+    shared_cause:
+      cause_claim: ExposureAggregate is defined as total exposure but implemented as a
+        month-end batch value that omits intraday new lending until the next
+        batch.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-012.cause-002
+    rationale: finding-003 emphasizes the governed timeliness tradeoff for
+      limit/appetite checks; finding-012 emphasizes the semantic mismatch
+      between 'total exposure' and delayed snapshot. The same batch/freshness
+      fact drives both.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: shared_cause_candidate
+    root_hypothesis: Both findings arise because temporal basis for exposure-derived
+      calculations is not modeled as a governed, replayable concept.
+    shared_cause:
+      cause_claim: Aggregation freshness is month-end batch based and explicitly
+        excludes intraday new exposures until the next batch.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-009.cause-002
+    rationale: finding-003 covers stale aggregate use in operational checks;
+      finding-009 covers evolution and replay failures when intraday or
+      reporting frequency changes. Both depend on the same missing
+      temporal/cutoff contract.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-005
+    to_finding_id: finding-003
+    relation: same_root_candidate
+    root_hypothesis: The ontology lacks a coherent temporal-validity model for risk
+      decisions, leaving aggregate freshness, rating dates, limit dates, and
+      appetite threshold dates under-specified.
+    shared_cause: null
+    rationale: finding-005 identifies missing effective/as-of attributes across
+      rating, limit, and appetite concepts; finding-003 identifies the resulting
+      hidden freshness problem when aggregate-dependent checks use stale
+      month-end data.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-005
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Temporal and currency bases are treated as incidental
+      attributes or external behavior rather than versioned shared concepts for
+      reproducible calculations.
+    shared_cause: null
+    rationale: finding-005 covers temporal coverage gaps across core decision
+      concepts; finding-009 combines those temporal gaps with currency/FX
+      authority gaps for utilization and aggregate evolution.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-006
+    to_finding_id: finding-003
+    relation: enables
+    root_hypothesis: Missing exposure and limit lifecycle states make it easier for
+      stale or partial aggregates to be treated as complete control inputs.
+    shared_cause: null
+    rationale: finding-006 says the ontology cannot classify active, approved,
+      exhausted, terminated, or intraday items for inclusion. That omission
+      enables the finding-003 failure mode where aggregate-dependent checks lack
+      explicit freshness and inclusion status.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-006
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: Both findings reflect missing inclusion-boundary semantics for
+      what counts in exposure totals and utilization calculations.
+    shared_cause: null
+    rationale: finding-006 identifies absent lifecycle status categories for
+      inclusion/exclusion; finding-012 identifies ambiguity in whether
+      ExposureAggregate means current total or a delayed snapshot. Both weaken
+      the boundary of the exposure total concept.
+    confidence: medium
+  - relation_id: rel-011
+    from_finding_id: finding-013
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite is modeled as a self-contained scalar object
+      rather than as an explicit policy concept connected to an assessment over
+      an exposure aggregate.
+    shared_cause:
+      cause_claim: RiskAppetite combines threshold and compliance status internally
+        while lacking a structural relation to the ExposureAggregate it
+        evaluates.
+      from_cause_ref: finding-013.cause-003
+      to_cause_ref: finding-014.cause-002
+    rationale: finding-013 reports the semantic merge of policy threshold and result
+      status; finding-014 reports the missing structural edge to the aggregate.
+      Both point to an under-modeled compliance assessment concept.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-014
+    relation: enables
+    root_hypothesis: Because aggregate-dependent appetite checks lack explicit
+      freshness and partial-data semantics, the missing
+      RiskAppetite-to-ExposureAggregate relation becomes materially harder to
+      interpret or audit.
+    shared_cause: null
+    rationale: finding-003 establishes that RiskAppetite compliance depends on
+      ExposureAggregate without a freshness contract; finding-014 establishes
+      that the graph lacks the structural path connecting the appetite
+      threshold/status to that aggregate.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-008
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Closed or externally maintained classification value spaces
+      prevent controlled ontology-level evolution for ratings and other risk
+      taxonomy axes.
+    shared_cause: null
+    rationale: finding-008 covers closed inline enums broadly; finding-007 is the
+      rating-scale-specific case where change requires consumer-local mapping
+      updates. Both would be addressed by governed versioned
+      vocabularies/mappings.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-008
+    to_finding_id: finding-004
+    relation: same_root_candidate
+    root_hypothesis: The taxonomy lacks governed extensible state vocabularies,
+      causing some important status axes to be closed, omitted, or pushed
+      outside the shared model.
+    shared_cause: null
+    rationale: finding-008 identifies brittle closed value sets and missing
+      unknown/unmapped handling; finding-004 identifies delinquency/default
+      status as an omitted status axis with no boundary concept or external
+      authority reference.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-004
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: Operational risk-state coverage is incomplete because important
+      lifecycle and credit-status categories are absent from the shared
+      ontology.
+    shared_cause: null
+    rationale: finding-004 covers delinquency/default state exclusion; finding-006
+      covers exposure and limit lifecycle state absence. Both leave consumers to
+      classify operational states outside the shared concept standard.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-010
+    to_finding_id: finding-006
+    relation: enables
+    root_hypothesis: Confusing collateral assets with exposure subtypes can further
+      obscure which exposure-like records should be included in exposure
+      lifecycle and aggregation rules.
+    shared_cause: null
+    rationale: finding-010 shows Collateral is incorrectly modeled as an Exposure
+      subtype; finding-006 shows the ontology lacks lifecycle
+      inclusion/exclusion states for Exposure and Limit. The subtype error
+      enables misclassification of collateral as an exposure candidate in those
+      already under-specified rules.
+    confidence: medium
+  - relation_id: rel-017
+    from_finding_id: finding-010
+    to_finding_id: finding-012
+    relation: enables
+    root_hypothesis: If collateral is treated as a subtype of Exposure, the meaning
+      of 'sum of all Exposure.amount' becomes even less reliable as a shared
+      total-exposure concept.
+    shared_cause: null
+    rationale: finding-010 makes collateral inherit or appear eligible for exposure
+      semantics; finding-012 depends on the meaning of total exposure as the sum
+      of all Exposure.amount. The type confusion can contaminate the aggregate
+      concept.
+    confidence: medium
+singleton_findings: []

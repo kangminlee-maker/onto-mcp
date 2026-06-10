@@ -1,0 +1,164 @@
+schema_version: 1
+session_id: 20260610-5fbe917f
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules / Result.status /
+      Report.result_status
+    evidence_anchor: 'clinical-lab-ontology.yaml embedded materialized input:
+      Result.status values [preliminary, final, corrected]; Report.result_status
+      values [prelim, finalized, amended]; state_rules[0] "Order는 모든 Result가
+      final일 때 completed로 전이한다."; state_rules[1] "Report는 released_at 기록 시점에
+      finalized 상태가 된다. 단, Result.status가 corrected로 바뀌면 Report.result_status는
+      amended가 되어야 한다(동기화 배치는 야간 1회)."'
+    claim: 동일 상태 의미를 유지한다고 선언한 Result.status와 Report.result_status가 서로 다른 enum 값 집합을
+      사용해 상태 규칙의 일부가 형식적으로 미정의된다.
+    what: Result.status의 enum은 `preliminary/final/corrected`인데 Report.result_status의
+      enum은 `prelim/finalized/amended`입니다. 동시에 Result.status note는 동일 정보가
+      Report.result_status에도 유지된다고 하고, state_rules는 `Result.status ==
+      corrected`이면 `Report.result_status == amended`가 되어야 한다고 한 값만 매핑합니다. 그러나
+      `preliminary`와 `final`에 대한 Report 값 매핑은 형식적으로 정의되지 않은 상태에서 `final`과
+      `finalized`가 각각 규칙에 쓰입니다.
+    why: 논리 lens 기준으로 이는 도메인 의미 판단 없이도 관찰 가능한 형식 계약 충돌입니다. 한 claim은 동일 정보 유지라는
+      동치/동기화 제약을 선언하지만, 두 상태 타입의 값 공간은 동일하지 않고 전체 함수/대응 관계도 선언되어 있지 않습니다. 그 결과
+      Order 완료 조건은 `Result.status == final`에 의존하고 Report release 조건은
+      `Report.result_status == finalized`에 의존하지만, 두 상태가 동일 정보라는 선언을 동시에 만족시키는
+      총체적 매핑이 문서 안에서 닫히지 않습니다. EMR/LIS 통합 권위 문서로 쓰면 상태 전이 및 소비자 신뢰 조건이 구현자별로 달라질
+      수 있습니다.
+    how_to_fix: 두 상태 필드 중 하나를 권위 상태로 정하고 enum 값을 통일하거나, `preliminary -> prelim`,
+      `final -> finalized`, `corrected -> amended` 같은 전체 매핑을 명시한 후 모든
+      state_rules가 같은 권위/매핑을 참조하게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 결과와 보고서 상태 전이를 일관되게 정의하는 목적.
+      failure_condition: 구현자가 Result.status와 Report.result_status의 동일 정보 유지 규칙을 적용하려 할
+        때, 전체 enum 대응이 문서 내에서 닫히지 않아 `preliminary/final`과 `prelim/finalized` 간
+        동기화 조건을 임의 해석해야 하는 경우.
+      impact: 상태 전이 규칙이 권위 문서 안에서 결정되지 않으므로 완료/보고 상태를 판단하는 EMR, LIS, 대시보드 소비자가 서로 다른
+        매핑을 구현할 수 있어 검토 신뢰와 실행 가능성이 약해집니다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml embedded materialized input: Result.status
+          values [preliminary, final, corrected] and note says
+          Report.result_status also maintains the same information"
+        - "clinical-lab-ontology.yaml embedded materialized input:
+          Report.result_status values [prelim, finalized, amended] and note says
+          it is the authoritative value trusted by clinicians"
+        - "clinical-lab-ontology.yaml embedded materialized input:
+          state_rules[0] and state_rules[1]"
+    causal_path:
+      root_cause_candidate: 동일 정보 유지라는 동기화 claim과 서로 다른 enum 값 공간을 연결하는 총체적 대응 규칙이
+        target artifact 안에 정의되어 있지 않다.
+      root_cause_step_id: logic-candidate-001.cause-004
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: Result.status와 Report.result_status는 같은 결과 상태 정보를 유지한다고 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - 'clinical-lab-ontology.yaml embedded materialized input:
+              Result.status note "Report.result_status에도 동일 정보가 유지된다."'
+        - cause_id: logic-candidate-001.cause-002
+          claim: 두 필드는 서로 다른 enum 값 집합을 가진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              Result.status values [preliminary, final, corrected]"
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              Report.result_status values [prelim, finalized, amended]"
+        - cause_id: logic-candidate-001.cause-003
+          claim: state_rules는 corrected -> amended만 명시하고 `preliminary/final`에 대한 report 상태
+            대응을 닫지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[1]"
+        - cause_id: logic-candidate-001.cause-004
+          claim: Order 완료와 Report release 규칙은 각각 `final`과 `finalized`를 사용하므로 통합 구현에서 상태 조건
+            해석이 분기될 수 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[0]"
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[1]"
+      unresolved_beyond_evidence: "`prelim/finalized/amended`가 의도된 별칭인지 별도 lifecycle인지
+        판단하려면 의미/구조 lens 또는 별도 도메인 문서가 필요하지만, 현재 문서 내 형식 매핑 부재는 관찰 가능하다."
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml state_rules / Report.result_status
+      synchronization timing
+    evidence_anchor: 'clinical-lab-ontology.yaml embedded materialized input:
+      state_rules[1] "Result.status가 corrected로 바뀌면 Report.result_status는
+      amended가 되어야 한다(동기화 배치는 야간 1회)."; Report.result_status note "보고서에 표시되는 결과
+      상태의 권위 값. 임상의는 이 값을 신뢰한다."'
+    claim: 즉시 의무처럼 표현된 amended 전이와 야간 1회 배치 동기화 가능성이 같은 규칙 안에서 혼재되어 시간 조건이 형식적으로 닫히지
+      않는다.
+    what: 규칙은 `Result.status`가 `corrected`로 바뀌면 `Report.result_status`가 `amended`가
+      되어야 한다고 의무를 선언하면서, 같은 문장 안에 동기화가 야간 1회 배치라고 제한합니다. 그러나 `되어야 한다`가 즉시
+      불변조건인지, 다음 배치 후 보장인지, 배치 전 지연 상태가 허용되는지는 명시하지 않습니다.
+    why: "`Report.result_status`가 임상의가 신뢰하는 권위 값이라고 선언되어 있으므로 이 시간 양상은 단순 설명이 아니라 상태
+      계약에 영향을 줍니다. 즉시 invariant라면 야간 배치 방식과 동시 만족이 불가능하고, eventual guarantee라면
+      배치 전 불일치가 허용되어야 하지만 그 허용 구간이 문서에 없습니다. 이는 necessary/obligatory와
+      possible/eventual 조건이 한 claim 안에서 구분되지 않은 modality 충돌입니다."
+    how_to_fix: "규칙을 시간 조건으로 분해하십시오. 예: `Result.status=corrected` 발생 시 Report는
+      `pending_amendment` 또는 동등한 중간 상태를 가질 수 있고, 다음 야간 배치 완료 전까지
+      `Report.result_status=amended`로 전이되어야 한다. 또는 즉시 전이가 필수라면 야간 배치 제한 문구를 제거하고
+      동기 실행을 계약으로 선언하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 결과 정정과 보고서 상태 동기화의 권위 규칙을 EMR/LIS 통합자가 일관되게 구현하게 하는 목적.
+      failure_condition: Result가 corrected로 변경된 직후부터 야간 배치가 실행되기 전까지
+        Report.result_status가 amended가 아닌 상태가 허용되는지 판단해야 하는 경우.
+      impact: 권위 상태가 즉시 보장인지 지연 보장인지 불명확해 임상의 표시값과 LIS 결과값 간 불일치 처리, 경보, 재발행 로직이 구현자별로
+        달라질 수 있습니다.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml embedded materialized input:
+          state_rules[1] corrected -> amended obligation and nightly batch
+          clause"
+        - "clinical-lab-ontology.yaml embedded materialized input:
+          Report.result_status note identifies the field as authoritative and
+          trusted by clinicians"
+    causal_path:
+      root_cause_candidate: 정정 상태 전이 규칙이 즉시 의무와 배치 기반 지연 가능성을 하나의 선언에 섞고 허용 시간 구간을 정의하지 않는다.
+      root_cause_step_id: logic-candidate-002.cause-004
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Report.result_status는 임상의가 신뢰하는 권위 값으로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              Report.result_status note"
+        - cause_id: logic-candidate-002.cause-002
+          claim: state_rules[1]은 Result.status가 corrected로 바뀌면 Report.result_status가
+            amended가 되어야 한다고 선언한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[1]"
+        - cause_id: logic-candidate-002.cause-003
+          claim: 같은 규칙은 동기화 배치가 야간 1회라고 선언해 corrected 발생 시점과 amended 반영 시점 사이의 지연 가능성을
+            도입한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[1]"
+        - cause_id: logic-candidate-002.cause-004
+          claim: 지연 구간의 허용 여부와 최대 보장 시점이 정의되지 않아 즉시 invariant와 eventual batch guarantee 중
+            어느 계약을 만족해야 하는지 결정할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              state_rules[1]"
+            - "clinical-lab-ontology.yaml embedded materialized input:
+              Report.result_status note"
+      unresolved_beyond_evidence: 실제 운영에서 야간 배치가 허용되는지는 실사용/정책 판단이지만, 현재 문장 내부의
+        modality 구분 누락은 target 안에서 확인된다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 임상검사 도메인별 외부 규칙은 사용하지 않고, target 문서에 명시된 타입·enum·상태
+    규칙의 형식적 양립 가능성만 판단했다.
+  - Evidence anchors use the embedded materialized input because the prompt
+    declares it as the authoritative target input.
+validation:
+  unaddressable_candidates: []

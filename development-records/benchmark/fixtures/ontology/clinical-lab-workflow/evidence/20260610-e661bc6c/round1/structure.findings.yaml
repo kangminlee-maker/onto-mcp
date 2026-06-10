@@ -1,0 +1,244 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml relations
+    evidence_anchor: clinical-lab-ontology.yaml entities.Assay; relations list
+      contains Test->Result, Result->Report, Result->Specimen, Specimen->Result
+      but no relation involving Assay
+    claim: Assay is structurally orphaned from the workflow graph.
+    what: Assay is defined as the analyzer-executed unit of the test catalog, but no
+      declared relation connects it to Test, Specimen, Result, Department, or
+      any workflow entity. Its only structural links are attribute references to
+      Department, not workflow relations.
+    why: The ontology is intended as the EMR/LIS integration concept authority from
+      Order to Report. Within the declared relations, the execution path goes
+      Order -> Specimen -> Result -> Report and Test -> Result, while Assay is
+      not reachable from that path. This makes the catalog execution unit
+      unusable for integration contracts that need to map ordered tests to
+      analyzer-executed assays or their results.
+    how_to_fix: Add explicit relations such as Test maps_to/has_many Assay and Assay
+      produces Result, or define Assay as an attribute/projection of Test if it
+      should not be a separate workflow node. Also state whether Assay
+      participates in specimen/result traceability.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority for EMR/LIS
+        integration from order through report.
+      failure_condition: When an ordered Test must be connected to the
+        analyzer-executed Assay and downstream Result, the declared graph has no
+        path through Assay.
+      impact: Implementers can either ignore Assay or create divergent local mappings,
+        weakening the ontology as a shared authority for LIS execution
+        semantics.
+      evidence_refs:
+        - "clinical-lab-ontology.yaml entities.Assay definition:
+          analyzer-executed test item / execution unit"
+        - "clinical-lab-ontology.yaml relations list: no from/to Assay entries"
+        - "clinical-lab-ontology.yaml notes: new items are currently registered
+          in both Test and Assay"
+    causal_path:
+      root_cause_candidate: Assay was promoted to a standalone entity without any
+        declared workflow relation tying it into the
+        Order-Test-Specimen-Result-Report graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: The relation list contains no edge whose from or to value is Assay.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations list
+        - cause_id: structure-candidate-001.cause-002
+          claim: Because there is no Assay edge, the declared workflow graph cannot
+            traverse from Test or Specimen to Assay and then to Result.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml relations: Test->Result,
+              Result->Specimen, Specimen->Result, Result->Report, Report->Order,
+              Order->Report"
+            - clinical-lab-ontology.yaml entities.Assay definition
+        - cause_id: structure-candidate-001.cause-003
+          claim: The orphaned Assay node makes the analyzer execution unit structurally
+            unavailable to EMR/LIS integration consumers.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml header comment: concept model from
+              Order to Report for EMR/LIS integration design"
+            - "clinical-lab-ontology.yaml notes: Test and Assay both receive new
+              item registration"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml CriticalValue
+    evidence_anchor: clinical-lab-ontology.yaml entities.CriticalValue; relations
+      list has no relation involving CriticalValue
+    claim: CriticalValue is disconnected from Result and notification workflow
+      structure.
+    what: CriticalValue is defined as a dangerous result range and has a test_ref
+      attribute, but no relation connects it to Result, Report, Order, Staff,
+      Patient, or any notification/acknowledgement concept. The notified boolean
+      note points to a phone log outside the ontology, leaving no structural
+      path inside the authority document.
+    why: The target is a workflow ontology for operational EMR/LIS integration.
+      Critical values are operationally tied to concrete results and
+      reporting/notification handling, but the graph only links CriticalValue to
+      Test by attribute. As a result, consumers cannot determine from the
+      ontology how a specific Result becomes critical, how it is tied to
+      reporting, or what workflow node records notification completion.
+    how_to_fix: Add relations connecting CriticalValue to Result, for example Result
+      evaluated_against CriticalValue or CriticalValue applies_to Test and
+      triggers CriticalNotification. If notification remains external, model a
+      minimal Notification/CommunicationRecord reference or explicitly mark it
+      out of scope with a stable boundary relation.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as an operational authority for laboratory
+        result workflow and EMR/LIS integration risks.
+      failure_condition: When a result falls into a critical range and must be
+        reported or notified, the declared graph provides no relation from the
+        Result/Report workflow to CriticalValue or its notification evidence.
+      impact: Integration implementers may handle critical results outside the shared
+        concept graph, creating inconsistent notification state, auditability,
+        and report trust across EMR/LIS boundaries.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.CriticalValue definition and
+          attributes.test_ref/notified
+        - "clinical-lab-ontology.yaml relations list: no from/to CriticalValue
+          entries"
+        - clinical-lab-ontology.yaml entities.Result status and verified_by
+        - clinical-lab-ontology.yaml entities.Report result_status/released_at
+    causal_path:
+      root_cause_candidate: CriticalValue is modeled as a standalone range with only a
+        test_ref attribute and no relation into the Result/Report or
+        notification graph.
+      root_cause_step_id: structure-candidate-002.cause-004
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: The relation list contains no edge whose from or to value is
+            CriticalValue.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml relations list
+        - cause_id: structure-candidate-002.cause-002
+          claim: CriticalValue only references Test through an attribute and does not
+            connect to a concrete Result instance or Report release path.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.CriticalValue.attributes.test_ref
+            - "clinical-lab-ontology.yaml relations: Test->Result,
+              Result->Report, Report->Result"
+        - cause_id: structure-candidate-002.cause-003
+          claim: The notified flag depends on a phone log that is not represented as a
+            connected ontology node or relation.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml
+              entities.CriticalValue.attributes.notified note
+        - cause_id: structure-candidate-002.cause-004
+          claim: The critical-value operational path is therefore structurally incomplete
+            for EMR/LIS workflow integration.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml header comment: EMR/LIS integration
+              concept authority"
+            - clinical-lab-ontology.yaml entities.CriticalValue definition
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml Order-Test-Result-Report structure
+    evidence_anchor: clinical-lab-ontology.yaml
+      entities.Order.attributes.ordered_tests;
+      entities.Report.attributes.order_ref; relations list lacks
+      Order/Test-to-Report result membership constraint beyond Report->Result
+      contains
+    claim: Report-to-Result membership is not structurally constrained to the
+      Order's ordered Tests.
+    what: Order declares ordered_tests and Report belongs to Order/contains Result,
+      while Result references Test. However, no relation or invariant states
+      that a Report may contain only Results whose test_ref is one of the
+      Report.order_ref.ordered_tests, or whose Specimen belongs to the same
+      Order.
+    why: The existing edges allow Report to contain Result and Result to derive from
+      Specimen, but they do not close the structural path tying a contained
+      Result back to the same Order that produced the Report. For an authority
+      document, that missing join constraint can permit cross-order result
+      aggregation without violating the declared structure.
+    how_to_fix: Add a structural invariant such as Report.contains Result only if
+      Result.test_ref is in Report.order_ref.ordered_tests and
+      Result.derived_from Specimen belongs_to Report.order_ref. Consider adding
+      explicit Order has_many Result or Order orders Test relation if those are
+      canonical joins.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority for Order-to-Report
+        workflow structure.
+      failure_condition: When validating report contents, the ontology cannot prove
+        that contained results belong to the report's order, ordered tests, and
+        specimens.
+      impact: This weakens integration trust because EMR/LIS implementations could
+        aggregate or accept results across orders without violating the
+        published graph contract.
+      evidence_refs:
+        - clinical-lab-ontology.yaml entities.Order.attributes.ordered_tests
+        - clinical-lab-ontology.yaml entities.Report.attributes.order_ref
+        - clinical-lab-ontology.yaml entities.Result.attributes.test_ref
+        - "clinical-lab-ontology.yaml relations: Report->Result contains;
+          Result->Specimen derived_from; Specimen->Order belongs_to"
+    causal_path:
+      root_cause_candidate: The ontology declares pairwise edges but omits a
+        membership invariant binding Report.contents to Report.order_ref through
+        ordered Test and belonging Specimen.
+      root_cause_step_id: structure-candidate-003.cause-004
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Order has ordered_tests and Report has order_ref, but the relation list
+            has no Order->Test relation or Report containment constraint tied to
+            ordered_tests.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml entities.Order.attributes.ordered_tests
+            - clinical-lab-ontology.yaml entities.Report.attributes.order_ref
+            - clinical-lab-ontology.yaml relations list
+        - cause_id: structure-candidate-003.cause-002
+          claim: Report contains Result and Result references Test, yet the graph does not
+            state that the contained Result's test_ref must be among the Order's
+            ordered_tests.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml relations: Report->Result contains"
+            - clinical-lab-ontology.yaml entities.Result.attributes.test_ref
+            - clinical-lab-ontology.yaml entities.Order.attributes.ordered_tests
+        - cause_id: structure-candidate-003.cause-003
+          claim: Result derives from Specimen and Specimen belongs_to Order, yet no
+            invariant states that the specimen's Order must equal the Report's
+            order_ref.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml relations: Result->Specimen
+              derived_from; Specimen->Order belongs_to"
+            - clinical-lab-ontology.yaml entities.Report.attributes.order_ref
+        - cause_id: structure-candidate-003.cause-004
+          claim: The report aggregation path remains structurally underconstrained for
+            same-order result membership.
+          relation_to_previous: causes
+          evidence_refs:
+            - "clinical-lab-ontology.yaml header comment: Order to Report
+              concept model"
+            - clinical-lab-ontology.yaml relations list
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific structure specification was
+    used.
+  - Attribute references are treated as weaker structural links than declared
+    workflow relations when assessing graph reachability and integration
+    contract completeness.
+  - The lens is limited to structural completeness and does not judge domain
+    correctness of clinical workflow concepts beyond whether required graph
+    connections are present.
+validation:
+  unaddressable_candidates: []

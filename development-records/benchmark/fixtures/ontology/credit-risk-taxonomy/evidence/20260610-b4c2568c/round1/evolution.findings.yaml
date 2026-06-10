@@ -1,0 +1,168 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml rating scale model
+    evidence_anchor: credit-risk-ontology.yaml:15-17,
+      credit-risk-ontology.yaml:26-29, credit-risk-ontology.yaml:48-51,
+      credit-risk-ontology.yaml:87-93
+    claim: 등급 체계가 3개 스케일로 고정되고 변환 권위가 소비 시스템으로 분산되어 등급 체계 변경 시 연속성이 깨진다.
+    what: Borrower.internal_rating은 1~10, RiskRating.grade는 R1~R5,
+      Exposure.risk_grade는 AAA~CCC로 병존하며, 매핑 테이블은 외부 위키를 참조하고 변환은 각 소비 시스템이
+      수행한다고 되어 있습니다.
+    why: 이 온톨로지는 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서를 지향하지만, 등급 간 변환 규칙과 버전 유효기간이 온톨로지 안에
+      없습니다. 새 등급, 등급 재정의, 외부 표준 변경이 생기면 각 소비 시스템의 변환 구현을 동시에 바꿔야 하며, 같은 과거 데이터도
+      소비 시점이나 시스템별 매핑에 따라 다르게 해석될 수 있습니다.
+    how_to_fix: 등급 스케일을 독립 개념으로 승격하고, canonical rating scale, mapping version,
+      valid_from/valid_to, source_authority, manual_override provenance를 온톨로지 안에
+      정의하십시오. Exposure.risk_grade는 단순 enum이 아니라 특정 RiskRating.grade와 mapping
+      version에서 파생된 결과임을 참조로 표현하는 것이 좋습니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서로서 등급 해석의 연속성을 제공하는 목적
+      failure_condition: 새 등급 스케일이나 매핑 변경이 도입되거나 과거 등급을 재해석해야 할 때, 각 소비 시스템이 자체 변환을 수행한다.
+      impact: 공유 온톨로지가 등급 변환의 기준점이 되지 못해 리스크 엔진 산출값과 보고 등급의 비교 가능성, 재현성, 장기 데이터 연속성이
+        약해진다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:15-17
+        - credit-risk-ontology.yaml:26-29
+        - credit-risk-ontology.yaml:48-51
+        - credit-risk-ontology.yaml:87-93
+    causal_path:
+      root_cause_candidate: 등급 스케일과 등급 매핑을 versioned ontology concept가 아니라 여러 속성 enum
+        및 외부/소비자 변환 규칙으로 둔 모델링
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 대상 파일은 internal_rating, RiskRating.grade, Exposure.risk_grade를 서로 다른 스케일로
+            정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:15-17
+            - credit-risk-ontology.yaml:26-29
+            - credit-risk-ontology.yaml:48-51
+        - cause_id: evolution-candidate-001.cause-002
+          claim: classification_rules와 notes는 risk_grade가 RiskRating.grade에서 도출되지만 수동 조정
+            가능하고, 3개 스케일 변환은 각 소비 시스템이 수행한다고 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-93
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 따라서 등급 체계가 변경되면 온톨로지의 단일 권위가 아니라 소비 시스템별 변환 구현 변경에 의존하게 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-93
+      unresolved_beyond_evidence: 외부 위키의 실제 매핑 내용은 경계상 확인하지 않았으므로, 이 finding은 대상 온톨로지가
+        자체적으로 연속성 계약을 닫지 못한다는 범위로 한정된다.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml closed classification enums
+    evidence_anchor: credit-risk-ontology.yaml:14, credit-risk-ontology.yaml:25,
+      credit-risk-ontology.yaml:39
+    claim: 핵심 분류가 폐쇄 enum으로만 정의되어 새 세그먼트·상품·담보 유형 추가 시 기존 구조 수정이 필요하다.
+    what: Borrower.segment, Exposure.product_type, Collateral.collateral_type이 각각 고정
+      enum 목록으로 정의되어 있고, 코드/표준값/확장 슬롯/버전 정책/상위-하위 분류 계층이 없습니다.
+    why: 여신 리스크 분류는 상품, 차주 세그먼트, 담보 유형이 시간이 지나며 늘어날 가능성이 큰 표준 영역입니다. 현재 구조에서는 새 상품이나
+      담보를 수용하려면 enum 자체를 수정해야 하며, 과거 값과 신규 값의 분류 계층, 폐기 여부, 호환 별칭을 표현할 위치가 없습니다.
+    how_to_fix: 각 enum을 reference taxonomy 개념으로 분리하고 code, label, parent, status,
+      valid_from/valid_to, replacement_code를 가진 확장 가능한 분류표로 모델링하십시오. 속성은 enum 값
+      자체보다 taxonomy code reference를 갖도록 바꾸면 기존 구조 변경 없이 새 범주를 추가할 수 있습니다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 분류체계의 변경 내성과 확장성
+      failure_condition: 신규 차주 세그먼트, 신규 여신 상품, 신규 담보 유형이 추가될 때 폐쇄 enum 목록을 변경해야 한다.
+      impact: 분류 확장이 온톨로지 스키마 변경으로 번져 소비 시스템 배포와 과거 데이터 호환성 검토를 동반하게 되어 운영 확장 비용과 회귀
+        위험이 커진다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:14
+        - credit-risk-ontology.yaml:25
+        - credit-risk-ontology.yaml:39
+    causal_path:
+      root_cause_candidate: 변경 가능한 업무 분류를 버전 가능한 taxonomy entity가 아니라 고정 enum attribute로 둔 모델링
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Borrower.segment는 retail, sme, corporate 세 값만 허용하는 enum이다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Exposure.product_type과 Collateral.collateral_type도 각각 고정 enum 값 목록으로 정의되어
+            있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 고정 enum에는 신규 값의 유효기간, 폐기, 상위 분류, 호환 별칭을 표현할 구조가 없어 새 범주 추가가 기존 구조 수정으로
+            이어진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml ExposureAggregate and utilization timing
+    evidence_anchor: credit-risk-ontology.yaml:64-71, credit-risk-ontology.yaml:89
+    claim: 익스포저 집계가 월말 배치 저장값으로 고정되어 일중 또는 다중 기준시점 리스크 산정으로 확장할 때 개념 재구성이 필요하다.
+    what: ExposureAggregate는 모든 Exposure.amount의 합으로 정의되지만 total_amount는 월말 배치로 계산해
+      저장하며 일중 신규 여신은 다음 배치까지 미반영된다고 되어 있습니다. Limit 소진율도 이 저장된
+      ExposureAggregate.total_amount를 사용합니다.
+    why: 현재 모델은 월말 보고에는 맞을 수 있지만, 동일한 공유 개념을 실시간 승인, 일중 한도 모니터링, 규제 보고 기준시점 등으로 확장할
+      때 snapshot type, calculation frequency, included/excluded exposure
+      criteria를 구분하지 못합니다. 새 시간성 요구가 생기면 ExposureAggregate의 의미 자체를 바꾸거나 별도 유사
+      개념을 추가해야 합니다.
+    how_to_fix: ExposureAggregate에 aggregation_basis 또는 snapshot_kind,
+      calculated_at, effective_as_of, inclusion_policy, freshness_status를 추가하고,
+      Limit utilization rule이 어떤 aggregate version/snapshot을 요구하는지 명시하십시오. 월말
+      배치는 하나의 snapshot kind로 남기고 일중 산정은 같은 개념의 별도 인스턴스로 확장하게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 익스포저·한도 산정 기준의 시간적 확장성
+      failure_condition: 월말 배치 외의 일중 승인, 실시간 한도 소진율, 다른 보고 기준시점이 필요해질 때 현재
+        ExposureAggregate가 한 의미만 담는다.
+      impact: 기존 aggregate 의미를 바꾸면 보고 연속성이 깨지고, 별도 개념을 임의로 추가하면 리스크 엔진과 보고 시스템 간 소진율
+        기준이 갈라질 수 있다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-71
+        - credit-risk-ontology.yaml:89
+    causal_path:
+      root_cause_candidate: 집계값의 시간 기준과 산정 방식 변형을 속성화하지 않고 월말 배치 저장이라는 단일 실현에 고정한 모델링
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: ExposureAggregate는 차주 단위 총익스포저를 모든 Exposure.amount의 합으로 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-65
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 같은 개념의 total_amount는 월말 배치로 계산해 저장되며 일중 신규 여신은 다음 배치까지 미반영된다고 제한한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:68-71
+        - cause_id: evolution-candidate-003.cause-003
+          claim: Limit 소진율은 ExposureAggregate.total_amount를 직접 사용하므로, 월말 배치 집계의 시간성 제한이 한도
+            산정 규칙으로 전파된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:89
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 월말 배치가 아닌 산정 요구가 추가되면 기존 ExposureAggregate 의미 또는 한도 산정 규칙을 수정해야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-71
+            - credit-risk-ontology.yaml:89
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았습니다.
+  - 검토는 제공된 단일 온톨로지 파일과 review target profile 범위 안에서 수행했습니다.
+  - 여신 리스크 분류체계는 시간이 지나며 상품 유형, 담보 유형, 등급 스케일, 산정 기준시점이 변경될 수 있다는 일반적인 확장 시나리오를
+    가정했습니다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,239 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml / entities.RiskAppetite
+    evidence_anchor: Embedded Materialized Input, `entities.RiskAppetite` definition
+      and attributes; `relations` list
+    claim: RiskAppetite is structurally disconnected from the exposure aggregate it
+      governs.
+    what: "`RiskAppetite` defines a threshold and compliance status for
+      `ExposureAggregate` breaches, but the ontology has no relation linking
+      `RiskAppetite` to `ExposureAggregate`, `Borrower`, `Limit`, segment,
+      product, or currency. It is therefore not reachable from the operational
+      credit-risk graph except by prose in its definition."
+    why: The definition says `ExposureAggregate` exceeding `RiskAppetite` determines
+      a violation, yet the relation set only connects `Borrower` to `Exposure`,
+      `RiskRating`, and `Limit`, and connects `ExposureAggregate` to `Borrower`.
+      No edge connects `RiskAppetite` to the aggregate or the population to
+      which the appetite applies. For a shared concept authority between a risk
+      engine and reporting system, this breaks the required structural path from
+      measured exposure to the governing appetite threshold, making compliance
+      status hard to compute, audit, or consistently report from the ontology
+      graph itself.
+    how_to_fix: "Add an explicit governing relation such as `{ from: RiskAppetite,
+      to: ExposureAggregate, kind: governs }` or `{ from: ExposureAggregate, to:
+      RiskAppetite, kind: tested_against }`, and add any required scoping
+      attributes or relations for borrower segment, product type, currency, and
+      effective period if appetite thresholds vary by those dimensions."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is intended as the shared concept authority for a
+        risk engine and reporting system over exposures, ratings, limits, and
+        collateral.
+      failure_condition: When computing or reporting `RiskAppetite.compliance_status`,
+        the graph lacks a structural edge from `ExposureAggregate` to the
+        applicable `RiskAppetite` threshold despite the definition depending on
+        that comparison.
+      impact: Consumers must infer the missing connection from prose or external
+        implementation choices, weakening the ontology as a shared operational
+        contract and increasing inconsistency between engine breach logic and
+        reports.
+      evidence_refs:
+        - "Embedded Materialized Input: `RiskAppetite` definition states
+          `ExposureAggregate` exceeding `RiskAppetite` is a violation"
+        - "Embedded Materialized Input: `relations` contains no relation
+          involving `RiskAppetite`"
+    causal_path:
+      root_cause_candidate: The ontology introduces `RiskAppetite` as a governed
+        threshold concept but omits any formal relation connecting it to the
+        aggregate exposure concept it evaluates.
+      root_cause_step_id: structure-candidate-001.cause-004
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`RiskAppetite` is present as an entity with threshold and compliance
+            status attributes."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input:
+              `entities.RiskAppetite.attributes.threshold` and
+              `compliance_status`"
+        - cause_id: structure-candidate-001.cause-002
+          claim: The only stated breach logic depends on comparing `ExposureAggregate`
+            with `RiskAppetite`.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `entities.RiskAppetite.definition`"
+        - cause_id: structure-candidate-001.cause-003
+          claim: The relation list does not include any edge from or to `RiskAppetite`.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `relations` list"
+        - cause_id: structure-candidate-001.cause-004
+          claim: As a result, appetite compliance cannot be traversed or validated through
+            the ontology's formal structure.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `relations` list"
+            - "Embedded Materialized Input: `RiskAppetite` definition"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml / entities.Collateral and relations Exposure
+      secured_by Collateral
+    evidence_anchor: "Embedded Materialized Input, `entities.Collateral.is_a:
+      Exposure`; `relations` item `{ from: Exposure, to: Collateral, kind:
+      secured_by }`"
+    claim: Collateral is modeled both as a subtype of Exposure and as a secured
+      asset related to Exposure.
+    what: "`Collateral` is declared with `is_a: Exposure`, while the relations also
+      state `Exposure secured_by Collateral`. This gives `Collateral` two
+      incompatible structural roles: it is simultaneously an exposure and the
+      asset that secures an exposure."
+    why: "The ontology definition describes `Collateral` as an asset securing an
+      exposure, and its attributes are collateral-specific (`collateral_id`,
+      `collateral_type`, `appraised_value`, `appraised_at`). The `is_a:
+      Exposure` edge makes collateral inherit or occupy the exposure
+      classification hierarchy, while the `secured_by` relation treats it as a
+      separate connected entity. That structural mismatch can create invalid
+      graph paths, such as collateral being counted or classified as an
+      exposure, while also serving as security for exposure."
+    how_to_fix: "Remove `is_a: Exposure` from `Collateral`. Keep `Collateral` as a
+      separate entity connected through `Exposure secured_by Collateral`, or
+      introduce a broader parent concept only if both exposure and collateral
+      truly share a common supertype."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is intended to define shared concepts for
+        exposures and collateral used by risk engines and reporting systems.
+      failure_condition: When consumers traverse hierarchy or aggregate exposure
+        concepts, `Collateral` can be treated as a kind of `Exposure` even
+        though the relation model treats collateral as a separate securing
+        asset.
+      impact: This weakens structural integrity of exposure and collateral categories
+        and can lead to incorrect inclusion of collateral records in
+        exposure-oriented processing or reports.
+      evidence_refs:
+        - "Embedded Materialized Input: `Collateral.definition` says it is an
+          asset securing an exposure"
+        - "Embedded Materialized Input: `Collateral.is_a: Exposure`"
+        - "Embedded Materialized Input: relation `{ from: Exposure, to:
+          Collateral, kind: secured_by }`"
+    causal_path:
+      root_cause_candidate: The ontology uses `is_a` where an association relation is
+        already the appropriate structural connection.
+      root_cause_step_id: structure-candidate-002.cause-004
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: "`Collateral` is declared as a subtype of `Exposure`."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `entities.Collateral.is_a: Exposure`"
+        - cause_id: structure-candidate-002.cause-002
+          claim: "`Collateral` is also connected as the target of `Exposure secured_by
+            Collateral`."
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `relations` item `{ from: Exposure,
+              to: Collateral, kind: secured_by }`"
+        - cause_id: structure-candidate-002.cause-003
+          claim: The collateral definition and attributes describe an asset, not a credit
+            exposure.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `Collateral.definition`"
+            - "Embedded Materialized Input: `Collateral.attributes`"
+        - cause_id: structure-candidate-002.cause-004
+          claim: The resulting structure permits consumers to interpret collateral as both
+            exposure subtype and exposure security, creating ambiguous traversal
+            and aggregation behavior.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `entities.Collateral.is_a: Exposure`"
+            - "Embedded Materialized Input: `relations` item `{ from: Exposure,
+              to: Collateral, kind: secured_by }`"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: credit-risk-ontology.yaml / classification_rules deriving
+      Exposure.risk_grade from RiskRating.grade
+    evidence_anchor: Embedded Materialized Input, `classification_rules[0]`; `relations` list
+    claim: The stated derivation from RiskRating.grade to Exposure.risk_grade has no
+      structural path from RiskRating to Exposure.
+    what: A classification rule says `Exposure.risk_grade` is derived from
+      `RiskRating.grade`, but the relation model connects both `Exposure` and
+      `RiskRating` separately to `Borrower`; it does not connect `RiskRating` to
+      `Exposure` or define a formal path for applying a borrower-level rating to
+      one or more exposure-level grades.
+    why: The available graph has `Borrower has_many Exposure` and `Borrower rated_by
+      RiskRating`. That provides a common borrower node but not the required
+      derivation relation or cardinality from a specific rating record to a
+      specific exposure grade. Because the rule also allows report-team manual
+      adjustment, the missing structural link makes it unclear which rating is
+      the source for which exposure grade and whether adjusted grades remain
+      traceable.
+    how_to_fix: "Add an explicit derivation relation such as `{ from: Exposure, to:
+      RiskRating, kind: grade_derived_from }`, or define a derivation object
+      that links `Exposure.risk_grade`, source `RiskRating.grade`, adjustment
+      authority, and effective/as-of time."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is meant to provide a shared concept basis for
+        risk-engine classification and reporting use of grades.
+      failure_condition: When deriving or auditing `Exposure.risk_grade`, the ontology
+        lacks a formal relation from exposure-level grade to the source
+        risk-rating concept named by the rule.
+      impact: Risk engine and reporting consumers may derive, override, or trace
+        exposure grades differently because the formal structure does not encode
+        the dependency stated in the classification rule.
+      evidence_refs:
+        - "Embedded Materialized Input: classification rule
+          `Exposure.risk_grade` derived from `RiskRating.grade`"
+        - "Embedded Materialized Input: `relations` includes
+          Borrower-to-Exposure and Borrower-to-RiskRating but no
+          Exposure-to-RiskRating relation"
+    causal_path:
+      root_cause_candidate: The ontology states a cross-entity derivation rule without
+        adding the relation needed to represent that dependency in the graph.
+      root_cause_step_id: structure-candidate-003.cause-004
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: "`Exposure.risk_grade` and `RiskRating.grade` are separate attributes on
+            separate entities."
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: `Exposure.attributes.risk_grade`"
+            - "Embedded Materialized Input: `RiskRating.attributes.grade`"
+        - cause_id: structure-candidate-003.cause-002
+          claim: A classification rule says the exposure grade is derived from the risk
+            rating grade.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `classification_rules[0]`"
+        - cause_id: structure-candidate-003.cause-003
+          claim: The relation list lacks a direct derivation or source relation between
+            `Exposure` and `RiskRating`.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `relations` list"
+        - cause_id: structure-candidate-003.cause-004
+          claim: The only structural connection is through `Borrower`, which does not
+            identify the source rating record or derivation relationship for
+            each exposure grade.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: `relations` items `{ from: Borrower,
+              to: Exposure, kind: has_many }` and `{ from: Borrower, to:
+              RiskRating, kind: rated_by }`"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 구조 lens 범위에 맞춰 도메인 완전성보다는 선언된 요소 간의 연결 완결성, 고아 요소, 누락된 관계, 계층/관계 구조 불일치만
+    판단했습니다.
+  - "`relations` 목록과 명시적 `is_a`를 온톨로지의 구조적 권위로 보았고, 자유문장 정의와
+    classification_rules는 관계가 존재해야 하는 설계 의도를 보여주는 증거로 사용했습니다."
+validation:
+  unaddressable_candidates: []

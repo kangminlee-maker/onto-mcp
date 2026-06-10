@@ -1,0 +1,161 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Axiology, coverage, evolution, and semantics accept the broad
+      root that grade, limit, and FX authority/conversion policies are not
+      closed inside the ontology, while logic and structure narrow the root to
+      deterministic precedence/conflict handling and explicit grade
+      derivation/adjustment structure. Deliberation must decide whether the
+      issue remains a broad authority-policy defect or should be narrowed to the
+      directly evidenced grade derivation and precedence gap.
+    resolution_question: Should issue-001 be resolved as a broad canonical
+      authority/conversion-policy issue covering grade, limit, and FX, or
+      narrowed to the evidenced grade precedence, derivation, and
+      reporting-adjustment structure needed for deterministic outputs?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.evolution
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: Coverage, axiology, and evolution support a full
+      history/effective-period/versioning root for rating reconstruction, while
+      logic and semantics narrow the concern to basis-date rating selection or
+      semantic time qualification. Semantics also lowers severity, creating a
+      material question about whether audit reconstruction failure requires the
+      full RatingHistory/Snapshot remedy at high severity.
+    resolution_question: Is the material root the absence of full rating
+      history/effective-period/version concepts needed for audit reconstruction,
+      or a narrower absence of time-qualified rating selection semantics with
+      lower severity?
+  - issue_id: issue-004
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: Coverage, axiology, and evolution treat missing
+      actor/time/reason/evidence/before-after entities for manual adjustments
+      and approvals as a standalone high-severity audit/control defect. Logic
+      and semantics treat it as surface or adjacent provenance support rather
+      than their root concern, with logic lowering severity. Deliberation must
+      decide whether this is an independent material issue or only supporting
+      scope for authority and semantic-adjustment issues.
+    resolution_question: Should missing control-act provenance for manual
+      adjustments, review inputs, and approvals remain a standalone
+      high-severity issue, or be scoped as a supporting provenance gap under
+      adjacent grade authority and semantic adjustment issues?
+  - issue_id: issue-006
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - coverage
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+    conflict_summary: Evolution, axiology, and coverage support the broad root that
+      closed enums should become lifecycle-aware code sets. Logic narrows the
+      root to deterministic unknown/extension handling and valid-period
+      behavior, while semantics treats it as surface-only. Deliberation must
+      decide how broad the required concept promotion should be.
+    resolution_question: Does issue-006 require promoting core closed enums into
+      full lifecycle code-set concepts, or is the material defect limited to
+      unknown/extension handling and validity rules for new classification
+      values?
+  - issue_id: issue-007
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - logic
+      - axiology
+      - coverage
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: Semantics, logic, and axiology treat Collateral as a subtype
+      of Exposure as a material type/subsumption error. Coverage, evolution, and
+      structure agree only as surface or adjacent scope, and evolution lowers
+      severity. Deliberation must decide whether the surface-only positions
+      affect issue admission or only lens ownership.
+    resolution_question: Is the Collateral-is-a-Exposure modeling defect a
+      standalone medium material issue, or should it be treated as a surface
+      structural symptom with reduced severity or narrower ownership?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the stale month-end snapshot/current total
+      exposure root and remedy; semantics lowers severity but still supports the
+      same root, and structure's surface-only note is an adjacent
+      graph-verification concern rather than a material disagreement requiring
+      deliberation.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: The projection has no runtime conflict signals. Supporting lenses agree
+      this is a medium coverage/evolution boundary issue, while non-applicable
+      lenses do not assert competing material claims.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: All applicable lenses support separating or explicitly authorizing
+      submitted versus calculated LTV. Evolution narrows the framing to
+      lifecycle/formula authority, but that is compatible with the proposed
+      remedy and does not create a material conflict.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: The projection has no runtime conflict signals. All lenses support
+      separating RiskAppetite policy from a time-bound assessment linked to
+      ExposureAggregate and as_of.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: All applicable lenses support adding explicit derivation lineage from
+      RiskRating.grade to Exposure.risk_grade. Semantics narrows the framing to
+      grade meaning distinctions, but that is compatible with the structural
+      dependency remedy and does not require controlled deliberation.

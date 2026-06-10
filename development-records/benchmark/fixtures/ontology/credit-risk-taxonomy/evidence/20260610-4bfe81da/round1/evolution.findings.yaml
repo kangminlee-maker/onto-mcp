@@ -1,0 +1,231 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml rating concepts and classification_rules
+    evidence_anchor: Borrower.internal_rating note; RiskRating.grade values/note;
+      Exposure.risk_grade values/note; notes[0]; classification_rules[0]
+    claim: Three rating scales are left as consumer-local mappings, so rating-scale
+      evolution requires coordinated changes outside the ontology.
+    what: The ontology defines Borrower.internal_rating as a 1-10 scale,
+      RiskRating.grade as R1-R5, and Exposure.risk_grade as AAA-CCC, then states
+      that conversions are performed by each consuming system and that the
+      RiskRating mapping table lives in the risk-team wiki. This means a new
+      grade, scale consolidation, or changed mapping cannot be added once in the
+      shared concept authority.
+    why: The stated purpose is to be a shared concept authority for the risk engine
+      and reporting systems, but the conversion authority is explicitly outside
+      the ontology and duplicated across consumers. When rating scales change,
+      historical continuity and engine/report consistency depend on each
+      consumer updating its private mapping at the same time and in the same
+      way.
+    how_to_fix: Add a canonical RatingScale/RatingGrade/RatingMapping model in the
+      ontology with source and target scales, effective_from/effective_to,
+      version, owner, and derivation/override precedence. Make
+      Exposure.risk_grade a governed projection from this mapping rather than a
+      separately maintained closed enum with consumer-side conversion.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Risk engine and reporting system share a stable concept basis
+        for ratings and classification.
+      failure_condition: A grade scale is revised, a new grade is introduced, or
+        historical mappings need replay across engine and reports.
+      impact: The shared ontology no longer provides the controlling mapping, so
+        consumers can diverge and historical reports may not be reproducible
+        under the same conceptual rules.
+      evidence_refs:
+        - "Borrower.internal_rating note: internal 1~10 numeric grade"
+        - "RiskRating.grade values: R1-R5 and note referencing risk-team wiki
+          mapping"
+        - "Exposure.risk_grade values: AAA-CCC and note that reporting team uses
+          it"
+        - "notes[0]: three scales coexist and each consumer performs conversion"
+        - "classification_rules[0]: Exposure.risk_grade is derived from
+          RiskRating.grade but may be manually adjusted by reporting"
+    causal_path:
+      root_cause_candidate: Rating scale mapping is not modeled as a canonical
+        versioned ontology concept.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: The target defines three independent rating representations with
+            different value spaces.
+          relation_to_previous: null
+          evidence_refs:
+            - Borrower.internal_rating note
+            - RiskRating.grade values
+            - Exposure.risk_grade values
+        - cause_id: evolution-candidate-001.cause-002
+          claim: The ontology delegates conversion to external or consumer-local
+            authorities.
+          relation_to_previous: causes
+          evidence_refs:
+            - "RiskRating.grade note: mapping table is in risk-team wiki"
+            - "notes[0]: conversion is performed by each consuming system"
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Rating changes therefore require multiple consumer updates rather than
+            extending one shared concept model.
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[0]
+            - classification_rules[0]
+      unresolved_beyond_evidence: The packet does not include the external wiki or
+        consumer implementations, so the exact number of divergent mappings is
+        outside boundary.
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml enum-based classification attributes
+    evidence_anchor: Borrower.segment values; Exposure.product_type values;
+      Exposure.risk_grade values; Collateral.collateral_type values;
+      RiskRating.grade values; RiskAppetite.compliance_status values
+    claim: Closed inline enums make new segments, products, collateral classes, and
+      grade/status values require schema edits instead of controlled extension.
+    what: Core classification axes are encoded as fixed value lists directly inside
+      entity attributes. The ontology does not define a vocabulary concept with
+      versioning, lifecycle status, aliases, jurisdiction/source, or an
+      unknown/other handling rule for values not yet recognized by the taxonomy.
+    why: For a risk taxonomy expected to support future products and reporting
+      changes, fixed inline enums are brittle. Adding a new product_type or
+      collateral_type changes the ontology shape and likely requires coordinated
+      parser/report updates; unrecognized values have no declared acceptance,
+      quarantine, or mapping behavior.
+    how_to_fix: Promote classification value sets into governed vocabulary/code-list
+      concepts with ids, labels, valid_from/valid_to, status, parent category,
+      aliases, and explicit unknown/unmapped handling. Keep attribute types as
+      references to those vocabularies so additions are data extensions rather
+      than schema rewrites.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Classification taxonomy remains extensible as credit products,
+        collateral types, borrower segments, and reporting states evolve.
+      failure_condition: A new product, collateral type, borrower segment, grade, or
+        compliance status must be onboarded before all consumers are redeployed.
+      impact: The taxonomy cannot absorb common business extensions through controlled
+        data updates; consumers face invalid-input behavior or synchronized
+        schema changes.
+      evidence_refs:
+        - "Borrower.segment values: retail, sme, corporate"
+        - "Exposure.product_type values: term_loan, revolving, guarantee"
+        - "Collateral.collateral_type values: real_estate, deposit, securities"
+        - "RiskRating.grade values: R1-R5"
+        - "RiskAppetite.compliance_status values: compliant, breached"
+    causal_path:
+      root_cause_candidate: Classification axes are represented as closed
+        attribute-local enums rather than versioned extensible vocabularies.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Multiple core classification attributes are closed enum lists embedded in
+            entity definitions.
+          relation_to_previous: null
+          evidence_refs:
+            - Borrower.segment values
+            - Exposure.product_type values
+            - Collateral.collateral_type values
+            - RiskRating.grade values
+            - RiskAppetite.compliance_status values
+        - cause_id: evolution-candidate-002.cause-002
+          claim: No extension metadata or invalid-input behavior is declared for values
+            outside those lists.
+          relation_to_previous: causes
+          evidence_refs:
+            - All listed enum definitions omit validity windows, lifecycle
+              status, aliasing, and unmapped handling
+        - cause_id: evolution-candidate-002.cause-003
+          claim: New classification values require ontology/schema changes or
+            consumer-specific bypass behavior.
+          relation_to_previous: causes
+          evidence_refs:
+            - Review target profile goal includes invalid_input_behavior
+            - Inline enum definitions listed above
+      unresolved_beyond_evidence: The boundary does not include runtime validators, so
+        actual rejection behavior is inferred from the visible enum contract.
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml exposure aggregation and limit utilization rules
+    evidence_anchor: Exposure.amount attribute; Limit.currency attribute;
+      ExposureAggregate.total_amount/as_of note; classification_rules[1]
+    claim: Currency and time basis are not modeled as shared, versioned concepts, so
+      multi-currency or intraday risk evolution breaks continuity across
+      systems.
+    what: Exposure.amount has no currency or valuation timestamp, while Limit has
+      currency. ExposureAggregate.total_amount is stored from a month-end batch
+      and omits intraday loans until the next batch. The utilization rule says
+      each system uses its own daily FX table when currencies differ.
+    why: If reporting frequency, FX source, or multi-currency exposure handling
+      changes, there is no canonical as-of, currency, or FX-rate authority for
+      replaying the same calculation across engine and reports. The rule
+      therefore evolves by external system behavior rather than by extending the
+      ontology.
+    how_to_fix: Model monetary amounts as a Money/Valuation concept with amount,
+      currency, value_as_of, source system, and FX conversion basis. Add an
+      FXRate/ConversionPolicy reference with effective dating and make
+      ExposureAggregate declare calculation_as_of, included_event_cutoff, and
+      refresh cadence.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Risk engine and reports share reproducible limit-utilization
+        and aggregate-exposure concepts over time.
+      failure_condition: Intraday exposures, multi-currency portfolios, or changed FX
+        providers/rates must be handled consistently across systems or
+        historical reports replayed.
+      impact: Different systems can compute different utilization values for the same
+        borrower because the ontology delegates conversion to local FX tables
+        and stores stale aggregates without a shared cutoff contract.
+      evidence_refs:
+        - Exposure.amount attribute has only type number and note '익스포저 금액'
+        - Limit.currency attribute exists only on Limit
+        - "ExposureAggregate.total_amount note: month-end batch; intraday new
+          loans omitted until next batch"
+        - "classification_rules[1]: different currencies use each system's daily
+          FX table"
+    causal_path:
+      root_cause_candidate: The ontology lacks canonical temporal and
+        currency-conversion concepts for exposure amounts and utilization
+        calculations.
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Exposure monetary value is modeled as a bare number without currency or
+            value timestamp.
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure.amount attribute
+        - cause_id: evolution-candidate-003.cause-002
+          claim: Aggregation freshness is month-end batch based and explicitly excludes
+            intraday new exposures until the next batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - ExposureAggregate.total_amount note
+            - ExposureAggregate.as_of attribute
+        - cause_id: evolution-candidate-003.cause-003
+          claim: Cross-currency utilization delegates FX conversion to each system's own
+            daily table.
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[1]
+        - cause_id: evolution-candidate-003.cause-004
+          claim: Changes in frequency or FX authority cannot be represented as a versioned
+            ontology extension, weakening continuity between engine and report
+            calculations.
+          relation_to_previous: causes
+          evidence_refs:
+            - Exposure.amount attribute
+            - ExposureAggregate.total_amount note
+            - classification_rules[1]
+      unresolved_beyond_evidence: The packet does not include actual FX table
+        definitions or batch job contracts, so this finding is limited to the
+        ontology's declared concept surface.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific extension_cases document was
+    used.
+  - The ontology is intended to act as a shared concept authority between a risk
+    engine and reporting systems, as stated in the materialized input header.
+  - Inline enum declarations are treated as caller-facing configuration
+    contracts under the review target profile.
+validation:
+  unaddressable_candidates: []
