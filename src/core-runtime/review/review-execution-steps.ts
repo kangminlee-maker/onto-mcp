@@ -1242,7 +1242,7 @@ export async function reviewRound(
  * as an in-progress proxy — the enum has no explicit in-progress); per-unit
  * results are merged in by {@link mergeUnitResultIntoExecutionResult}.
  */
-function buildInitialExecutionResultScaffold(
+export function buildInitialExecutionResultScaffold(
   plan: ReviewExecutionPlan,
 ): ReviewExecutionResultArtifact {
   const plannedLensIds = plan.lens_execution_seats.map((seat) => seat.lens_id);

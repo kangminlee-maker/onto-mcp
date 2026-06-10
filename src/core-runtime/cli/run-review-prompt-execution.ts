@@ -83,7 +83,17 @@ import {
 } from "../review/lens-sidecar-ledger.js";
 import type { ReviewExecutionProfile } from "../review/review-execution-profile.js";
 import { effectiveReviewUnitLlmRef } from "../review/review-execution-profile.js";
-import type { ReviewContinuationPlan } from "../review/continuation-plan.js";
+import type {
+  ReviewContinuationPlan,
+  ReviewContinuationUnit,
+} from "../review/continuation-plan.js";
+import {
+  buildInitialExecutionResultScaffold,
+  computeReviewFrontier,
+  mergeUnitResultIntoExecutionResult,
+  validateUnitSeatToResult,
+} from "../review/review-execution-steps.js";
+import { isTrustedLedgerUnit } from "../pipeline-execution-ledger.js";
 import {
   buildReviewExecutionRoute,
   buildReviewRuntimeRouteArtifactProjection,
@@ -100,6 +110,7 @@ import {
   validateDeliberationResolutionObject,
   validateIssueDeliberationResponseObject,
   type IssueDeliberationResponseArtifact,
+  type IssueScopedDeliberationWorkItem,
 } from "../review/controlled-lens-deliberation.js";
 import {
   computeLensCompletionBarrier,
@@ -3299,6 +3310,11 @@ async function resetExecutionOutputs(
 ): Promise<void> {
   const pathsToClear = [
     executionPlan.execution_result_path,
+    // The run manifest describes the run being discarded; leaving it would
+    // feed stale unit hashes to the frontier ledger on the rerun (fresh
+    // seats vs old manifest hashes -> untrusted lens units -> the post-lens
+    // router has nothing to route). It is rewritten at the final batch write.
+    path.join(executionPlan.session_root, "review-run-manifest.yaml"),
     degradationSummaryPathForSession(executionPlan.session_root),
     executionPlan.error_log_path,
     executionPlan.synthesis_output_path,
@@ -3780,6 +3796,467 @@ export async function unitOutcomeWithNestedFirstAttempt(args: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Unit-execution layer (4f F2) — per-unit execution functions extracted from
+// the stage worker closures. Each owns the full A semantics for ONE unit:
+// dispatch (nested first-attempt + flat retry budget), stage validation, and
+// unavailable-completion fallback. Stage sequencing still calls them from the
+// existing worker pools; the frontier loop (F3) becomes their second caller
+// with kind context derived from durable state instead of stage locals.
+// ---------------------------------------------------------------------------
+
+/** Shared per-unit execution inputs (stage- and frontier-agnostic). */
+export interface RuntimeUnitExecutionContext {
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  retryPolicy: ReviewRuntimeRetryPolicy;
+  unitTimeoutMs?: number | undefined;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+}
+
+/**
+ * Issue-stance unit: dispatch + on-disk stance validation. A validation
+ * failure is terminal for the unit (flat semantics: no retry on stage
+ * validation), recorded as an output-contract failure with the seat removed.
+ */
+export async function executeIssueStanceUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  participatingLensIds: string[];
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<ExecutionOutcome> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.issueArtifactMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    return outcome;
+  }
+  const lensId = dispatch.unit_id.slice("issue-stance:".length);
+  try {
+    await validateIssueStanceResponseOnDisk({
+      executionPlan: ctx.executionPlan,
+      projectRoot: ctx.projectRoot,
+      responsePath: dispatch.output_path,
+      lensId,
+      participatingLensIds: args.participatingLensIds,
+    });
+    return outcome;
+  } catch (error) {
+    const failure: ExecutionFailure = {
+      unit_id: dispatch.unit_id,
+      unit_kind: dispatch.unit_kind,
+      packet_path: dispatch.packet_path,
+      output_path: dispatch.output_path,
+      message: error instanceof Error ? error.message : String(error),
+      failure_kind: failureKindFromError(error),
+    };
+    await removeFileIfExists(dispatch.output_path);
+    await appendExecutionFailure(
+      ctx.executionPlan.error_log_path,
+      failure,
+      ctx.executionPlan.effective_boundary_state,
+    );
+    return {
+      ...outcome,
+      success: false as const,
+      completedAtMs: Date.now(),
+      outputBytes: await fileSizeIfPresent(dispatch.output_path),
+      failure,
+    };
+  }
+}
+
+/**
+ * Runtime fallback for an unavailable per-issue deliberation participant:
+ * preserve the source stance and record an unavailable-participant response
+ * at the unit's seat. Null when completion itself fails (caller keeps the
+ * original failed outcome).
+ */
+export async function completeUnavailableDeliberationResponseUnit(args: {
+  executionPlan: ReviewExecutionPlan;
+  dispatch: ExecutionDispatchResult;
+  workItem: IssueScopedDeliberationWorkItem;
+  reason: string;
+  failedOutcome?: ExecutionOutcome | undefined;
+}): Promise<ExecutionOutcome | null> {
+  const { executionPlan, dispatch, workItem, reason, failedOutcome } = args;
+  try {
+    const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
+      await fs.readFile(dispatch.packet_path, "utf8"),
+    ).allowed_evidence_refs;
+    const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
+      sessionId: executionPlan.session_id,
+      workItem,
+      reason,
+      allowedEvidenceRefs,
+    });
+    await writeYamlDocument(dispatch.output_path, artifact);
+    validateIssueDeliberationResponseObject({
+      parsed: artifact,
+      sessionId: executionPlan.session_id,
+      issueId: workItem.issue_id,
+      lensId: workItem.lens_id,
+      allowedEvidenceRefs,
+    });
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue deliberation runtime completion",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        "completion_rule: preserve source stance; record unavailable participant response",
+      ],
+    );
+    return {
+      dispatch,
+      success: true,
+      startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+      completedAtMs: Date.now(),
+      attemptCount: failedOutcome?.attemptCount ?? 1,
+      packetBytes:
+        failedOutcome?.packetBytes ?? (await fileSizeIfPresent(dispatch.packet_path)),
+      outputBytes: await fileSizeIfPresent(dispatch.output_path),
+      ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+      ...(failedOutcome?.artifactGenerationRealization !== undefined
+        ? {
+            artifactGenerationRealization:
+              failedOutcome.artifactGenerationRealization,
+          }
+        : {}),
+      ...(failedOutcome?.semanticQualityEvidence !== undefined
+        ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+        : {}),
+    };
+  } catch (completionError) {
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue deliberation runtime completion failed",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+      ],
+    );
+    return null;
+  }
+}
+
+/**
+ * Per-issue deliberation unit: dispatch; an executor failure falls back to
+ * the runtime unavailable-completion (degraded-but-progressing semantics).
+ */
+export async function executeDeliberationResponseUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  workItem: IssueScopedDeliberationWorkItem;
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<ExecutionOutcome> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.deliberationMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    return (
+      (await completeUnavailableDeliberationResponseUnit({
+        executionPlan: ctx.executionPlan,
+        dispatch,
+        workItem: args.workItem,
+        reason: outcome.failure?.message ?? "unknown executor failure",
+        failedOutcome: outcome,
+      })) ?? outcome
+    );
+  }
+  return outcome;
+}
+
+/**
+ * Runtime fallback for an unavailable per-issue synthesis worker: a
+ * conservative projection from synthesis-work-items.yaml written at the
+ * unit's seat. Null when completion itself fails.
+ */
+export async function completeUnavailableSynthesisResponseUnit(args: {
+  executionPlan: ReviewExecutionPlan;
+  dispatch: ExecutionDispatchResult;
+  workItem: ReviewSynthesisWorkItem;
+  sourceWorkItemsRef: string;
+  reason: string;
+  failedOutcome?: ExecutionOutcome | undefined;
+}): Promise<{
+  outcome: ExecutionOutcome;
+  response: IssueSynthesisResponseArtifact;
+} | null> {
+  const { executionPlan, dispatch, workItem, reason, failedOutcome } = args;
+  try {
+    const response = buildRuntimeIssueSynthesisUnavailableResponse({
+      sessionId: executionPlan.session_id,
+      workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason,
+    });
+    await writeYamlDocument(dispatch.output_path, response);
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue synthesis runtime completion",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        "completion_rule: conservative projection from synthesis-work-items.yaml",
+      ],
+    );
+    return {
+      outcome: {
+        dispatch,
+        success: true,
+        startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
+        completedAtMs: Date.now(),
+        attemptCount: failedOutcome?.attemptCount ?? 1,
+        packetBytes:
+          failedOutcome?.packetBytes ??
+          (await fileSizeIfPresent(dispatch.packet_path)),
+        outputBytes: await fileSizeIfPresent(dispatch.output_path),
+        ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
+        ...(failedOutcome?.artifactGenerationRealization !== undefined
+          ? {
+              artifactGenerationRealization:
+                failedOutcome.artifactGenerationRealization,
+            }
+          : {}),
+        ...(failedOutcome?.semanticQualityEvidence !== undefined
+          ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
+          : {}),
+      },
+      response,
+    };
+  } catch (completionError) {
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      "runner issue synthesis runtime completion failed",
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `reason: ${reason.slice(0, 500)}`,
+        `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
+      ],
+    );
+    return null;
+  }
+}
+
+/**
+ * Per-issue synthesis unit: dispatch + on-disk response validation; both
+ * executor failure and validation failure fall back to the runtime
+ * unavailable-completion. `response` is null only when the unit terminally
+ * failed (no fallback possible).
+ */
+export async function executeSynthesisResponseUnit(args: {
+  ctx: RuntimeUnitExecutionContext;
+  dispatch: ExecutionDispatchResult;
+  workItem: ReviewSynthesisWorkItem;
+  sourceWorkItemsRef: string;
+  nestedBatch?: NestedStageBatchAttempt | undefined;
+}): Promise<{
+  outcome: ExecutionOutcome;
+  response: IssueSynthesisResponseArtifact | null;
+}> {
+  const { ctx, dispatch } = args;
+  const outcome = await unitOutcomeWithNestedFirstAttempt({
+    batch: args.nestedBatch,
+    flat: {
+      projectRoot: ctx.projectRoot,
+      sessionRoot: ctx.sessionRoot,
+      executionPlan: ctx.executionPlan,
+      executorConfig: ctx.executorConfig,
+      dispatch,
+      maxRetries: ctx.retryPolicy.synthesisMaxRetries,
+      retryInitialDelayMs: ctx.retryPolicy.retryInitialDelayMs,
+      ...(ctx.unitTimeoutMs !== undefined
+        ? { unitTimeoutMs: ctx.unitTimeoutMs }
+        : {}),
+      reviewExecutionProfile: ctx.reviewExecutionProfile,
+    },
+  });
+  if (!outcome.success) {
+    const completed = await completeUnavailableSynthesisResponseUnit({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason: outcome.failure?.message ?? "unknown synthesis worker failure",
+      failedOutcome: outcome,
+    });
+    return completed ?? { outcome, response: null };
+  }
+  try {
+    const response = await validateIssueSynthesisResponseOnDisk({
+      responsePath: dispatch.output_path,
+      sessionId: ctx.executionPlan.session_id,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+    });
+    return { outcome, response };
+  } catch (error) {
+    const failedOutcome = await synthesisValidationFailureOutcome({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      priorOutcome: outcome,
+      error,
+    });
+    const completed = await completeUnavailableSynthesisResponseUnit({
+      executionPlan: ctx.executionPlan,
+      dispatch,
+      workItem: args.workItem,
+      sourceWorkItemsRef: args.sourceWorkItemsRef,
+      reason: errorMessage(error),
+      failedOutcome,
+    });
+    return completed ?? { outcome: failedOutcome, response: null };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4f F3 — frontier plumbing for the A loop. The shared ledger/frontier
+// (review-execution-steps) needs engine-shaped execution-result entries on
+// disk to advance; these helpers seed/merge them mid-run. They are ledger
+// bookkeeping ONLY: every halt/final path still batch-writes A's enriched
+// artifact via writeExecutionResultArtifact, overwriting the mid-run state.
+// ---------------------------------------------------------------------------
+
+/**
+ * Merge one A outcome into the on-disk execution-result in engine shape so
+ * the frontier can trust/advance past it. Successful seats go through the
+ * same seat-level gate B uses (validateUnitSeatToResult — hashes included,
+ * which ledger trust requires); failures merge as failed results.
+ */
+async function mergeOutcomeIntoFrontierLedger(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  outcome: ExecutionOutcome;
+  base?: ReviewExecutionResultArtifact | undefined;
+}): Promise<void> {
+  const { dispatch } = args.outcome;
+  if (args.outcome.success) {
+    const unit: ReviewContinuationUnit = {
+      unitId: dispatch.unit_id,
+      unitKind: dispatch.unit_kind as ReviewContinuationUnit["unitKind"],
+      ...(dispatch.unit_kind === "lens" ? { lensId: dispatch.unit_id } : {}),
+      packetPath: dispatch.packet_path,
+      outputPath: dispatch.output_path,
+      priorStatus: "missing",
+      dispatchDecision: "run",
+      reason: "runtime loop seed (4f): merge an executed unit into the frontier ledger",
+      owner: "host_llm",
+    };
+    const result = await validateUnitSeatToResult({
+      sessionRoot: args.sessionRoot,
+      unit,
+      executionPlan: args.executionPlan,
+    });
+    await mergeUnitResultIntoExecutionResult({
+      sessionRoot: args.sessionRoot,
+      result,
+      ...(args.base ? { base: args.base } : {}),
+    });
+    return;
+  }
+  await mergeUnitResultIntoExecutionResult({
+    sessionRoot: args.sessionRoot,
+    result: toUnitExecutionResult(args.outcome),
+    ...(args.base ? { base: args.base } : {}),
+  });
+}
+
+/**
+ * Seed the lens stage into the frontier ledger after the (still inline) lens
+ * phase, so the post-lens loop starts from a frontier that trusts the lenses
+ * the barrier already admitted.
+ */
+async function seedLensResultsForFrontier(args: {
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  outcomes: ExecutionOutcome[];
+}): Promise<void> {
+  let base: ReviewExecutionResultArtifact | undefined =
+    buildInitialExecutionResultScaffold(args.executionPlan);
+  for (const outcome of args.outcomes) {
+    await mergeOutcomeIntoFrontierLedger({
+      sessionRoot: args.sessionRoot,
+      executionPlan: args.executionPlan,
+      outcome,
+      ...(base ? { base } : {}),
+    });
+    base = undefined;
+  }
+}
+
+type PostLensFrontierRoute =
+  | { kind: "issue_artifact"; artifactId: ReviewIssueArtifactId }
+  | { kind: "deliberation" }
+  | { kind: "problem_framing" }
+  | { kind: "synthesize" };
+
+/**
+ * Canonical stage routing for ready frontier units. Order mirrors the
+ * retired sequential path (PRE_DELIBERATION ids → deliberation →
+ * problem-framing → synthesize); the per-lens stance maps and per-issue
+ * synthesis maps route to their collection stages.
+ */
+function pickPostLensFrontierRoute(
+  ready: ReviewContinuationUnit[],
+): PostLensFrontierRoute | null {
+  const ids = new Set(ready.map((unit) => unit.unitId));
+  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+    if (artifactId === "issue-stance-matrix") {
+      if (
+        ids.has("issue-stance-matrix") ||
+        ready.some((unit) => unit.unitId.startsWith("issue-stance:"))
+      ) {
+        return { kind: "issue_artifact", artifactId };
+      }
+      continue;
+    }
+    if (ids.has(artifactId)) return { kind: "issue_artifact", artifactId };
+  }
+  if (ready.some((unit) => unit.unitKind === "deliberation")) {
+    return { kind: "deliberation" };
+  }
+  if (ids.has("problem-framing")) return { kind: "problem_framing" };
+  if (
+    ids.has("synthesize") ||
+    ready.some((unit) => unit.unitId.startsWith("synthesis:"))
+  ) {
+    return { kind: "synthesize" };
+  }
+  return null;
+}
+
 function issueArtifactProgress(artifactId: ReviewIssueArtifactId): {
   step: number;
   label: string;
@@ -3931,57 +4408,20 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       nextDispatchIndex += 1;
       if (dispatchIndex >= dispatches.length) return;
       const dispatch = dispatches[dispatchIndex]!;
-      const outcome = await unitOutcomeWithNestedFirstAttempt({
-        batch: stanceNestedBatch,
-        flat: {
+      outcomes[dispatchIndex] = await executeIssueStanceUnit({
+        ctx: {
           projectRoot: args.projectRoot,
           sessionRoot: args.sessionRoot,
           executionPlan: args.executionPlan,
           executorConfig: args.executorConfig,
-          dispatch,
-          maxRetries: args.retryPolicy.issueArtifactMaxRetries,
-          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          retryPolicy: args.retryPolicy,
           unitTimeoutMs: args.unitTimeoutMs,
           reviewExecutionProfile: args.reviewExecutionProfile,
         },
+        dispatch,
+        participatingLensIds,
+        nestedBatch: stanceNestedBatch,
       });
-      if (!outcome.success) {
-        outcomes[dispatchIndex] = outcome;
-        continue;
-      }
-      const lensId = dispatch.unit_id.slice("issue-stance:".length);
-      try {
-        await validateIssueStanceResponseOnDisk({
-          executionPlan: args.executionPlan,
-          projectRoot: args.projectRoot,
-          responsePath: dispatch.output_path,
-          lensId,
-          participatingLensIds,
-        });
-        outcomes[dispatchIndex] = outcome;
-      } catch (error) {
-        const failure: ExecutionFailure = {
-          unit_id: dispatch.unit_id,
-          unit_kind: dispatch.unit_kind,
-          packet_path: dispatch.packet_path,
-          output_path: dispatch.output_path,
-          message: error instanceof Error ? error.message : String(error),
-          failure_kind: failureKindFromError(error),
-        };
-        await removeFileIfExists(dispatch.output_path);
-        await appendExecutionFailure(
-          args.executionPlan.error_log_path,
-          failure,
-          args.executionPlan.effective_boundary_state,
-        );
-        outcomes[dispatchIndex] = {
-          ...outcome,
-          success: false as const,
-          completedAtMs: Date.now(),
-          outputBytes: await fileSizeIfPresent(dispatch.output_path),
-          failure,
-        };
-      }
     }
   }
   await Promise.all(
@@ -4465,73 +4905,9 @@ async function runControlledLensDeliberation(args: {
       failure,
     };
   };
-  const completeUnavailableDeliberationResponse = async (
-    dispatch: ExecutionDispatchResult,
-    reason: string,
-    failedOutcome?: ExecutionOutcome,
-  ): Promise<ExecutionOutcome | null> => {
-    const workItem = workItemByUnitId.get(dispatch.unit_id);
-    if (!workItem) return null;
-    try {
-      const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
-        await fs.readFile(dispatch.packet_path, "utf8"),
-      ).allowed_evidence_refs;
-      const artifact = buildRuntimeIssueDeliberationUnavailableResponse({
-        sessionId: executionPlan.session_id,
-        workItem,
-        reason,
-        allowedEvidenceRefs,
-      });
-      await writeYamlDocument(dispatch.output_path, artifact);
-      validateIssueDeliberationResponseObject({
-        parsed: artifact,
-        sessionId: executionPlan.session_id,
-        issueId: workItem.issue_id,
-        lensId: workItem.lens_id,
-        allowedEvidenceRefs,
-      });
-      await appendExecutionProgress(
-        executionPlan.error_log_path,
-        "runner issue deliberation runtime completion",
-        [
-          `unit_id: ${dispatch.unit_id}`,
-          `reason: ${reason.slice(0, 500)}`,
-          "completion_rule: preserve source stance; record unavailable participant response",
-        ],
-      );
-      return {
-        dispatch,
-        success: true,
-        startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
-        completedAtMs: Date.now(),
-        attemptCount: failedOutcome?.attemptCount ?? 1,
-        packetBytes:
-          failedOutcome?.packetBytes ?? (await fileSizeIfPresent(dispatch.packet_path)),
-        outputBytes: await fileSizeIfPresent(dispatch.output_path),
-        ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
-        ...(failedOutcome?.artifactGenerationRealization !== undefined
-          ? {
-              artifactGenerationRealization:
-                failedOutcome.artifactGenerationRealization,
-            }
-          : {}),
-        ...(failedOutcome?.semanticQualityEvidence !== undefined
-          ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
-          : {}),
-      };
-    } catch (completionError) {
-      await appendExecutionProgress(
-        executionPlan.error_log_path,
-        "runner issue deliberation runtime completion failed",
-        [
-          `unit_id: ${dispatch.unit_id}`,
-          `reason: ${reason.slice(0, 500)}`,
-          `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
-        ],
-      );
-      return null;
-    }
-  };
+  // Unavailable-completion now lives at module level
+  // (completeUnavailableDeliberationResponseUnit) — shared by the worker
+  // path (via executeDeliberationResponseUnit) and the validation loop.
   for (const dispatch of deliberationDispatches) {
     if (!shouldRunUnit(dispatch.unit_id)) continue;
     const workItem = workItemByUnitId.get(dispatch.unit_id);
@@ -4596,30 +4972,26 @@ async function runControlledLensDeliberation(args: {
         deliberationOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
         continue;
       }
-      const outcome = await unitOutcomeWithNestedFirstAttempt({
-        batch: deliberationNestedBatch,
-        flat: {
+      const workItem = workItemByUnitId.get(dispatch.unit_id);
+      if (!workItem) {
+        // Dispatches are built 1:1 from the worklist; the validation loop
+        // below would throw on the same absence — fail loud here too.
+        throw new Error(`Missing deliberation work item: ${dispatch.unit_id}`);
+      }
+      deliberationOutcomes[currentIndex] = await executeDeliberationResponseUnit({
+        ctx: {
           projectRoot,
           sessionRoot,
           executionPlan,
           executorConfig: lensExecutorConfig,
-          dispatch,
-          maxRetries: args.retryPolicy.deliberationMaxRetries,
-          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          retryPolicy: args.retryPolicy,
           unitTimeoutMs,
           reviewExecutionProfile: args.reviewExecutionProfile,
         },
+        dispatch,
+        workItem,
+        nestedBatch: deliberationNestedBatch,
       });
-      if (!outcome.success) {
-        deliberationOutcomes[currentIndex] =
-          (await completeUnavailableDeliberationResponse(
-            dispatch,
-            outcome.failure?.message ?? "unknown executor failure",
-            outcome,
-          )) ?? outcome;
-        continue;
-      }
-      deliberationOutcomes[currentIndex] = outcome;
     }
   }
 
@@ -4668,11 +5040,13 @@ async function runControlledLensDeliberation(args: {
           (outcome) => outcome.dispatch.unit_id === dispatch.unit_id,
         ),
       );
-      const completedOutcome = await completeUnavailableDeliberationResponse(
+      const completedOutcome = await completeUnavailableDeliberationResponseUnit({
+        executionPlan,
         dispatch,
-        errorMessage(error),
+        workItem,
+        reason: errorMessage(error),
         failedOutcome,
-      );
+      });
       if (completedOutcome) {
         const allowedEvidenceRefs = parseRuntimeIssueDeliberationSchemaContext(
           await fs.readFile(dispatch.packet_path, "utf8"),
@@ -5318,71 +5692,9 @@ async function runSynthesisMapReduceDispatch(args: {
     const workItemByUnitId = new Map(
       workItems.work_items.map((workItem) => [workItem.work_item_id, workItem]),
     );
-    const completeUnavailableSynthesisResponse = async (
-      dispatch: ExecutionDispatchResult,
-      reason: string,
-      failedOutcome?: ExecutionOutcome,
-    ): Promise<{
-      outcome: ExecutionOutcome;
-      response: IssueSynthesisResponseArtifact;
-    } | null> => {
-      const workItem = workItemByUnitId.get(dispatch.unit_id);
-      if (!workItem) return null;
-      try {
-        const sourceWorkItemsRef = sourceWorkItemRef(workItem);
-        const response = buildRuntimeIssueSynthesisUnavailableResponse({
-          sessionId: args.executionPlan.session_id,
-          workItem,
-          sourceWorkItemsRef,
-          reason,
-        });
-        await writeYamlDocument(dispatch.output_path, response);
-        await appendExecutionProgress(
-          args.executionPlan.error_log_path,
-          "runner issue synthesis runtime completion",
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `reason: ${reason.slice(0, 500)}`,
-            "completion_rule: conservative projection from synthesis-work-items.yaml",
-          ],
-        );
-        return {
-          outcome: {
-            dispatch,
-            success: true,
-            startedAtMs: failedOutcome?.startedAtMs ?? Date.now(),
-            completedAtMs: Date.now(),
-            attemptCount: failedOutcome?.attemptCount ?? 1,
-            packetBytes:
-              failedOutcome?.packetBytes ??
-              await fileSizeIfPresent(dispatch.packet_path),
-            outputBytes: await fileSizeIfPresent(dispatch.output_path),
-            ...(failedOutcome !== undefined ? { childOutcomes: [failedOutcome] } : {}),
-            ...(failedOutcome?.artifactGenerationRealization !== undefined
-              ? {
-                  artifactGenerationRealization:
-                    failedOutcome.artifactGenerationRealization,
-                }
-              : {}),
-            ...(failedOutcome?.semanticQualityEvidence !== undefined
-              ? { semanticQualityEvidence: failedOutcome.semanticQualityEvidence }
-              : {}),
-          },
-          response,
-        };
-      } catch (completionError) {
-        await appendExecutionProgress(
-          args.executionPlan.error_log_path,
-          "runner issue synthesis runtime completion failed",
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `reason: ${reason.slice(0, 500)}`,
-            `completion_error: ${errorMessage(completionError).slice(0, 500)}`,
-          ],
-        );
-        return null;
-      }
-    };
+    // Unavailable-completion now lives at module level
+    // (completeUnavailableSynthesisResponseUnit) — consumed via
+    // executeSynthesisResponseUnit in the worker.
     const synthesisReadRefs = uniqueAllowedReadRefs(args.projectRoot, [
       workItemsPath,
       args.executionPlan.finding_ledger_path,
@@ -5466,60 +5778,24 @@ async function runSynthesisMapReduceDispatch(args: {
           });
           continue;
         }
-        const outcome = await unitOutcomeWithNestedFirstAttempt({
-          batch: synthesisNestedBatch,
-          flat: {
+        const { outcome, response } = await executeSynthesisResponseUnit({
+          ctx: {
             projectRoot: args.projectRoot,
             sessionRoot: args.sessionRoot,
             executionPlan: args.executionPlan,
             executorConfig: args.executorConfig,
-            dispatch,
-            maxRetries: args.retryPolicy.synthesisMaxRetries,
-            retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+            retryPolicy: args.retryPolicy,
             unitTimeoutMs: args.unitTimeoutMs,
             reviewExecutionProfile: args.reviewExecutionProfile,
           },
+          dispatch,
+          workItem,
+          sourceWorkItemsRef: sourceWorkItemRef(workItem),
+          nestedBatch: synthesisNestedBatch,
         });
-        if (!outcome.success) {
-          const completed = await completeUnavailableSynthesisResponse(
-            dispatch,
-            outcome.failure?.message ?? "unknown synthesis worker failure",
-            outcome,
-          );
-          if (completed) {
-            responses[currentIndex] = completed.response;
-            issueOutcomes[currentIndex] = completed.outcome;
-          } else {
-            issueOutcomes[currentIndex] = outcome;
-          }
-          continue;
-        }
-        try {
-          responses[currentIndex] = await validateIssueSynthesisResponseOnDisk({
-            responsePath: dispatch.output_path,
-            sessionId: args.executionPlan.session_id,
-            workItem,
-            sourceWorkItemsRef: sourceWorkItemRef(workItem),
-          });
-          issueOutcomes[currentIndex] = outcome;
-        } catch (error) {
-          const failedOutcome = await synthesisValidationFailureOutcome({
-            executionPlan: args.executionPlan,
-            dispatch,
-            priorOutcome: outcome,
-            error,
-          });
-          const completed = await completeUnavailableSynthesisResponse(
-            dispatch,
-            errorMessage(error),
-            failedOutcome,
-          );
-          if (completed) {
-            responses[currentIndex] = completed.response;
-            issueOutcomes[currentIndex] = completed.outcome;
-          } else {
-            issueOutcomes[currentIndex] = failedOutcome;
-          }
+        issueOutcomes[currentIndex] = outcome;
+        if (response) {
+          responses[currentIndex] = response;
         }
       }
     };
@@ -6467,7 +6743,33 @@ export async function executeReviewPromptExecution(
       ...haltArtifactFields("issue_artifact", failureOutcome),
     };
   };
-  for (const artifactId of PRE_DELIBERATION_ISSUE_ARTIFACT_IDS) {
+  // ---------------------------------------------------------------------
+  // 4f F3 — frontier-driven post-lens sequencing. The shared ledger/
+  // frontier decides WHAT runs next; the existing stage handlers execute
+  // it and the existing composition/halt blocks remain the artifact
+  // authority. Mid-loop engine merges exist only so the frontier can
+  // advance — every halt/final path still batch-writes A's enriched
+  // artifact, overwriting the mid-run engine-shaped state.
+  // ---------------------------------------------------------------------
+  await seedLensResultsForFrontier({
+    sessionRoot,
+    executionPlan,
+    outcomes: executionOutcomes.filter(
+      (outcome): outcome is ExecutionOutcome => outcome !== undefined,
+    ),
+  });
+
+  let controlledDeliberation!: Awaited<
+    ReturnType<typeof runControlledLensDeliberation>
+  >;
+  let deliberationStageRan = false;
+  let synthesizeOutcome!: ExecutionOutcome;
+  let synthesizeStageRan = false;
+  const routedFrontierStages = new Set<string>();
+
+  const runPreDeliberationArtifactStage = async (
+    artifactId: ReviewIssueArtifactId,
+  ): Promise<ReviewPromptExecutionResult | null> => {
     const cancelRequest = await readReviewCancelRequest(sessionRoot);
     if (cancelRequest) {
       return haltForCancellation({
@@ -6492,7 +6794,7 @@ export async function executeReviewPromptExecution(
           output_path: issueArtifactOutputPath(executionPlan, artifactId),
         }),
       );
-      continue;
+      return null;
     }
     try {
       issueArtifactOutcomes.push(await runIssueArtifactDispatch({
@@ -6509,44 +6811,47 @@ export async function executeReviewPromptExecution(
         retryPolicy,
         reviewExecutionProfile: params.reviewExecutionProfile,
       }));
+      return null;
     } catch (error) {
       return haltAfterIssueArtifactFailure({
         error,
         deliberationStatus: "not_performed",
       });
     }
-  }
-  let controlledDeliberation: Awaited<
-    ReturnType<typeof runControlledLensDeliberation>
-  >;
-  const preDeliberationCancelRequest = await readReviewCancelRequest(sessionRoot);
-  if (preDeliberationCancelRequest) {
-    return haltForCancellation({
-      cancelRequest: preDeliberationCancelRequest,
-      phase: "before_controlled_deliberation",
-      issueArtifactOutcomes,
-    });
-  }
-  try {
-    controlledDeliberation = await runControlledLensDeliberation({
-      projectRoot,
-      sessionRoot,
-      executionPlan,
-      lensExecutorConfig: defaultExecutorConfig,
-      teamleadExecutorConfig,
-      successfulLensDispatches,
-      maxConcurrentLenses,
-      unitTimeoutMs,
-      retryPolicy,
-      reviewExecutionProfile: params.reviewExecutionProfile,
-      ...(continuationMode
-        ? {
-            runUnitIds: continuationRunUnitIds,
-            preservedResultsByUnitId: previousResultsByUnitId,
-          }
-        : {}),
-    });
-  } catch (error) {
+  };
+
+  const runDeliberationStage = async (): Promise<ReviewPromptExecutionResult | null> => {
+    routedFrontierStages.add("deliberation");
+    const preDeliberationCancelRequest = await readReviewCancelRequest(sessionRoot);
+    if (preDeliberationCancelRequest) {
+      return haltForCancellation({
+        cancelRequest: preDeliberationCancelRequest,
+        phase: "before_controlled_deliberation",
+        issueArtifactOutcomes,
+      });
+    }
+    try {
+      controlledDeliberation = await runControlledLensDeliberation({
+        projectRoot,
+        sessionRoot,
+        executionPlan,
+        lensExecutorConfig: defaultExecutorConfig,
+        teamleadExecutorConfig,
+        successfulLensDispatches,
+        maxConcurrentLenses,
+        unitTimeoutMs,
+        retryPolicy,
+        reviewExecutionProfile: params.reviewExecutionProfile,
+        ...(continuationMode
+          ? {
+              runUnitIds: continuationRunUnitIds,
+              preservedResultsByUnitId: previousResultsByUnitId,
+            }
+          : {}),
+      });
+      deliberationStageRan = true;
+      return null;
+    } catch (error) {
     const failureMessage = error instanceof Error ? error.message : String(error);
     const deliberationExecutionOutcomes =
       controlledDeliberationOutcomesFromError(error);
@@ -6628,8 +6933,10 @@ export async function executeReviewPromptExecution(
         failedDeliberationOutcome,
       ),
     };
-  }
+    }
+  };
 
+  const runProblemFramingStage = async (): Promise<ReviewPromptExecutionResult | null> => {
   if (!shouldRunUnit("problem-framing")) {
     issueArtifactOutcomes.push(
       preservedOutcomeForDispatch({
@@ -6680,6 +6987,8 @@ export async function executeReviewPromptExecution(
       });
     }
   }
+    return null;
+  };
 
   const synthesizeDispatch: ExecutionDispatchResult = {
     unit_id: "synthesize",
@@ -6688,6 +6997,7 @@ export async function executeReviewPromptExecution(
     output_path: synthesisLedgerPath(sessionRoot),
   };
 
+  const runSynthesizeStage = async (): Promise<ReviewPromptExecutionResult | null> => {
   const preSynthesizeCancelRequest = await readReviewCancelRequest(sessionRoot);
   if (preSynthesizeCancelRequest) {
     return haltForCancellation({
@@ -6702,7 +7012,7 @@ export async function executeReviewPromptExecution(
     });
   }
 
-  let synthesizeOutcome: ExecutionOutcome;
+  synthesizeStageRan = true;
   if (shouldRunUnit("synthesize")) {
     console.log("[review runner] starting synthesize map-reduce: synthesize");
     await appendExecutionProgress(
@@ -6741,6 +7051,166 @@ export async function executeReviewPromptExecution(
     await ensureNonEmptyOutputFile(synthesizeDispatch.output_path);
     await ensureNonEmptyOutputFile(executionPlan.synthesis_output_path);
   }
+    return null;
+  };
+
+  // Was a unit's stage already run this process (its seats are this run's
+  // products) — used by the absorb gate so a continuation rerun target is
+  // never absorbed from a stale seat before its stage executed.
+  const frontierStageRanFor = (unit: ReviewContinuationUnit): boolean => {
+    const id = unit.unitId;
+    if (unit.unitKind === "deliberation") {
+      return routedFrontierStages.has("deliberation");
+    }
+    if (id.startsWith("issue-stance:") || id === "issue-stance-matrix") {
+      return routedFrontierStages.has("issue_artifact:issue-stance-matrix");
+    }
+    if (id === "synthesize" || id.startsWith("synthesis:")) {
+      return routedFrontierStages.has("synthesize");
+    }
+    if (id === "problem-framing") {
+      return routedFrontierStages.has("problem_framing");
+    }
+    return routedFrontierStages.has(`issue_artifact:${id}`);
+  };
+
+  const FRONTIER_LOOP_MAX_ITERATIONS = 64;
+  for (let iteration = 0; ; iteration += 1) {
+    if (iteration >= FRONTIER_LOOP_MAX_ITERATIONS) {
+      throw new Error(
+        "post-lens frontier loop did not converge (max iterations)",
+      );
+    }
+    const frontier = await computeReviewFrontier(sessionRoot);
+    if (frontier.unitLedger.units.every((unit) => isTrustedLedgerUnit(unit))) {
+      break;
+    }
+    const ready = frontier.frontierUnits.filter(
+      (unit) => unit.dispatchDecision !== "skip",
+    );
+    if (ready.length === 0) {
+      throw new Error(
+        frontier.ineligibleReason ??
+          "post-lens frontier stalled: no ready units but untrusted work remains",
+      );
+    }
+    // Absorb seats that already exist (stage products from the previous
+    // iteration, preserved continuation units): the same seat-level gate B
+    // uses merges them so the frontier advances. Units that still owe an
+    // execution this run (stage not run, shouldRunUnit true) are not
+    // absorbed from stale seats.
+    let absorbed = false;
+    for (const unit of ready) {
+      if (!unit.outputPath) continue;
+      if (!frontierStageRanFor(unit) && shouldRunUnit(unit.unitId)) continue;
+      if (!(await fileExists(unit.outputPath))) continue;
+      const result = await validateUnitSeatToResult({
+        sessionRoot,
+        unit,
+        executionPlan,
+      });
+      if (result.status !== "completed") continue;
+      await mergeUnitResultIntoExecutionResult({ sessionRoot, result });
+      absorbed = true;
+    }
+    if (absorbed) continue;
+    const route = pickPostLensFrontierRoute(ready);
+    if (!route) {
+      throw new Error(
+        `post-lens frontier has no stage route for ready units: ${ready
+          .map((unit) => unit.unitId)
+          .join(", ")}`,
+      );
+    }
+    const routeKey =
+      route.kind === "issue_artifact"
+        ? `issue_artifact:${route.artifactId}`
+        : route.kind;
+    if (routedFrontierStages.has(routeKey)) {
+      throw new Error(
+        `post-lens frontier did not converge after stage ${routeKey}`,
+      );
+    }
+    routedFrontierStages.add(routeKey);
+    let halt: ReviewPromptExecutionResult | null = null;
+    switch (route.kind) {
+      case "issue_artifact":
+        halt = await runPreDeliberationArtifactStage(route.artifactId);
+        break;
+      case "deliberation":
+        halt = await runDeliberationStage();
+        break;
+      case "problem_framing":
+        if (!deliberationStageRan) halt = await runDeliberationStage();
+        if (!halt) halt = await runProblemFramingStage();
+        break;
+      case "synthesize":
+        if (!deliberationStageRan) halt = await runDeliberationStage();
+        if (!halt) halt = await runSynthesizeStage();
+        break;
+    }
+    if (halt) return halt;
+    // A failed synthesize aggregate must reach the artifact-backed halt
+    // block below (the previous sequential flow) — the frontier would
+    // otherwise re-offer the untrusted synthesize unit and trip the
+    // convergence guard before the structured halt result is written.
+    if (synthesizeStageRan && !synthesizeOutcome.success) break;
+  }
+
+  // Composition parity: stages the frontier never routed (their units were
+  // already trusted — continuation) still run their handlers so the final
+  // write composes the same arrays the sequential path did (handlers
+  // preserve internally via shouldRunUnit).
+  if (!deliberationStageRan) {
+    const halt = await runDeliberationStage();
+    if (halt) return halt;
+  }
+  if (!synthesizeStageRan) {
+    const halt = await runSynthesizeStage();
+    if (halt) return halt;
+  }
+  // Canonical issue-artifact ordering, independent of frontier execution
+  // order; preserved entries fill the canonical slots the loop never ran.
+  {
+    const issueOutcomeById = new Map(
+      issueArtifactOutcomes.map((outcome) => [outcome.dispatch.unit_id, outcome]),
+    );
+    const orderedIssueArtifactOutcomes: ExecutionOutcome[] = [];
+    for (const artifactId of [
+      ...PRE_DELIBERATION_ISSUE_ARTIFACT_IDS,
+      "problem-framing" as const,
+    ]) {
+      const existing = issueOutcomeById.get(artifactId);
+      if (existing) {
+        orderedIssueArtifactOutcomes.push(existing);
+        continue;
+      }
+      if (!shouldRunUnit(artifactId)) {
+        orderedIssueArtifactOutcomes.push(
+          preservedOutcomeForDispatch({
+            unit_id: artifactId,
+            unit_kind: "issue_artifact",
+            packet_path:
+              executionPlan.issue_artifact_prompt_packet_seats.find(
+                (seat) => seat.artifact_id === artifactId,
+              )?.packet_path ??
+              path.join(
+                executionPlan.prompt_packets_root,
+                issueArtifactSpec(artifactId).prompt_packet_file_name,
+              ),
+            output_path: issueArtifactOutputPath(executionPlan, artifactId),
+          }),
+        );
+        continue;
+      }
+      throw new Error(
+        `issue artifact ${artifactId} missing from frontier composition`,
+      );
+    }
+    issueArtifactOutcomes.length = 0;
+    issueArtifactOutcomes.push(...orderedIssueArtifactOutcomes);
+  }
+
   const synthesizeSucceeded = synthesizeOutcome.success;
   if (synthesizeSucceeded) {
     await validateSynthesizeOutputParticipationTruth({
