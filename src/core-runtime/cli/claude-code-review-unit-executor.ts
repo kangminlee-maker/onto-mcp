@@ -191,6 +191,7 @@ async function runClaudeWorker(args: {
   unitKind: string;
   sessionRoot: string;
   outputDir: string;
+  timeoutMs?: number | undefined;
 }): Promise<string> {
   // The prompt is passed as the positional argument (not stdin): `claude -p`
   // with piped text stdin does not treat it as the prompt, so it would exit
@@ -290,8 +291,35 @@ async function runClaudeWorker(args: {
     );
   });
 
+  // Self-enforced unit timeout (`--timeout-ms`): in the flat path the parent
+  // runner kills timed-out workers, but a nesting batch script has no
+  // per-unit kill switch — the executor bounding itself keeps a hang local
+  // to one unit in every topology. Mirrors the codex unit executor.
+  let timedOut = false;
+  let timeoutTimer: NodeJS.Timeout | null = null;
+  let forceKillTimer: NodeJS.Timeout | null = null;
+  if (typeof args.timeoutMs === "number" && args.timeoutMs > 0) {
+    timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill("SIGTERM");
+      } catch {
+        // ignore
+      }
+      forceKillTimer = setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+          // ignore
+        }
+      }, 2_000);
+    }, args.timeoutMs);
+  }
+
   const exitCode = await new Promise<number>((resolve, reject) => {
     child.on("error", (err: NodeJS.ErrnoException) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
       if (err.code === "ENOENT") {
         reject(
           new Error(
@@ -302,8 +330,26 @@ async function runClaudeWorker(args: {
         reject(err);
       }
     });
-    child.on("close", (code) => resolve(code ?? 1));
+    child.on("close", (code) => {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      resolve(code ?? 1);
+    });
   });
+
+  if (timedOut) {
+    if (runningLogStream) {
+      try {
+        runningLogStream.write(`ENV-AFTER unit=${args.unitId} exit=timeout\n`);
+        runningLogStream.end();
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(
+      `Claude worker executor timed out after ${args.timeoutMs} ms for ${args.unitId}.`,
+    );
+  }
   appendRuntimeStreamEventSync({
     pipeline: "review",
     sessionRoot: args.sessionRoot,
@@ -383,6 +429,7 @@ export async function runClaudeCodeReviewUnitExecutorCli(
       "config-override": { type: "string", multiple: true, default: [] },
       "output-format": { type: "string", default: "markdown" },
       "human-output-ref": { type: "string" },
+      "timeout-ms": { type: "string" },
     },
     strict: true,
     allowPositionals: false,
@@ -452,6 +499,15 @@ export async function runClaudeCodeReviewUnitExecutorCli(
 
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
+  const timeoutMsRaw = values["timeout-ms"];
+  const timeoutMs =
+    typeof timeoutMsRaw === "string" && timeoutMsRaw.length > 0
+      ? Number.parseInt(timeoutMsRaw, 10)
+      : undefined;
+  if (timeoutMs !== undefined && (!Number.isInteger(timeoutMs) || timeoutMs <= 0)) {
+    throw new Error(`--timeout-ms must be a positive integer, got "${timeoutMsRaw}".`);
+  }
+
   const stdout = await runClaudeWorker({
     projectRoot,
     boundedPrompt,
@@ -462,6 +518,7 @@ export async function runClaudeCodeReviewUnitExecutorCli(
     unitKind,
     sessionRoot,
     outputDir: path.dirname(outputPath),
+    timeoutMs,
   });
 
   let structuredPayloadFields: number | undefined;

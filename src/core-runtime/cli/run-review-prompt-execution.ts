@@ -3611,6 +3611,11 @@ export async function runNestedStageFirstAttempt(args: {
     dispatch: firstDispatch,
     profile,
   });
+  const effectiveUnitTimeoutMs = timeoutMsForDispatch({
+    profile,
+    dispatch: firstDispatch,
+    fallback: args.unitTimeoutMs ?? DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
+  });
   const units = args.dispatches.map((dispatch) => ({
     unit_id: dispatch.unit_id,
     unit_kind: dispatch.unit_kind,
@@ -3623,16 +3628,16 @@ export async function runNestedStageFirstAttempt(args: {
       ...(dispatch.human_output_ref
         ? ["--human-output-ref", dispatch.human_output_ref]
         : []),
+      // Self-enforced per-unit timeout: the batch script has no per-unit
+      // kill switch, so a hung inner must bound itself — otherwise it
+      // holds its wave's barrier and burns the outer's multi-wave budget.
+      "--timeout-ms",
+      String(effectiveUnitTimeoutMs),
     ],
   }));
   const width = Math.max(1, Math.min(args.dispatchWidth, args.dispatches.length));
-  // Outer timeout must cover every wave of inner units (the script has no
-  // per-unit kill switch) plus outer startup overhead.
-  const effectiveUnitTimeoutMs = timeoutMsForDispatch({
-    profile,
-    dispatch: firstDispatch,
-    fallback: args.unitTimeoutMs ?? DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
-  });
+  // Outer timeout backstop covering every wave plus startup overhead; the
+  // per-unit self-timeout above keeps a single hang from consuming it.
   const waveCount = Math.ceil(units.length / width);
   const timeoutMs = effectiveUnitTimeoutMs * waveCount + 60_000;
 
@@ -6094,6 +6099,11 @@ export async function executeReviewPromptExecution(
       dispatch: firstLensDispatch,
       profile: params.reviewExecutionProfile,
     });
+    const nestedLensUnitTimeoutMs = timeoutMsForDispatch({
+      profile: params.reviewExecutionProfile,
+      dispatch: firstLensDispatch,
+      fallback: unitTimeoutMs,
+    });
     const nestedUnits = lensDispatches.map((dispatch) => ({
       unit_id: dispatch.unit_id,
       unit_kind: dispatch.unit_kind,
@@ -6106,11 +6116,15 @@ export async function executeReviewPromptExecution(
         ...(dispatch.human_output_ref
           ? ["--human-output-ref", dispatch.human_output_ref]
           : []),
+        // Self-enforced per-unit timeout — a hung inner must not hold its
+        // wave's barrier and burn the outer's multi-wave budget.
+        "--timeout-ms",
+        String(nestedLensUnitTimeoutMs),
       ],
     }));
-    // Concurrency/timeout parity with the flat lens pool: waves are capped
-    // at maxConcurrentLenses and the outer timeout covers every wave (the
-    // script has no per-unit kill switch) plus outer startup overhead.
+    // Concurrency parity with the flat lens pool: waves are capped at
+    // maxConcurrentLenses; the outer timeout is a backstop covering every
+    // wave plus startup overhead (per-unit hangs bound themselves above).
     const nestedLensWidth = Math.max(
       1,
       Math.min(maxConcurrentLenses, lensDispatches.length),
@@ -6118,11 +6132,6 @@ export async function executeReviewPromptExecution(
     const nestedLensWaveCount = Math.ceil(
       lensDispatches.length / nestedLensWidth,
     );
-    const nestedLensUnitTimeoutMs = timeoutMsForDispatch({
-      profile: params.reviewExecutionProfile,
-      dispatch: firstLensDispatch,
-      fallback: unitTimeoutMs,
-    });
     const nestedResult = await executeReviewViaNestedBatch({
       brand: nestedBrand,
       sessionRoot,
