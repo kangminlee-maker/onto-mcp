@@ -3310,6 +3310,11 @@ async function resetExecutionOutputs(
 ): Promise<void> {
   const pathsToClear = [
     executionPlan.execution_result_path,
+    // The run manifest describes the run being discarded; leaving it would
+    // feed stale unit hashes to the frontier ledger on the rerun (fresh
+    // seats vs old manifest hashes -> untrusted lens units -> the post-lens
+    // router has nothing to route). It is rewritten at the final batch write.
+    path.join(executionPlan.session_root, "review-run-manifest.yaml"),
     degradationSummaryPathForSession(executionPlan.session_root),
     executionPlan.error_log_path,
     executionPlan.synthesis_output_path,
@@ -7145,6 +7150,11 @@ export async function executeReviewPromptExecution(
         break;
     }
     if (halt) return halt;
+    // A failed synthesize aggregate must reach the artifact-backed halt
+    // block below (the previous sequential flow) — the frontier would
+    // otherwise re-offer the untrusted synthesize unit and trip the
+    // convergence guard before the structured halt result is written.
+    if (synthesizeStageRan && !synthesizeOutcome.success) break;
   }
 
   // Composition parity: stages the frontier never routed (their units were

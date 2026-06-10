@@ -287,6 +287,33 @@ describe("A runtime pipeline goldens (4f F1)", () => {
     expect(artifacts.manifest).toMatchSnapshot("happy-manifest");
   }, 120_000);
 
+  it("rerun without continuation completes (stale manifest must not poison the frontier)", async () => {
+    // PR #25 Codex P1 regression guard: a non-continuation rerun resets the
+    // outputs and execution-result but previously left review-run-manifest
+    // behind — its stale hashes made the freshly rerun lens units untrusted
+    // and the post-lens frontier router had nothing it could route.
+    const session = await prepareGoldenSession("4f golden rerun");
+    const first = await executeReviewPromptExecution({
+      projectRoot: session.projectRoot,
+      sessionRoot: session.sessionRoot,
+      defaultExecutorConfig: executorConfig(session.stubPath),
+    });
+    expect(first.synthesis_executed).toBe(true);
+
+    const rerun = await executeReviewPromptExecution({
+      projectRoot: session.projectRoot,
+      sessionRoot: session.sessionRoot,
+      defaultExecutorConfig: executorConfig(session.stubPath),
+    });
+    expect(rerun.participating_lens_ids).toEqual(["logic", "coverage"]);
+    expect(rerun.synthesis_executed).toBe(true);
+    expect(rerun.halt_reason ?? null).toBeNull();
+    const rawExecution = await readYamlDocument<{ execution_status?: string }>(
+      path.join(session.sessionRoot, "execution-result.yaml"),
+    );
+    expect(rawExecution.execution_status).toBe("completed");
+  }, 120_000);
+
   it("golden: cancellation before dispatch halts with partial write", async () => {
     const session = await prepareGoldenSession("4f golden cancel");
     await writeYamlDocument(
