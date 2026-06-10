@@ -1,0 +1,234 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: Exposure.risk_grade의 산출 등급과 보고 조정 등급을 별도 권위·의미 개념으로 분리하지 않은 것이
+      두 finding의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-001은 보고서 팀의 수동 조정 권한이 공유 권위를 약화한다고 보고, finding-013은 같은 수동 조정
+      때문에 Exposure.risk_grade가 엔진 산출 등급인지 보고용 오버레이인지 불명확해진다고 본다. 둘 다 동일 등급 필드에
+      산출 권위와 보고 조정 권위를 섞은 문제를 지적한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: Exposure.risk_grade 도출 및 조정 과정을 별도 추적 가능한 관계나 조정 객체로 모델링하지 않았다는 공통 원인이 있다.
+    shared_cause:
+      cause_claim: Exposure.risk_grade가 RiskRating.grade에서 도출되고 수동 조정될 수 있지만, 도출 관계와
+        조정 권위가 구조적으로 닫히지 않았다.
+      from_cause_ref: finding-001.cause-004
+      to_cause_ref: finding-017.cause-003
+    rationale: finding-001은 수동 조정의 권위와 우선순위 부재를 문제 삼고, finding-017은 RiskRating에서
+      Exposure로 가는 공식 구조 경로가 없다고 지적한다. 둘 다 등급 도출·조정의 권위 경계를 그래프 안에서 표현하지 않은 데서
+      발생한다.
+    confidence: medium
+  - relation_id: rel-003
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: 세 등급 스케일 사이의 canonical 매핑을 온톨로지 개념으로 승격하지 않고 외부/소비 시스템 변환에 맡긴 것이 공통 원인이다.
+    shared_cause: null
+    rationale: finding-002는 등급 변환 책임이 소비 시스템에 분산된 가치 문제를, finding-006은 등급 매핑/전이 기준
+      coverage 부재를 지적한다. 두 finding 모두 internal_rating, RiskRating.grade,
+      Exposure.risk_grade 사이의 공통 매핑 권위 부재를 같은 핵심 결함으로 다룬다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: same_root_candidate
+    root_hypothesis: 등급 스케일과 매핑을 versioned ontology concept로 모델링하지 않고 소비 시스템 구현에 맡긴 것이 공통 원인이다.
+    shared_cause: null
+    rationale: finding-002는 현재 공유 기준 목적이 약화된다고 보고, finding-008은 향후 등급 체계 변경 시 연속성이
+      깨진다고 본다. 현재 운영 일관성과 변경 연속성 모두 동일한 등급 매핑 권위 부재에서 파생된다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 동일 의미권의 신용/리스크 등급 스케일들을 권위 있는 의미 매핑 없이 병존시킨 것이 공통 원인이다.
+    shared_cause: null
+    rationale: finding-002는 변환 책임의 분산을, finding-013은 등급 의미권의 불명확성을 지적한다. 둘 다 세 스케일의
+      관계가 온톨로지 안에서 닫히지 않고 소비 시스템 해석에 맡겨진다는 동일한 결함을 다룬다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-006
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 등급 매핑을 버전·유효기간·권위가 있는 참조 개념으로 모델링하지 않은 것이 coverage와 evolution 문제를 함께 만든다.
+    shared_cause:
+      cause_claim: 등급 개념은 세 개로 분리했지만 그 사이의 매핑과 변환 권위를 온톨로지 내부의 versioned concept로 포함하지 않았다.
+      from_cause_ref: finding-006.cause-004
+      to_cause_ref: finding-008.cause-003
+    rationale: finding-006은 현재 매핑 coverage가 비어 있다고 보고, finding-008은 등급 체계 변경 시 온톨로지가
+      연속성 기준점이 되지 못한다고 본다. 둘 다 버전 가능한 매핑 개념의 부재를 공유한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-017
+    to_finding_id: finding-013
+    relation: symptom_of
+    root_hypothesis: RiskRating.grade와 Exposure.risk_grade 사이의 의미·권위 매핑을 닫지 않은 결과로,
+      그래프에도 직접 도출 경로가 빠졌다는 가설이다.
+    shared_cause: null
+    rationale: finding-013은 등급 의미와 권위가 섞인 의미론적 문제이고, finding-017은 그 도출 관계가 구조적으로
+      표현되지 않은 문제다. 구조 경로 부재는 의미 매핑을 독립 개념으로 모델링하지 않은 결함의 구체적 증상으로 볼 수 있다.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-002
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: 핵심 변환 권위를 공통 온톨로지 개념으로 두지 않고 소비 시스템별 구현에 분산한 것이 등급 변환과 통화 환산 문제를 함께 만든다.
+    shared_cause:
+      cause_claim: 공유 판단에 필요한 변환 기준이 온톨로지 내부의 canonical authority가 아니라 각 소비 시스템의
+        구현/테이블에 맡겨져 있다.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-005.cause-003
+    rationale: finding-002는 등급 스케일 변환을 각 소비 시스템이 수행한다고 보고, finding-005는 통화가 다를 때 환산을
+      각 시스템의 당일 환율 테이블에 맡긴다고 본다. 도메인은 다르지만 공유 기준을 좌우하는 변환 권위가 분산된다는 공통 원인이 있다.
+    confidence: medium
+  - relation_id: rel-009
+    from_finding_id: finding-003
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: ExposureAggregate를 월말 배치 산출물로 고정하면서 한도·준수 판단에 필요한 시간적 유효 범위와
+      snapshot 종류를 모델링하지 않은 것이 공통 원인이다.
+    shared_cause: null
+    rationale: finding-003은 stale한 월말 배치 총익스포저가 한도 소진율과 준수 판단에 쓰이는 현재 위험을 지적하고,
+      finding-010은 같은 모델이 일중/다중 기준시점 요구로 확장될 때 재구성이 필요하다고 본다. 둘 다 aggregate의 시간성
+      계약 부재를 공통 원인으로 삼는다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-003
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: ExposureAggregate.total_amount가 현재 전체 합계와 월말 배치 snapshot이라는 두
+      의미를 동시에 부담하는 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: ExposureAggregate.total_amount가 모든 Exposure.amount의 합으로 정의되면서도 월말
+        배치 저장값으로서 일중 신규 여신을 제외할 수 있다.
+      from_cause_ref: finding-003.cause-002
+      to_cause_ref: finding-011.cause-002
+    rationale: finding-003은 이 stale aggregate가 compliance와 한도 판단에 사용되는 운영 위험을,
+      finding-011은 동일 필드 정의의 논리적 모순을 지적한다. 둘 다 월말 배치 값과 전체 익스포저 총계 의미를 분리하지 않은
+      데서 출발한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-010
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 단일 ExposureAggregate 개념에 all-exposure total과 persisted monthly
+      snapshot을 함께 넣은 것이 논리 모순과 진화 취약성을 동시에 만든다.
+    shared_cause: null
+    rationale: finding-011은 현재 정의가 동시에 inclusive와 non-inclusive가 된다고 보고,
+      finding-010은 같은 단일 의미 고정 때문에 새 시간성 요구가 생기면 개념 재구성이 필요하다고 본다. 둘 다 snapshot
+      kind나 inclusion policy 부재를 공유한다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-003
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite 준수 판단을 시간 지정 평가 결과로 분리하지 않고 기준/상태/집계 사용을 한데 묶은 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: RiskAppetite 위반 여부가 ExposureAggregate 초과 여부로 정의되지만, 어떤 집계 시점과 평가
+        결과가 적용되는지 별도 assessment 개념으로 닫히지 않았다.
+      from_cause_ref: finding-003.cause-004
+      to_cause_ref: finding-014.cause-004
+    rationale: finding-003은 stale aggregate가 준수 판단에 쓰일 수 있음을 문제 삼고, finding-014는
+      RiskAppetite 기준과 compliant/breached 평가 상태가 같은 개념에 섞인다고 본다. 별도 as_of 평가 결과
+      개념이 없다는 점에서 원인이 맞닿아 있다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-014
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: RiskAppetite를 평가 기준과 평가 결과/적용 대상을 분리한 관계 구조로 모델링하지 않은 것이 공통 원인이다.
+    shared_cause: null
+    rationale: finding-014는 RiskAppetite가 정책 기준과 준수 판정 상태를 혼합한다고 보고, finding-015는
+      RiskAppetite가 평가 대상인 ExposureAggregate와 구조적으로 연결되지 않았다고 본다. 둘 다 appetite
+      threshold가 어떤 aggregate에 어떻게 적용되는지 독립 관계나 assessment로 표현되지 않은 문제다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-007
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite를 범위·기간·적용 대상이 있는 정책 기준으로 충분히 모델링하지 않고 단일
+      threshold/status 중심으로 둔 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: RiskAppetite가 적용 범위나 평가 객체 없이 threshold와 compliance_status 중심으로만
+        모델링되어 있다.
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-014.cause-002
+    rationale: finding-007은 segment/product/rating 등 적용 범위 기준 부재를 지적하고, finding-014는
+      기준 객체와 평가 결과가 섞인다고 지적한다. 둘 다 RiskAppetite의 scope와 assessment 경계가 부족하다는 같은
+      모델링 결함에 기대고 있다.
+    confidence: medium
+  - relation_id: rel-015
+    from_finding_id: finding-007
+    to_finding_id: finding-015
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite의 적용 범위와 governed aggregate 관계를 명시하지 않은 것이
+      reporting coverage와 graph structure 문제를 함께 만든다.
+    shared_cause:
+      cause_claim: RiskAppetite가 어떤 차주·세그먼트·상품·집계값에 적용되는지 구조적 범위와 관계가 모델링되지 않았다.
+      from_cause_ref: finding-007.cause-002
+      to_cause_ref: finding-015.cause-003
+    rationale: finding-007은 RiskAppetite 범위 기준 부족으로 보고 집계 기준이 시스템별 구현으로 이동한다고 보고,
+      finding-015는 RiskAppetite와 ExposureAggregate 사이의 edge 부재로 준수 상태를 계산·감사하기
+      어렵다고 본다. 둘 다 적용 대상 연결 부재를 공유한다.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-009
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: 세그먼트·상품·담보 유형 같은 업무 분류를 확장 가능한 taxonomy/dimension 개념으로 승격하지 않은 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: 업무 분류 차원이 reference taxonomy나 aggregation dimension으로 모델링되지 않고 단순
+        속성/enum 수준에 머물러 있다.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-009는 segment/product/collateral_type이 고정 enum이라 변경 내성이 낮다고
+      보고, finding-007은 같은 분류 차원을 기준으로 한 포트폴리오 집계와 RiskAppetite 범위가 닫히지 않는다고 본다.
+      둘 다 분류 차원을 독립 관리 가능한 개념으로 두지 않은 문제와 관련된다.
+    confidence: medium
+  - relation_id: rel-017
+    from_finding_id: finding-009
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: 변경 가능한 분류 체계를 versioned reference concept로 모델링하지 않은 것이 일반
+      taxonomy 확장성과 rating scale 연속성 문제를 함께 만든다.
+    shared_cause:
+      cause_claim: 시간에 따라 바뀔 수 있는 분류/등급 값을 유효기간과 버전이 있는 참조 개념이 아니라 고정 속성 값으로 둔다.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-008.cause-003
+    rationale: finding-009는 업무 분류 enum의 신규 값·폐기·상위 분류 표현 부재를, finding-008은 등급 체계 변경
+      시 버전 매핑 부재를 지적한다. 둘 다 변화하는 분류 지식을 버전 가능한 권위 개념으로 분리하지 않은 진화성 문제다.
+    confidence: medium
+  - relation_id: rel-018
+    from_finding_id: finding-004
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 공유 리스크 판단에 필요한 핵심 참조 개념을 온톨로지 안에 최소 참조 모델로 포함하지 않고 외부 시스템/문서에
+      맡긴 것이 공통 원인이다.
+    shared_cause:
+      cause_claim: 공유 권위 문서가 핵심 리스크 상태나 변환 기준을 자체 개념으로 닫지 않고 외부 시스템 또는 소비 시스템 책임으로 둔다.
+      from_cause_ref: finding-004.cause-002
+      to_cause_ref: finding-006.cause-004
+    rationale: finding-004는 default 상태를 별도 연체관리 시스템 범위로 빼서 공통 참조 개념이 없다고 보고,
+      finding-006은 등급 변환을 소비 시스템이 수행하게 해 공통 매핑 개념이 없다고 본다. 대상 영역은 다르지만 shared
+      ontology의 핵심 참조 지식을 외부화한다는 원인이 유사하다.
+    confidence: medium
+  - relation_id: rel-019
+    from_finding_id: finding-012
+    to_finding_id: finding-016
+    relation: duplicates
+    root_hypothesis: Collateral을 Exposure의 하위 유형으로 선언하면서 동시에 Exposure를 담보하는 별도 자산으로
+      연결한 동일한 모델링 오류를 두 lens가 각각 의미론과 구조 관점에서 기록했다.
+    shared_cause: null
+    rationale: "finding-012와 finding-016은 모두 Collateral.is_a: Exposure와 Exposure
+      secured_by Collateral의 충돌을 근거로, 담보 자산이 익스포저처럼 해석될 수 있는 위험을 지적한다. 표현 언어만 다를
+      뿐 같은 증거와 같은 수정 방향을 가진 중복 finding이다."
+    confidence: high
+singleton_findings: []

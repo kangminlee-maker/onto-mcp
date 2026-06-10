@@ -23,7 +23,7 @@ export interface SemanticQualityGateCheck {
 
 export interface SemanticQualityGateResult {
   status: SemanticQualityGateStatus;
-  fixture_id: SemanticQualityGateFixtureId;
+  fixture_id: string;
   scope: "fixture_specific";
   fixture_target_anchor: string;
   applicability: "real_model_only";
@@ -55,8 +55,18 @@ interface ReviewPipelineIssueArtifactsLike {
   issueLedger?: unknown;
 }
 
-interface SemanticQualityFixture {
-  fixtureId: SemanticQualityGateFixtureId;
+/**
+ * Target-specific expectation data the gate evaluates against. The checks
+ * themselves are target-agnostic; everything target-specific (which material
+ * truths must be recalled, which boundary decoys must stay non-material,
+ * which anchor grounds the issues) is carried here as data. Built-in code
+ * fixtures are presets of this shape; non-code targets (e.g. ontology
+ * fixtures) inject their own expectations derived from ground-truth manifests.
+ * Empty boundary term lists mean "no boundary decoy declared": the
+ * boundary-sensitive checks then pass vacuously instead of failing.
+ */
+export interface SemanticQualityExpectations {
+  fixtureId: string;
   materialTerms: string[];
   expectedMaterialTruth: string;
   boundaryUncertaintyTerms: string[];
@@ -69,7 +79,7 @@ interface SemanticQualityFixture {
 
 const DEFAULT_FIXTURE_ID: SemanticQualityGateFixtureId = "review-pipeline-target-v1";
 
-const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityFixture> = {
+const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityExpectations> = {
   "review-pipeline-target-v1": {
     fixtureId: "review-pipeline-target-v1",
     materialTerms: ["unstableformat", "json.stringify", "undefined"],
@@ -129,7 +139,7 @@ const FIXTURES: Record<SemanticQualityGateFixtureId, SemanticQualityFixture> = {
 
 function semanticFixture(
   fixtureId: SemanticQualityGateFixtureId | undefined,
-): SemanticQualityFixture {
+): SemanticQualityExpectations {
   const resolved = fixtureId ?? DEFAULT_FIXTURE_ID;
   if (!Object.prototype.hasOwnProperty.call(FIXTURES, resolved)) {
     throw new Error(`Unknown semantic quality fixture: ${resolved}`);
@@ -182,7 +192,7 @@ function textContainsAny(text: string, terms: string[]): boolean {
 
 function containsBoundarySensitiveUncertainty(
   text: string,
-  fixture: SemanticQualityFixture,
+  fixture: SemanticQualityExpectations,
 ): boolean {
   return textContainsAny(text, fixture.boundaryUncertaintyTerms) &&
     textContainsAny(text, fixture.boundaryContextTerms);
@@ -230,7 +240,7 @@ function issueArtifactChecks(
   artifacts: ReviewPipelineIssueArtifactsLike | undefined,
   declaredNonMaterialFindingCount: number,
   nonMaterialProjections: Record<string, unknown>[],
-  fixture: SemanticQualityFixture,
+  fixture: SemanticQualityExpectations,
 ): SemanticQualityGateCheck[] {
   if (!artifacts) return [];
   const findingLedger = record(artifacts.findingLedger);
@@ -424,7 +434,13 @@ function issueArtifactChecks(
         typeof relation.to_finding_id === "string"
           ? findingIssueIds.get(relation.to_finding_id)
           : undefined;
-      if (!fromIssueId || !toIssueId || fromIssueId === toIssueId) return false;
+      if (!fromIssueId || !toIssueId) return false;
+      // Endpoints co-located in one issue by independent merge evidence
+      // (runtime enforces same_root_candidate connectivity; shared_cause as
+      // merge evidence is already rejected above): the shared-cause context
+      // lives inside that issue, so a cross-issue dependency is impossible
+      // by construction and co-location counts as preserved.
+      if (fromIssueId === toIssueId) return true;
       return dependencyRows.some((dependency) => {
         if (dependency.dependency_kind !== "shared_cause_candidate") return false;
         if (!strings(dependency.relation_refs).includes(relationId)) return false;
@@ -495,11 +511,16 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   /** Legacy debug caller compatibility. Prefer executionRoute. */
   executorRealization?: string;
   fixtureId?: SemanticQualityGateFixtureId;
+  /**
+   * Injected expectation data for targets outside the built-in code-fixture
+   * presets (e.g. ontology fixtures). Takes precedence over fixtureId.
+   */
+  expectations?: SemanticQualityExpectations;
   reviewRecord: ReviewRecordLike;
   finalOutputText: string;
   issueArtifacts?: ReviewPipelineIssueArtifactsLike;
 }): SemanticQualityGateResult {
-  const fixture = semanticFixture(args.fixtureId);
+  const fixture = args.expectations ?? semanticFixture(args.fixtureId);
   const summary = args.reviewRecord.result_classification_summary ?? null;
   const materialIssues = records(summary?.material_issues);
   const nonMaterialFindings = records(summary?.non_material_findings);
@@ -629,7 +650,7 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
     }),
     [
       "material issue must preserve lens/artifact refs",
-      "material issue must preserve target anchor src/target.ts",
+      `material issue must preserve target anchor ${fixture.targetAnchor}`,
     ],
   );
 
