@@ -1,0 +1,373 @@
+schema_version: 1
+session_id: 20260610-36ef1faa
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: manufacturing-bom-ontology.yaml / ECO and Part lifecycle coverage
+    evidence_anchor: "Embedded Materialized Input: Part.attributes.rev/current_eco;
+      ECO.attributes.effective_date/status; integrity_rules: ECO.effective_date
+      이후 production follows new rev, but Part.rev updated after drawing ledger
+      weekly batch"
+    claim: ECO 적용과 품목 revision의 과거 시점 재구성에 필요한 revision/effectivity 이력 개념이 누락되어 있습니다.
+    what: 온톨로지는 Part.rev를 단일 현재 값으로 두고 ECO에는 effective_date와 상태만 둡니다. 어떤 revision이
+      어떤 기간, 생산 lot/order, BOM/routing 조합에 유효했는지 기록하는 PartRevision, Effectivity,
+      RevisionHistory 같은 하위 개념이 없습니다.
+    why: PLM/MES 통합 기준 문서에서는 ECO 적용일 이후 신규 rev를 따른다고 선언하지만, Part.rev는 도면 관리대장 주간 배치로
+      늦게 동기화됩니다. 현재 모델만으로는 지연 동기화 기간이나 과거 생산분에 대해 당시 유효한 품목 revision을 안정적으로 재구성할
+      수 없습니다. 이는 품목·BOM·라우팅·변경관리 정합성 검토 목적을 직접 약화시킵니다.
+    how_to_fix: Part의 현재 rev와 별도로 PartRevision 또는 RevisionEffectivity 개념을 추가하고,
+      part_ref, rev, effective_from/effective_to, source_eco, applied_at,
+      superseded_by를 모델링하십시오. ECO 적용은 현재 값 갱신이 아니라 revision/effectivity 레코드 생성으로
+      표현되게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목 revision과 ECO 적용 기준을 일관되게 제공하는 목적
+      failure_condition: ECO effective_date와 Part.rev 주간 배치 동기화 사이 또는 과거 생산 시점의 revision을 판정해야 할 때
+      impact: MES 생산 오더, 품질 추적, 설계변경 적용 범위가 서로 다른 revision 해석을 할 수 있어 변경관리 기준 문서로서 신뢰가
+        약화됩니다.
+      evidence_refs:
+        - "Part.attributes.rev note: 도면 리비전. 도면 관리대장이 원본"
+        - "Part.attributes.current_eco note: 최신 설계변경. ECO 시스템이 원본"
+        - ECO.attributes.effective_date/status
+        - "integrity_rules[2]: ECO.effective_date 이후 생산분은 신규 rev를 따른다; Part.rev
+          갱신은 도면 관리대장 반영 후 주간 배치로 동기화"
+    causal_path:
+      root_cause_candidate: 시간 의존 revision/effectivity를 별도 이력 개념으로 승격하지 않고 Part.rev 단일
+        현재 속성과 ECO.effective_date만 둔 모델링 선택
+      root_cause_step_id: coverage-candidate-001.cause-004
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: Part.rev는 단일 string 속성으로만 정의되어 있고 유효기간, 적용 범위, 이전 revision 관계가 없다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Part.attributes.rev: type string"
+        - cause_id: coverage-candidate-001.cause-002
+          claim: ECO는 effective_date와 status를 갖지만 revision별 유효기간이나 적용된 revision 레코드를 만들지
+            않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - ECO.attributes.effective_date
+            - "ECO.attributes.status values: open, approved, applied"
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 무결성 규칙은 ECO.effective_date 이후 신규 rev 적용을 요구하면서도 Part.rev 갱신이 주간 배치로 지연된다고
+            명시한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - integrity_rules[2]
+        - cause_id: coverage-candidate-001.cause-004
+          claim: 따라서 과거 생산 시점의 유효 revision 재구성은 현재 온톨로지의 개념 범위 안에서 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.attributes.rev
+            - ECO.attributes.effective_date
+            - integrity_rules[2]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: manufacturing-bom-ontology.yaml / BOM and routing production effectivity
+      coverage
+    evidence_anchor: "Embedded Materialized Input: Assembly.bom_lines;
+      BomLine.qty_per/scrap_rate; Routing.part_ref/operations/status;
+      ECO.affected_parts/effective_date"
+    claim: BOM 라인과 라우팅의 revision별 또는 기간별 effectivity 범위가 누락되어 ECO 변경 범위를 생산 기준으로 닫을
+      수 없습니다.
+    what: BomLine과 Routing은 현재 구조와 현재 공정 순서만 표현합니다. 어떤 BOM line이나 Routing version이
+      특정 Part revision, 날짜, lot, plant, order에 적용되는지 나타내는 effectivity/version
+      개념이 없습니다.
+    why: ECO는 affected_parts와 effective_date를 가지지만, 실제 변경 대상은 품목뿐 아니라 BOM 구성, 수량,
+      대체품, 라우팅 작업 순서와 표준시간일 수 있습니다. 이 온톨로지는 변경의 유효 범위를 Part 현재 상태 중심으로만 표현하여 PLM
+      변경과 MES 생산 실행 사이의 기준 시점을 충분히 커버하지 못합니다.
+    how_to_fix: BomLineEffectivity와 RoutingVersion 또는 RoutingEffectivity를 추가하십시오. 최소
+      속성으로 parent/child 또는 routing_ref, revision/version,
+      effective_from/effective_to, source_eco, applicability 조건(lot/order/plant가
+      필요하면 확장)을 두고, released 생산 오더는 해당 시점의 유효 BOM/routing 버전을 참조하게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: BOM·라우팅·변경관리 개념의 정합성을 바탕으로 PLM/MES 통합 기준을 제공하는 목적
+      failure_condition: ECO 이후 특정 생산분에 어떤 BOM 구성과 라우팅 순서/시간을 적용해야 하는지 판정해야 할 때
+      impact: BOM과 라우팅이 현재값으로만 해석되어 변경 전후 생산 오더, 원가, 품질 추적의 기준 구성이 달라질 수 있습니다.
+      evidence_refs:
+        - Assembly.attributes.bom_lines
+        - BomLine.attributes.qty_per/scrap_rate
+        - Routing.attributes.part_ref/operations/status
+        - ECO.attributes.affected_parts/effective_date
+    causal_path:
+      root_cause_candidate: BOM line과 Routing을 버전/effectivity 대상이 아닌 현재 구조 속성으로만 둔 범위 결손
+      root_cause_step_id: coverage-candidate-002.cause-004
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Assembly는 bom_lines 목록을 갖고 BomLine은 parent, child, qty_per, scrap_rate만
+            갖는다.
+          relation_to_previous: null
+          evidence_refs:
+            - Assembly.attributes.bom_lines
+            - BomLine.attributes
+        - cause_id: coverage-candidate-002.cause-002
+          claim: Routing은 part_ref, ordered operations, status만 갖고 라우팅 버전 또는 유효기간 속성이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - Routing.attributes.routing_id/part_ref/operations/status
+        - cause_id: coverage-candidate-002.cause-003
+          claim: ECO는 affected_parts와 effective_date를 갖지만 affected BOM lines나 routing
+            versions를 직접 식별하지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - ECO.attributes.affected_parts
+            - ECO.attributes.effective_date
+        - cause_id: coverage-candidate-002.cause-004
+          claim: 그 결과 변경 전후 생산분의 BOM/routing 기준을 온톨로지 내부 개념만으로 표현하기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - BomLine.attributes
+            - Routing.attributes
+            - ECO.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: manufacturing-bom-ontology.yaml / controlled actions and audit evidence
+      coverage
+    evidence_anchor: "Embedded Materialized Input: Routing.status values [draft,
+      released]; ECO.status values [open, approved, applied]; notes and
+      attributes reference manual copy/input/reconciliation but no
+      actor/time/reason evidence entity"
+    claim: 승인, 적용, 수기 입력, 복사, 대사 같은 통제 행위의 감사 증거 개념이 누락되어 있습니다.
+    what: Routing과 ECO는 상태를 갖지만 상태 전이의 행위자, 시각, 승인 근거, 변경 사유, 수기 조정 근거를 담는 Approval,
+      ChangeEvent, ManualAdjustment, ReconciliationEvidence 같은 개념이 없습니다.
+    why: 문서에는 released 라우팅만 생산 오더 생성 가능, ECO 승인/적용, scrap_rate 엑셀 복사, 표준원가 수기 입력 및
+      분기 대사처럼 통제가 필요한 행위가 여럿 있습니다. 그러나 행위 증거 개념이 없어 운영상 누가 언제 어떤 근거로 승인·적용·조정했는지
+      추적할 수 없습니다.
+    how_to_fix: 공통 AuditEvent 또는 ControlEvidence 개념을 추가하고 actor, occurred_at,
+      action_type, target_ref, reason/evidence_ref, source_system, before/after
+      값을 포함하십시오. ECO 승인/적용, Routing release, scrap_rate 복사, 표준원가 대사 행위를 이 개념과
+      연결하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 제조 운영 위험을 중심으로 한 PLM/MES 통합 개념 기준 문서의 통제 가능성
+      failure_condition: 라우팅 release, ECO 승인/적용, 수기 복사/입력 값의 근거를 감사하거나 원인 추적해야 할 때
+      impact: 상태와 값은 남지만 통제 행위의 증거가 없어 변경관리와 제조 실행 통제의 책임성과 재현성이 낮아집니다.
+      evidence_refs:
+        - "Routing.attributes.status values: draft, released"
+        - "ECO.attributes.status values: open, approved, applied"
+        - "BomLine.attributes.scrap_rate note: 생산계획팀 엑셀 값을 복사"
+        - "notes[0]: 표준원가 시스템에도 수기 입력 필드가 있어 분기마다 대사"
+    causal_path:
+      root_cause_candidate: 상태와 수기 관리 값을 모델링하면서 행위 증거/감사 이벤트 개념을 범위에 포함하지 않은 것
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Routing과 ECO는 운영 통제에 쓰이는 상태 값을 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - Routing.status
+            - ECO.status
+        - cause_id: coverage-candidate-003.cause-002
+          claim: scrap_rate와 표준원가 시간은 복사, 수기 입력, 대사 같은 사람 또는 외부 장부 개입을 전제로 한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - BomLine.scrap_rate note
+            - notes[0]
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 엔티티 목록에는 이러한 행위의 actor, time, reason, evidence를 표현하는 감사/승인 이벤트 개념이 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "entities list: Part, Assembly, BomLine, AlternatePart, Operation,
+              Routing, WorkCenter, ECO, InspectionPlan"
+        - cause_id: coverage-candidate-003.cause-004
+          claim: 따라서 통제 행위가 필요한 값과 상태의 운영 증거가 온톨로지 범위에서 빠진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Routing.status
+            - ECO.status
+            - BomLine.scrap_rate note
+            - notes[0]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: manufacturing-bom-ontology.yaml / lifecycle coverage for Routing, ECO,
+      Part, BomLine
+    evidence_anchor: "Embedded Materialized Input: Routing.status only [draft,
+      released]; ECO.status only [open, approved, applied]; Part has no
+      lifecycle status; BomLine has no lifecycle/effectivity status"
+    claim: 상태를 갖는 핵심 요소의 lifecycle이 종료, 폐기, 단종, 정정, 재발행 구간까지 포괄하지 못합니다.
+    what: Routing은 draft/released만, ECO는 open/approved/applied만 표현합니다. Part와
+      BomLine에는 active, obsolete, superseded, archived 같은 lifecycle 상태도 없습니다. 적용
+      후 정정, 취소, 재발행 같은 변경관리 사건도 수용되지 않습니다.
+    why: 제조 기준 정보는 생산 투입 이후에도 단종, 폐기, 보관, 정정, 재발행이 필요합니다. 현재 lifecycle 범위는 도입과
+      release/apply까지만 있어 종료 이후 상태나 잘못 적용된 변경을 바로잡는 사건을 상태 의미와 모순 없이 표현하기 어렵습니다.
+    how_to_fix: Part, BomLine, Routing, ECO에 공통 lifecycle 범주를 정리하고
+      obsolete/superseded/archived/cancelled/revised 같은 종료·정정 상태를 추가하십시오. 단, 현재
+      상태 enum을 단순 확장하기보다 상태 전이 이벤트와 함께 설계해 applied 이후 correction/reissue를 기록할 수
+      있게 하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리의 전 lifecycle 기준을 제공하는 목적
+      failure_condition: 품목 단종, 라우팅 폐기, BOM line 대체 종료, 적용된 ECO 정정 또는 재발행을 표현해야 할 때
+      impact: 운영 종료 및 사후 정정 구간이 기준 문서에서 빠져 MES/PLM 간 상태 해석과 사용 가능 여부 판단이 불완전해집니다.
+      evidence_refs:
+        - "Routing.status values: draft, released"
+        - "ECO.status values: open, approved, applied"
+        - Part.attributes has no lifecycle status
+        - BomLine.attributes has no lifecycle/effectivity status
+    causal_path:
+      root_cause_candidate: 핵심 마스터 데이터 lifecycle을 생성/릴리즈/적용 전반부 상태 중심으로만 모델링한 것
+      root_cause_step_id: coverage-candidate-004.cause-004
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Routing 상태는 draft와 released만 포함한다.
+          relation_to_previous: null
+          evidence_refs:
+            - Routing.attributes.status values
+        - cause_id: coverage-candidate-004.cause-002
+          claim: ECO 상태는 open, approved, applied만 포함한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - ECO.attributes.status values
+        - cause_id: coverage-candidate-004.cause-003
+          claim: Part와 BomLine에는 lifecycle 상태 또는 종료 상태 속성이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - Part.attributes
+            - BomLine.attributes
+        - cause_id: coverage-candidate-004.cause-004
+          claim: 따라서 종료, 보관, 폐기, 단종, applied 이후 정정/재발행 구간이 온톨로지 범위에 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Routing.status
+            - ECO.status
+            - Part.attributes
+            - BomLine.attributes
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-005
+    target: manufacturing-bom-ontology.yaml / cross-system authority coverage for
+      copied or reconciled values
+    evidence_anchor: "Embedded Materialized Input: BomLine.scrap_rate note says
+      production planning Excel is copied; notes say MES calculates cumulative
+      std_time but standard cost system has manual input reconciled quarterly;
+      uom conversion has no item conversion-factor master"
+    claim: 복수 장부·시스템에 걸친 값의 단일 권위와 동기화 상태 개념이 일부 누락되어 있습니다.
+    what: Part.rev와 current_eco는 원본 시스템을 note로 밝히지만, scrap_rate, 누적 std_time/표준원가
+      입력, uom 환산계수에는 권위 원본, 복사 시각, 대사 상태, 불일치 처리 개념이 없습니다.
+    why: PLM/MES 통합에서는 같은 값이 엑셀, MES, 표준원가 시스템, 현장 환산에 흩어져 있을 때 어느 값을 기준으로 삼는지 명확해야
+      합니다. 현재 모델은 몇몇 속성에만 원본 note가 있고, 병행 관리 값의 authority와 reconciliation
+      coverage가 독립 개념으로 닫히지 않습니다.
+    how_to_fix: SourceAuthority 또는 MasterDataAuthority 개념을 추가해 attribute_ref,
+      authoritative_system, replica_systems, sync_method, last_synced_at,
+      reconciliation_status, discrepancy_owner를 표현하십시오. scrap_rate, std_time
+      누적/표준원가, uom conversion factor에 우선 적용하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 및 주변 장부 간 기준 데이터의 precedence와 scope control을 제공하는 목적
+      failure_condition: 엑셀 복사값, MES 계산값, 표준원가 수기값, 현장 환산값이 서로 다를 때 기준값을 판정해야 할 때
+      impact: 단일 권위와 대사 상태가 없어 통합 기준 문서가 값 충돌 상황에서 운영 결정을 충분히 안내하지 못합니다.
+      evidence_refs:
+        - BomLine.scrap_rate note
+        - "notes[0]: MES Routing calculation and standard cost manual input
+          reconciled quarterly"
+        - "notes[1]: uom conversion factor master absent; converted in field
+          when needed"
+        - Part.rev/current_eco notes provide source examples
+    causal_path:
+      root_cause_candidate: 원본 시스템 정보를 속성 note에 산발적으로 적고, 병행 관리 값의 권위/동기화/대사 상태를 별도 개념으로 모델링하지 않은 것
+      root_cause_step_id: coverage-candidate-005.cause-005
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: Part.rev와 current_eco는 원본 장부/시스템을 note로 명시한다.
+          relation_to_previous: null
+          evidence_refs:
+            - Part.rev note
+            - Part.current_eco note
+        - cause_id: coverage-candidate-005.cause-002
+          claim: scrap_rate는 생산계획팀 엑셀 값을 복사한다고 하지만 authority, copied_at, reconciliation
+            status 속성이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - BomLine.scrap_rate note
+            - BomLine.attributes
+        - cause_id: coverage-candidate-005.cause-003
+          claim: 누적 std_time은 MES와 표준원가 시스템에 병행 존재하고 분기마다 대사한다고 하지만 대사 결과나 권위 기준 개념이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - notes[0]
+        - cause_id: coverage-candidate-005.cause-004
+          claim: uom 환산은 마스터가 없고 현장 환산한다고 되어 있어 기준 환산계수의 권위가 비어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - notes[1]
+        - cause_id: coverage-candidate-005.cause-005
+          claim: 따라서 다중 시스템 값 충돌 시 기준 원본과 동기화 상태를 온톨로지 내부에서 판정할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - BomLine.scrap_rate note
+            - notes[0]
+            - notes[1]
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-006
+    target: manufacturing-bom-ontology.yaml / manufacturing execution and order
+      coverage
+    evidence_anchor: "Embedded Materialized Input: integrity_rules: Routing.status
+      released items can create production orders; no ProductionOrder,
+      Lot/Batch, AsBuiltBOM, Consumption, or genealogy entity appears in
+      entities list"
+    claim: MES 실행 위험을 다루기 위한 생산오더, 로트, 실적/소비, as-built genealogy 하위 영역이 누락되어 있습니다.
+    what: 무결성 규칙은 생산 오더 생성을 언급하지만 온톨로지에는 ProductionOrder, WorkOrder, Lot/Batch,
+      MaterialConsumption, OperationResult, AsBuiltBOM 같은 MES 실행 개념이 없습니다.
+    why: 요청 범위가 PLM/MES 통합과 제조 운영 위험을 포함하므로, released 라우팅에서 실제 생산 오더가 생성되고 어떤
+      BOM/라우팅 버전으로 실행되었는지 최소한의 실행 기준 개념이 필요합니다. 현재 모델은 기준정보 중심이라 MES 실행에서 변경 적용,
+      대체품 사용, 스크랩 재투입, 검사 결과를 추적할 하위 영역이 비어 있습니다.
+    how_to_fix: 범위를 기준정보 온톨로지로 제한할 의도가 아니라면 ProductionOrder, Lot/Batch,
+      AsPlannedBOM/RoutingSnapshot, MaterialConsumption,
+      OperationExecution/Result, AsBuiltGenealogy를 최소 실행 bridge 개념으로 추가하십시오. 범위를
+      기준정보로 제한한다면 생산오더 언급을 외부 의존으로 분명히 표시하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 제조 운영 위험까지 검토 가능한 범위를 제공하는 목적
+      failure_condition: released routing으로 생성된 생산 오더가 어떤 품목 revision, BOM, routing,
+        대체품, 검사계획으로 실행되었는지 추적해야 할 때
+      impact: 기준정보와 MES 실행 사이의 연결 개념이 없어 제조 운영 위험 검토가 실제 실행 단계까지 이어지지 않습니다.
+      evidence_refs:
+        - "integrity_rules[1]: Routing.status가 released인 품목만 생산 오더를 생성할 수 있다"
+        - entities list contains Part, Assembly, BomLine, AlternatePart,
+          Operation, Routing, WorkCenter, ECO, InspectionPlan only
+        - AlternatePart entity
+        - InspectionPlan entity
+    causal_path:
+      root_cause_candidate: PLM 기준정보 엔티티 중심으로 범위를 구성하면서 MES 실행 bridge 엔티티를 포함하지 않은 것
+      root_cause_step_id: coverage-candidate-006.cause-004
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: 문서는 released 라우팅을 생산 오더 생성 조건으로 사용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - integrity_rules[1]
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 엔티티 목록에는 생산오더, 로트, 공정실적, 자재소비, as-built 구성 개념이 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - entities list
+        - cause_id: coverage-candidate-006.cause-003
+          claim: 대체부품과 검사계획은 존재하지만 실제 오더에서 어떤 대체품이 사용되고 어떤 검사 결과가 발생했는지 담는 실행 개념은 없다.
+          relation_to_previous: enables
+          evidence_refs:
+            - AlternatePart entity
+            - InspectionPlan entity
+            - entities list
+        - cause_id: coverage-candidate-006.cause-004
+          claim: 따라서 PLM 기준정보가 MES 실행으로 전이되는 구간의 제조 운영 위험을 온톨로지 범위 안에서 충분히 검토할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - integrity_rules[1]
+            - entities list
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았습니다.
+  - coverage lens 범위에 맞춰 존재하는 개념의 정확성보다 PLM/MES 통합 기준 문서에 필요한 누락 하위 영역과 차원 결손만
+    평가했습니다.
+  - materialized input에 포함된 manufacturing-bom-ontology.yaml을 권위 있는 대상 입력으로
+    사용했습니다.
+validation:
+  unaddressable_candidates: []

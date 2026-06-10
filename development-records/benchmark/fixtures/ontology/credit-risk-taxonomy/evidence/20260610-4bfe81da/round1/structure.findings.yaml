@@ -1,0 +1,69 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml / entities.RiskAppetite
+    evidence_anchor: .onto/review/20260610-4bfe81da/execution-preparation/materialized-input.md:78-90
+    claim: RiskAppetite is structurally orphaned from the exposure aggregate it is
+      defined to govern.
+    what: RiskAppetite is defined as a threshold whose breach depends on
+      ExposureAggregate, but the relations list connects only Borrower,
+      Exposure, Collateral, RiskRating, Limit, and ExposureAggregate. No
+      relation connects RiskAppetite to ExposureAggregate, Borrower, Limit, or
+      any scoped portfolio/entity.
+    why: The definition says ExposureAggregate exceeding RiskAppetite determines a
+      RiskAppetite breach, so the ontology itself declares a required
+      connection. Because RiskAppetite has only scalar attributes and no
+      relation entries, risk engines and reporting systems cannot determine from
+      this shared concept model which aggregate is evaluated against which
+      appetite threshold.
+    how_to_fix: Add an explicit relation such as ExposureAggregate -> RiskAppetite
+      with a kind like evaluated_against or constrained_by, and include the
+      necessary scope key if appetite thresholds vary by borrower, segment,
+      product, or portfolio.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for risk engines and reporting systems.
+      failure_condition: When determining or reporting RiskAppetite compliance from
+        ExposureAggregate values, the target model provides no structural path
+        linking the aggregate to the appetite threshold and status concept.
+      impact: This weakens review trust because a core compliance concept is present
+        but disconnected, making implementations rely on external or implicit
+        joins rather than the canonical ontology.
+      evidence_refs:
+        - materialized-input.md:78-90
+    causal_path:
+      root_cause_candidate: The relations block omits any edge involving RiskAppetite
+        despite its definition depending on ExposureAggregate.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite defines compliance status using a comparison between
+            ExposureAggregate and RiskAppetite.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relations block includes no relation whose from or to endpoint is
+            RiskAppetite.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:85-90
+        - cause_id: structure-candidate-001.cause-003
+          claim: Therefore RiskAppetite is isolated from the structural graph needed to
+            compute or report its declared compliance meaning.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:78-90
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific structure document was used.
+  - The structure lens is limited to connection completeness among entities and
+    declared relations in the materialized ontology input.
+validation:
+  unaddressable_candidates: []

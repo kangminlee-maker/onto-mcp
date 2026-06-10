@@ -226,5 +226,119 @@
         }
       ]
     }
+  },
+  {
+    "fixture": "manufacturing-bom",
+    "evidence_dir": "development-records/benchmark/fixtures/ontology/manufacturing-bom/evidence/20260610-36ef1faa",
+    "gate": {
+      "status": "passed",
+      "fixture_id": "manufacturing-bom-ontology-v1",
+      "scope": "fixture_specific",
+      "fixture_target_anchor": "manufacturing-bom-ontology.yaml",
+      "applicability": "real_model_only",
+      "checks": [
+        {
+          "check_id": "count_list_consistency",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=10, material_issues.length=10",
+            "non_material_finding_count=1, non_material_findings.length=1"
+          ]
+        },
+        {
+          "check_id": "material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "material_issue_count=10",
+            "expected target truth: MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "final_result_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "Final Review Result chars=134487",
+            "expected final explanation to preserve MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "false_materiality_guard",
+          "status": "passed",
+          "evidence": [
+            "boundary-sensitive uncertainty terms must be disclosed with boundary context when they are not admitted material issues: ",
+            "non_material_finding_count=1",
+            "boundary_notes_chars=585"
+          ]
+        },
+        {
+          "check_id": "boundary_uncertainty_preservation",
+          "status": "passed",
+          "evidence": [
+            "Boundary Notes chars=585",
+            "expected: compact note preserving  uncertainty"
+          ]
+        },
+        {
+          "check_id": "causal_materiality_shape",
+          "status": "passed",
+          "evidence": [
+            "finding_count=21",
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021",
+            "non_material_finding_ids=none"
+          ]
+        },
+        {
+          "check_id": "artifact_material_issue_recall",
+          "status": "passed",
+          "evidence": [
+            "ledger_material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021",
+            "expected artifact truth: MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate 복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time 이중 기록 + MBO-10 유효기간 부재"
+          ]
+        },
+        {
+          "check_id": "non_material_finding_preservation",
+          "status": "passed",
+          "evidence": [
+            "declared_non_material_finding_count=1",
+            "preserved_non_material_ids=issue-011",
+            "non-material findings must preserve target-specific boundary uncertainty and remain outside relation coverage"
+          ]
+        },
+        {
+          "check_id": "causal_relation_correctness",
+          "status": "passed",
+          "evidence": [
+            "material_finding_ids=finding-001,finding-002,finding-003,finding-004,finding-005,finding-006,finding-007,finding-008,finding-009,finding-010,finding-011,finding-012,finding-013,finding-014,finding-015,finding-016,finding-017,finding-018,finding-019,finding-020,finding-021",
+            "relation_covered_ids=finding-001,finding-004,finding-011,finding-005,finding-013,finding-006,finding-007,finding-002,finding-008,finding-003,finding-012,finding-019,finding-010,finding-015,finding-018,finding-014,finding-016,finding-020,finding-017,finding-009,finding-021",
+            "shared_cause_relation_ids=rel-005,rel-007,rel-016,rel-019,rel-020"
+          ]
+        },
+        {
+          "check_id": "issue_dependency_preservation",
+          "status": "passed",
+          "evidence": [
+            "shared_cause_relation_ids=rel-005,rel-007,rel-016,rel-019,rel-020",
+            "issue_relation_refs=rel-001,rel-002,rel-003,rel-004,rel-006,rel-008,rel-009,rel-010,rel-011,rel-012,rel-013,rel-015",
+            "dependency_relation_refs=rel-005,rel-007,rel-016,rel-019,rel-020"
+          ]
+        },
+        {
+          "check_id": "actionability",
+          "status": "passed",
+          "evidence": [
+            "material_action_candidates=fix_before_release,follow_up,fix_now",
+            "expected final output to include a concrete remediation path"
+          ]
+        },
+        {
+          "check_id": "grounding",
+          "status": "passed",
+          "evidence": [
+            "material issue must preserve lens/artifact refs",
+            "material issue must preserve target anchor manufacturing-bom-ontology.yaml"
+          ]
+        }
+      ]
+    }
   }
 ]

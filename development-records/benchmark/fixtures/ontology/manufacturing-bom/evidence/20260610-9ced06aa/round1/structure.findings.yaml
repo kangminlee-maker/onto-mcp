@@ -1,0 +1,89 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml relations graph for AlternatePart
+    evidence_anchor: .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:37
+      and
+      .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:84
+    claim: AlternatePart is defined as an entity but is not connected in the
+      declared relations graph.
+    what: The ontology defines `AlternatePart` with `primary_ref`, `alternate_ref`,
+      and `direction`, but the `relations` list never uses `AlternatePart` as a
+      `from` or `to` endpoint. Instead, it declares only a direct `Part -> Part
+      alternate_of` shortcut with a note that it is expressed through
+      AlternatePart.
+    why: For a PLM/MES integration concept baseline, the declared relations graph is
+      the structural contract consumers are likely to traverse. Because
+      `AlternatePart` is bypassed by the relation list, its direction attribute
+      is structurally disconnected from the alternate relationship and may be
+      lost or ignored by relation-based consumers.
+    how_to_fix: Make `AlternatePart` the explicit association entity in `relations`,
+      for example `AlternatePart -> Part primary` and `AlternatePart -> Part
+      alternate`, and either remove the `Part -> Part alternate_of` shortcut or
+      clearly mark it as a derived projection from `AlternatePart`.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Using the ontology as a PLM/MES integration concept baseline
+        for item, BOM, routing, and change-management structures.
+      failure_condition: A consumer that builds its integration graph from the
+        declared `relations` section cannot traverse from the alternate-part
+        association entity to the two participating parts or to the `direction`
+        property.
+      impact: Alternate-part substitution semantics become structurally incomplete in
+        the canonical relation graph, weakening integration trust for a
+        manufacturing operation where substitution direction affects planning,
+        procurement, and execution choices.
+      evidence_refs:
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:37
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:40
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:41
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:42
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:84
+        - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:91
+    causal_path:
+      root_cause_candidate: The declared relation graph models alternates as a direct
+        `Part -> Part` shortcut instead of connecting the `AlternatePart`
+        association entity.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`AlternatePart` is defined as an entity carrying `primary_ref`,
+            `alternate_ref`, and `direction`."
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:37
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:40
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:41
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:42
+        - cause_id: structure-candidate-001.cause-002
+          claim: The `relations` section has no relation endpoint whose `from` or `to` is
+            `AlternatePart`.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:84
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:85
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:86
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:87
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:88
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:89
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:90
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:91
+        - cause_id: structure-candidate-001.cause-003
+          claim: The only alternate relation is a direct `Part -> Part alternate_of`
+            shortcut, with a note saying it is expressed through
+            `AlternatePart`.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-9ced06aa/execution-preparation/materialized-input.md:91
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - The `relations` section is treated as the canonical structural relation
+    graph for integration consumers; attribute-level `ref` fields alone do not
+    fully substitute for missing relation endpoints in this lens.
+validation:
+  unaddressable_candidates: []

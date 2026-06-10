@@ -1,0 +1,115 @@
+schema_version: 1
+session_id: 20260610-5fbe917f
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml / Result.status, Report.result_status, and
+      report state rule
+    evidence_anchor: .onto/review/20260610-5fbe917f/execution-preparation/materialized-input.md:69-83,121-123;
+      .onto/review/20260610-5fbe917f/execution-preparation/review-value-alignment-criteria.yaml:6-8
+    claim: 보고 상태 권위를 Report에 중복 배치하고 야간 동기화를 허용해 EMR/LIS 통합용 개념 권위 문서라는 목적과 어긋난다.
+    what: Result.status는 preliminary/final/corrected이고 Report.result_status는
+      prelim/finalized/amended로 별도 enum을 유지한다. 동시에 Report.result_status를 '권위
+      값'이라고 하면서 Result.status와 동일 정보가 유지된다고 적고, corrected 반영은 야간 1회 동기화 배치에 맡긴다.
+    why: 리뷰 기준은 이 파일이 EMR/LIS 통합의 개념 권위 문서로 적절한지, 엔티티·관계·상태 모델과 운영 위험을 보라는 것이다. 그런데
+      임상의가 신뢰하는 보고 상태가 결과 상태와 다른 enum/권위/동기화 주기를 갖기 때문에 corrected 결과가 발생한 뒤 다음
+      배치 전까지 EMR이 outdated finalized 상태를 신뢰할 수 있다. 이는 단순 구조 문제가 아니라 '권위 문서'가 권위
+      원천과 최신성 약속을 흐리게 만드는 목적 drift다.
+    how_to_fix: 결과 상태의 단일 canonical 상태 모델을 정하고 Report.result_status는 그 상태의
+      projection인지, 별도 임상 보고 상태인지 명시한다. corrected/amended 전이는 야간 배치가 아니라 통합 계약상
+      즉시성 또는 허용 지연 SLA를 포함한 상태 전이 규칙으로 닫는다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로 사용하기 위한 상태 권위와 운영 위험 판단.
+      failure_condition: Result.status가 corrected로 바뀐 뒤 Report.result_status가 야간 배치
+        전까지 finalized로 남아 임상의 또는 EMR 소비자가 stale 보고 상태를 신뢰하는 경우.
+      impact: 권위 문서가 상태의 source of truth와 동기화 신뢰 조건을 모호하게 만들어 통합 설계자가 안전한 precedence와
+        invalid-input/stale-state 처리를 결정할 수 없다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 보고 상태를 단일 canonical 상태로 닫지 않고 Result와 Report 양쪽에 다른 enum과
+        권위 문구로 중복 모델링했다.
+      root_cause_step_id: axiology-candidate-001.cause-004
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: Result.status는 preliminary/final/corrected이고 Report.result_status는
+            prelim/finalized/amended로 별도 enum이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: axiology-candidate-001.cause-002
+          claim: Report.result_status는 임상의가 신뢰하는 권위 값이라고 선언되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: axiology-candidate-001.cause-003
+          claim: corrected 발생 시 amended 반영은 야간 1회 동기화 배치에 맡겨져 즉시 일관성을 보장하지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: axiology-candidate-001.cause-004
+          claim: EMR/LIS 통합 권위 문서 검토 목적에서는 이런 stale authority window가 상태 precedence와 운영 위험
+            판단을 약화한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-8
+            - review-target-profile.yaml:17-20
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml / CriticalValue notification model
+    evidence_anchor: .onto/review/20260610-5fbe917f/execution-preparation/materialized-input.md:100-106;
+      .onto/review/20260610-5fbe917f/execution-preparation/review-value-alignment-criteria.yaml:6-8
+    claim: CriticalValue의 즉시 통보 책임을 boolean과 외부 전화 기록 대장으로 밀어내 운영 위험 중심 검토 목적을 충족하지
+      못한다.
+    what: CriticalValue는 '즉시 통보가 필요한 위험 결과 값 범위'로 정의되지만 온톨로지 안에는 notified boolean만
+      있고 통보 시각과 수신자는 전화 기록 대장에 있다고만 한다. 통보 이벤트, 수신자, 시각, 실패/재시도 상태가 개념 모델에 없다.
+    why: 사용자 요청의 기준은 EMR/LIS 통합 권위 문서로서 운영 시 생길 위험까지 검토하는 것이다. 즉시 통보가 필요한 결과는
+      EMR/LIS 사이의 책임 경계와 auditability가 중요한 상태인데, 핵심 증거를 외부 대장으로만 남기면 통합 소비자가 통보
+      완료의 의미, 지연, 실패, 중복 통보를 개념적으로 구분할 수 없다.
+    how_to_fix: CriticalValueNotification 또는 NotificationEvent 같은 별도 개념을 추가해
+      critical value, recipient, notified_at, channel, acknowledgement,
+      failure/retry 상태를 모델링한다. notified boolean은 해당 이벤트의 파생 projection으로 낮추거나
+      제거한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 권위 문서가 운영 위험과 상태 모델의 개념적 타당성을 설명해야 한다는 목적.
+      failure_condition: 위험 결과가 발생했지만 전화 기록 대장과 LIS/EMR 상태가 불일치하거나 통보 실패/지연이 boolean 하나로 덮이는 경우.
+      impact: 통합 설계자가 critical value 통보의 책임 경계, 감사 가능성, 실패 처리를 문서에서 도출할 수 없어 운영상 위험한
+        상태를 정상 완료처럼 취급할 수 있다.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:6-8
+    causal_path:
+      root_cause_candidate: 즉시 통보라는 목적상 핵심 이벤트를 온톨로지의 상태/관계 개념으로 승격하지 않고 boolean 속성과 외부 기록으로 축소했다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-101
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 온톨로지 내부 통보 모델은 notified boolean뿐이고 시각과 수신자는 외부 전화 기록 대장에 있다고 되어 있다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:102-106
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 운영 위험 중심의 EMR/LIS 통합 권위 문서 목적에서는 통보 이벤트의 책임과 실패 상태를 도출할 수 있어야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-8
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 임상 도메인 규정은 사용하지 않았고, 사용자 요청에서 확인된 EMR/LIS 통합 권위
+    문서 목적과 운영 위험 검토 기준만 가치 기준으로 사용했다.
+  - role definition external ref는 작업 루트 상대 경로로는 열리지 않았으나, prompt packet에 임베드된
+    axiology role definition을 기준으로 판단했다.
+validation:
+  unaddressable_candidates: []

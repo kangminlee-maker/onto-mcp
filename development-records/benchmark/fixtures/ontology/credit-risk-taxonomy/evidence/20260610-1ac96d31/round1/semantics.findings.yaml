@@ -1,0 +1,233 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: credit-risk-ontology.yaml entities.Collateral.is_a
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:39-46,85-88
+    claim: Collateral을 Exposure의 하위 유형으로 둔 관계가 담보 자산의 실제 의미와 맞지 않습니다.
+    what: "Collateral은 정의상 익스포저를 담보하는 자산인데 `is_a: Exposure`로 모델링되어 있습니다. 동시에
+      relations에서는 `Exposure secured_by Collateral`로 별도 담보 관계도 둡니다."
+    why: 담보 자산은 대출/한도성 여신인 Exposure의 종류가 아니라 Exposure에 붙는 보전 자산입니다. 하위 유형으로 두면 담보가
+      `amount`, `product_type`, `risk_grade`, `ltv` 같은 Exposure 속성을 상속받는 의미가 되어
+      리스크 엔진과 보고 시스템이 담보를 여신 익스포저로 집계하거나 분류할 위험이 생깁니다.
+    how_to_fix: "`Collateral.is_a: Exposure`를 제거하고 `Exposure secured_by Collateral`
+      관계를 권위 관계로 유지하십시오. 담보 평가 단위가 필요하면 `Collateral` 자체 속성과
+      `CollateralValuation` 같은 평가 개념으로 분리하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 익스포저·담보 개념 기준
+      failure_condition: 담보가 Exposure 하위 유형으로 해석되어 Exposure 속성·분류·집계 대상에 포함될 때
+      impact: 담보 자산과 여신 익스포저의 존재론적 유형이 섞여 보고 집계와 엔진 입력의 의미 신뢰가 약해집니다.
+      evidence_refs:
+        - materialized-input.md:24-37
+        - materialized-input.md:39-46
+        - materialized-input.md:85-88
+    causal_path:
+      root_cause_candidate: 담보 자산을 Exposure의 하위 유형으로 선언한 개념 유형 분류 오류
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: Collateral은 '익스포저를 담보하는 자산'으로 정의되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:39-40
+        - cause_id: semantics-candidate-001.cause-002
+          claim: "같은 Collateral이 `is_a: Exposure`로 선언되어 Exposure의 종류처럼 모델링됩니다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:39-42
+        - cause_id: semantics-candidate-001.cause-003
+          claim: Exposure와 Collateral 사이에는 이미 `secured_by` 관계가 있어 담보 관계를 표현할 수 있습니다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:85-88
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: credit-risk-ontology.yaml entities.Exposure.attributes.ltv
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:24-37,39-46
+    claim: "`ltv`는 산식성 비율인데 원천값과 별개로 심사역 입력값으로 모델링되어 파생값-입력 불일치가 발생할 수 있습니다."
+    what: Exposure에는 `ltv`가 숫자 속성으로 있으며 '담보인정비율'이고 심사 시점에 심사역이 입력한다고 되어 있습니다. 같은
+      모델에는 Exposure.amount와 Collateral.appraised_value/appraised_at도 존재합니다.
+    why: LTV는 통상 여신금액과 담보가치의 관계로 해석되는 비율 이름입니다. 온톨로지 안에 원천 후보인 Exposure.amount와
+      Collateral.appraised_value가 공존하는데 LTV를 독립 입력으로 두면 엔진 계산값, 심사 입력값, 담보 재평가
+      이후 값이 서로 달라질 수 있습니다.
+    how_to_fix: "`ltv`를 권위 입력값으로 둘지 계산 파생값으로 둘지 명시하십시오. 파생값이면 산식, 원천 속성, 기준시점, 담보 다건
+      처리 규칙을 정의하고, 입력값이면 `submitted_ltv`처럼 입력 성격을 이름에 드러내며 계산 LTV와 구분하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 담보 인정 비율의 개념 권위
+      failure_condition: 심사 입력 LTV와 Exposure.amount/Collateral.appraised_value 기반 계산
+        LTV가 서로 다른 상태로 엔진 또는 보고서에 사용될 때
+      impact: 동일한 LTV 명칭 아래 서로 다른 의미의 값이 소비되어 리스크 분류, 담보 재평가, 보고 수치의 일관성이 깨질 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:29
+        - materialized-input.md:35-37
+        - materialized-input.md:45-46
+        - materialized-input.md:95
+    causal_path:
+      root_cause_candidate: 산식성 비율 명칭을 원천값과 공존시키면서 독립 입력 속성으로 정의함
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Exposure.amount와 Collateral.appraised_value가 모델에 존재합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29
+            - materialized-input.md:45
+        - cause_id: semantics-candidate-002.cause-002
+          claim: "`ltv`는 '담보인정비율'이라는 비율 이름이지만 심사역 입력값으로 선언되어 있습니다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35-37
+        - cause_id: semantics-candidate-002.cause-003
+          claim: Collateral.appraised_value에는 1년 이상 경과 시 재평가 규칙이 있어 LTV 원천값이 시간에 따라 바뀔 수
+            있습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:95
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: credit-risk-ontology.yaml Exposure.risk_grade and RiskRating.grade
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:31-34,48-57,92-98
+    claim: "`Exposure.risk_grade`가 엔진 등급에서 도출되는 값과 보고팀 수동 조정 등급을 한 개념명으로 겸하고 있습니다."
+    what: RiskRating.grade는 리스크 엔진이 산출하는 R1~R5 등급이고, Exposure.risk_grade는 AAA~CCC
+      스케일의 보고서 팀 사용 등급입니다. 규칙은 Exposure.risk_grade가 RiskRating.grade에서 도출되지만 보고서
+      팀이 시장 상황에 따라 수동 조정할 수 있다고 합니다.
+    why: 도출 등급과 수동 조정 등급은 권위, 의미, 사용 시점이 다릅니다. 둘을 `risk_grade` 하나로 표현하면 엔진 산출값인지 보고
+      조정값인지 구별되지 않아 등급 변환·보고 조정·엔진 재현성의 의미가 흐려집니다.
+    how_to_fix: "엔진 산출 등급, 변환 등급, 보고 조정 등급을 이름과 권위로 분리하십시오. 예:
+      `RiskRating.engine_grade`, `Exposure.report_grade`,
+      `grade_override_reason`, `grade_as_of`, `grade_source`. 변환표는 외부 위키 참조가 아니라
+      온톨로지 내 권위 개념 또는 명시적 참조로 관리하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 등급 분류 기준
+      failure_condition: 소비자가 `Exposure.risk_grade`를 엔진 도출 등급으로 해석하거나 보고팀 조정 후 등급으로 해석하는 경우
+      impact: 동일 등급 필드의 의미가 소비자별로 달라져 분류 재현성, 보고 설명력, 시스템 간 매핑 신뢰가 약화됩니다.
+      evidence_refs:
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 도출 등급과 수동 조정 등급의 의미·권위를 하나의 `risk_grade` 속성에 결합함
+      root_cause_step_id: semantics-candidate-003.cause-004
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: RiskRating은 리스크 엔진이 산출하는 차주 신용등급으로 정의됩니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:48-57
+        - cause_id: semantics-candidate-003.cause-002
+          claim: Exposure.risk_grade는 보고서 팀이 사용하는 익스포저 단위 등급입니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:31-34
+        - cause_id: semantics-candidate-003.cause-003
+          claim: 분류 규칙은 Exposure.risk_grade가 RiskRating.grade에서 도출되면서도 보고서 팀이 수동 조정할 수 있다고
+            선언합니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:92-94
+        - cause_id: semantics-candidate-003.cause-004
+          claim: 노트는 세 개 등급 스케일의 변환을 각 소비 시스템이 수행한다고 하여 공유 권위 기준이 분산됩니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:97-98
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: credit-risk-ontology.yaml entities.ExposureAggregate.total_amount
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:69-76,92-94
+    claim: "`ExposureAggregate.total_amount`의 이름과 정의는 총익스포저를 뜻하지만 실제 값은 월말 배치 기준 부분
+      시점 값입니다."
+    what: ExposureAggregate는 '차주 단위 총익스포저. 모든 Exposure.amount의 합'으로 정의됩니다. 그러나
+      total_amount note는 월말 배치 저장값이며 일중 신규 여신은 다음 배치까지 미반영된다고 합니다.
+    why: 총액이라는 이름은 모든 현재 Exposure.amount 합계를 기대하게 하지만 실제 권위 값은 월말 배치 스냅샷입니다. Limit
+      소진율 산식이 이 값을 사용하므로 일중 여신이 제외된 값을 현재 총익스포저로 해석할 수 있습니다.
+    how_to_fix: 개념명을 `ExposureAggregateSnapshot` 또는 `month_end_total_amount`처럼 기준시점이
+      드러나게 바꾸고, `as_of`, 포함 범위, 배치 기준, 일중 제외 여부를 정의에 포함하십시오. 현재 총액이 필요하면 별도
+      `current_total_amount` 계산 권위를 분리하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 익스포저 총액 및 한도 소진율 기준
+      failure_condition: 월말 배치 스냅샷을 현재 모든 Exposure.amount의 합으로 해석하여 한도 소진율이나 리스크 앱타이트 판단에 사용할 때
+      impact: 시간성이 숨겨져 총익스포저 의미가 소비 시스템별로 달라지고 일중 리스크가 누락될 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:69-76
+        - materialized-input.md:92-94
+    causal_path:
+      root_cause_candidate: 스냅샷/배치 기준 값을 현재 총액처럼 명명하고 정의함
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: ExposureAggregate 정의는 모든 Exposure.amount의 합인 차주 단위 총익스포저라고 말합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-70
+        - cause_id: semantics-candidate-004.cause-002
+          claim: total_amount note는 월말 배치 계산값이며 일중 신규 여신은 미반영된다고 밝힙니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:73-76
+        - cause_id: semantics-candidate-004.cause-003
+          claim: Limit 소진율 규칙은 ExposureAggregate.total_amount를 분자로 사용합니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:92-94
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-005
+    target: credit-risk-ontology.yaml
+      entities.RiskAppetite.attributes.compliance_status
+    evidence_anchor: .onto/review/20260610-1ac96d31/execution-preparation/materialized-input.md:78-83
+    claim: "`compliance_status`는 RiskAppetite 자체 속성이 아니라 ExposureAggregate와
+      threshold 비교에서 파생되는 준수 판정입니다."
+    what: RiskAppetite 정의는 ExposureAggregate가 RiskAppetite를 초과하면 위반이고, 위반 여부는
+      RiskAppetite 준수 상태로 정의된다고 합니다. 그런데 compliance_status가 RiskAppetite의 독립
+      enum 속성으로 들어 있습니다.
+    why: RiskAppetite는 한도 또는 임계값 성격의 개념이고 준수 여부는 특정 차주/포트폴리오의 익스포저 총액, 기준시점,
+      threshold 비교 결과입니다. 상태를 RiskAppetite 자체 속성으로 두면 어떤 ExposureAggregate에 대한
+      상태인지, 언제의 상태인지, 어떤 한도 기준인지가 의미적으로 고정되지 않습니다.
+    how_to_fix: "`RiskAppetite`에는 appetite 식별자와 threshold 같은 정책 기준만 두고, 준수 판정은
+      `RiskAppetiteAssessment` 또는 `AppetiteBreach`처럼 ExposureAggregate,
+      RiskAppetite, as_of, computed_status를 함께 가진 파생 평가 개념으로 분리하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 리스크 성향 한도 및 위반 판정 기준
+      failure_condition: "`RiskAppetite.compliance_status`가 특정 집계·시점과 연결되지 않은 채 보고 또는
+        엔진 판단에 사용될 때"
+      impact: 준수 상태의 대상과 시간 기준이 불분명해 같은 RiskAppetite에 대해 소비 시스템별로 다른 위반 의미를 부여할 수 있습니다.
+      evidence_refs:
+        - materialized-input.md:78-83
+    causal_path:
+      root_cause_candidate: 비교 결과인 준수 상태를 정책 기준 개념의 독립 속성으로 배치함
+      root_cause_step_id: semantics-candidate-005.cause-003
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: RiskAppetite는 threshold를 가진 리스크 성향 한도로 정의됩니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-82
+        - cause_id: semantics-candidate-005.cause-002
+          claim: 정의는 ExposureAggregate가 RiskAppetite를 초과할 때 위반이라고 하여 준수 상태가 비교 결과임을 밝힙니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:78-79
+        - cause_id: semantics-candidate-005.cause-003
+          claim: 하지만 compliance_status는 비교 대상이나 기준시점 없이 RiskAppetite의 enum 속성으로 저장됩니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:80-83
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 세션 도메인이 none이므로 별도 도메인 문서는 사용하지 않았고, 제공된 온톨로지 텍스트와 역할 정의만 근거로 판단했습니다.
+  - 파일 주석의 '리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서'를 검토 목적의 공유 개념 기준으로 보았습니다.
+  - 외부 표준이나 기관별 신용등급 체계의 정확성은 웹/외부 자료 접근이 금지되어 검증하지 않았습니다.
+validation:
+  unaddressable_candidates: []

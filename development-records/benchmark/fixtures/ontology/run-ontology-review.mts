@@ -59,6 +59,18 @@ async function persistEvidence(fixtureId: string, sessionRoot: string): Promise<
       // 해당 run에 없는 아티팩트는 건너뜀
     }
   }
+  // ledger의 source_ref/evidence_refs가 round1 lens 산출물을 가리키므로
+  // round1을 함께 영속화해야 evidence 번들이 자급자족한다.
+  try {
+    const round1Src = path.join(sessionRoot, "round1");
+    const round1Dst = path.join(dst, "round1");
+    await fs.mkdir(round1Dst, { recursive: true });
+    for (const file of await fs.readdir(round1Src)) {
+      await fs.copyFile(path.join(round1Src, file), path.join(round1Dst, file));
+    }
+  } catch {
+    // round1 부재 run은 건너뜀
+  }
   return dst;
 }
 

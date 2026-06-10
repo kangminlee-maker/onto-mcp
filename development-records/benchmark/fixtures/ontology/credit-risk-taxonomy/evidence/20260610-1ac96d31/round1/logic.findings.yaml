@@ -1,0 +1,62 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / ExposureAggregate.total_amount
+    evidence_anchor: credit-risk-ontology.yaml:64-70
+    claim: ExposureAggregate의 '모든 Exposure.amount의 합' 정의와 '일중 신규 여신은 다음 배치까지 미반영' 저장
+      규칙은 일중 신규 Exposure가 존재하는 동안 동시 만족될 수 없습니다.
+    what: ExposureAggregate는 차주 단위 총익스포저를 모든 Exposure.amount의 합으로 정의하지만,
+      total_amount는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 제외한다고 선언합니다.
+    why: "형식적으로는 같은 속성 total_amount가 항상 모든 Exposure.amount의 합이어야 한다는 necessary
+      claim과, 특정 기간에는 일부 Exposure.amount가 포함되지 않는다는 temporal/batch claim이 충돌합니다.
+      일중 신규 여신이 발생하고 다음 배치 전인 상태에서는 total_amount가 동시에 '모든 Exposure.amount의 합'이면서
+      '신규 여신 미반영 값'일 수 없습니다. conflict_pair: credit-risk-ontology.yaml:64-65 /
+      credit-risk-ontology.yaml:68-70. satisfiability_note: inter-claim;
+      ExposureAggregate 정의와 total_amount 저장 규칙의 상호작용에서 조건부 불만족 상태가 생깁니다.
+      modality_note: mixed; 정의상 necessary 집계 기준과 배치 저장 가능 상태가 구분되지 않았습니다.
+      boundary_handoff_note: 시간성·운영 주기 표현은 evolution/structure 관점과 인접하지만, 명시
+      claim 집합 자체가 특정 상태에서 불만족 가능하므로 logic finding으로 소유합니다."
+    how_to_fix: ExposureAggregate의 정의를 as_of 기준의 배치 스냅샷 합계로 좁히거나, 실시간 총익스포저와 배치 저장
+      총익스포저를 별도 속성/엔티티로 분리해 각각의 포함 범위와 as_of 의미를 명시하세요.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 총익스포저 개념 기준
+      failure_condition: 일중 신규 여신이 생성된 뒤 다음 배치가 실행되기 전
+      impact: 같은 ExposureAggregate.total_amount를 리스크 엔진은 전체 익스포저 합계로, 보고 시스템은 배치 스냅샷
+        값으로 해석할 수 있어 한도 소진율과 RiskAppetite 판단의 입력 권위가 약해집니다.
+      evidence_refs:
+        - credit-risk-ontology.yaml:64-70
+        - credit-risk-ontology.yaml:87-89
+    causal_path:
+      root_cause_candidate: ExposureAggregate.total_amount가 실시간 전체 합계 개념과 월말 배치 스냅샷 저장
+        개념을 하나의 necessary 정의로 겹쳐 선언한 것
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: ExposureAggregate는 '모든 Exposure.amount의 합'으로 정의됩니다.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:64-65
+        - cause_id: logic-candidate-001.cause-002
+          claim: 같은 total_amount는 월말 배치로 계산되어 일중 신규 여신을 다음 배치까지 반영하지 않는다고 선언됩니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:68-70
+        - cause_id: logic-candidate-001.cause-003
+          claim: Limit 소진율은 ExposureAggregate.total_amount를 직접 입력으로 사용하므로, 충돌한 총익스포저 정의가
+            공유 계산 계약에 전파됩니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-89
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 규칙 없이 문서 내 명시 claim의 형식적 동시 만족 가능성만 판단했습니다.
+  - "'모든 Exposure.amount의 합'은 별도 제한이 없는 한 현재 온톨로지 범위의 Exposure 전체를 포함하는
+    necessary 정의로 해석했습니다."
+validation:
+  unaddressable_candidates: []

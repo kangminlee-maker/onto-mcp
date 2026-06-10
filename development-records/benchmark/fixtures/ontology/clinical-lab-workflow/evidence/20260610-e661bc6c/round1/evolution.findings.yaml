@@ -1,0 +1,156 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: clinical-lab-ontology.yaml / Test-Assay catalog model
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:46,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:54,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:111,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:127
+    claim: 신규 검사 항목 추가 시 Test와 Assay를 독립적으로 이중 등록해야 해 카탈로그 확장 내성이 낮다.
+    what: Test는 주문 가능한 카탈로그 단위이고 Assay는 분석기 수행 단위로 별도 엔티티지만, 둘 사이의 명시적 매핑 관계가 없다.
+      Result도 Test만 참조하며, notes는 신규 항목을 두 곳 모두에 등록한다고 정한다.
+    why: EMR/LIS 통합의 개념 권위 문서라면 주문 카탈로그와 분석기 수행 카탈로그 사이의 연속성이 확장 시에도 보존되어야 한다. 현재
+      구조에서는 새 검사, 패널 분해, 장비별 assay 교체가 생길 때 Test와 Assay를 각각 수정하고 외부 절차로 맞춰야 하므로
+      누락·불일치가 생겨도 온톨로지 내부에서 발견하거나 추적하기 어렵다.
+    how_to_fix: Test와 Assay 사이에 수행 매핑 개념을 추가한다. 예를 들어 Test-to-Assay mapping 엔티티/관계를
+      두고 버전, 유효기간, 장비 또는 부서 조건, 1:N·N:1 매핑을 표현하게 하며 Result가 어떤 Assay 수행에서 나온 값인지
+      연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 주문 카탈로그와 수행 카탈로그의 확장 가능한 연결을 제공하는 목적.
+      failure_condition: 신규 검사 항목, 장비별 assay, 패널/반사검사처럼 Test와 Assay의 대응이 바뀌거나 1:1이 아닌 항목이 추가될 때.
+      impact: 권위 문서가 변경 지점을 한 곳으로 수렴시키지 못하고 이중 등록 절차에 의존하므로 카탈로그 변경의 연속성, 추적성, 통합 신뢰가
+        약해진다.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:111
+        - materialized-input.md:127
+    causal_path:
+      root_cause_candidate: 주문 카탈로그(Test)와 수행 카탈로그(Assay)를 별도 엔티티로 두었지만 둘 사이의 권위 있는 매핑 관계를 모델링하지 않았다.
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 신규 항목은 Test와 Assay 두 곳 모두에 등록해야 한다고 명시되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:127
+        - cause_id: evolution-candidate-001.cause-002
+          claim: Result는 test_ref로 Test만 참조하고, relations에는 Test-to-Assay 또는
+            Assay-to-Result 연결이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:66
+            - materialized-input.md:108-119
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Test와 Assay는 각각 카탈로그 단위와 수행 단위로 정의되어 있으나 대응 관계가 빠져 있다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:46-60
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: clinical-lab-ontology.yaml / specimen type representation
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:42,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:52,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:60
+    claim: 검체 유형이 enum과 자유 문자열로 분산되어 새 검체·외부 코드 수용 시 구조 수정과 매핑 단절이 발생한다.
+    what: Specimen.specimen_type과 Test.requires_specimen_type은
+      blood/urine/tissue/swab 고정 enum이지만, Assay.specimen_kind는 'WB', 'Serum',
+      'Urine-random' 같은 자유 문자열이다.
+    why: 새 검체 유형이나 LIS/분석기 코드가 추가될 때 Specimen과 Test 쪽은 enum 개정이 필요하고, Assay 쪽은 문자열
+      관례에 의존한다. 같은 검체 개념이 서로 다른 표현 체계로 나뉘어 있어 외부 표준이나 장비 코드 변경 시 기존 데이터와 새 데이터의
+      연속적인 해석이 어렵다.
+    how_to_fix: SpecimenKind 같은 독립 카탈로그 개념을 만들고 Specimen, Test, Assay가 모두 이를 참조하게
+      한다. 필요한 경우 display label, local code, analyzer code, external code,
+      synonym, active period를 속성으로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합에서 검체 유형을 안정적인 공통 개념으로 사용하게 하는 목적.
+      failure_condition: 혈청, 혈장, 전혈, 무작위뇨처럼 현재 enum에 없는 세분 검체나 분석기/LIS별 코드가 추가될 때.
+      impact: 일부 필드는 스키마 변경이 필요하고 일부 필드는 자유 문자열로 우회되므로 통합 규칙, 카탈로그 변경, 과거 데이터 해석이 분산된다.
+      evidence_refs:
+        - materialized-input.md:42
+        - materialized-input.md:52
+        - materialized-input.md:60
+    causal_path:
+      root_cause_candidate: 검체 종류가 재사용 가능한 기준 개념으로 승격되지 않고 필드별 enum 또는 문자열로 직접 인코딩되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Specimen.specimen_type과 Test.requires_specimen_type은 동일한 제한 enum 값을 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42
+            - materialized-input.md:52
+        - cause_id: evolution-candidate-002.cause-002
+          claim: Assay.specimen_kind는 예시가 세분 검체 문자열인 자유 문자열로 정의되어 같은 개념 축을 다른 방식으로 표현한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:60
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 공통 SpecimenKind 엔티티나 참조 관계가 없어 새 검체 유형을 기존 구조 수정 없이 추가할 확장 지점이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:37-60
+            - materialized-input.md:108-119
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: clinical-lab-ontology.yaml / Result and Report status evolution
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:69,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:80,
+      .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:123
+    claim: Result.status와 Report.result_status가 다른 enum으로 중복되어 결과 상태 확장 시 매핑·동기화 변경
+      없이는 연속성이 깨진다.
+    what: Result.status는 preliminary/final/corrected이고 Report.result_status는
+      prelim/finalized/amended이다. 문서상 동일 정보가 유지된다고 하면서도 상태명과 권위 필드가 다르고,
+      corrected 변경은 야간 배치로 Report에 반영된다.
+    why: 새 결과 상태나 보고 상태가 추가되면 두 enum, 상태 전이 규칙, 동기화 규칙을 동시에 고쳐야 한다. 또한 기존 데이터에서
+      preliminary와 prelim, corrected와 amended 같은 대응은 암묵 규칙으로만 남아 EMR/LIS 간 상태
+      표준이나 운영 정책 변경 시 의미 연속성을 보장하기 어렵다.
+    how_to_fix: 상태의 권위 원천과 투영을 분리한다. CanonicalResultStatus 또는 StatusMapping 개념을 두고
+      Result 상태, Report 표시 상태, 전이 조건, 동기화 SLA를 명시적으로 매핑하며 새 상태는 매핑 행 추가로 수용하게
+      한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 임상의가 신뢰하는 보고 상태와 LIS 결과 상태를 변경에도 안정적으로 연결하는 개념 권위 목적.
+      failure_condition: 부분 수정, 재검증, 취소 후 재발행, 외부 상태 코드 도입처럼 현재 세 값 외의 상태나 다른 명명 체계가 필요할 때.
+      impact: 상태 확장이 두 enum과 배치 규칙의 동시 변경을 요구하고, 암묵 매핑에 의존해 과거 결과와 보고서의 상태 의미가 분기될 수
+        있다.
+      evidence_refs:
+        - materialized-input.md:69-83
+        - materialized-input.md:123
+    causal_path:
+      root_cause_candidate: 결과 상태와 보고 표시 상태 사이의 변환 규칙이 별도 개념으로 모델링되지 않고 두 필드의 중복 enum과 문장 규칙에 묶여 있다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Result.status와 Report.result_status가 동일 정보를 유지한다고 설명되지만 서로 다른 enum 값을
+            사용한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-83
+        - cause_id: evolution-candidate-003.cause-002
+          claim: corrected에서 amended로의 반영은 야간 1회 동기화 배치라는 운영 규칙에 의존한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:123
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 상태 매핑 엔티티나 전이 테이블이 없어 새 상태 추가 시 두 필드와 규칙을 함께 수정해야 한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - materialized-input.md:69-83
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 검토 대상은 EMR/LIS 연동 설계의 개념 권위 문서로 사용될 예정이라는 materialized input의 선언을 목적 기준으로
+    삼았다.
+  - session_domain이 none이므로 외부 임상 표준 문서는 사용하지 않았고, 변경 시나리오는 문서 내부의
+    EMR/LIS·카탈로그·분석기·보고 상태 표현에서 직접 도출했다.
+validation:
+  unaddressable_candidates: []

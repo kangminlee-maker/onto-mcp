@@ -1,0 +1,165 @@
+schema_version: 1
+session_id: 20260610-1ac96d31
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml / rating authority model
+    evidence_anchor: review-value-alignment-criteria.yaml:7-8;
+      materialized-input.md:6-8,31-34,48-56,92-98
+    claim: 등급 권위가 엔진·보고·소비 시스템으로 분산되어 공유 개념 기준이라는 목적에서 벗어납니다.
+    what: 온톨로지는 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서를 지향하지만, RiskRating.grade는 엔진 등급,
+      Exposure.risk_grade는 보고서 팀 사용 등급, Borrower.internal_rating은 내부 등급으로 따로
+      존재하며 변환은 각 소비 시스템이 수행한다고 둡니다. 또한 Exposure.risk_grade는 RiskRating.grade에서
+      도출되면서도 보고서 팀이 시장 상황에 따라 수동 조정할 수 있습니다.
+    why: 권위 문서의 목적은 리스크 엔진과 보고 시스템이 같은 개념 기준을 쓰게 하는 것입니다. 그런데 등급 의미와 변환 권위가 온톨로지 내부에
+      닫혀 있지 않고 보고서 팀 수동 조정 및 각 소비 시스템 변환으로 흩어져 있어, 동일 차주·익스포저에 대해 엔진 판단과 보고 판단이
+      다른 값으로 정당화될 수 있습니다. 이는 단순한 구조 취향 문제가 아니라 권위·precedence 목적 자체를 약화합니다.
+    how_to_fix: 등급의 canonical source를 하나로 지정하고,
+      internal_rating/RiskRating.grade/Exposure.risk_grade 사이의 변환표·유효일·예외
+      승인권자·수동 조정 감사 필드를 온톨로지 안에 닫으십시오. 보고용 조정이 필요하다면 원천 등급과 조정 등급을 분리하고 조정 사유 및
+      우선순위를 명시하십시오.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서로서의 등급 기준과 precedence 제공.
+      failure_condition: 엔진 등급, 보고 등급, 내부 등급 또는 소비 시스템별 변환이 서로 다른 결과를 만들 때 어느 값이
+        authoritative한지 target 안에서 결정할 수 없습니다.
+      impact: 공유 기준을 제공해야 할 온톨로지가 등급 해석과 조정 권한을 외부 소비자에게 넘기므로 보고 수치, 엔진 판단, 운영 의사결정 간
+        불일치가 정상 상태로 허용됩니다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:7-8
+        - materialized-input.md:6-8
+        - materialized-input.md:31-34
+        - materialized-input.md:48-56
+        - materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 등급 체계의 canonical authority와 변환/override precedence가 온톨로지 안에 정의되지 않았습니다.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 대상은 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:6-8
+            - review-value-alignment-criteria.yaml:7-8
+        - cause_id: axiology-candidate-001.cause-002
+          claim: Borrower.internal_rating, RiskRating.grade, Exposure.risk_grade가 서로 다른
+            스케일로 존재하고 변환은 각 소비 시스템이 수행한다고 명시되어 있습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20-22
+            - materialized-input.md:53-56
+            - materialized-input.md:31-34
+            - materialized-input.md:97-98
+        - cause_id: axiology-candidate-001.cause-003
+          claim: 보고서 팀이 Exposure.risk_grade를 시장 상황에 따라 수동 조정할 수 있어 엔진 산출 등급과 보고 등급의 우선순위가
+            불명확해집니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:92-93
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml / ExposureAggregate, Limit utilization,
+      RiskAppetite compliance
+    evidence_anchor: review-value-alignment-criteria.yaml:7-8; materialized-input.md:69-83,92-95
+    claim: 월말 배치 총익스포저를 한도 소진율과 리스크 성향 준수 판단에 쓰게 하여 시간성 목적을 훼손합니다.
+    what: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로 정의되지만 월말 배치로 저장되어
+      일중 신규 여신은 다음 배치까지 미반영됩니다. 동시에 Limit 소진율은 이 total_amount를 approved_amount로
+      나눈 값으로 정의되고, RiskAppetite 위반도 ExposureAggregate가 threshold를 초과하는지로 정의됩니다.
+    why: 리스크 엔진과 보고 시스템이 공유하는 기준이라면 같은 수치가 어떤 시점의 사실을 대표하는지 닫혀 있어야 합니다. 현재 모델은 월말
+      스냅샷을 일중 한도 소진·리스크 성향 준수 판단에 연결하면서도 staleness 허용 범위나 실시간/배치 권위 구분을 두지 않습니다.
+      이 때문에 신규 여신이 발생한 당일에는 준수 상태가 실제 익스포저보다 낙관적으로 보고될 수 있습니다.
+    how_to_fix: ExposureAggregate에 calculation_window, freshness_sla,
+      includes_intraday 여부를 추가하고, Limit utilization 및 RiskAppetite compliance가
+      사용할 authoritative exposure source를 배치용과 일중용으로 분리하십시오. 일중 판단이 필요 없으면 해당 지표가
+      월말 보고용임을 명시하고 운영 판단 사용을 금지하십시오.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 시간성 관점에서 리스크 엔진과 보고 시스템이 같은 기준 시점의 익스포저·한도·준수 상태를 공유하게 하는 목적.
+      failure_condition: 일중 신규 여신 발생 후 다음 월말 배치 전까지 Limit 소진율 또는 RiskAppetite
+        compliance를 조회할 때 stale total_amount가 사용됩니다.
+      impact: 공유 개념 기준이 현재 리스크 상태가 아니라 오래된 배치 상태를 authoritative하게 만들 수 있어 한도 초과와 리스크
+        성향 위반의 발견·보고가 지연됩니다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:7-8
+        - materialized-input.md:69-75
+        - materialized-input.md:78-83
+        - materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: 집계값의 시점 권위와 사용처별 freshness 요구가 온톨로지에 분리되어 있지 않습니다.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: ExposureAggregate.total_amount는 모든 Exposure.amount의 합으로 정의됩니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:69-74
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 같은 total_amount가 월말 배치로 저장되고 일중 신규 여신은 다음 배치까지 미반영됩니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:73-75
+        - cause_id: axiology-candidate-002.cause-003
+          claim: Limit 소진율과 RiskAppetite 위반 판단이 이 ExposureAggregate를 사용하도록 정의되어 stale 값이
+            준수 판단에 전파됩니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:78-83
+            - materialized-input.md:93-95
+      unresolved_beyond_evidence: null
+  - candidate_id: axiology-candidate-003
+    target: credit-risk-ontology.yaml / Limit.approved_amount and FX conversion
+      authority
+    evidence_anchor: review-value-alignment-criteria.yaml:7-8; materialized-input.md:59-67,92-94
+    claim: 한도 소진율 계산의 외부 권위가 분산되어 보고·엔진 간 공유 기준을 약화합니다.
+    what: Limit.approved_amount는 승인 시스템이 기록하지만 영업점 CRM의 available_limit과 합산 관리된다고 되어
+      있고, 통화가 다른 경우 환산은 각 시스템의 당일 환율 테이블을 사용한다고 정의되어 있습니다.
+    why: 한도 소진율은 리스크 엔진과 보고 시스템이 모두 사용할 핵심 운영 지표입니다. 그런데 승인 한도와 available_limit의 관계,
+      중복/차감 규칙, 환율 테이블 우선순위가 온톨로지 내부에 없습니다. 각 시스템이 자기 환율 테이블과 합산 규칙을 쓰면 같은
+      borrower/product 조합에 대해 서로 다른 소진율이 산출될 수 있어 공유 개념 기준이라는 목적에 맞지 않습니다.
+    how_to_fix: Limit의 authoritative source, available_limit과의 관계, 합산/차감 규칙, 환율 기준
+      테이블, 환율 적용 시각을 온톨로지에 명시하십시오. 시스템별 환율 사용이 불가피하면 report_value와 engine_value를
+      별도 projection으로 분리하고 reconcile 규칙을 추가하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 동일한 한도 소진율 계산 기준을 공유하게 하는 목적.
+      failure_condition: 통화가 다르거나 승인 시스템 한도와 CRM available_limit이 함께 쓰이는 경우, 시스템별 환율
+        테이블 또는 합산 방식 차이로 서로 다른 소진율이 계산됩니다.
+      impact: 한도 관리 지표가 공유 기준이 아니라 시스템별 계산 결과가 되어 운영 보고와 엔진 판단의 비교 가능성이 낮아집니다.
+      evidence_refs:
+        - review-value-alignment-criteria.yaml:7-8
+        - materialized-input.md:59-67
+        - materialized-input.md:93-94
+    causal_path:
+      root_cause_candidate: 한도와 환산 계산의 authoritative source 및 precedence가 온톨로지 내부에 닫혀 있지 않습니다.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Limit.approved_amount는 승인 시스템이 기록하고 CRM available_limit과 합산 관리된다고 되어
+            있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:59-67
+        - cause_id: axiology-candidate-003.cause-002
+          claim: Limit 소진율은 ExposureAggregate.total_amount / Limit.approved_amount로 정의됩니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:93-94
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 통화가 다른 경우 각 시스템의 당일 환율 테이블을 사용한다고 하여 동일 지표의 계산 권위가 시스템별로 분산됩니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:93-94
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none으로 명시되어 도메인 전용 규정 문서는 사용하지 않았습니다.
+  - 가치 판단의 기준은 허용된 review-value-alignment-criteria의 사용자 의도와 materialized input에
+    포함된 대상의 선언 목적에 한정했습니다.
+  - 역할 정의 파일은 상대 경로 해석상 읽기에 실패했으나, prompt packet에 동일 역할 정의가 임베드되어 있어 그 범위 안에서
+    axiology 관점을 적용했습니다.
+validation:
+  unaddressable_candidates: []

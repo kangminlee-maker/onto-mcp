@@ -1,0 +1,200 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: CriticalValue notification model
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:95-101
+    claim: CriticalValue 통보 행위의 감사 증거 개념이 온톨로지 내부에 없다.
+    what: CriticalValue는 `notified` boolean만 갖고, 통보 시각과 수신자는 외부 전화 기록 대장에 있다고 설명한다.
+      그러나 온톨로지에는 통보 행위, 수신자, 통보자, 시각, 근거, 통보 채널, 실패/재시도 같은 통제 행위 증거를 표현하는 엔티티나
+      관계가 없다.
+    why: 이 문서는 EMR/LIS 연동 설계의 개념 권위 문서로 쓰일 예정인데, critical value 통보는 결과 보고보다 더 강한 운영
+      통제가 필요한 행위다. 내부 모델이 `notified` 여부만 보유하면 EMR과 LIS가 통보 완료 여부를 신뢰하더라도 누가 언제
+      누구에게 어떤 근거로 통보했는지 재구성할 수 없어, 통보 분쟁·누락·지연을 통합 모델 안에서 검증할 수 없다.
+    how_to_fix: "`CriticalValueNotification` 또는 `NotificationEvent` 같은 개념을 추가하고
+      `critical_value_ref/result_ref`, `notified_at`, `notified_by`,
+      `recipient`, `channel`, `acknowledged_at`, `outcome`, `evidence_ref`를
+      모델링한다. `CriticalValue.notified`는 이 이벤트에서 파생되는 값으로 정의하거나 제거한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 critical value 통보 상태와 증거를 신뢰 가능하게 공유하는 목적
+      failure_condition: CriticalValue가 통보 완료 여부만 표현하고 통보 행위의 행위자·시각·수신자·근거를 온톨로지 내부에서 표현하지 못하는 경우
+      impact: 환자 안전에 직결되는 통보 완료 판단이 외부 대장과 boolean 값에 분산되어, 연동 시스템이 통보 책임과 감사 증거를
+        재구성하지 못한다.
+      evidence_refs:
+        - materialized-input.md:95-101
+    causal_path:
+      root_cause_candidate: CriticalValue 통보를 상태 플래그로만 두고 통제 행위 증거를 별도 온톨로지 개념으로 승격하지 않았다.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: CriticalValue에는 `notified` boolean과 외부 전화 기록 대장 언급만 있고 통보 이벤트 엔티티나 관계가
+            없다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:95-101
+        - cause_id: coverage-candidate-001.cause-002
+          claim: 따라서 통보의 행위자·시각·수신자·근거는 EMR/LIS 권위 모델 내부에서 조회하거나 검증할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:95-101
+        - cause_id: coverage-candidate-001.cause-003
+          claim: Critical value 통보 완료 상태를 연동 시스템이 신뢰할 때 감사·분쟁·누락 확인에 필요한 개념 범위가 부족해진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:2-5
+            - materialized-input.md:95-101
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: Specimen lifecycle
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:33-40,113
+    claim: Specimen lifecycle이 분석 이후의 보관·폐기 구간을 온톨로지에서 커버하지 않는다.
+    what: Specimen lifecycle은 `collected`, `received`, `in_analysis`, `analyzed`까지만
+      정의되어 있고, state rule은 analyzed 이후 보관/폐기를 각 부서 내규에 맡긴다고만 한다. 검체 보관, 장기 보관,
+      폐기, 반출, 재검 가능 기간, 폐기 보류 같은 종료 구간 개념이 없다.
+    why: 검체는 분석 완료 뒤에도 재검, 정정, 감사, 법정 보관, 폐기 책임과 연결된다. EMR/LIS 통합의 개념 권위 문서가 분석 시점에서
+      lifecycle을 끝내면 결과 정정이나 재검 요청 시 검체가 아직 사용 가능한지, 어느 부서 정책이 적용되는지, 폐기 완료 여부를
+      공통 모델로 판단할 수 없다.
+    how_to_fix: Specimen lifecycle에 `stored`, `retained`, `disposed`,
+      `released/transferred`, `discard_blocked` 등 필요한 종료 상태를 추가하고, 보관 위치·보관
+      시작/종료 시각·폐기 시각·폐기 승인/근거를 표현하는 속성 또는 이벤트를 정의한다. 부서 내규는 상태 전이 규칙의 파라미터로
+      연결한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 주문부터 보고까지뿐 아니라 결과 정정·재검·감사에 필요한 검체 상태를 EMR/LIS가 공통으로 해석하는 목적
+      failure_condition: 검체가 `analyzed` 이후 보관·폐기 상태 없이 부서 내규로만 처리되는 경우
+      impact: 분석 이후 검체 가용성, 폐기 책임, 재검 가능 여부가 권위 모델 밖으로 빠져 운영 시스템 간 상태 해석이 갈라질 수 있다.
+      evidence_refs:
+        - materialized-input.md:33-40
+        - materialized-input.md:113
+    causal_path:
+      root_cause_candidate: Specimen 상태 모델을 분석 수행 구간까지만 정의하고 종료 lifecycle을 온톨로지 범위에 포함하지 않았다.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: Specimen lifecycle은 `analyzed`에서 끝난다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:33-40
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 분석 이후 보관/폐기는 각 부서 내규를 따른다고 되어 있으나 온톨로지 상태나 관계로 표현되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:113
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 그 결과 재검·정정·감사 시점의 검체 가용성과 폐기 상태를 EMR/LIS 공통 개념으로 재구성할 수 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:2-5
+            - materialized-input.md:33-40
+            - materialized-input.md:113
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: Test and Assay catalog coverage
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:42-58,116
+    claim: Test와 Assay 병행 카탈로그에 단일 권위와 매핑 개념이 빠져 있다.
+    what: Test는 주문 가능한 카탈로그 단위이고 Assay는 분석기 수행 단위로 정의되어 있으며 신규 항목은 두 곳 모두에 등록한다고 한다.
+      그러나 Test와 Assay 사이의 매핑 관계, 버전, 활성 기간, 동기화 책임, 어느 쪽이 주문/수행/보고 코드의 권위인지가 모델에
+      없다.
+    why: EMR/LIS 연동에서는 주문 코드와 분석기 수행 코드가 다를 수 있어 카탈로그 매핑이 핵심 범위다. 두 카탈로그를 병행 관리하면서
+      단일 원본과 매핑 lifecycle을 정의하지 않으면 신규 항목 등록, 코드 변경, 단종, 대체 검사 전환 때
+      Order/Test/Result가 어떤 Assay 수행으로 이어졌는지 권위 있게 해석하기 어렵다.
+    how_to_fix: "`TestAssayMapping` 또는 `CatalogItemMapping`을 추가해 `test_ref`,
+      `assay_ref`, `effective_from`, `effective_to`, `status`, `mapping_type`,
+      `authority_system`, `created/approved_by`를 표현한다. Test와 Assay 각각의 코드 권위와
+      변경/단종 lifecycle도 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR 주문 카탈로그와 LIS/분석기 수행 카탈로그를 일관되게 연결하는 개념 권위 목적
+      failure_condition: Test와 Assay가 병행 등록되지만 상호 매핑, 유효기간, 권위 시스템이 정의되지 않는 경우
+      impact: 주문 항목과 실제 수행 항목 사이의 변환 근거가 모델 밖에 남아 코드 불일치, 신규 항목 누락, 과거 결과 해석 오류가 발생할 수
+        있다.
+      evidence_refs:
+        - materialized-input.md:42-58
+        - materialized-input.md:116
+    causal_path:
+      root_cause_candidate: 병행 카탈로그를 별도 엔티티로 둔 뒤 두 개념을 묶는 권위 매핑 개념을 추가하지 않았다.
+      root_cause_step_id: coverage-candidate-003.cause-004
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Test는 주문 가능한 카탈로그 단위이고 Assay는 분석기 수행 단위로 따로 정의되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:42-58
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 현재 신규 항목은 두 곳 모두에 등록한다고 되어 있어 병행 관리가 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:116
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 하지만 relations에는 Test와 Assay를 연결하는 관계가 없고, 어느 카탈로그가 어떤 값의 권위인지도 없다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:104-111
+            - materialized-input.md:116
+        - cause_id: coverage-candidate-003.cause-004
+          claim: 따라서 주문 코드와 수행 코드의 변환·변경·과거 유효성을 권위 문서 안에서 보장하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:2-5
+            - materialized-input.md:42-58
+            - materialized-input.md:116
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: TAT calculation concept
+    evidence_anchor: .onto/review/20260610-e661bc6c/execution-preparation/materialized-input.md:34,78-87,117
+    claim: turnaround_time(TAT)의 권위 계산 개념과 이력 차원이 없다.
+    what: TAT는 `collected_at`부터 `released_at`까지로 계산하며 대시보드 팀이 자체 계산식을 유지한다고만 되어 있다.
+      온톨로지에는 TAT metric, 계산 기준, 제외/중단 시간, priority별 기준, 계산 주체, 계산 버전, 산출 시각이 없다.
+    why: TAT는 운영 성과와 SLA성 판단에 쓰이는 파생 값인데, EMR/LIS 권위 모델 밖에서 대시보드가 자체 계산하면 같은 주문·보고
+      데이터로도 시스템별 값이 달라질 수 있다. 특히 corrected/amended 이후 재발행이나 release 시각 변경이 있을 때
+      과거 시점의 TAT를 재구성할 개념이 부족하다.
+    how_to_fix: "`TurnaroundTimeMetric` 또는 `OperationalMetric` 개념을 추가하고 source
+      timestamps, calculation_policy/version, effective period, computed_at,
+      computed_by/system, recomputation trigger를 정의한다. 대시보드 표시값은 이 권위 계산의
+      projection으로 둔다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합 권위 문서가 운영 지표를 일관되게 산출·해석하게 하는 목적
+      failure_condition: TAT 계산이 온톨로지 외부 대시보드 계산식에 맡겨지고 계산 정책·버전·권위가 모델에 없는 경우
+      impact: 운영 지표가 시스템별로 달라지고, 정정·재발행 이후 과거 TAT 값의 근거를 재구성하기 어렵다.
+      evidence_refs:
+        - materialized-input.md:34
+        - materialized-input.md:78-87
+        - materialized-input.md:117
+    causal_path:
+      root_cause_candidate: TAT를 권위 모델의 파생 개념으로 승격하지 않고 외부 대시보드 계산식으로 남겨두었다.
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Specimen에는 `collected_at`, Report에는 `released_at`이 있어 TAT 원천 시각은 일부 존재한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:34
+            - materialized-input.md:78-87
+        - cause_id: coverage-candidate-004.cause-002
+          claim: TAT는 두 시각 사이로 계산하며 대시보드 팀이 자체 계산식을 유지한다고 되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:117
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 온톨로지에는 계산 정책, 버전, 산출 권위, 이력 개념이 없으므로 동일 데이터의 운영 지표가 외부 구현마다 달라질 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:2-5
+            - materialized-input.md:117
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았다.
+  - 임상검사 EMR/LIS 통합의 개념 권위 문서는 주문, 검체, 수행 카탈로그, 결과, 보고, critical value 통보, 운영
+    지표의 권위와 추적 가능성을 최소 범위로 포함해야 한다고 보았다.
+  - Critical value 통보, 카탈로그 매핑, TAT 산출은 복수 시스템 사이에서 상태나 값이 공유될 수 있는 운영 개념으로 보았다.
+validation:
+  unaddressable_candidates: []

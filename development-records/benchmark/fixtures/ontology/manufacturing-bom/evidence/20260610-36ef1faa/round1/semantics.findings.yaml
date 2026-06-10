@@ -1,0 +1,186 @@
+schema_version: 1
+session_id: 20260610-36ef1faa
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: AlternatePart
+    evidence_anchor: .onto/review/20260610-36ef1faa/execution-preparation/materialized-input.md:37
+    claim: AlternatePart의 정의가 대체 관계를 항상 양방향으로 설명하지만 속성은 단방향을 기본값으로 둔다.
+    what: "`AlternatePart.definition`은 `A의 대체가 B이면 B의 대체도 A`라고 하여 대체 가능성을 대칭 관계로
+      정의한다. 그러나 같은 엔티티의 `direction`은 `[one_way, bidirectional]`이고 note는 `기본은
+      one_way`라고 한다."
+    why: 대체 가능 부품은 한쪽 대체만 허용되는 경우와 상호 대체가 가능한 경우의 의미가 다르다. 현재 정의는 모든 인스턴스가 양방향 대체라고
+      읽히는데, 속성은 단방향 인스턴스를 기본으로 허용하므로 개념 이름·정의·속성 의미가 같은 대상을 가리키지 않는다. PLM/MES 통합
+      기준 문서에서 이 의미가 불명확하면 구매/생산 대체 허용 범위를 반대로 해석할 수 있다.
+    how_to_fix: "`AlternatePart` 정의를 방향성을 가진 대체 관계로 고치고, 양방향은 `direction:
+      bidirectional`일 때만 성립한다고 명시한다. 또는 실제로 항상 대칭 관계라면 `direction` 속성과 `one_way`
+      값을 제거한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서에서 품목 대체 관계의 의미 기준을 제공하는 목적.
+      failure_condition: 단방향 대체 인스턴스가 기본으로 생성되거나 해석될 때, 정의 문장은 이를 양방향 대체로 해석하게 만든다.
+      impact: 대체 부품 허용 범위가 제조, 구매, 품질 승인 흐름에서 반대로 적용될 수 있어 생산 투입 오류나 승인되지 않은 대체 사용 위험이
+        생긴다.
+      evidence_refs:
+        - materialized-input.md:37-45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 동일 개념 안에서 대체 관계의 방향성 의미를 단일 기준으로 정하지 않았다.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: "`AlternatePart.definition`은 대체 관계를 대칭 관계로 정의한다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-38
+        - cause_id: semantics-candidate-001.cause-002
+          claim: "`AlternatePart.direction`은 `one_way`와 `bidirectional`을 모두 허용하고 기본을
+            `one_way`라고 설명한다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:42-45
+        - cause_id: semantics-candidate-001.cause-003
+          claim: 따라서 같은 인스턴스가 정의상 양방향이면서 속성상 단방향일 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:37-45
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: InspectionPlan
+    evidence_anchor: .onto/review/20260610-36ef1faa/execution-preparation/materialized-input.md:77
+    claim: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획 문서와 실행 공정 단계를 혼동한다.
+    what: "`InspectionPlan`은 `검사 계획`이고 `sampling_rule`, `acceptance_criteria` 같은 검사
+      파라미터를 가진다고 정의되어 있다. 그런데 `is_a: Operation`으로 모델링되어 라우팅의 실행 단계인 `Operation`과
+      같은 존재론적 유형으로 취급된다."
+    why: 계획은 검사 수행 방법과 기준을 담는 정보/제도적 산출물이고, Operation은 라우팅에서 수행되는 실행 단계다. 검사 공정 자체가
+      Operation일 수는 있지만, InspectionPlan은 그 공정에 붙는 기준 또는 파라미터 집합에 가깝다. 이 하위유형 관계는
+      '계획이 곧 실행 공정'이라는 의미를 만들며, 라우팅 실행과 품질 기준 관리를 같은 객체 생명주기로 묶어버린다.
+    how_to_fix: "`InspectionPlan`을 독립 엔티티로 두고 `Operation` 또는 검사 유형의 `Operation`이
+      `inspection_plan_ref`로 참조하게 한다. 검사 실행 단계가 필요하면 별도의 `InspectionOperation
+      is_a Operation`과 `InspectionPlan`을 분리한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅과 검사 계획을 PLM/MES 통합 기준에서 의미적으로 구분하는 목적.
+      failure_condition: 검사 기준 변경, 샘플링 룰 변경, 라우팅 공정 변경이 서로 다른 생명주기를 가져야 할 때
+        `InspectionPlan is_a Operation` 관계가 같은 유형으로 처리하게 만든다.
+      impact: MES 라우팅 실행 객체와 품질 기준 문서가 혼동되어 변경관리, 배포, 추적성 기준이 부정확해질 수 있다.
+      evidence_refs:
+        - materialized-input.md:47-53
+        - materialized-input.md:77-82
+        - materialized-input.md:88-89
+    causal_path:
+      root_cause_candidate: 검사 수행 행위와 검사 계획 문서/파라미터를 같은 하위유형 계층에 배치했다.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: "`Operation`은 라우팅의 한 공정 단계로 정의된다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47-53
+        - cause_id: semantics-candidate-002.cause-002
+          claim: "`InspectionPlan`은 검사 계획 및 검사 파라미터 확장으로 정의된다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77-82
+        - cause_id: semantics-candidate-002.cause-003
+          claim: "`InspectionPlan`이 `Operation`의 하위 유형으로 선언되어 계획 객체가 실행 공정 단계로 취급된다."
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77-80
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: integrity_rules[0]
+    evidence_anchor: .onto/review/20260610-36ef1faa/execution-preparation/materialized-input.md:93
+    claim: 스크랩 재투입을 Assembly 자기 하위 포함으로 모델링하는 것은 제품 구성 관계와 공정 재순환 관계를 혼동한다.
+    what: 무순환 BOM 규칙은 BOM을 비순환으로 요구하면서, 재생 원료 회수 공정은 `Assembly가 자기 하위에 자신을 포함`하는
+      방식으로 모델링한다고 예외를 둔다.
+    why: BOM의 parent-child 관계는 상위 품목을 만들기 위해 필요한 하위 품목 구성 의미를 가진다. 스크랩 회수와 재투입은 제조
+      공정의 산출물 회수 및 투입 흐름에 가깝고, 완제품/조립품이 자기 자신의 구성품이라는 의미와 다르다. 이 예외는 BOM 구성 의미를
+      공정 순환 의미로 재사용한다.
+    how_to_fix: BOM은 구성 관계로 유지하고, 스크랩 재투입은 별도 `Byproduct`, `RecoveredMaterial`,
+      `Rework/RecyclingOperation`, 또는 라우팅의 투입/산출 관계로 표현한다. 순환 허용이 필요하면 BOM 자기참조가
+      아니라 공정 흐름 모델에서 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM과 공정/라우팅의 의미 경계를 PLM/MES 통합 기준으로 제공하는 목적.
+      failure_condition: 스크랩 재투입 사례가 BOM 자기참조로 기록될 때, 구성 폭발, 소요량 계산, 원가 롤업이 제품이 자기 자신을
+        소비한다는 의미로 해석할 수 있다.
+      impact: 구성 의미와 공정 재순환 의미가 섞여 제조 운영 계산과 추적성 기준의 신뢰가 낮아진다.
+      evidence_refs:
+        - materialized-input.md:29-35
+        - materialized-input.md:84-88
+        - materialized-input.md:93-94
+    causal_path:
+      root_cause_candidate: BOM 구성 관계를 공정 재순환 관계의 표현 수단으로 재사용했다.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: "`BomLine`은 상위 품목이 하위 품목을 얼마나 쓰는지 나타내는 BOM 한 줄로 정의된다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29-35
+        - cause_id: semantics-candidate-003.cause-002
+          claim: 무순환 규칙의 예외는 재생 원료 회수 공정을 Assembly 자기 하위 포함으로 모델링한다고 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:93-94
+        - cause_id: semantics-candidate-003.cause-003
+          claim: 그 결과 공정 재투입 흐름이 제품 구성 자기참조로 의미화된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:29-35
+            - materialized-input.md:93-94
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260610-36ef1faa/execution-preparation/materialized-input.md:63
+    claim: capacity_per_shift가 작업장마다 다른 단위의 값을 같은 속성명으로 담아 의미가 불안정하다.
+    what: "`capacity_per_shift`는 교대당 처리 능력으로 정의되지만 note에서 단위가 작업장마다 `개수 또는 시간`으로
+      다르다고 설명한다."
+    why: 개수 기준 처리량과 시간 기준 가용량은 같은 숫자 속성으로 비교하거나 집계할 수 없는 다른 물리량이다. 같은 속성명이 서로 다른 차원의
+      값을 담으면 MES 계획, 부하 산정, 작업장 비교에서 숫자의 의미를 속성명만으로 알 수 없다.
+    how_to_fix: 용량 값을 수량 기준과 시간 기준으로 분리하거나, `capacity_value`, `capacity_uom`,
+      `capacity_basis`를 함께 두어 차원을 명시한다. 가능하면 작업장별 환산 기준도 별도 마스터로 둔다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 작업장 능력 개념을 라우팅 및 생산계획 통합 기준으로 명확히 정의하는 목적.
+      failure_condition: 여러 WorkCenter의 `capacity_per_shift`를 계획/부하 계산에서 같은 단위의 숫자로
+        소비할 때 단위 의미가 달라진다.
+      impact: 작업장 능력 산정과 생산 오더 가능 여부 판단에서 의미가 다른 값을 같은 값처럼 처리할 수 있다.
+      evidence_refs:
+        - materialized-input.md:63-67
+        - materialized-input.md:87-89
+    causal_path:
+      root_cause_candidate: 용량의 물리 차원과 단위를 속성 모델에 포함하지 않았다.
+      root_cause_step_id: semantics-candidate-004.cause-003
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: "`WorkCenter.capacity_per_shift`는 단일 number 속성이다."
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63-67
+        - cause_id: semantics-candidate-004.cause-002
+          claim: 같은 속성의 단위가 작업장마다 개수 또는 시간으로 달라질 수 있다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: semantics-candidate-004.cause-003
+          claim: 따라서 같은 이름의 속성이 서로 다른 의미 차원의 값을 나타낸다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:63-67
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았다.
+  - 일반 제조/PLM/MES 문맥에서 BOM parent-child는 제품 구성 소요 관계, Routing/Operation은 제조 실행
+    순서, InspectionPlan은 검사 기준 또는 계획 정보로 보았다.
+  - 일반 제조 문맥에서 대체 부품 관계는 단방향 대체와 양방향 상호 대체가 서로 다른 승인 의미를 가진다고 보았다.
+  - 생산계획과 MES에서 capacity 숫자는 단위 또는 산정 기준이 함께 있어야 같은 의미로 비교·계산될 수 있다고 보았다.
+validation:
+  unaddressable_candidates: []

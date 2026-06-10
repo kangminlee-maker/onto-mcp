@@ -1,0 +1,112 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules BOM acyclicity rule
+    evidence_anchor: manufacturing-bom-ontology.yaml:88-89
+    claim: BOM 비순환 필수 규칙과 자기 하위 포함 모델링 예외가 동일 claim 안에서 양립하지 않습니다.
+    what: 무결성 규칙은 먼저 'BOM은 비순환이어야 한다'고 선언한 뒤, 같은 문장에서 스크랩 재투입은 'Assembly가 자기 하위에 자신을
+      포함하는 형태'로 모델링한다고 선언합니다. 자기 자신을 하위에 포함하는 BOM은 길이 1의 순환이므로 비순환 필수 규칙과 동시에
+      만족될 수 없습니다.
+    why: "논리 관점에서는 domain-specific 제조 판단 없이도 'acyclic'과 'self-child inclusion'이 같은
+      BOM 모델에 동시에 적용될 수 없다는 형식 모순을 판정할 수 있습니다. conflict_pair:
+      manufacturing-bom-ontology.yaml:89 ↔ manufacturing-bom-ontology.yaml:89.
+      satisfiability_note: intra-claim; 단일 무결성 문장 내부에서 일반 필수 규칙과 예외 모델링 방식이
+      충돌합니다. modality_note: mixed; necessary 비순환 제약과 possible/exception 자기참조 허용이
+      충돌합니다. boundary_handoff_note: 예외 구조를 별도 관계나 공정 부산물 흐름으로 분리해야 하는지는
+      structure lens 범위와 맞닿지만, 현재 문장 자체의 동시 만족 불가능성은 logic 소유입니다."
+    how_to_fix: 스크랩 재투입을 BOM parent-child 순환으로 표현하지 않도록 별도 ScrapReturn/ReworkFlow 같은
+      공정 흐름 관계로 분리하거나, 비순환 규칙을 '일반 BOM parent-child 그래프는 비순환이며 스크랩 재투입은 BOM 그래프
+      밖의 별도 흐름으로 모델링한다'처럼 충돌 없이 재작성하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM 무결성 규칙과 제조 운영 기준을 제공하는 목적.
+      failure_condition: BOM 검증기가 비순환 규칙을 적용하면서 동시에 스크랩 재투입을 자기참조 BOM 라인으로 수용해야 할 때,
+        같은 모델 인스턴스를 유효/무효로 동시에 판단하게 됩니다.
+      impact: BOM 전개, 자재소요, 원가 누적, 생산 오더 생성 같은 downstream 처리가 순환 차단 기준을 신뢰할 수 없어 검토
+        결과의 실행 가능성이 약화됩니다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:88-89
+        - manufacturing-bom-ontology.yaml:24-30
+    causal_path:
+      root_cause_candidate: 스크랩 재투입이라는 공정 흐름 예외를 BOM parent-child 그래프의 자기참조로 직접 편입한 규칙 작성 방식.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: 무결성 규칙은 BOM이 비순환이어야 한다고 선언합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:88-89
+        - cause_id: logic-candidate-001.cause-002
+          claim: 같은 규칙은 스크랩 재투입을 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 선언합니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:89
+        - cause_id: logic-candidate-001.cause-003
+          claim: BomLine은 parent_ref가 Assembly이고 child_ref가 Part이며, Assembly는 Part의 일종이므로
+            Assembly 자기참조는 BOM 그래프의 순환입니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:18-29
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml AlternatePart definition and direction enum
+    evidence_anchor: manufacturing-bom-ontology.yaml:32-40
+    claim: AlternatePart는 대체 관계를 필수 대칭으로 정의하면서 동시에 one_way 방향 값을 허용하고 기본값으로 둡니다.
+    what: AlternatePart 정의는 'A의 대체가 B이면 B의 대체도 A'라고 하여 관계를 양방향으로 고정합니다. 그러나
+      direction 속성은 one_way와 bidirectional을 모두 허용하고, note는 기본을 one_way로 둔다고 합니다.
+    why: "정의가 대체 가능성을 necessary bidirectional relation으로 선언한 상태에서 같은 엔티티의 속성은
+      possible/default one_way relation을 허용합니다. 한 AlternatePart 인스턴스가 기본값
+      one_way를 가지면 정의의 대칭성 조건을 만족할 수 없습니다. conflict_pair:
+      manufacturing-bom-ontology.yaml:33 ↔
+      manufacturing-bom-ontology.yaml:37-40. satisfiability_note: inter-claim;
+      엔티티 정의 claim과 direction enum/default claim이 같은 AlternatePart 인스턴스의 관계 양상을
+      서로 다르게 강제합니다. modality_note: mixed; necessary bidirectional 정의와
+      possible/default one_way 속성이 충돌합니다. boundary_handoff_note: '대체' 용어 의미를
+      상호대체와 승인대체로 나누는 문제는 semantics와 맞닿지만, 현재 정의와 enum이 명시적으로 반대 양상을 허용하므로 logic
+      finding으로 유지합니다."
+    how_to_fix: 대체 관계를 항상 대칭으로 둘 것이라면 direction 속성과 one_way 값을 제거하십시오. 단방향 승인 대체도
+      필요하다면 정의를 'direction이 bidirectional일 때만 역방향 대체가 성립한다'로 바꾸고 기본값 one_way의
+      의미를 명시하십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준에서 품목 대체 가능성의 유효 범위와 방향을 일관되게 판정하는 목적.
+      failure_condition: 기본 one_way AlternatePart 인스턴스를 생성하거나 해석할 때, 정의상으로는 역방향 대체도
+        참이어야 하지만 속성상으로는 역방향 대체가 보장되지 않습니다.
+      impact: 자재 부족 대체, 구매 대체, 생산 현장 투입 허용 판단에서 같은 대체 관계를 양방향/단방향으로 다르게 해석할 수 있어 개념 기준
+        문서의 판정력이 약화됩니다.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:32-40
+        - manufacturing-bom-ontology.yaml:86
+    causal_path:
+      root_cause_candidate: AlternatePart의 관계 양상 정의를 대칭 관계로 고정하면서 방향성 속성과 기본값을 동시에 도입한 모델링 방식.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: AlternatePart 정의는 A의 대체가 B이면 B의 대체도 A라고 선언합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:32-33
+        - cause_id: logic-candidate-002.cause-002
+          claim: direction 속성은 one_way와 bidirectional을 모두 허용합니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:37-39
+        - cause_id: logic-candidate-002.cause-003
+          claim: direction note는 기본값을 one_way로 선언하여 정의의 필수 대칭성과 반대되는 기본 인스턴스를 가능하게 합니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:40
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 제조 도메인별 외부 규칙은 사용하지 않고, 문서 내부 claim 구조만으로 동시 만족 가능성을
+    검토했습니다.
+  - materialized input과 manufacturing-bom-ontology.yaml의 동일 내용 및 줄 번호를 근거로
+    사용했습니다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,131 @@
+schema_version: 1
+session_id: 20260610-5fbe917f
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml / Assay workflow connectivity
+    evidence_anchor: clinical-lab-ontology.yaml:49, clinical-lab-ontology.yaml:57,
+      clinical-lab-ontology.yaml:103, clinical-lab-ontology.yaml:121
+    claim: Assay is structurally disconnected from the order-to-result workflow.
+    what: Assay is defined as the analyzer execution unit, but the relation graph
+      does not connect Assay to Test, Specimen, Result, or Order. It only has
+      attributes, including a Department reference, while the relations list
+      connects Test, Specimen, Result, Report, Order, Department, and Staff
+      without any Assay edge.
+    why: The ontology states that Test and Assay are both maintained for new catalog
+      items, and Assay is the execution-side unit. Without an explicit
+      Test-to-Assay or Result-to-Assay connection, EMR/LIS integration cannot
+      structurally trace which analyzer-side assay implements an ordered test or
+      produced a result. This weakens the document as a concept authority
+      because one of the core execution concepts is not reachable from the main
+      workflow graph.
+    how_to_fix: Add explicit relations such as Test maps_to Assay, Assay
+      performed_on Specimen, and/or Result produced_by Assay, with cardinality
+      and lifecycle expectations aligned to the intended LIS workflow.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as the concept authority document for EMR/LIS integration
+        from Order to Report.
+      failure_condition: When an integration or implementation needs to map ordered
+        catalog tests to analyzer execution units and result provenance, the
+        relation graph provides no path through Assay.
+      impact: The implementation can preserve Order/Test/Result links while omitting
+        or inconsistently inventing the analyzer execution mapping, reducing
+        trust in the ontology as the canonical structure for LIS integration.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:49
+        - clinical-lab-ontology.yaml:57
+        - clinical-lab-ontology.yaml:103
+        - clinical-lab-ontology.yaml:121
+    causal_path:
+      root_cause_candidate: The ontology defines Assay as a workflow entity but does
+        not include Assay in the relations graph.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay is defined as the analyzer execution unit for catalog items.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:49
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relation graph contains no edge with Assay as either from or to.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:103
+        - cause_id: structure-candidate-001.cause-003
+          claim: The notes require new items to be registered in both Test and Assay,
+            making their missing structural bridge operationally relevant.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:121
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml / CriticalValue result-notification path
+    evidence_anchor: clinical-lab-ontology.yaml:95, clinical-lab-ontology.yaml:101,
+      clinical-lab-ontology.yaml:103
+    claim: CriticalValue has no structural path from Result to notification handling.
+    what: CriticalValue is defined as the dangerous-result range requiring immediate
+      notification, but it is only attached to Test through an attribute. The
+      relations list has no CriticalValue edge, and Result has no relation or
+      attribute that records critical-value evaluation or notification linkage.
+    why: Because CriticalValue is not connected to Result, Report, Staff, or any
+      notification record in the ontology graph, a produced Result cannot be
+      structurally traced to the critical-value rule that applied or to the
+      notification obligation indicated by CriticalValue.notified. For a
+      workflow authority document, this leaves an operationally important path
+      disconnected.
+    how_to_fix: Model the critical-value path explicitly, for example Result
+      evaluated_against CriticalValue and CriticalValue notification_recorded_by
+      Staff or CriticalValueNotification, or place critical
+      evaluation/notification as a structured relation from Result with
+      timestamp and recipient concepts if those are in scope.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use as a concept authority for operational EMR/LIS workflow
+        behavior and integration risk around reportable results.
+      failure_condition: When a result falls into a critical range, the ontology
+        provides no structural route from the Result to the applicable
+        CriticalValue or notification handling.
+      impact: Implementations may treat critical notification as an ungoverned side
+        process even though the ontology declares it as part of the result
+        concept space, weakening operational completeness and auditability.
+      evidence_refs:
+        - clinical-lab-ontology.yaml:95
+        - clinical-lab-ontology.yaml:101
+        - clinical-lab-ontology.yaml:103
+    causal_path:
+      root_cause_candidate: CriticalValue is modeled as an entity with only a Test
+        reference and is omitted from the relation graph.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue is declared as the range requiring immediate notification.
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:95
+        - cause_id: structure-candidate-002.cause-002
+          claim: CriticalValue.notified records completion but points notification details
+            outside the modeled graph.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:101
+        - cause_id: structure-candidate-002.cause-003
+          claim: No relation connects CriticalValue to Result, Report, Staff, or a
+            notification record.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:103
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Session domain is none, so no external clinical-laboratory domain document
+    was used.
+  - The relations list is treated as the authoritative workflow relation graph;
+    typed ref attributes are considered local references but not a substitute
+    for missing workflow relations when a concept is intended to participate in
+    the main process.
+validation:
+  unaddressable_candidates: []

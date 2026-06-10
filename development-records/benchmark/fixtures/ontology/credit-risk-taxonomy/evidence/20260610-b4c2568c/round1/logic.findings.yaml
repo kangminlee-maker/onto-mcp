@@ -1,0 +1,74 @@
+schema_version: 1
+session_id: 20260610-b4c2568c
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.ExposureAggregate
+    evidence_anchor: .onto/review/20260610-b4c2568c/execution-preparation/materialized-input.md:69-75
+    claim: ExposureAggregate.total_amount is both defined as the sum of all
+      Exposure.amount and as a stored monthly-batch value that excludes intraday
+      new exposures until the next batch.
+    what: "The ontology makes two claims about the same aggregate value that cannot
+      both hold for borrowers with intraday new Exposure records: it is the
+      total of all Exposure.amount, yet it explicitly omits intraday new loans
+      until the next batch."
+    why: The definition at lines 69-70 gives ExposureAggregate a necessary totality
+      property over all Exposure.amount, while the total_amount note at lines
+      73-75 states a condition where some Exposure.amount values are not
+      reflected. Under that condition, the stored total_amount is not the sum of
+      all Exposure.amount, so risk-engine and reporting consumers cannot rely on
+      the same formal meaning for the aggregate.
+    how_to_fix: "Split the concepts or qualify the definition: define
+      ExposureAggregate as an as-of/batch snapshot total, and separately define
+      a live/current exposure total if needed. Make the inclusion boundary
+      explicit, e.g. 'sum of Exposure.amount included in the batch as_of date'
+      rather than 'all Exposure.amount'."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: A shared concept authority for risk engine and reporting systems.
+      failure_condition: When a borrower has intraday new exposures after the monthly
+        batch, the ontology's declared aggregate total is simultaneously
+        required to include all exposures and permitted to exclude those new
+        exposures.
+      impact: Consumers can implement different compliance, limit-utilization, or
+        reporting calculations while each appearing to satisfy the ontology,
+        weakening the target's scope-control and precedence role for shared
+        concepts.
+      evidence_refs:
+        - .onto/review/20260610-b4c2568c/execution-preparation/materialized-input.md:69-75
+    causal_path:
+      root_cause_candidate: The ontology uses one field,
+        ExposureAggregate.total_amount, for both an all-exposure semantic total
+        and a persisted batch snapshot.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: ExposureAggregate is defined as borrower-level total exposure equal to
+            the sum of all Exposure.amount.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260610-b4c2568c/execution-preparation/materialized-input.md:69-70
+        - cause_id: logic-candidate-001.cause-002
+          claim: The same total_amount attribute is described as stored by month-end batch
+            and excluding intraday new loans until the next batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-b4c2568c/execution-preparation/materialized-input.md:73-75
+        - cause_id: logic-candidate-001.cause-003
+          claim: For intraday new exposures, these two claims make the same value both
+            inclusive and non-inclusive of those Exposure.amount records.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260610-b4c2568c/execution-preparation/materialized-input.md:69-75
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Domain-specific credit-risk rules were not used because session_domain is
+    none; the finding relies only on explicit claims in the target artifact.
+  - The logic lens treats '모든 Exposure.amount의 합' as a necessary totality claim
+    and '일중 신규 여신은 다음 배치까지 미반영' as an explicit exclusion condition for the same
+    stored attribute.
+validation:
+  unaddressable_candidates: []
