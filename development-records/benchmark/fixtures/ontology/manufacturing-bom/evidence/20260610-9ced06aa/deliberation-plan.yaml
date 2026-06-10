@@ -1,0 +1,162 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+    conflict_summary: Most stances support the high-severity source-of-truth and
+      precedence issue across scrap_rate, std_time, and uom conversion, while
+      evolution narrows the supported evidence and lowers severity mainly to
+      extensible measurement/UOM reference concepts; structure also narrows
+      support to explicit master/reference graph paths rather than the broader
+      authority claim.
+    resolution_question: Should issue-001 remain a high-severity
+      authority/precedence issue covering scrap_rate, std_time, and uom
+      conversion, or be narrowed to a measurement/UOM master-reference modeling
+      issue with lower severity or reduced action scope?
+  - issue_id: issue-011
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - evolution
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+    conflict_summary: "Semantics, axiology, and structure frame the root as an
+      ontological taxonomy error: InspectionPlan was placed under Operation.
+      Coverage and evolution narrow the root toward a broader missing separation
+      among inspection plan, inspection execution, and inspection result
+      categories. The chosen root affects whether the repair is only retyping
+      InspectionPlan or also adding execution/result concepts."
+    resolution_question: Should issue-011 be resolved primarily as an is_a taxonomy
+      correction for InspectionPlan versus Operation, or as a broader
+      coverage/evolution gap requiring separate inspection plan, execution, and
+      result concepts?
+  - issue_id: issue-012
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - logic
+      - axiology
+      - coverage
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.semantics
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.axiology
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+      - issue-stance-matrix.yaml#stances.issue-012.evolution
+      - issue-stance-matrix.yaml#stances.issue-012.structure
+    conflict_summary: Semantics and most supporting stances treat the issue as
+      product-structure meaning being mixed with process yield/recovery flow
+      inside BOM composition. Logic narrows support to the formal
+      acyclic/self-child incompatibility also captured by issue-003. This
+      creates a material scope question because issue-012 may be an independent
+      semantic issue or only the semantic facet of the same formal
+      scrap-reinput/BOM-cycle defect.
+    resolution_question: Should issue-012 stand as a distinct semantic
+      BOM-versus-process-flow issue, or be narrowed/merged into the acyclic
+      self-reference conflict already represented by issue-003?
+  - issue_id: issue-014
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - logic
+      - evolution
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+    conflict_summary: Structure, coverage, semantics, and axiology support issue-014
+      as an independent relation-graph completeness problem because
+      AlternatePart is bypassed by a Part-to-Part shortcut, losing direction.
+      Logic narrows it to enabling context for the formal directionality
+      conflict in issue-009/issue-010, and evolution narrows it to extensibility
+      of substitution policy. The deliberation must decide whether this is a
+      separate structural issue or part of the AlternatePart directionality
+      cluster.
+    resolution_question: Should issue-014 be kept as an independent medium
+      structural issue about the declared relations graph, or folded into the
+      AlternatePart directionality issues as supporting context?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Structure narrows its own lens authority to the connectable
+      effectivity/revision concepts, but it keeps severity and does not dispute
+      the material root or proposed effectivity-aware repair supported by
+      axiology, coverage, evolution, and semantics.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: "All applicable stances support the same material root: scrap
+      reinput/recovery flow was absorbed into BOM self-reference instead of a
+      separate process-flow concept. No controlled deliberation is needed."
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Evolution narrows its support to version/effectivity continuity at
+      execution time, but all applicable stances support adding a
+      ProductionOrder or WorkOrder execution node and keep severity. The
+      narrowing does not create a material dispute.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All applicable stances support the need for an independent BOM
+      lifecycle/version/effectivity object. Logic is not applicable rather than
+      conflicting.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All applicable stances support the missing lot/serial/batch and
+      execution-history traceability concepts. Logic is not applicable rather
+      than conflicting.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All applicable stances support promoting UOM, conversion, and capacity
+      measurements from fixed enums or unitless values into reference concepts.
+      Logic is not applicable rather than conflicting.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All applicable stances support the version/effectivity continuity issue
+      and the proposed introduction of version and effectivity concepts. Logic
+      is not applicable rather than conflicting.
+  - issue_id: issue-009
+    reason_code: no_material_conflict
+    reason: Evolution narrows the issue to extensibility implications, while logic,
+      axiology, semantics, and structure support the same AlternatePart
+      directionality defect. The narrowed lens scope does not alter the needed
+      resolution within this issue.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Evolution narrows its rationale to stable relation-modality expansion,
+      but semantics, logic, axiology, and structure all support the same
+      directionality meaning defect. No material intra-issue conflict remains.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is explicitly low severity and non-material in the projection,
+      with multiple lenses marking insufficient evidence and no material failure
+      condition established within boundary.

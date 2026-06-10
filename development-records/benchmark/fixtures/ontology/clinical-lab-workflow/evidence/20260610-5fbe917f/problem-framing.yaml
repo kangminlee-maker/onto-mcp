@@ -1,0 +1,201 @@
+schema_version: 1
+session_id: 20260610-5fbe917f
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 결과 상태의 canonical authority와 보고 상태 projection 계약이 닫히지 않아 상태
+      source of truth가 중복됩니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 여러 렌즈와 deliberation이 Result.status와 Report.result_status의 중복 권위, enum
+      매핑, precedence, 동기화 지연 계약 결함에 수렴했습니다. EMR/LIS 통합 권위 문서의 핵심 상태 모델 신뢰를 직접
+      흔드므로 target 안에서 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-009
+      - finding-012
+  - issue_id: issue-002
+    problem_definition: 위험 결과 통보가 독립 이벤트나 상태 경로 없이 boolean과 외부 기록에 의존합니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: CriticalValue 통보 완료, 실패, 지연, 재시도, 수신 확인을 문서 내부에서 구분할 수 없다는 점이
+      지원되었습니다. 환자 안전과 감사 책임에 직접 연결되지만 상태 권위 전체보다 좁은 워크플로 결함이므로 다음 단계 전 폐쇄가
+      필요합니다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-005
+      - finding-010
+  - issue_id: issue-003
+    problem_definition: ordered Test를 Specimen, Assay, Result에 연결하는 실행/매핑 bridge가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 다중 검사·다중 검체 상황에서 주문 항목별 검체 배정, 분석 수행, 결과 귀속 권위가 비어 있다는 결론으로 좁혀졌습니다.
+      주문부터 보고까지의 핵심 통합 경로가 닫히지 않으므로 권위 문서 자체에서 해결해야 합니다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Specimen lifecycle이 정상 흐름에 치우쳐 분석 전 품질부적합, 거절, 재채취 상태 의미가 누락됩니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: pre-analytic 예외와 품질 상태 누락은 수용되었지만 구조적 graph defect 주장은 제외되었습니다. 정상 경로
+      밖 운영 상태를 보강해야 하는 medium 범위 결함으로, 다음 단계에서 폐쇄 가능하게 carry forward하는 분류가
+      적절합니다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: corrected/amended 상태를 발생시키는 amendment event와 감사·버전 속성 권위가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 정정 상태값은 있으나 prior/new value, reason, actor, timestamp, approval, 재통보
+      같은 감사 표면이 없다는 점이 수용되었습니다. 감사성과 신뢰성을 약화하지만 핵심 상태 권위 결함보다 한 단계 좁은 후속 폐쇄
+      항목입니다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-006
+    problem_definition: TAT 및 운영 지표 정책이 권위 모델 밖에 있을 가능성이 있으나 material failure
+      condition은 입증되지 않았습니다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: maintainability_evolvability
+    timing_class: defer_watch
+    closure_class: watch
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: projection이 low severity, low confidence, material failure condition
+      미입증을 명시합니다. 현재는 결함 확정보다 증거 부족 관찰에 가깝기 때문에 watch/planned later로 분류합니다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-007
+    problem_definition: Test와 Assay의 의미 경계, 권위 방향, 구조적 매핑 관계가 닫히지 않았습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 high-severity Test/Assay authority-boundary 및 graph
+      defect를 유지했습니다. 신규 검사, specimen typing, analyzer execution, Result
+      provenance 확장에 모두 영향을 주므로 target 안에서 폐쇄해야 합니다.
+    related_surface_finding_ids:
+      - finding-008
+      - finding-016
+      - finding-018
+  - issue_id: issue-008
+    problem_definition: Specimen lifecycle이 analyzed 이후 보관, 폐기, 재검 추적과
+      retention/disposition policy를 포함하지 않습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: post-analysis lifecycle과 policy authority 결함은 수용되었고 구조적 missing edge
+      주장은 제외되었습니다. 부서·규정 변화 대응성을 약화하는 medium lifecycle issue로 다음 단계에서 닫을 수 있습니다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-009
+    problem_definition: corrected 이후 amended 전이가 즉시 invariant인지 bounded eventual
+      guarantee인지 닫히지 않았습니다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: logic, axiology, semantics는 독립 timing-contract issue로 보았고 evolution은
+      issue-001의 surface symptom으로 남겼습니다. 즉시 보장과 배치 지연 보장 중 해석 결정을 내려야 구현 일관성이
+      확보됩니다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-010
+    problem_definition: 동일 결과 상태 의미가 서로 다른 enum 어휘와 권위 선언으로 반복되어 상태 precedence가 흐려집니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 이 issue는 semantics가 제기한 duplicated result-status authority이며
+      issue-001의 canonical status/projection contract와 양립하는 중복 표면입니다. 별도
+      deliberation은 필요 없지만 issue-001 폐쇄와 함께 target 안에서 해소되어야 합니다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-011
+    problem_definition: STAT/urgency 의미가 subtype, enum value, boolean에 독립적으로 중복 배치되어
+      canonical urgency source가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: semantic canonical-source defect로 수용되었고 coverage gap이 아니라 canonical
+      representation 및 invariant/derivation contract 문제로 좁혀졌습니다. 긴급도 판단을 소비하는
+      시스템 간 불일치를 막기 위해 다음 단계 전 권위 표현 결정을 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-012
+    problem_definition: Result provenance와 analysis execution을 분리하는 개념 경계가 없어
+      Specimen이 produces Result 역할을 떠안습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 최종 root는 단순 관계명 문제가 아니라 derived_from/source_for Specimen과 execution
+      produces Result의 경계 부재로 좁혀졌습니다. provenance 의미 정확성을 약화하는 medium 결함으로 후속 모델링
+      단계에서 닫을 수 있습니다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-013
+    problem_definition: Result에서 CriticalValue rule 평가와 notification
+      obligation/event handling으로 이어지는 structural path가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 렌즈가 missing critical-result path를 medium defect로 인정했고,
+      event/inference path narrowing은 remediation detail로 통합되었습니다. 위험 결과 통보 의무
+      추론과 감사 가능성에 영향을 주므로 다음 단계 전 폐쇄해야 합니다.
+    related_surface_finding_ids:
+      - finding-019

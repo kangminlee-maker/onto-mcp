@@ -1,0 +1,53 @@
+# Ground truth — credit-risk-taxonomy fixture의 seeded 개념 결함 (채점 전용, 타깃 비포함)
+fixture: credit-risk-taxonomy
+seeded_defects:
+  - id: CRT-1
+    kind: enum_fragmentation
+    where: "Borrower.internal_rating(1~10) vs RiskRating.grade(R1~R5) vs Exposure.risk_grade(AAA~CCC)"
+    description: "동일 개념(신용등급)이 3개 스케일로 병존, notes가 '각 소비 시스템이 변환'으로 권위 부재를 명문화. 매핑은 위키 참조(모델 밖)."
+    severity_expectation: material
+  - id: CRT-2
+    kind: wrong_generalization
+    where: "Collateral is_a Exposure"
+    description: "담보는 익스포저의 하위 타입이 아님(secured_by 관계 대상). is-a 오용으로 Collateral이 amount/risk_grade 등 무의미한 상속 속성을 가짐."
+    severity_expectation: material
+  - id: CRT-3
+    kind: derived_value_as_input
+    where: "Exposure.ltv"
+    description: "LTV는 amount/appraised_value의 파생값인데 '심사역이 입력'하는 독립 속성으로 승격 — 원천과 불일치 가능."
+    severity_expectation: material
+  - id: CRT-4
+    kind: temporal_semantics_gap
+    where: "RiskRating"
+    description: "등급의 유효기간(valid_from/until)·이력 개념 부재 — 시점 질의(승인 당시 등급) 불가."
+    severity_expectation: material
+  - id: CRT-5
+    kind: authority_conflict
+    where: "Limit.approved_amount note"
+    description: "한도 진실이 승인 시스템 + 영업점 CRM available_limit '합산 관리'로 이원화."
+    severity_expectation: material
+  - id: CRT-6
+    kind: circular_definition
+    where: "RiskAppetite.definition"
+    description: "위반 여부를 '준수 상태로 정의된다'로 순환 정의 — 판정 기준 부재."
+    severity_expectation: medium_or_above
+  - id: CRT-7
+    kind: staleness_by_design
+    where: "ExposureAggregate.total_amount"
+    description: "집계가 월말 배치 저장이라 일중 한도 소진율 계산(classification_rules)이 구조적으로 부정확."
+    severity_expectation: material
+  - id: CRT-8
+    kind: unit_ambiguity
+    where: "Exposure.amount / 환산 규칙"
+    description: "Exposure에 통화 속성이 없고(Limit에만 있음), 환산은 '각 시스템의 당일 환율 테이블' — 다통화 합산의 단위 무결성 부재."
+    severity_expectation: material
+  - id: CRT-9
+    kind: governed_override_gap
+    where: "classification_rules의 risk_grade 수동 조정"
+    description: "보고서 팀의 수동 조정에 승인/기록/사유 통제가 없음 — 등급 진실성 훼손 경로."
+    severity_expectation: medium_or_above
+  - id: CRT-10
+    kind: scope_exclusion_breaks_semantics
+    where: "notes의 default 범위 제외"
+    description: "부실 상태를 범위 밖으로 두면 risk_grade/한도/appetite의 핵심 의미(부실 익스포저 처리)가 정의 불능 — 경계 설정이 본체 의미를 깨뜨림."
+    severity_expectation: material
