@@ -1,0 +1,257 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Post-release correction and amendment semantics are missing,
+      so clinician-facing report status can remain trusted while stale and
+      amendment history cannot be reconstructed.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection preserves high severity and broad lens support for a
+      safety-relevant lifecycle gap. Because the ontology is intended as EMR/LIS
+      status authority, stale trusted report status and missing versioned
+      correction evidence must be resolved in the target artifact.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-006
+  - issue_id: issue-002
+    problem_definition: Critical-value notification authority is reduced to a
+      boolean while the evidence needed for immediate-risk handling remains
+      outside the ontology.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The issue affects patient-safety notification, audit, and
+      reconciliation for critical values. All stances converge on the need for
+      authoritative notification evidence, making it a present blocker for using
+      the ontology as operational-risk authority.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: Turnaround-time is named by the ontology but calculated by
+      downstream dashboard formulas, allowing metric authority and reporting
+      semantics to drift.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The concern is material but not immediate safety-critical: the
+      ontology can describe the workflow, yet its authority is weakened when a
+      shared operational metric lacks canonical derivation rules."
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: The Specimen lifecycle stops at analyzed even though
+      post-analysis handling such as retention, storage, transfer, and disposal
+      is in scope by reference.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is a material lifecycle coverage gap. It should be closed
+      before relying on the ontology as a complete workflow authority, but it is
+      less immediately blocking than high-severity safety or traceability
+      failures.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: Critical-value notification lacks an in-ontology event or
+      evidence concept for actor, time, recipient, method, acknowledgement, and
+      basis.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection keeps high severity because a safety-critical
+      communication path is under-specified for exchange, audit, and escalation.
+      This must be fixed in the target authority model rather than deferred.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Shared and time-dependent integration values are scattered
+      as local fields instead of governed concepts with mappings, versions, and
+      effective history.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue weakens change resilience and historical reconstruction
+      across EMR/LIS boundaries. It is material for the next modeling stage,
+      though not framed as an immediate safety blocker.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: The Test-Assay split lacks a canonical mapping and execution
+      path, so ordered tests, performed assays, and results cannot be reliably
+      traced.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: "Deliberation resolved this as high severity: missing Test-Assay
+      authority and Assay relations block order-to-result traceability, a core
+      correctness requirement for the ontology's declared purpose."
+    related_surface_finding_ids:
+      - finding-008
+      - finding-013
+      - finding-017
+  - issue_id: issue-008
+    problem_definition: Result.status and Report.result_status duplicate an evolving
+      status concept without a canonical authority or precise projection
+      boundary.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All stances support the duplicated-status authority issue. It creates
+      status drift risk under future changes and should be closed before
+      subsequent integration design depends on these enums.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-009
+    problem_definition: Order completion is defined over mutable Result.status
+      values without declaring whether completion is a snapshot, live invariant,
+      or reversible lifecycle state.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: The projection preserves high severity because Order.completed can
+      remain true after the condition that justified completion is no longer
+      true. That undermines state correctness for the intended authority
+      document.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-010
+    problem_definition: Result and Report status meanings overlap while using
+      different enums and delayed synchronization despite Report status being
+      clinician-trusted.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is primarily an unresolved authority-boundary
+      interpretation between canonical result state and clinician-facing
+      projection. It is material for consistency, but the projection keeps
+      medium severity.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-011
+    problem_definition: CriticalValue combines reusable threshold-rule meaning with
+      patient/result-specific notification-event state in a single concept.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: All stances support splitting threshold rules from event state. The
+      blended concept creates semantic and lifecycle inconsistency that should
+      be resolved before building further critical-value workflow relations.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-012
+    problem_definition: STAT semantics are duplicated across priority, is_stat, and
+      StatOrder without a canonical meaning location or invariants.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The projection shows consistent lens support that duplicate STAT
+      representations can diverge in routing, SLA, and reason validation. This
+      is a medium consistency blocker for the next modeling step.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-013
+    problem_definition: The Specimen-to-Result relation name 'produces' overstates
+      specimen responsibility and should instead express source or material
+      semantics.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: The issue is explicitly low and non-material in the projection. It is
+      a real semantic naming problem, but bounded evidence does not show a
+      material workflow failure distinct from broader execution-path issues.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-014
+    problem_definition: CriticalValue is disconnected from the Result, Report, and
+      notification workflow, with repair constrained by the need to distinguish
+      threshold rules from event concepts.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation narrowed the issue rather than rejecting it. The missing
+      workflow linkage is accepted, but relation ownership across threshold
+      rule, critical result, and notification event concepts still requires a
+      modeling decision.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-015
+    problem_definition: Order completion lacks an authoritative Result membership
+      set or snapshot boundary despite multiple indirect Order-to-Result paths.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: "The resolved issue remains medium severity: the completion predicate
+      cannot be applied consistently until the authoritative result set or
+      equivalent constraint is defined, but it does not supersede the
+      higher-severity mutable-status issue."
+    related_surface_finding_ids:
+      - finding-019

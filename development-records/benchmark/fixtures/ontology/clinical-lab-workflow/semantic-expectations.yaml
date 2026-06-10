@@ -7,7 +7,8 @@ material_terms: # 전 항목 필수 (textContainsAll)
   - "result_status" # CLW-2 결과 상태 권위 이원화 (+ CLW-3 enum 파편화)
   - "corrected" # CLW-3 상태 어휘 파편화 (corrected vs amended)
   - "is_stat" # CLW-4 STAT 삼중 표현 (enum + boolean + 하위타입)
-  - "폐기" # CLW-5 검체 lifecycle 보관/폐기 부재
+  # 산문 개념 토큰은 출력 언어 분산에 대비해 동의어 그룹(any-of)로 둔다 — ground truth의 동일 앵커 개념 번역만 허용.
+  - ["폐기", "보관", "disposal", "retention"] # CLW-5 검체 lifecycle 보관/폐기 부재
   - "requires_specimen_type" # CLW-7 Specimen↔Test 관계 부재로 검증 불능
   - "notified" # CLW-9 위험값 통보 감사 추적 부재
 expected_material_truth: >-

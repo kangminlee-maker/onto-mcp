@@ -801,6 +801,41 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
     ).toBe("failed");
   });
 
+  it("accepts alternates groups in material terms (any alternate satisfies the entry)", () => {
+    const expectations = ontologyExpectations();
+    // 한국어 산문 토큰의 영어 출력 변형: 그룹의 한 대안만 맞으면 entry 충족
+    expectations.materialTerms = [["폐기물", "copied"], "scrap_rate"];
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      expectations,
+      reviewRecord: ontologyReviewRecord(),
+      finalOutputText: [
+        "### Final Review Result",
+        "scrap_rate is copied from an external spreadsheet authority.",
+        "",
+        "### Immediate Actions Required",
+        "- Designate a single authority for scrap_rate.",
+      ].join("\n"),
+    });
+
+    expect(
+      result.checks.find((check) => check.check_id === "material_issue_recall")
+        ?.status,
+    ).toBe("failed"); // 레코드(한국어 '복사')에는 'copied'가 없음 — 그룹 전 대안 불일치는 실패
+
+    const koreanAlternates = ontologyExpectations();
+    koreanAlternates.materialTerms = [["복사", "copied"], "scrap_rate"];
+    const passing = evaluateReviewPipelineSemanticQualityGate({
+      expectations: koreanAlternates,
+      reviewRecord: ontologyReviewRecord(),
+      finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+    });
+    expect(
+      passing.checks.find((check) => check.check_id === "material_issue_recall")
+        ?.status,
+    ).toBe("passed");
+  });
+
   it("rejects injected expectations with empty material terms", () => {
     const expectations = ontologyExpectations();
     expectations.materialTerms = [];

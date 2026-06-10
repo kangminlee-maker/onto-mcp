@@ -1,0 +1,254 @@
+schema_version: 1
+session_id: 20260611-1b46eb7b
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Report.result_status가 clinician-facing 권위값으로 쓰이면서도
+      Result.status 정정 후 야간 배치 전까지 오래된 상태로 남을 수 있는 상태 신뢰 문제입니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 지지한 고심각도 결함이며, 더 넓은 상태 권위·이력 부재(issue-004/013)의 사용자 노출 증상입니다.
+      임상의가 신뢰하는 상태값의 의미를 흔드므로 다음 단계 전에 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: CriticalValue 즉시 통보 증거가 온톨로지 내부 권위 이벤트가 아니라 외부 전화 기록과 notified 속성에 의존합니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 통보 evidence 외부화 자체는 지지되지만, issue-005로 흡수할지와 high로 올릴지에 대한 남은
+      disagreement가 있습니다. 안전·감사 흐름에 걸리므로 다음 단계 전 결정 근거가 필요합니다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: TAT 산출 기준을 통합 권위가 아니라 대시보드 팀의 자체 계산식으로 남겨 운영 지표 해석 권위가 분산됩니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 동일한 TAT 권위 결함의 가치·거버넌스 표면이며 issue-008의 계산 규칙/버전 공백과 같은 해법을 공유합니다. 핵심
+      안전 상태보다는 운영 지표 재현성과 권위 품질 문제입니다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Result.status와 Report.result_status가 중복 현재값으로 존재하지만 단일
+      source-of-truth, 상태 이벤트, 버전 이력이 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 지연, 정정, 과거 노출 상태 재구성 문제의 중심 원인입니다. EMR/LIS 상태 계약의 권위와 precedence를
+      닫는 목적에 직접 걸리므로 대상 안에서 반드시 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: CriticalValue 통보가 독립적인 감사 이벤트가 아니라 완료 여부 boolean으로 축소되어 통보
+      책임과 이행 증거가 모델 밖에 남습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 위험 결과 통보의 actor, recipient, time, acknowledgement, retry를 표현하지 못하는
+      고심각도 coverage 결함입니다. 안전 관련 운영 책임의 핵심 경로이므로 대상에서 직접 수정되어야 합니다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Specimen lifecycle이 analyzed에서 끝나 보관, 재검 가능성, 만료, 폐기 승인/실행
+      상태가 외부 내규로만 남습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 분석 후 검체 책임 범위를 닫지 못하는 독립 lifecycle coverage 공백입니다. 주요 통합 권위 품질에는
+      중요하지만 상태·critical-value 결함보다는 후속 단계에서 닫아도 되는 중간 심각도입니다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Test와 Assay를 분리했지만 의미 경계, 권위, cardinality, lifecycle mapping이 정의되지 않았습니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 카탈로그 권위 문제의 넓은 root로 유지되지만 evolution은 severity 상향 가능성을 남겼습니다. 주문-수행
+      매핑은 통합 precedence의 중심이므로 다음 단계 전에 최종 범위와 심각도 근거를 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-015
+  - issue_id: issue-008
+    problem_definition: TAT 산출값의 권위, 계산 버전, 예외 구간이 온톨로지 개념으로 모델링되지 않았습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: TAT 관련 문제의 원인 축이며 운영 지표 재현성·감사 가능성을 약화합니다. 중간 심각도이며 안전 상태 계약보다는 운영 지표
+      governance 문제로 후속 단계에서 닫을 수 있습니다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Test와 Assay 이중 등록으로 신규 검사 항목 추가 시 동시 수정과 매핑 불일치 위험이 생깁니다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 최종 resolution은 issue-007의 Test/Assay 권위 결함에 크게 겹치는 증상으로 낮췄지만
+      evolution은 독립 high 위험을 유지합니다. 독립 이슈로 남길 근거가 추가로 필요합니다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Specimen/Test enum과 Assay 자유 문자열이 같은 검체 분류축을 나누어 표현해 shared codeset이 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 새 검체 유형과 외부 코드 수용성을 약화하는 독립 codeset 권위 결함입니다. 중간 심각도의 확장성·일관성 문제로 후속
+      단계에서 반영하면 됩니다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: Order.completed가 mutable current Result.status에 의존해 Result가
+      later corrected 되면 완료 의미가 불안정해집니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 완료 상태 계약의 직접 logical contradiction입니다. issue-004와 상태 event/history
+      맥락을 공유하지만 Order 완료 의미 실패는 별도 고심각도 correctness 문제로 대상 안에서 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: Report.result_status 하나에 즉시 amendment 의무와 야간 배치 materialized
+      field 의미가 함께 들어가 지연 구간 모순이 생깁니다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: logic은 독립 modality mismatch로 보고 coverage는 issue-004의 증상으로 좁힙니다. 상태 권위
+      모델 결정 전 fold-under 여부에 대한 relation evidence가 필요합니다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: Result와 Report 상태 어휘가 별도 enum으로 중복되어 canonical authority, 완전
+      매핑, 지연 표시 상태가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 의미 해석과 향후 확장의 중심 결함이며 issue-004와 원인을 공유합니다. 임상의 신뢰 상태와 상태 확장 안정성을
+      동시에 흔드는 고심각도 root입니다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-011
+  - issue_id: issue-014
+    problem_definition: STAT 의미가 priority, is_stat, StatOrder subtype 세 표면에 중복되어 모순 인스턴스가 가능합니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 응급 주문 여부의 canonical representation이 없는 직접 consistency 결함입니다. 운영 우선순위에
+      영향을 주므로 다음 단계 전 단일 권위나 invariant를 정해야 합니다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-015
+    problem_definition: CriticalValue가 임계값 규칙, 환자별 위험 결과 사건, 통보 상태를 한 엔티티에 섞어 개념 경계가 흐립니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: CriticalValue notification 결함의 의미적 원인 축입니다. rule, occurrence,
+      notification event는 권위와 lifecycle이 다르므로 다음 단계 전 개념 분리가 필요합니다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-016
+    problem_definition: Specimen produces Result 관계명이 검체를 결과 생산 주체처럼 표현해 역할 의미가 부정확합니다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: bounded evidence상 material failure condition이 없는 low severity 명명
+      문제입니다. 현재 권위 계약을 막지는 않으므로 후속 정리나 문서 수준으로 다루면 충분합니다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: Assay가 실행 단위로 도입되었지만 explicit workflow relation graph에서
+      Test/Result/Specimen 경로와 연결되지 않습니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Test/Assay 경계 문제(issue-007)의 구조적 증상이며, 그래프 기반 통합 매핑 완성도를 약화합니다. 중간
+      심각도 completeness 결함으로 후속 단계에서 relation을 추가하면 됩니다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-018
+    problem_definition: Order-to-Test edge가 explicit relation graph에 없어 주문에 속한
+      tests와 completion 대상 results를 그래프만으로 추적하기 어렵습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Order completion과 ordered_tests 의미의 중심 relation이 누락된 직접 구조 공백입니다.
+      graph 기반 소비자가 핵심 workflow를 해석해야 하므로 다음 단계 전 명시 relation이 필요합니다.
+    related_surface_finding_ids:
+      - finding-020

@@ -1,0 +1,132 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+planned_issues:
+  - issue_id: issue-007
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: All selected lenses support the Test-Assay mapping issue, but
+      semantics lowers severity while evolution and structure keep high severity
+      for the missing canonical mapping and execution path.
+    resolution_question: Should issue-007 remain high severity because the missing
+      Test-Assay mapping blocks order-to-result traceability, or should it be
+      lowered because the semantic evidence supports a less severe
+      catalog-meaning ambiguity?
+  - issue_id: issue-014
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - structure
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-014.structure
+      - issue-stance-matrix.yaml#stances.issue-014.semantics
+      - issue-stance-matrix.yaml#stances.issue-014.axiology
+      - issue-stance-matrix.yaml#stances.issue-014.coverage
+      - issue-stance-matrix.yaml#stances.issue-014.evolution
+      - issue-stance-matrix.yaml#stances.issue-014.logic
+    conflict_summary: Structure, coverage, evolution, logic, and axiology frame the
+      issue as a disconnected CriticalValue workflow relation path, while
+      semantics replaces the root with an unresolved split between
+      threshold-rule and critical-result or notification-event concepts.
+      Axiology also raises severity, but the root choice determines the repair
+      shape.
+    resolution_question: Should issue-014 be resolved as a structural
+      missing-relation problem on CriticalValue, or as a consequence of first
+      splitting CriticalValue into threshold-rule and critical-result or
+      notification-event concepts?
+  - issue_id: issue-015
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - structure
+      - logic
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-015.structure
+      - issue-stance-matrix.yaml#stances.issue-015.logic
+      - issue-stance-matrix.yaml#stances.issue-015.semantics
+      - issue-stance-matrix.yaml#stances.issue-015.axiology
+      - issue-stance-matrix.yaml#stances.issue-015.coverage
+      - issue-stance-matrix.yaml#stances.issue-015.evolution
+    conflict_summary: Structure frames Order completion membership as a medium
+      structural authority gap, logic raises severity because the completion
+      predicate quantifies over an undefined Result set, and semantics narrows
+      the concern to completion predicate meaning and snapshot/live semantics.
+    resolution_question: Should issue-015 remain a medium structural membership-path
+      gap, be raised because the undefined Result set undermines the completion
+      predicate itself, or be narrowed to completion predicate semantics rather
+      than authoritative graph structure?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: Semantics narrows its direct claim to Result/Report status authority
+      ambiguity, but does not dispute the material correction/amendment
+      lifecycle issue, proposed repair direction, or kept severity.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Several lenses narrow the root to event semantics, truth conditions, or
+      change resilience, but all preserve high severity and converge on the need
+      for authoritative critical-value notification evidence.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Structure narrows the concern to calculation authority boundary, while
+      all lenses support the same TAT derivation authority problem and keep
+      medium severity.
+  - issue_id: issue-004
+    reason_code: no_material_conflict
+    reason: Logic marks the issue as surface-only for its lens, but does not contest
+      the coverage, semantic, structural, evolution, or value basis for the
+      material specimen disposition gap.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Evolution and logic narrow the emphasis, but all lenses keep high
+      severity and support adding notification event or evidence authority for
+      critical values.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Logic and semantics narrow the root to identity, authority, and meaning
+      boundaries, but they remain compatible with the broader governed
+      shared-value concept repair and kept medium severity.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All lens stances support the duplicated Result/Report status authority
+      issue with kept medium severity and no runtime conflict signal.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All lens stances support the mutable Result.status versus
+      Order.completed closure issue with kept high severity and no runtime
+      conflict signal.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All lens stances support the Result.status and Report.result_status
+      authority-boundary issue with kept medium severity and no runtime conflict
+      signal.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All lens stances support splitting CriticalValue threshold-rule meaning
+      from notification-event state with kept medium severity and no runtime
+      conflict signal.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All lens stances support consolidating STAT semantics into one canonical
+      representation with kept medium severity and no runtime conflict signal.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: The issue is classified low and non-material in the projection;
+      conflicts concern surface naming and scope, not a material deliberation
+      candidate.

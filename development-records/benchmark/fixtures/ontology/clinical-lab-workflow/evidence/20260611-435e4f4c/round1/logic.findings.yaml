@@ -1,0 +1,91 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules / Order lifecycle
+    evidence_anchor: clinical-lab-ontology.yaml:12, clinical-lab-ontology.yaml:100,
+      clinical-lab-ontology.yaml:101
+    claim: Order completion is defined by all Result values being final, while the
+      same model permits later correction of Result.status after report
+      finalization.
+    what: "`Order` has a terminal-looking `completed` lifecycle state, and a state
+      rule says an Order transitions to `completed` when all Result objects are
+      `final`. The next rule explicitly allows a later transition where
+      `Result.status` changes to `corrected`, causing the Report to become
+      `amended`. There is no corresponding rule that reopens or reclassifies the
+      already-completed Order."
+    why: The completion predicate depends on a reversible state
+      (`Result.status=final`). Because the model also allows a subsequent
+      `corrected` state, a workflow path can satisfy `Order.completed` at time T
+      and later invalidate the condition that caused completion at time T+1.
+      Within the declared rules, the model cannot keep both 'completed because
+      all results are final' and 'a result is now corrected' logically stable
+      unless completion is explicitly snapshot-based or an Order can
+      leave/revise `completed`. This matters for an EMR/LIS authority document
+      because downstream systems may treat Order completion as closed while
+      Report/Result state continues to change.
+    how_to_fix: Define whether `Order.completed` is a snapshot release milestone or
+      a live invariant. If it is live, add reopening/amended-order transitions
+      for corrected results. If it is a milestone, rewrite the rule to say
+      completion is based on all reportable results being final at release time
+      and is not invalidated by later corrections, with separate amendment
+      tracking.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the concept authority for EMR/LIS
+        integration state behavior.
+      failure_condition: A Result changes from `final` to `corrected` after the Order
+        has transitioned to `completed` under the 'all Result final' rule.
+      impact: "Systems consuming the ontology can derive incompatible closure states
+        for the same order: the Order remains completed while its defining
+        completion condition is no longer true, weakening trust in state
+        synchronization and closure semantics."
+      evidence_refs:
+        - clinical-lab-ontology.yaml:12
+        - clinical-lab-ontology.yaml:100
+        - clinical-lab-ontology.yaml:101
+    causal_path:
+      root_cause_candidate: The completion rule uses a mutable Result status as an
+        invariant-like condition without specifying whether completion is
+        snapshot-based or reversible.
+      root_cause_step_id: logic-candidate-001.cause-004
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`Order` includes `completed` in its lifecycle."
+          relation_to_previous: null
+          evidence_refs:
+            - clinical-lab-ontology.yaml:12
+        - cause_id: logic-candidate-001.cause-002
+          claim: The ontology states that an Order transitions to completed when all
+            Results are final.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:100
+        - cause_id: logic-candidate-001.cause-003
+          claim: The ontology also states that a Result.status can later change to
+            corrected and then requires Report.result_status to become amended.
+          relation_to_previous: enables
+          evidence_refs:
+            - clinical-lab-ontology.yaml:101
+        - cause_id: logic-candidate-001.cause-004
+          claim: Because no Order reopening or amendment transition is defined, a later
+            corrected result can invalidate the condition used to justify
+            completed while the Order lifecycle still remains completed.
+          relation_to_previous: causes
+          evidence_refs:
+            - clinical-lab-ontology.yaml:12
+            - clinical-lab-ontology.yaml:100
+            - clinical-lab-ontology.yaml:101
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so only generic formal consistency checks from the
+    prompt packet were applied.
+  - The finding treats lifecycle `completed` as a state whose transition
+    condition should remain logically coherent over allowed state evolution
+    unless the ontology declares it as a historical snapshot milestone.
+validation:
+  unaddressable_candidates: []

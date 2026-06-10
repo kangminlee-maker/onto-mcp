@@ -1,0 +1,152 @@
+schema_version: 1
+session_id: 20260611-1b46eb7b
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: Report.result_status is treated as a trusted immediate
+      authority while its update is allowed to lag until nightly
+      synchronization.
+    shared_cause: null
+    rationale: "Both findings describe the same failure window: Result.status
+      becomes corrected, Report.result_status should become amended, but the
+      nightly batch permits the clinician-trusted report value to remain stale
+      before synchronization."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-004
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology lacks a single canonical result/report status
+      authority with explicit mappings and version/event semantics.
+    shared_cause:
+      cause_claim: Result.status and Report.result_status are both modeled as status
+        authorities without a canonical source-of-truth or complete mapping
+        between their vocabularies.
+      from_cause_ref: finding-004.cause-001
+      to_cause_ref: finding-014.cause-002
+    rationale: Coverage flags missing source-of-truth/history for duplicated status
+      fields, while semantics flags that the same information uses different
+      vocabularies and authority claims. These are supported by the same
+      duplicated status-authority design.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-011
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: Result and Report status are duplicated as separate enums
+      without a versioned authority mapping or explicit delayed-display state.
+    shared_cause: null
+    rationale: Evolution focuses on how new status values will require coordinated
+      enum and sync-rule changes; semantics focuses on current meaning and
+      authority ambiguity. Both arise from the same unresolved
+      ResultStatus/ReportStatus split.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-012
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: Lifecycle rules are expressed over mutable current status
+      values without immutable status events or versioned state history.
+    shared_cause:
+      cause_claim: The model uses current Result.status values for downstream state
+        contracts but lacks status event/version concepts to preserve past
+        finalization, correction, and report exposure semantics.
+      from_cause_ref: finding-012.cause-004
+      to_cause_ref: finding-004.cause-003
+    rationale: The order-completion contradiction depends on a final Result later
+      becoming corrected with no declared resolution, while the coverage finding
+      identifies the missing event/history axis needed to represent that
+      lifecycle cleanly.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-005
+    relation: duplicates
+    root_hypothesis: Critical-value notification is reduced to a boolean while
+      audit-critical notification evidence is left outside the ontology.
+    shared_cause: null
+    rationale: "Both findings identify the same operational gap: CriticalValue has
+      only notified internally, while notification time, recipient, actor,
+      acknowledgement, and evidence remain outside the EMR/LIS authority model."
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-017
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: CriticalValue conflates threshold/range definition,
+      patient-specific critical result occurrence, and notification event state
+      instead of modeling them separately.
+    shared_cause:
+      cause_claim: Notification completion is attached to CriticalValue even though
+        the entity otherwise behaves like a critical range/rule and lacks a
+        separate notification event model.
+      from_cause_ref: finding-017.cause-003
+      to_cause_ref: finding-005.cause-002
+    rationale: The semantic finding explains why notified does not belong on a
+      threshold/range concept; the coverage finding shows the practical
+      consequence that notification audit evidence and attempts are not
+      represented.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: TAT is defined from available timestamps but its canonical
+      calculation authority, versioning, and exceptions are left to a
+      dashboard-local formula.
+    shared_cause: null
+    rationale: Both findings target the same TAT modeling defect. Axiology frames it
+      as misalignment with the authority-document purpose; coverage frames it as
+      missing metric authority, calculation version, and exception concepts.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-007
+    to_finding_id: finding-009
+    relation: duplicates
+    root_hypothesis: Test and Assay are maintained as parallel catalog concepts
+      without explicit authority, mapping, and lifecycle rules.
+    shared_cause: null
+    rationale: Both findings cite Test/Assay dual registration and missing
+      connecting relation. Coverage emphasizes missing authority/version
+      lifecycle; evolution emphasizes future change and inconsistency risk, but
+      the underlying catalog-mapping issue is the same.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-015
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: The ontology separates order catalog and execution catalog
+      concepts without defining their semantic boundary, cardinality, authority,
+      or lifecycle mapping.
+    shared_cause: null
+    rationale: Semantics identifies unclear meaning between Test and Assay; coverage
+      identifies the missing authority and mapping lifecycle needed once those
+      concepts are separated. The same unresolved catalog boundary explains
+      both.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-019
+    to_finding_id: finding-007
+    relation: symptom_of
+    root_hypothesis: Assay is structurally disconnected because the Test-Assay
+      catalog mapping concept was not modeled.
+    shared_cause: null
+    rationale: The structural omission of Assay from the relation graph is a
+      concrete graph-level manifestation of the broader missing Test/Assay
+      authority and mapping lifecycle described in finding-007.
+    confidence: high
+singleton_findings:
+  - finding_id: finding-006
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-010
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-016
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-020
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

@@ -1,0 +1,2535 @@
+review_record_id: 20260611-1b46eb7b
+session_id: 20260611-1b46eb7b
+entrypoint: review
+record_status: completed
+created_at: 2026-06-11T01:40:23+09:00
+updated_at: 2026-06-11T01:52:09+09:00
+request_text: 이 임상검사 워크플로 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 쓰기에 적절한지 검토해 달라. 엔티티·관계·상태
+  모델의 개념적 타당성과 운영 시 생길 위험을 중심으로.
+review_target_scope_ref: .onto/review/20260611-1b46eb7b/binding.yaml
+interpretation_ref: .onto/review/20260611-1b46eb7b/interpretation.yaml
+binding_ref: .onto/review/20260611-1b46eb7b/binding.yaml
+domain_final_selection_ref: .onto/review/20260611-1b46eb7b/binding.yaml
+resolved_review_mode: core-axis
+resolved_execution_realization: worker
+resolved_host_runtime: codex
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+execution_result_ref: .onto/review/20260611-1b46eb7b/execution-result.yaml
+session_metadata_ref: .onto/review/20260611-1b46eb7b/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260611-1b46eb7b/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260611-1b46eb7b/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260611-1b46eb7b/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  axiology: .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml
+  coverage: .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml
+  evolution: .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml
+  logic: .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml
+  semantics: .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml
+  structure: .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml
+lens_output_schema_version: 2
+participating_lens_ids:
+  - axiology
+  - coverage
+  - evolution
+  - logic
+  - semantics
+  - structure
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: null
+per_lens_provenance:
+  axiology:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 임상 도메인 규정은 사용하지 않았고, materialized input과
+        review-value-alignment-criteria의 사용자 목적을 가치 판단의 권위로 사용했습니다.
+      - 역할 정의 파일은 허용 루트 밖 상대 경로로는 읽히지 않았으나, prompt packet에 포함된 axiology 역할 정의와
+        출력 계약을 사용했습니다.
+  coverage:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았고, prompt packet에 포함된
+        coverage lens 질문과 materialized input만 기준으로 판단했다.
+      - 임상검사 워크플로 온톨로지가 EMR/LIS 통합의 개념 권위 문서로 사용된다는 선언을 주요 완료 기준으로 삼았다.
+  evolution:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았다.
+      - 임상검사 EMR/LIS 통합에서는 검사 카탈로그, 검체 코드, 결과/보고 상태가 시간이 지나며 추가·변경될 수 있는 확장 축이라고
+        보았다.
+  logic:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain is none, so findings use only generic intra/inter-claim
+        logical consistency checks from the prompt packet.
+      - The materialized input is treated as the authoritative target input; no
+        external clinical laboratory domain rules were used.
+      - Line numbers were not available in the embedded materialized input, so
+        evidence anchors cite entity attributes and state_rules indexes.
+        Node-style anchors are used as stable claim identifiers within the
+        provided YAML content.
+  semantics:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았습니다.
+      - 판단은 제공된 ontology의 정의, 속성 note, 관계명, state_rules 내부의 의미적 일관성에 한정했습니다.
+      - 외부 임상검사 표준이나 병원별 LIS 구현 지식은 web research denied 및 domain document 부재 때문에
+        근거로 사용하지 않았습니다.
+  structure:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - "`session_domain` is none, so no external clinical laboratory domain
+        rule was used."
+      - The explicit `relations` block is treated as the ontology's formal
+        workflow relation graph; reference attributes are considered supporting
+        evidence but not a substitute for missing explicit graph edges when
+        relation completeness is under review.
+finding_ledger_ref: .onto/review/20260611-1b46eb7b/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260611-1b46eb7b/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260611-1b46eb7b/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260611-1b46eb7b/issue-stance-matrix.yaml
+deliberation_plan_ref: .onto/review/20260611-1b46eb7b/deliberation-plan.yaml
+problem_framing_ref: .onto/review/20260611-1b46eb7b/problem-framing.yaml
+issue_resolution_summary:
+  - issue_id: issue-001
+    problem_definition: Report.result_status가 clinician-facing 권위값으로 쓰이면서도
+      Result.status 정정 후 야간 배치 전까지 오래된 상태로 남을 수 있는 상태 신뢰 문제입니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 지지한 고심각도 결함이며, 더 넓은 상태 권위·이력 부재(issue-004/013)의 사용자 노출 증상입니다.
+      임상의가 신뢰하는 상태값의 의미를 흔드므로 다음 단계 전에 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: CriticalValue 즉시 통보 증거가 온톨로지 내부 권위 이벤트가 아니라 외부 전화 기록과 notified 속성에 의존합니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: safety_risk
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 통보 evidence 외부화 자체는 지지되지만, issue-005로 흡수할지와 high로 올릴지에 대한 남은
+      disagreement가 있습니다. 안전·감사 흐름에 걸리므로 다음 단계 전 결정 근거가 필요합니다.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: TAT 산출 기준을 통합 권위가 아니라 대시보드 팀의 자체 계산식으로 남겨 운영 지표 해석 권위가 분산됩니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 동일한 TAT 권위 결함의 가치·거버넌스 표면이며 issue-008의 계산 규칙/버전 공백과 같은 해법을 공유합니다. 핵심
+      안전 상태보다는 운영 지표 재현성과 권위 품질 문제입니다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Result.status와 Report.result_status가 중복 현재값으로 존재하지만 단일
+      source-of-truth, 상태 이벤트, 버전 이력이 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 지연, 정정, 과거 노출 상태 재구성 문제의 중심 원인입니다. EMR/LIS 상태 계약의 권위와 precedence를
+      닫는 목적에 직접 걸리므로 대상 안에서 반드시 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: CriticalValue 통보가 독립적인 감사 이벤트가 아니라 완료 여부 boolean으로 축소되어 통보
+      책임과 이행 증거가 모델 밖에 남습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: safety_risk
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 위험 결과 통보의 actor, recipient, time, acknowledgement, retry를 표현하지 못하는
+      고심각도 coverage 결함입니다. 안전 관련 운영 책임의 핵심 경로이므로 대상에서 직접 수정되어야 합니다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: Specimen lifecycle이 analyzed에서 끝나 보관, 재검 가능성, 만료, 폐기 승인/실행
+      상태가 외부 내규로만 남습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 분석 후 검체 책임 범위를 닫지 못하는 독립 lifecycle coverage 공백입니다. 주요 통합 권위 품질에는
+      중요하지만 상태·critical-value 결함보다는 후속 단계에서 닫아도 되는 중간 심각도입니다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: Test와 Assay를 분리했지만 의미 경계, 권위, cardinality, lifecycle mapping이 정의되지 않았습니다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 카탈로그 권위 문제의 넓은 root로 유지되지만 evolution은 severity 상향 가능성을 남겼습니다. 주문-수행
+      매핑은 통합 precedence의 중심이므로 다음 단계 전에 최종 범위와 심각도 근거를 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-007
+      - finding-015
+  - issue_id: issue-008
+    problem_definition: TAT 산출값의 권위, 계산 버전, 예외 구간이 온톨로지 개념으로 모델링되지 않았습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: TAT 관련 문제의 원인 축이며 운영 지표 재현성·감사 가능성을 약화합니다. 중간 심각도이며 안전 상태 계약보다는 운영 지표
+      governance 문제로 후속 단계에서 닫을 수 있습니다.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Test와 Assay 이중 등록으로 신규 검사 항목 추가 시 동시 수정과 매핑 불일치 위험이 생깁니다.
+    issue_role: symptom
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: needs_evidence
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 최종 resolution은 issue-007의 Test/Assay 권위 결함에 크게 겹치는 증상으로 낮췄지만
+      evolution은 독립 high 위험을 유지합니다. 독립 이슈로 남길 근거가 추가로 필요합니다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: Specimen/Test enum과 Assay 자유 문자열이 같은 검체 분류축을 나누어 표현해 shared codeset이 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 새 검체 유형과 외부 코드 수용성을 약화하는 독립 codeset 권위 결함입니다. 중간 심각도의 확장성·일관성 문제로 후속
+      단계에서 반영하면 됩니다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: Order.completed가 mutable current Result.status에 의존해 Result가
+      later corrected 되면 완료 의미가 불안정해집니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 완료 상태 계약의 직접 logical contradiction입니다. issue-004와 상태 event/history
+      맥락을 공유하지만 Order 완료 의미 실패는 별도 고심각도 correctness 문제로 대상 안에서 닫아야 합니다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: Report.result_status 하나에 즉시 amendment 의무와 야간 배치 materialized
+      field 의미가 함께 들어가 지연 구간 모순이 생깁니다.
+    issue_role: conflicting_interpretation
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: logic은 독립 modality mismatch로 보고 coverage는 issue-004의 증상으로 좁힙니다. 상태 권위
+      모델 결정 전 fold-under 여부에 대한 relation evidence가 필요합니다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-013
+    problem_definition: Result와 Report 상태 어휘가 별도 enum으로 중복되어 canonical authority, 완전
+      매핑, 지연 표시 상태가 없습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 상태 의미 해석과 향후 확장의 중심 결함이며 issue-004와 원인을 공유합니다. 임상의 신뢰 상태와 상태 확장 안정성을
+      동시에 흔드는 고심각도 root입니다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-011
+  - issue_id: issue-014
+    problem_definition: STAT 의미가 priority, is_stat, StatOrder subtype 세 표면에 중복되어 모순 인스턴스가 가능합니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 응급 주문 여부의 canonical representation이 없는 직접 consistency 결함입니다. 운영 우선순위에
+      영향을 주므로 다음 단계 전 단일 권위나 invariant를 정해야 합니다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-015
+    problem_definition: CriticalValue가 임계값 규칙, 환자별 위험 결과 사건, 통보 상태를 한 엔티티에 섞어 개념 경계가 흐립니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: CriticalValue notification 결함의 의미적 원인 축입니다. rule, occurrence,
+      notification event는 권위와 lifecycle이 다르므로 다음 단계 전 개념 분리가 필요합니다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-016
+    problem_definition: Specimen produces Result 관계명이 검체를 결과 생산 주체처럼 표현해 역할 의미가 부정확합니다.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: defer_watch
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: bounded evidence상 material failure condition이 없는 low severity 명명
+      문제입니다. 현재 권위 계약을 막지는 않으므로 후속 정리나 문서 수준으로 다루면 충분합니다.
+    related_surface_finding_ids:
+      - finding-018
+  - issue_id: issue-017
+    problem_definition: Assay가 실행 단위로 도입되었지만 explicit workflow relation graph에서
+      Test/Result/Specimen 경로와 연결되지 않습니다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Test/Assay 경계 문제(issue-007)의 구조적 증상이며, 그래프 기반 통합 매핑 완성도를 약화합니다. 중간
+      심각도 completeness 결함으로 후속 단계에서 relation을 추가하면 됩니다.
+    related_surface_finding_ids:
+      - finding-019
+  - issue_id: issue-018
+    problem_definition: Order-to-Test edge가 explicit relation graph에 없어 주문에 속한
+      tests와 completion 대상 results를 그래프만으로 추적하기 어렵습니다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Order completion과 ordered_tests 의미의 중심 relation이 누락된 직접 구조 공백입니다.
+      graph 기반 소비자가 핵심 workflow를 해석해야 하므로 다음 단계 전 명시 relation이 필요합니다.
+    related_surface_finding_ids:
+      - finding-020
+result_classification_summary:
+  highest_severity: high
+  finding_count: 20
+  issue_count: 18
+  finding_severity_counts:
+    blocker: 0
+    high: 6
+    medium: 13
+    low: 1
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 6
+    medium: 11
+    low: 1
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 13
+  non_material_finding_count: 5
+  material_issues:
+    - issue_id: issue-001
+      severity: high
+      material: true
+      affected_purpose: EMR/LIS 통합 설계의 개념 권위 문서로서 임상의가 신뢰할 결과·보고 상태의 권위를 정렬하는 목적.
+      failure_condition: Result.status가 corrected로 바뀐 뒤 야간 배치 전까지
+        Report.result_status가 아직 finalized/prelim 계열 값으로 남는 경우.
+      impact: 권위 문서가 stale clinician-facing 상태를 허용하면 통합 구현자는 지연 동기화를 정상 계약으로 받아들일 수
+        있고, 임상의가 신뢰한다고 선언된 보고 상태의 의미가 약해집니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-candidate-001
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:user-request-intent
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:69-83,121-123;
+          .onto/review/20260611-1b46eb7b/execution-preparation/review-value-alignment-criteria.yaml:user-request-intent
+      source_lens_ids:
+        - axiology
+      action_candidates: &a2
+        - fix_before_release
+        - fix_now
+      rationale: "여러 렌즈가 지지한 고심각도 결함이며, 더 넓은 상태 권위·이력 부재(issue-004/013)의 사용자 노출 증상입니다.
+        임상의가 신뢰하는 상태값의 의미를 흔드므로 다음 단계 전에 닫아야 합니다. Source finding context:
+        clinical-lab-ontology.yaml Report.result_status / Result.status
+        synchronization rule Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 임상의가 신뢰하는
+        보고 상태를 야간 배치로 동기화하도록 둔 결정은 EMR/LIS 통합 권위 문서 목적과 어긋납니다. Source finding
+        context: 검토 목적은 이 파일이 EMR/LIS 통합의 개념 권위 문서로 적절한지 판단하는 것입니다. 이 목적에서는 임상의가
+        보는 보고 상태의 권위와 LIS 결과 상태의 권위가 즉시 일관되어야 하는지가 핵심 가치입니다. 현재 모델은
+        clinician-facing 상태를 권위 값으로 만들면서도 corrected 상태 반영 지연을 정상 운영 전제로 수용하므로,
+        정정 결과가 생긴 당일에는 Report.result_status가 임상의 신뢰 대상이라는 약속을 약화시킬 수 있습니다.
+        Source finding context: Report.result_status의 권위 원천을 Result.status로 명확히
+        낮추거나, corrected 전이를 Report.result_status에 동기적으로 반영해야 하는 불변식으로 올리십시오. 배치가
+        필요하다면 그 동안 Report를 stale/pending_amendment 같은 명시 상태로 표시하고 임상의 신뢰 가능 범위를
+        문서화하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: EMR/LIS 통합 설계의 개념 권위 문서로서 임상의가 신뢰할
+        결과·보고 상태의 권위를 정렬하는 목적. Source finding context: Result.status가 corrected로
+        바뀐 뒤 야간 배치 전까지 Report.result_status가 아직 finalized/prelim 계열 값으로 남는 경우.
+        Source finding context: 권위 문서가 stale clinician-facing 상태를 허용하면 통합 구현자는
+        지연 동기화를 정상 계약으로 받아들일 수 있고, 임상의가 신뢰한다고 선언된 보고 상태의 의미가 약해집니다. Source
+        finding context: 보고 상태의 신뢰 가치와 운영 편의성인 야간 배치 동기화가 같은 계약 안에서 조정 없이 병존합니다.
+        Source finding context: Report.result_status는 임상의가 신뢰하는 권위 값으로 선언되어
+        있습니다. Source finding context: Result.status가 corrected로 바뀌면
+        Report.result_status는 amended가 되어야 하지만 동기화는 야간 1회로 제한됩니다. Source finding
+        context: 따라서 corrected 발생 시점과 야간 배치 사이에 임상의가 신뢰하는 상태가 LIS 결과 상태와 불일치할 수
+        있습니다."
+      problem_definition: Report.result_status가 clinician-facing 권위값으로 쓰이면서도
+        Result.status 정정 후 야간 배치 전까지 오래된 상태로 남을 수 있는 상태 신뢰 문제입니다.
+      issue_statement: "임상의가 신뢰하는 보고 상태를 야간 배치로 동기화하도록 둔 결정은 EMR/LIS 통합 권위 문서 목적과
+        어긋납니다. Source finding context: clinical-lab-ontology.yaml
+        Report.result_status / Result.status synchronization rule Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 검토 목적은 이
+        파일이 EMR/LIS 통합의 개념 권위 문서로 적절한지 판단하는 것입니다. 이 목적에서는 임상의가 보는 보고 상태의 권위와 LIS
+        결과 상태의 권위가 즉시 일관되어야 하는지가 핵심 가치입니다. 현재 모델은 clinician-facing 상태를 권위 값으로
+        만들면서도 corrected 상태 반영 지연을 정상 운영 전제로 수용하므로, 정정 결과가 생긴 당일에는
+        Report.result_status가 임상의 신뢰 대상이라는 약속을 약화시킬 수 있습니다. Source finding
+        context: Report.result_status의 권위 원천을 Result.status로 명확히 낮추거나, corrected
+        전이를 Report.result_status에 동기적으로 반영해야 하는 불변식으로 올리십시오. 배치가 필요하다면 그 동안
+        Report를 stale/pending_amendment 같은 명시 상태로 표시하고 임상의 신뢰 가능 범위를 문서화하십시오.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: EMR/LIS 통합 설계의 개념 권위 문서로서 임상의가 신뢰할
+        결과·보고 상태의 권위를 정렬하는 목적. Source finding context: Result.status가 corrected로
+        바뀐 뒤 야간 배치 전까지 Report.result_status가 아직 finalized/prelim 계열 값으로 남는 경우.
+        Source finding context: 권위 문서가 stale clinician-facing 상태를 허용하면 통합 구현자는
+        지연 동기화를 정상 계약으로 받아들일 수 있고, 임상의가 신뢰한다고 선언된 보고 상태의 의미가 약해집니다. Source
+        finding context: 보고 상태의 신뢰 가치와 운영 편의성인 야간 배치 동기화가 같은 계약 안에서 조정 없이 병존합니다.
+        Source finding context: Report.result_status는 임상의가 신뢰하는 권위 값으로 선언되어
+        있습니다. Source finding context: Result.status가 corrected로 바뀌면
+        Report.result_status는 amended가 되어야 하지만 동기화는 야간 1회로 제한됩니다. Source finding
+        context: 따라서 corrected 발생 시점과 야간 배치 사이에 임상의가 신뢰하는 상태가 LIS 결과 상태와 불일치할 수
+        있습니다."
+      issue_role: symptom
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: observed
+    - issue_id: issue-004
+      severity: high
+      material: true
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 결과 상태와 보고 상태의 precedence 및 운영 위험을 닫는 목적.
+      failure_condition: Result.status가 corrected로 바뀐 뒤 야간 배치 전까지 Result와 Report가 다른
+        상태를 보유하거나, 정정/재발행 후 특정 시점에 임상의가 본 상태를 재구성해야 하는 경우.
+      impact: "상태 권위와 이력이 없으면 동기화 지연 구간의 신뢰 기준, 정정 보고 추적성, 과거 보고 상태 재현을 결정할 수 없어 핵심 운영
+        계약이 불완전해집니다. Source finding context: 상태 권위와 이력이 없으면 통합 설계가 동기화 지연 구간의 신뢰
+        기준, 정정 보고의 추적성, 과거 보고 상태 재현을 결정할 수 없어 핵심 운영 계약이 불완전해집니다."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-candidate-001
+        - "materialized input: Result.status note = LIS가 기록하며
+          Report.result_status에도 동일 정보가 유지된다"
+        - "materialized input: Report.result_status note = 보고서에 표시되는 결과 상태의 권위
+          값. 임상의는 이 값을 신뢰한다"
+        - "materialized input: state_rules[1] = corrected 변경 시
+          Report.result_status는 amended가 되어야 하며 동기화 배치는 야간 1회"
+        - "materialized input: Result.status note; Report.result_status note;
+          state_rules[1]"
+      source_lens_ids:
+        - coverage
+      action_candidates: &a3
+        - fix_now
+      rationale: "상태 지연, 정정, 과거 노출 상태 재구성 문제의 중심 원인입니다. EMR/LIS 상태 계약의 권위와 precedence를
+        닫는 목적에 직접 걸리므로 대상 안에서 반드시 닫아야 합니다. Source finding context:
+        clinical-lab-ontology.yaml Source finding context: materialized input:
+        Result.status note; Report.result_status note; state_rules[1] Source
+        finding context: 결과 상태의 단일 권위와 이력 축이 누락되어 EMR/LIS 통합 권위 문서로는 상태 커버리지가
+        부족하다. Source finding context: coverage lens 기준에서 복수 시스템·장부에 걸친 값에는 단일 원본
+        지정이 필요하고, 상태 값에는 과거 시점 재구성을 위한 이력/유효기간 차원이 필요합니다. 현재 모델은 상태 값이 Result와
+        Report에 병행 저장된다는 사실과 지연 동기화만 포함하므로, 낮 동안 LIS의 corrected와 EMR 보고서의
+        finalized가 동시에 존재하는 구간에서 어떤 상태가 권위인지와 과거 특정 시점의 임상의 노출 상태를 설명하지 못합니다.
+        Source finding context: ResultStatusAuthority 또는
+        ResultStatusEvent/ReportReleaseEvent 같은 상태 권위 및 이벤트 개념을 추가하고, 각 상태 변화에
+        effective_at, recorded_at, source_system, supersedes/replaces,
+        released_version을 두어 Report가 보여주는 상태가 어떤 Result 상태 이벤트에서 파생되었는지 명시하세요.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 결과 상태와 보고
+        상태의 precedence 및 운영 위험을 닫는 목적. Source finding context: Result.status가
+        corrected로 바뀐 뒤 야간 배치 전까지 Result와 Report가 다른 상태를 보유하거나, 정정/재발행 후 특정 시점에
+        임상의가 본 상태를 재구성해야 하는 경우. Source finding context: 상태 권위와 이력이 없으면 통합 설계가
+        동기화 지연 구간의 신뢰 기준, 정정 보고의 추적성, 과거 보고 상태 재현을 결정할 수 없어 핵심 운영 계약이 불완전해집니다.
+        Source finding context: 상태를 하나의 현재값 속성으로만 모델링하고, 복수 저장 위치 간
+        source-of-truth 및 상태 이벤트/버전 개념을 포함하지 않았다. Source finding context:
+        Result.status와 Report.result_status가 모두 결과 상태 정보를 보유한다. Source finding
+        context: Report.result_status의 갱신은 corrected 발생 즉시가 아니라 야간 배치에 의존한다.
+        Source finding context: 상태 이력, 유효시각, 재발행/대체 버전, source_system 개념이 엔티티와
+        관계 목록에 없다."
+      problem_definition: Result.status와 Report.result_status가 중복 현재값으로 존재하지만 단일
+        source-of-truth, 상태 이벤트, 버전 이력이 없습니다.
+      issue_statement: "결과 상태의 단일 권위와 이력 축이 누락되어 동기화 지연 구간과 과거 임상의 노출 상태를 설명하지 못합니다.
+        Source finding context: clinical-lab-ontology.yaml Source finding
+        context: materialized input: Result.status note; Report.result_status
+        note; state_rules[1] Source finding context: 결과 상태의 단일 권위와 이력 축이 누락되어
+        EMR/LIS 통합 권위 문서로는 상태 커버리지가 부족하다. Source finding context: coverage lens
+        기준에서 복수 시스템·장부에 걸친 값에는 단일 원본 지정이 필요하고, 상태 값에는 과거 시점 재구성을 위한 이력/유효기간 차원이
+        필요합니다. 현재 모델은 상태 값이 Result와 Report에 병행 저장된다는 사실과 지연 동기화만 포함하므로, 낮 동안
+        LIS의 corrected와 EMR 보고서의 finalized가 동시에 존재하는 구간에서 어떤 상태가 권위인지와 과거 특정 시점의
+        임상의 노출 상태를 설명하지 못합니다. Source finding context: ResultStatusAuthority 또는
+        ResultStatusEvent/ReportReleaseEvent 같은 상태 권위 및 이벤트 개념을 추가하고, 각 상태 변화에
+        effective_at, recorded_at, source_system, supersedes/replaces,
+        released_version을 두어 Report가 보여주는 상태가 어떤 Result 상태 이벤트에서 파생되었는지 명시하세요.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 결과 상태와 보고
+        상태의 precedence 및 운영 위험을 닫는 목적. Source finding context: Result.status가
+        corrected로 바뀐 뒤 야간 배치 전까지 Result와 Report가 다른 상태를 보유하거나, 정정/재발행 후 특정 시점에
+        임상의가 본 상태를 재구성해야 하는 경우. Source finding context: 상태 권위와 이력이 없으면 통합 설계가
+        동기화 지연 구간의 신뢰 기준, 정정 보고의 추적성, 과거 보고 상태 재현을 결정할 수 없어 핵심 운영 계약이 불완전해집니다.
+        Source finding context: 상태를 하나의 현재값 속성으로만 모델링하고, 복수 저장 위치 간
+        source-of-truth 및 상태 이벤트/버전 개념을 포함하지 않았다. Source finding context:
+        Result.status와 Report.result_status가 모두 결과 상태 정보를 보유한다. Source finding
+        context: Report.result_status의 갱신은 corrected 발생 즉시가 아니라 야간 배치에 의존한다.
+        Source finding context: 상태 이력, 유효시각, 재발행/대체 버전, source_system 개념이 엔티티와
+        관계 목록에 없다."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-005
+      severity: high
+      material: true
+      affected_purpose: 위험 결과의 즉시 통보와 EMR/LIS 운영 책임을 설명하는 개념 권위 문서 역할.
+      failure_condition: critical value가 발생했지만 통보 누락, 지연, 수신자 불명, 재시도 또는 수신 확인 여부를 추적해야 하는 경우.
+      impact: 통보 행위의 증거가 온톨로지 밖에 있으면 통합 시스템이 안전 관련 운영 책임과 감사 추적을 공통 개념으로 설계하지 못하고,
+        notified boolean만으로는 실제 통보 이행을 검증할 수 없습니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-candidate-002
+        - "materialized input: CriticalValue definition = 즉시 통보가 필요한 위험 결과 값 범위"
+        - "materialized input: CriticalValue.notified note = 통보 시각과 수신자는 전화 기록
+          대장에 있다"
+        - "materialized input: CriticalValue attributes omit
+          actor/time/recipient/evidence fields"
+        - "materialized input: CriticalValue attributes and note"
+      source_lens_ids:
+        - coverage
+      action_candidates: &a4
+        - fix_now
+      rationale: "위험 결과 통보의 actor, recipient, time, acknowledgement, retry를 표현하지 못하는
+        고심각도 coverage 결함입니다. 안전 관련 운영 책임의 핵심 경로이므로 대상에서 직접 수정되어야 합니다. Source
+        finding context: clinical-lab-ontology.yaml Source finding context:
+        materialized input: CriticalValue attributes and note Source finding
+        context: CriticalValue 통보 행위의 감사 증거 개념이 누락되어 위험 결과 운영 커버리지가 부족하다. Source
+        finding context: 즉시 통보가 필요한 위험 결과는 통제가 필요한 행위이며, coverage lens는 승인·수동
+        조정·통보에 행위자·시각·근거 추적 증거 개념이 있는지 봅니다. 현재 모델은 통보 완료 여부만 내부에 두고 감사 증거는 외부
+        대장에 맡기므로 EMR/LIS 통합 권위 문서가 통보 책임, 지연, 누락, 수신 확인을 자체적으로 표현하지 못합니다. Source
+        finding context: CriticalValueNotification 또는 NotificationAttempt 엔티티를
+        추가해 critical_value/result_ref, notified_by, recipient, notified_at,
+        channel, acknowledgement_at, outcome, failure_reason/retry_of를 모델링하고
+        CriticalValue 또는 Result와 관계를 연결하세요. notified boolean은 이 이벤트에서 파생되는 값으로
+        낮추는 것이 안전합니다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 위험 결과의 즉시 통보와 EMR/LIS 운영 책임을 설명하는
+        개념 권위 문서 역할. Source finding context: critical value가 발생했지만 통보 누락, 지연,
+        수신자 불명, 재시도 또는 수신 확인 여부를 추적해야 하는 경우. Source finding context: 통보 행위의 증거가
+        온톨로지 밖에 있으면 통합 시스템이 안전 관련 운영 책임과 감사 추적을 공통 개념으로 설계하지 못하고, notified
+        boolean만으로는 실제 통보 이행을 검증할 수 없습니다. Source finding context: 통보를 독립적인 감사
+        가능한 행위/이벤트가 아니라 CriticalValue의 완료 여부 속성으로 축소했다. Source finding context:
+        CriticalValue는 통보가 필요한 위험 결과 범위를 모델링한다. Source finding context: 내부 속성은
+        notified boolean만 두고 핵심 통보 증거는 외부 전화 기록 대장에 둔다. Source finding context:
+        엔티티와 관계 목록에 통보 이벤트, 통보 시도, 수신 확인 또는 통보 근거 Result 연결 개념이 없다."
+      problem_definition: CriticalValue 통보가 독립적인 감사 이벤트가 아니라 완료 여부 boolean으로 축소되어 통보
+        책임과 이행 증거가 모델 밖에 남습니다.
+      issue_statement: "CriticalValue 통보 행위의 감사 증거 개념이 누락되어 위험 결과 운영 커버리지가 부족하다.
+        Source finding context: clinical-lab-ontology.yaml Source finding
+        context: materialized input: CriticalValue attributes and note Source
+        finding context: 즉시 통보가 필요한 위험 결과는 통제가 필요한 행위이며, coverage lens는 승인·수동
+        조정·통보에 행위자·시각·근거 추적 증거 개념이 있는지 봅니다. 현재 모델은 통보 완료 여부만 내부에 두고 감사 증거는 외부
+        대장에 맡기므로 EMR/LIS 통합 권위 문서가 통보 책임, 지연, 누락, 수신 확인을 자체적으로 표현하지 못합니다. Source
+        finding context: CriticalValueNotification 또는 NotificationAttempt 엔티티를
+        추가해 critical_value/result_ref, notified_by, recipient, notified_at,
+        channel, acknowledgement_at, outcome, failure_reason/retry_of를 모델링하고
+        CriticalValue 또는 Result와 관계를 연결하세요. notified boolean은 이 이벤트에서 파생되는 값으로
+        낮추는 것이 안전합니다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 위험 결과의 즉시 통보와 EMR/LIS 운영 책임을 설명하는
+        개념 권위 문서 역할. Source finding context: critical value가 발생했지만 통보 누락, 지연,
+        수신자 불명, 재시도 또는 수신 확인 여부를 추적해야 하는 경우. Source finding context: 통보 행위의 증거가
+        온톨로지 밖에 있으면 통합 시스템이 안전 관련 운영 책임과 감사 추적을 공통 개념으로 설계하지 못하고, notified
+        boolean만으로는 실제 통보 이행을 검증할 수 없습니다. Source finding context: 통보를 독립적인 감사
+        가능한 행위/이벤트가 아니라 CriticalValue의 완료 여부 속성으로 축소했다. Source finding context:
+        CriticalValue는 통보가 필요한 위험 결과 범위를 모델링한다. Source finding context: 내부 속성은
+        notified boolean만 두고 핵심 통보 증거는 외부 전화 기록 대장에 둔다. Source finding context:
+        엔티티와 관계 목록에 통보 이벤트, 통보 시도, 수신 확인 또는 통보 근거 Result 연결 개념이 없다."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-011
+      severity: high
+      material: true
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration state contracts.
+      failure_condition: "A Result reaches final, Order becomes completed, and the
+        Result is later changed to corrected under the Report amendment rule.
+        Source finding context: A Result reaches `final`, Order becomes
+        `completed`, and the Result is later changed to `corrected` under the
+        Report amendment rule."
+      impact: "Integrations relying on Order.completed cannot determine whether
+        completion means all current Results are final or merely that
+        finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results. Source finding context:
+        Integrations relying on `Order.completed` cannot determine whether
+        completion means all current Results are final or merely that
+        finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candidate-001
+        - "Embedded Materialized Input: Result.status values [preliminary,
+          final, corrected]"
+        - "Embedded Materialized Input: state_rules[0]"
+        - "Embedded Materialized Input: state_rules[1]"
+        - "Embedded Materialized Input: state_rules[0] `Order는 모든 Result가 final일
+          때 completed로 전이한다.`; Result.status enum values `[preliminary, final,
+          corrected]`; state_rules[1] allows `Result.status` to change to
+          `corrected` after report release"
+      source_lens_ids:
+        - logic
+      action_candidates: &a6
+        - fix_now
+      rationale: "완료 상태 계약의 직접 logical contradiction입니다. issue-004와 상태 event/history
+        맥락을 공유하지만 Order 완료 의미 실패는 별도 고심각도 correctness 문제로 대상 안에서 닫아야 합니다. Source
+        finding context: clinical-lab-ontology.yaml state_rules Source finding
+        context: Embedded Materialized Input: state_rules[0] `Order는 모든 Result가
+        final일 때 completed로 전이한다.`; Result.status enum values `[preliminary,
+        final, corrected]`; state_rules[1] allows `Result.status` to change to
+        `corrected` after report release Source finding context: Order
+        completion is defined by a reversible Result status, so later correction
+        can make an already completed Order no longer satisfy its own completion
+        condition. Source finding context: These claims are jointly satisfiable
+        at a snapshot where all Results are `final`, but not stable across the
+        lifecycle path explicitly allowed by the second rule. The model has no
+        rule saying whether `completed` is irreversible, reopened, amended, or
+        still completed after a correction, so the state machine can contain a
+        completed Order whose required completion condition is false. For an
+        EMR/LIS authority document, this weakens downstream trust in completion
+        as a contract state. Source finding context: Define completion against
+        an immutable event/snapshot, or add an explicit post-completion
+        correction transition such as `completed -> amended/reopened` with rules
+        for how corrected Results affect Order state. If completed is intended
+        to remain true after correction, state that completion means initial
+        finalization and separate it from amendment status. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: Use of the ontology as the conceptual
+        authority for EMR/LIS integration state contracts. Source finding
+        context: A Result reaches `final`, Order becomes `completed`, and the
+        Result is later changed to `corrected` under the Report amendment rule.
+        Source finding context: Integrations relying on `Order.completed` cannot
+        determine whether completion means all current Results are final or
+        merely that finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results. Source finding context:
+        Completion is specified as a state transition predicate over mutable
+        current Result.status values without an accompanying correction/reopen
+        rule for Order. Source finding context: The target defines Result.status
+        as an enum including both `final` and `corrected`. Source finding
+        context: The target defines Order completion as occurring when all
+        Results are `final`. Source finding context: The target explicitly
+        permits a Result status to change to `corrected` after report release
+        and requires Report.result_status to become amended. Source finding
+        context: After such a correction, an already completed Order can have a
+        non-final current Result and no declared Order transition resolves the
+        mismatch."
+      problem_definition: Order.completed가 mutable current Result.status에 의존해 Result가
+        later corrected 되면 완료 의미가 불안정해집니다.
+      issue_statement: "나중에 Result가 corrected로 바뀌면 이미 completed인 Order가 자신의 완료 조건을 더
+        이상 만족하지 않는 lifecycle 모순이 생깁니다. Source finding context:
+        clinical-lab-ontology.yaml state_rules Source finding context: Embedded
+        Materialized Input: state_rules[0] `Order는 모든 Result가 final일 때
+        completed로 전이한다.`; Result.status enum values `[preliminary, final,
+        corrected]`; state_rules[1] allows `Result.status` to change to
+        `corrected` after report release Source finding context: Order
+        completion is defined by a reversible Result status, so later correction
+        can make an already completed Order no longer satisfy its own completion
+        condition. Source finding context: These claims are jointly satisfiable
+        at a snapshot where all Results are `final`, but not stable across the
+        lifecycle path explicitly allowed by the second rule. The model has no
+        rule saying whether `completed` is irreversible, reopened, amended, or
+        still completed after a correction, so the state machine can contain a
+        completed Order whose required completion condition is false. For an
+        EMR/LIS authority document, this weakens downstream trust in completion
+        as a contract state. Source finding context: Define completion against
+        an immutable event/snapshot, or add an explicit post-completion
+        correction transition such as `completed -> amended/reopened` with rules
+        for how corrected Results affect Order state. If completed is intended
+        to remain true after correction, state that completion means initial
+        finalization and separate it from amendment status. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: Use of the ontology as the conceptual
+        authority for EMR/LIS integration state contracts. Source finding
+        context: A Result reaches `final`, Order becomes `completed`, and the
+        Result is later changed to `corrected` under the Report amendment rule.
+        Source finding context: Integrations relying on `Order.completed` cannot
+        determine whether completion means all current Results are final or
+        merely that finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results. Source finding context:
+        Completion is specified as a state transition predicate over mutable
+        current Result.status values without an accompanying correction/reopen
+        rule for Order. Source finding context: The target defines Result.status
+        as an enum including both `final` and `corrected`. Source finding
+        context: The target defines Order completion as occurring when all
+        Results are `final`. Source finding context: The target explicitly
+        permits a Result status to change to `corrected` after report release
+        and requires Report.result_status to become amended. Source finding
+        context: After such a correction, an already completed Order can have a
+        non-final current Result and no declared Order transition resolves the
+        mismatch."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-013
+      severity: high
+      material: true
+      affected_purpose: "결과 및 보고 상태를 EMR/LIS 통합에서 확장 가능하고 일관되게 해석하는 개념 권위 문서 역할.
+        Source finding context: EMR/LIS 통합의 개념 권위 문서로서 결과/보고 상태 의미를 일관되게 제공하는
+        목적"
+      failure_condition: "LIS는 Result.status를, EMR 또는 임상의 화면은 Report.result_status를
+        기준으로 삼거나 corrected 외 새 결과/보고 상태가 추가되는 경우. Source finding context: LIS는
+        Result.status를, EMR 또는 임상의 화면은 Report.result_status를 기준으로 삼을 때 같은 검사 결과가
+        서로 다른 의미의 상태로 해석되는 경우 Source finding context: corrected 외의 새 결과 상태, 보고
+        표시 상태, 외부 LIS 상태가 추가될 때 두 enum과 야간 동기화 규칙을 동시에 변경해야 한다."
+      impact: "상태 어휘의 권위 분열은 임상의 신뢰와 후속 조치에 직접 영향을 주는 상태 의미를 약화하고, 상태 확장 시 기존 데이터 해석
+        연속성을 흔듭니다. Source finding context: 결과가 preliminary인지 final인지,
+        corrected인지 amended인지에 따라 임상의 신뢰와 후속 조치가 달라지므로 상태 어휘의 권위 분열은 통합 계약의 핵심
+        의미를 약화합니다. Source finding context: 상태 확장 시 기존 보고서와 결과 데이터의 해석 연속성이 깨지고
+        임상의가 신뢰하는 Report.result_status의 최신성/권위가 흔들린다."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics-candidate-001
+        - clinical-lab-ontology.yaml:64-78
+        - clinical-lab-ontology.yaml:116-118
+        - clinical-lab-ontology.yaml:64-78, 116-118
+        - .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution-candidate-003
+        - materialized-input.md:69-83
+        - materialized-input.md:121-123
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:69-83,121-123
+      source_lens_ids:
+        - semantics
+        - evolution
+      action_candidates: &a7
+        - fix_now
+      rationale: "상태 의미 해석과 향후 확장의 중심 결함이며 issue-004와 원인을 공유합니다. 임상의 신뢰 상태와 상태 확장 안정성을
+        동시에 흔드는 고심각도 root입니다. Source finding context:
+        clinical-lab-ontology.yaml: Result.status and Report.result_status
+        Source finding context: clinical-lab-ontology.yaml:64-78, 116-118 Source
+        finding context: Result.status와 Report.result_status가 같은 의미라고 선언되지만 서로
+        다른 상태 어휘와 권위 주장을 사용한다. Source finding context: 동일 정보라면 상태값은 의미적으로 같은
+        어휘이거나 명시적이고 완전한 매핑이어야 합니다. 현재는 preliminary/prelim, final/finalized,
+        corrected/amended처럼 값 이름이 다르고, Result는 LIS 기록값이며 Report는 임상의가 신뢰하는
+        권위값이라고 되어 있어 EMR/LIS 통합의 상태 권위가 둘로 갈라집니다. corrected와 amended는 특히 결과 자체의
+        정정과 보고서 개정이라는 서로 다른 사건을 가리킬 수 있어 단순 동의어로 취급하기 어렵습니다. Source finding
+        context: 상태 권위 개념을 하나로 정하십시오. 예: canonical ResultStatus enum을 하나 두고
+        Report는 그 상태를 참조/투영하게 하거나, ResultStatus와 ReportStatus를 분리하되 각 값의 의미와 전이
+        매핑을 명시하십시오. '동일 정보'와 '권위 값' 중 어느 필드가 원천인지도 하나로 정해야 합니다. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: EMR/LIS 통합의 개념 권위 문서로서 결과/보고 상태
+        의미를 일관되게 제공하는 목적 Source finding context: LIS는 Result.status를, EMR 또는 임상의
+        화면은 Report.result_status를 기준으로 삼을 때 같은 검사 결과가 서로 다른 의미의 상태로 해석되는 경우
+        Source finding context: 결과가 preliminary인지 final인지, corrected인지
+        amended인지에 따라 임상의 신뢰와 후속 조치가 달라지므로 상태 어휘의 권위 분열은 통합 계약의 핵심 의미를 약화합니다.
+        Source finding context: 결과 상태와 보고 상태의 원천 권위 및 값 어휘가 하나의 canonical
+        concept으로 정리되지 않았다. Source finding context: Result.status와
+        Report.result_status가 같은 정보라고 선언되어 있다. Source finding context: 두 필드는 서로
+        다른 enum 값을 사용하며 Report 쪽은 별도의 권위 값이라고 선언한다. Source finding context:
+        state_rules는 Result.status corrected가 Report.result_status amended로 바뀌어야
+        한다고 하여 두 상태가 동기화되는 별도 개념임을 드러낸다. Source finding context:
+        clinical-lab-ontology.yaml: Result/Report status evolution Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123 Source finding context: Result와 Report가 별도 상태 어휘와 야간
+        동기화 규칙을 가져 상태 추가·변경 시 연속성이 깨지기 쉽다. Source finding context: 보고 상태는 임상의가
+        신뢰하는 값으로 명시되어 있어 상태 모델 변경의 영향이 크다. 새 상태나 외부 시스템 상태가 추가되면 두 enum과 전이 규칙,
+        배치 동기화 매핑을 함께 바꿔야 하며, 기존 데이터가 어느 상태 권위에 따라 해석되는지 불분명해질 수 있다. Source
+        finding context: Result 상태를 원천 상태로 둘지 Report 상태를 별도 표시 상태로 둘지 권위를 분리하고,
+        두 상태 사이의 버전 있는 매핑 테이블/전이 규칙을 명시한다. 동기화 지연 상태도 모델에 표현해 임상의 표시 값과 LIS 원천
+        값의 차이를 추적할 수 있게 한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-003 Source finding context: 결과 및 보고 상태를 EMR/LIS 통합에서 확장 가능하고
+        일관되게 해석하는 개념 권위 문서 역할. Source finding context: corrected 외의 새 결과 상태, 보고
+        표시 상태, 외부 LIS 상태가 추가될 때 두 enum과 야간 동기화 규칙을 동시에 변경해야 한다. Source finding
+        context: 상태 확장 시 기존 보고서와 결과 데이터의 해석 연속성이 깨지고 임상의가 신뢰하는
+        Report.result_status의 최신성/권위가 흔들린다. Source finding context: 같은 상태 정보를
+        Result와 Report에 서로 다른 enum으로 중복 보존하면서 권위 매핑과 지연 상태를 명시하지 않았다. Source
+        finding context: Result.status와 Report.result_status가 같은 정보를 유지한다고 설명되지만
+        enum 값은 서로 다르다. Source finding context: Report.result_status는 임상의가 신뢰하는
+        권위 값으로 명시되어 있다. Source finding context: corrected 변경은 야간 1회 배치로 amended에
+        반영되어 상태 지연 구간이 생기지만 지연 상태 자체는 모델에 없다."
+      problem_definition: Result와 Report 상태 어휘가 별도 enum으로 중복되어 canonical authority, 완전
+        매핑, 지연 표시 상태가 없습니다.
+      issue_statement: "결과/보고 상태 어휘와 권위가 분리되어 현재 의미 해석과 향후 상태 확장 모두에서 일관성이 깨질 수 있습니다.
+        Source finding context: clinical-lab-ontology.yaml: Result.status and
+        Report.result_status Source finding context:
+        clinical-lab-ontology.yaml:64-78, 116-118 Source finding context:
+        Result.status와 Report.result_status가 같은 의미라고 선언되지만 서로 다른 상태 어휘와 권위 주장을
+        사용한다. Source finding context: 동일 정보라면 상태값은 의미적으로 같은 어휘이거나 명시적이고 완전한
+        매핑이어야 합니다. 현재는 preliminary/prelim, final/finalized, corrected/amended처럼
+        값 이름이 다르고, Result는 LIS 기록값이며 Report는 임상의가 신뢰하는 권위값이라고 되어 있어 EMR/LIS 통합의
+        상태 권위가 둘로 갈라집니다. corrected와 amended는 특히 결과 자체의 정정과 보고서 개정이라는 서로 다른 사건을
+        가리킬 수 있어 단순 동의어로 취급하기 어렵습니다. Source finding context: 상태 권위 개념을 하나로
+        정하십시오. 예: canonical ResultStatus enum을 하나 두고 Report는 그 상태를 참조/투영하게 하거나,
+        ResultStatus와 ReportStatus를 분리하되 각 값의 의미와 전이 매핑을 명시하십시오. '동일 정보'와 '권위 값'
+        중 어느 필드가 원천인지도 하나로 정해야 합니다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: EMR/LIS 통합의 개념 권위 문서로서 결과/보고 상태
+        의미를 일관되게 제공하는 목적 Source finding context: LIS는 Result.status를, EMR 또는 임상의
+        화면은 Report.result_status를 기준으로 삼을 때 같은 검사 결과가 서로 다른 의미의 상태로 해석되는 경우
+        Source finding context: 결과가 preliminary인지 final인지, corrected인지
+        amended인지에 따라 임상의 신뢰와 후속 조치가 달라지므로 상태 어휘의 권위 분열은 통합 계약의 핵심 의미를 약화합니다.
+        Source finding context: 결과 상태와 보고 상태의 원천 권위 및 값 어휘가 하나의 canonical
+        concept으로 정리되지 않았다. Source finding context: Result.status와
+        Report.result_status가 같은 정보라고 선언되어 있다. Source finding context: 두 필드는 서로
+        다른 enum 값을 사용하며 Report 쪽은 별도의 권위 값이라고 선언한다. Source finding context:
+        state_rules는 Result.status corrected가 Report.result_status amended로 바뀌어야
+        한다고 하여 두 상태가 동기화되는 별도 개념임을 드러낸다. Source finding context:
+        clinical-lab-ontology.yaml: Result/Report status evolution Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123 Source finding context: Result와 Report가 별도 상태 어휘와 야간
+        동기화 규칙을 가져 상태 추가·변경 시 연속성이 깨지기 쉽다. Source finding context: 보고 상태는 임상의가
+        신뢰하는 값으로 명시되어 있어 상태 모델 변경의 영향이 크다. 새 상태나 외부 시스템 상태가 추가되면 두 enum과 전이 규칙,
+        배치 동기화 매핑을 함께 바꿔야 하며, 기존 데이터가 어느 상태 권위에 따라 해석되는지 불분명해질 수 있다. Source
+        finding context: Result 상태를 원천 상태로 둘지 Report 상태를 별도 표시 상태로 둘지 권위를 분리하고,
+        두 상태 사이의 버전 있는 매핑 테이블/전이 규칙을 명시한다. 동기화 지연 상태도 모델에 표현해 임상의 표시 값과 LIS 원천
+        값의 차이를 추적할 수 있게 한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-003 Source finding context: 결과 및 보고 상태를 EMR/LIS 통합에서 확장 가능하고
+        일관되게 해석하는 개념 권위 문서 역할. Source finding context: corrected 외의 새 결과 상태, 보고
+        표시 상태, 외부 LIS 상태가 추가될 때 두 enum과 야간 동기화 규칙을 동시에 변경해야 한다. Source finding
+        context: 상태 확장 시 기존 보고서와 결과 데이터의 해석 연속성이 깨지고 임상의가 신뢰하는
+        Report.result_status의 최신성/권위가 흔들린다. Source finding context: 같은 상태 정보를
+        Result와 Report에 서로 다른 enum으로 중복 보존하면서 권위 매핑과 지연 상태를 명시하지 않았다. Source
+        finding context: Result.status와 Report.result_status가 같은 정보를 유지한다고 설명되지만
+        enum 값은 서로 다르다. Source finding context: Report.result_status는 임상의가 신뢰하는
+        권위 값으로 명시되어 있다. Source finding context: corrected 변경은 야간 1회 배치로 amended에
+        반영되어 상태 지연 구간이 생기지만 지연 상태 자체는 모델에 없다."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-003
+      severity: medium
+      material: true
+      affected_purpose: EMR/LIS 통합에서 공통 개념과 파생 지표의 권위를 제공하는 목적.
+      failure_condition: 대시보드 팀의 자체 TAT 계산식이 온톨로지의 collected_at-to-released_at 정의와
+        다르거나 예외 처리를 다르게 하는 경우.
+      impact: 운영자는 동일 검사 흐름에 대해 서로 다른 TAT 값을 보게 되고, 통합 권위 문서가 지표 해석의 분쟁을 해소하지 못합니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-candidate-003
+        - materialized-input.md:41
+        - materialized-input.md:84
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:user-request-intent
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:41,84,126-128;
+          .onto/review/20260611-1b46eb7b/execution-preparation/review-value-alignment-criteria.yaml:user-request-intent
+      source_lens_ids:
+        - axiology
+      action_candidates: &a9
+        - follow_up
+      rationale: "동일한 TAT 권위 결함의 가치·거버넌스 표면이며 issue-008의 계산 규칙/버전 공백과 같은 해법을 공유합니다. 핵심
+        안전 상태보다는 운영 지표 재현성과 권위 품질 문제입니다. Source finding context:
+        clinical-lab-ontology.yaml turnaround_time note Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:41,84,126-128;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: TAT 계산식을
+        대시보드 팀의 자체 권위로 남겨 둔 것은 통합 개념 권위 문서의 목적과 맞지 않는 국소 최적화입니다. Source finding
+        context: EMR/LIS 통합 권위 문서는 시스템 간 해석 차이를 줄이는 데 가치가 있습니다. TAT는 운영 성과와 우선순위
+        판단에 쓰일 가능성이 큰 파생 지표인데, 권위 문서가 canonical formula와 예외를 닫지 않고 대시보드 로컬 계산을
+        허용하면 같은 워크플로를 서로 다른 숫자로 해석할 여지를 남깁니다. Source finding context:
+        turnaround_time을 파생 속성 또는 명시된 projection으로 정의하고 source fields, timezone,
+        missing timestamp, corrected/amended report 처리 기준을 온톨로지에 포함하십시오. 대시보드
+        계산식은 이 canonical rule의 구현체로 표현하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: EMR/LIS 통합에서 공통 개념과 파생 지표의 권위를 제공하는
+        목적. Source finding context: 대시보드 팀의 자체 TAT 계산식이 온톨로지의
+        collected_at-to-released_at 정의와 다르거나 예외 처리를 다르게 하는 경우. Source finding
+        context: 운영자는 동일 검사 흐름에 대해 서로 다른 TAT 값을 보게 되고, 통합 권위 문서가 지표 해석의 분쟁을 해소하지
+        못합니다. Source finding context: 권위 문서가 파생 지표의 canonical authority를 닫지 않고
+        downstream 팀의 자체 계산식을 허용합니다. Source finding context: TAT의 원천 필드인
+        collected_at과 released_at은 온톨로지 안에 정의되어 있습니다. Source finding context:
+        노트는 TAT를 collected_at부터 released_at까지로 계산한다고 하면서도 대시보드 팀이 자체 계산식을 유지한다고
+        선언합니다. Source finding context: 따라서 통합 권위 문서가 공통 지표 의미를 확정하지 못하고 팀별 해석
+        차이를 허용합니다."
+      problem_definition: TAT 산출 기준을 통합 권위가 아니라 대시보드 팀의 자체 계산식으로 남겨 운영 지표 해석 권위가 분산됩니다.
+      issue_statement: "TAT 계산식을 대시보드 팀의 자체 권위로 남겨 둔 것은 통합 개념 권위 문서의 목적과 맞지 않는 국소
+        최적화입니다. Source finding context: clinical-lab-ontology.yaml
+        turnaround_time note Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:41,84,126-128;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: EMR/LIS
+        통합 권위 문서는 시스템 간 해석 차이를 줄이는 데 가치가 있습니다. TAT는 운영 성과와 우선순위 판단에 쓰일 가능성이 큰 파생
+        지표인데, 권위 문서가 canonical formula와 예외를 닫지 않고 대시보드 로컬 계산을 허용하면 같은 워크플로를 서로
+        다른 숫자로 해석할 여지를 남깁니다. Source finding context: turnaround_time을 파생 속성 또는
+        명시된 projection으로 정의하고 source fields, timezone, missing timestamp,
+        corrected/amended report 처리 기준을 온톨로지에 포함하십시오. 대시보드 계산식은 이 canonical
+        rule의 구현체로 표현하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: EMR/LIS 통합에서 공통 개념과 파생 지표의 권위를 제공하는
+        목적. Source finding context: 대시보드 팀의 자체 TAT 계산식이 온톨로지의
+        collected_at-to-released_at 정의와 다르거나 예외 처리를 다르게 하는 경우. Source finding
+        context: 운영자는 동일 검사 흐름에 대해 서로 다른 TAT 값을 보게 되고, 통합 권위 문서가 지표 해석의 분쟁을 해소하지
+        못합니다. Source finding context: 권위 문서가 파생 지표의 canonical authority를 닫지 않고
+        downstream 팀의 자체 계산식을 허용합니다. Source finding context: TAT의 원천 필드인
+        collected_at과 released_at은 온톨로지 안에 정의되어 있습니다. Source finding context:
+        노트는 TAT를 collected_at부터 released_at까지로 계산한다고 하면서도 대시보드 팀이 자체 계산식을 유지한다고
+        선언합니다. Source finding context: 따라서 통합 권위 문서가 공통 지표 의미를 확정하지 못하고 팀별 해석
+        차이를 허용합니다."
+      issue_role: symptom
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-006
+      severity: medium
+      material: true
+      affected_purpose: 주문부터 보고까지뿐 아니라 검체가 생성한 결과의 재검·감사·폐기 책임을 포함하는 임상검사 워크플로 개념 권위.
+      failure_condition: 분석 완료 후 검체 보관, 재검 가능성 판단, 보관 만료, 폐기 승인/실행을 EMR/LIS가 공통 상태로 해석해야 하는 경우.
+      impact: 분석 후 lifecycle이 비어 있으면 운영 시스템 간 검체의 현재 책임 상태를 합의할 수 없고, 재검/폐기 관련 의사결정이
+        온톨로지 밖 내규 해석에 의존합니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-candidate-003
+        - "materialized input: Specimen.lifecycle = [collected, received,
+          in_analysis, analyzed]"
+        - "materialized input: state_rules[2] = analyzed 뒤 보관/폐기는 각 부서 내규를 따른다"
+        - "materialized input: Specimen.lifecycle and state_rules[2]"
+      source_lens_ids:
+        - coverage
+      action_candidates: &a10
+        - follow_up
+      rationale: "분석 후 검체 책임 범위를 닫지 못하는 독립 lifecycle coverage 공백입니다. 주요 통합 권위 품질에는
+        중요하지만 상태·critical-value 결함보다는 후속 단계에서 닫아도 되는 중간 심각도입니다. Source finding
+        context: clinical-lab-ontology.yaml Source finding context: materialized
+        input: Specimen.lifecycle and state_rules[2] Source finding context:
+        Specimen의 보관·폐기 lifecycle 구간이 온톨로지에 표현되지 않아 검체 운영 범위가 끝까지 닫히지 않는다.
+        Source finding context: coverage lens는 상태 요소의 lifecycle이 도입부터 보관·폐기·단종 등
+        종료 구간까지 커버되는지 확인합니다. 검체는 분석 후에도 재검, 보관, 폐기 책임이 남는 개체인데 현재 권위 문서는 그 구간을
+        외부 내규로 밀어내 EMR/LIS 통합 모델의 공통 상태와 책임 범위를 닫지 못합니다. Source finding context:
+        Specimen lifecycle에 stored, retention_expired, disposal_pending,
+        disposed 같은 종료 구간을 추가하거나 SpecimenRetention/SpecimenDisposalEvent 엔티티를
+        두세요. 부서별 내규는 상태 개념을 대체하지 말고 retention_policy_ref, storage_location,
+        disposed_at, disposed_by 같은 속성으로 연결하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 주문부터 보고까지뿐 아니라 검체가 생성한 결과의 재검·감사·폐기
+        책임을 포함하는 임상검사 워크플로 개념 권위. Source finding context: 분석 완료 후 검체 보관, 재검 가능성
+        판단, 보관 만료, 폐기 승인/실행을 EMR/LIS가 공통 상태로 해석해야 하는 경우. Source finding context:
+        분석 후 lifecycle이 비어 있으면 운영 시스템 간 검체의 현재 책임 상태를 합의할 수 없고, 재검/폐기 관련 의사결정이
+        온톨로지 밖 내규 해석에 의존합니다. Source finding context: 검체 lifecycle 범위를 분석 완료까지로
+        한정하고 종료 구간을 온톨로지 개념 대신 외부 부서 내규에 위임했다. Source finding context: Specimen
+        lifecycle은 analyzed에서 종료된다. Source finding context: 보관/폐기 처리는 온톨로지 상태가
+        아니라 각 부서 내규로 처리된다고 선언되어 있다. Source finding context: Specimen 보관·폐기 이벤트나
+        retention policy와 연결되는 엔티티/관계가 없다."
+      problem_definition: Specimen lifecycle이 analyzed에서 끝나 보관, 재검 가능성, 만료, 폐기 승인/실행
+        상태가 외부 내규로만 남습니다.
+      issue_statement: "검체의 보관·폐기 lifecycle 구간이 표현되지 않아 분석 후 운영 책임 범위가 닫히지 않습니다.
+        Source finding context: clinical-lab-ontology.yaml Source finding
+        context: materialized input: Specimen.lifecycle and state_rules[2]
+        Source finding context: Specimen의 보관·폐기 lifecycle 구간이 온톨로지에 표현되지 않아 검체
+        운영 범위가 끝까지 닫히지 않는다. Source finding context: coverage lens는 상태 요소의
+        lifecycle이 도입부터 보관·폐기·단종 등 종료 구간까지 커버되는지 확인합니다. 검체는 분석 후에도 재검, 보관, 폐기
+        책임이 남는 개체인데 현재 권위 문서는 그 구간을 외부 내규로 밀어내 EMR/LIS 통합 모델의 공통 상태와 책임 범위를 닫지
+        못합니다. Source finding context: Specimen lifecycle에 stored,
+        retention_expired, disposal_pending, disposed 같은 종료 구간을 추가하거나
+        SpecimenRetention/SpecimenDisposalEvent 엔티티를 두세요. 부서별 내규는 상태 개념을 대체하지 말고
+        retention_policy_ref, storage_location, disposed_at, disposed_by 같은 속성으로
+        연결하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 주문부터 보고까지뿐 아니라 검체가 생성한 결과의 재검·감사·폐기
+        책임을 포함하는 임상검사 워크플로 개념 권위. Source finding context: 분석 완료 후 검체 보관, 재검 가능성
+        판단, 보관 만료, 폐기 승인/실행을 EMR/LIS가 공통 상태로 해석해야 하는 경우. Source finding context:
+        분석 후 lifecycle이 비어 있으면 운영 시스템 간 검체의 현재 책임 상태를 합의할 수 없고, 재검/폐기 관련 의사결정이
+        온톨로지 밖 내규 해석에 의존합니다. Source finding context: 검체 lifecycle 범위를 분석 완료까지로
+        한정하고 종료 구간을 온톨로지 개념 대신 외부 부서 내규에 위임했다. Source finding context: Specimen
+        lifecycle은 analyzed에서 종료된다. Source finding context: 보관/폐기 처리는 온톨로지 상태가
+        아니라 각 부서 내규로 처리된다고 선언되어 있다. Source finding context: Specimen 보관·폐기 이벤트나
+        retention policy와 연결되는 엔티티/관계가 없다."
+      issue_role: root_cause
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-008
+      severity: medium
+      material: true
+      affected_purpose: 임상검사 워크플로의 운영 성능 지표를 EMR/LIS 통합 권위 문서에서 일관되게 해석하는 목적.
+      failure_condition: 대시보드, LIS, EMR이 같은 주문/검체에 대해 다른 TAT를 산출하거나, 계산식 변경 전후의 과거
+        TAT를 재현해야 하는 경우.
+      impact: 계산 권위와 규칙 이력이 없으면 운영 지표가 통합 모델의 계약이 아니라 외부 팀 계산식에 의존해 precedence와 감사
+        가능성이 약해집니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-candidate-005
+        - "materialized input: notes[1] = TAT은 collected_at부터 released_at까지로
+          계산하며 대시보드 팀이 자체 계산식을 유지한다"
+        - "materialized input: Specimen.collected_at"
+        - "materialized input: Report.released_at"
+        - "materialized input: notes[1] and available attributes"
+      source_lens_ids:
+        - coverage
+      action_candidates: &a12
+        - follow_up
+      rationale: "TAT 관련 문제의 원인 축이며 운영 지표 재현성·감사 가능성을 약화합니다. 중간 심각도이며 안전 상태 계약보다는 운영
+        지표 governance 문제로 후속 단계에서 닫을 수 있습니다. Source finding context:
+        clinical-lab-ontology.yaml Source finding context: materialized input:
+        notes[1] and available attributes Source finding context: TAT 산출값의 권위·계산
+        버전·예외 구간 개념이 누락되어 운영 지표 커버리지가 부족하다. Source finding context: TAT는 시점 의존
+        운영 지표이고, 자체 계산식이 별도 팀에 있다는 것은 병행 관리 값입니다. coverage 관점에서 이런 값은 단일 권위와
+        이력/유효기간이 필요합니다. 현재 모델은 원천 시각 두 개만 제공하고 계산 권위를 외부로 둬서 EMR/LIS와 대시보드 간 지표
+        불일치나 과거 리포트 재현을 설명하지 못합니다. Source finding context: TATMetric 또는
+        TurnaroundTimeCalculationRule 엔티티를 추가하고 metric_owner/source_system,
+        effective_from/effective_to, start_event, stop_event, pause/exception
+        events, target_threshold, calculated_at을 명시하세요. 대시보드 계산식은 외부 임의 로직이 아니라
+        해당 규칙 버전의 projection으로 두세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-005 Source finding context: 임상검사 워크플로의 운영 성능 지표를 EMR/LIS 통합 권위
+        문서에서 일관되게 해석하는 목적. Source finding context: 대시보드, LIS, EMR이 같은 주문/검체에 대해
+        다른 TAT를 산출하거나, 계산식 변경 전후의 과거 TAT를 재현해야 하는 경우. Source finding context: 계산
+        권위와 규칙 이력이 없으면 운영 지표가 통합 모델의 계약이 아니라 외부 팀 계산식에 의존해 precedence와 감사 가능성이
+        약해집니다. Source finding context: 운영 지표를 온톨로지 개념이 아니라 두 타임스탬프와 외부 계산식으로만
+        표현했다. Source finding context: TAT 산출에 필요한 시작/종료 시각은
+        Specimen.collected_at과 Report.released_at으로 존재한다. Source finding
+        context: 계산식은 대시보드 팀이 자체 유지한다고 되어 있어 모델 내부의 단일 권위가 아니다. Source finding
+        context: 엔티티/관계 목록에 TAT 산출 규칙, 버전, 예외 구간, 지표 권위 개념이 없다."
+      problem_definition: TAT 산출값의 권위, 계산 버전, 예외 구간이 온톨로지 개념으로 모델링되지 않았습니다.
+      issue_statement: "TAT 산출값의 권위·계산 버전·예외 구간 개념이 누락되어 운영 지표 커버리지가 부족하다. Source
+        finding context: clinical-lab-ontology.yaml Source finding context:
+        materialized input: notes[1] and available attributes Source finding
+        context: TAT는 시점 의존 운영 지표이고, 자체 계산식이 별도 팀에 있다는 것은 병행 관리 값입니다. coverage
+        관점에서 이런 값은 단일 권위와 이력/유효기간이 필요합니다. 현재 모델은 원천 시각 두 개만 제공하고 계산 권위를 외부로 둬서
+        EMR/LIS와 대시보드 간 지표 불일치나 과거 리포트 재현을 설명하지 못합니다. Source finding context:
+        TATMetric 또는 TurnaroundTimeCalculationRule 엔티티를 추가하고
+        metric_owner/source_system, effective_from/effective_to, start_event,
+        stop_event, pause/exception events, target_threshold, calculated_at을
+        명시하세요. 대시보드 계산식은 외부 임의 로직이 아니라 해당 규칙 버전의 projection으로 두세요. Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-005 Source finding context: 임상검사 워크플로의 운영 성능 지표를 EMR/LIS 통합 권위
+        문서에서 일관되게 해석하는 목적. Source finding context: 대시보드, LIS, EMR이 같은 주문/검체에 대해
+        다른 TAT를 산출하거나, 계산식 변경 전후의 과거 TAT를 재현해야 하는 경우. Source finding context: 계산
+        권위와 규칙 이력이 없으면 운영 지표가 통합 모델의 계약이 아니라 외부 팀 계산식에 의존해 precedence와 감사 가능성이
+        약해집니다. Source finding context: 운영 지표를 온톨로지 개념이 아니라 두 타임스탬프와 외부 계산식으로만
+        표현했다. Source finding context: TAT 산출에 필요한 시작/종료 시각은
+        Specimen.collected_at과 Report.released_at으로 존재한다. Source finding
+        context: 계산식은 대시보드 팀이 자체 유지한다고 되어 있어 모델 내부의 단일 권위가 아니다. Source finding
+        context: 엔티티/관계 목록에 TAT 산출 규칙, 버전, 예외 구간, 지표 권위 개념이 없다."
+      issue_role: root_cause
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-010
+      severity: medium
+      material: true
+      affected_purpose: 새 검사·검체 유형과 외부 LIS/분석기 코드 변화를 수용하는 확장 가능한 EMR/LIS 통합 모델.
+      failure_condition: "blood/urine/tissue/swab 밖의 검체 유형이나 Serum/WB 같은 세부 검체 종류가 필요할
+        때 enum 수정과 문자열 매핑 규칙 추가가 동시에 필요한 경우. Source finding context:
+        blood/urine/tissue/swab 밖의 검체 유형이나 Serum/WB 같은 세부 검체 종류가 필요할 때 enum 수정과
+        문자열 매핑 규칙 추가가 동시에 필요하다."
+      impact: "검체 호환성 판단이 엔티티마다 다른 표현에 의존해 카탈로그 확장 시 기존 구조를 수정해야 하고, 통합 규칙이 불안정해집니다.
+        Source finding context: 검체 호환성 판단이 엔티티마다 다른 표현에 의존해 카탈로그 확장 시 기존 구조를
+        수정해야 하고, 통합 규칙이 불안정해진다."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution-candidate-002
+        - materialized-input.md:37-60
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:37-60
+      source_lens_ids:
+        - evolution
+      action_candidates: &a13
+        - follow_up
+      rationale: "새 검체 유형과 외부 코드 수용성을 약화하는 독립 codeset 권위 결함입니다. 중간 심각도의 확장성·일관성 문제로 후속
+        단계에서 반영하면 됩니다. Source finding context: clinical-lab-ontology.yaml:
+        Specimen/Test specimen typing Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:37-60 Source finding context: 검체 종류가 닫힌 enum과 자유 문자열로 갈라져 새 검체 유형 수용
+        시 스키마 수정과 매핑 충돌이 발생한다. Source finding context: 검체 유형은 카탈로그 확장과 장비 연동에서
+        자주 확장되는 축이다. 현재 모델은 새 검체 세부 유형을 추가하려면 enum을 수정해야 하고, 동시에 Assay의 문자열 값과
+        동등성 판단 규칙도 별도로 만들어야 한다. 이 때문에 외부 LIS/분석기 코드 체계 변화나 신규 검체 유형 도입 시 기존 데이터와
+        규칙의 연속성이 약해진다. Source finding context: 검체 종류를 별도 `SpecimenKind`/코드셋 개념으로
+        승격하고, Specimen/Test/Assay가 같은 코드셋 또는 명시적 alias/mapping을 참조하게 한다. 닫힌
+        enum은 최소 범주용으로만 쓰거나 버전 있는 코드셋으로 대체한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 새 검사·검체 유형과 외부 LIS/분석기 코드 변화를
+        수용하는 확장 가능한 EMR/LIS 통합 모델. Source finding context:
+        blood/urine/tissue/swab 밖의 검체 유형이나 Serum/WB 같은 세부 검체 종류가 필요할 때 enum 수정과
+        문자열 매핑 규칙 추가가 동시에 필요하다. Source finding context: 검체 호환성 판단이 엔티티마다 다른 표현에
+        의존해 카탈로그 확장 시 기존 구조를 수정해야 하고, 통합 규칙이 불안정해진다. Source finding context: 동일한
+        검체 분류 축을 닫힌 enum과 자유 문자열이라는 두 표현으로 나누고 공통 코드셋/매핑 개념을 두지 않았다. Source
+        finding context: Specimen.specimen_type은 네 값으로 닫힌 enum이다. Source finding
+        context: Test.requires_specimen_type도 같은 네 값 enum으로 닫혀 있다. Source
+        finding context: Assay.specimen_kind는 별도 자유 문자열이며 예시 값이 enum 값과 다른
+        granularity를 가진다."
+      problem_definition: Specimen/Test enum과 Assay 자유 문자열이 같은 검체 분류축을 나누어 표현해 shared
+        codeset이 없습니다.
+      issue_statement: "검체 종류 표현이 Specimen/Test enum과 Assay 자유 문자열로 갈라져 새 검체 유형 수용 시
+        스키마 수정과 매핑 충돌을 유발합니다. Source finding context:
+        clinical-lab-ontology.yaml: Specimen/Test specimen typing Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:37-60 Source finding context: 검체 종류가 닫힌 enum과 자유 문자열로 갈라져 새 검체 유형 수용
+        시 스키마 수정과 매핑 충돌이 발생한다. Source finding context: 검체 유형은 카탈로그 확장과 장비 연동에서
+        자주 확장되는 축이다. 현재 모델은 새 검체 세부 유형을 추가하려면 enum을 수정해야 하고, 동시에 Assay의 문자열 값과
+        동등성 판단 규칙도 별도로 만들어야 한다. 이 때문에 외부 LIS/분석기 코드 체계 변화나 신규 검체 유형 도입 시 기존 데이터와
+        규칙의 연속성이 약해진다. Source finding context: 검체 종류를 별도 `SpecimenKind`/코드셋 개념으로
+        승격하고, Specimen/Test/Assay가 같은 코드셋 또는 명시적 alias/mapping을 참조하게 한다. 닫힌
+        enum은 최소 범주용으로만 쓰거나 버전 있는 코드셋으로 대체한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 새 검사·검체 유형과 외부 LIS/분석기 코드 변화를
+        수용하는 확장 가능한 EMR/LIS 통합 모델. Source finding context:
+        blood/urine/tissue/swab 밖의 검체 유형이나 Serum/WB 같은 세부 검체 종류가 필요할 때 enum 수정과
+        문자열 매핑 규칙 추가가 동시에 필요하다. Source finding context: 검체 호환성 판단이 엔티티마다 다른 표현에
+        의존해 카탈로그 확장 시 기존 구조를 수정해야 하고, 통합 규칙이 불안정해진다. Source finding context: 동일한
+        검체 분류 축을 닫힌 enum과 자유 문자열이라는 두 표현으로 나누고 공통 코드셋/매핑 개념을 두지 않았다. Source
+        finding context: Specimen.specimen_type은 네 값으로 닫힌 enum이다. Source finding
+        context: Test.requires_specimen_type도 같은 네 값 enum으로 닫혀 있다. Source
+        finding context: Assay.specimen_kind는 별도 자유 문자열이며 예시 값이 enum 값과 다른
+        granularity를 가진다."
+      issue_role: root_cause
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-014
+      severity: medium
+      material: true
+      affected_purpose: 주문 우선순위와 응급 주문 의미를 EMR/LIS 간 일관되게 전달하는 목적.
+      failure_condition: 주문 생성, 변경, 인터페이스 매핑에서 priority, is_stat, StatOrder가 서로 다른 값을 갖는 경우.
+      impact: STAT 여부는 채혈, 분석 우선순위, 알림의 운영 판단에 직접 영향을 주므로 중복 권위는 통합 시 잘못된 긴급도 처리로 이어질
+        수 있습니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics-candidate-003
+        - clinical-lab-ontology.yaml:16-24
+      source_lens_ids:
+        - semantics
+      action_candidates: &a15
+        - fix_before_release
+        - fix_now
+      rationale: "응급 주문 여부의 canonical representation이 없는 직접 consistency 결함입니다. 운영
+        우선순위에 영향을 주므로 다음 단계 전 단일 권위나 invariant를 정해야 합니다. Source finding context:
+        clinical-lab-ontology.yaml: STAT order modeling Source finding context:
+        clinical-lab-ontology.yaml:16-24 Source finding context: STAT 주문 의미가
+        priority enum, is_stat boolean, StatOrder subtype으로 동시에 모델링되어 있다. Source
+        finding context: 셋은 모두 '이 주문이 STAT인가'라는 같은 의미를 표현합니다. STAT 여부가 값, 플래그,
+        타입으로 동시에 존재하면 routine priority이면서 is_stat=true인 주문이나 StatOrder이지만
+        priority가 urgent인 주문처럼 의미적으로 모순된 인스턴스가 가능해집니다. OntoClean 관점에서도 STAT은 주문의
+        본질적 타입이라기보다 긴급도/처리 우선순위 역할에 가까우므로 subtype으로 고정하면 주문의 정체성과 상태/역할을 혼동할 위험이
+        있습니다. Source finding context: STAT 의미의 canonical 표현을 하나로 정하십시오. 보통
+        priority enum의 stat 값으로 충분하며, StatOrder가 필요한 경우에는 priority=stat 불변조건과
+        subtype 사용 이유를 명시하십시오. is_stat은 priority에서 파생되는 projection으로 두거나 제거하십시오.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 주문 우선순위와 응급 주문 의미를 EMR/LIS 간 일관되게
+        전달하는 목적 Source finding context: 주문 생성, 변경, 인터페이스 매핑에서 priority, is_stat,
+        StatOrder가 서로 다른 값을 갖는 경우 Source finding context: STAT 여부는 채혈, 분석 우선순위,
+        알림의 운영 판단에 직접 영향을 주므로 중복 권위는 통합 시 잘못된 긴급도 처리로 이어질 수 있습니다. Source finding
+        context: STAT이라는 하나의 역할/우선순위 의미가 값, 파생 플래그, subtype으로 분산되어 있다. Source
+        finding context: Order.priority는 stat 값을 포함한다. Source finding context:
+        Order.is_stat도 STAT 주문 여부를 별도 기록한다고 되어 있다. Source finding context:
+        StatOrder는 동일한 STAT 의미를 Order subtype으로 다시 모델링한다."
+      problem_definition: STAT 의미가 priority, is_stat, StatOrder subtype 세 표면에 중복되어 모순 인스턴스가 가능합니다.
+      issue_statement: "STAT 주문 여부가 세 표면에 중복 모델링되어 서로 모순된 인스턴스가 가능해집니다. Source finding
+        context: clinical-lab-ontology.yaml: STAT order modeling Source finding
+        context: clinical-lab-ontology.yaml:16-24 Source finding context: STAT
+        주문 의미가 priority enum, is_stat boolean, StatOrder subtype으로 동시에 모델링되어 있다.
+        Source finding context: 셋은 모두 '이 주문이 STAT인가'라는 같은 의미를 표현합니다. STAT 여부가 값,
+        플래그, 타입으로 동시에 존재하면 routine priority이면서 is_stat=true인 주문이나 StatOrder이지만
+        priority가 urgent인 주문처럼 의미적으로 모순된 인스턴스가 가능해집니다. OntoClean 관점에서도 STAT은 주문의
+        본질적 타입이라기보다 긴급도/처리 우선순위 역할에 가까우므로 subtype으로 고정하면 주문의 정체성과 상태/역할을 혼동할 위험이
+        있습니다. Source finding context: STAT 의미의 canonical 표현을 하나로 정하십시오. 보통
+        priority enum의 stat 값으로 충분하며, StatOrder가 필요한 경우에는 priority=stat 불변조건과
+        subtype 사용 이유를 명시하십시오. is_stat은 priority에서 파생되는 projection으로 두거나 제거하십시오.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 주문 우선순위와 응급 주문 의미를 EMR/LIS 간 일관되게
+        전달하는 목적 Source finding context: 주문 생성, 변경, 인터페이스 매핑에서 priority, is_stat,
+        StatOrder가 서로 다른 값을 갖는 경우 Source finding context: STAT 여부는 채혈, 분석 우선순위,
+        알림의 운영 판단에 직접 영향을 주므로 중복 권위는 통합 시 잘못된 긴급도 처리로 이어질 수 있습니다. Source finding
+        context: STAT이라는 하나의 역할/우선순위 의미가 값, 파생 플래그, subtype으로 분산되어 있다. Source
+        finding context: Order.priority는 stat 값을 포함한다. Source finding context:
+        Order.is_stat도 STAT 주문 여부를 별도 기록한다고 되어 있다. Source finding context:
+        StatOrder는 동일한 STAT 의미를 Order subtype으로 다시 모델링한다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: observed
+    - issue_id: issue-015
+      severity: medium
+      material: true
+      affected_purpose: 위험 결과와 즉시 통보 개념을 통합 설계에서 안전하게 구분하는 목적.
+      failure_condition: 시스템이 CriticalValue를 임계값 마스터 데이터로도, 환자별 위험 결과/통보 상태로도 사용하는 경우.
+      impact: "규칙과 사건의 의미가 섞이면 통보 누락, 중복 통보, 감사 추적 공백이 생길 수 있습니다. Source finding
+        context: 위험 결과 통보는 운영상 중요한 조치이므로 규칙과 사건의 의미가 섞이면 통보 누락, 중복 통보, 감사 추적 공백이
+        생길 수 있습니다."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics-candidate-004
+        - clinical-lab-ontology.yaml:95-101
+      source_lens_ids:
+        - semantics
+      action_candidates: &a16
+        - fix_before_release
+        - fix_now
+      rationale: "CriticalValue notification 결함의 의미적 원인 축입니다. rule, occurrence,
+        notification event는 권위와 lifecycle이 다르므로 다음 단계 전 개념 분리가 필요합니다. Source
+        finding context: clinical-lab-ontology.yaml: CriticalValue Source
+        finding context: clinical-lab-ontology.yaml:95-101 Source finding
+        context: CriticalValue라는 이름은 실제 결과값처럼 보이지만 정의와 속성은 임계 범위 규칙과 통보 상태를 섞고
+        있다. Source finding context: 현재 엔티티는 개별 환자의 위험 결과값이 아니라 검사별 critical
+        range/threshold rule에 가깝습니다. 그런데 notified는 특정 결과 발생 후의 통보 상태라서 범위 규칙의
+        속성이 아니라 critical result event 또는 notification event의 속성입니다. 이름과 속성이 서로
+        다른 존재론적 유형을 섞어 EMR/LIS가 임계값 규칙, 실제 위험 결과, 통보 사건 중 무엇을 주고받아야 하는지 흐리게
+        만듭니다. Source finding context: CriticalValueRange 또는 CriticalValueRule을
+        임계 범위 정의로 두고 lower/upper bound를 유지하십시오. 실제 환자 결과가 임계값을 넘은 사건은
+        CriticalResult 또는 CriticalAlert로 분리하고, notified는 통보 이벤트/상태와 수신자·시각 참조로
+        옮기십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 위험 결과와 즉시 통보 개념을 통합 설계에서 안전하게
+        구분하는 목적 Source finding context: 시스템이 CriticalValue를 임계값 마스터 데이터로도, 환자별
+        위험 결과/통보 상태로도 사용하는 경우 Source finding context: 위험 결과 통보는 운영상 중요한 조치이므로
+        규칙과 사건의 의미가 섞이면 통보 누락, 중복 통보, 감사 추적 공백이 생길 수 있습니다. Source finding
+        context: 임계값 규칙, 실제 위험 결과 사건, 통보 완료 상태가 하나의 CriticalValue 엔티티에 결합되어 있다.
+        Source finding context: 정의와 bound 속성은 검사별 위험 결과 값 범위를 나타낸다. Source
+        finding context: notified는 범위 정의가 아니라 통보 완료라는 사건 상태를 나타낸다. Source
+        finding context: 통보 시각과 수신자가 별도 전화 기록 대장에 있다는 note는 통보가 별도 사건/기록임을
+        뒷받침한다."
+      problem_definition: CriticalValue가 임계값 규칙, 환자별 위험 결과 사건, 통보 상태를 한 엔티티에 섞어 개념 경계가 흐립니다.
+      issue_statement: "CriticalValue라는 개념이 임계값 규칙과 실제 위험 결과 사건, 통보 완료 상태를 섞어 무엇을 교환해야
+        하는지 흐립니다. Source finding context: clinical-lab-ontology.yaml:
+        CriticalValue Source finding context: clinical-lab-ontology.yaml:95-101
+        Source finding context: CriticalValue라는 이름은 실제 결과값처럼 보이지만 정의와 속성은 임계 범위
+        규칙과 통보 상태를 섞고 있다. Source finding context: 현재 엔티티는 개별 환자의 위험 결과값이 아니라 검사별
+        critical range/threshold rule에 가깝습니다. 그런데 notified는 특정 결과 발생 후의 통보 상태라서
+        범위 규칙의 속성이 아니라 critical result event 또는 notification event의 속성입니다. 이름과
+        속성이 서로 다른 존재론적 유형을 섞어 EMR/LIS가 임계값 규칙, 실제 위험 결과, 통보 사건 중 무엇을 주고받아야 하는지
+        흐리게 만듭니다. Source finding context: CriticalValueRange 또는
+        CriticalValueRule을 임계 범위 정의로 두고 lower/upper bound를 유지하십시오. 실제 환자 결과가
+        임계값을 넘은 사건은 CriticalResult 또는 CriticalAlert로 분리하고, notified는 통보 이벤트/상태와
+        수신자·시각 참조로 옮기십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 위험 결과와 즉시 통보 개념을 통합 설계에서 안전하게
+        구분하는 목적 Source finding context: 시스템이 CriticalValue를 임계값 마스터 데이터로도, 환자별
+        위험 결과/통보 상태로도 사용하는 경우 Source finding context: 위험 결과 통보는 운영상 중요한 조치이므로
+        규칙과 사건의 의미가 섞이면 통보 누락, 중복 통보, 감사 추적 공백이 생길 수 있습니다. Source finding
+        context: 임계값 규칙, 실제 위험 결과 사건, 통보 완료 상태가 하나의 CriticalValue 엔티티에 결합되어 있다.
+        Source finding context: 정의와 bound 속성은 검사별 위험 결과 값 범위를 나타낸다. Source
+        finding context: notified는 범위 정의가 아니라 통보 완료라는 사건 상태를 나타낸다. Source
+        finding context: 통보 시각과 수신자가 별도 전화 기록 대장에 있다는 note는 통보가 별도 사건/기록임을
+        뒷받침한다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: observed
+    - issue_id: issue-017
+      severity: medium
+      material: true
+      affected_purpose: Use the ontology as the conceptual authority document for
+        EMR/LIS integration from Order through Report.
+      failure_condition: When an integration needs to map ordered catalog tests to
+        analyzer-executed assay units, the formal relation graph has no path
+        involving Assay beyond Department.
+      impact: Review trust is weakened because a core LIS execution concept is present
+        but structurally disconnected from the workflow graph that downstream
+        implementers would use for integration mapping.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure-candidate-001
+        - materialized-input.md:54-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:54
+          and
+          .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:108
+      source_lens_ids:
+        - structure
+      action_candidates: &a17
+        - follow_up
+      rationale: "Test/Assay 경계 문제(issue-007)의 구조적 증상이며, 그래프 기반 통합 매핑 완성도를 약화합니다. 중간
+        심각도 completeness 결함으로 후속 단계에서 relation을 추가하면 됩니다. Source finding
+        context: clinical-lab-ontology.yaml relations graph for Assay Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:54 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: Assay is omitted from the explicit
+        workflow relation graph. Source finding context: The ontology says Test
+        and Assay are both currently registered, but the explicit relation graph
+        has no Test-Assay, Assay-Result, or Assay-Specimen edge. As a result,
+        the execution unit cannot be traversed from the order/test/result
+        workflow except through a generic department reference, weakening the
+        document as a concept authority for EMR/LIS integration paths. Source
+        finding context: Add an explicit relation that connects Assay to the
+        core workflow, preferably through the catalog concept it realizes, such
+        as `Test -> Assay` / `Assay -> Test` with a clear kind, and add any
+        required execution-result edge if Result is produced by Assay rather
+        than directly by Test or Specimen. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: Use the ontology as the
+        conceptual authority document for EMR/LIS integration from Order through
+        Report. Source finding context: When an integration needs to map ordered
+        catalog tests to analyzer-executed assay units, the formal relation
+        graph has no path involving Assay beyond Department. Source finding
+        context: Review trust is weakened because a core LIS execution concept
+        is present but structurally disconnected from the workflow graph that
+        downstream implementers would use for integration mapping. Source
+        finding context: The ontology introduces Assay as a separate
+        execution-unit concept but does not add corresponding workflow relations
+        for that split. Source finding context: Assay is defined as the
+        analyzer-executed unit with department and specimen_kind attributes.
+        Source finding context: The explicit relation list contains no edge
+        where Assay is the source or target. Source finding context: The note
+        says new items are currently registered in both Test and Assay, making
+        the missing Test-Assay connection operationally relevant within the
+        target."
+      problem_definition: Assay가 실행 단위로 도입되었지만 explicit workflow relation graph에서
+        Test/Result/Specimen 경로와 연결되지 않습니다.
+      issue_statement: "Assay is omitted from the explicit workflow relation graph.
+        Source finding context: clinical-lab-ontology.yaml relations graph for
+        Assay Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:54 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: The ontology says Test and Assay are
+        both currently registered, but the explicit relation graph has no
+        Test-Assay, Assay-Result, or Assay-Specimen edge. As a result, the
+        execution unit cannot be traversed from the order/test/result workflow
+        except through a generic department reference, weakening the document as
+        a concept authority for EMR/LIS integration paths. Source finding
+        context: Add an explicit relation that connects Assay to the core
+        workflow, preferably through the catalog concept it realizes, such as
+        `Test -> Assay` / `Assay -> Test` with a clear kind, and add any
+        required execution-result edge if Result is produced by Assay rather
+        than directly by Test or Specimen. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: Use the ontology as the
+        conceptual authority document for EMR/LIS integration from Order through
+        Report. Source finding context: When an integration needs to map ordered
+        catalog tests to analyzer-executed assay units, the formal relation
+        graph has no path involving Assay beyond Department. Source finding
+        context: Review trust is weakened because a core LIS execution concept
+        is present but structurally disconnected from the workflow graph that
+        downstream implementers would use for integration mapping. Source
+        finding context: The ontology introduces Assay as a separate
+        execution-unit concept but does not add corresponding workflow relations
+        for that split. Source finding context: Assay is defined as the
+        analyzer-executed unit with department and specimen_kind attributes.
+        Source finding context: The explicit relation list contains no edge
+        where Assay is the source or target. Source finding context: The note
+        says new items are currently registered in both Test and Assay, making
+        the missing Test-Assay connection operationally relevant within the
+        target."
+      issue_role: symptom
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-018
+      severity: medium
+      material: true
+      affected_purpose: Use the ontology as the concept authority for EMR/LIS
+        order-to-result workflow integration.
+      failure_condition: "When a consumer relies on the relation graph to determine
+        which tests belong to an order, the formal graph lacks the required
+        Order-Test edge even though the attribute model declares ordered_tests.
+        Source finding context: When a consumer relies on the relation graph to
+        determine which tests belong to an order, the formal graph lacks the
+        required Order-Test edge even though the attribute model declares
+        `ordered_tests`."
+      impact: "The graph is structurally incomplete for the central workflow question
+        of what tests an order contains and which results complete those ordered
+        tests. Source finding context: The graph is structurally incomplete for
+        a central workflow question: what tests an order contains and which
+        results complete those ordered tests."
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure-candidate-002
+        - materialized-input.md:15-23
+        - materialized-input.md:108-119
+        - materialized-input.md:121-123
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:19
+          and
+          .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:108
+      source_lens_ids:
+        - structure
+      action_candidates: &a18
+        - fix_before_release
+        - fix_now
+      rationale: "Order completion과 ordered_tests 의미의 중심 relation이 누락된 직접 구조 공백입니다.
+        graph 기반 소비자가 핵심 workflow를 해석해야 하므로 다음 단계 전 명시 relation이 필요합니다. Source
+        finding context: clinical-lab-ontology.yaml Order-to-Test structural
+        path Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:19 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: The explicit relation graph omits the
+        Order-to-Test ordering edge. Source finding context: For a workflow
+        authority document, the ordered tests are the structural basis for
+        expected lab work. Without an explicit Order-to-Test relation, the
+        relation graph cannot directly express which Test items were ordered,
+        which makes downstream traversal from Order to expected Test/Result
+        behavior depend on an attribute that is not mirrored in the formal
+        relation model. Source finding context: Add an explicit `Order -> Test`
+        relation such as `orders` or `includes_ordered_test`, and if needed
+        define the expected Result path from ordered Test to Result so the
+        completion rule can be evaluated from the same graph. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: Use the ontology as the concept
+        authority for EMR/LIS order-to-result workflow integration. Source
+        finding context: When a consumer relies on the relation graph to
+        determine which tests belong to an order, the formal graph lacks the
+        required Order-Test edge even though the attribute model declares
+        `ordered_tests`. Source finding context: The graph is structurally
+        incomplete for a central workflow question: what tests an order contains
+        and which results complete those ordered tests. Source finding context:
+        The ontology splits ordered-test membership into an attribute reference
+        while the formal relation graph omits the same core workflow edge.
+        Source finding context: Order declares `ordered_tests` as a list of
+        references to Test. Source finding context: The explicit relation list
+        has no Order-to-Test relation, despite including other workflow edges
+        such as Order-Specimen, Test-Result, and Order-Report. Source finding
+        context: The Order completion rule depends on all Result objects being
+        final, which requires a dependable structural path from an Order to its
+        expected test results."
+      problem_definition: Order-to-Test edge가 explicit relation graph에 없어 주문에 속한
+        tests와 completion 대상 results를 그래프만으로 추적하기 어렵습니다.
+      issue_statement: "Order-to-Test ordering edge가 relation graph에 없어 어떤 tests가
+        order에 속하고 어떤 results가 완료 조건을 만족하는지 그래프만으로 추적하기 어렵습니다. Source finding
+        context: clinical-lab-ontology.yaml Order-to-Test structural path Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:19 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: The explicit relation graph omits the
+        Order-to-Test ordering edge. Source finding context: For a workflow
+        authority document, the ordered tests are the structural basis for
+        expected lab work. Without an explicit Order-to-Test relation, the
+        relation graph cannot directly express which Test items were ordered,
+        which makes downstream traversal from Order to expected Test/Result
+        behavior depend on an attribute that is not mirrored in the formal
+        relation model. Source finding context: Add an explicit `Order -> Test`
+        relation such as `orders` or `includes_ordered_test`, and if needed
+        define the expected Result path from ordered Test to Result so the
+        completion rule can be evaluated from the same graph. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: Use the ontology as the concept
+        authority for EMR/LIS order-to-result workflow integration. Source
+        finding context: When a consumer relies on the relation graph to
+        determine which tests belong to an order, the formal graph lacks the
+        required Order-Test edge even though the attribute model declares
+        `ordered_tests`. Source finding context: The graph is structurally
+        incomplete for a central workflow question: what tests an order contains
+        and which results complete those ordered tests. Source finding context:
+        The ontology splits ordered-test membership into an attribute reference
+        while the formal relation graph omits the same core workflow edge.
+        Source finding context: Order declares `ordered_tests` as a list of
+        references to Test. Source finding context: The explicit relation list
+        has no Order-to-Test relation, despite including other workflow edges
+        such as Order-Specimen, Test-Result, and Order-Report. Source finding
+        context: The Order completion rule depends on all Result objects being
+        final, which requires a dependable structural path from an Order to its
+        expected test results."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_before_next_stage
+      judgment_state: observed
+  non_material_findings:
+    - issue_id: issue-009
+      severity: high
+      material: false
+      affected_purpose: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문 카탈로그와 수행 카탈로그를 안정적으로 연결하는 목적.
+      failure_condition: 신규 검사 항목, 장비별 assay variant, 카탈로그 정비가 발생할 때 Test와 Assay를 모두
+        수동 등록해야 하고 양자 간 권위 관계가 없어 매핑 불일치가 발생한다.
+      impact: 통합 설계에서 주문된 Test가 어떤 Assay로 수행되는지 안정적으로 추적할 수 없으므로 새 카탈로그 항목 추가 때 기존 구조와
+        운영 규칙을 반복 수정해야 한다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution-candidate-001
+        - materialized-input.md:46-60
+        - materialized-input.md:126-127
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:46-60,126-127
+      source_lens_ids:
+        - evolution
+      action_candidates: &a5
+        - needs_evidence
+      rationale: "최종 resolution은 issue-007의 Test/Assay 권위 결함에 크게 겹치는 증상으로 낮췄지만
+        evolution은 독립 high 위험을 유지합니다. 독립 이슈로 남길 근거가 추가로 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml: Test/Assay catalog model Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:46-60,126-127 Source finding context: Test와 Assay가 분리된 중복 카탈로그로 유지되어
+        신규 검사 항목 추가 시 기존 구조의 동시 수정과 불일치가 필요해진다. Source finding context: EMR/LIS
+        통합의 개념 권위 문서라면 주문 코드와 분석기 수행 코드의 연결이 확장 가능한 핵심 축이어야 한다. 현재는 신규 검사, 장비별
+        assay variant, 패널 구성 변경이 생길 때 Test와 Assay를 각각 수정해야 하며, 어떤 쪽이 원천인지 알 수 없어
+        코드 매핑과 운영 연속성이 깨질 수 있다. Source finding context: Test를 주문 카탈로그의 권위 개념으로
+        둘지, Assay를 수행 카탈로그의 권위 개념으로 둘지 명시하고 `Test -> Assay` 매핑 관계를 추가한다. 신규 항목
+        등록은 한 권위 카탈로그에서 시작하고 다른 쪽은 명시적 매핑/프로젝션으로 연결되도록 정리한다. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문
+        카탈로그와 수행 카탈로그를 안정적으로 연결하는 목적. Source finding context: 신규 검사 항목, 장비별
+        assay variant, 카탈로그 정비가 발생할 때 Test와 Assay를 모두 수동 등록해야 하고 양자 간 권위 관계가 없어
+        매핑 불일치가 발생한다. Source finding context: 통합 설계에서 주문된 Test가 어떤 Assay로 수행되는지
+        안정적으로 추적할 수 없으므로 새 카탈로그 항목 추가 때 기존 구조와 운영 규칙을 반복 수정해야 한다. Source finding
+        context: Test와 Assay의 권위 경계 및 매핑 관계가 모델에 정의되지 않은 상태에서 두 엔티티에 신규 항목 이중
+        등록을 요구한다. Source finding context: Test와 Assay가 각각 검사 카탈로그 단위와 수행 단위로
+        정의되어 있다. Source finding context: 현재 신규 항목은 두 곳 모두에 등록한다고 명시되어 있다. Source
+        finding context: 관계 목록에는 Test와 Assay를 연결하는 관계가 없다."
+      problem_definition: Test와 Assay 이중 등록으로 신규 검사 항목 추가 시 동시 수정과 매핑 불일치 위험이 생깁니다.
+      issue_statement: "Test와 Assay가 분리된 중복 카탈로그로 유지되어 신규 검사 항목 추가 시 기존 구조의 동시 수정과
+        불일치가 필요해진다. Source finding context: clinical-lab-ontology.yaml:
+        Test/Assay catalog model Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:46-60,126-127 Source finding context: EMR/LIS 통합의 개념 권위 문서라면 주문 코드와
+        분석기 수행 코드의 연결이 확장 가능한 핵심 축이어야 한다. 현재는 신규 검사, 장비별 assay variant, 패널 구성
+        변경이 생길 때 Test와 Assay를 각각 수정해야 하며, 어떤 쪽이 원천인지 알 수 없어 코드 매핑과 운영 연속성이 깨질 수
+        있다. Source finding context: Test를 주문 카탈로그의 권위 개념으로 둘지, Assay를 수행 카탈로그의
+        권위 개념으로 둘지 명시하고 `Test -> Assay` 매핑 관계를 추가한다. 신규 항목 등록은 한 권위 카탈로그에서 시작하고
+        다른 쪽은 명시적 매핑/프로젝션으로 연결되도록 정리한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문
+        카탈로그와 수행 카탈로그를 안정적으로 연결하는 목적. Source finding context: 신규 검사 항목, 장비별
+        assay variant, 카탈로그 정비가 발생할 때 Test와 Assay를 모두 수동 등록해야 하고 양자 간 권위 관계가 없어
+        매핑 불일치가 발생한다. Source finding context: 통합 설계에서 주문된 Test가 어떤 Assay로 수행되는지
+        안정적으로 추적할 수 없으므로 새 카탈로그 항목 추가 때 기존 구조와 운영 규칙을 반복 수정해야 한다. Source finding
+        context: Test와 Assay의 권위 경계 및 매핑 관계가 모델에 정의되지 않은 상태에서 두 엔티티에 신규 항목 이중
+        등록을 요구한다. Source finding context: Test와 Assay가 각각 검사 카탈로그 단위와 수행 단위로
+        정의되어 있다. Source finding context: 현재 신규 항목은 두 곳 모두에 등록한다고 명시되어 있다. Source
+        finding context: 관계 목록에는 Test와 Assay를 연결하는 관계가 없다."
+      issue_role: symptom
+      timing_class: planned_follow_up
+      closure_class: needs_evidence
+      closure_obligation: may_close_during_next_stage
+      judgment_state: contested
+    - issue_id: issue-002
+      severity: medium
+      material: false
+      affected_purpose: 운영 위험을 포함해 EMR/LIS 통합의 개념 권위를 제공하는 목적.
+      failure_condition: 위험 결과가 발생했지만 notified boolean 외 통보 시각·수신자·이행 주체가 온톨로지 권위 안에서 추적되지 않는 경우.
+      impact: 통합 구현자가 critical-value 통보를 외부 장부의 비정형 부속 절차로 취급할 수 있어, 위험 결과 워크플로의 책임성과
+        감사 가능성이 약해집니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-candidate-002
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:user-request-intent
+        - .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:100-106;
+          .onto/review/20260611-1b46eb7b/execution-preparation/review-value-alignment-criteria.yaml:user-request-intent
+      source_lens_ids:
+        - axiology
+      action_candidates: &a8
+        - needs_evidence
+      rationale: "통보 evidence 외부화 자체는 지지되지만, issue-005로 흡수할지와 high로 올릴지에 대한 남은
+        disagreement가 있습니다. 안전·감사 흐름에 걸리므로 다음 단계 전 결정 근거가 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml CriticalValue notification model
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:100-106;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 즉시 통보가
+        필요한 CriticalValue의 핵심 증거를 외부 전화 기록 대장으로 밀어낸 것은 권위 문서 목적을 약화합니다. Source
+        finding context: 이 파일의 선언 목적은 EMR/LIS 통합에서 엔티티·관계·상태의 개념 권위가 되는 것입니다. 즉시
+        통보가 CriticalValue의 본질이라면 통보 완료 여부뿐 아니라 누가 언제 누구에게 통보했는지가 운영 신뢰의 핵심입니다.
+        이를 외부 장부에 두면 EMR/LIS 통합 계약은 가장 위험한 결과 흐름의 책임 추적과 상태 전이를 권위 있게 설명하지 못합니다.
+        Source finding context: CriticalValueNotification 같은 개념을 추가하거나
+        CriticalValue에 notified_at, notified_to, notified_by,
+        acknowledgement/status를 포함해 Result/Report/Staff/Order와 연결하십시오. 최소한 외부 전화
+        기록 대장이 canonical authority인지, EMR/LIS가 어떤 키로 이를 참조하는지 명시하십시오. Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 운영 위험을 포함해 EMR/LIS 통합의 개념 권위를 제공하는
+        목적. Source finding context: 위험 결과가 발생했지만 notified boolean 외 통보 시각·수신자·이행
+        주체가 온톨로지 권위 안에서 추적되지 않는 경우. Source finding context: 통합 구현자가
+        critical-value 통보를 외부 장부의 비정형 부속 절차로 취급할 수 있어, 위험 결과 워크플로의 책임성과 감사 가능성이
+        약해집니다. Source finding context: CriticalValue의 purpose-critical 행위인 즉시
+        통보가 온톨로지 내부 상태·관계 모델이 아니라 외부 기록 전제로 축소되어 있습니다. Source finding context:
+        CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의됩니다. Source finding context: 모델은
+        통보 완료 여부를 boolean으로만 두고 통보 시각과 수신자는 전화 기록 대장에 있다고 둡니다. Source finding
+        context: 그 결과 EMR/LIS 통합 권위 문서 안에서는 critical-value 통보 이행과 감사에 필요한 개념 관계가
+        닫히지 않습니다."
+      problem_definition: CriticalValue 즉시 통보 증거가 온톨로지 내부 권위 이벤트가 아니라 외부 전화 기록과 notified 속성에 의존합니다.
+      issue_statement: "즉시 통보가 필요한 CriticalValue의 핵심 증거를 외부 전화 기록 대장으로 밀어낸 것은 권위 문서
+        목적을 약화합니다. Source finding context: clinical-lab-ontology.yaml
+        CriticalValue notification model Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:100-106;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 이 파일의 선언
+        목적은 EMR/LIS 통합에서 엔티티·관계·상태의 개념 권위가 되는 것입니다. 즉시 통보가 CriticalValue의 본질이라면
+        통보 완료 여부뿐 아니라 누가 언제 누구에게 통보했는지가 운영 신뢰의 핵심입니다. 이를 외부 장부에 두면 EMR/LIS 통합
+        계약은 가장 위험한 결과 흐름의 책임 추적과 상태 전이를 권위 있게 설명하지 못합니다. Source finding context:
+        CriticalValueNotification 같은 개념을 추가하거나 CriticalValue에 notified_at,
+        notified_to, notified_by, acknowledgement/status를 포함해
+        Result/Report/Staff/Order와 연결하십시오. 최소한 외부 전화 기록 대장이 canonical
+        authority인지, EMR/LIS가 어떤 키로 이를 참조하는지 명시하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 운영 위험을 포함해 EMR/LIS 통합의 개념 권위를 제공하는
+        목적. Source finding context: 위험 결과가 발생했지만 notified boolean 외 통보 시각·수신자·이행
+        주체가 온톨로지 권위 안에서 추적되지 않는 경우. Source finding context: 통합 구현자가
+        critical-value 통보를 외부 장부의 비정형 부속 절차로 취급할 수 있어, 위험 결과 워크플로의 책임성과 감사 가능성이
+        약해집니다. Source finding context: CriticalValue의 purpose-critical 행위인 즉시
+        통보가 온톨로지 내부 상태·관계 모델이 아니라 외부 기록 전제로 축소되어 있습니다. Source finding context:
+        CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의됩니다. Source finding context: 모델은
+        통보 완료 여부를 boolean으로만 두고 통보 시각과 수신자는 전화 기록 대장에 있다고 둡니다. Source finding
+        context: 그 결과 EMR/LIS 통합 권위 문서 안에서는 critical-value 통보 이행과 감사에 필요한 개념 관계가
+        닫히지 않습니다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: needs_evidence
+      closure_obligation: must_close_before_next_stage
+      judgment_state: contested
+    - issue_id: issue-007
+      severity: medium
+      material: false
+      affected_purpose: EMR 주문 카탈로그와 LIS/분석기 수행 카탈로그 간 통합 precedence 및 scope control.
+        / EMR 주문 카탈로그와 LIS 수행 카탈로그를 연결하는 개념 권위 제공
+      failure_condition: 신규 검사 항목, assay 변경, 장비별 수행 코드 변경, 과거 결과 재조회에서 Test와 Assay 정의가
+        어긋나는 경우. / 신규 검사 항목이나 코드 매핑을 추가할 때 Test와 Assay 중 어느 항목이 주문 권위인지 수행 권위인지
+        판단해야 하는 경우
+      impact: 카탈로그 권위와 매핑 lifecycle이 없으면 주문 가능성, 수행 가능성, 결과 해석이 서로 다른 기준으로 운영될 수 있어 통합
+        설계의 핵심 범위가 비어 있습니다. / 카탈로그 권위가 흐려지면 주문 코드, 수행 코드, 결과 귀속이 어긋날 수 있어 통합 설계의
+        의미적 actionability가 낮아집니다.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-candidate-004
+        - "materialized input: Test definition = 주문 가능한 카탈로그 단위"
+        - "materialized input: Assay definition = 분석기에서 수행되는 검사 항목"
+        - "materialized input: notes[0] = 신규 항목은 두 곳 모두에 등록한다"
+        - "materialized input: relations list lacks Test-Assay relation"
+        - "materialized input: Test/Assay definitions and notes[0]"
+        - .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics-candidate-002
+        - clinical-lab-ontology.yaml:41-55
+        - clinical-lab-ontology.yaml:121-122
+        - clinical-lab-ontology.yaml:41-55, 121-122
+      source_lens_ids:
+        - coverage
+        - semantics
+      action_candidates: &a11
+        - needs_evidence
+      rationale: "카탈로그 권위 문제의 넓은 root로 유지되지만 evolution은 severity 상향 가능성을 남겼습니다. 주문-수행
+        매핑은 통합 precedence의 중심이므로 다음 단계 전에 최종 범위와 심각도 근거를 닫아야 합니다. Source finding
+        context: clinical-lab-ontology.yaml Source finding context: materialized
+        input: Test/Assay definitions and notes[0] Source finding context: 검사
+        카탈로그의 Test·Assay 병행 관리에 단일 권위와 매핑 lifecycle이 누락되어 카탈로그 커버리지가 부족하다.
+        Source finding context: 복수 시스템 또는 장부에 걸쳐 관리되는 값에는 단일 원본 지정이 있어야 하고, 카탈로그
+        항목은 시점 의존적인 활성 상태와 버전이 필요합니다. 현재 문서는 Test와 Assay를 모두 엔티티로 두면서 관계와 권위 범위를
+        비워 두기 때문에 주문 항목과 수행 항목의 불일치, 신규 항목 등록 누락, 과거 결과의 카탈로그 정의 재구성 문제를 모델 안에서
+        다루지 못합니다. Source finding context: TestAssayMapping 또는 CatalogItemVersion
+        개념을 추가하고, Test와 Assay의 authority/source_system,
+        effective_from/effective_to, active/deprecated 상태,
+        one-to-one/one-to-many 매핑 cardinality, migration/alias를 명시하세요. 신규 등록 절차도
+        두 곳 수동 등록이 아니라 권위 카탈로그에서 파생되는 흐름으로 정리하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: EMR 주문 카탈로그와 LIS/분석기 수행 카탈로그 간 통합
+        precedence 및 scope control. Source finding context: 신규 검사 항목, assay 변경,
+        장비별 수행 코드 변경, 과거 결과 재조회에서 Test와 Assay 정의가 어긋나는 경우. Source finding
+        context: 카탈로그 권위와 매핑 lifecycle이 없으면 주문 가능성, 수행 가능성, 결과 해석이 서로 다른 기준으로
+        운영될 수 있어 통합 설계의 핵심 범위가 비어 있습니다. Source finding context: 주문 카탈로그와 수행
+        카탈로그를 별도 엔티티로 선언했지만 두 카탈로그의 권위, 매핑, 버전 lifecycle 개념을 추가하지 않았다. Source
+        finding context: Test와 Assay는 서로 다른 카탈로그/수행 단위로 정의되어 있다. Source finding
+        context: 신규 항목은 두 곳 모두에 등록된다고 하여 병행 관리가 명시되어 있다. Source finding context:
+        관계 목록에는 Test와 Assay를 연결하거나 권위/버전을 표현하는 관계가 없다. Source finding context:
+        clinical-lab-ontology.yaml: Test and Assay Source finding context:
+        clinical-lab-ontology.yaml:41-55, 121-122 Source finding context: Test와
+        Assay의 의미 경계가 주문 카탈로그 단위와 수행 단위 사이에서 충분히 구분되지 않는다. Source finding
+        context: 주문 가능한 검사(Test)와 분석기 수행 항목(Assay)은 통합 모델에서 구분될 수 있지만, 현재 정의는 둘의
+        관계와 의미 차이를 닫지 못한 채 병렬 카탈로그로 남겨둡니다. 특히 신규 항목을 두 곳 모두 등록한다는 운영 규칙은 두 개념이
+        사실상 같은 카탈로그 항목처럼 쓰일 수 있음을 보여 줍니다. 이 상태에서는 EMR 주문 코드와 LIS 수행 코드가 같은 개념인지,
+        1:N 매핑인지, 서로 다른 lifecycle을 갖는지 판단하기 어렵습니다. Source finding context: Test와
+        Assay를 분리 유지하려면 'Test는 주문/청구/임상 표시 단위, Assay는 장비/분석 수행 단위'처럼 의미 기준을 명시하고
+        Test-to-Assay 매핑 관계와 cardinality를 추가하십시오. 같은 개념으로 쓰려는 의도라면 canonical
+        카탈로그 엔티티 하나와 수행 세부 속성으로 정리하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: EMR 주문 카탈로그와 LIS 수행 카탈로그를 연결하는 개념
+        권위 제공 Source finding context: 신규 검사 항목이나 코드 매핑을 추가할 때 Test와 Assay 중 어느
+        항목이 주문 권위인지 수행 권위인지 판단해야 하는 경우 Source finding context: 카탈로그 권위가 흐려지면 주문
+        코드, 수행 코드, 결과 귀속이 어긋날 수 있어 통합 설계의 의미적 actionability가 낮아집니다. Source
+        finding context: 주문 가능 카탈로그 단위와 분석 수행 단위의 개념 분리 기준 및 매핑 관계가 명시되지 않았다.
+        Source finding context: Test와 Assay가 모두 검사 항목/카탈로그 단위로 정의되어 속성군도 유사하다.
+        Source finding context: 운영 note는 신규 항목을 두 곳 모두 등록한다고 하여 두 카탈로그가 병렬 권위로
+        유지됨을 보여 준다."
+      problem_definition: Test와 Assay를 분리했지만 의미 경계, 권위, cardinality, lifecycle mapping이 정의되지 않았습니다.
+      issue_statement: "Shared-root issue across finding-007, finding-015: The
+        ontology separates order catalog and execution catalog concepts without
+        defining their semantic boundary, cardinality, authority, or lifecycle
+        mapping. Source finding context: clinical-lab-ontology.yaml Source
+        finding context: materialized input: Test/Assay definitions and notes[0]
+        Source finding context: 검사 카탈로그의 Test·Assay 병행 관리에 단일 권위와 매핑 lifecycle이
+        누락되어 카탈로그 커버리지가 부족하다. Source finding context: 복수 시스템 또는 장부에 걸쳐 관리되는 값에는
+        단일 원본 지정이 있어야 하고, 카탈로그 항목은 시점 의존적인 활성 상태와 버전이 필요합니다. 현재 문서는 Test와 Assay를
+        모두 엔티티로 두면서 관계와 권위 범위를 비워 두기 때문에 주문 항목과 수행 항목의 불일치, 신규 항목 등록 누락, 과거 결과의
+        카탈로그 정의 재구성 문제를 모델 안에서 다루지 못합니다. Source finding context:
+        TestAssayMapping 또는 CatalogItemVersion 개념을 추가하고, Test와 Assay의
+        authority/source_system, effective_from/effective_to, active/deprecated
+        상태, one-to-one/one-to-many 매핑 cardinality, migration/alias를 명시하세요. 신규 등록
+        절차도 두 곳 수동 등록이 아니라 권위 카탈로그에서 파생되는 흐름으로 정리하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: EMR 주문 카탈로그와 LIS/분석기 수행 카탈로그 간 통합
+        precedence 및 scope control. Source finding context: 신규 검사 항목, assay 변경,
+        장비별 수행 코드 변경, 과거 결과 재조회에서 Test와 Assay 정의가 어긋나는 경우. Source finding
+        context: 카탈로그 권위와 매핑 lifecycle이 없으면 주문 가능성, 수행 가능성, 결과 해석이 서로 다른 기준으로
+        운영될 수 있어 통합 설계의 핵심 범위가 비어 있습니다. Source finding context: 주문 카탈로그와 수행
+        카탈로그를 별도 엔티티로 선언했지만 두 카탈로그의 권위, 매핑, 버전 lifecycle 개념을 추가하지 않았다. Source
+        finding context: Test와 Assay는 서로 다른 카탈로그/수행 단위로 정의되어 있다. Source finding
+        context: 신규 항목은 두 곳 모두에 등록된다고 하여 병행 관리가 명시되어 있다. Source finding context:
+        관계 목록에는 Test와 Assay를 연결하거나 권위/버전을 표현하는 관계가 없다. Source finding context:
+        clinical-lab-ontology.yaml: Test and Assay Source finding context:
+        clinical-lab-ontology.yaml:41-55, 121-122 Source finding context: Test와
+        Assay의 의미 경계가 주문 카탈로그 단위와 수행 단위 사이에서 충분히 구분되지 않는다. Source finding
+        context: 주문 가능한 검사(Test)와 분석기 수행 항목(Assay)은 통합 모델에서 구분될 수 있지만, 현재 정의는 둘의
+        관계와 의미 차이를 닫지 못한 채 병렬 카탈로그로 남겨둡니다. 특히 신규 항목을 두 곳 모두 등록한다는 운영 규칙은 두 개념이
+        사실상 같은 카탈로그 항목처럼 쓰일 수 있음을 보여 줍니다. 이 상태에서는 EMR 주문 코드와 LIS 수행 코드가 같은 개념인지,
+        1:N 매핑인지, 서로 다른 lifecycle을 갖는지 판단하기 어렵습니다. Source finding context: Test와
+        Assay를 분리 유지하려면 'Test는 주문/청구/임상 표시 단위, Assay는 장비/분석 수행 단위'처럼 의미 기준을 명시하고
+        Test-to-Assay 매핑 관계와 cardinality를 추가하십시오. 같은 개념으로 쓰려는 의도라면 canonical
+        카탈로그 엔티티 하나와 수행 세부 속성으로 정리하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: EMR 주문 카탈로그와 LIS 수행 카탈로그를 연결하는 개념
+        권위 제공 Source finding context: 신규 검사 항목이나 코드 매핑을 추가할 때 Test와 Assay 중 어느
+        항목이 주문 권위인지 수행 권위인지 판단해야 하는 경우 Source finding context: 카탈로그 권위가 흐려지면 주문
+        코드, 수행 코드, 결과 귀속이 어긋날 수 있어 통합 설계의 의미적 actionability가 낮아집니다. Source
+        finding context: 주문 가능 카탈로그 단위와 분석 수행 단위의 개념 분리 기준 및 매핑 관계가 명시되지 않았다.
+        Source finding context: Test와 Assay가 모두 검사 항목/카탈로그 단위로 정의되어 속성군도 유사하다.
+        Source finding context: 운영 note는 신규 항목을 두 곳 모두 등록한다고 하여 두 카탈로그가 병렬 권위로
+        유지됨을 보여 준다."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: needs_evidence
+      closure_obligation: must_close_before_next_stage
+      judgment_state: contested
+    - issue_id: issue-012
+      severity: medium
+      material: false
+      affected_purpose: Use of Report.result_status as a trusted EMR/LIS integration
+        authority value for clinicians.
+      failure_condition: A Result.status is corrected after release before the nightly
+        synchronization batch updates Report.result_status.
+      impact: The ontology simultaneously requires the report to be amended and allows
+        the trusted displayed field to remain finalized, making the status
+        contract ambiguous for consumers during the delay window.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candidate-002
+        - "Embedded Materialized Input: Report.result_status note says it is the
+          authority value and clinicians trust it"
+        - "Embedded Materialized Input: state_rules[1]"
+        - "Embedded Materialized Input: Report.result_status enum values
+          `[prelim, finalized, amended]`; state_rules[1] says `Report는
+          released_at 기록 시점에 finalized 상태가 된다` and `Report.result_status는
+          amended가 되어야 한다(동기화 배치는 야간 1회)`"
+      source_lens_ids:
+        - logic
+      action_candidates: &a14
+        - needs_evidence
+      rationale: "logic은 독립 modality mismatch로 보고 coverage는 issue-004의 증상으로 좁힙니다. 상태
+        권위 모델 결정 전 fold-under 여부에 대한 relation evidence가 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml Report.result_status / state_rules
+        Source finding context: Embedded Materialized Input:
+        Report.result_status enum values `[prelim, finalized, amended]`;
+        state_rules[1] says `Report는 released_at 기록 시점에 finalized 상태가 된다` and
+        `Report.result_status는 amended가 되어야 한다(동기화 배치는 야간 1회)` Source finding
+        context: The report status rule treats a delayed batch-synchronized
+        value as an immediate required state, producing an interval where the
+        obligation cannot be simultaneously satisfied with the declared
+        synchronization mechanism. Source finding context: The conflict is a
+        modality mismatch: `must become amended` is stated as an obligation over
+        the authoritative displayed value, while the same sentence permits
+        delayed synchronization. If the report status is the value clinicians
+        trust, the ontology allows a period where the authoritative
+        Report.result_status is necessarily stale relative to its required
+        condition. Source finding context: Separate the immediate semantic state
+        from the materialized synchronized field. For example, define
+        `Report.amendment_required` immediately when a Result is corrected, and
+        define `Report.result_status` as updated by the nightly batch with an
+        explicit stale/pending state or SLA. Alternatively require immediate
+        update when clinician-facing authority must never lag. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-002 Source finding context: Use of Report.result_status as a trusted
+        EMR/LIS integration authority value for clinicians. Source finding
+        context: A Result.status is corrected after release before the nightly
+        synchronization batch updates Report.result_status. Source finding
+        context: The ontology simultaneously requires the report to be amended
+        and allows the trusted displayed field to remain finalized, making the
+        status contract ambiguous for consumers during the delay window. Source
+        finding context: The model collapses an immediate derived obligation and
+        a delayed materialized synchronization field into the same authoritative
+        Report.result_status concept. Source finding context:
+        Report.result_status is declared as the authority value shown on the
+        report and trusted by clinicians. Source finding context: The state rule
+        requires Report.result_status to become `amended` when Result.status
+        changes to `corrected`. Source finding context: The same rule states the
+        synchronization batch runs only once nightly. Source finding context:
+        Between correction and batch execution, the model permits the trusted
+        Report.result_status field to remain unamended despite the immediate
+        amendment obligation."
+      problem_definition: Report.result_status 하나에 즉시 amendment 의무와 야간 배치 materialized
+        field 의미가 함께 들어가 지연 구간 모순이 생깁니다.
+      issue_statement: "The report status rule treats a delayed batch-synchronized
+        value as an immediate required state, producing an interval where the
+        obligation cannot be simultaneously satisfied with the declared
+        synchronization mechanism. Source finding context:
+        clinical-lab-ontology.yaml Report.result_status / state_rules Source
+        finding context: Embedded Materialized Input: Report.result_status enum
+        values `[prelim, finalized, amended]`; state_rules[1] says `Report는
+        released_at 기록 시점에 finalized 상태가 된다` and `Report.result_status는 amended가
+        되어야 한다(동기화 배치는 야간 1회)` Source finding context: The conflict is a
+        modality mismatch: `must become amended` is stated as an obligation over
+        the authoritative displayed value, while the same sentence permits
+        delayed synchronization. If the report status is the value clinicians
+        trust, the ontology allows a period where the authoritative
+        Report.result_status is necessarily stale relative to its required
+        condition. Source finding context: Separate the immediate semantic state
+        from the materialized synchronized field. For example, define
+        `Report.amendment_required` immediately when a Result is corrected, and
+        define `Report.result_status` as updated by the nightly batch with an
+        explicit stale/pending state or SLA. Alternatively require immediate
+        update when clinician-facing authority must never lag. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-002 Source finding context: Use of Report.result_status as a trusted
+        EMR/LIS integration authority value for clinicians. Source finding
+        context: A Result.status is corrected after release before the nightly
+        synchronization batch updates Report.result_status. Source finding
+        context: The ontology simultaneously requires the report to be amended
+        and allows the trusted displayed field to remain finalized, making the
+        status contract ambiguous for consumers during the delay window. Source
+        finding context: The model collapses an immediate derived obligation and
+        a delayed materialized synchronization field into the same authoritative
+        Report.result_status concept. Source finding context:
+        Report.result_status is declared as the authority value shown on the
+        report and trusted by clinicians. Source finding context: The state rule
+        requires Report.result_status to become `amended` when Result.status
+        changes to `corrected`. Source finding context: The same rule states the
+        synchronization batch runs only once nightly. Source finding context:
+        Between correction and batch execution, the model permits the trusted
+        Report.result_status field to remain unamended despite the immediate
+        amendment obligation."
+      issue_role: conflicting_interpretation
+      timing_class: next_step_blocker
+      closure_class: needs_evidence
+      closure_obligation: must_close_before_next_stage
+      judgment_state: contested
+    - issue_id: issue-016
+      severity: low
+      material: false
+      affected_purpose: declared review purpose
+      failure_condition: no material failure condition is shown by the current bounded
+        lens evidence
+      impact: The naming can confuse specimen input/source role with actual producing
+        actors or systems, but the finding does not establish a material failure
+        condition within the bounded evidence.
+      evidence_refs:
+        - .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics-candidate-005
+        - clinical-lab-ontology.yaml:113-114
+      source_lens_ids:
+        - semantics
+      action_candidates: &a19
+        - follow_up
+      rationale: "bounded evidence상 material failure condition이 없는 low severity 명명
+        문제입니다. 현재 권위 계약을 막지는 않으므로 후속 정리나 문서 수준으로 다루면 충분합니다. Source finding
+        context: clinical-lab-ontology.yaml: Specimen-to-Result relation naming
+        Source finding context: clinical-lab-ontology.yaml:113-114 Source
+        finding context: Specimen produces Result는 검체의 의미적 역할을 생산 주체로 잘못 이름 붙인다.
+        Source finding context: 검체는 결과 산출의 원천 물질 또는 입력이지, 결과를 생산하는 행위자나 시스템이
+        아닙니다. 이미 Result derived_from Specimen이라는 더 정확한 의미 관계가 있으므로 produces는 같은
+        관계를 더 강한 인과/행위 의미로 중복 표현합니다. 이 이름은 분석기, Assay, Staff 같은 실제 수행 주체와
+        Specimen의 역할을 혼동하게 할 수 있습니다. Source finding context: Specimen-to-Result
+        방향 관계가 필요하면 source_for, input_to, yields_result처럼 검체가 원천/입력임을 드러내는 이름으로
+        바꾸십시오. 결과 생성 주체를 표현하려면 Assay 또는 분석 실행 개념을 별도로 연결하십시오. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-005"
+      problem_definition: Specimen produces Result 관계명이 검체를 결과 생산 주체처럼 표현해 역할 의미가 부정확합니다.
+      issue_statement: "Specimen produces Result는 검체를 결과 생산 주체처럼 표현해 의미적으로 부정확한 관계명을
+        남깁니다. Source finding context: clinical-lab-ontology.yaml:
+        Specimen-to-Result relation naming Source finding context:
+        clinical-lab-ontology.yaml:113-114 Source finding context: Specimen
+        produces Result는 검체의 의미적 역할을 생산 주체로 잘못 이름 붙인다. Source finding context:
+        검체는 결과 산출의 원천 물질 또는 입력이지, 결과를 생산하는 행위자나 시스템이 아닙니다. 이미 Result
+        derived_from Specimen이라는 더 정확한 의미 관계가 있으므로 produces는 같은 관계를 더 강한 인과/행위
+        의미로 중복 표현합니다. 이 이름은 분석기, Assay, Staff 같은 실제 수행 주체와 Specimen의 역할을 혼동하게 할
+        수 있습니다. Source finding context: Specimen-to-Result 방향 관계가 필요하면
+        source_for, input_to, yields_result처럼 검체가 원천/입력임을 드러내는 이름으로 바꾸십시오. 결과 생성
+        주체를 표현하려면 Assay 또는 분석 실행 개념을 별도로 연결하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-005"
+      issue_role: independent_issue
+      timing_class: defer_watch
+      closure_class: document_only
+      closure_obligation: planned_later
+      judgment_state: observed
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "여러 렌즈가 지지한 고심각도 결함이며, 더 넓은 상태 권위·이력 부재(issue-004/013)의 사용자 노출 증상입니다.
+        임상의가 신뢰하는 상태값의 의미를 흔드므로 다음 단계 전에 닫아야 합니다. Source finding context:
+        clinical-lab-ontology.yaml Report.result_status / Result.status
+        synchronization rule Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 임상의가 신뢰하는
+        보고 상태를 야간 배치로 동기화하도록 둔 결정은 EMR/LIS 통합 권위 문서 목적과 어긋납니다. Source finding
+        context: 검토 목적은 이 파일이 EMR/LIS 통합의 개념 권위 문서로 적절한지 판단하는 것입니다. 이 목적에서는 임상의가
+        보는 보고 상태의 권위와 LIS 결과 상태의 권위가 즉시 일관되어야 하는지가 핵심 가치입니다. 현재 모델은
+        clinician-facing 상태를 권위 값으로 만들면서도 corrected 상태 반영 지연을 정상 운영 전제로 수용하므로,
+        정정 결과가 생긴 당일에는 Report.result_status가 임상의 신뢰 대상이라는 약속을 약화시킬 수 있습니다.
+        Source finding context: Report.result_status의 권위 원천을 Result.status로 명확히
+        낮추거나, corrected 전이를 Report.result_status에 동기적으로 반영해야 하는 불변식으로 올리십시오. 배치가
+        필요하다면 그 동안 Report를 stale/pending_amendment 같은 명시 상태로 표시하고 임상의 신뢰 가능 범위를
+        문서화하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-001 Source finding context: EMR/LIS 통합 설계의 개념 권위 문서로서 임상의가 신뢰할
+        결과·보고 상태의 권위를 정렬하는 목적. Source finding context: Result.status가 corrected로
+        바뀐 뒤 야간 배치 전까지 Report.result_status가 아직 finalized/prelim 계열 값으로 남는 경우.
+        Source finding context: 권위 문서가 stale clinician-facing 상태를 허용하면 통합 구현자는
+        지연 동기화를 정상 계약으로 받아들일 수 있고, 임상의가 신뢰한다고 선언된 보고 상태의 의미가 약해집니다. Source
+        finding context: 보고 상태의 신뢰 가치와 운영 편의성인 야간 배치 동기화가 같은 계약 안에서 조정 없이 병존합니다.
+        Source finding context: Report.result_status는 임상의가 신뢰하는 권위 값으로 선언되어
+        있습니다. Source finding context: Result.status가 corrected로 바뀌면
+        Report.result_status는 amended가 되어야 하지만 동기화는 야간 1회로 제한됩니다. Source finding
+        context: 따라서 corrected 발생 시점과 야간 배치 사이에 임상의가 신뢰하는 상태가 LIS 결과 상태와 불일치할 수
+        있습니다."
+    - issue_id: issue-004
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "상태 지연, 정정, 과거 노출 상태 재구성 문제의 중심 원인입니다. EMR/LIS 상태 계약의 권위와 precedence를
+        닫는 목적에 직접 걸리므로 대상 안에서 반드시 닫아야 합니다. Source finding context:
+        clinical-lab-ontology.yaml Source finding context: materialized input:
+        Result.status note; Report.result_status note; state_rules[1] Source
+        finding context: 결과 상태의 단일 권위와 이력 축이 누락되어 EMR/LIS 통합 권위 문서로는 상태 커버리지가
+        부족하다. Source finding context: coverage lens 기준에서 복수 시스템·장부에 걸친 값에는 단일 원본
+        지정이 필요하고, 상태 값에는 과거 시점 재구성을 위한 이력/유효기간 차원이 필요합니다. 현재 모델은 상태 값이 Result와
+        Report에 병행 저장된다는 사실과 지연 동기화만 포함하므로, 낮 동안 LIS의 corrected와 EMR 보고서의
+        finalized가 동시에 존재하는 구간에서 어떤 상태가 권위인지와 과거 특정 시점의 임상의 노출 상태를 설명하지 못합니다.
+        Source finding context: ResultStatusAuthority 또는
+        ResultStatusEvent/ReportReleaseEvent 같은 상태 권위 및 이벤트 개념을 추가하고, 각 상태 변화에
+        effective_at, recorded_at, source_system, supersedes/replaces,
+        released_version을 두어 Report가 보여주는 상태가 어떤 Result 상태 이벤트에서 파생되었는지 명시하세요.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 결과 상태와 보고
+        상태의 precedence 및 운영 위험을 닫는 목적. Source finding context: Result.status가
+        corrected로 바뀐 뒤 야간 배치 전까지 Result와 Report가 다른 상태를 보유하거나, 정정/재발행 후 특정 시점에
+        임상의가 본 상태를 재구성해야 하는 경우. Source finding context: 상태 권위와 이력이 없으면 통합 설계가
+        동기화 지연 구간의 신뢰 기준, 정정 보고의 추적성, 과거 보고 상태 재현을 결정할 수 없어 핵심 운영 계약이 불완전해집니다.
+        Source finding context: 상태를 하나의 현재값 속성으로만 모델링하고, 복수 저장 위치 간
+        source-of-truth 및 상태 이벤트/버전 개념을 포함하지 않았다. Source finding context:
+        Result.status와 Report.result_status가 모두 결과 상태 정보를 보유한다. Source finding
+        context: Report.result_status의 갱신은 corrected 발생 즉시가 아니라 야간 배치에 의존한다.
+        Source finding context: 상태 이력, 유효시각, 재발행/대체 버전, source_system 개념이 엔티티와
+        관계 목록에 없다."
+    - issue_id: issue-005
+      candidates: *a4
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "위험 결과 통보의 actor, recipient, time, acknowledgement, retry를 표현하지 못하는
+        고심각도 coverage 결함입니다. 안전 관련 운영 책임의 핵심 경로이므로 대상에서 직접 수정되어야 합니다. Source
+        finding context: clinical-lab-ontology.yaml Source finding context:
+        materialized input: CriticalValue attributes and note Source finding
+        context: CriticalValue 통보 행위의 감사 증거 개념이 누락되어 위험 결과 운영 커버리지가 부족하다. Source
+        finding context: 즉시 통보가 필요한 위험 결과는 통제가 필요한 행위이며, coverage lens는 승인·수동
+        조정·통보에 행위자·시각·근거 추적 증거 개념이 있는지 봅니다. 현재 모델은 통보 완료 여부만 내부에 두고 감사 증거는 외부
+        대장에 맡기므로 EMR/LIS 통합 권위 문서가 통보 책임, 지연, 누락, 수신 확인을 자체적으로 표현하지 못합니다. Source
+        finding context: CriticalValueNotification 또는 NotificationAttempt 엔티티를
+        추가해 critical_value/result_ref, notified_by, recipient, notified_at,
+        channel, acknowledgement_at, outcome, failure_reason/retry_of를 모델링하고
+        CriticalValue 또는 Result와 관계를 연결하세요. notified boolean은 이 이벤트에서 파생되는 값으로
+        낮추는 것이 안전합니다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-002 Source finding context: 위험 결과의 즉시 통보와 EMR/LIS 운영 책임을 설명하는
+        개념 권위 문서 역할. Source finding context: critical value가 발생했지만 통보 누락, 지연,
+        수신자 불명, 재시도 또는 수신 확인 여부를 추적해야 하는 경우. Source finding context: 통보 행위의 증거가
+        온톨로지 밖에 있으면 통합 시스템이 안전 관련 운영 책임과 감사 추적을 공통 개념으로 설계하지 못하고, notified
+        boolean만으로는 실제 통보 이행을 검증할 수 없습니다. Source finding context: 통보를 독립적인 감사
+        가능한 행위/이벤트가 아니라 CriticalValue의 완료 여부 속성으로 축소했다. Source finding context:
+        CriticalValue는 통보가 필요한 위험 결과 범위를 모델링한다. Source finding context: 내부 속성은
+        notified boolean만 두고 핵심 통보 증거는 외부 전화 기록 대장에 둔다. Source finding context:
+        엔티티와 관계 목록에 통보 이벤트, 통보 시도, 수신 확인 또는 통보 근거 Result 연결 개념이 없다."
+    - issue_id: issue-009
+      candidates: *a5
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "최종 resolution은 issue-007의 Test/Assay 권위 결함에 크게 겹치는 증상으로 낮췄지만
+        evolution은 독립 high 위험을 유지합니다. 독립 이슈로 남길 근거가 추가로 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml: Test/Assay catalog model Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:46-60,126-127 Source finding context: Test와 Assay가 분리된 중복 카탈로그로 유지되어
+        신규 검사 항목 추가 시 기존 구조의 동시 수정과 불일치가 필요해진다. Source finding context: EMR/LIS
+        통합의 개념 권위 문서라면 주문 코드와 분석기 수행 코드의 연결이 확장 가능한 핵심 축이어야 한다. 현재는 신규 검사, 장비별
+        assay variant, 패널 구성 변경이 생길 때 Test와 Assay를 각각 수정해야 하며, 어떤 쪽이 원천인지 알 수 없어
+        코드 매핑과 운영 연속성이 깨질 수 있다. Source finding context: Test를 주문 카탈로그의 권위 개념으로
+        둘지, Assay를 수행 카탈로그의 권위 개념으로 둘지 명시하고 `Test -> Assay` 매핑 관계를 추가한다. 신규 항목
+        등록은 한 권위 카탈로그에서 시작하고 다른 쪽은 명시적 매핑/프로젝션으로 연결되도록 정리한다. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-001 Source finding context: EMR/LIS 연동 설계의 개념 권위 문서로서 검사 주문
+        카탈로그와 수행 카탈로그를 안정적으로 연결하는 목적. Source finding context: 신규 검사 항목, 장비별
+        assay variant, 카탈로그 정비가 발생할 때 Test와 Assay를 모두 수동 등록해야 하고 양자 간 권위 관계가 없어
+        매핑 불일치가 발생한다. Source finding context: 통합 설계에서 주문된 Test가 어떤 Assay로 수행되는지
+        안정적으로 추적할 수 없으므로 새 카탈로그 항목 추가 때 기존 구조와 운영 규칙을 반복 수정해야 한다. Source finding
+        context: Test와 Assay의 권위 경계 및 매핑 관계가 모델에 정의되지 않은 상태에서 두 엔티티에 신규 항목 이중
+        등록을 요구한다. Source finding context: Test와 Assay가 각각 검사 카탈로그 단위와 수행 단위로
+        정의되어 있다. Source finding context: 현재 신규 항목은 두 곳 모두에 등록한다고 명시되어 있다. Source
+        finding context: 관계 목록에는 Test와 Assay를 연결하는 관계가 없다."
+    - issue_id: issue-011
+      candidates: *a6
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "완료 상태 계약의 직접 logical contradiction입니다. issue-004와 상태 event/history
+        맥락을 공유하지만 Order 완료 의미 실패는 별도 고심각도 correctness 문제로 대상 안에서 닫아야 합니다. Source
+        finding context: clinical-lab-ontology.yaml state_rules Source finding
+        context: Embedded Materialized Input: state_rules[0] `Order는 모든 Result가
+        final일 때 completed로 전이한다.`; Result.status enum values `[preliminary,
+        final, corrected]`; state_rules[1] allows `Result.status` to change to
+        `corrected` after report release Source finding context: Order
+        completion is defined by a reversible Result status, so later correction
+        can make an already completed Order no longer satisfy its own completion
+        condition. Source finding context: These claims are jointly satisfiable
+        at a snapshot where all Results are `final`, but not stable across the
+        lifecycle path explicitly allowed by the second rule. The model has no
+        rule saying whether `completed` is irreversible, reopened, amended, or
+        still completed after a correction, so the state machine can contain a
+        completed Order whose required completion condition is false. For an
+        EMR/LIS authority document, this weakens downstream trust in completion
+        as a contract state. Source finding context: Define completion against
+        an immutable event/snapshot, or add an explicit post-completion
+        correction transition such as `completed -> amended/reopened` with rules
+        for how corrected Results affect Order state. If completed is intended
+        to remain true after correction, state that completion means initial
+        finalization and separate it from amendment status. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-001 Source finding context: Use of the ontology as the conceptual
+        authority for EMR/LIS integration state contracts. Source finding
+        context: A Result reaches `final`, Order becomes `completed`, and the
+        Result is later changed to `corrected` under the Report amendment rule.
+        Source finding context: Integrations relying on `Order.completed` cannot
+        determine whether completion means all current Results are final or
+        merely that finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results. Source finding context:
+        Completion is specified as a state transition predicate over mutable
+        current Result.status values without an accompanying correction/reopen
+        rule for Order. Source finding context: The target defines Result.status
+        as an enum including both `final` and `corrected`. Source finding
+        context: The target defines Order completion as occurring when all
+        Results are `final`. Source finding context: The target explicitly
+        permits a Result status to change to `corrected` after report release
+        and requires Report.result_status to become amended. Source finding
+        context: After such a correction, an already completed Order can have a
+        non-final current Result and no declared Order transition resolves the
+        mismatch."
+    - issue_id: issue-013
+      candidates: *a7
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "상태 의미 해석과 향후 확장의 중심 결함이며 issue-004와 원인을 공유합니다. 임상의 신뢰 상태와 상태 확장 안정성을
+        동시에 흔드는 고심각도 root입니다. Source finding context:
+        clinical-lab-ontology.yaml: Result.status and Report.result_status
+        Source finding context: clinical-lab-ontology.yaml:64-78, 116-118 Source
+        finding context: Result.status와 Report.result_status가 같은 의미라고 선언되지만 서로
+        다른 상태 어휘와 권위 주장을 사용한다. Source finding context: 동일 정보라면 상태값은 의미적으로 같은
+        어휘이거나 명시적이고 완전한 매핑이어야 합니다. 현재는 preliminary/prelim, final/finalized,
+        corrected/amended처럼 값 이름이 다르고, Result는 LIS 기록값이며 Report는 임상의가 신뢰하는
+        권위값이라고 되어 있어 EMR/LIS 통합의 상태 권위가 둘로 갈라집니다. corrected와 amended는 특히 결과 자체의
+        정정과 보고서 개정이라는 서로 다른 사건을 가리킬 수 있어 단순 동의어로 취급하기 어렵습니다. Source finding
+        context: 상태 권위 개념을 하나로 정하십시오. 예: canonical ResultStatus enum을 하나 두고
+        Report는 그 상태를 참조/투영하게 하거나, ResultStatus와 ReportStatus를 분리하되 각 값의 의미와 전이
+        매핑을 명시하십시오. '동일 정보'와 '권위 값' 중 어느 필드가 원천인지도 하나로 정해야 합니다. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-001 Source finding context: EMR/LIS 통합의 개념 권위 문서로서 결과/보고 상태
+        의미를 일관되게 제공하는 목적 Source finding context: LIS는 Result.status를, EMR 또는 임상의
+        화면은 Report.result_status를 기준으로 삼을 때 같은 검사 결과가 서로 다른 의미의 상태로 해석되는 경우
+        Source finding context: 결과가 preliminary인지 final인지, corrected인지
+        amended인지에 따라 임상의 신뢰와 후속 조치가 달라지므로 상태 어휘의 권위 분열은 통합 계약의 핵심 의미를 약화합니다.
+        Source finding context: 결과 상태와 보고 상태의 원천 권위 및 값 어휘가 하나의 canonical
+        concept으로 정리되지 않았다. Source finding context: Result.status와
+        Report.result_status가 같은 정보라고 선언되어 있다. Source finding context: 두 필드는 서로
+        다른 enum 값을 사용하며 Report 쪽은 별도의 권위 값이라고 선언한다. Source finding context:
+        state_rules는 Result.status corrected가 Report.result_status amended로 바뀌어야
+        한다고 하여 두 상태가 동기화되는 별도 개념임을 드러낸다. Source finding context:
+        clinical-lab-ontology.yaml: Result/Report status evolution Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:69-83,121-123 Source finding context: Result와 Report가 별도 상태 어휘와 야간
+        동기화 규칙을 가져 상태 추가·변경 시 연속성이 깨지기 쉽다. Source finding context: 보고 상태는 임상의가
+        신뢰하는 값으로 명시되어 있어 상태 모델 변경의 영향이 크다. 새 상태나 외부 시스템 상태가 추가되면 두 enum과 전이 규칙,
+        배치 동기화 매핑을 함께 바꿔야 하며, 기존 데이터가 어느 상태 권위에 따라 해석되는지 불분명해질 수 있다. Source
+        finding context: Result 상태를 원천 상태로 둘지 Report 상태를 별도 표시 상태로 둘지 권위를 분리하고,
+        두 상태 사이의 버전 있는 매핑 테이블/전이 규칙을 명시한다. 동기화 지연 상태도 모델에 표현해 임상의 표시 값과 LIS 원천
+        값의 차이를 추적할 수 있게 한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-003 Source finding context: 결과 및 보고 상태를 EMR/LIS 통합에서 확장 가능하고
+        일관되게 해석하는 개념 권위 문서 역할. Source finding context: corrected 외의 새 결과 상태, 보고
+        표시 상태, 외부 LIS 상태가 추가될 때 두 enum과 야간 동기화 규칙을 동시에 변경해야 한다. Source finding
+        context: 상태 확장 시 기존 보고서와 결과 데이터의 해석 연속성이 깨지고 임상의가 신뢰하는
+        Report.result_status의 최신성/권위가 흔들린다. Source finding context: 같은 상태 정보를
+        Result와 Report에 서로 다른 enum으로 중복 보존하면서 권위 매핑과 지연 상태를 명시하지 않았다. Source
+        finding context: Result.status와 Report.result_status가 같은 정보를 유지한다고 설명되지만
+        enum 값은 서로 다르다. Source finding context: Report.result_status는 임상의가 신뢰하는
+        권위 값으로 명시되어 있다. Source finding context: corrected 변경은 야간 1회 배치로 amended에
+        반영되어 상태 지연 구간이 생기지만 지연 상태 자체는 모델에 없다."
+    - issue_id: issue-002
+      candidates: *a8
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "통보 evidence 외부화 자체는 지지되지만, issue-005로 흡수할지와 high로 올릴지에 대한 남은
+        disagreement가 있습니다. 안전·감사 흐름에 걸리므로 다음 단계 전 결정 근거가 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml CriticalValue notification model
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:100-106;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: 즉시 통보가
+        필요한 CriticalValue의 핵심 증거를 외부 전화 기록 대장으로 밀어낸 것은 권위 문서 목적을 약화합니다. Source
+        finding context: 이 파일의 선언 목적은 EMR/LIS 통합에서 엔티티·관계·상태의 개념 권위가 되는 것입니다. 즉시
+        통보가 CriticalValue의 본질이라면 통보 완료 여부뿐 아니라 누가 언제 누구에게 통보했는지가 운영 신뢰의 핵심입니다.
+        이를 외부 장부에 두면 EMR/LIS 통합 계약은 가장 위험한 결과 흐름의 책임 추적과 상태 전이를 권위 있게 설명하지 못합니다.
+        Source finding context: CriticalValueNotification 같은 개념을 추가하거나
+        CriticalValue에 notified_at, notified_to, notified_by,
+        acknowledgement/status를 포함해 Result/Report/Staff/Order와 연결하십시오. 최소한 외부 전화
+        기록 대장이 canonical authority인지, EMR/LIS가 어떤 키로 이를 참조하는지 명시하십시오. Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-002 Source finding context: 운영 위험을 포함해 EMR/LIS 통합의 개념 권위를 제공하는
+        목적. Source finding context: 위험 결과가 발생했지만 notified boolean 외 통보 시각·수신자·이행
+        주체가 온톨로지 권위 안에서 추적되지 않는 경우. Source finding context: 통합 구현자가
+        critical-value 통보를 외부 장부의 비정형 부속 절차로 취급할 수 있어, 위험 결과 워크플로의 책임성과 감사 가능성이
+        약해집니다. Source finding context: CriticalValue의 purpose-critical 행위인 즉시
+        통보가 온톨로지 내부 상태·관계 모델이 아니라 외부 기록 전제로 축소되어 있습니다. Source finding context:
+        CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의됩니다. Source finding context: 모델은
+        통보 완료 여부를 boolean으로만 두고 통보 시각과 수신자는 전화 기록 대장에 있다고 둡니다. Source finding
+        context: 그 결과 EMR/LIS 통합 권위 문서 안에서는 critical-value 통보 이행과 감사에 필요한 개념 관계가
+        닫히지 않습니다."
+    - issue_id: issue-003
+      candidates: *a9
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "동일한 TAT 권위 결함의 가치·거버넌스 표면이며 issue-008의 계산 규칙/버전 공백과 같은 해법을 공유합니다. 핵심
+        안전 상태보다는 운영 지표 재현성과 권위 품질 문제입니다. Source finding context:
+        clinical-lab-ontology.yaml turnaround_time note Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:41,84,126-128;
+        .onto/review/20260611-1b46eb7b/execution-preparation/review-value-align\
+        ment-criteria.yaml:user-request-intent Source finding context: TAT 계산식을
+        대시보드 팀의 자체 권위로 남겨 둔 것은 통합 개념 권위 문서의 목적과 맞지 않는 국소 최적화입니다. Source finding
+        context: EMR/LIS 통합 권위 문서는 시스템 간 해석 차이를 줄이는 데 가치가 있습니다. TAT는 운영 성과와 우선순위
+        판단에 쓰일 가능성이 큰 파생 지표인데, 권위 문서가 canonical formula와 예외를 닫지 않고 대시보드 로컬 계산을
+        허용하면 같은 워크플로를 서로 다른 숫자로 해석할 여지를 남깁니다. Source finding context:
+        turnaround_time을 파생 속성 또는 명시된 projection으로 정의하고 source fields, timezone,
+        missing timestamp, corrected/amended report 처리 기준을 온톨로지에 포함하십시오. 대시보드
+        계산식은 이 canonical rule의 구현체로 표현하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/axiology.findings.yaml#axiology-c\
+        andidate-003 Source finding context: EMR/LIS 통합에서 공통 개념과 파생 지표의 권위를 제공하는
+        목적. Source finding context: 대시보드 팀의 자체 TAT 계산식이 온톨로지의
+        collected_at-to-released_at 정의와 다르거나 예외 처리를 다르게 하는 경우. Source finding
+        context: 운영자는 동일 검사 흐름에 대해 서로 다른 TAT 값을 보게 되고, 통합 권위 문서가 지표 해석의 분쟁을 해소하지
+        못합니다. Source finding context: 권위 문서가 파생 지표의 canonical authority를 닫지 않고
+        downstream 팀의 자체 계산식을 허용합니다. Source finding context: TAT의 원천 필드인
+        collected_at과 released_at은 온톨로지 안에 정의되어 있습니다. Source finding context:
+        노트는 TAT를 collected_at부터 released_at까지로 계산한다고 하면서도 대시보드 팀이 자체 계산식을 유지한다고
+        선언합니다. Source finding context: 따라서 통합 권위 문서가 공통 지표 의미를 확정하지 못하고 팀별 해석
+        차이를 허용합니다."
+    - issue_id: issue-006
+      candidates: *a10
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "분석 후 검체 책임 범위를 닫지 못하는 독립 lifecycle coverage 공백입니다. 주요 통합 권위 품질에는
+        중요하지만 상태·critical-value 결함보다는 후속 단계에서 닫아도 되는 중간 심각도입니다. Source finding
+        context: clinical-lab-ontology.yaml Source finding context: materialized
+        input: Specimen.lifecycle and state_rules[2] Source finding context:
+        Specimen의 보관·폐기 lifecycle 구간이 온톨로지에 표현되지 않아 검체 운영 범위가 끝까지 닫히지 않는다.
+        Source finding context: coverage lens는 상태 요소의 lifecycle이 도입부터 보관·폐기·단종 등
+        종료 구간까지 커버되는지 확인합니다. 검체는 분석 후에도 재검, 보관, 폐기 책임이 남는 개체인데 현재 권위 문서는 그 구간을
+        외부 내규로 밀어내 EMR/LIS 통합 모델의 공통 상태와 책임 범위를 닫지 못합니다. Source finding context:
+        Specimen lifecycle에 stored, retention_expired, disposal_pending,
+        disposed 같은 종료 구간을 추가하거나 SpecimenRetention/SpecimenDisposalEvent 엔티티를
+        두세요. 부서별 내규는 상태 개념을 대체하지 말고 retention_policy_ref, storage_location,
+        disposed_at, disposed_by 같은 속성으로 연결하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-003 Source finding context: 주문부터 보고까지뿐 아니라 검체가 생성한 결과의 재검·감사·폐기
+        책임을 포함하는 임상검사 워크플로 개념 권위. Source finding context: 분석 완료 후 검체 보관, 재검 가능성
+        판단, 보관 만료, 폐기 승인/실행을 EMR/LIS가 공통 상태로 해석해야 하는 경우. Source finding context:
+        분석 후 lifecycle이 비어 있으면 운영 시스템 간 검체의 현재 책임 상태를 합의할 수 없고, 재검/폐기 관련 의사결정이
+        온톨로지 밖 내규 해석에 의존합니다. Source finding context: 검체 lifecycle 범위를 분석 완료까지로
+        한정하고 종료 구간을 온톨로지 개념 대신 외부 부서 내규에 위임했다. Source finding context: Specimen
+        lifecycle은 analyzed에서 종료된다. Source finding context: 보관/폐기 처리는 온톨로지 상태가
+        아니라 각 부서 내규로 처리된다고 선언되어 있다. Source finding context: Specimen 보관·폐기 이벤트나
+        retention policy와 연결되는 엔티티/관계가 없다."
+    - issue_id: issue-007
+      candidates: *a11
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "카탈로그 권위 문제의 넓은 root로 유지되지만 evolution은 severity 상향 가능성을 남겼습니다. 주문-수행
+        매핑은 통합 precedence의 중심이므로 다음 단계 전에 최종 범위와 심각도 근거를 닫아야 합니다. Source finding
+        context: clinical-lab-ontology.yaml Source finding context: materialized
+        input: Test/Assay definitions and notes[0] Source finding context: 검사
+        카탈로그의 Test·Assay 병행 관리에 단일 권위와 매핑 lifecycle이 누락되어 카탈로그 커버리지가 부족하다.
+        Source finding context: 복수 시스템 또는 장부에 걸쳐 관리되는 값에는 단일 원본 지정이 있어야 하고, 카탈로그
+        항목은 시점 의존적인 활성 상태와 버전이 필요합니다. 현재 문서는 Test와 Assay를 모두 엔티티로 두면서 관계와 권위 범위를
+        비워 두기 때문에 주문 항목과 수행 항목의 불일치, 신규 항목 등록 누락, 과거 결과의 카탈로그 정의 재구성 문제를 모델 안에서
+        다루지 못합니다. Source finding context: TestAssayMapping 또는 CatalogItemVersion
+        개념을 추가하고, Test와 Assay의 authority/source_system,
+        effective_from/effective_to, active/deprecated 상태,
+        one-to-one/one-to-many 매핑 cardinality, migration/alias를 명시하세요. 신규 등록 절차도
+        두 곳 수동 등록이 아니라 권위 카탈로그에서 파생되는 흐름으로 정리하세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-004 Source finding context: EMR 주문 카탈로그와 LIS/분석기 수행 카탈로그 간 통합
+        precedence 및 scope control. Source finding context: 신규 검사 항목, assay 변경,
+        장비별 수행 코드 변경, 과거 결과 재조회에서 Test와 Assay 정의가 어긋나는 경우. Source finding
+        context: 카탈로그 권위와 매핑 lifecycle이 없으면 주문 가능성, 수행 가능성, 결과 해석이 서로 다른 기준으로
+        운영될 수 있어 통합 설계의 핵심 범위가 비어 있습니다. Source finding context: 주문 카탈로그와 수행
+        카탈로그를 별도 엔티티로 선언했지만 두 카탈로그의 권위, 매핑, 버전 lifecycle 개념을 추가하지 않았다. Source
+        finding context: Test와 Assay는 서로 다른 카탈로그/수행 단위로 정의되어 있다. Source finding
+        context: 신규 항목은 두 곳 모두에 등록된다고 하여 병행 관리가 명시되어 있다. Source finding context:
+        관계 목록에는 Test와 Assay를 연결하거나 권위/버전을 표현하는 관계가 없다. Source finding context:
+        clinical-lab-ontology.yaml: Test and Assay Source finding context:
+        clinical-lab-ontology.yaml:41-55, 121-122 Source finding context: Test와
+        Assay의 의미 경계가 주문 카탈로그 단위와 수행 단위 사이에서 충분히 구분되지 않는다. Source finding
+        context: 주문 가능한 검사(Test)와 분석기 수행 항목(Assay)은 통합 모델에서 구분될 수 있지만, 현재 정의는 둘의
+        관계와 의미 차이를 닫지 못한 채 병렬 카탈로그로 남겨둡니다. 특히 신규 항목을 두 곳 모두 등록한다는 운영 규칙은 두 개념이
+        사실상 같은 카탈로그 항목처럼 쓰일 수 있음을 보여 줍니다. 이 상태에서는 EMR 주문 코드와 LIS 수행 코드가 같은 개념인지,
+        1:N 매핑인지, 서로 다른 lifecycle을 갖는지 판단하기 어렵습니다. Source finding context: Test와
+        Assay를 분리 유지하려면 'Test는 주문/청구/임상 표시 단위, Assay는 장비/분석 수행 단위'처럼 의미 기준을 명시하고
+        Test-to-Assay 매핑 관계와 cardinality를 추가하십시오. 같은 개념으로 쓰려는 의도라면 canonical
+        카탈로그 엔티티 하나와 수행 세부 속성으로 정리하십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-002 Source finding context: EMR 주문 카탈로그와 LIS 수행 카탈로그를 연결하는 개념
+        권위 제공 Source finding context: 신규 검사 항목이나 코드 매핑을 추가할 때 Test와 Assay 중 어느
+        항목이 주문 권위인지 수행 권위인지 판단해야 하는 경우 Source finding context: 카탈로그 권위가 흐려지면 주문
+        코드, 수행 코드, 결과 귀속이 어긋날 수 있어 통합 설계의 의미적 actionability가 낮아집니다. Source
+        finding context: 주문 가능 카탈로그 단위와 분석 수행 단위의 개념 분리 기준 및 매핑 관계가 명시되지 않았다.
+        Source finding context: Test와 Assay가 모두 검사 항목/카탈로그 단위로 정의되어 속성군도 유사하다.
+        Source finding context: 운영 note는 신규 항목을 두 곳 모두 등록한다고 하여 두 카탈로그가 병렬 권위로
+        유지됨을 보여 준다."
+    - issue_id: issue-008
+      candidates: *a12
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "TAT 관련 문제의 원인 축이며 운영 지표 재현성·감사 가능성을 약화합니다. 중간 심각도이며 안전 상태 계약보다는 운영
+        지표 governance 문제로 후속 단계에서 닫을 수 있습니다. Source finding context:
+        clinical-lab-ontology.yaml Source finding context: materialized input:
+        notes[1] and available attributes Source finding context: TAT 산출값의 권위·계산
+        버전·예외 구간 개념이 누락되어 운영 지표 커버리지가 부족하다. Source finding context: TAT는 시점 의존
+        운영 지표이고, 자체 계산식이 별도 팀에 있다는 것은 병행 관리 값입니다. coverage 관점에서 이런 값은 단일 권위와
+        이력/유효기간이 필요합니다. 현재 모델은 원천 시각 두 개만 제공하고 계산 권위를 외부로 둬서 EMR/LIS와 대시보드 간 지표
+        불일치나 과거 리포트 재현을 설명하지 못합니다. Source finding context: TATMetric 또는
+        TurnaroundTimeCalculationRule 엔티티를 추가하고 metric_owner/source_system,
+        effective_from/effective_to, start_event, stop_event, pause/exception
+        events, target_threshold, calculated_at을 명시하세요. 대시보드 계산식은 외부 임의 로직이 아니라
+        해당 규칙 버전의 projection으로 두세요. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/coverage.findings.yaml#coverage-c\
+        andidate-005 Source finding context: 임상검사 워크플로의 운영 성능 지표를 EMR/LIS 통합 권위
+        문서에서 일관되게 해석하는 목적. Source finding context: 대시보드, LIS, EMR이 같은 주문/검체에 대해
+        다른 TAT를 산출하거나, 계산식 변경 전후의 과거 TAT를 재현해야 하는 경우. Source finding context: 계산
+        권위와 규칙 이력이 없으면 운영 지표가 통합 모델의 계약이 아니라 외부 팀 계산식에 의존해 precedence와 감사 가능성이
+        약해집니다. Source finding context: 운영 지표를 온톨로지 개념이 아니라 두 타임스탬프와 외부 계산식으로만
+        표현했다. Source finding context: TAT 산출에 필요한 시작/종료 시각은
+        Specimen.collected_at과 Report.released_at으로 존재한다. Source finding
+        context: 계산식은 대시보드 팀이 자체 유지한다고 되어 있어 모델 내부의 단일 권위가 아니다. Source finding
+        context: 엔티티/관계 목록에 TAT 산출 규칙, 버전, 예외 구간, 지표 권위 개념이 없다."
+    - issue_id: issue-010
+      candidates: *a13
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "새 검체 유형과 외부 코드 수용성을 약화하는 독립 codeset 권위 결함입니다. 중간 심각도의 확장성·일관성 문제로 후속
+        단계에서 반영하면 됩니다. Source finding context: clinical-lab-ontology.yaml:
+        Specimen/Test specimen typing Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:37-60 Source finding context: 검체 종류가 닫힌 enum과 자유 문자열로 갈라져 새 검체 유형 수용
+        시 스키마 수정과 매핑 충돌이 발생한다. Source finding context: 검체 유형은 카탈로그 확장과 장비 연동에서
+        자주 확장되는 축이다. 현재 모델은 새 검체 세부 유형을 추가하려면 enum을 수정해야 하고, 동시에 Assay의 문자열 값과
+        동등성 판단 규칙도 별도로 만들어야 한다. 이 때문에 외부 LIS/분석기 코드 체계 변화나 신규 검체 유형 도입 시 기존 데이터와
+        규칙의 연속성이 약해진다. Source finding context: 검체 종류를 별도 `SpecimenKind`/코드셋 개념으로
+        승격하고, Specimen/Test/Assay가 같은 코드셋 또는 명시적 alias/mapping을 참조하게 한다. 닫힌
+        enum은 최소 범주용으로만 쓰거나 버전 있는 코드셋으로 대체한다. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/evolution.findings.yaml#evolution\
+        -candidate-002 Source finding context: 새 검사·검체 유형과 외부 LIS/분석기 코드 변화를
+        수용하는 확장 가능한 EMR/LIS 통합 모델. Source finding context:
+        blood/urine/tissue/swab 밖의 검체 유형이나 Serum/WB 같은 세부 검체 종류가 필요할 때 enum 수정과
+        문자열 매핑 규칙 추가가 동시에 필요하다. Source finding context: 검체 호환성 판단이 엔티티마다 다른 표현에
+        의존해 카탈로그 확장 시 기존 구조를 수정해야 하고, 통합 규칙이 불안정해진다. Source finding context: 동일한
+        검체 분류 축을 닫힌 enum과 자유 문자열이라는 두 표현으로 나누고 공통 코드셋/매핑 개념을 두지 않았다. Source
+        finding context: Specimen.specimen_type은 네 값으로 닫힌 enum이다. Source finding
+        context: Test.requires_specimen_type도 같은 네 값 enum으로 닫혀 있다. Source
+        finding context: Assay.specimen_kind는 별도 자유 문자열이며 예시 값이 enum 값과 다른
+        granularity를 가진다."
+    - issue_id: issue-012
+      candidates: *a14
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "logic은 독립 modality mismatch로 보고 coverage는 issue-004의 증상으로 좁힙니다. 상태
+        권위 모델 결정 전 fold-under 여부에 대한 relation evidence가 필요합니다. Source finding
+        context: clinical-lab-ontology.yaml Report.result_status / state_rules
+        Source finding context: Embedded Materialized Input:
+        Report.result_status enum values `[prelim, finalized, amended]`;
+        state_rules[1] says `Report는 released_at 기록 시점에 finalized 상태가 된다` and
+        `Report.result_status는 amended가 되어야 한다(동기화 배치는 야간 1회)` Source finding
+        context: The report status rule treats a delayed batch-synchronized
+        value as an immediate required state, producing an interval where the
+        obligation cannot be simultaneously satisfied with the declared
+        synchronization mechanism. Source finding context: The conflict is a
+        modality mismatch: `must become amended` is stated as an obligation over
+        the authoritative displayed value, while the same sentence permits
+        delayed synchronization. If the report status is the value clinicians
+        trust, the ontology allows a period where the authoritative
+        Report.result_status is necessarily stale relative to its required
+        condition. Source finding context: Separate the immediate semantic state
+        from the materialized synchronized field. For example, define
+        `Report.amendment_required` immediately when a Result is corrected, and
+        define `Report.result_status` as updated by the nightly batch with an
+        explicit stale/pending state or SLA. Alternatively require immediate
+        update when clinician-facing authority must never lag. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/logic.findings.yaml#logic-candida\
+        te-002 Source finding context: Use of Report.result_status as a trusted
+        EMR/LIS integration authority value for clinicians. Source finding
+        context: A Result.status is corrected after release before the nightly
+        synchronization batch updates Report.result_status. Source finding
+        context: The ontology simultaneously requires the report to be amended
+        and allows the trusted displayed field to remain finalized, making the
+        status contract ambiguous for consumers during the delay window. Source
+        finding context: The model collapses an immediate derived obligation and
+        a delayed materialized synchronization field into the same authoritative
+        Report.result_status concept. Source finding context:
+        Report.result_status is declared as the authority value shown on the
+        report and trusted by clinicians. Source finding context: The state rule
+        requires Report.result_status to become `amended` when Result.status
+        changes to `corrected`. Source finding context: The same rule states the
+        synchronization batch runs only once nightly. Source finding context:
+        Between correction and batch execution, the model permits the trusted
+        Report.result_status field to remain unamended despite the immediate
+        amendment obligation."
+    - issue_id: issue-014
+      candidates: *a15
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "응급 주문 여부의 canonical representation이 없는 직접 consistency 결함입니다. 운영
+        우선순위에 영향을 주므로 다음 단계 전 단일 권위나 invariant를 정해야 합니다. Source finding context:
+        clinical-lab-ontology.yaml: STAT order modeling Source finding context:
+        clinical-lab-ontology.yaml:16-24 Source finding context: STAT 주문 의미가
+        priority enum, is_stat boolean, StatOrder subtype으로 동시에 모델링되어 있다. Source
+        finding context: 셋은 모두 '이 주문이 STAT인가'라는 같은 의미를 표현합니다. STAT 여부가 값, 플래그,
+        타입으로 동시에 존재하면 routine priority이면서 is_stat=true인 주문이나 StatOrder이지만
+        priority가 urgent인 주문처럼 의미적으로 모순된 인스턴스가 가능해집니다. OntoClean 관점에서도 STAT은 주문의
+        본질적 타입이라기보다 긴급도/처리 우선순위 역할에 가까우므로 subtype으로 고정하면 주문의 정체성과 상태/역할을 혼동할 위험이
+        있습니다. Source finding context: STAT 의미의 canonical 표현을 하나로 정하십시오. 보통
+        priority enum의 stat 값으로 충분하며, StatOrder가 필요한 경우에는 priority=stat 불변조건과
+        subtype 사용 이유를 명시하십시오. is_stat은 priority에서 파생되는 projection으로 두거나 제거하십시오.
+        Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-003 Source finding context: 주문 우선순위와 응급 주문 의미를 EMR/LIS 간 일관되게
+        전달하는 목적 Source finding context: 주문 생성, 변경, 인터페이스 매핑에서 priority, is_stat,
+        StatOrder가 서로 다른 값을 갖는 경우 Source finding context: STAT 여부는 채혈, 분석 우선순위,
+        알림의 운영 판단에 직접 영향을 주므로 중복 권위는 통합 시 잘못된 긴급도 처리로 이어질 수 있습니다. Source finding
+        context: STAT이라는 하나의 역할/우선순위 의미가 값, 파생 플래그, subtype으로 분산되어 있다. Source
+        finding context: Order.priority는 stat 값을 포함한다. Source finding context:
+        Order.is_stat도 STAT 주문 여부를 별도 기록한다고 되어 있다. Source finding context:
+        StatOrder는 동일한 STAT 의미를 Order subtype으로 다시 모델링한다."
+    - issue_id: issue-015
+      candidates: *a16
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "CriticalValue notification 결함의 의미적 원인 축입니다. rule, occurrence,
+        notification event는 권위와 lifecycle이 다르므로 다음 단계 전 개념 분리가 필요합니다. Source
+        finding context: clinical-lab-ontology.yaml: CriticalValue Source
+        finding context: clinical-lab-ontology.yaml:95-101 Source finding
+        context: CriticalValue라는 이름은 실제 결과값처럼 보이지만 정의와 속성은 임계 범위 규칙과 통보 상태를 섞고
+        있다. Source finding context: 현재 엔티티는 개별 환자의 위험 결과값이 아니라 검사별 critical
+        range/threshold rule에 가깝습니다. 그런데 notified는 특정 결과 발생 후의 통보 상태라서 범위 규칙의
+        속성이 아니라 critical result event 또는 notification event의 속성입니다. 이름과 속성이 서로
+        다른 존재론적 유형을 섞어 EMR/LIS가 임계값 규칙, 실제 위험 결과, 통보 사건 중 무엇을 주고받아야 하는지 흐리게
+        만듭니다. Source finding context: CriticalValueRange 또는 CriticalValueRule을
+        임계 범위 정의로 두고 lower/upper bound를 유지하십시오. 실제 환자 결과가 임계값을 넘은 사건은
+        CriticalResult 또는 CriticalAlert로 분리하고, notified는 통보 이벤트/상태와 수신자·시각 참조로
+        옮기십시오. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-004 Source finding context: 위험 결과와 즉시 통보 개념을 통합 설계에서 안전하게
+        구분하는 목적 Source finding context: 시스템이 CriticalValue를 임계값 마스터 데이터로도, 환자별
+        위험 결과/통보 상태로도 사용하는 경우 Source finding context: 위험 결과 통보는 운영상 중요한 조치이므로
+        규칙과 사건의 의미가 섞이면 통보 누락, 중복 통보, 감사 추적 공백이 생길 수 있습니다. Source finding
+        context: 임계값 규칙, 실제 위험 결과 사건, 통보 완료 상태가 하나의 CriticalValue 엔티티에 결합되어 있다.
+        Source finding context: 정의와 bound 속성은 검사별 위험 결과 값 범위를 나타낸다. Source
+        finding context: notified는 범위 정의가 아니라 통보 완료라는 사건 상태를 나타낸다. Source
+        finding context: 통보 시각과 수신자가 별도 전화 기록 대장에 있다는 note는 통보가 별도 사건/기록임을
+        뒷받침한다."
+    - issue_id: issue-017
+      candidates: *a17
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Test/Assay 경계 문제(issue-007)의 구조적 증상이며, 그래프 기반 통합 매핑 완성도를 약화합니다. 중간
+        심각도 completeness 결함으로 후속 단계에서 relation을 추가하면 됩니다. Source finding
+        context: clinical-lab-ontology.yaml relations graph for Assay Source
+        finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:54 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: Assay is omitted from the explicit
+        workflow relation graph. Source finding context: The ontology says Test
+        and Assay are both currently registered, but the explicit relation graph
+        has no Test-Assay, Assay-Result, or Assay-Specimen edge. As a result,
+        the execution unit cannot be traversed from the order/test/result
+        workflow except through a generic department reference, weakening the
+        document as a concept authority for EMR/LIS integration paths. Source
+        finding context: Add an explicit relation that connects Assay to the
+        core workflow, preferably through the catalog concept it realizes, such
+        as `Test -> Assay` / `Assay -> Test` with a clear kind, and add any
+        required execution-result edge if Result is produced by Assay rather
+        than directly by Test or Specimen. Source finding context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-001 Source finding context: Use the ontology as the
+        conceptual authority document for EMR/LIS integration from Order through
+        Report. Source finding context: When an integration needs to map ordered
+        catalog tests to analyzer-executed assay units, the formal relation
+        graph has no path involving Assay beyond Department. Source finding
+        context: Review trust is weakened because a core LIS execution concept
+        is present but structurally disconnected from the workflow graph that
+        downstream implementers would use for integration mapping. Source
+        finding context: The ontology introduces Assay as a separate
+        execution-unit concept but does not add corresponding workflow relations
+        for that split. Source finding context: Assay is defined as the
+        analyzer-executed unit with department and specimen_kind attributes.
+        Source finding context: The explicit relation list contains no edge
+        where Assay is the source or target. Source finding context: The note
+        says new items are currently registered in both Test and Assay, making
+        the missing Test-Assay connection operationally relevant within the
+        target."
+    - issue_id: issue-018
+      candidates: *a18
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Order completion과 ordered_tests 의미의 중심 relation이 누락된 직접 구조 공백입니다.
+        graph 기반 소비자가 핵심 workflow를 해석해야 하므로 다음 단계 전 명시 relation이 필요합니다. Source
+        finding context: clinical-lab-ontology.yaml Order-to-Test structural
+        path Source finding context:
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:19 and
+        .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input\
+        .md:108 Source finding context: The explicit relation graph omits the
+        Order-to-Test ordering edge. Source finding context: For a workflow
+        authority document, the ordered tests are the structural basis for
+        expected lab work. Without an explicit Order-to-Test relation, the
+        relation graph cannot directly express which Test items were ordered,
+        which makes downstream traversal from Order to expected Test/Result
+        behavior depend on an attribute that is not mirrored in the formal
+        relation model. Source finding context: Add an explicit `Order -> Test`
+        relation such as `orders` or `includes_ordered_test`, and if needed
+        define the expected Result path from ordered Test to Result so the
+        completion rule can be evaluated from the same graph. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/structure.findings.yaml#structure\
+        -candidate-002 Source finding context: Use the ontology as the concept
+        authority for EMR/LIS order-to-result workflow integration. Source
+        finding context: When a consumer relies on the relation graph to
+        determine which tests belong to an order, the formal graph lacks the
+        required Order-Test edge even though the attribute model declares
+        `ordered_tests`. Source finding context: The graph is structurally
+        incomplete for a central workflow question: what tests an order contains
+        and which results complete those ordered tests. Source finding context:
+        The ontology splits ordered-test membership into an attribute reference
+        while the formal relation graph omits the same core workflow edge.
+        Source finding context: Order declares `ordered_tests` as a list of
+        references to Test. Source finding context: The explicit relation list
+        has no Order-to-Test relation, despite including other workflow edges
+        such as Order-Specimen, Test-Result, and Order-Report. Source finding
+        context: The Order completion rule depends on all Result objects being
+        final, which requires a dependable structural path from an Order to its
+        expected test results."
+    - issue_id: issue-016
+      candidates: *a19
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "bounded evidence상 material failure condition이 없는 low severity 명명
+        문제입니다. 현재 권위 계약을 막지는 않으므로 후속 정리나 문서 수준으로 다루면 충분합니다. Source finding
+        context: clinical-lab-ontology.yaml: Specimen-to-Result relation naming
+        Source finding context: clinical-lab-ontology.yaml:113-114 Source
+        finding context: Specimen produces Result는 검체의 의미적 역할을 생산 주체로 잘못 이름 붙인다.
+        Source finding context: 검체는 결과 산출의 원천 물질 또는 입력이지, 결과를 생산하는 행위자나 시스템이
+        아닙니다. 이미 Result derived_from Specimen이라는 더 정확한 의미 관계가 있으므로 produces는 같은
+        관계를 더 강한 인과/행위 의미로 중복 표현합니다. 이 이름은 분석기, Assay, Staff 같은 실제 수행 주체와
+        Specimen의 역할을 혼동하게 할 수 있습니다. Source finding context: Specimen-to-Result
+        방향 관계가 필요하면 source_for, input_to, yields_result처럼 검체가 원천/입력임을 드러내는 이름으로
+        바꾸십시오. 결과 생성 주체를 표현하려면 Assay 또는 분석 실행 개념을 별도로 연결하십시오. Source finding
+        context:
+        .onto/review/20260611-1b46eb7b/round1/semantics.findings.yaml#semantics\
+        -candidate-005"
+synthesis_result_ref: .onto/review/20260611-1b46eb7b/synthesis-ledger.yaml
+synthesis_result_sha256: da26f35662018f4f120dc60cb60cfb0e46c89c8311f75a6ea9998390cecc7864
+synthesis_output_sha256: 95589f1c5b9fddd08d173e1c41816b2f1a1b5ebf841ab2f7b06bca0555df69ea
+deliberation_status: performed
+deliberation_result_ref: .onto/review/20260611-1b46eb7b/deliberation-resolution.yaml
+deliberation_result_sha256: 483ab0c7406c6468ad45cef2b0364c546c2fef944bec414400165d7f1b3c56fd
+final_output_ref: .onto/review/20260611-1b46eb7b/final-output.md
+final_output_sha256: b71912fc3375627b18cb87c2230155d53ae6610874e9ed3bee610406759a5fc9
+shared_phenomenon_summary: []

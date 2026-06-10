@@ -9,8 +9,9 @@ material_terms: # 전 항목 필수 (textContainsAll)
   - "valid_from" # CRT-4 등급 유효기간/이력 부재
   - "available_limit" # CRT-5 한도 권위 이원화 (승인 시스템 + CRM)
   - "total_amount" # CRT-7 월말 배치 집계의 구조적 staleness
-  - "환율" # CRT-8 통화 속성 부재 + 시스템별 환율 환산
-  - "부실" # CRT-10 default 범위 제외가 본체 의미 파괴
+  # 산문 개념 토큰은 출력 언어 분산에 대비해 동의어 그룹(any-of)로 둔다 — ground truth의 동일 앵커 개념 번역만 허용.
+  - ["환율", "통화", "exchange rate", "currency"] # CRT-8 통화 속성 부재 + 시스템별 환율 환산
+  - ["부실", "default", "연체"] # CRT-10 default 범위 제외가 본체 의미 파괴
 expected_material_truth: >-
   CRT-1 등급 스케일 파편화 + CRT-2 담보 is-a 오류 + CRT-3 LTV 파생값 승격 +
   CRT-4 등급 시간성 부재 + CRT-5 한도 권위 이원화 + CRT-7 집계 staleness +

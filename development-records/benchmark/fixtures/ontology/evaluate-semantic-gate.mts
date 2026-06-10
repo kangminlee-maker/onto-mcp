@@ -44,6 +44,22 @@ function requireStrings(value: unknown, key: string): string[] {
   return value as string[];
 }
 
+/** material_terms 항목: 문자열 또는 동의어 그룹(any-of 문자열 배열). */
+function requireTermGroups(value: unknown, key: string): Array<string | string[]> {
+  const valid = Array.isArray(value) &&
+    value.every((item) =>
+      typeof item === "string" ||
+      (Array.isArray(item) && item.length > 0 &&
+        item.every((alt) => typeof alt === "string")),
+    );
+  if (!valid) {
+    throw new Error(
+      `semantic-expectations.${key} must be a list of strings or non-empty string groups`,
+    );
+  }
+  return value as Array<string | string[]>;
+}
+
 function requireString(value: unknown, key: string): string {
   if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`semantic-expectations.${key} must be a non-empty string`);
@@ -55,7 +71,7 @@ async function loadExpectations(fixtureId: string) {
   const raw = (await readYaml(
     path.join(FIXTURES_ROOT, fixtureId, "semantic-expectations.yaml"),
   )) as Record<string, unknown>;
-  const materialTerms = requireStrings(raw.material_terms, "material_terms");
+  const materialTerms = requireTermGroups(raw.material_terms, "material_terms");
   if (materialTerms.length === 0) {
     // 빈 리스트면 recall 체크가 공허 통과한다 — boundary decoy 리스트와 달리 비허용.
     throw new Error("semantic-expectations.material_terms must not be empty");

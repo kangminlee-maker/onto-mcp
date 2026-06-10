@@ -67,7 +67,13 @@ interface ReviewPipelineIssueArtifactsLike {
  */
 export interface SemanticQualityExpectations {
   fixtureId: string;
-  materialTerms: string[];
+  /**
+   * Required material vocabulary. Each entry must match (ALL semantics);
+   * an entry given as a string array is an alternates group — any one
+   * alternate satisfies the entry (e.g. translations of the same
+   * ground-truth anchor concept, robust to output-language variance).
+   */
+  materialTerms: Array<string | string[]>;
   expectedMaterialTruth: string;
   boundaryUncertaintyTerms: string[];
   boundaryContextTerms: string[];
@@ -182,8 +188,15 @@ function normalizedText(value: unknown): string {
   return `${raw}\n${searchFriendly}`.toLowerCase();
 }
 
-function textContainsAll(text: string, terms: string[]): boolean {
-  return terms.every((term) => text.includes(term));
+function textContainsAll(
+  text: string,
+  terms: Array<string | string[]>,
+): boolean {
+  return terms.every((term) =>
+    Array.isArray(term)
+      ? term.some((alternate) => text.includes(alternate))
+      : text.includes(term),
+  );
 }
 
 function textContainsAny(text: string, terms: string[]): boolean {
