@@ -178,6 +178,19 @@ function issueArtifactPacketPath(
   );
 }
 
+/** First entry per key wins — parents precede their flattened children. */
+function firstWinsByUnitId<T>(
+  entries: T[],
+  keyOf: (entry: T) => string,
+): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const entry of entries) {
+    const key = keyOf(entry);
+    if (!map.has(key)) map.set(key, entry);
+  }
+  return map;
+}
+
 function allExecutionResults(
   executionResult: ReviewExecutionResultArtifact | null | undefined,
 ): ReviewUnitExecutionResult[] {
@@ -668,16 +681,24 @@ export async function buildReviewPipelineExecutionLedger(
   const outputRefsByUnitId = new Map(
     units.map((unit) => [unit.unitId, unit.outputRefs] as const),
   );
-  const executionResultsByUnitId = new Map(
-    allExecutionResults(params.executionResult).map((result) => [
-      result.unit_id,
-      result,
-    ]),
+  // Duplicate unit_ids appear when a unit completed through an
+  // unavailable-fallback: the parent (final, completed) result embeds the
+  // failed attempt as child_results, and both flatten into the same list —
+  // in the execution-result via allExecutionResults and in the manifest via
+  // worker-unit child flattening, parent always preceding its children. The
+  // PARENT is the unit's status authority (children are audit trail), so
+  // dedupe must be FIRST-wins; a last-wins Map let a failed child shadow its
+  // completed parent and blocked the whole downstream trust chain.
+  const executionResultsByUnitId = firstWinsByUnitId(
+    allExecutionResults(params.executionResult),
+    (result) => result.unit_id,
   );
-  const workerUnitsByUnitId = new Map(
-    (params.reviewRunManifest?.worker_units ?? [])
-      .filter((unit) => typeof unit.unit_id === "string")
-      .map((unit) => [unit.unit_id as string, unit]),
+  const workerUnitsByUnitId = firstWinsByUnitId(
+    (params.reviewRunManifest?.worker_units ?? []).filter(
+      (unit): unit is ReviewRunManifestWorkerUnitForLedger & { unit_id: string } =>
+        typeof unit.unit_id === "string",
+    ),
+    (unit) => unit.unit_id,
   );
   const trustedUnitIds = new Set<string>();
   const ledgerUnits: PipelineExecutionLedgerUnitEntry[] = [];

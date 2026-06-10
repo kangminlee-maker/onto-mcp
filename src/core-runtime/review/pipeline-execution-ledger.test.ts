@@ -250,6 +250,50 @@ describe("buildReviewPipelineExecutionLedger", () => {
     ]).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("keeps a fallback-completed unit trusted when its failed attempt rides as a child result", async () => {
+    // Unavailable-fallback shape: the parent (final, completed) result embeds
+    // the failed executor attempt as child_results with the SAME unit_id.
+    // The flattened child must not shadow the parent's status — a last-wins
+    // dedupe here blocked the whole downstream trust chain (live regression,
+    // session 20260610-3c51cdc4).
+    const root = await tempSessionRoot();
+    const plan = executionPlan(root);
+    const runResult = executionResult(plan);
+    const fallbackUnit = (runResult.deliberation_execution_results ?? [])[0];
+    expect(fallbackUnit).toBeDefined();
+    fallbackUnit!.child_results = [
+      {
+        ...fallbackUnit!,
+        status: "failed",
+        failure_message: "executor boom (attempt embedded for audit)",
+        failure_kind: "unknown",
+        child_results: undefined,
+      } as typeof fallbackUnit,
+    ] as never;
+    for (const unitResult of [
+      ...runResult.lens_execution_results,
+      ...(runResult.issue_artifact_execution_results ?? []),
+      ...(runResult.deliberation_execution_results ?? []),
+      runResult.synthesize_execution_result,
+    ]) {
+      if (unitResult) await writeOutput(unitResult.output_path);
+    }
+    await writeOutput(plan.synthesis_output_path);
+
+    const ledger = await buildReviewPipelineExecutionLedger({
+      sessionRoot: root,
+      executionPlan: plan,
+      executionResult: runResult,
+    });
+
+    const unit = ledger.units.find((u) => u.unitId === fallbackUnit!.unit_id);
+    expect(unit?.status).toBe("completed");
+    expect(unit?.trustStatus).toBe("trusted");
+    expect(
+      ledger.units.find((u) => u.unitId === "synthesize")?.trustStatus,
+    ).toBe("trusted");
+  });
+
   it("does not trust synthesize when its markdown projection is missing", async () => {
     const root = await tempSessionRoot();
     const plan = executionPlan(root);
