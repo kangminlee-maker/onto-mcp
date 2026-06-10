@@ -6108,6 +6108,21 @@ export async function executeReviewPromptExecution(
           : []),
       ],
     }));
+    // Concurrency/timeout parity with the flat lens pool: waves are capped
+    // at maxConcurrentLenses and the outer timeout covers every wave (the
+    // script has no per-unit kill switch) plus outer startup overhead.
+    const nestedLensWidth = Math.max(
+      1,
+      Math.min(maxConcurrentLenses, lensDispatches.length),
+    );
+    const nestedLensWaveCount = Math.ceil(
+      lensDispatches.length / nestedLensWidth,
+    );
+    const nestedLensUnitTimeoutMs = timeoutMsForDispatch({
+      profile: params.reviewExecutionProfile,
+      dispatch: firstLensDispatch,
+      fallback: unitTimeoutMs,
+    });
     const nestedResult = await executeReviewViaNestedBatch({
       brand: nestedBrand,
       sessionRoot,
@@ -6115,6 +6130,8 @@ export async function executeReviewPromptExecution(
       ontoConfig: params.ontoConfig ?? {},
       units: nestedUnits,
       inner_executor: nestedLensExecutorConfig,
+      dispatch_width: nestedLensWidth,
+      timeout_ms: nestedLensUnitTimeoutMs * nestedLensWaveCount + 60_000,
     });
     const nestedCompletedAtMs = Date.now();
     // Map nested-dispatch outcomes into executionOutcomes[] in lensDispatches order.
