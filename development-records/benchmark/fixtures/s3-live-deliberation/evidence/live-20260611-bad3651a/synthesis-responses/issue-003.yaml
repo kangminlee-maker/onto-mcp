@@ -1,0 +1,79 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-003"
+issue_id: "issue-003"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-003"
+conclusion: >-
+  The doc defines [] to mean "window still open" (C6), but flush also returns
+  [] in the reachable state windowStartedAt === null in which no window is
+  open, so one return value carries two undistinguished meanings and the
+  definition contradicts the producing rule (R2) in that state. The documented
+  meaning of [] is therefore false on every idle-state flush(now) call with
+  declared-legal inputs — a today-exercised, clock-independent contract
+  falsity whose standalone harm is interpretive-only. Deliberation adjudicated
+  severity at medium; the fix is to either widen the documented meaning of []
+  or make the two states distinguishable in the signature, keeping C6
+  consistent with the choice.
+materiality_explanation: >-
+  The issue weakens the declared goals of verifiability of the caller-facing
+  contract and correctness of caller-side state interpretation. The failure
+  condition is a caller or monitor branching on the documented meaning of []
+  in the no-window state, or operation under finding-001's clock-skew
+  condition where the misleading reading persists indefinitely. The impact is
+  misclassification of batcher state by polling callers (idle read as
+  batching) and tests written against the documented meaning validating the
+  wrong semantics. Severity is medium: the falsity is exercised today with
+  declared-legal inputs and is independent of the clock defect, but the
+  standalone harm is interpretive-only with no delivery failure, capping it
+  below high; the persistent-misreading escalation under clock skew is priced
+  in issue-001/issue-006, not here.
+root_cause_explanation: >-
+  The chain starts where flush conflates two distinct states — "no window
+  started" and "window open, not yet closed" — into a single [] output while
+  the doc defines only one meaning for that value. This conflation is the
+  root because the doc asserts a necessary equivalence ([] iff window still
+  open) that the producing rule cannot honor: the implementation also yields
+  [] from the reachable no-window state (the initial value and the state
+  after every successful flush), a possible-as-necessary modality error. All
+  lenses accepted this recorded root as-is; deliberation only adjudicated the
+  deferred severity calibration.
+causal_path_explanation: >-
+  Step 1 (finding-003.cause-001): two early returns map the distinct states
+  windowStartedAt === null and now - windowStartedAt < WINDOW_MS to the same
+  output []. Step 2 (finding-003.cause-002, caused by step 1): the doc
+  definition assigns [] the single meaning "window still open", which is
+  false in the reachable no-window state — definition and producing rule
+  contradict. Nothing was left unresolved beyond the evidence. Deliberation
+  (logic and semantics participating) resolved the deferred medium-vs-low
+  calibration at medium: logic answered semantics' falsifying question with a
+  today-reachable harm path that does not route through the clock defect
+  (idle-state flush returns [] while its documented meaning is false at that
+  moment) and conceded the double-counting point that the permanent-misreading
+  escalation belongs to issue-001; semantics then moved low to medium on
+  rubric consistency, since a today-exercised contract falsity cannot grade
+  below the refactor-conditional cluster (issue-002/005/007) held at medium.
+  Both participating lenses' final positions are medium with no remaining
+  disagreement.
+action_explanation: >-
+  Close the homonym in one of two ways and keep C6 consistent with whichever
+  is chosen: widen the documented meaning ("[] means there is nothing to
+  flush yet: no window has started, or the window is still open"), or make
+  the states distinguishable in the signature (e.g. return null for "no
+  window" vs [] for "window open"). Either option closes the issue without a
+  product-intent decision. Closure class is fix_now with obligation
+  must_close_before_next_stage: it must close before verification-stage work
+  because tests written against the current documented meaning would validate
+  the wrong semantics. The severity escalation under clock skew is handled by
+  the issue-001/issue-006 time-authority fix, so this issue's action is the
+  independent definitional repair; the recorded action candidates are
+  fix_before_release and fix_now.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-003"
+  - "problem-framing.yaml#issue-003"
+  - "deliberation-resolution.yaml#issue-003"
+  - "finding-ledger.yaml#finding-003"
+  - "issue-stance-matrix.yaml#stances.issue-003.logic"
+  - "issue-stance-matrix.yaml#stances.issue-003.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-003.semantics"

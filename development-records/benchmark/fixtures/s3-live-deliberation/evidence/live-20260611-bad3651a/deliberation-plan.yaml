@@ -1,0 +1,60 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+planned_issues:
+  - issue_id: issue-004
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids: [coverage, logic, semantics]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: "Logic narrows the merged issue to the clock-split manifestation, holding that the enqueuedAt leg yields no derivable contradiction within the bounded target (logic finding-4: insufficient evidence for a formal claim binding windowStartedAt to per-item entry time), while coverage and semantics accept the full single-undesignated-time-authority root spanning both manifestations (rel-007) with coupled fixes."
+    resolution_question: "Does the single undesignated-time-authority root legitimately cover both manifestations (enqueue/flush clock split and the inert caller-trusted enqueuedAt) as one merged high-severity issue with coupled fixes, or must the issue be narrowed to the clock-split leg with the enqueuedAt leg adjudicated on coverage/semantics evidence alone?"
+  - issue_id: issue-002
+    priority: 20
+    conflict_type: action_or_severity
+    participating_lens_ids: [logic, coverage, semantics]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: "Recorded high severity is contested two-to-one: coverage and semantics lower to medium because the check-to-reset interleaving is unreachable in the current single-threaded synchronous realization (latent harm, activated only by a future async/re-entrant refactor), while logic keeps high on the formally established C7-vs-R5 necessary/necessary contradiction. Semantics additionally narrows the root to a direction-neutral form (the documented preservation property has no implementing mechanism) versus the recorded clear()-side-defective hypothesis."
+    resolution_question: "Is the carry-over contract defect high or medium severity given that the failure condition is unreachable inside the bounded synchronous target, and should the root hypothesis be restated direction-neutrally (no implementing mechanism for the documented preservation property) instead of locating the defect in the unconditional pending.clear()?"
+  - issue_id: issue-003
+    priority: 30
+    conflict_type: action_or_severity
+    participating_lens_ids: [logic, semantics]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.logic
+      - issue-stance-matrix.yaml#stances.issue-003.semantics
+    conflict_summary: "Semantics lowers severity to low, arguing today's state invariant makes the two [] readings coincide for callers and the persistent-misreading escalation belongs to the clock defect (issue-001/issue-006) rather than to this definitional issue; logic keeps medium on the C6-vs-R2 definition-vs-producing-rule contradiction. The low position would demote the issue below the material-severity candidate boundary."
+    resolution_question: "Does the [] homonym (no-window state vs window-open state sharing one documented meaning) warrant medium severity on its own, or does it drop to low (non-material) once the persistent-misreading escalation is attributed entirely to the clock-authority issue?"
+  - issue_id: issue-005
+    priority: 40
+    conflict_type: action_or_severity
+    participating_lens_ids: [coverage, logic]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.coverage
+      - issue-stance-matrix.yaml#stances.issue-005.logic
+    conflict_summary: "Logic raises severity to high, holding the contradiction is formally established (the documented carry-over invariant is necessarily false in every execution where its antecedent holds), while coverage keeps medium per its latency-of-harm assessment: the failure condition requires a future async/concurrent realization that the comment itself invites."
+    resolution_question: "Is the absent item-granularity carry-over mechanism high severity on contract falsity alone, or medium because the failure condition is unreachable inside the bounded single-threaded synchronous target?"
+  - issue_id: issue-007
+    priority: 50
+    conflict_type: action_or_severity
+    participating_lens_ids: [semantics, logic]
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+    conflict_summary: "Logic raises severity to high, adding that the code guarantees the complementary property (pending becomes empty) at the same program point so the comment-vs-clear() conflict is necessary/necessary, while semantics (originating lens) and coverage keep medium per the synchronous-runtime latency of the harm: today the defect is a false documented invariant, with loss activation conditional on an async/re-entrant refactor."
+    resolution_question: "Does the intended-but-unbuilt carry-over contract warrant high severity as a necessary/necessary contradiction, or medium because the described interleaving is unreachable until a later async/re-entrant refactor relies on the documented invariant?"
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: "All three lenses support with root accepted and high severity kept; no conflicting stance, root, or severity positions exist, so there is nothing to deliberate."
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: "All three lenses support with root accepted and high severity kept (duplicate cluster with issue-001 via rel-002); no conflicting positions exist, so there is nothing to deliberate."
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: "The runtime mixed-stance signal is not a material conflict: logic's surface_only / insufficient_evidence position is an explicit deference — it affirms the surface facts (enqueuedAt never read, second internally sampled timestamp) and states that root and severity adjudication lie outside logic's verdict basis, deferring to the semantics evidence. The applicable stances (coverage, semantics) agree on the root and on medium severity, so no competing claims remain to deliberate."

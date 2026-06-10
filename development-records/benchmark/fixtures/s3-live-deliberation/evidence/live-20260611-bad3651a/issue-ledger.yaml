@@ -1,0 +1,400 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: >-
+      Window-start and window-close use different time authorities (internal
+      Date.now() vs caller-supplied now) with no declared same-clock
+      precondition, so the flush close obligation is violable with
+      declared-legal inputs.
+    root_confidence: medium
+    surface_finding_ids: [finding-001]
+    relation_refs: []
+    raised_by_lens_ids: [logic]
+    issue_statement: >-
+      Window start and window close are judged on two different time
+      authorities — enqueue binds windowStartedAt to the internal Date.now()
+      wall clock while flush evaluates closure against an arbitrary
+      caller-supplied now — and no same-clock precondition is declared, so
+      the claim set {C5, C6, R1, R3} is jointly satisfiable only under an
+      undeclared premise and the documented flush close obligation is
+      violable over the full declared input domain of flush(now).
+    proposed_action: >-
+      Unify the time authority: parameterize enqueue on the same clock
+      (enqueue(item, now)), drop the now parameter and use Date.now() in
+      flush, or inject a single clock function at construction used by both
+      methods; declare the clock-source contract on the API doc.
+    affected_purpose: >-
+      correctness and verifiability of the flush contract (declared review
+      goals: correctness, verifiability)
+    failure_condition: >-
+      any flush caller whose now is not sampled from the same wall clock that
+      enqueue used: deterministic-clock tests, monotonic-time-derived values,
+      cross-process or skewed clock sources
+    impact: >-
+      digests are never emitted for the affected window (perpetual [] read as
+      "window still open") or are emitted before the window elapses; the 30s
+      batching contract is silently broken and the documented [] meaning
+      becomes permanently misleading
+    evidence_refs:
+      - "round1/logic.md#finding-1"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:27-28"
+      - "notification-batcher.ts:30-32"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: >-
+      Relation-graph review connects finding-001 only through duplicates
+      relations (rel-001 from finding-005, rel-002 from finding-009) and the
+      enables relation rel-005 toward finding-003; duplicates and enables are
+      not same_root_candidate merge evidence under the issue-ledger contract,
+      so the finding remains its own root-cause issue.
+  - issue_id: issue-002
+    root_cause_hypothesis: >-
+      The flush reset clears the whole pending map instead of removing only
+      the entries that were flushed into the digest, making the documented
+      check-to-reset carry-over guarantee unsatisfiable whenever such an
+      enqueue occurs.
+    root_confidence: medium
+    surface_finding_ids: [finding-002]
+    relation_refs: []
+    raised_by_lens_ids: [logic]
+    issue_statement: >-
+      The reset comment declares that notifications enqueued between the
+      window-close check and the reset are carried into the next window, but
+      pending.clear() unconditionally empties the entire map at the same
+      program point; the code guarantees the negation of the comment's
+      guarantee, so the documented preservation property is vacuous today and
+      becomes silent notification loss under any async/concurrent
+      realization.
+    proposed_action: >-
+      Make the comment true or make it honest: delete only the flushed
+      entries (snapshot digested keys/items, then delete those specific
+      entries) so post-check arrivals genuinely persist, or rewrite the
+      comment to state that the reset drops everything currently pending and
+      relies on synchronous execution.
+    affected_purpose: >-
+      correctness (no silent notification loss) and regression_risk (declared
+      review goals)
+    failure_condition: >-
+      any realization in which enqueue can interleave with flush between the
+      close check and clear(): an async refactor of flush, concurrent
+      callers, or re-entrant enqueue
+    impact: >-
+      silent notification loss while the in-code documentation asserts the
+      opposite guarantee; future maintainers relying on the documented
+      invariant will ship the loss without noticing
+    evidence_refs:
+      - "round1/logic.md#finding-2"
+      - "notification-batcher.ts:32"
+      - "notification-batcher.ts:34-36"
+      - "notification-batcher.ts:37-39"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: >-
+      Relation-graph review connects finding-002 only through duplicates
+      relations (rel-003 from finding-006, rel-004 from finding-010);
+      duplicates is not same_root_candidate merge evidence under the
+      issue-ledger contract, so the finding remains its own root-cause issue.
+  - issue_id: issue-003
+    root_cause_hypothesis: >-
+      flush conflates two distinct states ("no window started" and "window
+      open, not yet closed") into a single [] output while the doc defines
+      only one meaning for it, so the definition contradicts the producing
+      rule in the reachable no-window state.
+    root_confidence: medium
+    surface_finding_ids: [finding-003]
+    relation_refs: []
+    raised_by_lens_ids: [logic]
+    issue_statement: >-
+      The doc defines [] to mean "window still open", but flush also returns
+      [] in the reachable state windowStartedAt === null in which no window
+      is open; one return value carries two undistinguished meanings, and
+      under finding-001's clock-skew condition the misreading turns from a
+      transient ambiguity into a permanently misleading caller-facing
+      reading.
+    proposed_action: >-
+      Widen the documented meaning ("[] means there is nothing to flush yet:
+      no window has started, or the window is still open") or make the
+      states distinguishable in the signature (e.g. return null for "no
+      window" vs [] for "window open"), keeping C6 consistent with whichever
+      is chosen.
+    affected_purpose: >-
+      verifiability of the caller-facing contract; correctness of caller-side
+      state interpretation (declared review goals)
+    failure_condition: >-
+      a caller or monitor branches on the documented meaning of [] in the
+      no-window state, or operates under finding-001's clock-skew condition
+      where the misleading reading persists indefinitely
+    impact: >-
+      misclassification of batcher state by polling callers; tests written
+      against the documented meaning validate the wrong semantics
+    evidence_refs:
+      - "round1/logic.md#finding-3"
+      - "notification-batcher.ts:28"
+      - "notification-batcher.ts:31"
+      - "notification-batcher.ts:40"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: >-
+      finding-003 is linked only by the enables relation rel-005 from
+      finding-001, which records persistence-enablement of an independent
+      definition-vs-rule contradiction, not a shared root; no
+      same_root_candidate relation supports a merge.
+  - issue_id: issue-004
+    root_cause_hypothesis: >-
+      The design never designates a single canonical time authority for the
+      batcher; the enqueue/flush clock split (internal Date.now() vs
+      caller-supplied now) and the inert, caller-trusted enqueuedAt field
+      beside the internally stamped windowStartedAt are two manifestations of
+      that one missing designation. Falsifiable: a fix that injects one clock
+      owning every timestamp in the file should dissolve both defects; if
+      either survives such a fix, the common-root claim is wrong.
+    root_confidence: medium
+    surface_finding_ids: [finding-005, finding-007]
+    relation_refs: [rel-007]
+    raised_by_lens_ids: [coverage]
+    issue_statement: >-
+      No single time authority is designated anywhere in the batcher: the
+      window lifecycle is governed by two parallel, unreconciled clocks
+      (Date.now() in enqueue vs caller-injected now in flush), and the
+      entry-time record is declared on enqueuedAt yet never stamped or read
+      by the entry-owning method, which re-measures entry time from its own
+      clock — one undesignated-authority root with two surface
+      manifestations whose fixes are coupled.
+    proposed_action: >-
+      Designate a single time authority owning every timestamp in the file:
+      inject a constructor-supplied clock used by both enqueue and flush (or
+      have flush own time internally via Date.now()), and assign enqueuedAt
+      stamping to the entry owner from that same clock (or re-document it as
+      caller-asserted creation time); at minimum document the required time
+      base on flush(now).
+    affected_purpose: >-
+      correctness review goal — window-closure contract of the enqueue/flush
+      pair / verifiability review goal — trustworthiness of the documented
+      entry-time record
+    failure_condition: >-
+      any caller supplying now from a different time base than Date.now()
+      (performance.now(), seconds instead of ms, or a simulated test clock) /
+      any caller supplying an inaccurate, stale, or fabricated enqueuedAt,
+      whose divergence from actual entry time is unbounded and undetectable
+      within the target
+    impact: >-
+      window closure fails in both directions — never closes (notifications
+      never delivered) or closes immediately — because the closure
+      subtraction mixes two unreconciled time bases / downstream consumers
+      (ordering, age-based expiry, audit) that trust the documented
+      entry-time semantics build on a record no component guarantees, while
+      a second parallel entry-adjacent timestamp coexists with no designated
+      canonical source
+    evidence_refs:
+      - "round1/coverage.md#finding-1"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:30-32"
+      - "round1/coverage.md#finding-3"
+      - "notification-batcher.ts:8-9"
+      - "notification-batcher.ts:19-24"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-005
+    root_cause_hypothesis: >-
+      The reset mechanism was written at window granularity while the
+      documented guarantee is written at item granularity; the
+      item-granularity concept ("late-enqueued notification") has no
+      representation in the code.
+    root_confidence: medium
+    surface_finding_ids: [finding-006]
+    relation_refs: []
+    raised_by_lens_ids: [coverage]
+    issue_statement: >-
+      The comment declares that notifications enqueued between the
+      window-close check and the reset are carried into the next window, but
+      no selective-removal, snapshot-then-diff, or re-queue mechanism exists
+      that could realize the guarantee; the whole-map clear() removes every
+      entry unconditionally, so the declared sub-behavior is absent from the
+      system.
+    proposed_action: >-
+      Make behavior and contract converge: implement the guarantee by
+      snapshotting the digested keys/items and deleting only those (or
+      swapping in a fresh map after capturing a reference), or retract the
+      contract by rewriting the comment to the true semantics.
+    affected_purpose: >-
+      contract-vs-behavior consistency and regression_risk (declared review
+      goals)
+    failure_condition: >-
+      a future async/concurrent refactor (e.g., awaiting a send inside the
+      digest loop) relies on the documented carry-over safety property while
+      enqueue can interleave between the close check and the reset
+    impact: >-
+      silent notification loss while documentation claims the opposite; the
+      harm is latent in the current single-threaded synchronous runtime but
+      is activated by exactly the refactor the comment invites
+    evidence_refs:
+      - "round1/coverage.md#finding-2"
+      - "notification-batcher.ts:37-39"
+      - "notification-batcher.ts:32"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: >-
+      finding-006 is linked to finding-002 only by the duplicates relation
+      rel-003; duplicates is not same_root_candidate merge evidence under
+      the issue-ledger contract, so the finding remains its own root-cause
+      issue.
+  - issue_id: issue-006
+    root_cause_hypothesis: >-
+      Split time authority introduced at line 20 versus line 30: window
+      start bound to the internal Date.now() authority while window close is
+      decided against an external now with no declared authority, making the
+      cross-clock subtraction semantically meaningless.
+    root_confidence: medium
+    surface_finding_ids: [finding-009]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: >-
+      Two distinct time concepts — internal wall-clock now and
+      caller-supplied now — share one name without a unifying contract: the
+      expression now - windowStartedAt subtracts an internally sourced
+      Date.now() value from a caller-supplied number whose time source is
+      never declared, so the window-duration semantics are not guaranteed by
+      the contract, and the file's caller-supplied epoch-ms precedent
+      (enqueuedAt) makes a divergent caller clock an in-contract scenario.
+    proposed_action: >-
+      Establish a single time authority: drop the parameter and use
+      Date.now() inside flush, make both sides caller-supplied, or inject a
+      clock dependency used by both methods; in all cases document the
+      required time source of now.
+    affected_purpose: >-
+      correctness (declared review goal) — window-duration semantics of the
+      flush contract
+    failure_condition: >-
+      a caller supplies now from a different clock than the internal
+      Date.now() capture: performance.now() (monotonic, origin near process
+      start) or an injected test clock — an in-contract scenario given the
+      file's caller-supplied epoch-ms precedent
+    impact: >-
+      with a monotonic now the subtraction is hugely negative so flush
+      returns [] forever, which the doc defines as "window still open" —
+      notifications are never delivered; with a skewed or mocked clock the
+      window can also close instantly
+    evidence_refs:
+      - "round1/semantics.md#f1"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:30-32"
+      - "notification-batcher.ts:8"
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: >-
+      finding-009 is linked to finding-001 only by the duplicates relation
+      rel-002; duplicates is not same_root_candidate merge evidence under
+      the issue-ledger contract, so the finding remains its own root-cause
+      issue.
+  - issue_id: issue-007
+    root_cause_hypothesis: >-
+      The comment encodes an intended-but-unbuilt behavior: a carry-over
+      contract with no implementing mechanism in the code.
+    root_confidence: medium
+    surface_finding_ids: [finding-010]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: >-
+      The reset comment states that notifications enqueued between the
+      window-close check and the reset are carried into the next window, but
+      pending.clear() removes all entries unconditionally and no snapshot
+      distinguishes entries being digested from entries that arrived after
+      the check; the comment describes a scenario the current synchronous
+      code neither encounters nor handles, and a later async/re-entrant
+      refactor relying on the documented invariant inherits silent
+      notification loss.
+    proposed_action: >-
+      Either implement the stated semantics (snapshot the keys/entries to
+      digest, delete only those keys, leaving later arrivals in place) or
+      rewrite the comment to state the actual behavior ("all entries pending
+      at flush time are digested and cleared; nothing is carried over").
+    affected_purpose: >-
+      correctness, maintainability, and regression_risk (declared review
+      goals) — contract-vs-behavior consistency of the flush reset
+    failure_condition: >-
+      a maintainer later makes flush async or re-entrant and relies on the
+      documented carry-over invariant; the described interleaving then
+      becomes reachable while the code provides no implementing mechanism
+    impact: >-
+      silent notification loss inherited from a documented invariant the
+      code does not provide; today the comment describes a scenario the code
+      neither encounters nor handles as stated
+    evidence_refs:
+      - "round1/semantics.md#f2"
+      - "notification-batcher.ts:37-39"
+      - "notification-batcher.ts:34"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: >-
+      finding-010 is linked to finding-002 only by the duplicates relation
+      rel-004; duplicates is not same_root_candidate merge evidence under
+      the issue-ledger contract, so the finding remains its own root-cause
+      issue.
+  - issue_id: issue-008
+    root_cause_hypothesis: >-
+      A derivable value (windowStartedAt) is modeled as an independent input
+      from a second clock while its source field (enqueuedAt) is kept inert,
+      leaving two authorities for the one meaning "time the notification
+      entered the batch".
+    root_confidence: medium
+    surface_finding_ids: [finding-011]
+    relation_refs: []
+    raised_by_lens_ids: [semantics]
+    issue_statement: >-
+      The meaning "time the notification entered the batch" exists twice —
+      as the caller-supplied enqueuedAt field and as the internal Date.now()
+      capture in enqueue() — and the two are never unified: the batcher
+      never reads enqueuedAt, so the interface advertises a timestamp
+      contract with no behavioral meaning while the window anchors to a
+      divergent second source.
+    proposed_action: >-
+      Pick one source of truth: derive the window anchor from pending items'
+      enqueuedAt (e.g., window starts at the first item's enqueuedAt), or
+      remove enqueuedAt from the interface / explicitly document that it is
+      payload-only metadata that does not affect windowing.
+    affected_purpose: >-
+      correctness and verifiability (callers misled into believing
+      enqueuedAt drives windowing) and regression_risk (duplicate time
+      sources enable drift) — declared review goals
+    failure_condition: >-
+      a caller backfills or replays notifications with enqueuedAt in the
+      past — an in-contract use given the field's documentation; the window
+      then silently anchors to processing time instead of the declared entry
+      time
+    impact: >-
+      the field's name and the system's behavior diverge: the interface
+      advertises a timestamp contract with no behavioral meaning, and the
+      duplicate source enables undetected drift between the two timestamps
+    evidence_refs:
+      - "round1/semantics.md#f3"
+      - "notification-batcher.ts:8-9"
+      - "notification-batcher.ts:20"
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: >-
+      finding-011 is linked to finding-007 only by the shared_cause_candidate
+      relation rel-006, which the contract preserves as cross-issue
+      dependency context, not merge evidence; the findings assert distinct
+      defects with different affected purposes, so finding-011 remains its
+      own root-cause issue and the shared cause is recorded in
+      issue_dependencies.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids: [issue-004, issue-008]
+    relation_refs: [rel-006]
+    rationale: >-
+      Runtime projection: these distinct issues share preserved relation
+      graph cause context (Entry time has two parallel representations — the
+      caller-supplied enqueuedAt field and the internal Date.now() capture in
+      enqueue() — with no single designated authority: enqueue neither stamps
+      nor reads enqueuedAt and re-measures entry time from its own clock.).
+validation:
+  unclustered_finding_ids:
+    - finding-004
+    - finding-008
+    - finding-012
+    - finding-013

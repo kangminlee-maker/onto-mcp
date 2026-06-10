@@ -1,0 +1,177 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+lens_id: "logic"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "This lens's own primary finding (finding-l1): C3 (windowStartedAt
+      sampled from ambient Date.now() at enqueue) and C4+C6 (closure computed
+      from caller-supplied now at flush) are jointly satisfiable only under an
+      undeclared shared-clock necessary condition, so C4 is violated for
+      permitted inputs. The root hypothesis states exactly that necessary
+      condition and carries a well-formed falsification test (bind both closure
+      operands to one declared clock authority)."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/logic.md#finding-l1
+  - issue_id: issue-002
+    stance: support
+    rationale: "This lens's own finding (finding-l2): C7 (carry-over guarantee,
+      lines 37-38) and C8 (emit-all-then-clear, lines 34-36,39) are jointly
+      unsatisfiable — the guaranteed interval is empty under synchronous
+      execution (vacuous obligation), and in the only materially reachable
+      reading items are emitted in the current digest and cleared, inverting
+      the guarantee. The hypothesis correctly locates the absence of any
+      membership-snapshotting mechanism as the root."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/logic.md#finding-l2
+  - issue_id: issue-003
+    stance: support
+    rationale: "This lens's own finding (finding-l3): the documented conditional
+      C5 ('empty array means window still open') is false in the reachable
+      no-window state (windowStartedAt === null at line 31), where flush also
+      returns []. A formal contract-vs-behavior inconsistency, correctly kept
+      low severity since it is behaviorally benign for pure polling loops."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/logic.md#finding-l3
+  - issue_id: issue-004
+    stance: support
+    rationale: "This lens's own finding (finding-l4): two recordings purport to
+      denote the first-enqueue instant (caller-supplied enqueuedAt vs
+      internally sampled windowStartedAt) with no reconciliation rule, so the
+      field's documented definition holds only under the undeclared condition
+      that callers pass Date.now() at call time — the model permits states in
+      which the definition is false. Latent (no current reader), so low
+      severity is right."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/logic.md#finding-l4
+  - issue_id: issue-005
+    stance: support
+    rationale: "Coverage's missing clock-authority concept is the same undeclared
+      necessary condition this lens identified as the premise of the closure
+      contradiction in finding-l1 (rel-001 records the identical cause_claim
+      over identical evidence anchors, lines 20 and 30-32). From the logic
+      side, the absence of any declared inter-clock binding is precisely what
+      makes the closure rule unsatisfiable for permitted inputs, so the
+      conceptual-absence framing and the high severity both hold."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-005
+      - finding-relation-graph.yaml#rel-001
+      - round1/logic.md#finding-l1
+  - issue_id: issue-006
+    stance: support
+    rationale: "From the exported surface (enqueue, window-gated flush,
+      pendingUserCount) it follows deductively that no unconditional exit path
+      exists for pending items: every exit requires a future external poll that
+      also satisfies the window predicate. The silent-loss conclusion at
+      shutdown is a valid inference rather than a contradiction of any declared
+      claim, and the hypothesis carries a sound refutation condition (loss
+      persisting despite a terminal operation). No declared contract claim
+      conflicts with this issue."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-006
+  - issue_id: issue-007
+    stance: support
+    rationale: "Logically sound absence claim: enqueue appends unconditionally
+      and the sole reducer (flush) is poll- and window-gated, so pending growth
+      proportional to enqueue rate times poll gap follows necessarily. No
+      capacity or overflow claim exists anywhere in the contract to contradict,
+      and the hypothesis's refutation test (growth persisting under a
+      documented bound) is well-formed."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-007
+  - issue_id: issue-008
+    stance: support
+    rationale: "Both premises are decidable from the target: enqueuedAt is never
+      read (consistent with this lens's finding-l4) and flush destroys state
+      while persisting nothing, so unverifiability of the carry-over comment
+      and non-reconstructability of past windows follow validly. This also
+      explains why the C7/C8 contradiction in finding-l2 can never be checked
+      against delivery evidence. Medium root confidence is appropriate since
+      the deficit admits two distinct remedies (remove field vs add consumer)."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-008
+      - round1/logic.md#finding-l4
+  - issue_id: issue-009
+    stance: support
+    rationale: "A user-breadth count is formally invariant to per-user item
+      counts and item ages: for any fixed pendingUserCount value there exist
+      states with arbitrarily many or arbitrarily old pending items, so the
+      provided metric provably cannot distinguish a stalled-poll state from a
+      healthy one. The undetectability claim is a valid inference from the
+      metric's type, not merely an empirical observation."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-009
+  - issue_id: issue-010
+    stance: support
+    rationale: "Same defect this lens established independently as finding-l2
+      (rel-004 records the duplication): C7 and C8 are jointly unsatisfiable
+      for any item present at flush time. The semantics framing — guarantee
+      asserted over an interleaving point the synchronous model makes
+      unreachable, with clear() inverting the outcome if it ever became
+      reachable — is logically equivalent to this lens's vacuous-obligation
+      analysis, and the snapshot-or-redocument resolution matches finding-l2's
+      proposed action."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-010
+      - finding-relation-graph.yaml#rel-004
+      - round1/logic.md#finding-l2
+  - issue_id: issue-011
+    stance: support
+    rationale: "The compound root 'the batcher owns no time fact' validly
+      generalizes two conditions this lens derived separately: the unbound
+      closure clocks of finding-l1 (rel-002 records the identical terminal
+      cause) and the unreconciled enqueuedAt definition of finding-l4. The
+      conjunction is internally consistent, and the hypothesis correctly builds
+      in its own refutation test — clock unification alone leaving finding-012
+      intact without the stamping change — which justifies medium rather than
+      high root confidence. Medium severity is coherent given the high-severity
+      closure contradiction is owned by issue-001/issue-005."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-011
+      - finding-relation-graph.yaml#rel-002
+      - round1/logic.md#finding-l1
+      - round1/logic.md#finding-l4
+  - issue_id: issue-012
+    stance: support
+    rationale: "The formally checkable components hold from this lens's own
+      results: the empty-return doc inaccuracy is exactly the C5 violation
+      established in finding-l3, and late-item absorption into the closing
+      digest follows from the emit-all-then-clear behavior analyzed in
+      finding-l2. The remaining component (flush conventionally means 'force
+      out') rests on lexical convention outside formal logic, but it does not
+      conflict with any derivation, so the issue stands as stated at low
+      severity."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-012
+      - round1/logic.md#finding-l3
+      - round1/logic.md#finding-l2
+validation:
+  missing_issues: []

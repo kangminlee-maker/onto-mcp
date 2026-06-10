@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-005"
+lens_id: "logic"
+difference_explanation: "Both lenses support the issue and accept the granularity-mismatch root; the planned conflict was severity — logic raised to high on the formally established contradiction, coverage kept the recorded medium on its latency-of-harm assessment. Resolved in the live exchange: logic withdrew the raise and accepts medium, converging the duplicate family (issue-002/-005/-007, rel-003/rel-004) uniformly at medium."
+response_to_other_positions: "Coverage's live argument is accepted in full: severity is an impact scale over reachable executions of the bounded target, not a proof-strength scale. 'The code guarantees the negation' establishes certainty of the contradiction, not magnitude or reachability of harm — and logic's own role contract separates verdict state from severity, so pricing proof strength into severity was logic's calibration error. The antecedent (enqueue interleaved in the check-to-reset interval) is unoccupiable in every declared-legal execution of the current synchronous target: present harm is a false documented invariant (verifiability/maintainability) plus the invited-refactor regression_risk channel, which raises risk WITHIN medium rather than creating a present failure path. The calibration anchor stands: issue-001/-004/-006 are high because a declared-legal flush(now) input breaks delivery today with no refactor needed; grading certainty-of-contradiction as high would flatten that distinction. On coverage's consistency point: agreed that the family must converge — one factual correction from the live exchange: issue-007 IS planned for deliberation (semantics+logic, priority 50), and logic is converging it to medium there as well, so all three copies land coherently at medium. Logic also notes the root family coherence: this issue's granularity-mismatch root is already direction-neutral, matching the direction-neutral restatement adopted for issue-002."
+updated_stance: support
+changed: true
+change_reason: "Severity position moved from raises to accepting the recorded medium: coverage's impact-reachability calibration is correct — the loss antecedent is modification-conditional (unoccupiable with declared-legal inputs in the bounded synchronous target), unlike the input-reachable clock split, and the formal certainty of the contradiction belongs to verdict confidence, not severity. The withdrawal also converges the duplicate family (issue-002/-005/-007) at one severity."
+accepted_root_hypothesis: "Recorded root accepted as-is: the reset mechanism was written at window granularity while the documented guarantee is written at item granularity; the item-granularity concept ('late-enqueued notification') has no representation in the code. Noted as the same direction-neutral defect family root as issue-002's restatement (the documented preservation property has no implementing mechanism)."
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-005"
+  - "round1/logic.md#finding-2"
+  - "round1/coverage.md#finding-2"
+  - "notification-batcher.ts:37-39"
+  - "notification-batcher.ts:32"
+  - "notification-batcher.ts:34-36"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-005.logic"

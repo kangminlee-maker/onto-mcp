@@ -1,0 +1,40 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+planned_issues: []
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: "All three lenses (logic, coverage, semantics) support the issue, accept the single-clock-authority root hypothesis, and keep high severity; no runtime conflict signals and no diverging claims to deliberate."
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: "Unanimous support/accepts/keeps across logic, coverage, and semantics on the carry-over-vs-clear contradiction and its no-snapshot-mechanism root; no conflicting stance or severity position exists."
+  - issue_id: issue-003
+    reason_code: non_material_issue
+    reason: "Low severity (material_issue: false) — overloaded empty-return doc is behaviorally benign for polling callers; non-material findings do not enter planned deliberation, and stances are also unanimous."
+  - issue_id: issue-004
+    reason_code: non_material_issue
+    reason: "Low severity (material_issue: false) — latent enqueuedAt definitional inconsistency with no current reader; below the material-severity candidate boundary, with unanimous supporting stances."
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: "All lenses support the missing clock-authority concept, accept the root hypothesis, and keep high severity; shared-cause dependencies with issue-001/issue-011 are recorded as distinct issues, not stance conflicts."
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: "Unanimous support/accepts/keeps on the missing terminal-lifecycle operation and medium severity; the shared mid-path cause with issue-007 (dep-004) is agreed by all lenses to be a distinct-root relation, raising no conflict."
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: "All lenses support the missing capacity/overflow/backpressure concept, accept the root hypothesis, and keep medium severity; no conflicting position on root, action, or severity."
+  - issue_id: issue-008
+    reason_code: non_material_issue
+    reason: "Low severity (material_issue: false) — verifiability-scoped deficit (unread enqueuedAt, no delivery record); below the material boundary and unanimously supported."
+  - issue_id: issue-009
+    reason_code: non_material_issue
+    reason: "Low severity (material_issue: false) — observability skew of pendingUserCount is an operability gap, not a correctness defect; non-material with unanimous stances."
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: "Unanimous support/accepts/keeps on the false carry-over comment vs clear() inversion and medium severity; logic and coverage corroborate semantics' own finding via rel-004 with no diverging claim."
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: "All lenses accept the compound batcher-owns-no-time-fact root including its built-in refutation condition, and keep medium severity; rel-006 same-root pairing and dep-002/dep-003 shared causes are agreed, leaving nothing to deliberate."
+  - issue_id: issue-012
+    reason_code: non_material_issue
+    reason: "Low severity (material_issue: false) — flush name/doc overpromise is a maintainability fit issue with internally consistent behavior; below the material boundary, with unanimous supporting stances."

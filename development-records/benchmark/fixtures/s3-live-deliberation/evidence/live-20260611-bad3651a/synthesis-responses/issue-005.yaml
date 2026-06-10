@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-005"
+issue_id: "issue-005"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-005"
+conclusion: >-
+  The comment at lines 37-38 declares that notifications enqueued between the
+  window-close check and the reset are carried into the next window, but no
+  selective-removal, snapshot-then-diff, or re-queue mechanism exists that
+  could realize that guarantee: the reset is a whole-map clear() that removes
+  every entry unconditionally, so the declared sub-behavior is absent from the
+  system. The harm is latent in the current single-threaded synchronous
+  runtime and is activated by exactly the async/concurrent refactor the
+  comment invites. Deliberation resolved the issue at medium severity (the
+  single cluster decision for issue-002/issue-005/issue-007), and it must
+  close before that next stage through one implement-or-retract decision.
+materiality_explanation: >-
+  The declared review goals explicitly include contract-vs-behavior
+  consistency and regression_risk, and this issue weakens both: the
+  documentation claims a carry-over safety property the mechanism does not
+  provide, and the comment invites a future async/concurrent refactor (for
+  example awaiting a send inside the digest loop) to rely on that property
+  while enqueue can interleave between the close check and the reset. The
+  impact is silent notification loss while documentation claims the opposite.
+  Severity is medium per the impact-reachability calibration: the loss
+  antecedent is modification-conditional — unoccupiable with declared-legal
+  inputs in the bounded synchronous target — unlike the input-reachable clock
+  split, so it blocks the next stage rather than current operation.
+root_cause_explanation: >-
+  The accepted root, taken as recorded, is a granularity mismatch at the point
+  of specification: the reset mechanism was written at window granularity
+  while the documented guarantee is written at item granularity, and the
+  item-granularity concept ("late-enqueued notification") has no
+  representation in the code. This is the starting point because every
+  downstream fact follows from it — a reset conceived per-window can only be a
+  whole-map operation, so no code path could ever distinguish a late-enqueued
+  item from a flushed one, making the documented item-level carry-over
+  unimplementable as written rather than merely unimplemented.
+causal_path_explanation: >-
+  The causal path runs in three observed steps on coverage finding-006. First,
+  the window/item granularity mismatch leaves the late-enqueued-notification
+  concept unrepresented in the code (lines 37-39). Second, because the reset
+  is implemented as a whole-map clear() rather than removal of only the
+  flushed items, every entry — including any hypothetical late arrival — is
+  removed unconditionally (line 39). Third, the declared carry-over guarantee
+  at lines 37-38 is therefore contradicted by the reset: no item present but
+  not yet digested can be "carried into the next window". All three lenses
+  support this path — logic established the same contradiction formally as its
+  finding-002 (the documented invariant is necessarily false in every
+  execution where its antecedent holds), and semantics confirmed the ghost
+  concept reading as its finding-010 — so the absence is directly observed,
+  not inferred. Whether and when flush will actually be refactored to async or
+  called concurrently remains outside the bounded single-file target.
+action_explanation: >-
+  Make behavior and contract converge through one explicit decision with two
+  candidate paths. Either implement the guarantee before release — snapshot
+  the digested keys/items and delete only those, or swap in a fresh map after
+  capturing a reference — or accept the risk and retract the contract by
+  rewriting the comment to the true semantics ("the entire pending map is
+  dropped at flush; flush must not be interleaved with enqueue"). The ordering
+  constraint is that this implement-or-retract decision must close before any
+  async/concurrent refactor of flush, because that refactor is precisely the
+  failure condition; the closure obligation is must_close_before_next_stage.
+  The decision should also stay coherent with the rel-003/rel-004 duplicate
+  cluster (issue-002/issue-007), whose severity was fixed at medium in the
+  same single decision.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-005"
+  - "problem-framing.yaml#issue-005"
+  - "deliberation-resolution.yaml#issue-005"
+  - "finding-ledger.yaml#finding-006"
+  - "issue-stance-matrix.yaml#stances.issue-005.logic"
+  - "issue-stance-matrix.yaml#stances.issue-005.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-005.semantics"

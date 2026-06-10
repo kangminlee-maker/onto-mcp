@@ -1,0 +1,24 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+work_item_id: "synthesis:issue-005"
+issue_id: "issue-005"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-005"
+conclusion: "Window-closure decisions mix two undeclared time authorities — internal Date.now() at enqueue (line 20) and caller-supplied now at flush (line 30) — and no single-origin time-source authority concept exists anywhere in the file. This is a high-severity, material correctness defect framed as the root cause shared with issue-001 and issue-011: designate one time authority for window anchoring and closure and document it on the interface."
+materiality_explanation: "The issue weakens the declared review goal `correctness` for window-closure decisions under the explicitly requested time-source-semantics focus. Whenever the caller's now comes from a different epoch or skewed source than Date.now() — a test clock, monotonic clock, or mocked scheduler time — the closure predicate at line 32 becomes a cross-clock subtraction, making the window close never, early, or instantly. The core window contract thus fails under permitted caller behavior inside the bounded target, which is why it stands as a current_blocker rather than a latent concern."
+root_cause_explanation: "The contract lacks any clock-authority concept: enqueue takes no clock parameter and nothing documents a requirement on the source of flush's now (absence across lines 18-32), so the two time authorities are free to diverge. This absence is the starting point — it is directly verifiable across the file (judgment state: observed), and the problem framing classifies this issue as the root_cause on which issue-001's closure contradiction rests (dep-001) and which issue-011 reaches from the naming side (dep-003). The hypothesis is falsifiable: if designating a single time authority for both entry points eliminates the cross-clock subtraction, it holds; root confidence is high."
+causal_path_explanation: "The coverage lens's finding-005 chain has three steps over evidence round1/coverage.md#finding-1, running from symptom back to the root step finding-005.cause-003. Step finding-005.cause-001: the window closes never, early, or instantly whenever the caller's now diverges from the Date.now() timeline, violating the declared correctness goal. That is caused by finding-005.cause-002: the closure predicate (line 32) is a cross-clock subtraction — windowStartedAt is anchored to the internal wall clock (line 20) while now is caller-supplied (line 30). That in turn is caused by the root step finding-005.cause-003: no clock-authority concept exists in the contract, so nothing binds the caller's time source to the internal anchor's source and the two authorities are free to diverge. Coverage framed this as a dimensional deficit — one time-dependent value (window age) parallel-managed across two time sources with no single-origin authority designation — squarely inside the requested time-source-semantics scope; logic confirms the same absent binding is the premise of its closure contradiction (rel-001), and semantics reached the identical absence through naming analysis (rel-003: WINDOW_MS cannot denote 30 seconds of any single clock). Nothing is unresolved beyond evidence."
+action_explanation: "Designate a single time authority for window anchoring and closure — a shared caller-supplied time source threaded through both methods (the smallest in-target fix: stop calling Date.now() in enqueue and anchor the window from the same caller-supplied source, e.g. enqueue(item, now)) or an injected clock used by both methods — and document on flush that its now must come from that same authority. The projected action class is fix_now with closure obligation must_close_in_target. Ordering matters: this issue is the shared cause behind issue-001's closure contradiction (dep-001) and converges with issue-011's missing-single-time-authority and false shared-timebase naming finding (dep-003), so resolving it first closes the common root for all three rather than treating each symptom separately. Deliberation was skipped (consistent_stances): all three lenses support the missing clock-authority concept, accept the root hypothesis, and keep high severity; the shared-cause dependencies are agreed dependency context, not stance conflicts, and no follow-up evidence is required."
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-005"
+  - "problem-framing.yaml#issue-005"
+  - "deliberation-resolution.yaml#issue-005"
+  - "finding-ledger.yaml#finding-005"
+  - "issue-stance-matrix.yaml#stances.issue-005.logic"
+  - "issue-stance-matrix.yaml#stances.issue-005.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-005.semantics"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-001"
+  - "issue-ledger.yaml#dep-003"
+  - "finding-relation-graph.yaml#rel-003"

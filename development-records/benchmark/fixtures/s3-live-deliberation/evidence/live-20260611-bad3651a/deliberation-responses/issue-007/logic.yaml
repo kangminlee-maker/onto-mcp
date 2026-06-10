@@ -1,0 +1,19 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-007"
+lens_id: "logic"
+difference_explanation: "Both lenses support the issue; the planned conflict was severity — logic raised to high on the necessary/necessary strengthening, semantics (originating lens) kept the recorded medium per the synchronous-runtime latency of the harm. Resolved in the live exchange: logic withdrew the raise and accepts medium, converging the duplicate family (issue-002/-005/-007) uniformly; semantics accepted logic's necessary/necessary strengthening as raising root confidence, and logic proposed a direction-neutral root phrasing for family coherence."
+response_to_other_positions: "Semantics' live position is accepted on severity: no declared-legal input to the current synchronous code exhibits the loss — activation requires a future async/re-entrant refactor — so the defect is a false safety invariant in the regression_risk channel, which is the medium band; the calibration anchor (issue-001/-006 high because any caller can pass a divergent now today) is the same one logic adopted for issue-002 and issue-005, and one defect carries one severity across the cluster. Logic's necessary/necessary strengthening stands and semantics has accepted it: the code does not merely fail to implement the guarantee, it guarantees the complementary property (pending becomes empty) at the same program point, which is why implement-or-retract is the complete fix space. One symmetry note from the live exchange, offered for the resolution: the recorded root ('the comment encodes an intended-but-unbuilt behavior') carries the mirror-image intent presumption to the one the panel removed from issue-002's root — there the hypothesis presumed the code side defective, here it presumes the comment encodes intent; both intent facts are unverifiable in the bounded target. For family coherence logic proposes the same direction-neutral root adopted for issue-002: the documented preservation property has no implementing mechanism."
+updated_stance: support
+changed: true
+change_reason: "Severity position moved from raises to accepting the recorded medium: the loss antecedent is modification-conditional (no declared-legal input to the current synchronous target reaches it), so per the impact-reachability calibration adopted across the duplicate family (issue-002/-005/-007) the formal certainty of the contradiction informs verdict confidence, not severity. Additionally, logic now proposes the direction-neutral root restatement in place of accepting the recorded intent-presuming phrasing, mirroring the issue-002 root convergence."
+accepted_root_hypothesis: "Direction-neutral restatement proposed for family coherence with issue-002: the documented preservation property (check-to-reset enqueues carried into the next window) has no implementing mechanism — C7 and R5 are jointly unsatisfiable, the code guaranteeing the complementary property at the same program point — without target-internal evidence whether the comment encodes unbuilt intent or the reset lost a required carve-out."
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-007"
+  - "round1/logic.md#finding-2"
+  - "round1/semantics.md#f2"
+  - "notification-batcher.ts:37-39"
+  - "notification-batcher.ts:34"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-007.logic"

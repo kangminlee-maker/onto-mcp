@@ -1,0 +1,138 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+lens_id: coverage
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Coverage independently observed the same defect as a dimension
+      deficit (finding-005, recorded as duplicate via rel-001): the window
+      lifecycle is governed by two parallel time sources with no single
+      authority designated. The logic lens's undeclared same-clock premise is
+      the contract-side statement of that missing designation; evidence anchors,
+      failure condition, and bidirectional impact match coverage's own finding.
+      The deeper cross-cluster root is recorded in issue-004, which generalizes
+      but does not contradict this hypothesis."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/coverage.md#finding-1
+      - notification-batcher.ts:20
+      - notification-batcher.ts:30-32
+  - issue_id: issue-002
+    stance: support
+    rationale: "The defect is real and coverage raised it independently
+      (finding-006, duplicate via rel-003): the declared carry-over sub-behavior
+      has no implementing mechanism. Coverage graded the duplicate medium, not
+      high: in the current single-threaded synchronous realization the
+      check-to-reset interval inside one flush call cannot be interleaved by
+      enqueue, so the harm is latent and activates only under a future
+      async/concurrent refactor. Contract falsity alone, with an unreachable
+      failure condition inside the bounded target, sits at medium under the
+      declared regression_risk goal."
+    root_hypothesis_position: accepts
+    severity_position: lowers
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/coverage.md#finding-2
+      - notification-batcher.ts:37-39
+  - issue_id: issue-003
+    stance: support
+    rationale: "From the coverage perspective this is a representation-coverage
+      gap in the caller-facing output domain: the reachable no-window state has
+      no distinct representation, so one output value ([]) stands for two
+      states while the doc defines only one meaning. The hypothesis that the
+      definition contradicts the producing rule in the null state is consistent
+      with that absence framing. Medium is right: the practical reading
+      coincides today via the state invariant, and persistence of the
+      misreading depends on issue-001's clock-skew condition."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - notification-batcher.ts:31
+      - notification-batcher.ts:40
+  - issue_id: issue-004
+    stance: support
+    rationale: "This is coverage's own merged issue (findings 005 and 007 via
+      rel-007): the design never designates a single canonical time authority,
+      and the enqueue/flush clock split plus the unenforced caller-trusted
+      enqueuedAt record are two manifestations of that one missing designation.
+      The hypothesis is falsifiable as stated — one injected clock owning every
+      timestamp in the file should dissolve both defects. High severity holds:
+      the closure subtraction mixing two unreconciled time bases can break
+      window closure in both directions, a visible correctness failure inside
+      the bounded target."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/coverage.md#finding-1
+      - round1/coverage.md#finding-3
+      - rel-007
+  - issue_id: issue-005
+    stance: support
+    rationale: "This is coverage's own issue (finding-006): the comment declares
+      an item-granularity carry-over guarantee while the only reset mechanism
+      operates at window granularity (whole-map clear), so the declared
+      sub-behavior is absent from the system. The root hypothesis restates
+      coverage's causal path exactly. Medium severity holds per the
+      latency-of-harm assessment: the failure condition requires a future
+      async/concurrent realization, which the comment itself invites."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-005
+      - round1/coverage.md#finding-2
+      - notification-batcher.ts:37-39
+  - issue_id: issue-006
+    stance: support
+    rationale: "Duplicate of the defect coverage raised as finding-005 (rel-002
+      links the semantics statement to the same root): two time concepts share
+      one name with no unifying contract, which is the semantics-side statement
+      of the missing single time authority coverage observed as a dimension
+      deficit. Same anchors (lines 20, 30-32), same failure condition, same
+      bidirectional impact. High severity matches coverage's own grading; the
+      cross-cluster generalization is already recorded in issue-004."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-006
+      - round1/coverage.md#finding-1
+      - notification-batcher.ts:20
+      - notification-batcher.ts:30-32
+  - issue_id: issue-007
+    stance: support
+    rationale: "Duplicate of the defect coverage raised as finding-006 (rel-004):
+      the reset comment encodes an intended-but-unbuilt carry-over behavior with
+      no implementing mechanism in the code. The hypothesis matches coverage's
+      absence framing (declared sub-behavior unrepresented in the system).
+      Medium severity matches coverage's own grading: harm is latent in the
+      current synchronous realization and activates under the async/re-entrant
+      refactor the comment invites."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-007
+      - round1/coverage.md#finding-2
+      - notification-batcher.ts:37-39
+  - issue_id: issue-008
+    stance: support
+    rationale: "Shares the undesignated entry-time authority cause with
+      coverage's finding-007 (rel-006, preserved as dep-001): the meaning 'time
+      the notification entered the batch' exists twice — caller-supplied
+      enqueuedAt and the internal Date.now() capture — with no unification.
+      Coverage's in-scope support covers the dual-authority, unenforced-record
+      core; the inert-field aspect (field never read) is another perspective's
+      observation but does not conflict with it. The issue is correctly kept
+      distinct from issue-004: different affected purposes and independently
+      fixable defects, with the shared cause recorded as a dependency. Medium
+      severity is consistent with coverage's grading of the record-side defect."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-008
+      - round1/coverage.md#finding-3
+      - rel-006
+validation:
+  missing_issues: []

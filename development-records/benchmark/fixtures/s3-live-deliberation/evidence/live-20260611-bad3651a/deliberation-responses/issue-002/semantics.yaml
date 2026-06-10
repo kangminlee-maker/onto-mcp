@@ -1,0 +1,52 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-002"
+lens_id: "semantics"
+difference_explanation: >-
+  Residual disagreement is severity only, contested 2-to-1: logic keeps high on
+  the formal status of the C7-vs-R5 necessary/necessary contradiction plus the
+  latent loss under an async/re-entrant realization; coverage and semantics
+  grade medium because the check-to-reset interleaving is unreachable with any
+  declared-legal input in the bounded synchronous target, so the present harm
+  is a false documented invariant whose loss activation is refactor-conditional.
+  On the root there is convergence: in the live exchange coverage explicitly
+  accepted the semantics direction-neutral restatement (the documented
+  preservation property has no implementing mechanism), noting the recorded
+  clear()-side-defective phrasing presumes an intent fact the bounded target
+  cannot verify; logic accepts the recorded root but the difference from the
+  neutral form is defect-side attribution, not existence. In the final
+  exchange logic conceded severity to medium and accepted the direction-neutral
+  root, making the position unanimous (3-of-3).
+response_to_other_positions: >-
+  To logic: the necessary/necessary status establishes certainty that the
+  defect exists — certainty is not the contested variable. Severity grades what
+  harm legal inputs can realize inside the bounded target, and there the
+  antecedent (an enqueue between check and reset) is unoccupiable; logic's own
+  "vacuous under the current synchronous realization" is the reachability
+  concession, and pricing the async refactor is the definition of the medium
+  regression_risk band. High stays anchored to today-reachable failures
+  (issue-001/issue-006, where any caller can pass a divergent now). To
+  coverage: alignment recorded on both severity (medium) and the
+  direction-neutral root restatement, which matches coverage's finding-006
+  absence framing. Semantics asks resolution to decide the duplicate cluster
+  (issue-002/005/007) in one severity decision so duplicates converge at the
+  rubric-supported value.
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: >-
+  The documented check-to-reset preservation property has no implementing
+  mechanism in the code: pending.clear() guarantees the complementary property
+  (pending becomes empty) at the same program point, so implement-or-retract is
+  the complete and symmetric fix space. Whether the defect lies in the missing
+  selective-removal mechanism or in the comment asserting unbuilt intent is
+  unverifiable within the bounded target; the root should remain
+  direction-neutral. Coverage accepted this restatement in deliberation.
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-002"
+  - "round1/semantics.md#f2"
+  - "notification-batcher.ts:37-39"
+  - "notification-batcher.ts:34"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-002.semantics"

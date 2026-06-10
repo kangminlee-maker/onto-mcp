@@ -1,0 +1,441 @@
+schema_version: 1
+session_id: 20260611-bad3651a
+issues:
+  - issue_id: issue-001
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "This issue is the logic lens's own finding-001. The inter-claim
+          contradiction is formally established: {C5 close obligation, C6 []
+          meaning, R1 internal Date.now() window start, R3 caller-supplied now
+          in the close predicate} are jointly satisfiable only under an
+          undeclared same-clock necessary premise, so the documented flush close
+          obligation is violable with declared-legal inputs. The issue statement
+          and proposed unification actions restate the finding without loss."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/logic.md#finding-1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+      - lens_id: coverage
+        stance: support
+        rationale: "Coverage independently observed the same defect as a dimension
+          deficit (finding-005, recorded as duplicate via rel-001): the window
+          lifecycle is governed by two parallel time sources with no single
+          authority designated. The logic lens's undeclared same-clock premise
+          is the contract-side statement of that missing designation; evidence
+          anchors, failure condition, and bidirectional impact match coverage's
+          own finding. The deeper cross-cluster root is recorded in issue-004,
+          which generalizes but does not contradict this hypothesis."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/coverage.md#finding-1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+      - lens_id: semantics
+        stance: support
+        rationale: "Semantics independently observed this defect as finding-009 (round1
+          F1): the name 'now' underdetermines its time source while
+          windowStartedAt is bound to internal Date.now(), so the same-clock
+          premise is undeclared. The root hypothesis matches the semantics
+          causal path exactly. High severity is right because the file's own
+          caller-supplied epoch-ms precedent (enqueuedAt, line 8) makes a
+          divergent caller clock an in-contract scenario, and the failure mode
+          is silent (perpetual [] documented as 'window still open')."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-001
+          - round1/semantics.md#f1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+          - notification-batcher.ts:8
+  - issue_id: issue-002
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "This issue is the logic lens's own finding-002. C7 (carry-over
+          comment) and R5 (unconditional pending.clear()) form a
+          necessary/necessary conflict: the code guarantees the negation of the
+          documented preservation property, so the guarantee is vacuous under
+          the current synchronous realization and becomes silent notification
+          loss in any realization where the check-to-reset interval is
+          non-empty. The issue's make-true-or-make-honest action space matches
+          the finding's remediation."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+          - round1/logic.md#finding-2
+          - notification-batcher.ts:37-39
+      - lens_id: coverage
+        stance: support
+        rationale: "The defect is real and coverage raised it independently
+          (finding-006, duplicate via rel-003): the declared carry-over
+          sub-behavior has no implementing mechanism. Coverage graded the
+          duplicate medium, not high: in the current single-threaded synchronous
+          realization the check-to-reset interval inside one flush call cannot
+          be interleaved by enqueue, so the harm is latent and activates only
+          under a future async/concurrent refactor. Contract falsity alone, with
+          an unreachable failure condition inside the bounded target, sits at
+          medium under the declared regression_risk goal."
+        root_hypothesis_position: accepts
+        severity_position: lowers
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+          - round1/coverage.md#finding-2
+          - notification-batcher.ts:37-39
+      - lens_id: semantics
+        stance: support
+        rationale: "The contract-vs-behavior mismatch is real; semantics observed it
+          independently as finding-010 (round1 F2). Narrow the root: the
+          hypothesis presumes the clear() side is the defective one (selective
+          removal should exist), but which side is defective — missing
+          carry-over mechanism vs comment encoding unbuilt intent — is
+          unverifiable within the bounded target. The defensible root is
+          direction-neutral: the documented preservation property has no
+          implementing mechanism. Severity lowers to medium from this lens: in
+          the current synchronous runtime the described interleaving is
+          unreachable, so the present harm is a false documented invariant whose
+          loss activation is conditional on a future async/re-entrant refactor —
+          consistent with the medium ratings of issue-005 and issue-007 on the
+          same defect."
+        root_hypothesis_position: narrows
+        severity_position: lowers
+        evidence_refs:
+          - issue-ledger.yaml#issue-002
+          - round1/semantics.md#f2
+          - notification-batcher.ts:37-39
+          - notification-batcher.ts:34
+  - issue_id: issue-003
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: This issue is the logic lens's own finding-003. The definition C6 ([]
+          means 'window still open') is contradicted by the producing rule R2
+          ([] returned in the reachable windowStartedAt === null state where no
+          window is open) — a possible-as-necessary modality error. Medium
+          severity is correct because the state invariant (windowStartedAt ===
+          null iff pending is empty) makes the practical reading coincide today,
+          while issue-001's clock-skew condition can make the misreading
+          persistent.
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - round1/logic.md#finding-3
+          - notification-batcher.ts:28
+          - notification-batcher.ts:31
+      - lens_id: coverage
+        stance: support
+        rationale: "From the coverage perspective this is a representation-coverage gap
+          in the caller-facing output domain: the reachable no-window state has
+          no distinct representation, so one output value ([]) stands for two
+          states while the doc defines only one meaning. The hypothesis that the
+          definition contradicts the producing rule in the null state is
+          consistent with that absence framing. Medium is right: the practical
+          reading coincides today via the state invariant, and persistence of
+          the misreading depends on issue-001's clock-skew condition."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - notification-batcher.ts:31
+          - notification-batcher.ts:40
+      - lens_id: semantics
+        stance: support
+        rationale: "The homonym is real — semantics found the same phenomenon
+          independently (finding-013, round1 F5): [] is produced from two
+          distinct reachable states (no window vs window open) while the doc
+          defines exactly one meaning. Root accepted. Severity lowers to low
+          from this lens: today's state invariant makes the two readings
+          coincide for callers, and the persistent-misreading escalation the
+          issue cites is conditional on the clock defect of issue-001/issue-006,
+          so that severity increment belongs to the clock issue, not to this
+          definitional one."
+        root_hypothesis_position: accepts
+        severity_position: lowers
+        evidence_refs:
+          - issue-ledger.yaml#issue-003
+          - round1/semantics.md#f5
+          - notification-batcher.ts:28
+          - notification-batcher.ts:31-32
+  - issue_id: issue-004
+    stances:
+      - lens_id: logic
+        stance: narrow
+        rationale: "Logic confirms the clock-split leg of this merged issue: it is the
+          same contradiction as issue-001 (finding-001, fail/high), and the
+          undesignated-time-authority root correctly generalizes that proven
+          defect. The enqueuedAt leg is not logic-demonstrable as a defect: no
+          declared claim binds windowStartedAt to per-item entry time, so no
+          jointly unsatisfiable claim set is derivable within the bounded target
+          (logic finding-4 recorded this as insufficient evidence). Logic
+          therefore supports the issue narrowed to the clock-split
+          manifestation, without opposing the broader designation claim, which
+          rests on coverage/semantics evidence."
+        root_hypothesis_position: narrows
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/logic.md#finding-1
+          - round1/logic.md#finding-4
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+          - notification-batcher.ts:8-9
+      - lens_id: coverage
+        stance: support
+        rationale: "This is coverage's own merged issue (findings 005 and 007 via
+          rel-007): the design never designates a single canonical time
+          authority, and the enqueue/flush clock split plus the unenforced
+          caller-trusted enqueuedAt record are two manifestations of that one
+          missing designation. The hypothesis is falsifiable as stated — one
+          injected clock owning every timestamp in the file should dissolve both
+          defects. High severity holds: the closure subtraction mixing two
+          unreconciled time bases can break window closure in both directions, a
+          visible correctness failure inside the bounded target."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/coverage.md#finding-1
+          - round1/coverage.md#finding-3
+          - rel-007
+      - lens_id: semantics
+        stance: support
+        rationale: "The undesignated-time-authority root subsumes the two semantics
+          findings exactly: finding-009 (clock split across enqueue/flush,
+          issue-006) and finding-011 (inert enqueuedAt beside a re-measured
+          windowStartedAt, issue-008) are two surface forms of one missing
+          designation — two time concepts sharing one name, and two
+          representations of one entry-time meaning, with no canonical authority
+          anywhere in the file. The falsifiability test is sound from the
+          semantics side: one injected clock owning every timestamp in the file,
+          including enqueuedAt stamping by the entry owner, dissolves both
+          manifestations. High severity keeps via the window-closure
+          manifestation."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-004
+          - round1/semantics.md#f1
+          - round1/semantics.md#f3
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+          - notification-batcher.ts:8-9
+  - issue_id: issue-005
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same defect as the logic lens's finding-002 (relation rel-003
+          records the duplication): the granularity-mismatch root (reset at
+          window granularity vs guarantee at item granularity) is the same
+          mechanism logic identified as 'clear() removes everything instead of
+          only flushed entries'. The contradiction is formally established, not
+          merely a coverage absence: the documented invariant is necessarily
+          false in every execution where its antecedent holds."
+        root_hypothesis_position: accepts
+        severity_position: raises
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+          - round1/logic.md#finding-2
+          - notification-batcher.ts:37-39
+          - notification-batcher.ts:34-36
+      - lens_id: coverage
+        stance: support
+        rationale: "This is coverage's own issue (finding-006): the comment declares an
+          item-granularity carry-over guarantee while the only reset mechanism
+          operates at window granularity (whole-map clear), so the declared
+          sub-behavior is absent from the system. The root hypothesis restates
+          coverage's causal path exactly. Medium severity holds per the
+          latency-of-harm assessment: the failure condition requires a future
+          async/concurrent realization, which the comment itself invites."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+          - round1/coverage.md#finding-2
+          - notification-batcher.ts:37-39
+      - lens_id: semantics
+        stance: support
+        rationale: "Same defect semantics reported as finding-010 (rel-003/rel-004 mark
+          the duplicate cluster with finding-002). The granularity framing is
+          semantically precise and adds value: the contract names an
+          item-granularity concept ('late-enqueued notification') that has no
+          representation in the code — a ghost concept — so the comment cannot
+          be true against a window-granularity clear(). Medium severity matches
+          the semantics rating: the harm is latent in the synchronous runtime
+          and activates on exactly the refactor the comment invites."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-005
+          - round1/semantics.md#f2
+          - notification-batcher.ts:37-39
+  - issue_id: issue-006
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same defect as the logic lens's finding-001 (relation rel-002
+          records the duplication): the semantics framing (two time concepts
+          sharing the name 'now' without a unifying contract) and the logic
+          framing (undeclared same-clock necessary premise) pick out the same
+          unsatisfiable claim set over the declared input domain of flush(now).
+          The cross-clock subtraction being 'semantically meaningless' is the
+          semantic restatement of the formal contradiction; high severity
+          matches finding-001."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+          - round1/logic.md#finding-1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+      - lens_id: coverage
+        stance: support
+        rationale: "Duplicate of the defect coverage raised as finding-005 (rel-002
+          links the semantics statement to the same root): two time concepts
+          share one name with no unifying contract, which is the semantics-side
+          statement of the missing single time authority coverage observed as a
+          dimension deficit. Same anchors (lines 20, 30-32), same failure
+          condition, same bidirectional impact. High severity matches coverage's
+          own grading; the cross-cluster generalization is already recorded in
+          issue-004."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+          - round1/coverage.md#finding-1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+      - lens_id: semantics
+        stance: support
+        rationale: "Originating lens. Reaffirm finding-009: two distinct time concepts —
+          internal wall-clock now and caller-supplied now — share one name
+          without a unifying contract, and the file's caller-supplied epoch-ms
+          precedent (enqueuedAt) makes a divergent caller clock an in-contract
+          scenario rather than a hypothetical. High stands: the failure is
+          contract-level (the window-duration semantics are unguaranteed over
+          the declared input domain) and silent in both directions — perpetual
+          [] read as 'window still open', or instant close."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-006
+          - round1/semantics.md#f1
+          - notification-batcher.ts:20
+          - notification-batcher.ts:30-32
+          - notification-batcher.ts:8
+  - issue_id: issue-007
+    stances:
+      - lens_id: logic
+        stance: support
+        rationale: "Same defect as the logic lens's finding-002 (relation rel-004
+          records the duplication): 'intended-but-unbuilt carry-over contract'
+          is the absence-side description of the comment-vs-clear()
+          contradiction. Logic adds that the conflict is necessary/necessary —
+          the code does not merely fail to implement the guarantee, it
+          guarantees the complementary property (pending becomes empty) at the
+          same program point — so implement-or-retract is the complete fix
+          space."
+        root_hypothesis_position: accepts
+        severity_position: raises
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+          - round1/logic.md#finding-2
+          - notification-batcher.ts:37-39
+      - lens_id: coverage
+        stance: support
+        rationale: "Duplicate of the defect coverage raised as finding-006 (rel-004):
+          the reset comment encodes an intended-but-unbuilt carry-over behavior
+          with no implementing mechanism in the code. The hypothesis matches
+          coverage's absence framing (declared sub-behavior unrepresented in the
+          system). Medium severity matches coverage's own grading: harm is
+          latent in the current synchronous realization and activates under the
+          async/re-entrant refactor the comment invites."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+          - round1/coverage.md#finding-2
+          - notification-batcher.ts:37-39
+      - lens_id: semantics
+        stance: support
+        rationale: "Originating lens. Reaffirm finding-010: the comment's preservation
+          claim requires that some entries survive the reset, but clear()
+          removes every entry present at call time, and the digest loop iterates
+          the same live map so a pre-clear entry is digested in the current
+          flush — the opposite of 'carried into the next window'. Medium stands
+          per the synchronous-runtime latency of the harm; the defect today is a
+          false documented invariant that a later async/re-entrant refactor
+          inherits as silent notification loss."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-007
+          - round1/semantics.md#f2
+          - notification-batcher.ts:37-39
+          - notification-batcher.ts:34
+  - issue_id: issue-008
+    stances:
+      - lens_id: logic
+        stance: surface_only
+        rationale: "Logic verified the surface facts this issue rests on: enqueuedAt is
+          consumed by no rule in the class body, and a second internally sampled
+          timestamp anchors the window (logic finding-4). However, no formal
+          contradiction is derivable: no declared claim states that
+          windowStartedAt equals or derives from any item's enqueuedAt, so the
+          'two authorities for one meaning' defect is a semantic modeling
+          judgment outside logic's verdict basis — within the bounded target the
+          claim needed for a satisfiability judgment is not formalized. Logic
+          affirms the surface phenomenon and defers root and severity
+          adjudication to the semantics evidence."
+        root_hypothesis_position: insufficient_evidence
+        severity_position: insufficient_evidence
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/logic.md#finding-4
+          - notification-batcher.ts:8-9
+          - notification-batcher.ts:20
+      - lens_id: coverage
+        stance: support
+        rationale: "Shares the undesignated entry-time authority cause with coverage's
+          finding-007 (rel-006, preserved as dep-001): the meaning 'time the
+          notification entered the batch' exists twice — caller-supplied
+          enqueuedAt and the internal Date.now() capture — with no unification.
+          Coverage's in-scope support covers the dual-authority,
+          unenforced-record core; the inert-field aspect (field never read) is
+          another perspective's observation but does not conflict with it. The
+          issue is correctly kept distinct from issue-004: different affected
+          purposes and independently fixable defects, with the shared cause
+          recorded as a dependency. Medium severity is consistent with
+          coverage's grading of the record-side defect."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/coverage.md#finding-3
+          - rel-006
+      - lens_id: semantics
+        stance: support
+        rationale: "Originating lens. Reaffirm finding-011: one meaning — 'time the
+          notification entered the batch' — exists in two un-unified sources,
+          the documented but never-read enqueuedAt field and the internal
+          Date.now() re-measurement, so the interface advertises a timestamp
+          contract with no behavioral meaning while the window anchors to the
+          divergent second source. Medium stands; backfill/replay with past
+          enqueuedAt is the in-contract failure path, and the duplicate source
+          enables undetected drift."
+        root_hypothesis_position: accepts
+        severity_position: keeps
+        evidence_refs:
+          - issue-ledger.yaml#issue-008
+          - round1/semantics.md#f3
+          - notification-batcher.ts:8-9
+          - notification-batcher.ts:20
+validation:
+  missing_stances: []

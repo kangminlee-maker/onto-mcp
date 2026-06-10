@@ -1,0 +1,17 @@
+{
+  "schema_version": "settings.json/v3",
+  "review": {
+    "artifacts": { "lens_output_format": "markdown" },
+    "execution": {
+      "topology": "main-workers",
+      "executor": "direct_call",
+      "orchestration": "host",
+      "deliberation": "controlled-lens-deliberation",
+      "actors": {
+        "teamlead": { "seat": "main", "llm": { "auth": "api_key", "provider": "openai", "model": "host-never-dispatches" } },
+        "lens": { "seat": "worker", "llm": { "auth": "api_key", "provider": "openai", "model": "host-never-dispatches" } },
+        "synthesize": { "seat": "worker", "llm": { "auth": "api_key", "provider": "openai", "model": "host-never-dispatches" } }
+      }
+    }
+  }
+}

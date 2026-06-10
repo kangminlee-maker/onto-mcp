@@ -1,0 +1,96 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-004"
+issue_id: "issue-004"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-004"
+conclusion: >-
+  The batcher never designates a single canonical time authority, and that one
+  missing designation produces two coupled defects: the enqueue/flush clock
+  split (window start stamped from internal Date.now() while window close is
+  decided against a caller-supplied now with no declared time base) and the
+  inert enqueuedAt field (declared as the batch-entry record yet never stamped
+  or read by enqueue, which re-measures entry time from its own clock at line
+  20). Deliberation resolved this as the session's root issue at high severity
+  with all three lenses accepting the full merged root; the fix is one
+  designated clock owning every timestamp in the file, and it must close in
+  target now.
+materiality_explanation: >-
+  The issue weakens both declared review purposes at once. Against the
+  correctness goal, the window-closure contract of the enqueue/flush pair is
+  input-reachable today: any caller supplying now from a different time base
+  than Date.now() (performance.now(), seconds instead of ms, or a simulated
+  test clock) makes the closure subtraction mix two unreconciled time bases, so
+  window closure fails in both directions — never closes (notifications never
+  delivered) or closes immediately. Against the verifiability goal, the
+  documented entry-time record is caller-trusted with unbounded, undetectable
+  divergence from actual entry time, so downstream consumers (ordering,
+  age-based expiry, audit) build on a record no component guarantees while a
+  second parallel entry-adjacent timestamp (windowStartedAt) coexists with no
+  designated canonical source. High severity holds via the input-reachable
+  clock-split manifestation and was never contested by any lens.
+root_cause_explanation: >-
+  The accepted root is that the design never designates a single canonical
+  time authority for the batcher. It is the starting point because both surface
+  defects are downstream of the same missing designation rather than of each
+  other: the clock split exists because flush externalizes time as a bare
+  number while enqueue hard-codes Date.now() with no canonical clock declared,
+  and the inert enqueuedAt exists because the contract names an event-derived
+  value without designating which component has authority to derive it. The
+  two legs are structurally unified at the line-20 Date.now() re-measurement,
+  which is simultaneously the internal window-start authority and the
+  divergent second authority in both legs. The root is inferred from the two
+  observed manifestations and is falsifiable as stated: one injected clock
+  owning every timestamp in the file (including enqueuedAt stamping by the
+  entry owner) should dissolve both defects; if either survives such a fix, the
+  common-root claim is wrong. Per deliberation, the clock-split leg carries a
+  formal logic contradiction (finding-001) while the enqueuedAt leg stands on
+  coverage/semantics observational evidence — an evidence-scope annotation, not
+  counter-evidence against the merge.
+causal_path_explanation: >-
+  Two causal paths, both raised by the coverage lens, converge on the missing
+  designation. Finding-005: the design splits time authority across the API
+  boundary (testability-style injection in flush, hard-coded Date.now() in
+  enqueue) with no canonical clock designated; flush therefore externalizes
+  its time source as a bare number parameter with no time-base contract while
+  windowStartedAt is stamped from the internal wall clock; the closure
+  predicate now - windowStartedAt then subtracts values from two unreconciled
+  time bases, so window closure can fail in both directions (lines 20, 30-32).
+  Finding-007: the data shape and the behavior were specified independently —
+  the contract names batch-entry time without designating who derives it
+  (lines 8-9); the stamping responsibility was never assigned to the
+  entry-owning method, so enqueue neither writes nor checks item.enqueuedAt
+  (lines 19-24); the entry-time record is therefore caller-trusted while the
+  class records its own entry-adjacent timestamp from Date.now(), leaving two
+  parallel time records with no single designated authority. Relation rel-007
+  merges these two paths into this issue as two manifestations of one root.
+action_explanation: >-
+  Designate a single time authority owning every timestamp in the file: inject
+  a constructor-supplied clock used by both enqueue and flush (or have flush
+  own time internally via Date.now()), and assign enqueuedAt stamping to the
+  entry owner from that same clock — for example by changing the input type to
+  omit the field — or, if callers must supply it, re-document it as
+  caller-asserted creation time and stop claiming it records batch entry. At
+  minimum, document the required time base on flush(now) ("epoch ms from the
+  same clock as Date.now()") as a stopgap. Ordering matters in two ways: the
+  two manifestations have coupled fixes, so they must be closed by the same
+  single-clock designation rather than patched separately, and because this is
+  the session's root issue, the same fix closes the symptom issues
+  (issue-001/issue-006 clock-split statements) in target. The dep-001/rel-006
+  shared-cause context with issue-008 is preserved as cross-issue dependency
+  context — the chosen clock should also govern that issue's resolution — but
+  it is dependency context, not merge evidence. Closure obligation is fix_now,
+  must close in target.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-004"
+  - "problem-framing.yaml#issue-004"
+  - "deliberation-resolution.yaml#issue-004"
+  - "finding-ledger.yaml#finding-005"
+  - "finding-ledger.yaml#finding-007"
+  - "finding-relation-graph.yaml#rel-007"
+  - "issue-stance-matrix.yaml#stances.issue-004.logic"
+  - "issue-stance-matrix.yaml#stances.issue-004.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-004.semantics"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-006"

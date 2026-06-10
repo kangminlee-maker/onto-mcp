@@ -1,0 +1,78 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+lens_id: "coverage"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Coverage's dimensional-deficit analysis (finding-005) independently located the same absent inter-clock binding at the identical anchors (lines 20, 30-32): no clock-authority concept exists anywhere in the file, which is exactly the undeclared necessary condition the logic lens derives the closure contradiction from (rel-001/dep-001). From the coverage side the hypothesis is well-formed: binding both closure operands to one declared clock authority is the concept whose absence this lens flagged."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-001, round1/coverage.md#finding-1]
+  - issue_id: issue-002
+    stance: support
+    rationale: "From the coverage side the carry-over guarantee has no implementing concept and no evidence counterpart: nothing in the file snapshots window membership at the close instant, and flush destroys state without persisting any record (this lens's finding-008), so the documented guarantee is unimplementable and unverifiable with the concepts present. The no-mechanism root the logic lens names is the same conceptual absence."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-002, round1/coverage.md#finding-4]
+  - issue_id: issue-003
+    stance: support
+    rationale: "This is a state-space coverage gap in the return-value protocol: the documented rule covers only the window-open empty return while the reachable no-window state (windowStartedAt === null) is left uncovered, producing the same [] with a different meaning. Narrowing the doc or splitting the protocol completes the uncovered state, consistent with the stated root. Low severity is right — behaviorally benign for pure polling loops."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-003]
+  - issue_id: issue-004
+    stance: support
+    rationale: "Coverage corroborates the missing-authority reading: enqueuedAt is a declared contract field with no consumer anywhere in the target (this lens's finding-008), so two recordings purporting to denote one instant coexist with no reconciliation rule or designated authority. Designating one authority for the batch-entry instant is the concept-level fix this lens's dimensional check also points to; latent severity (low) is appropriate while no reader exists."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-004, round1/coverage.md#finding-4]
+  - issue_id: issue-005
+    stance: support
+    rationale: "This lens raised the underlying finding: one time-dependent value (window age) is parallel-managed across two time sources with no single-origin time-source authority concept anywhere in the file, squarely inside the requested time-source-semantics focus. The root hypothesis matches the lens's own dimensional-deficit analysis, and high severity stands — a cross-clock subtraction can make the window close never, early, or instantly."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-005, round1/coverage.md#finding-1]
+  - issue_id: issue-006
+    stance: support
+    rationale: "Ghost sub-area raised by this lens: lifecycle termination is implied by the batching domain but entirely absent from the exported surface — the only exit path for pending items is a future poll that also satisfies the window predicate, so shutdown or poller stop silently loses items. The terminal-operation root holds, and it is correctly kept distinct from issue-007 (rel-005 is shared-cause, not same-root; mitigations differ)."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-006, round1/coverage.md#finding-2]
+  - issue_id: issue-007
+    stance: support
+    rationale: "Ghost sub-area raised by this lens: no capacity, overflow, or backpressure concept exists across the contract or implementation while the only reducer of the pending store is poll- and window-gated, so memory grows with enqueue rate times poll gap. The missing capacity-bound root holds, distinct from issue-006's missing terminal operation despite the shared poll-gated-reducer cause (rel-005/dep-004)."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-007, round1/coverage.md#finding-3]
+  - issue_id: issue-008
+    stance: support
+    rationale: "Dimensional deficit raised by this lens: the temporal axis is declared on the input side (enqueuedAt) but has no output or history counterpart — digests carry only bodies and flush destroys state with nothing persisted — so past batch state is unreconstructable and the carry-over comment can never be checked against evidence. Root and low (verifiability-scoped) severity both stand."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-008, round1/coverage.md#finding-4]
+  - issue_id: issue-009
+    stance: support
+    rationale: "Observability skew raised by this lens: monitoring covers only user breadth (pendingUserCount), the one dimension that cannot detect the characteristic poll-stall failure mode; pending-item count and oldest-pending-age are the missing metrics. The concept-distribution root holds and low severity is consistent with an operability gap rather than a direct correctness defect."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-009, round1/coverage.md#finding-5]
+  - issue_id: issue-010
+    stance: support
+    rationale: "Duplicate surface of issue-002 (rel-004), and coverage stands behind the same fact from the verifiability side: no mechanism or persisted record exists that could implement or evidence the promised carry-over, so the comment is false as written and clear() inverts the promised outcome if the interleaving point ever became reachable. Medium severity is right for a regression trap in a documented contract."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-010, round1/coverage.md#finding-4]
+  - issue_id: issue-011
+    stance: support
+    rationale: "Both halves of the batcher-owns-no-time-fact root are corroborated from the coverage side: the missing single clock authority is the same absent binding this lens flagged (finding-005, rel-003/dep-003), and this lens's finding-008 independently shows enqueuedAt is established, validated, and read by no behavior. The hypothesis's refutation condition (stamping required beyond clock unification) is consistent with enqueuedAt's no-consumer status; medium confidence and medium severity are appropriately calibrated."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-011, round1/coverage.md#finding-1, round1/coverage.md#finding-4]
+  - issue_id: issue-012
+    stance: support
+    rationale: "From the coverage angle the empty-return documentation undercovers the guard-state space (the same uncovered no-window state as issue-003) and digest membership is poll-time rather than window-bounded, so the docs claim stricter coverage than the behavior provides. The naming judgment itself belongs to the semantics lens, but the protocol-coverage deficit it rides on is real; rename-or-redocument resolves it and low severity fits a doc/name fit issue."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs: [issue-ledger.yaml#issue-012]
+validation:
+  missing_issues: []

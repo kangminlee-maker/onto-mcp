@@ -1,0 +1,64 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "No declared clock-authority binds the enqueue-time Date.now() window anchor (line 20) to the caller-supplied flush now (line 30), so the closure subtraction at line 32 mixes two free-running time sources."
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-005.cause-003
+    rationale: "finding-001 (logic) derives the closure contradiction and finding-005 (coverage) flags the missing time-source authority over identical evidence anchors (notification-batcher.ts:20,30-32). finding-001.cause-002 (time authority split across enqueue and flush with no declared contract binding the two clocks) and finding-005.cause-003 (no clock-authority concept exists in the contract) state the same absent inter-clock binding."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "No declared clock-authority binds the enqueue-time Date.now() window anchor (line 20) to the caller-supplied flush now (line 30), so the closure subtraction at line 32 mixes two free-running time sources."
+      from_cause_ref: finding-001.cause-002
+      to_cause_ref: finding-011.cause-002
+    rationale: "finding-011 (semantics) reaches the same terminal cause as finding-001 (logic) from the naming side: finding-011.cause-002 (no single time authority exists in the class and the parameter name now falsely asserts a shared timebase) is the same unbound-clock condition that finding-001.cause-002 identifies as the undeclared necessary condition of the closure rule. Same anchors (lines 20,30-32), same failure conditions (injected, monotonic, or skewed caller clocks)."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-005
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "No declared clock-authority binds the enqueue-time Date.now() window anchor (line 20) to the caller-supplied flush now (line 30), so the closure subtraction at line 32 mixes two free-running time sources."
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-011.cause-002
+    rationale: "Closes the clock cluster: finding-005's missing clock-authority concept (coverage, finding-005.cause-003) and finding-011's missing single time authority plus false shared-timebase name (semantics, finding-011.cause-002) are the same absent binding, observed from dimensional-coverage and naming-semantics angles respectively. Their proposed actions converge on designating one time authority for both entry points."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-002
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "Both findings target the same carry-over comment (lines 37-38) and the same unconditional this.pending.clear() reset (line 39), and make the same claim: the documented carry-over guarantee has no implementing mechanism — under synchronous execution the described interleaving interval is unreachable (vacuous), and under the only reading where it matters items are emitted in the current digest and wiped, the inverse of the guarantee. Proposed fixes coincide (align code and comment: filter/snapshot window membership, or rewrite the comment to actual behavior). Lens framing differs (logic: C7/C8 joint unsatisfiability; semantics: false-as-written contract), but it is one finding."
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-006
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "The sole reducer and exit path for pending state is flush, which requires both an external caller poll (line 28) and satisfaction of the WINDOW_MS predicate (line 32), so no unconditional or batcher-initiated reduction path exists for pending items."
+      from_cause_ref: finding-006.cause-002
+      to_cause_ref: finding-007.cause-002
+    rationale: "The two findings name distinct missing contract concepts with distinct roots (finding-006: no terminal-lifecycle operation; finding-007: no capacity/overflow concept), but both failure modes are activated by the same mid-path cause stated near-identically in both causal paths: finding-006.cause-002 (every pending item's only exit is a future external poll of flush that also satisfies the window predicate) and finding-007.cause-002 (the sole reducer of pending is flush, conditional on window age and an external poll). Shared cause, not same root — the findings remain separate issues whose mitigations differ (drain operation vs capacity bound)."
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: "The batcher owns no time fact: the window anchor, the closure input, and the documented batch-entry timestamp are all sourced from ambient or caller-chosen clocks that the batcher neither establishes nor validates. Designating a single batcher-owned time authority — and stamping enqueuedAt at the enqueue site from that authority — resolves both findings; if clock unification alone leaves finding-012 intact without the stamping change, the common root is refuted."
+    shared_cause: null
+    rationale: "finding-011 shows no single time authority binds the two window clocks; finding-012 shows the only per-item time fact (enqueuedAt, documented as batch-entry time) is delegated to callers pre-enqueue and never established or read by the batcher. Both reduce to time ownership being undesigned in the class, and finding-012's proposed action explicitly depends on 'the single time authority chosen for finding-011'. Confidence is medium because finding-012 additionally requires the batcher to stamp the field — a fix step not implied by clock unification alone — so the shared root is a candidate hypothesis rather than established."
+    confidence: medium
+singleton_findings: []

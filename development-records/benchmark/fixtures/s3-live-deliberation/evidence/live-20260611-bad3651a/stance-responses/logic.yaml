@@ -1,0 +1,86 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+lens_id: "logic"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "This issue is the logic lens's own finding-001. The inter-claim contradiction is formally established: {C5 close obligation, C6 [] meaning, R1 internal Date.now() window start, R3 caller-supplied now in the close predicate} are jointly satisfiable only under an undeclared same-clock necessary premise, so the documented flush close obligation is violable with declared-legal inputs. The issue statement and proposed unification actions restate the finding without loss."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/logic.md#finding-1
+      - notification-batcher.ts:20
+      - notification-batcher.ts:30-32
+  - issue_id: issue-002
+    stance: support
+    rationale: "This issue is the logic lens's own finding-002. C7 (carry-over comment) and R5 (unconditional pending.clear()) form a necessary/necessary conflict: the code guarantees the negation of the documented preservation property, so the guarantee is vacuous under the current synchronous realization and becomes silent notification loss in any realization where the check-to-reset interval is non-empty. The issue's make-true-or-make-honest action space matches the finding's remediation."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/logic.md#finding-2
+      - notification-batcher.ts:37-39
+  - issue_id: issue-003
+    stance: support
+    rationale: "This issue is the logic lens's own finding-003. The definition C6 ([] means 'window still open') is contradicted by the producing rule R2 ([] returned in the reachable windowStartedAt === null state where no window is open) — a possible-as-necessary modality error. Medium severity is correct because the state invariant (windowStartedAt === null iff pending is empty) makes the practical reading coincide today, while issue-001's clock-skew condition can make the misreading persistent."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/logic.md#finding-3
+      - notification-batcher.ts:28
+      - notification-batcher.ts:31
+  - issue_id: issue-004
+    stance: narrow
+    rationale: "Logic confirms the clock-split leg of this merged issue: it is the same contradiction as issue-001 (finding-001, fail/high), and the undesignated-time-authority root correctly generalizes that proven defect. The enqueuedAt leg is not logic-demonstrable as a defect: no declared claim binds windowStartedAt to per-item entry time, so no jointly unsatisfiable claim set is derivable within the bounded target (logic finding-4 recorded this as insufficient evidence). Logic therefore supports the issue narrowed to the clock-split manifestation, without opposing the broader designation claim, which rests on coverage/semantics evidence."
+    root_hypothesis_position: narrows
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/logic.md#finding-1
+      - round1/logic.md#finding-4
+      - notification-batcher.ts:20
+      - notification-batcher.ts:30-32
+      - notification-batcher.ts:8-9
+  - issue_id: issue-005
+    stance: support
+    rationale: "Same defect as the logic lens's finding-002 (relation rel-003 records the duplication): the granularity-mismatch root (reset at window granularity vs guarantee at item granularity) is the same mechanism logic identified as 'clear() removes everything instead of only flushed entries'. The contradiction is formally established, not merely a coverage absence: the documented invariant is necessarily false in every execution where its antecedent holds."
+    root_hypothesis_position: accepts
+    severity_position: raises
+    evidence_refs:
+      - issue-ledger.yaml#issue-005
+      - round1/logic.md#finding-2
+      - notification-batcher.ts:37-39
+      - notification-batcher.ts:34-36
+  - issue_id: issue-006
+    stance: support
+    rationale: "Same defect as the logic lens's finding-001 (relation rel-002 records the duplication): the semantics framing (two time concepts sharing the name 'now' without a unifying contract) and the logic framing (undeclared same-clock necessary premise) pick out the same unsatisfiable claim set over the declared input domain of flush(now). The cross-clock subtraction being 'semantically meaningless' is the semantic restatement of the formal contradiction; high severity matches finding-001."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-006
+      - round1/logic.md#finding-1
+      - notification-batcher.ts:20
+      - notification-batcher.ts:30-32
+  - issue_id: issue-007
+    stance: support
+    rationale: "Same defect as the logic lens's finding-002 (relation rel-004 records the duplication): 'intended-but-unbuilt carry-over contract' is the absence-side description of the comment-vs-clear() contradiction. Logic adds that the conflict is necessary/necessary — the code does not merely fail to implement the guarantee, it guarantees the complementary property (pending becomes empty) at the same program point — so implement-or-retract is the complete fix space."
+    root_hypothesis_position: accepts
+    severity_position: raises
+    evidence_refs:
+      - issue-ledger.yaml#issue-007
+      - round1/logic.md#finding-2
+      - notification-batcher.ts:37-39
+  - issue_id: issue-008
+    stance: surface_only
+    rationale: "Logic verified the surface facts this issue rests on: enqueuedAt is consumed by no rule in the class body, and a second internally sampled timestamp anchors the window (logic finding-4). However, no formal contradiction is derivable: no declared claim states that windowStartedAt equals or derives from any item's enqueuedAt, so the 'two authorities for one meaning' defect is a semantic modeling judgment outside logic's verdict basis — within the bounded target the claim needed for a satisfiability judgment is not formalized. Logic affirms the surface phenomenon and defers root and severity adjudication to the semantics evidence."
+    root_hypothesis_position: insufficient_evidence
+    severity_position: insufficient_evidence
+    evidence_refs:
+      - issue-ledger.yaml#issue-008
+      - round1/logic.md#finding-4
+      - notification-batcher.ts:8-9
+      - notification-batcher.ts:20
+validation:
+  missing_issues: []

@@ -1,4 +1,4 @@
-lexicon_version: "0.45.1"
+lexicon_version: "0.45.2"
 schema_version: "2"
 position: "Prototype-to-service ontology authority for the onto main repository."
 notes:
@@ -777,6 +777,7 @@ entities:
       - "prepare가 settings의 orchestration을 세션에 각인하면 생애 불변 — 한 세션은 정확히 한 locus만 구동한다(이중 실행·누수 차단)."
       - "A·B는 '유닛을 누가 실행하나'만 다르다. packet 생성·seat 검증·결과 기록·stage gate·frontier·assemble은 단일 공유 구현(review-execution-steps.ts)을 쓴다. 4f rebase 이후 A의 post-lens 시퀀싱도 동일 frontier(computeReviewFrontier)+seat gate가 구동한다(run-review-prompt-execution.ts의 stage-routed frontier loop; lens는 정의상 stage 0으로 pre-loop) — 루프 구현이 단일화됐다."
       - "전체 파이프라인 host 구동(compound runtime unit map/reduce 포함)은 PR #22로 완성 — reference host mock E2E가 completed ReviewRecord 도달을 증명한다. nested 라운드 배치는 NestingBatchWorker(S2) 참조."
+      - "live 심의 실험(S3)은 host 실현 자유의 한 사례다 — deliberation 유닛의 동료 관점 수송만 teammate 간 SendMessage 교환으로 바꾸며, seat·검증·gate·record 계약은 불변(신규 개념 없음): .onto/processes/review/live-deliberation-experiment-contract.md (Experimental)."
 
   NestingBatchWorker:
     canonical_label: "NestingBatchWorker"

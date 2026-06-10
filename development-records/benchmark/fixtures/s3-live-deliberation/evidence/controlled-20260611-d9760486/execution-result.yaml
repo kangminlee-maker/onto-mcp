@@ -1,0 +1,272 @@
+session_id: 20260611-d9760486
+session_root: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486
+execution_realization: direct-call
+host_runtime: openai
+artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+review_mode: core-axis
+execution_status: completed
+execution_started_at: 2026-06-11T03:58:48+09:00
+execution_completed_at: 2026-06-11T04:43:15+09:00
+total_duration_ms: 0
+max_concurrent_lenses: 3
+retry_policy:
+  lens_max_retries: 2
+  issue_artifact_max_retries: 2
+  deliberation_max_retries: 2
+  synthesis_max_retries: 2
+  retry_initial_delay_ms: 3000
+planned_lens_ids:
+  - logic
+  - coverage
+  - semantics
+participating_lens_ids:
+  - logic
+  - coverage
+  - semantics
+degraded_lens_ids: []
+excluded_lens_ids: []
+executed_lens_count: 3
+synthesis_executed: true
+error_log_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/error-log.md
+lens_execution_results:
+  - unit_id: logic
+    unit_kind: lens
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/logic.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/round1/logic.md
+    status: completed
+    started_at: 2026-06-11T03:58:48+09:00
+    completed_at: 2026-06-11T03:58:48+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: coverage
+    unit_kind: lens
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/coverage.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/round1/coverage.md
+    status: completed
+    started_at: 2026-06-11T03:58:48+09:00
+    completed_at: 2026-06-11T03:58:48+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: semantics
+    unit_kind: lens
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/semantics.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/round1/semantics.md
+    status: completed
+    started_at: 2026-06-11T03:58:48+09:00
+    completed_at: 2026-06-11T03:58:48+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+issue_artifact_execution_results:
+  - unit_id: finding-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/finding-ledger.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/finding-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T04:03:00+09:00
+    completed_at: 2026-06-11T04:03:00+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: finding-relation-graph
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/finding-relation-graph.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/finding-relation-graph.yaml
+    status: completed
+    started_at: 2026-06-11T04:06:24+09:00
+    completed_at: 2026-06-11T04:06:24+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-ledger
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/issue-ledger.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/issue-ledger.yaml
+    status: completed
+    started_at: 2026-06-11T04:26:38+09:00
+    completed_at: 2026-06-11T04:26:38+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:logic
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/issue-stance/logic.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/stance-responses/logic.yaml
+    status: completed
+    started_at: 2026-06-11T04:29:56+09:00
+    completed_at: 2026-06-11T04:29:56+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:coverage
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/issue-stance/coverage.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/stance-responses/coverage.yaml
+    status: completed
+    started_at: 2026-06-11T04:29:56+09:00
+    completed_at: 2026-06-11T04:29:56+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance:semantics
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/issue-stance/semantics.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/stance-responses/semantics.yaml
+    status: completed
+    started_at: 2026-06-11T04:29:56+09:00
+    completed_at: 2026-06-11T04:29:56+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: issue-stance-matrix
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/issue-stance-matrix.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/issue-stance-matrix.yaml
+    status: completed
+    started_at: 2026-06-11T04:29:56+09:00
+    completed_at: 2026-06-11T04:29:56+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: deliberation-plan
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/deliberation-plan.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/deliberation-plan.yaml
+    status: completed
+    started_at: 2026-06-11T04:31:52+09:00
+    completed_at: 2026-06-11T04:31:52+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: problem-framing
+    unit_kind: issue_artifact
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/problem-framing.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/problem-framing.yaml
+    status: completed
+    started_at: 2026-06-11T04:40:26+09:00
+    completed_at: 2026-06-11T04:40:26+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+deliberation_execution_results:
+  - unit_id: controlled-deliberation
+    unit_kind: deliberation
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/teamlead.deliberation.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/deliberation-resolution.yaml
+    status: completed
+    started_at: 2026-06-11T04:34:33+09:00
+    completed_at: 2026-06-11T04:34:33+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+synthesis_map_execution_results:
+  - unit_id: synthesis:issue-001
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-001.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-001.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-002
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-002.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-002.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-005
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-005.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-005.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-006
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-006.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-006.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-007
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-007.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-007.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-010
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-010.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-010.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+  - unit_id: synthesis:issue-011
+    unit_kind: synthesize
+    packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/prompt-packets/synthesis/issue-011.prompt.md
+    output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis/responses/issue-011.yaml
+    status: completed
+    started_at: 2026-06-11T04:43:15+09:00
+    completed_at: 2026-06-11T04:43:15+09:00
+    duration_ms: 0
+    timestamp_provenance: batch_window
+    failure_message: null
+    failure_kind: null
+synthesize_execution_result:
+  unit_id: synthesize
+  unit_kind: synthesize
+  packet_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis-work-items.yaml
+  output_path: /tmp/s3-controlled-fixture/.onto/review/20260611-d9760486/synthesis-ledger.yaml
+  status: completed
+  started_at: 2026-06-11T04:43:15+09:00
+  completed_at: 2026-06-11T04:43:15+09:00
+  duration_ms: 0
+  timestamp_provenance: batch_window
+  failure_message: null
+  failure_kind: null
+deliberation_status: performed

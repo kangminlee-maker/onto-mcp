@@ -1,0 +1,59 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-002"
+lens_id: "coverage"
+difference_explanation: "Initially contested 2:1 on severity: logic kept high
+  on the formally established necessary/necessary contradiction plus the
+  comment-invited refactor, while coverage and semantics graded medium because
+  the antecedent (an enqueue interleaving the check-to-reset interval) is
+  unoccupiable in the current single-threaded synchronous realization. In the
+  live exchange logic conceded: it adopted the impact-reachability calibration
+  (severity is an impact scale over reachable executions, not a proof-strength
+  scale) and accepted medium for the whole carry-over family. On the root,
+  semantics narrowed to a direction-neutral statement; coverage accepted the
+  restatement, and logic also accepted it as more faithful to the formal
+  content (C7-vs-R5 establishes joint unsatisfiability without locating which
+  side is defective). The panel converged: support, medium, direction-neutral
+  root."
+response_to_other_positions: "To logic (live exchange): the necessary/necessary
+  derivation is not contested — what is contested is that proof strength sets
+  severity. Certainty of the contradiction says nothing about reachability of
+  harm: no declared-legal execution of the bounded synchronous target loses a
+  notification today, so present harm is a false documented invariant
+  (verifiability/maintainability) and the invited-refactor channel raises
+  regression_risk within medium rather than creating a present failure path.
+  The panel's own calibration anchor (issue-001/-004/-006 high = presently
+  occupiable failure path via declared-legal flush(now) input) and issue-007's
+  standing medium on the same defect both point to medium. Logic's own
+  'implement-or-retract is the complete fix space' argument supports the
+  direction-neutral root: if both fix directions are equally complete, locating
+  the defect in clear()'s granularity presumes an intent fact the bounded
+  target cannot verify. Logic conceded in the exchange: it adopted the
+  reachability calibration (citing its own role contract's severity-vs-verdict
+  separation), named the decisive asymmetry (the clock split is
+  input-reachable today; the carry-over loss is modification-conditional), and
+  accepted the direction-neutral restatement. To semantics (live exchange):
+  restatement accepted — it matches coverage's own finding-006 absence
+  framing, and we are aligned at medium severity."
+updated_stance: support
+changed: true
+change_reason: "Root acceptance moved after the live exchange: coverage's
+  recorded stance accepted the clear()-side-defective hypothesis; semantics'
+  argument that which side is defective is unverifiable within the bounded
+  target — reinforced by logic's own complete-fix-space point — moved coverage
+  to the direction-neutral restatement (root position effectively
+  accepts -> narrows). Stance (support) and severity position (medium, lowers)
+  are unchanged."
+accepted_root_hypothesis: "The documented check-to-reset preservation property
+  has no implementing mechanism: the guarantee is written at item granularity
+  while the only reset operates at window granularity (whole-map clear()).
+  Which side is defective — missing carry-over mechanism vs comment encoding
+  unbuilt intent — is unverifiable within the bounded target, so the root is
+  stated direction-neutrally, preserving the implement-or-retract action space."
+remaining_blocker: null
+evidence_refs:
+  - issue-ledger.yaml#issue-002
+  - round1/coverage.md#finding-2
+  - notification-batcher.ts:37-39
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-002.coverage"

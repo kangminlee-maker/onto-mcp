@@ -1,0 +1,124 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-005
+    to_finding_id: finding-001
+    relation: duplicates
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "Same defect reported by two lenses: the coverage lens's 'two parallel,
+      unreconciled time sources with no designated time authority' is the logic
+      lens's split-clock contradiction restated as a dimension deficit. Both cite
+      the identical evidence anchors (notification-batcher.ts:20 for the internal
+      Date.now() window start, notification-batcher.ts:30-32 for the close check
+      against caller-supplied now), the same failure condition (caller now from a
+      different time base), the same bidirectional impact (window never closes or
+      closes immediately), and the same fix space (designate a single clock
+      authority)."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-009
+    to_finding_id: finding-001
+    relation: duplicates
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "Same defect reported by two lenses: the semantics lens's
+      definition-explicitness failure (two time concepts sharing the name 'now'
+      without a unifying contract) is the logic lens's undeclared same-clock
+      premise restated. Identical evidence anchors (notification-batcher.ts:20,
+      30-32), identical failure condition (monotonic or skewed caller clock),
+      identical impact (flush returns [] forever or closes instantly), and the
+      same three-option fix (drop the parameter, parameterize enqueue, or inject
+      one clock for both methods)."
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-006
+    to_finding_id: finding-002
+    relation: duplicates
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "Same defect reported by two lenses: the coverage lens's 'declared
+      carry-over sub-behavior has no implementing mechanism' is the logic lens's
+      comment-vs-clear() contradiction restated as an absence finding. Both cite
+      the carry-over comment at notification-batcher.ts:37-38 against the
+      unconditional pending.clear() at line 39, both locate the activation in a
+      future async/concurrent realization of flush, both name silent notification
+      loss as the impact, and both propose the same fix pair (delete only flushed
+      entries, or rewrite the comment to the true semantics)."
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-010
+    to_finding_id: finding-002
+    relation: duplicates
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "Same defect reported by two lenses: the semantics lens's
+      contract-vs-behavior inconsistency on the flush reset is the logic lens's
+      finding-002 with the same evidence (carry-over comment at
+      notification-batcher.ts:37-38, pending.clear() at line 39), the same
+      observation that the current synchronous execution makes the guarantee
+      vacuous, the same latent failure (async/re-entrant refactor inherits silent
+      notification loss), and the same implement-or-retract fix options."
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-001
+    to_finding_id: finding-003
+    relation: enables
+    root_hypothesis: null
+    shared_cause: null
+    rationale: "finding-003 is an independent definition-vs-rule contradiction ([]
+      is documented to mean 'window still open' but is also produced in the
+      reachable no-window state), yet its severity rests partly on finding-001:
+      finding-003's failure_condition and lens rationale explicitly cite
+      finding-001's clock-skew condition, under which flush returns [] forever
+      and the misdocumented meaning turns from a transient ambiguity into a
+      permanently misleading caller-facing reading. finding-001 does not create
+      the doc contradiction but enables its persistent manifestation."
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-007
+    to_finding_id: finding-011
+    relation: shared_cause_candidate
+    root_hypothesis: null
+    shared_cause:
+      cause_claim: "Entry time has two parallel representations — the
+        caller-supplied enqueuedAt field and the internal Date.now() capture in
+        enqueue() — with no single designated authority: enqueue neither stamps
+        nor reads enqueuedAt and re-measures entry time from its own clock."
+      from_cause_ref: finding-007.cause-003
+      to_cause_ref: finding-011.cause-002
+    rationale: "Both findings sit on the same causal step (two authorities for the
+      one meaning 'time the notification entered the batch') but assert distinct
+      defects: finding-007 attacks the trustworthiness of the documented
+      entry-time record (enqueue never writes or validates it, so the record is
+      caller-trusted and unverifiable), while finding-011 attacks the inert field
+      and the window anchoring to the divergent second source (backfill/replay
+      silently anchors the window to processing time). They are not duplicates —
+      different affected purposes and different fixes are possible — but they
+      share the unassigned-authority cause."
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-005
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: "The design never designates a single canonical time
+      authority for the batcher; the enqueue/flush clock split (internal
+      Date.now() vs caller-supplied now, findings 001/005/009) and the inert,
+      caller-trusted enqueuedAt field beside the internally stamped
+      windowStartedAt (findings 007/011) are two manifestations of that one
+      missing designation. Falsifiable: a fix that injects one clock owning every
+      timestamp in the file should dissolve both clusters; if either defect
+      survives such a fix, the common-root claim is wrong. finding-007's own
+      proposed_action supports the hypothesis by deferring to 'the single clock
+      chosen in the finding-005 fix'."
+    shared_cause: null
+    rationale: "Cross-cluster root link between the window-closure time-base
+      cluster and the entry-time record cluster: finding-005's root cause ('the
+      design splits time authority across the API boundary without designating
+      which clock is canonical') and finding-007's root cause ('the contract
+      names an event-derived value without designating which component has
+      authority to derive it') are both instances of undesignated time
+      authority, and the projection itself couples their fixes."
+    confidence: medium
+singleton_findings: []

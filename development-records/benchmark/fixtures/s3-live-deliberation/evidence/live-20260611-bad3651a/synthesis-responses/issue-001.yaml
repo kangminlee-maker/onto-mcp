@@ -1,0 +1,81 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-001"
+issue_id: "issue-001"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-001"
+conclusion: >-
+  Window start and window close are judged on two different time authorities:
+  enqueue binds windowStartedAt to the internal Date.now() wall clock while
+  flush evaluates closure against an arbitrary caller-supplied now, and no
+  same-clock precondition is declared. The claim set {C5 "flushes when the
+  window has closed", C6 "[] means window still open", R1 internal-clock window
+  start, R3 caller-clock close check} is jointly satisfiable only under the
+  undeclared premise that the caller's now comes from the same clock as
+  Date.now(), so the documented flush close obligation is violable over the
+  full declared input domain of flush(now). All three lenses accepted the
+  recorded root and kept severity high; the required fix is to unify the time
+  authority and declare the clock-source contract.
+materiality_explanation: >-
+  The issue directly weakens the declared review goals of correctness and
+  verifiability of the flush contract. The failure path is occupiable today
+  with declared-legal inputs: any flush caller whose now is not sampled from
+  the same wall clock that enqueue used (deterministic-clock tests,
+  monotonic-time-derived values, cross-process or skewed clock sources)
+  triggers it. The impact is that digests are never emitted for the affected
+  window (a perpetual [] that the contract says means "window still open") or
+  are emitted before the window elapses, so the 30s batching contract is
+  silently broken and the documented [] meaning becomes permanently
+  misleading. This presently occupiable failure path is the panel's
+  high-severity calibration anchor.
+root_cause_explanation: >-
+  The chain starts where the split time authority is introduced: enqueue binds
+  the window-start time (windowStartedAt) to the process wall clock via
+  Date.now(), while the close check in flush is parameterized on a
+  caller-supplied clock value, and no same-clock precondition is declared
+  anywhere on flush(now). Every downstream behavior follows from this split —
+  without a single designated clock, window start and window close can be
+  measured against diverging timelines, which is exactly what makes the close
+  obligation violable. Deliberation framed this issue as a symptom of the
+  broader issue-004 root (a single undesignated time authority for the window
+  lifecycle), which generalizes but does not contradict this clock-split
+  manifestation.
+causal_path_explanation: >-
+  Step 1 (finding-001.cause-001): the split time authority is introduced —
+  window start is bound to the process wall clock at enqueue while the close
+  check takes a caller clock value. Step 2 (finding-001.cause-002, enabled by
+  step 1): because no same-clock precondition is declared on flush(now), the
+  allowed input domain includes clock values that diverge from the
+  window-start authority. Step 3 (finding-001.cause-003, caused by step 2):
+  for a lagging caller clock the close predicate stays false after the
+  documented 30s window has elapsed, so flush returns [] — which the contract
+  defines as "window still open" — and the documented close obligation is
+  violated. One question stays open beyond the evidence: whether any
+  production caller currently supplies a non-Date.now() clock is outside the
+  bounded single-file target. Deliberation was skipped as
+  no-deliberation-needed (consistent_stances): logic, coverage, and semantics
+  all support, accept the recorded root, and keep high severity, with no
+  remaining disagreement.
+action_explanation: >-
+  Unify the time authority so window start and window close are judged on the
+  same clock, choosing one of three variants: (a) parameterize enqueue on the
+  same clock (enqueue(item, now)), (b) drop the now parameter and use
+  Date.now() inside flush, or (c) inject a single clock function at
+  construction that both methods use. In all variants, declare the
+  clock-source contract on the API doc. Closure class is fix_now with
+  closure obligation must_close_in_target: this is a current correctness
+  blocker because the failure path is occupiable with declared-legal inputs
+  today. Ordering matters in two ways recorded upstream: this clock-split
+  defect enables issue-003's persistent misreading of [] (rel-005), and the
+  generalizing single-time-authority root is tracked in issue-004, so the
+  single-time-authority fix here is the unit that discharges this issue
+  inside the target.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-001"
+  - "problem-framing.yaml#issue-001"
+  - "deliberation-resolution.yaml#issue-001"
+  - "finding-ledger.yaml#finding-001"
+  - "issue-stance-matrix.yaml#stances.issue-001.logic"
+  - "issue-stance-matrix.yaml#stances.issue-001.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-001.semantics"

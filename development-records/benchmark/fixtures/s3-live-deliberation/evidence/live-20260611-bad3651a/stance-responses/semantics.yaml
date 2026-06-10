@@ -1,0 +1,89 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+lens_id: "semantics"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "Semantics independently observed this defect as finding-009 (round1 F1): the name 'now' underdetermines its time source while windowStartedAt is bound to internal Date.now(), so the same-clock premise is undeclared. The root hypothesis matches the semantics causal path exactly. High severity is right because the file's own caller-supplied epoch-ms precedent (enqueuedAt, line 8) makes a divergent caller clock an in-contract scenario, and the failure mode is silent (perpetual [] documented as 'window still open')."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-001"
+      - "round1/semantics.md#f1"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:30-32"
+      - "notification-batcher.ts:8"
+  - issue_id: issue-002
+    stance: support
+    rationale: "The contract-vs-behavior mismatch is real; semantics observed it independently as finding-010 (round1 F2). Narrow the root: the hypothesis presumes the clear() side is the defective one (selective removal should exist), but which side is defective — missing carry-over mechanism vs comment encoding unbuilt intent — is unverifiable within the bounded target. The defensible root is direction-neutral: the documented preservation property has no implementing mechanism. Severity lowers to medium from this lens: in the current synchronous runtime the described interleaving is unreachable, so the present harm is a false documented invariant whose loss activation is conditional on a future async/re-entrant refactor — consistent with the medium ratings of issue-005 and issue-007 on the same defect."
+    root_hypothesis_position: narrows
+    severity_position: lowers
+    evidence_refs:
+      - "issue-ledger.yaml#issue-002"
+      - "round1/semantics.md#f2"
+      - "notification-batcher.ts:37-39"
+      - "notification-batcher.ts:34"
+  - issue_id: issue-003
+    stance: support
+    rationale: "The homonym is real — semantics found the same phenomenon independently (finding-013, round1 F5): [] is produced from two distinct reachable states (no window vs window open) while the doc defines exactly one meaning. Root accepted. Severity lowers to low from this lens: today's state invariant makes the two readings coincide for callers, and the persistent-misreading escalation the issue cites is conditional on the clock defect of issue-001/issue-006, so that severity increment belongs to the clock issue, not to this definitional one."
+    root_hypothesis_position: accepts
+    severity_position: lowers
+    evidence_refs:
+      - "issue-ledger.yaml#issue-003"
+      - "round1/semantics.md#f5"
+      - "notification-batcher.ts:28"
+      - "notification-batcher.ts:31-32"
+  - issue_id: issue-004
+    stance: support
+    rationale: "The undesignated-time-authority root subsumes the two semantics findings exactly: finding-009 (clock split across enqueue/flush, issue-006) and finding-011 (inert enqueuedAt beside a re-measured windowStartedAt, issue-008) are two surface forms of one missing designation — two time concepts sharing one name, and two representations of one entry-time meaning, with no canonical authority anywhere in the file. The falsifiability test is sound from the semantics side: one injected clock owning every timestamp in the file, including enqueuedAt stamping by the entry owner, dissolves both manifestations. High severity keeps via the window-closure manifestation."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-004"
+      - "round1/semantics.md#f1"
+      - "round1/semantics.md#f3"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:30-32"
+      - "notification-batcher.ts:8-9"
+  - issue_id: issue-005
+    stance: support
+    rationale: "Same defect semantics reported as finding-010 (rel-003/rel-004 mark the duplicate cluster with finding-002). The granularity framing is semantically precise and adds value: the contract names an item-granularity concept ('late-enqueued notification') that has no representation in the code — a ghost concept — so the comment cannot be true against a window-granularity clear(). Medium severity matches the semantics rating: the harm is latent in the synchronous runtime and activates on exactly the refactor the comment invites."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-005"
+      - "round1/semantics.md#f2"
+      - "notification-batcher.ts:37-39"
+  - issue_id: issue-006
+    stance: support
+    rationale: "Originating lens. Reaffirm finding-009: two distinct time concepts — internal wall-clock now and caller-supplied now — share one name without a unifying contract, and the file's caller-supplied epoch-ms precedent (enqueuedAt) makes a divergent caller clock an in-contract scenario rather than a hypothetical. High stands: the failure is contract-level (the window-duration semantics are unguaranteed over the declared input domain) and silent in both directions — perpetual [] read as 'window still open', or instant close."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-006"
+      - "round1/semantics.md#f1"
+      - "notification-batcher.ts:20"
+      - "notification-batcher.ts:30-32"
+      - "notification-batcher.ts:8"
+  - issue_id: issue-007
+    stance: support
+    rationale: "Originating lens. Reaffirm finding-010: the comment's preservation claim requires that some entries survive the reset, but clear() removes every entry present at call time, and the digest loop iterates the same live map so a pre-clear entry is digested in the current flush — the opposite of 'carried into the next window'. Medium stands per the synchronous-runtime latency of the harm; the defect today is a false documented invariant that a later async/re-entrant refactor inherits as silent notification loss."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-007"
+      - "round1/semantics.md#f2"
+      - "notification-batcher.ts:37-39"
+      - "notification-batcher.ts:34"
+  - issue_id: issue-008
+    stance: support
+    rationale: "Originating lens. Reaffirm finding-011: one meaning — 'time the notification entered the batch' — exists in two un-unified sources, the documented but never-read enqueuedAt field and the internal Date.now() re-measurement, so the interface advertises a timestamp contract with no behavioral meaning while the window anchors to the divergent second source. Medium stands; backfill/replay with past enqueuedAt is the in-contract failure path, and the duplicate source enables undetected drift."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - "issue-ledger.yaml#issue-008"
+      - "round1/semantics.md#f3"
+      - "notification-batcher.ts:8-9"
+      - "notification-batcher.ts:20"
+validation:
+  missing_issues: []
