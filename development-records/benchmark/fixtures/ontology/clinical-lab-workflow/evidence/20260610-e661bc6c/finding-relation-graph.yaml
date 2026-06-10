@@ -1,0 +1,211 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-002
+    to_finding_id: finding-004
+    relation: duplicates
+    root_hypothesis: "Both findings describe the same critical-value notification
+      defect: the ontology retains only a lossy notified boolean while
+      notification evidence remains outside the authority model."
+    shared_cause: null
+    rationale: finding-002 and finding-004 target the CriticalValue notification
+      model, cite the same modeled boolean/external phone-log evidence, and
+      propose first-class notification evidence fields such as timestamp,
+      recipient, notifier/channel, acknowledgement, and evidence reference. The
+      severity differs, but the semantic defect is the same.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-004
+    to_finding_id: finding-016
+    relation: same_root_candidate
+    root_hypothesis: CriticalValue was modeled as a standalone safety range/status
+      flag rather than as a connected notification/result workflow event with
+      auditable evidence.
+    shared_cause: null
+    rationale: finding-004 identifies missing audit evidence for the notification
+      act, while finding-016 identifies the structural disconnection from
+      Result/Report and notification workflow. Both causal paths converge on
+      CriticalValue being disconnected from concrete result notification
+      evidence.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-003
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: TAT is treated as an externally owned dashboard calculation
+      instead of a canonical ontology-owned operational metric with precedence,
+      policy, and history.
+    shared_cause: null
+    rationale: finding-003 frames the authority conflict created by dashboard-owned
+      TAT formulas, and finding-007 identifies the missing metric concept,
+      calculation policy, version, and history. Both arise from the same
+      delegation of a shared operational metric outside the ontology without
+      reconciliation rules.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-006
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: The Test and Assay catalogs are maintained in parallel without
+      an authoritative mapping concept that supports lifecycle, validity, and
+      extension.
+    shared_cause: null
+    rationale: finding-006 and finding-008 both target the Test-Assay catalog model,
+      cite double registration of new items, and propose an explicit
+      Test-to-Assay/CatalogItemMapping with version/effective-period/cardinality
+      conditions. finding-008 emphasizes evolution risk, but the underlying
+      defect is the same missing mapping authority.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-006
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: The ontology has not resolved whether Test and Assay are
+      distinct concepts or projections of one catalog item, so no authoritative
+      relation between them is defined.
+    shared_cause: null
+    rationale: finding-013 identifies the semantic boundary problem between
+      orderable Test and executable Assay, while finding-006 identifies the
+      missing mapping and authority lifecycle. The mapping gap is supported by
+      the same unresolved conceptual separation of the two catalog entities.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-006
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: Assay was promoted to a standalone entity but not integrated
+      into the authoritative workflow/catalog graph through Test-Assay and
+      Assay-Result relations.
+    shared_cause: null
+    rationale: finding-006 focuses on missing catalog mapping and authority, while
+      finding-015 focuses on Assay being structurally orphaned from the workflow
+      graph. Both are explained by the absence of relations tying Assay to Test
+      and Result.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-013
+    to_finding_id: finding-015
+    relation: enables
+    root_hypothesis: Unresolved Test-versus-Assay semantics makes it possible for
+      Assay to remain a separate entity without workflow edges.
+    shared_cause: null
+    rationale: finding-013 shows that Test and Assay are described with blurred
+      boundaries and no canonical relation. That semantic ambiguity enables the
+      structural issue in finding-015, where Assay exists as an entity but has
+      no declared relation into the workflow graph.
+    confidence: medium
+  - relation_id: rel-008
+    from_finding_id: finding-001
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: Result.status and Report.result_status duplicate the same
+      status authority without an explicit canonical mapping and bounded
+      synchronization rule.
+    shared_cause: null
+    rationale: finding-001 highlights stale clinician-facing report status caused by
+      nightly correction propagation, while finding-010 highlights evolution
+      fragility from duplicated status enums and batch mapping. Both causal
+      paths cite the corrected-to-amended nightly synchronization and the
+      duplicated status fields.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-001
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: The ontology duplicates result status across LIS and report
+      surfaces while declaring Report.result_status as clinician-facing
+      authority, leaving mismatched authority during synchronization delay.
+    shared_cause: null
+    rationale: finding-001 is the value/trust failure of delayed correction
+      propagation; finding-011 is the semantic duplicate-authority problem for
+      the same Result.status and Report.result_status fields. The same
+      duplicated authority and nightly synchronization rule supports both
+      findings.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-010
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: Both findings describe the same duplicated
+      Result.status/Report.result_status model with implicit mapping and batch
+      synchronization.
+    shared_cause: null
+    rationale: finding-010 frames the issue as evolution breakage when statuses
+      expand; finding-011 frames it as semantic duplication and authority
+      ambiguity. Both cite the same status fields, different enum values, and
+      corrected-to-amended batch rule, and both propose canonical status or
+      mapping concepts.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-014
+    to_finding_id: finding-015
+    relation: same_root_candidate
+    root_hypothesis: The ontology lacks an explicit execution/provenance node such
+      as Assay/Test execution between Specimen and Result, causing both misnamed
+      Specimen produces Result and orphaned Assay.
+    shared_cause: null
+    rationale: finding-014 says the Specimen-to-Result produces relation wrongly
+      assigns result production to the specimen rather than an assay/execution
+      process. finding-015 says Assay, the analyzer execution unit, is
+      structurally orphaned. Both point to the missing execution relation that
+      should connect Assay or a test execution to Result provenance.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-009
+    to_finding_id: finding-013
+    relation: shared_cause_candidate
+    root_hypothesis: Catalog-related concepts are encoded locally in entity fields
+      instead of being normalized into shared reference concepts and relations.
+    shared_cause:
+      cause_claim: Test and Assay model overlapping catalog/specimen dimensions
+        without a shared canonical reference model, causing field-level drift
+        across entities.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-013.cause-003
+    rationale: finding-009 identifies that specimen kind is not promoted into a
+      reusable SpecimenKind concept across Specimen/Test/Assay. finding-013
+      identifies that Test and Assay lack a closed canonical relation. Both are
+      catalog normalization failures where shared axes are left as local fields
+      or parallel entities.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-005
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology models the Order-to-Report workflow as pairwise
+      edges but omits lifecycle and invariant constraints needed to validate
+      downstream operational state.
+    shared_cause:
+      cause_claim: Workflow state is represented with local status/edge fragments
+        rather than end-to-end lifecycle constraints that preserve auditability
+        and same-order traceability.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-017.cause-004
+    rationale: finding-005 concerns missing post-analysis Specimen lifecycle needed
+      for retest/correction/audit decisions, while finding-017 concerns missing
+      invariants tying report contents back to the same order, tests, and
+      specimens. They are not duplicates, but both arise from an
+      underconstrained workflow graph that cannot reconstruct operational
+      validity across later lifecycle steps.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-012
+    to_finding_id: finding-003
+    relation: shared_cause_candidate
+    root_hypothesis: Operational classifications and metrics are duplicated or
+      delegated without a single canonical authority, allowing workflow logic to
+      diverge across consumers.
+    shared_cause:
+      cause_claim: The ontology does not choose a canonical representation for
+        operational control values that drive routing, urgency, or metric
+        interpretation.
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-003.cause-003
+    rationale: finding-012 shows STAT order meaning split across priority, is_stat,
+      and StatOrder, which can make routing/TAT logic diverge. finding-003 shows
+      TAT authority delegated to dashboards without precedence. They concern
+      different concepts, but share an authority-design cause around operational
+      values lacking one canonical source.
+    confidence: low
+singleton_findings: []

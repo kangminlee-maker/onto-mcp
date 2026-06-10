@@ -1,0 +1,205 @@
+schema_version: 1
+session_id: 20260610-36ef1faa
+planned_issues:
+  - issue_id: issue-002
+    priority: 8
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+    conflict_summary: Axiology, coverage, and logic accept the broad root that
+      copied/manual/reconciled operational values need an explicit
+      source-authority and reconciliation model, while evolution, semantics, and
+      structure narrow the issue to time/version effects, value-meaning
+      ambiguity, or structural authority links. Deliberation is needed because
+      the breadth of the root determines whether the issue calls for a general
+      MasterDataAuthority/Reconciliation concept or a smaller set of scoped
+      repairs.
+    resolution_question: Should issue-002 remain a broad
+      source-authority/reconciliation modeling issue for all copied, manual, and
+      reconciled operational values, or be narrowed to only the time-varying,
+      semantically ambiguous, or structurally linked subsets supported by the
+      narrowing lenses?
+  - issue_id: issue-004
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Coverage and axiology support the broad audit/control-evidence
+      gap across release, approval, application, copying, and reconciliation
+      actions. Evolution, logic, semantics, and structure narrow the root to
+      state-change history, verification conditions, state/action meaning
+      separation, or structural trace links. The conflict matters because it
+      changes whether the planned repair is a general AuditEvent/ControlEvidence
+      concept or only narrower lifecycle and state-transition evidence.
+    resolution_question: Should issue-004 be deliberated and resolved as a general
+      control-evidence/audit-event gap for all listed control actions, or
+      narrowed to the specific state-transition, verification, semantic, or
+      structural evidence gaps each narrowing lens supports?
+  - issue_id: issue-006
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - axiology
+      - evolution
+      - semantics
+      - structure
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+    conflict_summary: Coverage and axiology treat MES execution bridge entities as
+      necessary for the PLM/MES operating-risk purpose, while evolution,
+      semantics, and structure narrow the need to execution snapshots,
+      master-data versus execution-instance meaning, or trace paths. Logic marks
+      the issue not applicable because no direct logical conflict is shown. This
+      is a material scope conflict because the issue statement itself depends on
+      whether the review target must cover execution bridge concepts beyond
+      master data.
+    resolution_question: Does the declared PLM/MES integration and
+      manufacturing-risk purpose require adding MES execution bridge concepts
+      such as ProductionOrder, Lot, execution results, consumption, and
+      genealogy, or should the issue be narrowed to snapshot/traceability links
+      from 기준정보 to execution without full execution-domain coverage?
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - logic
+      - axiology
+      - coverage
+      - evolution
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+    conflict_summary: Semantics, logic, and axiology support the high-severity
+      intra-concept conflict between an always-bidirectional AlternatePart
+      definition and a one_way default. Coverage and evolution only acknowledge
+      surface impact or decline root/severity judgment, while structure narrows
+      the matter to canonical relation-model normalization linked to issue-008.
+      Deliberation is needed to decide whether issue-009 stands independently as
+      a high semantic/logical contradiction or should be merged or scoped under
+      the broader AlternatePart direction-authority problem.
+    resolution_question: Should issue-009 remain an independent high-severity
+      semantic/logical contradiction about AlternatePart direction meaning, or
+      be treated as a scoped surface of issue-008's canonical relation-direction
+      authority problem?
+  - issue_id: issue-010
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.structure
+    conflict_summary: Semantics and axiology support the issue as a meaningful
+      InspectionPlan versus Operation type confusion, while coverage treats it
+      as surface impact and evolution, logic, and structure narrow it to
+      lifecycle, subtype constraint, or reference-structure concerns. The
+      conflict is material because it determines whether the final issue is
+      admitted as a semantic type error or only as a narrower
+      lifecycle/reference modeling improvement.
+    resolution_question: Should InspectionPlan is_a Operation be resolved as a
+      material semantic type-confusion issue, or narrowed to lifecycle
+      separation, subtype-constraint, and reference-structure consequences
+      without broad coverage ownership?
+  - issue_id: issue-011
+    priority: 5
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - structure
+      - axiology
+      - coverage
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+    conflict_summary: Structure and axiology support the parent_ref relation
+      omission as a BOM graph authority issue. Coverage, evolution, and logic
+      narrow it to trace coverage, future effectivity attachment, or inference
+      incompleteness, while semantics treats it as surface-only rather than a
+      meaning conflict. Deliberation is needed because the issue's materiality
+      depends on whether relations are the authoritative BOM graph or merely one
+      projection alongside attribute references.
+    resolution_question: Is the missing BomLine -> Assembly parent_ref relation a
+      material authoritative-graph closure problem, or only a narrower
+      projection/completeness concern because Assembly -> BomLine and
+      BomLine.parent_ref may already supply the parent authority?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating lenses support the issue, accept the root hypothesis,
+      and keep severity; runtime conflict signals are absent.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Coverage narrows its evidentiary basis to UOM conversion authority, but
+      all lenses keep severity and support the same practical repair direction
+      for explicit Uom, UnitConversion, and WorkCenterCapacity basis concepts;
+      the narrowed stance does not create a material deliberation conflict.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Some lenses narrow the issue to lifecycle meaning, transition judgment,
+      or structural path concerns, but no lens disputes the material lifecycle
+      gap or the need to represent termination, correction, and post-application
+      states/events; disagreement is not material enough for controlled
+      deliberation.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All lenses support the issue, accept the root hypothesis, and keep
+      severity; runtime conflict signals are absent.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: Logic and structure directly support the canonical direction-authority
+      root, while other lenses narrow their support to coverage, evolution, or
+      semantic consequences. No lens disputes the issue or severity, and the
+      narrower positions do not require a separate deliberation question beyond
+      preserving the canonical relation-direction repair scope.

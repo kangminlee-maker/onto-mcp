@@ -1,0 +1,179 @@
+schema_version: 1
+session_id: 20260610-36ef1faa
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: ECO 적용 시점별 Part revision, BOM line, Routing/Operation 기준이
+      version/effectivity 이력으로 닫히지 않아 생산 시점의 기준정보를 일관되게 재구성할 수 없다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 root hypothesis와 high severity를 유지했고 deliberation도 불필요하다고
+      정리되었다. PLM/MES 기준 문서의 변경 전후 생산 기준 정합성을 직접 약화하므로 다음 단계 전에
+      version/effectivity 기준으로 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-004
+      - finding-011
+      - finding-005
+      - finding-013
+  - issue_id: issue-002
+    problem_definition: 복사·수기·계산·대사되는 운영 값의 source authority, sync 상태,
+      reconciliation 상태가 독립 기준 개념으로 모델링되지 않았다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: deliberation은 broad authority/reconciliation root를 유지하되 좁힌 렌즈들의 조건을
+      repair scope에 반영하는 것으로 해결되었다. 값 충돌 시 기준 원본과 최신성을 판정하는 거버넌스가 약해지는 medium
+      이슈다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-008
+  - issue_id: issue-003
+    problem_definition: UOM, 환산계수, capacity basis가 구조화된 기준 데이터로 분리되지 않아 수량과 능력 값의
+      의미가 소비 시스템별로 달라질 수 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: coverage가 일부 근거를 좁혔지만 모든 렌즈가 명시적 Uom, UnitConversion,
+      WorkCenterCapacity basis 필요성을 유지했다. 수량·능력 계산의 비교 가능성과 자동 검증 가능성을 약화하는 기준
+      모델 결손이다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-012
+      - finding-019
+  - issue_id: issue-004
+    problem_definition: 승인, 적용, 복사, 대사 같은 통제 행위가 actor/time/reason/evidence 및
+      before/after를 가진 감사 이벤트로 표현되지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: controlled deliberation은 general AuditEvent/ControlEvidence gap을 유지하고
+      narrow positions를 설계 조건으로 흡수했다. 상태와 값 변경의 책임성, 감사성, 재현성을 약화하는 medium 거버넌스
+      문제다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-005
+    problem_definition: Routing, ECO, Part, BomLine lifecycle이 release/apply 전반부 상태에
+      머물러 종료, 폐기, 단종, 정정, 재발행 구간을 표현하지 못한다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: 렌즈별 좁힘은 있었지만 lifecycle gap과 종료·사후정정 상태 또는 전이 이벤트 필요성은 다투어지지 않았다. 전
+      lifecycle 기준 제공 목적의 완전성을 약화하는 medium 이슈다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-006
+    problem_definition: 기준정보에서 생산오더와 실행 결과의 as-planned/as-built snapshot으로 이어지는 최소
+      execution bridge와 traceability 경로가 없다.
+    issue_role: enabler
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: deliberation은 전체 MES 실행 도메인 확장이 아니라 최소 execution bridge, snapshot,
+      traceability 개념으로 issue를 좁혔다. 기준정보 검토를 실제 제조 운영 위험 추적으로 연결하는 enabling
+      gap이므로 단계적 후속 보완이 적합하다.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: 스크랩 재투입을 BOM parent-child 자기참조 예외로 모델링해 BOM 비순환 불변식과 공정 재순환 의미가 충돌한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 렌즈가 root와 high severity를 지지했고, 비순환 규칙과 자기 하위 포함 예외가 같은 BomLine
+      구조에서 직접 충돌한다. BOM 전개, 검증, 원가 롤업의 핵심 정확성을 훼손하므로 대상 내에서 우선 해소해야 한다.
+    related_surface_finding_ids:
+      - finding-010
+      - finding-015
+      - finding-018
+  - issue_id: issue-008
+    problem_definition: AlternatePart 방향성 권위가 direction 속성을 가진 엔티티와 단축 Part-to-Part
+      relation 사이에 나뉘어 표준 relations 그래프에서 일관되게 검증되지 않는다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: logic과 structure가 canonical direction-authority root를 직접 지지하고 다른 렌즈들도
+      결과 범위로 좁혀 수용했다. 대체 방향성의 단일 구조 권위가 없어 통합 계약의 일관성이 약해지는 medium 이슈다.
+    related_surface_finding_ids:
+      - finding-014
+      - finding-020
+  - issue_id: issue-009
+    problem_definition: AlternatePart 정의는 항상 양방향 대체를 말하지만 direction 속성은 one_way 기본값을
+      허용해 동일 개념의 방향성 의미가 불일치한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation은 issue-008에 흡수하지 않고 독립 high-severity semantic/logical
+      contradiction으로 유지했다. 품목 대체 허용 방향을 반대로 적용할 수 있는 직접 의미 충돌이므로 대상 내에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-016
+  - issue_id: issue-010
+    problem_definition: InspectionPlan을 Operation 하위 유형으로 두어 검사 계획 문서/파라미터와 라우팅 실행
+      공정 단계를 같은 타입으로 취급한다.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: controlled deliberation은 semantic type-confusion issue로 확정했고,
+      lifecycle separation과 reference 구조는 해결 제약으로 남겼다. 라우팅 실행 객체와 품질 기준 문서의 의미
+      경계를 흐리는 medium 이슈다.
+    related_surface_finding_ids:
+      - finding-017
+  - issue_id: issue-011
+    problem_definition: relations가 BOM 기준 그래프의 authoritative surface인지 불명확한 상태에서
+      BomLine.parent_ref 대응 관계 또는 권위/동기화 규칙이 없어 상위 Assembly 경로의 완결성이 조건부로 불확실하다.
+    issue_role: evidence_gap
+    judgment_state: insufficient_evidence
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: deliberation은 issue를 narrowed로 처리하고 relations가 canonical graph인지
+      projection인지에 대한 명시 규칙을 required follow-up evidence로 남겼다. relations 권위가
+      확정되어야 materiality와 repair 범위를 판단할 수 있으므로 증거/결정이 먼저 필요하다.
+    related_surface_finding_ids:
+      - finding-021

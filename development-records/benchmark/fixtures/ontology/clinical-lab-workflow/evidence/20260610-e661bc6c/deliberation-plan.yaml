@@ -1,0 +1,167 @@
+schema_version: 1
+session_id: 20260610-e661bc6c
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - evolution
+      - semantics
+      - logic
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.logic
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+    conflict_summary: Most lenses frame duplicated Result.status and
+      Report.result_status as a material authority/trust and evolution risk
+      requiring canonical status or explicit mapping, while logic narrows it to
+      a satisfiable mapping/synchronization risk and lowers severity, and
+      structure narrows it to a modeled invariant gap.
+    resolution_question: Should issue-001 remain a high-severity authority/trust
+      issue about duplicated clinician-facing status authority, or be narrowed
+      to a lower-severity mapping/synchronization invariant gap?
+  - issue_id: issue-002
+    priority: 9
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: Axiology supports the standalone critical-notification
+      authority issue at medium severity, coverage raises severity and notes
+      issue-004 is the more complete workflow expression, while evolution,
+      semantics, and structure narrow the root to extensibility, boolean
+      meaning, or missing event structure.
+    resolution_question: Should issue-002 stand as its own material issue, be raised
+      in severity, or be subsumed into the broader CriticalValue
+      workflow/evidence issue represented by issue-004?
+  - issue_id: issue-004
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Coverage keeps high severity because disconnected
+      CriticalValue notification evidence blocks shared EMR/LIS safety workflow
+      validation, while structure directly supports the graph defect but lowers
+      severity despite accepting the missing Result/Report/notification
+      relations.
+    resolution_question: Should the connected CriticalValue notification/result
+      workflow gap remain high severity, or should it be lowered because the
+      established defect is primarily structural graph disconnection?
+  - issue_id: issue-006
+    priority: 7
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - structure
+      - logic
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-006.coverage
+      - issue-stance-matrix.yaml#stances.issue-006.semantics
+      - issue-stance-matrix.yaml#stances.issue-006.structure
+      - issue-stance-matrix.yaml#stances.issue-006.logic
+      - issue-stance-matrix.yaml#stances.issue-006.axiology
+      - issue-stance-matrix.yaml#stances.issue-006.evolution
+    conflict_summary: Coverage, semantics, structure, axiology, and evolution
+      support a shared medium issue combining unresolved Test/Assay concept
+      identity, missing mapping, orphaned Assay workflow integration, and
+      missing execution/provenance node, while logic narrows the issue to
+      missing explicit constraints and lowers severity because the current graph
+      is not formally contradictory.
+    resolution_question: Should issue-006 remain a combined material Test/Assay
+      authority and workflow-integration issue, or be narrowed to
+      non-contradictory missing constraints with lower severity?
+  - issue_id: issue-007
+    priority: 6
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - evolution
+      - axiology
+      - structure
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+    conflict_summary: Evolution supports issue-007 as a direct catalog
+      change-continuity issue, while axiology and structure treat it as a
+      surface or narrowed consequence of the broader Test/Assay mapping and
+      workflow issue captured by issue-006; coverage and semantics support the
+      root but also acknowledge overlap.
+    resolution_question: Should issue-007 remain a separate evolution material issue
+      about Test/Assay double registration, or be treated as a downstream
+      duplicate covered by issue-006?
+  - issue_id: issue-009
+    priority: 5
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - logic
+      - structure
+      - axiology
+      - coverage
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+    conflict_summary: Semantics and supporting lenses treat split STAT
+      representation as a material urgency/routing authority issue, while logic
+      narrows it to missing precedence/invariants and lowers severity because no
+      impossible state is established; structure also narrows to
+      underconstrained internal structure.
+    resolution_question: Should issue-009 be adjudicated as a medium material
+      canonical STAT authority issue, or narrowed to a lower-severity
+      missing-invariant concern without proven contradiction?
+skipped_issues:
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the TAT metric authority concern at medium
+      severity; semantics and structure only narrow the lens-specific framing to
+      calculation meaning, policy, versioning, and structural metric binding,
+      which is compatible with the proposed action.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Coverage, axiology, evolution, and semantics agree that post-analysis
+      specimen lifecycle coverage is a material medium gap; structure records
+      only lens-limited insufficient evidence for a specific structural finding,
+      not a material conflict against the issue.
+  - issue_id: issue-008
+    reason_code: no_material_conflict
+    reason: The stances consistently support a shared SpecimenKind/reference-concept
+      gap at medium severity; structure narrows the explanation to field-local
+      representation and missing reusable reference, which does not materially
+      conflict with the root or proposed action.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: All applicable lenses preserve medium severity and agree that
+      Report-to-Result membership needs same-order/test/specimen constraints;
+      evolution, logic, and semantics merely narrow their agreement to their
+      lens boundaries rather than disputing the material issue.
