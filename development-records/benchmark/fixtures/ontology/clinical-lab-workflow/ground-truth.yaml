@@ -1,0 +1,54 @@
+# Ground truth — clinical-lab-workflow fixture에 의도적으로 심은 개념 결함.
+# 이 파일은 리뷰 타깃 프로젝트에 절대 포함하지 않는다 (채점 전용).
+fixture: clinical-lab-workflow
+seeded_defects:
+  - id: CLW-1
+    kind: duplicate_concept
+    where: "Test vs Assay"
+    description: "같은 의미(주문/수행 가능한 검사 항목)가 두 엔티티로 분열. notes가 '두 곳 모두 등록'으로 분열을 운영화까지 함. specimen 타입도 enum vs 자유 문자열로 표현 분열."
+    severity_expectation: material
+  - id: CLW-2
+    kind: authority_conflict
+    where: "Result.status vs Report.result_status"
+    description: "결과 상태의 진실이 두 곳(LIS의 Result.status, Report.result_status)에 있고 Report 쪽 note가 '권위 값'을 주장. 야간 배치 1회 동기화라 corrected→amended 사이 최대 하루 불일치 창."
+    severity_expectation: material
+  - id: CLW-3
+    kind: enum_fragmentation
+    where: "Result.status [preliminary,final,corrected] vs Report.result_status [prelim,finalized,amended]"
+    description: "같은 개념의 상태 enum이 서로 다른 어휘로 파편화."
+    severity_expectation: material
+  - id: CLW-4
+    kind: subtype_attribute_duplication
+    where: "Order.priority/is_stat vs StatOrder"
+    description: "STAT 여부가 enum 값(priority=stat) + boolean(is_stat) + 하위타입(StatOrder) 세 방식으로 동시 표현 — 분류 권위 불명."
+    severity_expectation: material
+  - id: CLW-5
+    kind: lifecycle_gap
+    where: "Specimen.lifecycle"
+    description: "analyzed 이후 보관/폐기 상태가 없고 '부서 내규'로 위임 — 검체 추적성(보존 의무) 단절."
+    severity_expectation: material
+  - id: CLW-6
+    kind: relation_inconsistency
+    where: "Result↔Specimen: derived_from + produces 역방향 중복; Report↔Result: aggregated_into + contains 중복"
+    description: "동일 의미 관계가 양방향/이중 명명으로 중복 정의 — 단일 소유 원칙 위반."
+    severity_expectation: medium_or_above
+  - id: CLW-7
+    kind: missing_relation
+    where: "Specimen↔Test"
+    description: "검체가 어떤 Test를 위해 채취됐는지의 관계가 없음(Order 경유로만 추정 가능). requires_specimen_type 검증이 모델상 불가능."
+    severity_expectation: material
+  - id: CLW-8
+    kind: derived_value_as_authority
+    where: "notes의 TAT"
+    description: "TAT가 파생값인데 '대시보드 팀 자체 계산식'으로 별도 권위화 — 파생값의 원천 분리."
+    severity_expectation: medium_or_above
+  - id: CLW-9
+    kind: audit_evidence_gap
+    where: "CriticalValue.notified"
+    description: "위험값 통보가 boolean뿐, 통보 시각/수신자/방법이 모델 밖(전화 대장) — 규제 감사 추적 불가."
+    severity_expectation: material
+  - id: CLW-10
+    kind: temporal_semantics_gap
+    where: "state_rules의 Order completed 조건"
+    description: "'모든 Result final' 조건이 corrected 재발행을 고려하지 않음 — completed 후 corrected 발생 시 상태 의미 모순."
+    severity_expectation: medium_or_above

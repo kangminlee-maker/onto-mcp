@@ -1,0 +1,53 @@
+# Ground truth — manufacturing-bom fixture의 seeded 개념 결함 (채점 전용, 타깃 비포함)
+fixture: manufacturing-bom
+seeded_defects:
+  - id: MBO-1
+    kind: contradictory_invariant
+    where: "integrity_rules의 BOM 비순환 + 스크랩 재투입 예외"
+    description: "비순환 불변식을 선언하고 같은 줄에서 자기포함(순환)을 공식 모델링 패턴으로 허용 — 불변식 자기모순."
+    severity_expectation: material
+  - id: MBO-2
+    kind: authority_conflict
+    where: "Part.rev / Part.current_eco"
+    description: "리비전 진실이 도면 관리대장·ECO 시스템·온톨로지 필드 3곳에 분산, 주간 배치 동기화로 불일치 창 상시 존재."
+    severity_expectation: material
+  - id: MBO-3
+    kind: relation_semantics_conflict
+    where: "AlternatePart.definition vs direction 속성"
+    description: "정의는 '대체는 대칭'이라 선언하나 속성 기본값은 one_way — 정의와 스키마 모순."
+    severity_expectation: material
+  - id: MBO-4
+    kind: duplicate_relation_path
+    where: "Part alternate_of 단축 관계 vs AlternatePart 엔티티"
+    description: "같은 관계가 엔티티와 직접 관계 두 경로로 표현 — 어느 쪽이 원본인지 미정."
+    severity_expectation: medium_or_above
+  - id: MBO-5
+    kind: derived_value_copy
+    where: "BomLine.scrap_rate"
+    description: "외부 엑셀이 원본인 값을 '복사해 둔다' — 복사본 권위화와 드리프트."
+    severity_expectation: material
+  - id: MBO-6
+    kind: unit_ambiguity
+    where: "WorkCenter.capacity_per_shift + notes의 uom 환산 부재"
+    description: "능력 단위가 작업장마다 다르고(개수/시간), uom 환산계수 마스터 부재로 현장 임의 환산."
+    severity_expectation: material
+  - id: MBO-7
+    kind: wrong_generalization
+    where: "InspectionPlan is_a Operation"
+    description: "검사 '계획'은 공정 단계의 하위 타입이 아니라 별개 개념(계획↔수행 단위 혼동). acceptance_criteria 원본도 SOP 문서로 외부화."
+    severity_expectation: material
+  - id: MBO-8
+    kind: lifecycle_gap
+    where: "Part"
+    description: "품목 lifecycle(신규/양산/단종 등) 부재 — ECO effective_date·대체부품 의미가 상태 없이는 불완전."
+    severity_expectation: medium_or_above
+  - id: MBO-9
+    kind: dual_write_authority
+    where: "notes의 누적 std_time"
+    description: "MES 계산값과 표준원가 시스템 수기 입력이 병존, 분기 대사 — 이중 기록."
+    severity_expectation: material
+  - id: MBO-10
+    kind: temporal_effectivity_gap
+    where: "BomLine"
+    description: "BOM 라인에 유효기간(effectivity) 개념 부재 — ECO effective_date와 결합 불가, 시점별 BOM 재구성 불능."
+    severity_expectation: material
