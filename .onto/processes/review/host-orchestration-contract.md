@@ -13,7 +13,7 @@
 
 ## 1. Position
 
-A(runtime-orchestration)와 B(host-orchestration)는 **하나의 review 엔진을 공유**한다. 둘의 유일한 차이는 **유닛을 누가 실행(spawn)하는가**다:
+A(runtime-orchestration)와 B(host-orchestration)는 **하나의 review 엔진을 공유**한다. 둘의 유일한 차이는 **유닛을 누가 실행(spawn)하는가**다. 4f rebase(2026-06-10) 이후 이 선언은 루프 차원에서도 성립한다: A의 post-lens 시퀀싱은 B와 동일한 frontier(`computeReviewFrontier`)+seat gate(`validateUnitSeatToResult`+merge)가 구동하며, A는 "다음 유닛 실행"만 자신의 unit-execution layer(retry·검증·fallback)로 수행한다(lens는 정의상 stage 0으로 pre-loop 고정).
 
 | | A = runtime | B = host |
 |---|---|---|
