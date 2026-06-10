@@ -5774,10 +5774,39 @@ export async function executeReviewPromptExecution(
       ],
     );
     const nestedStartedAtMs = Date.now();
+    // Parity by construction: nested units reuse the SAME flat dispatch
+    // list (canonical seat paths, output-format, human ref) and the SAME
+    // effective unit-executor config (LLM overrides included) the flat
+    // loop would spawn — the nested worker only changes who fans out.
+    const firstLensDispatch = lensDispatches[0];
+    if (!firstLensDispatch) {
+      throw new Error("nested-workers dispatch requires at least one lens");
+    }
+    const nestedLensExecutorConfig = executorConfigWithUnitSettings({
+      executorConfig: defaultExecutorConfig,
+      dispatch: firstLensDispatch,
+      profile: params.reviewExecutionProfile,
+    });
+    const nestedUnits = lensDispatches.map((dispatch) => ({
+      unit_id: dispatch.unit_id,
+      unit_kind: dispatch.unit_kind,
+      packet_path: dispatch.packet_path,
+      output_path: dispatch.output_path,
+      extra_args: [
+        ...(dispatch.output_format && dispatch.output_format !== "markdown"
+          ? ["--output-format", dispatch.output_format]
+          : []),
+        ...(dispatch.human_output_ref
+          ? ["--human-output-ref", dispatch.human_output_ref]
+          : []),
+      ],
+    }));
     const nestedResult = await executeReviewViaCodexNested({
       sessionRoot,
       projectRoot,
       ontoConfig: params.ontoConfig ?? {},
+      units: nestedUnits,
+      inner_executor: nestedLensExecutorConfig,
     });
     const nestedCompletedAtMs = Date.now();
     // Map nested-dispatch outcomes into executionOutcomes[] in lensDispatches order.

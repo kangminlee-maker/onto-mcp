@@ -3,49 +3,30 @@
  *
  * # What this module is
  *
- * The bridge between review session artifacts and the nested Codex worker
- * orchestrator.
- * It reads the execution plan, constructs the
- * `NestedLensDispatchInput`, invokes `runCodexNestedTeamlead`, and
- * classifies per-lens outcomes into the
- * `ReviewPromptExecutionResult`-shaped value used downstream by
- * `completeReviewSession`.
+ * The A-path bridge between review session artifacts and the codex nesting
+ * batch worker. It receives the **caller-built** unit batch (the same
+ * dispatch list the flat path would execute — parity by construction),
+ * attaches session-scoped common args, invokes
+ * `runCodexNestingBatchWorker`, and classifies per-unit outcomes into the
+ * participating / degraded sets used downstream.
  *
- * # Why it exists
+ * # Layering
  *
- * `runCodexNestedTeamlead` is a pure function over lens inputs → outcomes,
- * intentionally decoupled from onto's session artifacts so it can be
- * unit-tested without filesystem fixtures. This bridge adds the integration that the
- * runner (`runReviewInvokeCli`) can branch into when the resolved
- * profile mode is `nested-workers`.
- *
- * Keeping this seat **separate** from `executeReviewPromptExecution`
- * (which uses the per-lens worker loop) preserves the existing review flow
- * for main-workers mode.
- *
- * # How it relates
- *
- * - `ReviewExecutionProfile.mode` selects whether this bridge is used.
- * - `executeReviewViaCodexNested()` handles the nested worker execution phase.
- * - `completeReviewSession()` downstream consumes the result to compile
- *   the final review record.
+ * - Units + inner executor argv are caller policy: the runner maps its
+ *   flat `lensDispatches` (canonical seat paths, `--output-format`,
+ *   `--human-output-ref`, LLM override args) so nested and flat execute
+ *   the identical unit-executor invocation. The bridge never re-derives
+ *   them from the plan (the retired bridge did, which is how nested lost
+ *   structured-output parity and got fail-closed).
+ * - The bridge owns: outer (teamlead seat) codex settings from
+ *   `.onto/settings.json`, sessionRoot-scoped stream/archive paths, output
+ *   probing, and the downstream result shape.
  *
  * # Scope
  *
- * - Bridge function `executeReviewViaCodexNested`
- * - Output-file validation (exists + non-empty) on top of orchestrator
- *   outcomes — a per-lens `status: "ok"` in the orchestrator is
- *   necessary but not sufficient; the file must actually be written.
- * - Tests with injected orchestrator + injected filesystem
- *
- * This bridge owns only nested lens dispatch. Synthesize, deliberation
- * artifact handling, and final record assembly stay in the main review
- * runner.
- *
- * # Design reference
- *
- * Current execution contract is owned by this bridge and the nested teamlead
- * executor. Historical validation notes are not runtime references.
+ * This bridge owns only nested batch dispatch for the lens phase (A-path
+ * scope). Synthesize, deliberation artifact handling, and final record
+ * assembly stay in the main review runner.
  */
 
 import fs from "node:fs/promises";
@@ -58,21 +39,16 @@ import {
 } from "../llm/model-switcher.js";
 import type { ReviewExecutionPlan } from "../review/artifact-types.js";
 import { readYamlDocument } from "../review/review-artifact-utils.js";
+import type { NestingBatchUnit } from "../review/nesting-batch.js";
 import {
-  type NestedLensDispatchInput,
-  type CodexNestedTeamleadResult,
-  runCodexNestedTeamlead,
-} from "./codex-nested-teamlead-executor.js";
+  type CodexNestingBatchWorkerResult,
+  runCodexNestingBatchWorker,
+} from "./codex-nesting-batch-worker.js";
 
-interface CodexSpawnConfig {
+export interface CodexOuterSpawnConfig {
   model?: string;
   effort?: string;
   service_tier?: string;
-}
-
-export interface CodexNestedSpawnConfig {
-  teamlead: CodexSpawnConfig;
-  lens: CodexSpawnConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -82,12 +58,23 @@ export interface CodexNestedSpawnConfig {
 export interface CodexNestedDispatchArgs {
   /** Absolute path to the review session directory. */
   sessionRoot: string;
-  /** Project root (for outer codex cwd). Defaults to parent of sessionRoot. */
-  projectRoot?: string;
+  /** Project root (outer codex cwd + `--project-root` for inner units). */
+  projectRoot: string;
   ontoConfig: OntoConfig;
   /**
-   * Per-invocation timeout for the outer codex (ms). Forwarded to
-   * `runCodexNestedTeamlead`. Defaults to 10 minutes.
+   * Units to fan out, in dispatch order — built by the caller from the
+   * same dispatch list the flat path executes (canonical output paths,
+   * per-unit `--output-format` / `--human-output-ref` extra args).
+   */
+  units: NestingBatchUnit[];
+  /**
+   * Unit-executor invocation (bin + args, LLM overrides included) — the
+   * caller passes the same effective executor config the flat path spawns.
+   */
+  inner_executor: { bin: string; args: string[] };
+  /**
+   * Per-invocation timeout for the outer codex (ms). Defaults to 10
+   * minutes.
    */
   timeout_ms?: number;
   /**
@@ -98,9 +85,10 @@ export interface CodexNestedDispatchArgs {
 }
 
 /**
- * Result shape consumed as `ReviewPromptExecutionResult` by the downstream
- * pipeline (`completeReviewSession`). `synthesis_executed` is always `false`;
- * synthesize runs in the main review runner.
+ * Result shape consumed by the downstream pipeline. `synthesis_executed`
+ * is always `false`; synthesize runs in the main review runner. For lens
+ * batches `unit_id === lens_id`, so the participating/degraded sets keep
+ * their established names.
  */
 export interface CodexNestedDispatchResult {
   session_root: string;
@@ -111,8 +99,8 @@ export interface CodexNestedDispatchResult {
   synthesis_output_path: string;
   error_log_path: string | null;
   halt_reason?: string;
-  /** Raw orchestrator result — retained for debugging / artifact capture. */
-  nested_raw: CodexNestedTeamleadResult;
+  /** Raw worker result — retained for debugging / artifact capture. */
+  nested_raw: CodexNestingBatchWorkerResult;
 }
 
 // ---------------------------------------------------------------------------
@@ -137,19 +125,18 @@ const defaultInspector: OutputFileInspector = async (p) => {
 // ---------------------------------------------------------------------------
 
 /**
- * Archive for outer codex stdout/stderr when streaming did not
- * already write the files. Normally `spawnOuterCodex` is invoked with
- * `stream_stdout_path` / `stream_stderr_path` and the on-disk files
- * carry the authoritative content via `fs.createWriteStream`; in that
- * case this helper sees non-empty files and returns without writing
- * (prevents dual-writer drift — 3rd self-review U4).
+ * Archive for outer codex stdout/stderr when streaming did not already
+ * write the files. Normally the worker is invoked with stream paths and
+ * the on-disk files carry the authoritative content; in that case this
+ * helper sees non-empty files and returns without writing (prevents
+ * dual-writer drift).
  *
  * Silently swallows write errors — an artifact write failure must not
  * mask the actual dispatch outcome. Best-effort.
  */
 async function archiveOuterStreamsIfMissing(
   sessionRoot: string,
-  nestedResult: CodexNestedTeamleadResult,
+  nestedResult: CodexNestingBatchWorkerResult,
 ): Promise<void> {
   const stdoutPath = path.join(sessionRoot, "nested-outer-stdout.log");
   const stderrPath = path.join(sessionRoot, "nested-outer-stderr.log");
@@ -174,26 +161,24 @@ async function archiveWriteIfMissing(targetPath: string, content: string): Promi
 }
 
 // ---------------------------------------------------------------------------
-// Worker setting resolution
+// Outer (teamlead seat) setting resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Resolve distinct Codex model settings for the outer teamlead and inner lens
- * workers. Empty objects mean Codex picks its configured defaults for that seat.
+ * Resolve the codex model settings for the outer worker (teamlead seat)
+ * from `.onto/settings.json`. Empty object means codex picks its
+ * configured defaults. Inner unit LLM settings are NOT resolved here —
+ * they ride inside the caller-built `inner_executor` args (flat parity).
  */
-export function resolveCodexSpawnConfig(
+export function resolveCodexOuterSpawnConfig(
   config: OntoConfig,
-): CodexNestedSpawnConfig {
-  const execution = config.review?.execution;
-  return {
-    teamlead: codexConfigFromRef(execution?.teamlead?.llm) ?? {},
-    lens: codexConfigFromRef(execution?.lens?.llm) ?? {},
-  };
+): CodexOuterSpawnConfig {
+  return codexConfigFromRef(config.review?.execution?.teamlead?.llm) ?? {};
 }
 
 function codexConfigFromRef(
   ref: ReviewLlmRef | undefined,
-): CodexSpawnConfig | null {
+): CodexOuterSpawnConfig | null {
   const selection = normalizeLlmModelSwitcher(ref);
   if (
     !isExternalOauthWorkerSelection(selection) ||
@@ -213,23 +198,22 @@ function codexConfigFromRef(
 // ---------------------------------------------------------------------------
 
 /**
- * Execute a review via the nested Codex worker path. Reads the execution
- * plan from `sessionRoot/execution-plan.yaml`, dispatches all lens
- * packets through one outer Codex teamlead plus one inner Codex worker per lens, and
- * classifies outcomes into participating / degraded lens sets.
+ * Execute the lens phase via the nested codex batch worker. Dispatches the
+ * caller-built units through one outer codex worker plus one inner
+ * unit-executor subprocess per unit, and classifies outcomes into
+ * participating / degraded sets.
  *
- * An orchestrator `status: "ok"` is NOT sufficient for `participating` —
- * the output file must exist AND be non-empty. This guards against the
- * outer Codex reporting success when an inner worker failed to write its
- * `-o` output.
+ * A worker `status: "ok"` is NOT sufficient for `participating` — the
+ * output file must exist AND be non-empty. This guards against the outer
+ * codex reporting success when an inner executor failed to write its seat.
  *
  * Injection:
- *   - `runImpl`: replace the orchestrator (default: `runCodexNestedTeamlead`)
+ *   - `runImpl`: replace the worker (default: `runCodexNestingBatchWorker`)
  *   - `inspector`: replace the file-existence probe (default: `fs.stat`)
  */
 export async function executeReviewViaCodexNested(
   args: CodexNestedDispatchArgs,
-  runImpl: typeof runCodexNestedTeamlead = runCodexNestedTeamlead,
+  runImpl: typeof runCodexNestingBatchWorker = runCodexNestingBatchWorker,
   inspector: OutputFileInspector = defaultInspector,
 ): Promise<CodexNestedDispatchResult> {
   const executionPlanPath = path.join(args.sessionRoot, "execution-plan.yaml");
@@ -238,44 +222,32 @@ export async function executeReviewViaCodexNested(
   // session artifact problem directly rather than a generic null check.
   const plan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
 
-  const lenses: NestedLensDispatchInput[] = plan.lens_prompt_packet_seats.map(
-    (seat) => ({
-      lens_id: seat.lens_id,
-      packet_path: seat.packet_path,
-      output_path: seat.output_path,
-    }),
-  );
-
-  const spawnConfig = resolveCodexSpawnConfig(args.ontoConfig);
+  const outerConfig = resolveCodexOuterSpawnConfig(args.ontoConfig);
 
   // Stream paths live under sessionRoot so the watcher pane can `tail -f`
-  // them from the moment the outer codex starts emitting, instead of
-  // waiting for the post-hoc `archiveOuterStreams` batch write. With
-  // streaming active, these files are the single authority — no post-
-  // dispatch overwrite (3rd self-review U4: prevent dual-writer drift
-  // where two writers could diverge if one was interrupted mid-flush).
+  // them from the moment the outer codex starts emitting. With streaming
+  // active, these files are the single authority — no post-dispatch
+  // overwrite (prevents dual-writer drift).
   const streamStdoutPath = path.join(args.sessionRoot, "nested-outer-stdout.log");
   const streamStderrPath = path.join(args.sessionRoot, "nested-outer-stderr.log");
 
   const nestedResult = await runImpl({
-    lenses,
-    ...(spawnConfig.teamlead.model
-      ? { teamlead_model: spawnConfig.teamlead.model }
+    batch: {
+      units: args.units,
+      inner_executor_argv: [args.inner_executor.bin, ...args.inner_executor.args],
+      common_args: [
+        "--project-root",
+        args.projectRoot,
+        "--session-root",
+        args.sessionRoot,
+      ],
+    },
+    ...(outerConfig.model ? { teamlead_model: outerConfig.model } : {}),
+    ...(outerConfig.effort ? { teamlead_reasoning_effort: outerConfig.effort } : {}),
+    ...(outerConfig.service_tier
+      ? { teamlead_service_tier: outerConfig.service_tier }
       : {}),
-    ...(spawnConfig.teamlead.effort
-      ? { teamlead_reasoning_effort: spawnConfig.teamlead.effort }
-      : {}),
-    ...(spawnConfig.teamlead.service_tier
-      ? { teamlead_service_tier: spawnConfig.teamlead.service_tier }
-      : {}),
-    ...(spawnConfig.lens.model ? { lens_model: spawnConfig.lens.model } : {}),
-    ...(spawnConfig.lens.effort
-      ? { lens_reasoning_effort: spawnConfig.lens.effort }
-      : {}),
-    ...(spawnConfig.lens.service_tier
-      ? { lens_service_tier: spawnConfig.lens.service_tier }
-      : {}),
-    ...(args.projectRoot ? { project_root: args.projectRoot } : {}),
+    project_root: args.projectRoot,
     ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
     ...(args.codex_bin ? { codex_bin: args.codex_bin } : {}),
     stream_stdout_path: streamStdoutPath,
@@ -287,34 +259,34 @@ export async function executeReviewViaCodexNested(
 
   const participating: string[] = [];
   const degraded: string[] = [];
-  for (let i = 0; i < lenses.length; i += 1) {
-    const lens = lenses[i]!;
+  for (let i = 0; i < args.units.length; i += 1) {
+    const unit = args.units[i]!;
     const outcome = nestedResult.outcomes[i];
-    const orchestratorOk = outcome?.status === "ok";
-    if (!orchestratorOk) {
-      degraded.push(lens.lens_id);
+    const workerOk = outcome?.status === "ok";
+    if (!workerOk) {
+      degraded.push(unit.unit_id);
       continue;
     }
-    const probe = await inspector(lens.output_path);
+    const probe = await inspector(unit.output_path);
     if (probe.exists && probe.size > 0) {
-      participating.push(lens.lens_id);
+      participating.push(unit.unit_id);
     } else {
-      degraded.push(lens.lens_id);
+      degraded.push(unit.unit_id);
     }
   }
 
-  // Determine halt_reason when orchestrator signalled teamlead-level
-  // failure (e.g., timeout, no summary) — surfaces to the caller for
-  // error reporting. Per-lens degradation alone does NOT halt.
+  // Determine halt_reason when the worker signalled outer-level failure
+  // (e.g., timeout, no summary) — surfaces to the caller for error
+  // reporting. Per-unit degradation alone does NOT halt.
   let halt_reason: string | undefined;
   if (!nestedResult.summary_parsed && nestedResult.outer_exit_code !== 0) {
     halt_reason =
-      `codex-nested outer teamlead failed (exit=${nestedResult.outer_exit_code}, summary=${nestedResult.summary_parsed ? "parsed" : "missing"})`;
+      `codex-nested outer worker failed (exit=${nestedResult.outer_exit_code}, summary=${nestedResult.summary_parsed ? "parsed" : "missing"})`;
   }
 
   return {
     session_root: args.sessionRoot,
-    executed_lens_count: lenses.length,
+    executed_lens_count: args.units.length,
     participating_lens_ids: participating,
     degraded_lens_ids: degraded,
     synthesis_executed: false,
