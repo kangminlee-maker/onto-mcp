@@ -1,0 +1,64 @@
+schema_version: 1
+session_id: 20260610-4bfe81da
+planned_issues:
+  - issue_id: issue-005
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - logic
+      - axiology
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-005.semantics
+      - issue-stance-matrix.yaml#stances.issue-005.logic
+      - issue-stance-matrix.yaml#stances.issue-005.axiology
+      - issue-stance-matrix.yaml#stances.issue-005.structure
+    conflict_summary: Semantics, axiology, and structure treat
+      Collateral-as-Exposure as a high-severity ontology-level type error that
+      can corrupt shared classification and aggregation behavior, while logic
+      narrows the claim because no explicit disjointness or unsatisfiable formal
+      condition is declared and lowers severity from a formal-logic perspective.
+    resolution_question: Should issue-005 remain a high-severity semantic/structural
+      type-boundary defect requiring removal of Collateral as an Exposure
+      subtype, or should its severity/root be lowered or narrowed because the
+      ontology does not explicitly declare formal disjointness between
+      Collateral and Exposure?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: The narrow coverage and structure stances limit their support to missing
+      canonical rating mappings, override semantics, and report projections, but
+      they keep severity and do not contradict the axiology, evolution, or
+      semantics claim that rating authority is delegated outside the shared
+      ontology.
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: Coverage narrows the issue to missing governed FX conversion concepts,
+      while axiology, evolution, and semantics support the broader
+      authority/reproducibility concern. The stances are complementary and all
+      applicable participants keep severity.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Structure narrows the root to missing explicit temporal, freshness, and
+      valuation carriers, but axiology, coverage, evolution, semantics, and
+      structure all support the material need for governed time and valuation
+      bases and keep severity.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: All applicable lenses support the issue root and severity; logic is
+      not_applicable rather than contrary, and the runtime projection already
+      marks the issue as having consistent stances.
+  - issue_id: issue-006
+    reason_code: no_material_conflict
+    reason: Coverage and structure narrow the issue to missing assessment/result
+      structures, and evolution treats it as surface-only context, but none
+      materially dispute the semantics and axiology claim that policy threshold
+      authority and compliance result should be separated.
+  - issue_id: issue-007
+    reason_code: no_material_conflict
+    reason: Coverage narrows the concern to missing compliance-assessment coverage
+      and evolution treats it as surface-only context, while structure,
+      axiology, and semantics support the orphaned
+      RiskAppetite-to-ExposureAggregate relation. These are scope refinements,
+      not a material conflict.
