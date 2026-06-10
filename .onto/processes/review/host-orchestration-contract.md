@@ -26,7 +26,7 @@ A(runtime-orchestration)와 B(host-orchestration)는 **하나의 review 엔진�
 
 ## 2. Orchestration owner 각인 (불변)
 
-- settings 키 `review.execution.orchestration: "runtime" | "host"`(미지정 `runtime`). `host`는 `topology=main-workers`를 요구(`settings-chain.ts` superRefine fail-closed).
+- settings 키 `review.execution.orchestration: "runtime" | "host"`(미지정 `runtime`). 양 topology(main-workers·nested-workers)와 조합 가능 — Stage 1의 host×nested fail-closed는 roadmap S2에서 해제됐고, nested 라운드 배치는 `nesting-batch-worker-contract.md`가 규정한다.
 - `prepare`가 이 값을 **session-metadata와 execution-plan에 불변 각인**한다(`materializers.ts`). 세션 생애 동안 바뀌지 않는다.
 - 한 세션은 정확히 한 locus만 구동한다(이중 실행·누수 차단). 강제는 §6.
 
@@ -95,7 +95,8 @@ deliberation 유닛도 DAG 위의 ready unit이다(동료 seat를 읽는 executo
 
 - **범위(Stage 1)**: flat(main-workers)·controlled·브랜드 중립 라운드 계약 + A/B fail-closed + settings + reference host(mock).
 - **범위(Stage 2 — §10)**: deliberation/synthesize 및 runtime-owned reduce(`issue-stance-matrix`, `synthesize`)의 완전한 host 구동, `completed` ReviewRecord **전체 파이프라인** 결정론 mock E2E.
-- **비범위(후속)**: `orchestration=host × topology≠main-workers`는 settings에서 거부. sidecar `finding-ledger`·no-planned-issue `controlled-deliberation`의 runtime-reduce 구동(현재 host_llm로 충분), live-LLM 전체 E2E, nested·subagent·live 심의는 후속/Stage 3.
+- **범위(roadmap S2)**: `orchestration=host × topology=nested-workers` 허용 — host가 라운드의 ready units를 NestingBatchWorker에 배치 위임(`nesting-batch-worker-contract.md`, reference driver `executeBatch`). 엔진(round/advance)은 topology 무변경.
+- **비범위(후속)**: sidecar `finding-ledger`·no-planned-issue `controlled-deliberation`의 runtime-reduce 구동(현재 host_llm로 충분), live-LLM 전체 E2E, teammate 지속형·live 심의는 Stage 3.
 - **무회귀**: `orchestration` 미설정 시 A 경로 100% 동일. B는 분해된 공유 step 함수를 재사용할 뿐 A 실행 경로를 바꾸지 않는다.
 
 ## 10. Stage 2 — 전체 파이프라인 host 구동 (compound runtime units)

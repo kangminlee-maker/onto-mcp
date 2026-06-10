@@ -1,6 +1,7 @@
 # Phase 2 — Stage 2 (roadmap S2): nesting 설계
 
-> 상태: 설계(승인 대기). 기준 코드: `main 8f4f764` (PR #22 full-pipeline host 구동 머지 후).
+> 상태: **구현 완료(2026-06-10)** — Step 1–8 전부 landed on `feat/nested-workers-s2`. 기준 코드: `main 8f4f764` (PR #22 full-pipeline host 구동 머지 후).
+> Landed 요약: Step 1 `review/nesting-batch.ts`(1cac0ce) · Step 2 codex outer 정합(8de6cdf) · Step 3 claude outer(b7dc8d0) · Step 4 A 통합+fail-closed 해제(1fcdad4) · Step 5 B 통합+settings 해제+completed E2E(17373d6) · Step 6 4셀 동등성 게이트(2d2fe8f) · Step 7–8 계약·lexicon 명문화+전체 검증(이 커밋). 상세는 각 커밋 메시지가 권위.
 > 상위 문서: `development-records/design/phase2-host-orchestration-roadmap.md` §4 Stage 2.
 > 권위: rank-1 `core-lexicon.yaml`(`ReviewExecutionMode`·`ReviewOrchestrationOwner`), rank-5 `host-orchestration-contract.md`·`prompt-execution-runner-contract.md`·`external-oauth-worker-contract.md`.
 > 명명 주의: 본 문서의 "S2"는 roadmap의 nesting 단계다. 브랜치/커밋 이력의 "Stage 2"(full-pipeline host 구동, PR #22)와 별개.
