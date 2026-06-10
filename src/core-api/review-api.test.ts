@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -19,6 +20,11 @@ import {
   executeReviewPromptExecution,
 } from "../core-runtime/cli/run-review-prompt-execution.js";
 import { driveHostOrchestration } from "../core-runtime/cli/host-orchestration-reference-driver.js";
+import {
+  buildNestingBatchScript,
+  parseNestingBatchSummary,
+  reconcileNestingBatchOutcomes,
+} from "../core-runtime/review/nesting-batch.js";
 import {
   disableReviewMockRealizationEnv,
   REVIEW_MOCK_REALIZATION_ENV,
@@ -563,6 +569,126 @@ describe("createOntoReviewCoreApi", () => {
     expect(executedUnitKinds).toContain("lens");
     expect(executedUnitKinds).toContain("issue_artifact");
     expect(executedUnitKinds).toContain("deliberation");
+  });
+
+  it("drives the full host pipeline to completed via nested batch rounds (B x nested, deterministic mock)", async () => {
+    const projectRoot = await tempProjectRoot();
+    await writeProjectSettings(projectRoot, {
+      schema_version: "settings.json/v3",
+      review: {
+        artifacts: { lens_output_format: "markdown" },
+        execution: {
+          topology: "nested-workers",
+          executor: "direct_call",
+          orchestration: "host",
+          deliberation: "controlled-lens-deliberation",
+          artifact_generation_realization: "semantic_mock",
+          actors: {
+            teamlead: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            lens: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+            synthesize: { seat: "worker", llm: { auth: "api_key", provider: "openai", model: "mock-model" } },
+          },
+        },
+      },
+    });
+    const api = createOntoReviewCoreApi({ ontoHome: path.resolve(".") });
+    const prepared = await api.prepareReview({
+      projectRoot,
+      target: "target.txt",
+      intent: "Host nested batch mock run",
+      noDomain: true,
+      reviewMode: "core-axis",
+      lensIds: ["logic", "coverage"],
+    });
+
+    // Stub unit executor (standalone subprocess): writes the same
+    // empty-but-valid seat per unit kind as the flat full-pipeline mock,
+    // keyed by --unit-id / --unit-kind, deriving session_id from
+    // --session-root. This is what the nesting batch script fans out.
+    const stubPath = path.join(projectRoot, "stub-unit-executor.mjs");
+    await fs.writeFile(
+      stubPath,
+      [
+        'import fs from "node:fs";',
+        'import path from "node:path";',
+        "const a = process.argv.slice(2);",
+        "const get = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };",
+        'const unitId = get("--unit-id");',
+        'const unitKind = get("--unit-kind");',
+        'const out = get("--output-path");',
+        'const sessionId = path.basename(get("--session-root") ?? "");',
+        "const docs = {",
+        '  "finding-ledger": `schema_version: 1\\nsession_id: ${sessionId}\\nfindings: []\\nvalidation:\\n  unaddressable_findings: []\\n`,',
+        '  "finding-relation-graph": `schema_version: 1\\nsession_id: ${sessionId}\\nrelations: []\\nsingleton_findings: []\\n`,',
+        '  "issue-ledger": `schema_version: 1\\nsession_id: ${sessionId}\\nissues: []\\nissue_dependencies: []\\nvalidation:\\n  unclustered_finding_ids: []\\n`,',
+        '  "deliberation-plan": `schema_version: 1\\nsession_id: ${sessionId}\\nplanned_issues: []\\nskipped_issues: []\\n`,',
+        '  "controlled-deliberation": `schema_version: 1\\nsession_id: ${sessionId}\\nissues: []\\nvalidation:\\n  missing_issue_ids: []\\n`,',
+        '  "problem-framing": `schema_version: 1\\nsession_id: ${sessionId}\\nclassifications: []\\n`,',
+        "};",
+        "let content = docs[unitId];",
+        'if (!content && unitId.startsWith("issue-stance:")) {',
+        '  const lensId = unitId.slice("issue-stance:".length);',
+        "  content = `schema_version: 1\\nsession_id: ${sessionId}\\nlens_id: ${lensId}\\nstances: []\\nvalidation:\\n  missing_issues: []\\n`;",
+        "}",
+        'if (!content && unitKind === "lens") {',
+        "  content = `# ${unitId} lens findings\\n\\n## Domain Constraints Used\\n\\u0060\\u0060\\u0060yaml\\n[]\\n\\u0060\\u0060\\u0060\\n\\n## Domain Context Assumptions\\n\\u0060\\u0060\\u0060yaml\\n[]\\n\\u0060\\u0060\\u0060\\n\\n`;",
+        "}",
+        "if (!content) content = `# ${unitId}\\n`;",
+        "fs.mkdirSync(path.dirname(out), { recursive: true });",
+        "fs.writeFileSync(out, content);",
+        "",
+      ].join("\n"),
+      "utf8",
+    );
+
+    // Host loop via the reference driver: each round's ready units are
+    // delegated as ONE nesting batch — the literal batch script fans them
+    // out as parallel stub unit-executor subprocesses (the NestingBatchWorker
+    // contract, minus the LLM outer which a live host would interpose).
+    const run = await driveHostOrchestration({
+      sessionRoot: prepared.sessionRoot,
+      executeBatch: async (units) => {
+        const batchUnits = units.map((u) => ({
+          unit_id: u.unit_id,
+          unit_kind: u.unit_kind,
+          packet_path: u.packet_path ?? "",
+          output_path: u.output_path ?? "",
+        }));
+        const script = buildNestingBatchScript({
+          units: batchUnits,
+          inner_executor_argv: [process.execPath, stubPath],
+          common_args: [
+            "--project-root",
+            projectRoot,
+            "--session-root",
+            prepared.sessionRoot,
+          ],
+        });
+        const result = spawnSync("bash", ["-s"], {
+          input: script,
+          encoding: "utf8",
+        });
+        expect(result.status).toBe(0);
+        const outcomes = reconcileNestingBatchOutcomes(
+          batchUnits,
+          parseNestingBatchSummary(result.stdout),
+        );
+        expect(outcomes.filter((o) => o.status !== "ok")).toEqual([]);
+      },
+      maxRounds: 24,
+    });
+
+    expect(run.finalStatus).toBe("ready_to_assemble");
+    // Assemble through the core-api wrapper (empty advance on a terminal
+    // frontier wraps completeReviewSession).
+    const assembled = await api.reviewAdvance({
+      sessionRoot: prepared.sessionRoot,
+      executed: [],
+    });
+    expect(assembled.status).toBe("assembled");
+    if (assembled.status === "assembled") {
+      expect(assembled.reviewStatus.status).toBe("completed");
+    }
   });
 
   it("fails loudly when a present review-record is malformed", async () => {

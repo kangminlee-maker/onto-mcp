@@ -319,7 +319,7 @@ describe("resolveSettingsChain", () => {
     expect(settings.review?.execution?.orchestration).toBe("host");
   });
 
-  it("rejects orchestration=host with nested-workers topology (fail-closed)", async () => {
+  it("resolves orchestration=host with nested-workers topology (S2 lift)", async () => {
     const projectRoot = path.join(scratchRoot, "project");
     const settingsDoc = v3ReviewSettings({
       topology: "nested-workers",
@@ -328,9 +328,10 @@ describe("resolveSettingsChain", () => {
     settingsDoc.review.execution.orchestration = "host";
     writeJson(projectSettingsPath(projectRoot), settingsDoc);
 
-    await expect(
-      resolveSettingsChain("/unused", projectRoot),
-    ).rejects.toThrow(/orchestration=host/);
+    const settings = await resolveSettingsChain("/unused", projectRoot);
+
+    expect(settings.review?.execution?.orchestration).toBe("host");
+    expect(settings.review?.execution?.mode).toBe("nested-workers");
   });
 
   it("parses and merges review unit execution settings", async () => {
