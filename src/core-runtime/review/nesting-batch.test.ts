@@ -96,6 +96,40 @@ describe("buildNestingBatchScript", () => {
       ),
     ).toThrow(/inner_executor_argv/);
   });
+
+  it("groups units into waves of dispatch_width with a wait barrier per wave", () => {
+    const units = [unit("a"), unit("b"), unit("c")];
+    const countWaits = (script: string) =>
+      script.split("\n").filter((line) => line === "wait").length;
+
+    // Default: one wave, one wait.
+    expect(countWaits(buildNestingBatchScript(descriptor(units)))).toBe(1);
+    // Width 1: every unit is its own wave.
+    const serial = buildNestingBatchScript(
+      descriptor(units, { dispatch_width: 1 }),
+    );
+    expect(countWaits(serial)).toBe(3);
+    expect(serial).toContain("# --- wave 3 (width 1) ---");
+    // Width 2: ceil(3/2) = 2 waves.
+    expect(
+      countWaits(buildNestingBatchScript(descriptor(units, { dispatch_width: 2 }))),
+    ).toBe(2);
+    // Width >= count collapses to a single unlabeled wave.
+    const wide = buildNestingBatchScript(
+      descriptor(units, { dispatch_width: 8 }),
+    );
+    expect(countWaits(wide)).toBe(1);
+    expect(wide).not.toContain("--- wave");
+  });
+
+  it("rejects a non-positive or fractional dispatch_width", () => {
+    expect(() =>
+      buildNestingBatchScript(descriptor([unit("a")], { dispatch_width: 0 })),
+    ).toThrow(/positive integer/);
+    expect(() =>
+      buildNestingBatchScript(descriptor([unit("a")], { dispatch_width: 1.5 })),
+    ).toThrow(/positive integer/);
+  });
 });
 
 describe("buildNestingBatchWorkerPrompt", () => {
@@ -248,5 +282,35 @@ describe("executed batch script (stub unit executor)", () => {
       "utf8",
     );
     expect(audit).toContain("stub failure");
+  });
+
+  it("wave-chunked execution (dispatch_width=1) yields the same seats and summary", async () => {
+    const stubPath = await writeStubExecutor();
+    const round1 = path.join(tmp, "round1");
+    const units = [unit("a"), unit("b"), unit("c")].map((u) => ({
+      ...u,
+      packet_path: path.join(tmp, `${u.unit_id}.prompt.md`),
+      output_path: path.join(round1, `${u.unit_id}.md`),
+    }));
+    const script = buildNestingBatchScript(
+      descriptor(units, {
+        inner_executor_argv: [process.execPath, stubPath],
+        common_args: [],
+        dispatch_width: 1,
+      }),
+    );
+
+    const run = spawnSync("bash", ["-s"], { input: script, encoding: "utf8" });
+    expect(run.status).toBe(0);
+    for (const u of units) {
+      await expect(fs.readFile(u.output_path, "utf8")).resolves.toBe(
+        `seat for ${u.unit_id}\n`,
+      );
+    }
+    const outcomes = reconcileNestingBatchOutcomes(
+      units,
+      parseNestingBatchSummary(run.stdout),
+    );
+    expect(outcomes.map((o) => o.status)).toEqual(["ok", "ok", "ok"]);
   });
 });
