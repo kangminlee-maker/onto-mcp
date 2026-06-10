@@ -80,7 +80,15 @@ export interface DispatchNestedBatchArgs {
   sessionRoot: string;
   /** Project root (outer worker cwd + `--project-root` for inner units). */
   projectRoot: string;
-  ontoConfig: OntoConfig;
+  /** Settings source for outer (teamlead seat) resolution. Ignored when
+   * `outer_config` is given. */
+  ontoConfig?: OntoConfig;
+  /**
+   * Pre-resolved outer (teamlead seat) settings — callers that hold a
+   * ReviewExecutionProfile resolve via {@link nestedOuterConfigFromLlmRef}
+   * instead of threading the raw settings chain down.
+   */
+  outer_config?: NestedOuterSpawnConfig;
   /**
    * Units to fan out, in dispatch order — built by the caller from the
    * same dispatch list the flat path executes (canonical output paths,
@@ -118,7 +126,12 @@ export interface DispatchNestedBatchArgs {
 }
 
 export interface NestedBatchDispatchArgs
-  extends Omit<DispatchNestedBatchArgs, "stream_label" | "dispatch_width"> {}
+  extends Omit<
+    DispatchNestedBatchArgs,
+    "stream_label" | "dispatch_width" | "ontoConfig" | "outer_config"
+  > {
+  ontoConfig: OntoConfig;
+}
 
 /**
  * Brand worker implementations — injectable for tests.
@@ -224,11 +237,17 @@ export function resolveNestedOuterSpawnConfig(
   config: OntoConfig,
 ): NestedOuterSpawnConfig {
   return (
-    outerConfigFromRef(brand, config.review?.execution?.teamlead?.llm) ?? {}
+    nestedOuterConfigFromLlmRef(brand, config.review?.execution?.teamlead?.llm) ?? {}
   );
 }
 
-function outerConfigFromRef(
+/**
+ * Resolve outer (teamlead seat) settings from a single llm ref — for
+ * callers holding a ReviewExecutionProfile (profile.teamlead.llm) rather
+ * than the raw settings chain. Null when the ref is absent or belongs to
+ * another brand's adapter.
+ */
+export function nestedOuterConfigFromLlmRef(
   brand: NestedBatchBrand,
   ref: ReviewLlmRef | undefined,
 ): NestedOuterSpawnConfig | null {
@@ -267,7 +286,9 @@ export async function dispatchNestedBatch(
   args: DispatchNestedBatchArgs,
   workers: NestedBatchWorkers = DEFAULT_WORKERS,
 ): Promise<NestedBatchWorkerRunResult> {
-  const outerConfig = resolveNestedOuterSpawnConfig(args.brand, args.ontoConfig);
+  const outerConfig =
+    args.outer_config ??
+    resolveNestedOuterSpawnConfig(args.brand, args.ontoConfig ?? {});
 
   // Stream paths live under sessionRoot so the watcher pane can `tail -f`
   // them from the moment the outer worker starts emitting. With streaming
