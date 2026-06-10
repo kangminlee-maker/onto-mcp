@@ -849,6 +849,25 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
     ).toThrowError(/materialTerms must not be empty/);
   });
 
+  it("rejects empty-string terms and empty alternates inside groups", () => {
+    for (const terms of [
+      ["", "scrap_rate"],
+      [["", "currency"], "scrap_rate"],
+      [[], "scrap_rate"],
+      [["  "], "scrap_rate"],
+    ] as Array<Array<string | string[]>>) {
+      const expectations = ontologyExpectations();
+      expectations.materialTerms = terms;
+      expect(() =>
+        evaluateReviewPipelineSemanticQualityGate({
+          expectations,
+          reviewRecord: ontologyReviewRecord(),
+          finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+        }),
+      ).toThrowError(/non-empty/);
+    }
+  });
+
   it("fails when shared-cause dependency rows do not match relation endpoints", () => {
     const artifacts = passingIssueArtifacts();
     artifacts.issueLedger.issue_dependencies = [

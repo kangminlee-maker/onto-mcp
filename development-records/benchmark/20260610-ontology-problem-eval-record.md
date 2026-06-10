@@ -85,7 +85,7 @@ npx tsx development-records/benchmark/fixtures/ontology/evaluate-semantic-gate.m
 
 잔여 현황: seeded 30결함 중 표적 앵커 기준 잔여 miss = **CLW-10 1건**(동일 클래스 모순을 한 줄 옆 규칙에서 발화한 만큼, 다음 후보는 probe 강화가 아니라 분산 확인 재실행). 보강 후 run은 fixture당 1회로 PRELIMINARY. 분산 안정화 평가(runs≥3)는 decision-grade 필요 시.
 
-## 후속 6 완료 — CLW-10 분산 확인 (with-probe n=3, INV-BENCH-1 충족)
+## 후속 6 완료 — CLW-10 분산 확인 (with-probe n=3, 단일 fixture — PRELIMINARY)
 
 clinical 무변경 재실행 2회 추가(세션 `20260611-1b46eb7b` 706s, `20260611-435e4f4c` 613s) → with-probe 3 run 판정:
 
@@ -95,6 +95,6 @@ clinical 무변경 재실행 2회 추가(세션 `20260611-1b46eb7b` 706s, `20260
 | `1b46eb7b` | **caught — logic, high** ("reversible Result status로 completed 정의") | caught (medium) |
 | `435e4f4c` | **caught — logic, high** | — |
 
-**판정: 분산(2/3 caught), 구조적 편향 아님** — probe가 표적 앵커 감지를 가능하게 했고(probe 이전 0/2), 인접 두 규칙 중 어느 쪽이 unitize되는지가 run마다 변동. 회귀: run2 0건, run3에서 CLW-5가 영어("retention and disposal")로 산출되어 게이트 `폐기` 토큰이 false negative — **실제 회수는 유지**(coverage finding-004).
+**판정: 분산(2/3 caught), 구조적 편향 아님 — 단, 단일 fixture(clinical) 3 run 관찰이므로 PRELIMINARY**(INV-BENCH-1의 decision-grade는 fixtures≥2 × runs≥3을 요구; CLW-10은 clinical 고유 결함이라 runs 축만 충족 가능). probe가 표적 앵커 감지를 가능하게 했고(probe 이전 0/2), 인접 두 규칙 중 어느 쪽이 unitize되는지가 run마다 변동. 회귀: run2 0건, run3에서 CLW-5가 영어("retention and disposal")로 산출되어 게이트 `폐기` 토큰이 false negative — **실제 회수는 유지**(coverage finding-004).
 
 **게이트 보완(이 발견의 산물)**: `materialTerms` 항목이 동의어 그룹(any-of 배열)을 허용하도록 확장 — 산문 개념 토큰의 출력 언어 분산 대응(ground truth 동일 앵커 개념의 번역만 허용; 스키마 식별자 토큰은 단일 유지). 적용 후 전 세션 매트릭스(10 pinned run): 보강 전 credit 2 run만 FAIL(CRT-3/5 — 의도된 판별), 나머지 8 run 전부 PASS. 결과: `semantic-gate-results-*.json`(전 세션 pinned 매트릭스 1파일).

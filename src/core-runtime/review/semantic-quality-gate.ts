@@ -594,6 +594,19 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
       "SemanticQualityExpectations.materialTerms must not be empty",
     );
   }
+  // 빈 문자열 term/alternate는 text.includes("")가 항상 참이라 해당 entry를
+  // 공허 충족시킨다 — 게이트 진입에서 fail loud.
+  for (const term of fixture.materialTerms) {
+    const alternates = Array.isArray(term) ? term : [term];
+    if (
+      alternates.length === 0 ||
+      alternates.some((alternate) => alternate.trim().length === 0)
+    ) {
+      throw new Error(
+        "SemanticQualityExpectations.materialTerms entries must be non-empty strings or non-empty groups of non-empty strings",
+      );
+    }
+  }
   const summary = args.reviewRecord.result_classification_summary ?? null;
   const materialIssues = records(summary?.material_issues);
   const nonMaterialFindings = records(summary?.non_material_findings);

@@ -44,17 +44,19 @@ function requireStrings(value: unknown, key: string): string[] {
   return value as string[];
 }
 
-/** material_terms 항목: 문자열 또는 동의어 그룹(any-of 문자열 배열). */
+/** material_terms 항목: 문자열 또는 동의어 그룹(any-of 문자열 배열). 빈 문자열은
+ * includes("")가 항상 참이라 entry를 공허 충족시키므로 거부한다. */
 function requireTermGroups(value: unknown, key: string): Array<string | string[]> {
+  const nonEmpty = (item: unknown): item is string =>
+    typeof item === "string" && item.trim().length > 0;
   const valid = Array.isArray(value) &&
     value.every((item) =>
-      typeof item === "string" ||
-      (Array.isArray(item) && item.length > 0 &&
-        item.every((alt) => typeof alt === "string")),
+      nonEmpty(item) ||
+      (Array.isArray(item) && item.length > 0 && item.every(nonEmpty)),
     );
   if (!valid) {
     throw new Error(
-      `semantic-expectations.${key} must be a list of strings or non-empty string groups`,
+      `semantic-expectations.${key} must be a list of non-empty strings or non-empty groups of non-empty strings`,
     );
   }
   return value as Array<string | string[]>;
