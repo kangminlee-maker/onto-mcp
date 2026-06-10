@@ -1,0 +1,21 @@
+entrypoint: review
+target_scope_candidate:
+  kind: file
+  primary_ref: /tmp/s3-controlled-fixture/notification-batcher.ts
+intent_summary: Review this notification batcher for material issues. Focus on
+  contract-vs-behavior consistency and time-source semantics.
+domain_recommendation: "@-"
+domain_selection_required: false
+review_mode_recommendation: core-axis
+lens_selection_plan:
+  always_include:
+    - logic
+    - coverage
+    - semantics
+  recommended_lenses:
+    - logic
+    - coverage
+    - semantics
+  rationale:
+    - host-facing invoke preserved the explicitly requested lens set.
+ambiguity_notes: []

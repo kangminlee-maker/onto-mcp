@@ -1,0 +1,51 @@
+schema_version: "1"
+session_id: 20260611-bad3651a
+created_at: 2026-06-11T02:36:27+09:00
+target_scope_kind: file
+materialized_input_kind: single_text
+target_input_kind: single_file
+target_material_kind: code
+requested_target: notification-batcher.ts
+review_intent_summary: Review this notification batcher for material issues.
+  Focus on contract-vs-behavior consistency and time-source semantics.
+artifact_roles:
+  primary: computational_artifact
+  secondary: []
+domain: none
+maturity: review_candidate
+closure_level: bounded_partial
+review_goal:
+  - correctness
+  - verifiability
+  - regression_risk
+  - maintainability
+closure_obligation_policy:
+  - must_close_in_target
+  - must_close_before_next_stage
+  - may_close_during_next_stage
+  - planned_later
+  - out_of_scope
+target_refs:
+  - ref: /tmp/s3-live-fixture/notification-batcher.ts
+    role: primary
+    kind: file
+    exists: true
+    sha256: 3bf0767dcf6f15458502399995b80b8a8e1ce47bc21df8bf5cc5239bd7750fc6
+material_profile:
+  target_material_kind: code
+  target_material_kind_candidates:
+    - code
+  support_status: supported
+  unsupported_reason: null
+  detection:
+    owner: runtime_heuristic
+    confidence: 0.92
+    confidence_basis: file name or extension indicates code/config material
+boundary:
+  filesystem_allowed_roots:
+    - /tmp/s3-live-fixture
+  source: binding
+inference:
+  owner: runtime_heuristic
+  confidence: 0.85
+  confidence_basis: runtime file-extension heuristic

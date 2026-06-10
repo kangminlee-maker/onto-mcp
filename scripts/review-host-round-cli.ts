@@ -66,7 +66,12 @@ export async function runHostRoundCli(argv: string[]): Promise<number> {
         noDomain: values["no-domain"] === true,
         ...(values["review-mode"] ? { reviewMode: values["review-mode"] } : {}),
         ...(values["lens-ids"]
-          ? { lensIds: values["lens-ids"].split(",").map((id) => id.trim()) }
+          ? {
+              lensIds: values["lens-ids"]
+                .split(",")
+                .map((id) => id.trim())
+                .filter((id) => id.length > 0),
+            }
           : {}),
       });
       emit({ status: "prepared", sessionRoot: prepared.sessionRoot });
@@ -80,9 +85,16 @@ export async function runHostRoundCli(argv: string[]): Promise<number> {
       return 0;
     }
     case "advance": {
+      const executed = require("executed")
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+      if (executed.length === 0) {
+        throw new Error("--executed must contain at least one unit id");
+      }
       const result = await api.reviewAdvance({
         sessionRoot: path.resolve(require("session-root")),
-        executed: require("executed").split(",").map((id) => id.trim()),
+        executed,
         ...(values["project-root"]
           ? { projectRoot: path.resolve(values["project-root"]) }
           : {}),
