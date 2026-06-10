@@ -3,14 +3,15 @@
 # 매칭은 소문자 부분 문자열(JSON 직렬화 + camelCase/구분자 분해 텍스트 대상).
 fixture_id: manufacturing-bom-ontology-v1
 material_terms: # 전 항목 필수 (textContainsAll)
-  - "순환" # MBO-1 비순환 불변식 자기모순
+  # 산문 개념 토큰은 출력 언어 분산에 대비해 동의어 그룹(any-of)로 둔다 — ground truth의 동일 앵커 개념 번역만 허용.
+  - ["순환", "cyclic", "circular", "acyclic"] # MBO-1 비순환 불변식 자기모순
   - "rev" # MBO-2 리비전 권위 3원화
   - "one_way" # MBO-3 대체 대칭 정의 vs one_way 기본값
   - "scrap_rate" # MBO-5 외부 엑셀 복사본 권위화
   - "capacity_per_shift" # MBO-6 능력 단위 모호 + 환산 마스터 부재
   - "inspection" # MBO-7 InspectionPlan is_a Operation 오일반화
   - "std_time" # MBO-9 MES 계산 vs 수기 입력 이중 기록
-  - "유효" # MBO-10 BOM 라인 유효기간(effectivity) 부재
+  - ["유효", "effectivity", "effective"] # MBO-10 BOM 라인 유효기간(effectivity) 부재
 expected_material_truth: >-
   MBO-1 순환 모순 + MBO-2 rev 권위 분산 + MBO-3 대체 방향 모순 + MBO-5 scrap_rate
   복사 권위 + MBO-6 능력 단위 모호 + MBO-7 검사계획 is-a 오류 + MBO-9 std_time

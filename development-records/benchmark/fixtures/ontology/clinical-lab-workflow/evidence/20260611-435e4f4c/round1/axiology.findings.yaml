@@ -1,0 +1,195 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: clinical-lab-ontology.yaml / Report.result_status synchronization rule
+    evidence_anchor: materialized-input.md:69-72, 75-84, 121-123;
+      review-value-alignment-criteria.yaml:6-11
+    claim: Nightly synchronization of corrected results undermines the ontology's
+      stated clinician-trust purpose for Report.result_status.
+    what: The ontology says Result.status is also maintained in
+      Report.result_status, and says clinicians trust Report.result_status as
+      the report's authoritative displayed status. But the state rule allows
+      Report.result_status to become amended only through a once-nightly
+      synchronization batch after Result.status changes to corrected.
+    why: "The review purpose is to judge whether this file is suitable as the
+      EMR/LIS integration concept authority document, especially operational
+      risks. Within that purpose, an authoritative status that clinicians are
+      expected to trust should not knowingly lag behind the LIS result
+      correction state without an explicit safety boundary, warning state, or
+      precedence rule. The current model accepts a hidden tradeoff: batch
+      simplicity over timely clinical status authority."
+    how_to_fix: "Make the correction propagation contract explicit and
+      safety-preserving: either require synchronous/near-real-time
+      Report.result_status amendment when Result.status becomes corrected, or
+      introduce an explicit pending-correction/stale-report state with
+      clinician-facing visibility, precedence rules, and maximum propagation
+      latency."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use as the conceptual authority document for EMR/LIS
+        integration and operational-risk review.
+      failure_condition: A Result.status changes to corrected after report release,
+        while Report.result_status remains finalized until the nightly batch.
+      impact: The authority document tells integrators and clinicians that
+        Report.result_status is trusted, yet permits a bounded stale state that
+        can misrepresent corrected results during clinical use.
+      evidence_refs:
+        - materialized-input.md:69-72
+        - materialized-input.md:80-83
+        - materialized-input.md:121-123
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: The ontology assigns clinician-trusted authority to
+        Report.result_status while delegating correction propagation to a
+        delayed batch without modeling stale/pending authority states.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: Report.result_status is described as the authoritative displayed value
+            trusted by clinicians.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:80-83
+        - cause_id: axiology-candidate-001.cause-002
+          claim: Corrected LIS Result.status changes are propagated to
+            Report.result_status only by a once-nightly synchronization batch.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: axiology-candidate-001.cause-003
+          claim: That delayed propagation weakens the review intent of using the ontology
+            as an EMR/LIS integration authority for operational risk.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: The packet provides no clinical SLA or domain rule
+        defining acceptable correction latency, so the finding is limited to the
+        contradiction between declared trust and modeled delayed propagation.
+  - candidate_id: axiology-candidate-002
+    target: clinical-lab-ontology.yaml / CriticalValue notification authority
+    evidence_anchor: materialized-input.md:100-106; review-value-alignment-criteria.yaml:6-11
+    claim: CriticalValue models only a notification boolean while placing
+      notification time and recipient outside the ontology, weakening its
+      operational authority for immediate-risk handling.
+    what: "CriticalValue is defined as a dangerous result range requiring immediate
+      notification, but its only notification attribute is notified: boolean.
+      The note says notification time and recipient live in a separate telephone
+      log, with no modeled entity, relation, authority boundary, or
+      reconciliation rule."
+    why: For an EMR/LIS integration concept authority document, immediate
+      critical-value notification is a purpose-critical operational workflow. A
+      boolean alone cannot represent who was notified, when, through what
+      channel, or how EMR/LIS should reconcile the external phone log. The model
+      therefore accepts an unexamined tradeoff that leaves a safety-critical
+      commitment outside the conceptual authority surface.
+    how_to_fix: "Promote notification evidence into the ontology: add a
+      CriticalValueNotification or NotificationEvent entity with notified_at,
+      recipient, notifier, channel, acknowledgement/status, and relations to
+      CriticalValue/Result/Order. If the phone log remains authoritative, model
+      it as an external authority with reconciliation and precedence rules."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Conceptual authority for EMR/LIS integration with emphasis on
+        operational risks.
+      failure_condition: A critical value is marked notified=true while the
+        integration model has no authoritative notification time, recipient,
+        acknowledgement, or reconciliation path to the external phone log.
+      impact: Integrators cannot derive a reliable operational contract for immediate
+        notification, audit, or cross-system consistency from the authority
+        document.
+      evidence_refs:
+        - materialized-input.md:100-106
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: The ontology treats critical-value notification evidence
+        as external to the model while retaining only a lossy boolean inside the
+        authority document.
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: CriticalValue is explicitly an immediate-notification risk concept.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-101
+        - cause_id: axiology-candidate-002.cause-002
+          claim: The ontology records only notified:boolean and states the actual
+            notification time and recipient are in a separate telephone log.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:102-106
+        - cause_id: axiology-candidate-002.cause-003
+          claim: This prevents the file from fully serving as EMR/LIS integration concept
+            authority for that operational-risk workflow.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: The external phone log's schema and governance are
+        outside the allowed packet, so this finding does not judge that system;
+        it only flags the missing authority boundary in the ontology.
+  - candidate_id: axiology-candidate-003
+    target: clinical-lab-ontology.yaml / TAT ownership note
+    evidence_anchor: materialized-input.md:126-128; review-value-alignment-criteria.yaml:6-11
+    claim: Delegating turnaround-time calculation to a dashboard-owned formula
+      creates purpose drift away from a shared EMR/LIS concept authority.
+    what: The ontology defines TAT as collected_at to released_at, but also says the
+      dashboard team maintains its own calculation formula. No canonical
+      calculation rule, exception handling, or projection boundary is modeled.
+    why: "A concept authority document for EMR/LIS integration should make shared
+      operational metrics traceable to canonical source concepts. Allowing a
+      downstream dashboard team to maintain its own calculation formula without
+      an explicit derivation contract creates a hidden tradeoff: local reporting
+      flexibility over cross-system metric consistency."
+    how_to_fix: Define TAT as a derived concept in the ontology with source fields,
+      inclusions/exclusions, null/late-release handling, and allowed
+      projections. If dashboards may override it, model those overrides as
+      non-authoritative views with clear naming and precedence.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared conceptual authority for EMR/LIS integration and
+        operational-risk review.
+      failure_condition: Different consumers compute TAT from local formulas while the
+        ontology remains the supposed authority for the workflow concepts.
+      impact: Operational reporting can diverge from the canonical workflow model,
+        reducing trust in the ontology as the integration source of truth.
+      evidence_refs:
+        - materialized-input.md:126-128
+        - review-value-alignment-criteria.yaml:6-11
+    causal_path:
+      root_cause_candidate: The ontology declares a metric boundary but leaves the
+        executable calculation authority with a downstream dashboard team.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: The notes define TAT from collected_at to released_at.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: axiology-candidate-003.cause-002
+          claim: The same note says the dashboard team maintains its own calculation
+            formula.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:126-128
+        - cause_id: axiology-candidate-003.cause-003
+          claim: That split weakens the document's role as the EMR/LIS integration concept
+            authority for operational metrics.
+          relation_to_previous: causes
+          evidence_refs:
+            - review-value-alignment-criteria.yaml:6-11
+      unresolved_beyond_evidence: No dashboard formula is available within the
+        boundary, so the finding is about missing authority and precedence, not
+        about a proven numeric mismatch.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none; no domain-specific clinical rule document was used.
+  - Value judgments are grounded in the declared review intent and the target
+    ontology's own statements about trust, immediacy, and authority, not
+    external medical standards.
+validation:
+  unaddressable_candidates: []

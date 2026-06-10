@@ -67,7 +67,13 @@ interface ReviewPipelineIssueArtifactsLike {
  */
 export interface SemanticQualityExpectations {
   fixtureId: string;
-  materialTerms: string[];
+  /**
+   * Required material vocabulary. Each entry must match (ALL semantics);
+   * an entry given as a string array is an alternates group — any one
+   * alternate satisfies the entry (e.g. translations of the same
+   * ground-truth anchor concept, robust to output-language variance).
+   */
+  materialTerms: Array<string | string[]>;
   expectedMaterialTruth: string;
   boundaryUncertaintyTerms: string[];
   boundaryContextTerms: string[];
@@ -182,8 +188,15 @@ function normalizedText(value: unknown): string {
   return `${raw}\n${searchFriendly}`.toLowerCase();
 }
 
-function textContainsAll(text: string, terms: string[]): boolean {
-  return terms.every((term) => text.includes(term));
+function textContainsAll(
+  text: string,
+  terms: Array<string | string[]>,
+): boolean {
+  return terms.every((term) =>
+    Array.isArray(term)
+      ? term.some((alternate) => text.includes(alternate))
+      : text.includes(term),
+  );
 }
 
 function textContainsAny(text: string, terms: string[]): boolean {
@@ -580,6 +593,19 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
     throw new Error(
       "SemanticQualityExpectations.materialTerms must not be empty",
     );
+  }
+  // 빈 문자열 term/alternate는 text.includes("")가 항상 참이라 해당 entry를
+  // 공허 충족시킨다 — 게이트 진입에서 fail loud.
+  for (const term of fixture.materialTerms) {
+    const alternates = Array.isArray(term) ? term : [term];
+    if (
+      alternates.length === 0 ||
+      alternates.some((alternate) => alternate.trim().length === 0)
+    ) {
+      throw new Error(
+        "SemanticQualityExpectations.materialTerms entries must be non-empty strings or non-empty groups of non-empty strings",
+      );
+    }
   }
   const summary = args.reviewRecord.result_classification_summary ?? null;
   const materialIssues = records(summary?.material_issues);

@@ -1,0 +1,161 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml entities.Assay / relations
+    evidence_anchor: 'materialized-input.md: Assay definition and attributes;
+      relations list has no from/to Assay entries; notes say "Test와 Assay는 ...
+      현재 신규 항목은 두 곳 모두에 등록한다."'
+    claim: Assay가 Test/Specimen/Result 실행 경로에 연결되지 않은 상태입니다.
+    what: Assay는 분석기에서 수행되는 검사 카탈로그의 수행 단위로 정의되어 있지만, relations에는 Assay를 출발점이나 도착점으로
+      삼는 관계가 하나도 없습니다. attributes의 department 참조만 있어 부서에는 붙지만, 주문 가능한 Test, 검체
+      Specimen, 생성 결과 Result와의 실행 연결은 닫히지 않습니다.
+    why: 문서가 EMR/LIS 통합의 개념 권위 문서라면 주문 카탈로그(Test)와 LIS/분석기 수행 단위(Assay) 사이의 연결이 핵심
+      경로입니다. 현재 구조에서는 신규 항목을 Test와 Assay 양쪽에 등록한다고 하면서도 둘을 매핑하는 관계가 없어, 어떤 주문
+      Test가 어떤 Assay 수행과 Result 생성으로 이어지는지 권위 있게 추적할 수 없습니다.
+    how_to_fix: "Assay를 실행 경로에 명시적으로 연결하십시오. 최소 수정은 `Test -> Assay` 관계(예:
+      maps_to/implemented_by)와 `Assay -> Result` 또는 `Specimen + Assay -> Result`
+      관계를 추가하고, 필요하면 다대다 매핑 여부를 명시하는 것입니다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: EMR/LIS 통합의 개념 권위 문서로서 주문 카탈로그와 LIS 수행 단위를 연결하는 구조적 완결성
+      failure_condition: LIS가 Assay 단위로 수행/결과를 만들거나 신규 항목을 Test와 Assay 양쪽에 등록하는 운영 상황
+      impact: 주문된 Test와 실제 수행 Assay/Result 사이의 권위 경로가 없어 인터페이스 매핑, 결과 추적, 카탈로그 정비 기준이
+        문서 안에서 닫히지 않습니다.
+      evidence_refs:
+        - 'Assay definition: "분석기에서 수행되는 검사 항목. 검사 카탈로그의 수행 단위."'
+        - "relations list: no Assay from/to entries"
+        - 'notes: "현재 신규 항목은 두 곳 모두에 등록한다."'
+    causal_path:
+      root_cause_candidate: Assay를 카탈로그 수행 단위로 도입했지만 relations 그래프에 Assay 연결을 추가하지 않았습니다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay는 분석기 수행 단위로 정의되어 있습니다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.Assay.definition
+        - cause_id: structure-candidate-001.cause-002
+          claim: relations 목록에는 Assay를 포함하는 관계가 없습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - relations list
+        - cause_id: structure-candidate-001.cause-003
+          claim: 따라서 Test, Specimen, Result로 이어지는 핵심 검사 실행 경로에서 Assay가 구조적으로 분리됩니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Test
+            - entities.Specimen
+            - entities.Result
+            - relations list
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml entities.CriticalValue / relations
+    evidence_anchor: "materialized-input.md: CriticalValue attributes only reference
+      Test; relations list has no from/to CriticalValue entries"
+    claim: CriticalValue가 실제 Result나 보고/통보 경로에 연결되지 않았습니다.
+    what: CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의되어 있지만, 구조상 Test만 참조하고 실제 발생한
+      Result, Report, Staff 또는 통보 기록과 연결되는 관계가 없습니다. relations 목록에도
+      CriticalValue는 전혀 등장하지 않습니다.
+    why: 위험 범위 정의가 Test에만 붙어 있으면 어떤 실제 Result가 CriticalValue 판정 대상인지, 판정된 결과가 어떤
+      Report나 통보 책임 경로로 이어지는지 온톨로지 안에서 닫히지 않습니다. 운영상 중요한 위험값 흐름이 권위 문서의 관계 그래프
+      바깥에 남습니다.
+    how_to_fix: "CriticalValue를 실제 결과 흐름에 연결하십시오. 예: `CriticalValue -> Test
+      applies_to`, `Result -> CriticalValue triggers` 또는 별도
+      `CriticalNotification` 엔티티를 두고 `Result -> CriticalNotification`,
+      `CriticalNotification -> Staff/Report` 관계를 명시합니다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 임상검사 워크플로의 위험 결과 구조와 운영 책임 경로를 설명하는 개념 권위성
+      failure_condition: 검사 결과가 위험 범위에 해당하여 즉시 통보 여부와 보고 반영을 판단해야 하는 상황
+      impact: 위험값 규칙이 실제 Result/Report 흐름과 연결되지 않아 EMR/LIS 통합에서 critical result 처리 경로를
+        구조적으로 검증하거나 구현 기준으로 삼기 어렵습니다.
+      evidence_refs:
+        - entities.CriticalValue.definition
+        - entities.CriticalValue.attributes.test_ref
+        - relations list has no CriticalValue entries
+    causal_path:
+      root_cause_candidate: CriticalValue를 범위 정의 엔티티로 추가했지만 실제 결과 및 통보 경로 관계를 모델링하지 않았습니다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: CriticalValue는 즉시 통보가 필요한 위험 결과 값 범위로 정의됩니다.
+          relation_to_previous: null
+          evidence_refs:
+            - entities.CriticalValue.definition
+        - cause_id: structure-candidate-002.cause-002
+          claim: CriticalValue의 구조적 연결은 attribute `test_ref`에 한정되고 relations 목록에는 등장하지
+            않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.CriticalValue.attributes
+            - relations list
+        - cause_id: structure-candidate-002.cause-003
+          claim: 그 결과 실제 Result가 위험값을 발생시키는 경로와 Report/통보 완료 경로가 관계 그래프에서 닫히지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - entities.Result
+            - entities.Report
+            - entities.CriticalValue.attributes.notified
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-003
+    target: clinical-lab-ontology.yaml state_rules.Order completed rule / relations
+    evidence_anchor: "materialized-input.md: state_rules[0] says Order completes
+      when all Result are final; relations provide Order->Specimen->Result and
+      Order->Report->Result paths but no direct Order-Result membership
+      relation"
+    claim: Order 완료 규칙이 참조하는 Result 집합의 권위 경로가 명시되지 않았습니다.
+    what: "`Order는 모든 Result가 final일 때 completed로 전이한다`는 상태 규칙이 있지만, 관계 그래프에는 Order에
+      속한 Result를 정의하는 단일 권위 관계가 없습니다. Result는 Specimen에서 produced/derived_from되고
+      Report에 contained/aggregated_into되며, Order는 Specimen 및 Report 양쪽과 연결됩니다."
+    why: 구조적으로는 Order의 Result 집합을 `Order -> Specimen -> Result`로 볼 수도 있고 `Order ->
+      Report -> Result`로 볼 수도 있습니다. 두 경로가 동일 집합을 보장한다는 제약이 없으므로 완료 상태 전이의 입력 집합이
+      문서 안에서 닫히지 않습니다.
+    how_to_fix: "Order에 속한 Result의 권위 경로를 하나로 지정하십시오. 예: `Order -> Result has_many`를
+      추가하거나, `Order results are exactly union(Specimen.produces)` 같은 제약을 state
+      rule 옆에 명시하고 Report.contains는 그 결과 집합의 projection임을 분리합니다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 상태 모델의 구조적 완결성과 EMR/LIS 연동에서 Order 완료 판정의 권위 기준
+      failure_condition: Order completion을 자동 산정하거나 EMR/LIS 양쪽에서 완료 상태를 동기화하는 상황
+      impact: 어떤 Result들을 모두 final로 봐야 하는지 구조적으로 불명확하여 완료 판정이 시스템별로 달라질 수 있습니다.
+      evidence_refs:
+        - state_rules[0]
+        - "relations: Order->Specimen, Specimen->Result, Order->Report,
+          Report->Result"
+    causal_path:
+      root_cause_candidate: Order completed 상태 규칙이 Result 집합을 요구하지만 해당 집합을 산출하는 권위 관계가 명시되지 않았습니다.
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: Order 완료 규칙은 모든 Result가 final인지 판단해야 합니다.
+          relation_to_previous: null
+          evidence_refs:
+            - state_rules[0]
+        - cause_id: structure-candidate-003.cause-002
+          claim: relations에는 Order에서 Result로 가는 복수의 간접 경로가 있습니다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "relations: Order->Specimen"
+            - "relations: Specimen->Result"
+            - "relations: Order->Report"
+            - "relations: Report->Result"
+        - cause_id: structure-candidate-003.cause-003
+          claim: 어느 경로가 완료 판정의 권위 Result 집합인지 명시되지 않아 상태 규칙의 구조적 입력이 닫히지 않습니다.
+          relation_to_previous: causes
+          evidence_refs:
+            - state_rules[0]
+            - relations list
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Attribute-level ref는 보조 연결 증거로 보되, relations 목록은 워크플로 관계 그래프의 명시적 권위 표면으로
+    간주했습니다.
+  - session_domain이 none이므로 외부 임상검사 도메인 표준이나 로컬 domain document는 사용하지 않았습니다.
+validation:
+  unaddressable_candidates: []

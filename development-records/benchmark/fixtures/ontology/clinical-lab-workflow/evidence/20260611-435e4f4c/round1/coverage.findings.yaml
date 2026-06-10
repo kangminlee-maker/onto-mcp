@@ -1,0 +1,259 @@
+schema_version: 1
+session_id: 20260611-435e4f4c
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: clinical-lab-ontology.yaml / Specimen lifecycle
+    evidence_anchor: .onto/review/20260611-435e4f4c/execution-preparation/materialized-input.md:37-44,121-124
+    claim: Specimen lifecycle omits post-analysis retention and disposal states.
+    what: Specimen is modeled only through `collected`, `received`, `in_analysis`,
+      and `analyzed`, while the state rules explicitly defer storage/disposal
+      after analysis to departmental policy. The ontology therefore does not
+      represent specimen retention, storage, disposal, or related terminal
+      lifecycle concepts.
+    why: For a document intended as the EMR/LIS integration concept authority,
+      specimen state must remain interpretable after analysis when reports are
+      amended, audits occur, or recollection/discard decisions are needed. The
+      target itself acknowledges post-analysis handling exists but leaves it
+      outside the ontology, so the lifecycle is incomplete from coverage
+      perspective.
+    how_to_fix: Extend Specimen with explicit post-analysis states such as `stored`,
+      `retained`, `disposed`, `transferred`, or `rejected/discarded` as
+      appropriate, and add attributes/events for disposition time, responsible
+      actor, retention policy, and reason.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the EMR/LIS integration concept authority
+        for clinical lab workflow entities, relations, and states.
+      failure_condition: After a specimen reaches `analyzed`, downstream systems need
+        to exchange or reason about storage, retention, disposal, or later
+        audit/rework, but the ontology has no concept for those states.
+      impact: The authority document cannot close the specimen lifecycle it explicitly
+        references, weakening integration scope control and leaving
+        operationally important states to undocumented departmental
+        interpretations.
+      evidence_refs:
+        - materialized-input.md:37-44
+        - materialized-input.md:121-124
+    causal_path:
+      root_cause_candidate: The ontology stops Specimen lifecycle at `analyzed` and
+        delegates post-analysis handling to external departmental policy instead
+        of modeling it.
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: Specimen lifecycle is declared as `[collected, received, in_analysis,
+            analyzed]`.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37-44
+        - cause_id: coverage-candidate-001.cause-002
+          claim: The state rules state that handling after `analyzed` follows each
+            department's internal policy.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-124
+        - cause_id: coverage-candidate-001.cause-003
+          claim: Because no post-analysis states or disposition evidence concepts are
+            present, retention/disposal cannot be represented in the authority
+            ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:37-44
+            - materialized-input.md:121-124
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-002
+    target: clinical-lab-ontology.yaml / CriticalValue notification model
+    evidence_anchor: .onto/review/20260611-435e4f4c/execution-preparation/materialized-input.md:100-106
+    claim: Critical value notification lacks an in-ontology evidence concept for
+      actor, time, recipient, and basis.
+    what: CriticalValue includes only bounds and a `notified` boolean, with a note
+      that notification time and recipient live in a phone log. No Notification,
+      Acknowledgement, CommunicationLog, actor, timestamp, recipient, method, or
+      escalation concept is represented in the ontology.
+    why: Critical value notification is a controlled safety action, not just a flag.
+      Coverage guidance asks whether actions needing control have
+      actor/time/basis evidence concepts. By keeping evidence outside the
+      ontology, EMR/LIS integrations can disagree on whether notification was
+      performed, who received it, and what proof supports it.
+    how_to_fix: Add a critical-value notification event/entity linked to
+      CriticalValue/Result/Order/Staff, with notified_at, notified_by,
+      recipient, recipient_role/contact, method, acknowledgement status/time,
+      escalation path, and evidence/source reference.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use the ontology as a concept authority for EMR/LIS
+        integration and operational risk around lab reporting.
+      failure_condition: A critical result is generated and notification status must
+        be exchanged, audited, reconciled, or escalated across systems, but the
+        ontology exposes only a boolean and externalizes the evidence.
+      impact: Patient-safety-critical communication becomes under-specified; systems
+        may treat a flag as sufficient without shared evidence for recipient,
+        timing, responsibility, or acknowledgement.
+      evidence_refs:
+        - materialized-input.md:100-106
+    causal_path:
+      root_cause_candidate: The CriticalValue model represents notification as a
+        boolean and places notification evidence in an external phone log not
+        modeled by the ontology.
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: CriticalValue defines `notified` as a boolean.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-002.cause-002
+          claim: The note says notification time and recipient are in a phone record
+            ledger, not in the ontology.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100-106
+        - cause_id: coverage-candidate-002.cause-003
+          claim: No in-ontology notification event or acknowledgement evidence concept
+            exists for actor, time, recipient, method, or basis.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:100-106
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-003
+    target: clinical-lab-ontology.yaml / Result and Report correction lifecycle
+    evidence_anchor: .onto/review/20260611-435e4f4c/execution-preparation/materialized-input.md:62-84,121-123
+    claim: Final-result correction and report amendment are represented as statuses
+      but not as versioned correction events.
+    what: Result has `preliminary`, `final`, and `corrected`; Report has `prelim`,
+      `finalized`, and `amended`; the state rule says corrected results should
+      make the report amended. However, the ontology has no correction/amendment
+      event, prior value, corrected value lineage, reason, corrected_at,
+      corrected_by separate from verification, report version, or re-release
+      concept.
+    why: Correcting a finalized lab result changes a clinically consumed record. A
+      coverage-complete lifecycle must support post-final correction without
+      losing the previous released fact or the reason and authority for the
+      amendment. The current model covers the status label but not the
+      operational evidence needed to reconstruct what changed and when.
+    how_to_fix: Introduce ResultCorrection and ReportAmendment/version concepts,
+      including previous value/status, new value/status, reason, corrected_by,
+      corrected_at, amended_report_version, released_at/released_by, and links
+      back to the affected Result and Report.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the authoritative model for result/report
+        states in EMR/LIS integration.
+      failure_condition: A final result is corrected after release and systems need to
+        exchange, audit, or display the amendment history, but only current
+        status fields exist.
+      impact: The model cannot reconstruct post-final changes or preserve the clinical
+        meaning of prior released reports, reducing trust in report-state
+        authority.
+      evidence_refs:
+        - materialized-input.md:62-84
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: The ontology models correction/amendment as
+        terminal-looking status values without separate lifecycle event/version
+        concepts.
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: Result status includes `corrected` and Report result_status includes
+            `amended`.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:62-84
+        - cause_id: coverage-candidate-003.cause-002
+          claim: The state rule states that when Result.status changes to corrected,
+            Report.result_status should become amended.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:121-123
+        - cause_id: coverage-candidate-003.cause-003
+          claim: No correction event, amendment version, prior value, reason, actor, or
+            correction timestamp is defined.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:62-84
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-004
+    target: clinical-lab-ontology.yaml / Test, Assay, and turnaround-time authority
+    evidence_anchor: .onto/review/20260611-435e4f4c/execution-preparation/materialized-input.md:46-60,126-128
+    claim: Parallel catalog and metric definitions lack single authority and
+      effective-history concepts.
+    what: Test and Assay are both catalog-like concepts with overlapping
+      department/specimen information, and notes say new items are currently
+      registered in both places pending later consolidation. The notes also say
+      TAT is calculated from collected_at to released_at while the dashboard
+      team maintains its own formula. The ontology does not model authoritative
+      source, mapping, effective dates, version history, or ownership for these
+      parallel definitions.
+    why: Coverage guidance calls out missing single authority for values managed
+      across multiple systems or ledgers, and missing history for time-dependent
+      values. Catalog mappings and operational metrics are exactly the kind of
+      integration concepts that drift when there is no authority or validity
+      period. As an EMR/LIS concept authority, the ontology should make those
+      boundaries explicit rather than leave them as later cleanup.
+    how_to_fix: "Define catalog authority and mapping concepts: TestCatalogEntry,
+      AssayCatalogEntry, TestAssayMapping, source_system/owner,
+      effective_from/effective_to, version/status, and deprecation rules. Define
+      TATMetricDefinition with formula authority, version, validity period, and
+      consuming systems."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology to control EMR/LIS integration scope,
+        precedence, and authoritative concepts.
+      failure_condition: A new test/assay or TAT calculation changes and multiple
+        systems must reconcile catalog entries or metric results, but the
+        ontology lacks authority, mapping, and validity concepts.
+      impact: Parallel registration and dashboard-owned formulas can produce
+        conflicting operational truth without a modeled source of authority or
+        history for reconstruction.
+      evidence_refs:
+        - materialized-input.md:46-60
+        - materialized-input.md:126-128
+    causal_path:
+      root_cause_candidate: The ontology acknowledges parallel catalog registration
+        and externally maintained TAT calculation but does not model authority,
+        mapping, or effective history.
+      root_cause_step_id: coverage-candidate-004.cause-004
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: Test and Assay are separate catalog/performance concepts with overlapping
+            department and specimen-kind attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:46-60
+        - cause_id: coverage-candidate-004.cause-002
+          claim: The notes say new items are currently registered in both Test and Assay
+            while consolidation is deferred.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:126-127
+        - cause_id: coverage-candidate-004.cause-003
+          claim: The notes say TAT has a formula but the dashboard team maintains its own
+            calculation.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:128
+        - cause_id: coverage-candidate-004.cause-004
+          claim: No source-of-authority, version, effective period, ownership, or mapping
+            concept is defined for these parallel values.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:46-60
+            - materialized-input.md:126-128
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서나 외부 표준은 사용하지 않았다.
+  - 검토 범위는 materialized input에 포함된 clinical-lab-ontology.yaml 단일 파일과 패킷 내
+    coverage 역할 정의로 제한했다.
+  - 임상검사 워크플로의 개념 권위 문서라는 자체 선언을 기준으로, EMR/LIS 통합에서 공유되어야 하는 lifecycle, 감사 증거,
+    단일 권위, 유효기간 차원의 누락을 평가했다.
+validation:
+  unaddressable_candidates: []

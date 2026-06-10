@@ -1,0 +1,186 @@
+schema_version: 1
+session_id: 20260611-1b46eb7b
+planned_issues:
+  - issue_id: issue-009
+    priority: 10
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - coverage
+      - logic
+      - semantics
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-009.evolution
+      - issue-stance-matrix.yaml#stances.issue-009.coverage
+      - issue-stance-matrix.yaml#stances.issue-009.logic
+      - issue-stance-matrix.yaml#stances.issue-009.semantics
+      - issue-stance-matrix.yaml#stances.issue-009.structure
+      - issue-stance-matrix.yaml#stances.issue-009.axiology
+    conflict_summary: Evolution and axiology keep the high-severity
+      future-maintenance risk for dual Test/Assay registration, while coverage,
+      logic, semantics, and structure narrow the issue to the shared
+      catalog-boundary or missing-mapping defect and lower severity toward
+      medium because it substantially overlaps issue-007.
+    resolution_question: Should issue-009 remain a distinct high-severity evolution
+      issue about future double maintenance, or be narrowed/lowered as a medium
+      Test/Assay mapping-boundary instance largely covered by issue-007?
+  - issue_id: issue-011
+    priority: 9
+    conflict_type: evidence_gap
+    participating_lens_ids:
+      - logic
+      - structure
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+    conflict_summary: Logic and most lenses support a high-severity lifecycle
+      contradiction caused by mutable Result.status after Order completion,
+      while structure only sees a surface structural prerequisite and says its
+      bounded evidence is insufficient for the stated lifecycle root, lowering
+      severity from its lens scope.
+    resolution_question: Is the logic evidence sufficient to keep issue-011 as a
+      high-severity lifecycle contradiction despite structure's bounded evidence
+      gap, or should the issue be narrowed to a graph prerequisite or merged
+      with the status-history issue?
+  - issue_id: issue-007
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - semantics
+      - evolution
+      - logic
+      - structure
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: Coverage, semantics, axiology, and evolution support a broad
+      shared-root Test/Assay authority, boundary, cardinality, and lifecycle
+      issue, while logic and structure support only narrower invariant or
+      graph-mapping aspects. Evolution also raises severity relative to the
+      merged medium issue.
+    resolution_question: Should issue-007 be deliberated as one broad merged
+      Test/Assay catalog-authority issue, or split/narrow the structural and
+      logical symptoms while resolving whether evolution risk warrants higher
+      severity?
+  - issue_id: issue-002
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+    conflict_summary: All participating lenses agree CriticalValue notification
+      evidence is missing or externalized, but coverage raises severity to high
+      because audit actors, times, recipients, acknowledgement, and retries are
+      uncovered, while axiology and semantics keep medium and evolution narrows
+      the root to workflow extensibility.
+    resolution_question: Should issue-002 remain medium as an authority/value
+      concern, be raised to high due to coverage-critical notification audit
+      gaps, or be narrowed into the notification-event coverage issue
+      represented by issue-005?
+  - issue_id: issue-012
+    priority: 6
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-012.logic
+      - issue-stance-matrix.yaml#stances.issue-012.coverage
+    conflict_summary: Logic treats the immediate amendment obligation versus delayed
+      nightly synchronization as a direct modality mismatch on
+      Report.result_status, while coverage supports the defect but narrows it as
+      a symptom of the broader missing status authority/history model in
+      issue-004.
+    resolution_question: Should issue-012 be kept as an independent root about
+      collapsing immediate semantic state with delayed materialized
+      synchronization, or folded under the broader status authority/history root
+      of issue-004?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: no_material_conflict
+    reason: Evolution narrows the root framing toward status authority and
+      synchronization stability, but all applicable lenses support the trusted
+      report-status defect and keep high severity; the difference does not
+      require controlled deliberation.
+  - issue_id: issue-003
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the TAT calculation-authority
+      issue at medium severity; non-applicable logic and structure stances do
+      not create a material conflict.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the high-severity missing status
+      authority and history-axis issue; structure is not applicable but does not
+      oppose the root or severity.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the high-severity missing
+      CriticalValue notification audit-event issue; non-applicable logic and
+      structure stances do not create a material conflict.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the medium-severity post-analysis
+      specimen retention/disposal lifecycle gap; non-applicable stances are
+      lens-scope limits only.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the medium-severity TAT metric
+      authority, versioning, and exception-coverage issue.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: Logic narrows the root to a shared codeset/mapping invariant, but keeps
+      medium severity and aligns with the proposed shared SpecimenKind
+      authority; no material deliberation conflict remains.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the high-severity duplicated
+      Result/Report status vocabulary and authority issue; structure is not
+      applicable but does not create a conflict.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: Applicable lenses consistently support the medium-severity duplicated
+      STAT representation issue and agree on the need for a canonical
+      representation or invariant.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: Logic narrows support to the event-state predicate portion of the
+      CriticalValue conflation but keeps severity, while other applicable lenses
+      support the semantic split; the difference is complementary rather than a
+      material conflict.
+  - issue_id: issue-016
+    reason_code: non_material_issue
+    reason: The issue is low severity and explicitly non-material; bounded evidence
+      shows a naming/role-precision problem without a material failure
+      condition.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: Logic narrows the issue to the missing relation or invariant needed for
+      workflow reasoning, but keeps medium severity and aligns with the
+      structural remedy; no material conflict needs deliberation.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All applicable lenses consistently support the medium-severity missing
+      Order-to-Test relation graph edge issue.

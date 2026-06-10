@@ -1,0 +1,170 @@
+schema_version: 1
+session_id: 20260611-1b46eb7b
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: clinical-lab-ontology.yaml state_rules
+    evidence_anchor: "Embedded Materialized Input: state_rules[0] `Order는 모든 Result가
+      final일 때 completed로 전이한다.`; Result.status enum values `[preliminary,
+      final, corrected]`; state_rules[1] allows `Result.status` to change to
+      `corrected` after report release"
+    claim: Order completion is defined by a reversible Result status, so later
+      correction can make an already completed Order no longer satisfy its own
+      completion condition.
+    what: The ontology declares that an Order transitions to `completed` when all
+      Results are `final`, while the same model also allows a Result that was
+      final/released to become `corrected`. Once any Result changes to
+      `corrected`, the completed Order no longer satisfies the only stated
+      completion predicate.
+    why: These claims are jointly satisfiable at a snapshot where all Results are
+      `final`, but not stable across the lifecycle path explicitly allowed by
+      the second rule. The model has no rule saying whether `completed` is
+      irreversible, reopened, amended, or still completed after a correction, so
+      the state machine can contain a completed Order whose required completion
+      condition is false. For an EMR/LIS authority document, this weakens
+      downstream trust in completion as a contract state.
+    how_to_fix: Define completion against an immutable event/snapshot, or add an
+      explicit post-completion correction transition such as `completed ->
+      amended/reopened` with rules for how corrected Results affect Order state.
+      If completed is intended to remain true after correction, state that
+      completion means initial finalization and separate it from amendment
+      status.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: Use of the ontology as the conceptual authority for EMR/LIS
+        integration state contracts.
+      failure_condition: A Result reaches `final`, Order becomes `completed`, and the
+        Result is later changed to `corrected` under the Report amendment rule.
+      impact: Integrations relying on `Order.completed` cannot determine whether
+        completion means all current Results are final or merely that
+        finalization occurred once, causing contradictory lifecycle
+        interpretations around corrected lab results.
+      evidence_refs:
+        - "Embedded Materialized Input: Result.status values [preliminary,
+          final, corrected]"
+        - "Embedded Materialized Input: state_rules[0]"
+        - "Embedded Materialized Input: state_rules[1]"
+    causal_path:
+      root_cause_candidate: Completion is specified as a state transition predicate
+        over mutable current Result.status values without an accompanying
+        correction/reopen rule for Order.
+      root_cause_step_id: logic-candidate-001.cause-004
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: The target defines Result.status as an enum including both `final` and
+            `corrected`.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Result.attributes.status values
+              [preliminary, final, corrected]"
+        - cause_id: logic-candidate-001.cause-002
+          claim: The target defines Order completion as occurring when all Results are
+            `final`.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[0]"
+        - cause_id: logic-candidate-001.cause-003
+          claim: The target explicitly permits a Result status to change to `corrected`
+            after report release and requires Report.result_status to become
+            amended.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1]"
+        - cause_id: logic-candidate-001.cause-004
+          claim: After such a correction, an already completed Order can have a non-final
+            current Result and no declared Order transition resolves the
+            mismatch.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Order.lifecycle [draft, placed,
+              in_progress, completed, cancelled]"
+            - "Embedded Materialized Input: state_rules[0]"
+            - "Embedded Materialized Input: state_rules[1]"
+      unresolved_beyond_evidence: null
+  - candidate_id: logic-candidate-002
+    target: clinical-lab-ontology.yaml Report.result_status / state_rules
+    evidence_anchor: "Embedded Materialized Input: Report.result_status enum values
+      `[prelim, finalized, amended]`; state_rules[1] says `Report는 released_at
+      기록 시점에 finalized 상태가 된다` and `Report.result_status는 amended가 되어야 한다(동기화
+      배치는 야간 1회)`"
+    claim: The report status rule treats a delayed batch-synchronized value as an
+      immediate required state, producing an interval where the obligation
+      cannot be simultaneously satisfied with the declared synchronization
+      mechanism.
+    what: The rule says Report becomes finalized at `released_at`, and if a
+      Result.status changes to corrected then Report.result_status must become
+      amended, but also says synchronization runs once nightly. During the time
+      between a correction and the nightly batch, the current required value
+      (`amended`) and the maintained duplicate value can diverge by design.
+    why: "The conflict is a modality mismatch: `must become amended` is stated as an
+      obligation over the authoritative displayed value, while the same sentence
+      permits delayed synchronization. If the report status is the value
+      clinicians trust, the ontology allows a period where the authoritative
+      Report.result_status is necessarily stale relative to its required
+      condition."
+    how_to_fix: Separate the immediate semantic state from the materialized
+      synchronized field. For example, define `Report.amendment_required`
+      immediately when a Result is corrected, and define `Report.result_status`
+      as updated by the nightly batch with an explicit stale/pending state or
+      SLA. Alternatively require immediate update when clinician-facing
+      authority must never lag.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use of Report.result_status as a trusted EMR/LIS integration
+        authority value for clinicians.
+      failure_condition: A Result.status is corrected after release before the nightly
+        synchronization batch updates Report.result_status.
+      impact: The ontology simultaneously requires the report to be amended and allows
+        the trusted displayed field to remain finalized, making the status
+        contract ambiguous for consumers during the delay window.
+      evidence_refs:
+        - "Embedded Materialized Input: Report.result_status note says it is the
+          authority value and clinicians trust it"
+        - "Embedded Materialized Input: state_rules[1]"
+    causal_path:
+      root_cause_candidate: The model collapses an immediate derived obligation and a
+        delayed materialized synchronization field into the same authoritative
+        Report.result_status concept.
+      root_cause_step_id: logic-candidate-002.cause-004
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: Report.result_status is declared as the authority value shown on the
+            report and trusted by clinicians.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Report.attributes.result_status.note"
+        - cause_id: logic-candidate-002.cause-002
+          claim: The state rule requires Report.result_status to become `amended` when
+            Result.status changes to `corrected`.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1]"
+        - cause_id: logic-candidate-002.cause-003
+          claim: The same rule states the synchronization batch runs only once nightly.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: state_rules[1]"
+        - cause_id: logic-candidate-002.cause-004
+          claim: Between correction and batch execution, the model permits the trusted
+            Report.result_status field to remain unamended despite the immediate
+            amendment obligation.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: Report.attributes.result_status.note"
+            - "Embedded Materialized Input: state_rules[1]"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so findings use only generic intra/inter-claim
+    logical consistency checks from the prompt packet.
+  - The materialized input is treated as the authoritative target input; no
+    external clinical laboratory domain rules were used.
+  - Line numbers were not available in the embedded materialized input, so
+    evidence anchors cite entity attributes and state_rules indexes. Node-style
+    anchors are used as stable claim identifiers within the provided YAML
+    content.
+validation:
+  unaddressable_candidates: []

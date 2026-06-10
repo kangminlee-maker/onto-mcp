@@ -1,0 +1,141 @@
+schema_version: 1
+session_id: 20260611-1b46eb7b
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: clinical-lab-ontology.yaml relations graph for Assay
+    evidence_anchor: .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:54
+      and
+      .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:108
+    claim: Assay is omitted from the explicit workflow relation graph.
+    what: Assay is defined as the analyzer-executed unit and has its own attributes,
+      but no relation in the `relations` list uses `Assay` as either `from` or
+      `to`. The only Assay connection visible in the target is an attribute
+      reference to Department.
+    why: The ontology says Test and Assay are both currently registered, but the
+      explicit relation graph has no Test-Assay, Assay-Result, or Assay-Specimen
+      edge. As a result, the execution unit cannot be traversed from the
+      order/test/result workflow except through a generic department reference,
+      weakening the document as a concept authority for EMR/LIS integration
+      paths.
+    how_to_fix: Add an explicit relation that connects Assay to the core workflow,
+      preferably through the catalog concept it realizes, such as `Test ->
+      Assay` / `Assay -> Test` with a clear kind, and add any required
+      execution-result edge if Result is produced by Assay rather than directly
+      by Test or Specimen.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the conceptual authority document for
+        EMR/LIS integration from Order through Report.
+      failure_condition: When an integration needs to map ordered catalog tests to
+        analyzer-executed assay units, the formal relation graph has no path
+        involving Assay beyond Department.
+      impact: Review trust is weakened because a core LIS execution concept is present
+        but structurally disconnected from the workflow graph that downstream
+        implementers would use for integration mapping.
+      evidence_refs:
+        - materialized-input.md:54-60
+        - materialized-input.md:108-119
+        - materialized-input.md:126-127
+    causal_path:
+      root_cause_candidate: The ontology introduces Assay as a separate execution-unit
+        concept but does not add corresponding workflow relations for that
+        split.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: Assay is defined as the analyzer-executed unit with department and
+            specimen_kind attributes.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:54-60
+        - cause_id: structure-candidate-001.cause-002
+          claim: The explicit relation list contains no edge where Assay is the source or
+            target.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-001.cause-003
+          claim: The note says new items are currently registered in both Test and Assay,
+            making the missing Test-Assay connection operationally relevant
+            within the target.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:126-127
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: clinical-lab-ontology.yaml Order-to-Test structural path
+    evidence_anchor: .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:19
+      and
+      .onto/review/20260611-1b46eb7b/execution-preparation/materialized-input.md:108
+    claim: The explicit relation graph omits the Order-to-Test ordering edge.
+    what: Order has `ordered_tests` as a list of Test references, but the
+      `relations` list does not include an Order-Test relationship. The graph
+      instead links Test to Result and Order to Specimen/Report.
+    why: For a workflow authority document, the ordered tests are the structural
+      basis for expected lab work. Without an explicit Order-to-Test relation,
+      the relation graph cannot directly express which Test items were ordered,
+      which makes downstream traversal from Order to expected Test/Result
+      behavior depend on an attribute that is not mirrored in the formal
+      relation model.
+    how_to_fix: Add an explicit `Order -> Test` relation such as `orders` or
+      `includes_ordered_test`, and if needed define the expected Result path
+      from ordered Test to Result so the completion rule can be evaluated from
+      the same graph.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use the ontology as the concept authority for EMR/LIS
+        order-to-result workflow integration.
+      failure_condition: When a consumer relies on the relation graph to determine
+        which tests belong to an order, the formal graph lacks the required
+        Order-Test edge even though the attribute model declares
+        `ordered_tests`.
+      impact: "The graph is structurally incomplete for a central workflow question:
+        what tests an order contains and which results complete those ordered
+        tests."
+      evidence_refs:
+        - materialized-input.md:15-23
+        - materialized-input.md:108-119
+        - materialized-input.md:121-123
+    causal_path:
+      root_cause_candidate: The ontology splits ordered-test membership into an
+        attribute reference while the formal relation graph omits the same core
+        workflow edge.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Order declares `ordered_tests` as a list of references to Test.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:15-23
+        - cause_id: structure-candidate-002.cause-002
+          claim: The explicit relation list has no Order-to-Test relation, despite
+            including other workflow edges such as Order-Specimen, Test-Result,
+            and Order-Report.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:108-119
+        - cause_id: structure-candidate-002.cause-003
+          claim: The Order completion rule depends on all Result objects being final,
+            which requires a dependable structural path from an Order to its
+            expected test results.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:121-123
+      unresolved_beyond_evidence: The target does not specify whether attribute refs
+        or the relations list are intended to be the sole graph authority; this
+        finding treats the explicit `relations` block as the relation graph
+        because the artifact defines one.
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`session_domain` is none, so no external clinical laboratory domain rule
+    was used."
+  - The explicit `relations` block is treated as the ontology's formal workflow
+    relation graph; reference attributes are considered supporting evidence but
+    not a substitute for missing explicit graph edges when relation completeness
+    is under review.
+validation:
+  unaddressable_candidates: []
