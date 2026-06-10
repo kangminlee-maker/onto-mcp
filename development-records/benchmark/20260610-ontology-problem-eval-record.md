@@ -38,7 +38,21 @@ note-한-줄 결함 자체는 약점이 아님(MBO-5·9 검출이 반례) — 1�
 
 - **semantic quality gate가 코드 fixture에 결합**: `SemanticQualityGateFixtureId`가 닫힌 union(코드 fixture 2종)이고 기대 어휘가 fixture-앵커라 비코드 타깃에 게이트를 적용할 수 없음 → 이번 평가는 ground-truth 수동 대조로 채점. **비코드 일반화가 후속 최우선**(사용자 확정).
 
+## 후속 1 완료 — semantic gate 비코드 일반화
+
+게이트 체크는 target-agnostic으로 유지하고, target-특정 데이터(필수 material 어휘·boundary decoy·anchor)를 주입형 `SemanticQualityExpectations`로 분리했다(코드 fixture 2종은 동일 형태의 내장 preset으로 잔존). 각 온톨로지 fixture는 ground truth에서 도출한 `semantic-expectations.yaml`을 보유하며, `evaluate-semantic-gate.mts`가 영속화된 evidence에 게이트를 적용한다.
+
+| fixture | gate | 비고 |
+|---|---|---|
+| clinical-lab-workflow | **passed** (12/12) | 구조 체크 포함 전부 통과 |
+| credit-risk-taxonomy | **failed** (recall 3종만) | `ltv`(CRT-3)·`available_limit`(CRT-5) 부재 — 수동 채점 미검출과 정확히 일치 (true negative) |
+| manufacturing-bom | **passed** (12/12) | |
+
+- 게이트가 수동 채점과 동일한 판정을 자동 재현 → 비코드 타깃에서도 판별력 확인. 결과 JSON: `fixtures/ontology/semantic-gate-results-*.json`.
+- **일반화로 드러난 게이트 결함 1건 수정**: `issue_dependency_preservation`이 same_root 병합으로 동일 issue에 합류한 finding 쌍의 shared_cause 관계(교차-issue 의존이 구성상 불가능)를 실패 처리 — 코드 fixture의 2~3 finding 위상에서는 노출 불가. co-location을 보존으로 인정하도록 수정(shared_cause를 병합 증거로 쓰는 위반은 기존대로 실패).
+- 한계: 온톨로지 expectations에는 seeded non-material decoy가 없어 boundary 계열 체크는 공허 통과 — decoy 주입은 부재형 보강(후속 2)과 함께 설계 후보.
+
 ## 후속 (사용자 확정 순서)
 
-1. semantic gate의 비코드 일반화 (최우선)
+1. ~~semantic gate의 비코드 일반화~~ (완료 — 위 섹션)
 2. 부재형 결함 감지 보강 → 3. 파생 추론/도메인 신호 보강 → 4. CRT-5 재실행 검증

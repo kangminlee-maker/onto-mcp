@@ -39,6 +39,7 @@ const FIXTURES: Record<string, { targetFile: string; intent: string }> = {
 /** 감사 가능성: 채점 근거가 되는 세션 아티팩트를 repo 증거 디렉토리로 영속화. */
 const EVIDENCE_ARTIFACTS = [
   "finding-ledger.yaml",
+  "finding-relation-graph.yaml",
   "issue-ledger.yaml",
   "problem-framing.yaml",
   "review-record.yaml",

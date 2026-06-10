@@ -1,0 +1,32 @@
+# Semantic gate expectations — clinical-lab-workflow (ground-truth.yaml에서 도출).
+# material_terms는 severity_expectation: material인 seeded defect의 스키마 앵커 토큰이다.
+# 매칭은 소문자 부분 문자열(JSON 직렬화 + camelCase/구분자 분해 텍스트 대상).
+fixture_id: clinical-lab-ontology-v1
+material_terms: # 전 항목 필수 (textContainsAll)
+  - "assay" # CLW-1 Test vs Assay 중복 개념
+  - "result_status" # CLW-2 결과 상태 권위 이원화 (+ CLW-3 enum 파편화)
+  - "corrected" # CLW-3 상태 어휘 파편화 (corrected vs amended)
+  - "is_stat" # CLW-4 STAT 삼중 표현 (enum + boolean + 하위타입)
+  - "폐기" # CLW-5 검체 lifecycle 보관/폐기 부재
+  - "requires_specimen_type" # CLW-7 Specimen↔Test 관계 부재로 검증 불능
+  - "notified" # CLW-9 위험값 통보 감사 추적 부재
+expected_material_truth: >-
+  CLW-1 Test/Assay 분열 + CLW-2 상태 권위 이원화 + CLW-3 enum 파편화 +
+  CLW-4 STAT 삼중 표현 + CLW-5 lifecycle 단절 + CLW-7 검체-검사 관계 부재 +
+  CLW-9 통보 감사 추적 불가
+boundary_uncertainty_terms: [] # 이 fixture에는 seeded non-material decoy가 없다
+boundary_context_terms: []
+action_material_terms: # any-match
+  - "result_status"
+  - "assay"
+  - "상태"
+action_remediation_terms: # any-match
+  - "권위"
+  - "단일"
+  - "원본"
+  - "정의"
+  - "통합"
+  - "명시"
+target_anchor: clinical-lab-ontology.yaml
+target_anchor_terms:
+  - "clinical-lab-ontology.yaml"

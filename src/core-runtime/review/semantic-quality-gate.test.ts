@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { evaluateReviewPipelineSemanticQualityGate } from "./semantic-quality-gate.js";
+import {
+  evaluateReviewPipelineSemanticQualityGate,
+  type SemanticQualityExpectations,
+} from "./semantic-quality-gate.js";
 
 function passingReviewRecord() {
   return {
@@ -321,6 +324,59 @@ function retryPolicyIssueArtifacts() {
     },
   };
 }
+
+function ontologyExpectations(): SemanticQualityExpectations {
+  return {
+    fixtureId: "sample-ontology-v1",
+    materialTerms: ["scrap_rate", "복사"],
+    expectedMaterialTruth: "scrap_rate 복사본 권위화 (외부 엑셀 원본과 드리프트)",
+    boundaryUncertaintyTerms: [],
+    boundaryContextTerms: [],
+    actionMaterialTerms: ["scrap_rate"],
+    actionRemediationTerms: ["authority", "single"],
+    targetAnchor: "sample-ontology.yaml",
+    targetAnchorTerms: ["sample-ontology.yaml"],
+  };
+}
+
+function ontologyReviewRecord() {
+  return {
+    result_classification_summary: {
+      material_issue_count: 1,
+      non_material_finding_count: 0,
+      material_issues: [
+        {
+          issue_id: "issue-001",
+          problem_definition:
+            "BomLine.scrap_rate는 외부 엑셀이 원본인 값을 복사해 두는 파생값 복사본 권위화다.",
+          failure_condition:
+            "sample-ontology.yaml의 scrap_rate 복사본이 원본 엑셀과 드리프트하면 소요량 계산이 틀어진다.",
+          evidence_refs: ["sample-ontology.yaml:30"],
+          source_lens_ids: ["semantics"],
+          action_candidates: ["single_authority_for_scrap_rate"],
+        },
+      ],
+      non_material_findings: [],
+      action_candidates: [
+        {
+          issue_id: "issue-001",
+          candidates: ["single_authority_for_scrap_rate"],
+        },
+      ],
+    },
+  };
+}
+
+const ONTOLOGY_FINAL_OUTPUT = [
+  "### Final Review Result",
+  "scrap_rate는 외부 엑셀 원본의 복사본을 권위화한 결함이다.",
+  "",
+  "### Boundary Notes",
+  "- 본 리뷰는 온톨로지 문서 범위로 한정되며 운영 데이터 검증은 포함하지 않는다.",
+  "",
+  "### Immediate Actions Required",
+  "- Designate a single authority for scrap_rate and derive the model value from it.",
+].join("\n");
 
 describe("evaluateReviewPipelineSemanticQualityGate", () => {
   it("passes when the benchmark target truth and boundary uncertainty are preserved", () => {
@@ -675,6 +731,89 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
     ).toBe("passed");
   });
 
+  it("treats shared-cause endpoints co-located by same-root merge evidence as preserved", () => {
+    const artifacts = passingIssueArtifacts();
+    // finding-001 and finding-003 merge into one issue via same_root evidence;
+    // their shared_cause relation can no longer be a cross-issue dependency.
+    artifacts.relationGraph.relations.push({
+      relation_id: "rel-002",
+      from_finding_id: "finding-001",
+      to_finding_id: "finding-003",
+      relation: "same_root_candidate",
+    } as (typeof artifacts.relationGraph.relations)[number]);
+    artifacts.issueLedger.issues = [
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-003"],
+        relation_refs: ["rel-002"],
+      },
+    ];
+    artifacts.issueLedger.issue_dependencies = [];
+    const record = passingReviewRecord();
+    record.result_classification_summary.material_issues = [
+      record.result_classification_summary.material_issues[0]!,
+    ];
+    record.result_classification_summary.material_issue_count = 1;
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executorRealization: "codex",
+      reviewRecord: record,
+      finalOutputText: PASSING_FINAL_OUTPUT,
+      issueArtifacts: artifacts,
+    });
+
+    expect(
+      result.checks.find(
+        (check) => check.check_id === "issue_dependency_preservation",
+      )?.status,
+    ).toBe("passed");
+  });
+
+  it("fails co-located shared-cause endpoints without cited same-root merge evidence", () => {
+    const artifacts = passingIssueArtifacts();
+    // Both endpoints land in one issue but no same_root_candidate relation is
+    // cited — the exact shared-cause-only merge the contract forbids.
+    artifacts.issueLedger.issues = [
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-003"],
+        relation_refs: [],
+      },
+    ];
+    artifacts.issueLedger.issue_dependencies = [];
+    const record = passingReviewRecord();
+    record.result_classification_summary.material_issues = [
+      record.result_classification_summary.material_issues[0]!,
+    ];
+    record.result_classification_summary.material_issue_count = 1;
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executorRealization: "codex",
+      reviewRecord: record,
+      finalOutputText: PASSING_FINAL_OUTPUT,
+      issueArtifacts: artifacts,
+    });
+
+    expect(
+      result.checks.find(
+        (check) => check.check_id === "issue_dependency_preservation",
+      )?.status,
+    ).toBe("failed");
+  });
+
+  it("rejects injected expectations with empty material terms", () => {
+    const expectations = ontologyExpectations();
+    expectations.materialTerms = [];
+
+    expect(() =>
+      evaluateReviewPipelineSemanticQualityGate({
+        expectations,
+        reviewRecord: ontologyReviewRecord(),
+        finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+      }),
+    ).toThrowError(/materialTerms must not be empty/);
+  });
+
   it("fails when shared-cause dependency rows do not match relation endpoints", () => {
     const artifacts = passingIssueArtifacts();
     artifacts.issueLedger.issue_dependencies = [
@@ -759,6 +898,67 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
       result.checks.find((check) => check.check_id === "causal_materiality_shape")
         ?.status,
     ).toBe("failed");
+  });
+
+  it("evaluates injected non-code expectations instead of a built-in fixture preset", () => {
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      expectations: ontologyExpectations(),
+      reviewRecord: ontologyReviewRecord(),
+      finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+    });
+
+    expect(result.status).toBe("passed");
+    expect(result.fixture_id).toBe("sample-ontology-v1");
+    expect(result.fixture_target_anchor).toBe("sample-ontology.yaml");
+    expect(
+      result.checks.find((check) => check.check_id === "grounding")?.evidence,
+    ).toContain("material issue must preserve target anchor sample-ontology.yaml");
+  });
+
+  it("fails injected expectations when the expected material truth is missing", () => {
+    const expectations = ontologyExpectations();
+    expectations.materialTerms = [...expectations.materialTerms, "missing_concept"];
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      expectations,
+      reviewRecord: ontologyReviewRecord(),
+      finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+    });
+
+    expect(result.status).toBe("failed");
+    expect(
+      result.checks
+        .filter((check) =>
+          ["material_issue_recall", "final_result_material_issue_recall"].includes(
+            check.check_id,
+          ),
+        )
+        .map((check) => check.status),
+    ).toEqual(["failed", "failed"]);
+  });
+
+  it("passes boundary checks vacuously when injected expectations declare no boundary decoy", () => {
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      expectations: ontologyExpectations(),
+      reviewRecord: ontologyReviewRecord(),
+      finalOutputText: [
+        "### Final Review Result",
+        "scrap_rate is copied from an external spreadsheet, so the copy drifts from its authority.",
+        "",
+        "### Immediate Actions Required",
+        "- Make the spreadsheet the single authority for scrap_rate or move the value into the model.",
+      ].join("\n"),
+    });
+
+    expect(
+      result.checks
+        .filter((check) =>
+          ["false_materiality_guard", "boundary_uncertainty_preservation"].includes(
+            check.check_id,
+          ),
+        )
+        .map((check) => check.status),
+    ).toEqual(["passed", "passed"]);
   });
 
   it("fails when artifact truth loses the material finding", () => {

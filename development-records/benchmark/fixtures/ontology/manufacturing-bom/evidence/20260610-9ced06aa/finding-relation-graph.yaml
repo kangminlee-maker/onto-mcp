@@ -1,0 +1,156 @@
+schema_version: 1
+session_id: 20260610-9ced06aa
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-003
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: 공정 재투입/회수 흐름을 별도 제조 흐름 개념으로 분리하지 않고 BOM parent-child 자기참조 예외로
+      흡수한 것이 두 finding의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-003은 자기참조 BOM이 제품 구조와 공정 순환을 섞어 통합 기준성을 약화한다고 보고,
+      finding-009는 같은 자기참조 예외가 BOM 비순환 확장 규칙을 특수분기화한다고 본다. 두 finding 모두 BomLine
+      자기참조 예외와 BOM 비순환 규칙을 같은 근거로 삼되, 하나는 현재 개념 목적 drift, 다른 하나는 확장성 훼손을 강조한다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-003
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: BOM 구성 관계와 공정 수율/회수 흐름을 동일한 BOM 표현 안에 배치한 것이 목적 drift와 의미 혼동을 함께 만든다.
+    shared_cause:
+      cause_claim: 제품 구조 관계와 공정 수율/회수 흐름을 같은 BOM 표현 안에 배치했다.
+      from_cause_ref: finding-003.cause-004
+      to_cause_ref: finding-014.cause-003
+    rationale: finding-003은 공정 재투입 흐름이 제품 구조인 BOM에 섞인다는 구조적 트레이드오프를 지적하고,
+      finding-014는 그 결과 BOM의 '상위 품목이 하위 품목을 사용한다'는 의미가 흐려진다고 지적한다. 두 causal path
+      모두 자기 하위 Assembly 예외를 핵심 원인으로 둔다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-010
+    to_finding_id: finding-003
+    relation: symptom_of
+    root_hypothesis: 스크랩 재투입을 BOM 자기참조로 표현한 설계 선택이 논리 모순과 목적/구조 혼재를 동시에 드러낸다.
+    shared_cause: null
+    rationale: finding-010의 비순환 규칙 대 자기참조 예외 모순은 finding-003이 말한 BOM 구조와 공정 순환 혼재가
+      형식 규칙 수준에서 나타난 증상이다. finding-003은 broader tradeoff이고, finding-010은 같은 설계가
+      acyclic/self-child 조건을 동시에 만족하지 못하는 구체적 논리 실패다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-009
+    to_finding_id: finding-010
+    relation: same_root_candidate
+    root_hypothesis: BOM 비순환 불변식을 유지해야 할 위치에 자기참조 스크랩 재투입 예외를 둔 것이 확장성 위험과 논리 충돌의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-009는 예외가 늘수록 BOM 비순환 검증과 소요량 전개가 특수 처리에 의존한다고 보고,
+      finding-010은 현재 문장 자체가 비순환 필수 규칙과 자기참조 허용을 동시에 요구한다고 본다. 둘 다 BOM
+      acyclicity rule과 scrap reinput exception의 같은 원인 사슬을 공유한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-011
+    to_finding_id: finding-012
+    relation: duplicates
+    root_hypothesis: AlternatePart 정의가 필수 대칭성을 선언하면서 direction one_way/default를 동시에
+      허용한다는 동일 결함을 두 렌즈가 각각 논리·의미 관점으로 기록했다.
+    shared_cause: null
+    rationale: 두 finding은 모두 manufacturing-bom-ontology.yaml:32-40 및 alternate_of
+      shortcut을 근거로, 대체 관계의 대칭 정의와 one_way direction/default가 충돌한다고 주장한다. logic
+      finding은 satisfiability를, semantics finding은 승인되지 않은 역방향 대체 의미를 강조하지만 실질
+      결함과 제안 조치가 동일하다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-016
+    to_finding_id: finding-012
+    relation: enables
+    root_hypothesis: AlternatePart association entity가 declared relations graph에서 빠져
+      direction 의미가 구조적으로 전달되지 않는 것이 one_way/bidirectional 의미 혼동을 가능하게 한다.
+    shared_cause: null
+    rationale: finding-016은 relation graph가 AlternatePart를 우회해 Part -> Part
+      alternate_of shortcut만 제공한다고 지적한다. finding-012는 그 shortcut이 direction 의미를
+      드러내지 않아 one_way 관계가 양방향으로 해석될 수 있다고 본다. 따라서 구조적 단절은 의미 혼동을 직접 가능하게 하는
+      조건이다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: symptom_of
+    root_hypothesis: 변경관리의 권한과 이력을 독립 버전/effectivity 개념이 아니라 Part 현재값과 ECO 단일 적용일
+      규칙에 집중시킨 것이 두 finding의 공통 원인이다.
+    shared_cause: null
+    rationale: finding-002는 ECO.effective_date와 Part.rev 주간 배치 사이의 생산 시점 판정 불일치를
+      특정한다. finding-008은 같은 증거를 포함해 Part.rev/current_eco와 ECO.effective_date 중심
+      구조가 동시 리비전, BOM/라우팅 변경, 지연 동기화를 견디지 못한다고 넓게 진단한다. finding-002는
+      finding-008의 version/effectivity 연속성 부족이 드러나는 구체 사례다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-005
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: BOM과 변경 대상을 독립 버전/effectivity 범주로 모델링하지 않은 것이 BOM 적용 범위 누락과 변경
+      이력 연속성 부족을 함께 만든다.
+    shared_cause:
+      cause_claim: BOM 구조나 BomLine이 어떤 변경 효력 또는 버전에 속하는지 표현하지 않는다.
+      from_cause_ref: finding-005.cause-003
+      to_cause_ref: finding-008.cause-002
+    rationale: finding-005는 BOM 자체의 version/status/effectivity 부재 때문에 ECO
+      effective_date 규칙이 BOM 구조 변경을 닫지 못한다고 본다. finding-008은 ECO가 BOM
+      라인·라우팅·작업·검사계획 버전 변경을 직접 연결하지 않아 버전 연속성이 부족하다고 본다. 두 finding은
+      BOM/effectivity를 현재값 바깥의 기준 객체로 승격하지 않은 원인을 공유한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-004
+    to_finding_id: finding-008
+    relation: enables
+    root_hypothesis: MES 실행 주문 개념이 없으면 생산오더 생성 시점의 유효 버전·라우팅·ECO 적용 상태를 고정 참조할 위치가
+      없어 변경 연속성 부족이 실행 단계에서 지속된다.
+    shared_cause: null
+    rationale: finding-004는 라우팅 릴리즈와 ECO 적용 결과를 담는 ProductionOrder/WorkOrder 개념이 없다고
+      지적한다. finding-008은 생산오더가 생성 시점의 유효 버전을 고정 참조해야 하지만 대상 파일에 그런 정책을 확인할 수 없다고
+      명시한다. 실행 주문 누락은 변경관리 version/effectivity 약점이 MES 실행으로 넘어갈 때 해소되지 않게 하는
+      조건이다.
+    confidence: medium
+  - relation_id: rel-010
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: 측정·환산·능력·스크랩 기준값의 source-of-truth와 precedence를 온톨로지 안에서 닫지 않은
+      것이 현재 운영 신뢰 약화와 미래 확장성 약화를 함께 만든다.
+    shared_cause:
+      cause_claim: uom 변환은 품목별 환산계수 마스터 없이 현장 환산에 맡겨져 있다.
+      from_cause_ref: finding-001.cause-003
+      to_cause_ref: finding-007.cause-003
+    rationale: finding-001은 scrap_rate, std_time, uom conversion의 권위가 엑셀·수기·현장 환산에
+      남아 PLM/MES 기준성을 약화한다고 본다. finding-007은 Part.uom enum, 단위 없는 capacity, 현장
+      환산 때문에 새 단위·환산·능력 기준 확장이 어렵다고 본다. 특히 품목별 환산계수 마스터 부재는 두 causal path에서 같은
+      cause로 등장한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-006
+    to_finding_id: finding-004
+    relation: shared_cause_candidate
+    root_hypothesis: 온톨로지가 계획/master data 중심으로 범위를 잡고 MES 실행 객체를 포함하지 않은 것이 실행 주문
+      누락과 lot/serial 추적 범주 누락을 함께 만든다.
+    shared_cause:
+      cause_claim: 온톨로지 범위가 기준 데이터에는 범위를 할당했지만 제조 실행 결과와 실행 단위에는 범위를 할당하지 않았다.
+      from_cause_ref: finding-006.cause-003
+      to_cause_ref: finding-004.cause-002
+    rationale: finding-004는 생산 오더가 문장 안에만 있고 엔티티/관계로 정의되지 않아 master data와 실행 데이터 사이
+      접점이 비어 있다고 본다. finding-006은 Part/BOM/Routing/InspectionPlan 같은 계획 기준 데이터는
+      있으나 operation execution, inspection result, lot/serial 같은 실행 이력 범주가 없다고
+      본다. 둘은 PLM/MES 통합 범위에서 MES 실행 계층을 모델링하지 않은 공통 원인을 가진다.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-013
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 검사 계획과 검사 실행/결과를 분리하는 개념 계층이 없어 계획 기준 문서와 제조 실행 이력이 모두 흐려진다.
+    shared_cause:
+      cause_claim: 공정과 검사는 Operation 및 InspectionPlan의 계획 속성으로 표현되지만 operation
+        execution이나 inspection result 범주는 없다.
+      from_cause_ref: finding-013.cause-003
+      to_cause_ref: finding-006.cause-002
+    rationale: finding-013은 InspectionPlan을 Operation 하위 유형으로 두어 계획 문서와 실행 공정 단계를
+      혼동한다고 본다. finding-006은 Operation 및 InspectionPlan은 계획 속성만 있고 operation
+      execution이나 inspection result 범주가 없다고 본다. 두 finding은 검사 기준과 실제 검사/공정 실행을
+      별도 개념으로 분리하지 않은 데서 연결된다.
+    confidence: medium
+singleton_findings: []
