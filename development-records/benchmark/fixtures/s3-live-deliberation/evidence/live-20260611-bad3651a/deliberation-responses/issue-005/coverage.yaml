@@ -1,0 +1,54 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-005"
+lens_id: "coverage"
+difference_explanation: "Severity only: logic initially raised medium to high,
+  holding that the contradiction is formally established and that duplicates
+  must converge with its issue-002 high; coverage kept the recorded medium on
+  reachability calibration — the failure condition is unoccupiable inside the
+  bounded single-threaded synchronous target. In the live exchange logic
+  conceded and accepted medium for the whole carry-over family
+  (issue-002/-005/-007), adopting the impact-reachability calibration. There
+  was never a root conflict: logic accepts the granularity-mismatch hypothesis
+  as the same mechanism as its clear()-side framing. The panel converged:
+  support, medium."
+response_to_other_positions: "To logic (live exchange, answering its request
+  for the coverage-side medium cap): severity is an impact scale over reachable
+  executions of the bounded target, not a proof-strength scale — certainty of
+  the contradiction says nothing about magnitude or reachability of harm. No
+  input or call sequence of the current synchronous target loses a
+  notification; present harm is a false documented invariant
+  (verifiability/maintainability), and the comment-invited refactor raises
+  regression_risk within medium rather than creating a present failure path.
+  On convergence: agreed that the duplicate family issue-002/-005/-007 must
+  land on one severity, but direction matters — the issue-002 panel was 2:1
+  for medium, and converging at high would have required overturning the
+  recorded mediums on proof-strength grounds alone, flattening the panel's
+  calibration anchor (issue-001/-004/-006 high = presently occupiable failure
+  path with declared-legal inputs). Logic conceded in the exchange: it adopted
+  the reachability calibration, citing its own role contract's
+  severity-vs-verdict separation, and named the decisive asymmetry (the clock
+  split is input-reachable today; the carry-over loss is
+  modification-conditional). Logic also corrected a coverage misstatement:
+  issue-007 IS planned for deliberation (semantics+logic, priority 50) — logic
+  stated it will converge issue-007 to medium there, so the family lands
+  coherently at medium across issue-002/-005/-007."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "The reset mechanism was written at window
+  granularity while the documented guarantee is written at item granularity;
+  the item-granularity concept ('late-enqueued notification') has no
+  representation in the code. This framing is already direction-neutral and
+  consistent with the restatement coverage accepted on issue-002."
+remaining_blocker: "None for this issue's severity (panel converged at medium).
+  Family-coherence depends on the issue-007 deliberation unit (semantics+logic)
+  actually landing medium as logic stated it would; if it lands otherwise, the
+  duplicate family severity must be re-reconciled."
+evidence_refs:
+  - issue-ledger.yaml#issue-005
+  - round1/coverage.md#finding-2
+  - notification-batcher.ts:37-39
+  - notification-batcher.ts:32
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-005.coverage"

@@ -1,0 +1,87 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-002"
+issue_id: "issue-002"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-002"
+conclusion: >-
+  The reset comment declares that notifications enqueued between the
+  window-close check and the reset are carried into the next window, but
+  pending.clear() unconditionally empties the entire map at the same program
+  point — the code guarantees the negation of the comment's guarantee (C7 vs
+  R5). Today, under the synchronous realization, the documented invariant is
+  false and the guarantee is vacuous and unverifiable; under any
+  async/concurrent/re-entrant realization the behavior becomes silent
+  notification loss, the exact failure the comment claims to exclude.
+  Deliberation adopted a direction-neutral root (the documented preservation
+  property has no implementing mechanism) and fixed severity at medium in one
+  decision for the duplicate cluster issue-002/issue-005/issue-007; closure
+  requires an explicit implement-or-retract decision before the next stage.
+materiality_explanation: >-
+  The issue weakens the declared correctness goal (no silent notification
+  loss) and the regression_risk goal. The failure condition is any realization
+  in which enqueue can interleave with flush between the close check and
+  clear(): an async refactor of flush, concurrent callers, or re-entrant
+  enqueue. The impact is silent notification loss while the in-code
+  documentation asserts the opposite guarantee, so future maintainers relying
+  on the documented invariant will ship the loss without noticing. Severity
+  was resolved at medium rather than high under the panel's
+  impact-reachability calibration: the check-to-reset antecedent is
+  unoccupiable with declared-legal inputs in the bounded synchronous target
+  (unlike issue-001's input-reachable clock split), so the present harm is a
+  false documented invariant — a verifiability/maintainability harm — with
+  loss activation conditional on a future refactor.
+root_cause_explanation: >-
+  The deliberated, direction-neutral root adopted by all three lenses is that
+  the documented check-to-reset preservation property has no implementing
+  mechanism: the guarantee is written at item granularity while the only reset
+  operates at window granularity (whole-map pending.clear()). This is the
+  starting point because the contradiction is structural — as long as the only
+  reset is an unconditional whole-map clear, no execution where a
+  check-to-reset enqueue occurs can satisfy the comment. Which side is
+  defective (a missing carve-out in the reset versus a comment encoding
+  unbuilt intent) is unverifiable within the bounded target, which is exactly
+  why the root is stated direction-neutrally and the implement-or-retract
+  action space is preserved.
+causal_path_explanation: >-
+  Step 1 (finding-002.cause-001): flush resets state by unconditionally
+  clearing the entire pending map rather than deleting only the flushed
+  entries. Step 2 (finding-002.cause-002, caused by step 1): any notification
+  present in pending at reset time but not part of the produced digests is
+  discarded, never preserved. Step 3 (finding-002.cause-003, caused by step
+  2): the comment's guarantee that check-to-reset enqueues are "carried into
+  the next window" is unsatisfiable together with that discard behavior
+  whenever such an enqueue occurs; under the current synchronous realization
+  the guarantee is vacuous and unverifiable as stated. Beyond the evidence,
+  whether any concurrent or async caller exists today is outside the bounded
+  single-file target. Deliberation resolved the panel: logic conceded
+  severity from high to medium by adopting the impact-reachability
+  calibration and accepted the direction-neutral root as more faithful to the
+  symmetric C7-vs-R5 result; coverage moved from the clear()-side-defective
+  hypothesis to the same restatement; semantics' remaining blocker — one
+  severity decision across the duplicate cluster — was discharged by fixing
+  issue-002, issue-005, and issue-007 at medium in this single decision, with
+  no remaining disagreement.
+action_explanation: >-
+  Make the comment true or make it honest. Either implement the documented
+  property — delete only the flushed entries (snapshot the digested
+  keys/items, then delete those specific entries) so post-check arrivals
+  genuinely persist into the next window — or retract it by rewriting the
+  comment to state that the reset drops everything currently pending and that
+  the implementation relies on synchronous execution to keep the
+  check-to-reset interval empty. The ordering dependency is explicit in the
+  framing: closure is gated by this implement-or-retract decision
+  (closure_class needs_decision), because which side is defective is
+  unverifiable within the bounded target, and the issue must close before the
+  next stage (must_close_before_next_stage) — it blocks any async or
+  re-entrant refactor of flush rather than current operation. The recorded
+  action candidates are fix_before_release and accept_risk.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-002"
+  - "problem-framing.yaml#issue-002"
+  - "deliberation-resolution.yaml#issue-002"
+  - "finding-ledger.yaml#finding-002"
+  - "issue-stance-matrix.yaml#stances.issue-002.logic"
+  - "issue-stance-matrix.yaml#stances.issue-002.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-002.semantics"

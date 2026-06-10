@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-002"
+lens_id: "logic"
+difference_explanation: "The panel agreed throughout that the C7-vs-R5 contradiction is real and formally established; the conflict was (a) severity — logic high vs coverage/semantics medium (2:1) — and (b) semantics' direction-neutral root restatement vs the recorded clear()-side-defective hypothesis. Both points resolved in the live exchange: logic accepted medium and the direction-neutral root, so the panel converges at support/medium/direction-neutral root."
+response_to_other_positions: "Logic accepts both peer arguments after live exchange. (1) Severity: coverage and semantics argued that severity is an impact scale over reachable executions of the bounded target, not a proof-strength scale. That is correct, and logic's own role contract separates verdict state (certainty of the contradiction) from severity (gravity of harm) — the recorded high conflated them. The decisive asymmetry is reachability class: the clock split (issue-001/-004/-006) is input-reachable today with declared-legal flush(now) values, while the carry-over loss antecedent (enqueue interleaved between close check and clear()) is unoccupiable in every declared-legal execution of the current synchronous target — modification-conditional, not input-reachable. Present harm is a false documented invariant (verifiability/maintainability) plus an invited-refactor regression_risk channel: the medium band. (2) Root: semantics' direction-neutral restatement is accepted as MORE faithful to logic's formal result — C7 and R5 are jointly unsatisfiable, and that result says nothing about which side is defective; the recorded hypothesis added an unverifiable intent fact (that carry-over was intended code behavior). Coverage's note that implement-or-retract symmetry itself supports the neutral restatement is adopted. (3) Family coherence: the same defect exists as issue-005 and issue-007 (rel-003/rel-004); logic withdraws its raise on both so the family lands uniformly at medium."
+updated_stance: support
+changed: true
+change_reason: "Two live-exchange concessions: severity position moved from keeps-high to accepting medium (impact-reachability calibration — the loss antecedent is unoccupiable with declared-legal inputs in the bounded synchronous target, unlike the input-reachable clock split; certainty of the contradiction was wrongly priced into severity), and the root position moved from the recorded clear()-side-defective hypothesis to semantics' direction-neutral restatement, which matches the symmetric formal content of the C7-vs-R5 result."
+accepted_root_hypothesis: "Direction-neutral restatement: the documented preservation property (notifications enqueued between the window-close check and the reset are carried into the next window) has no implementing mechanism — C7 and R5 are jointly unsatisfiable whenever the check-to-reset interval is occupied, and the bounded target contains no evidence locating the defect on the comment side (unbuilt intent) versus the code side (missing carve-out in the reset)."
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-002"
+  - "round1/logic.md#finding-2"
+  - "round1/coverage.md#finding-2"
+  - "round1/semantics.md#f2"
+  - "notification-batcher.ts:37-39"
+  - "notification-batcher.ts:32"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-002.logic"

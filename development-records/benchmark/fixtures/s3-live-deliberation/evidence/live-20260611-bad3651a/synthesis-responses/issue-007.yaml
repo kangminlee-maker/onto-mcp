@@ -1,0 +1,80 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-007"
+issue_id: "issue-007"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-007"
+conclusion: >-
+  The reset comment in notification-batcher.ts promises that notifications
+  enqueued between the window-close check and the reset are carried into the
+  next window, but pending.clear() unconditionally empties the map and no
+  snapshot separates entries being digested from later arrivals — the
+  documented preservation property has no implementing mechanism. In the
+  current synchronous code the described interleaving cannot even occur, so
+  the comment is a false documented invariant today, and a later
+  async/re-entrant refactor that relies on it inherits silent notification
+  loss. Severity is medium, set by the single cluster severity decision shared
+  with issue-002 and issue-005, and the issue closes through one
+  implement-or-retract decision that must land before the next refactor stage.
+materiality_explanation: >-
+  The issue counts against three declared review goals — correctness,
+  maintainability, and regression_risk — through a direct contract-vs-behavior
+  inconsistency in the flush reset. The failure condition is
+  modification-conditional: a maintainer makes flush async or re-entrant and
+  relies on the documented carry-over invariant, at which point the described
+  interleaving becomes reachable while the code provides no implementing
+  mechanism. The impact is silent notification loss inherited from a
+  documented invariant the code does not provide; even today the comment
+  describes a scenario the code neither encounters nor handles as stated,
+  which is exactly the kind of misleading contract the declared goals exist
+  to catch.
+root_cause_explanation: >-
+  Deliberation adopted a direction-neutral root for family coherence with
+  issue-002: the documented check-to-reset preservation property has no
+  implementing mechanism, and no target-internal evidence locates the defect
+  on the comment side (unbuilt intent) versus the code side (missing
+  carve-out in the reset) — both intent facts are unverifiable in the bounded
+  target. This is the starting point because every downstream observation
+  follows from the contract/mechanism gap, and logic's necessary/necessary
+  strengthening shows it is not a mere omission: pending.clear() guarantees
+  the complementary property (pending becomes empty) at the same program
+  point where the comment promises survival, so implement-or-retract is the
+  complete fix space.
+causal_path_explanation: >-
+  The causal chain from finding-010 (semantics) runs in three steps. First,
+  the reset comment (notification-batcher.ts:37-38) declares a carry-over
+  contract for notifications enqueued between the window-close check and the
+  reset. Second, this.pending.clear() (line 39) removes all entries
+  unconditionally and no snapshot distinguishes entries being digested from
+  entries that arrived after the check, so the contract has no implementing
+  mechanism — the digest loop iterates the same live map, the opposite of
+  "carried into the next window". Third, in the current synchronous,
+  single-threaded execution the described interleaving cannot occur, so the
+  comment describes a scenario the code neither encounters nor handles, and a
+  later async/re-entrant refactor relying on the documented invariant
+  inherits silent notification loss. One thing stays beyond the evidence:
+  whether flush will actually become async or re-entrant in real usage is
+  outside the bounded single-file target.
+action_explanation: >-
+  The accepted fix space is exactly two-sided (implement-or-retract): either
+  implement the stated semantics — snapshot the keys/entries to digest and
+  delete only those keys, leaving later arrivals in place — or rewrite the
+  comment to state the actual behavior ("all entries pending at flush time
+  are digested and cleared; nothing is carried over"). Logic's
+  necessary/necessary observation confirms no third option exists, because
+  the code actively guarantees the complementary property. Ordering matters:
+  the issue is framed as a next-step blocker with closure obligation
+  must_close_before_next_stage, so the decision must land before any
+  async/re-entrant refactor of flush; it is also the third member of the
+  rel-003/rel-004 duplicate cluster, so the choice should stay coherent with
+  the single cluster decision covering issue-002 and issue-005. The projected
+  action candidates are fix_before_release or accept_risk.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-007"
+  - "problem-framing.yaml#issue-007"
+  - "deliberation-resolution.yaml#issue-007"
+  - "finding-ledger.yaml#finding-010"
+  - "issue-stance-matrix.yaml#stances.issue-007.logic"
+  - "issue-stance-matrix.yaml#stances.issue-007.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-007.semantics"

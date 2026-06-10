@@ -1,0 +1,90 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+work_item_id: "synthesis:issue-011"
+issue_id: "issue-011"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-011"
+conclusion: >-
+  Time ownership is undesigned in the batcher. windowStartedAt is written from
+  the internal wall clock Date.now() (line 20) but compared against the
+  caller-supplied now parameter (lines 30-32) with no contract binding the two
+  clocks, so WINDOW_MS does not denote 30 seconds of any single clock; and
+  enqueuedAt's documented batch-entry meaning (line 8) is delegated to callers
+  pre-enqueue and never established, validated, or read by the batcher. Neither
+  WINDOW_MS nor enqueuedAt denotes what its name and documentation assert. The
+  accepted resolution is to designate one batcher-owned time authority for the
+  window lifecycle and have the batcher stamp enqueuedAt from that same
+  authority at the enqueue site, or re-document the field to its true
+  provenance.
+materiality_explanation: >-
+  This is material under the declared correctness and maintainability goals in
+  the explicitly requested time-source-semantics focus area. If a caller uses
+  an injected, fake, or skewed clock for flush's now, the closure subtraction
+  at line 32 becomes a cross-clock artifact: the window never closes, closes
+  immediately, or stays open indefinitely, so the named 30-second contract is
+  unkeepable across clocks. Simultaneously, the only per-item time fact in the
+  contract, enqueuedAt, carries a documented meaning that no behavior
+  establishes or verifies, so any consumer trusting it as actual batch-entry
+  time (metrics, ordering, expiry) is misled while callers populate it
+  pre-enqueue.
+root_cause_explanation: >-
+  The accepted compound root is that the batcher owns no time fact: the window
+  anchor, the closure input, and the documented batch-entry timestamp are all
+  sourced from ambient or caller-chosen clocks that the batcher neither
+  establishes nor validates. It is the starting point because both surface
+  findings reduce to that absent authority — finding-011's root step
+  (finding-011.cause-002: no single time authority, and the parameter name
+  "now" falsely asserts a shared timebase) and finding-012's root step
+  (finding-012.cause-002: batch-entry semantics assigned to a
+  caller-constructed pre-enqueue value the batcher never stamps). Root
+  confidence is deliberately medium because the hypothesis carries a built-in
+  refutation condition accepted by all lenses: if clock unification alone left
+  finding-012 intact without the enqueue-site stamping change, the common root
+  would be refuted. Framing classifies this issue as root_cause with judgment
+  inferred, per rel-006 pairing both findings under the compound root.
+causal_path_explanation: >-
+  Two parallel chains converge on the compound root. For finding-011:
+  WINDOW_MS does not denote 30 seconds of any single clock because the closure
+  subtraction mixes the internal wall-clock anchor with whatever the caller
+  passes as now (cause-001), and that mixing exists because no single time
+  authority lives in the class while the name "now" falsely asserts a shared
+  timebase (cause-002, root). For finding-012: enqueuedAt is documented as the
+  batch-entry instant but is never assigned, validated, or read by the batcher
+  (cause-001), because batch-entry semantics were assigned to a
+  caller-constructed pre-enqueue value the caller cannot truthfully populate
+  and the batcher never stamps at the enqueue site (cause-002, root). rel-006
+  pairs the two findings under the same batcher-owns-no-time-fact root, and
+  dep-002/dep-003 record it as a shared cause with issue-001 (the undeclared
+  necessary condition of the closure rule, rel-002) and issue-005 (the missing
+  clock-authority concept, rel-003) — the same absent clock binding observed
+  from the logic, coverage, and semantics angles.
+action_explanation: >-
+  Deliberation was skipped as no-deliberation-needed (consistent_stances): all
+  three lenses support the claim, accept the compound root including its
+  refutation condition, and keep medium severity, with nothing left to
+  deliberate. The required action is to designate one batcher-owned time
+  authority for the window lifecycle and have the batcher establish per-item
+  enqueuedAt from that same authority at the enqueue site; alternatively, if
+  caller-supplied time is intentional, rename/re-document the field to its true
+  provenance and either use it or remove it from the contract. Dependency and
+  ordering matter: closure is needs_decision with must_close_in_target, and
+  the single-time-authority decision is instantiated by the in-target fixes of
+  issues 001 and 005 (dep-002/dep-003), so the authority should be chosen once
+  there and applied here. Per the accepted refutation condition, clock
+  unification alone is insufficient — the enqueue-site stamping (or the
+  re-documentation alternative) must accompany it to close finding-012.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-011"
+  - "problem-framing.yaml#issue-011"
+  - "deliberation-resolution.yaml#issue-011"
+  - "finding-ledger.yaml#finding-011"
+  - "finding-ledger.yaml#finding-012"
+  - "finding-relation-graph.yaml#rel-006"
+  - "issue-stance-matrix.yaml#stances.issue-011.logic"
+  - "issue-stance-matrix.yaml#stances.issue-011.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-011.semantics"
+  - "issue-ledger.yaml#dep-002"
+  - "finding-relation-graph.yaml#rel-002"
+  - "issue-ledger.yaml#dep-003"
+  - "finding-relation-graph.yaml#rel-003"

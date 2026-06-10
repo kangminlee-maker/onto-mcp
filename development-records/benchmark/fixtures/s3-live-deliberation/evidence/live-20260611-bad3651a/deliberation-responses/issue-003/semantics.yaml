@@ -1,0 +1,61 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-003"
+lens_id: "semantics"
+difference_explanation: >-
+  Converged at medium through the live exchange. Both lenses accept the root
+  (the [] output conflates the no-window state and the open-window state while
+  the doc defines a single meaning). The initial disagreement — semantics low
+  versus logic medium — dissolved in two concessions: logic conceded the
+  double-counting point (the "permanently misleading" escalation is priced in
+  issue-001's recorded impact and its medium no longer leans on it), and
+  semantics conceded the today-exercised falsity point (the documented []
+  meaning is false on every idle poll with declared-legal inputs, a
+  clock-independent path semantics had posed as its falsifying question).
+response_to_other_positions: >-
+  Logic answered the falsifying question semantics posed — a today-reachable
+  harm path that does not route through the clock defect: calling flush(now)
+  in the idle state (initial state, and after every successful flush) returns
+  [] while the documented meaning "window still open" is false at that moment.
+  Unlike issue-002's unoccupiable check-to-reset antecedent, this contract
+  falsity is exercised today; concrete harms are a monitor deriving "is a
+  window open?" from the documented meaning misclassifying idle as batching,
+  and tests asserting "[] implies window open" passing wrongly and validating
+  the wrong semantics — a present, in-target violation of the declared
+  verifiability goal, which the review-target-profile materiality obligation
+  keys on. Rubric consistency moved semantics: the same reachability-based
+  grading this lens used to hold issue-002/005/007 at medium (failure not
+  exercisable today) requires medium, not low, for a falsity that is exercised
+  today with interpretive-only standalone harm. Severity grid recorded:
+  today-exercised delivery-level harm = high (issue-001/006); today-exercised
+  interpretive-level falsity = medium (this issue); refactor-conditional
+  delivery-level harm = medium (issue-002/005/007).
+updated_stance: support
+changed: true
+change_reason: >-
+  Severity position moved from lowers (low) to keeps (medium). Logic supplied
+  the today-reachable harm path semantics had explicitly posed as its
+  falsifying question: the documented [] meaning is false and exercised on
+  every idle poll with declared-legal inputs — a present in-target violation of
+  the declared verifiability goal under the review-target-profile materiality
+  rule. Holding low while grading issue-002/007 medium on
+  reachability grounds would be internally inconsistent: a today-exercised
+  contract falsity outranks a refactor-conditional one within this lens's own
+  rubric, and interpretive-only harm magnitude is what caps it at medium rather
+  than high.
+accepted_root_hypothesis: >-
+  flush conflates two distinct states ("no window started" and "window open,
+  not yet closed") into a single [] output while the doc defines only one
+  meaning for it, so the definition contradicts the producing rule in the
+  reachable no-window state. Accepted as recorded, with the escalation
+  increment (persistent misreading under clock skew) priced in
+  issue-001/issue-006, not here.
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-003"
+  - "round1/semantics.md#f5"
+  - "notification-batcher.ts:28"
+  - "notification-batcher.ts:31-32"
+  - "notification-batcher.ts:40"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-003.semantics"

@@ -1,0 +1,100 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+lens_id: "semantics"
+stances:
+  - issue_id: issue-001
+    stance: support
+    rationale: "This lens independently reached the same terminal cause from the naming side (round1 finding-2, linked via rel-002): the parameter name `now` semantically asserts one shared notion of current time while the class binds no single clock authority across line 20 (Date.now() anchor) and lines 30-32 (caller-supplied closure operand). The undeclared shared-clock necessary condition that issue-001 identifies is exactly the homonym this lens documented, and the failure conditions (injected, monotonic, or skewed caller clocks) match this lens's concrete divergence paths."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-001
+      - round1/semantics.md#finding-2
+  - issue_id: issue-002
+    stance: support
+    rationale: "This lens's own finding-1 is the recorded duplicate of the surface finding behind this issue (rel-004): the carry-over comment at lines 37-38 asserts a guarantee over an interleaving interval that synchronous execution makes unreachable, and this.pending.clear() at line 39 would invert the promised outcome if the interval ever became reachable. The hypothesis that no code path snapshots window membership at the close instant is exactly what this lens derived; the proposed align-comment-or-implement-carry-over action matches this lens's fix."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-002
+      - round1/semantics.md#finding-1
+  - issue_id: issue-003
+    stance: support
+    rationale: "This lens independently observed the overloaded empty return in round1 finding-4 part (b): [] is produced from two semantically different guards — no window exists (line 31) and window still open (line 32) — while the doc at line 28 states a single meaning. The root hypothesis that the documented rule was written without accounting for the windowStartedAt === null state matches this lens's reading, and low severity is right since the gap is behaviorally benign for pure polling callers."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-003
+      - round1/semantics.md#finding-4
+  - issue_id: issue-004
+    stance: support
+    rationale: "This lens's finding-3 confirms the definitional inconsistency from the provenance side: enqueuedAt's documented batch-entry meaning is assigned to a caller-constructed value that the batcher neither stamps, validates, nor reads, while windowStartedAt records an entry instant independently. The pick-one-authority hypothesis is compatible with this lens's fix (batcher stamps the field from the chosen clock, or the field is re-documented to its true provenance). Low severity is acceptable here because the deeper time-ownership root this lens rates medium is carried separately by issue-011."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-004
+      - round1/semantics.md#finding-3
+  - issue_id: issue-005
+    stance: support
+    rationale: "The missing clock-authority concept that coverage flags is the same absent inter-clock binding this lens reached through naming analysis (round1 finding-2, linked via rel-003): no statement anywhere in the file constrains flush's now to the Date.now() epoch timebase, so WINDOW_MS cannot denote 30 seconds of any single clock. The proposed single-time-authority designation converges with this lens's fix options (caller-supplied clock threaded through both entry points, or ambient clock everywhere with the parameter dropped). High severity holds: the closure subtraction is meaningless across clocks for permitted inputs."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-005
+      - round1/semantics.md#finding-2
+  - issue_id: issue-006
+    stance: support
+    rationale: "From the documented-meaning angle this lens verified the claim's structural premise: the named surface inventory is exactly enqueue, window-gated flush, and pendingUserCount — no member whose name or doc denotes termination, drain, or disposal exists, so the class doc's delivery purpose has no semantic counterpart for the shutdown case. This lens has no counter-evidence to the missing-terminal-lifecycle root; the absence is real on the surface this lens inventoried, and silent loss contradicts the artifact's stated delivery purpose."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-006
+  - issue_id: issue-007
+    stance: support
+    rationale: "Consistent with this lens's surface inventory: no name, doc, or contract element in the file denotes capacity, overflow, or backpressure, and the docs make no boundedness promise — so there is no name-vs-behavior contradiction for this lens to add, but the absence claim underlying the root hypothesis is accurate on the inventoried surface. The unbounded-append behavior of enqueue combined with the poll-and-window-gated sole reducer is verifiable from the projection; this lens supports without lens-specific severity grounds and keeps the projected severity."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-007
+  - issue_id: issue-008
+    stance: support
+    rationale: "This lens's finding-3 directly corroborates the dead-field half of this issue: nothing in the file consumes enqueuedAt, so its documented meaning is verified by no behavior and the contract floats free of the implementation. The output-side half (flush destroys state leaving no delivery record, making the carry-over comment unverifiable) is consistent with this lens's finding-1 observation that the carry-over guarantee cannot be exhibited. The declared-temporality-without-history root reads correctly from the semantics side."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-008
+      - round1/semantics.md#finding-3
+  - issue_id: issue-009
+    stance: support
+    rationale: "This lens verified in structural inspection that pendingUserCount is the one surface element whose name, doc, and behavior fully agree — and it measures exactly user breadth, nothing else. That confirms the skew claim: the only monitoring concept denotes the dimension that cannot reveal item volume or staleness, so the poll-stall failure mode has no semantic surface through which to appear. No lens-specific counter-evidence; low severity is proportionate for an observability gap."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-009
+  - issue_id: issue-010
+    stance: support
+    rationale: "This is this lens's own primary finding (round1 finding-1). The comment at lines 37-38 asserts carry-over over an interleaving point that synchronous flush makes unreachable, and this.pending.clear() at line 39 would silently drop interleaved items if any future async or re-entrant refactor made the point reachable — the documented contract is false as written and inverts the actual failure mode. The align-comment-and-mechanism hypothesis and the snapshot-or-re-document action are exactly this lens's derivation and fix."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-010
+      - round1/semantics.md#finding-1
+  - issue_id: issue-011
+    stance: support
+    rationale: "This lens raised both surface findings (round1 finding-2 and finding-3) and proposed the compound root via rel-006: the batcher owns no time fact — window anchor, closure input, and the documented batch-entry timestamp are all ambient or caller-chosen, never established or validated by the class. This lens affirms the stated refutation condition: clock unification alone does not fix finding-012; the batcher must also stamp enqueuedAt from the chosen authority, which is why medium root confidence is honest. Medium severity is kept as the compound of two medium surface findings."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-011
+      - round1/semantics.md#finding-2
+      - round1/semantics.md#finding-3
+  - issue_id: issue-012
+    stance: support
+    rationale: "This is this lens's own surface finding (round1 finding-4): flush conventionally names an unconditional force-out but behaves as a conditional poll; [] carries two guard meanings against a single documented one; and digest membership is poll-time rather than the documented window-bounded membership. The rename-or-re-document hypothesis matches this lens's fix, and surface-level low severity is right — the behavior is internally consistent for polling use; only names and docs overpromise."
+    root_hypothesis_position: accepts
+    severity_position: keeps
+    evidence_refs:
+      - issue-ledger.yaml#issue-012
+      - round1/semantics.md#finding-4
+validation:
+  missing_issues: []

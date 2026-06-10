@@ -1,0 +1,75 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-008"
+issue_id: "issue-008"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-008"
+conclusion: >-
+  One meaning — "time the notification entered the batch" — exists twice in
+  notification-batcher.ts: as the caller-supplied, documented enqueuedAt
+  field in the exported interface and as the internal Date.now() capture in
+  enqueue(). The two are never unified: the batcher never reads enqueuedAt,
+  so the interface advertises a timestamp contract with no behavioral meaning
+  while the window anchors to a divergent second source. Severity is medium
+  as recorded; the issue is a symptom of the missing time-authority
+  designation it shares with issue-004 (dep-001/rel-006), kept distinct
+  because the two defects affect different purposes and are independently
+  fixable. Closure needs one product-intent decision: does enqueuedAt drive
+  windowing, or is it payload-only metadata.
+materiality_explanation: >-
+  The issue weakens the declared goals of correctness and verifiability —
+  callers are misled into believing enqueuedAt drives windowing — and of
+  regression_risk, because duplicate time sources enable undetected drift
+  between the two timestamps. The failure condition is in-contract given the
+  field's documentation: a caller backfills or replays notifications with
+  enqueuedAt in the past, and the window silently anchors to processing time
+  instead of the declared entry time. There is no current delivery failure;
+  the harm is a misleading interface contract plus drift enablement, which is
+  why the framing places it as a planned follow-up rather than a release
+  blocker.
+root_cause_explanation: >-
+  The recorded root was accepted as-is with no deliberation needed: a
+  derivable value (windowStartedAt) is modeled as an independent input from a
+  second clock while its source field (enqueuedAt) is kept inert, leaving two
+  authorities for the one meaning "time the notification entered the batch".
+  This is the starting point because both observable symptoms — the inert
+  documented field and the divergent window anchor — are direct consequences
+  of never designating a single authority for entry time. The surface facts
+  are logic-verified (enqueuedAt is consumed by no rule in the class body; a
+  second internally sampled timestamp anchors the window); logic took a
+  surface_only / insufficient_evidence position as explicit deference, since
+  no declared claim formally ties windowStartedAt to enqueuedAt, and the
+  applicable lenses (coverage, semantics) agree on the root and on medium
+  severity.
+causal_path_explanation: >-
+  The causal chain from finding-011 (semantics) runs in three steps. First,
+  the interface contract declares enqueuedAt as the batch-entry timestamp — a
+  required, documented field (notification-batcher.ts:8-9). Second, enqueue()
+  ignores item.enqueuedAt and re-measures entry time from its own clock
+  (line 20), creating two authorities for one meaning. Third, when a caller
+  backfills or replays notifications with enqueuedAt in the past, the window
+  silently anchors to processing time instead of the declared entry time, so
+  the field's name and the system's behavior diverge. Nothing in the chain
+  remains unresolved beyond the cited evidence.
+action_explanation: >-
+  Pick one source of truth: either derive the window anchor from pending
+  items' enqueuedAt (e.g., the window starts at the first item's enqueuedAt),
+  or remove enqueuedAt from the interface (scope permitting) / explicitly
+  document that it is payload-only metadata that does not affect windowing.
+  The dependency that matters is the shared cause with issue-004
+  (dep-001/rel-006, the undesignated entry-time authority): closure requires
+  the product-intent decision on whether enqueuedAt drives windowing, and the
+  issue may close alongside the coupled issue-004 single-authority fix during
+  the next stage (closure obligation may_close_during_next_stage). The
+  projected action candidates are follow_up or accept_risk.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-008"
+  - "problem-framing.yaml#issue-008"
+  - "deliberation-resolution.yaml#issue-008"
+  - "finding-ledger.yaml#finding-011"
+  - "issue-stance-matrix.yaml#stances.issue-008.logic"
+  - "issue-stance-matrix.yaml#stances.issue-008.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-008.semantics"
+  - "issue-ledger.yaml#dep-001"
+  - "finding-relation-graph.yaml#rel-006"

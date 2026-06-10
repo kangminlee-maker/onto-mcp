@@ -1,0 +1,73 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+work_item_id: "synthesis:issue-007"
+issue_id: "issue-007"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-007"
+conclusion: >-
+  The pending store grows without bound: no capacity, overflow, or backpressure
+  concept exists anywhere in the contract or implementation, enqueue appends
+  unconditionally, and the sole reducer (flush) is poll- and window-gated. All
+  three lenses (logic, coverage, semantics) accepted this root and kept medium
+  severity with no deliberation needed; closure requires selecting a documented
+  capacity bound and an explicit overflow policy, surfaced to the caller,
+  before the next stage.
+materiality_explanation: >-
+  The declared review goals are correctness and regression_risk for bounded
+  resource behavior of the pending store in a long-lived process. With a
+  stalled or slow external poll loop while enqueues continue, memory
+  consumption grows proportional to enqueue rate times the gap between
+  successful polls, and the contract offers no surface to detect, reject, or
+  shed load. Unbounded memory growth with no detection or overflow policy is an
+  operational failure mode squarely inside the declared goals, which makes the
+  issue material.
+root_cause_explanation: >-
+  The chain starts at finding-007.cause-003: no capacity, overflow, or
+  backpressure concept exists anywhere in the contract or implementation
+  (absence across lines 14-48) — enqueue has no size check or rejection path
+  and nothing in the file mentions a bound, so enqueue appends unconditionally
+  for any number of users and items. This is the root because unbounded growth
+  follows necessarily once it holds, and it carries a well-formed refutation
+  test accepted by the logic lens: if growth persisted under a documented
+  capacity bound, the hypothesis would be refuted. The semantics lens
+  independently confirmed the absence on the inventoried surface — no name,
+  doc, or contract element denotes capacity, overflow, or backpressure, and the
+  docs make no boundedness promise. Root confidence is high.
+causal_path_explanation: >-
+  Because no capacity, overflow, or backpressure concept exists
+  (finding-007.cause-003), enqueue appends unconditionally while the sole
+  reducer of pending is flush, which is conditional on window age (line 32) and
+  on an external caller polling (line 28) (finding-007.cause-002); therefore,
+  whenever the poller stalls or slows while enqueues continue, pending storage
+  grows without bound (finding-007.cause-001). This three-step causes chain,
+  evidenced throughout by round1/coverage.md#finding-3, leads exactly to the
+  observed issue: a batching domain that implies a capacity/overflow sub-area
+  which is entirely absent. Deliberation was skipped (reason_code
+  consistent_stances) with unanimous support/accepts/keeps; nothing was
+  narrowed and no disagreement remains, and the lenses agree the shared
+  poll-gated-reducer cause with issue-006 (dep-004, rel-005) does not make the
+  two issues share a root.
+action_explanation: >-
+  Add a documented capacity bound (per user and/or total) with an explicit
+  overflow policy — reject, drop-oldest, or force-flush on overflow — and
+  surface overflow occurrences to the caller. Selecting the bound and the
+  policy is a contract decision (closure_class needs_decision) and a
+  next_step_blocker that must close before the next stage
+  (must_close_before_next_stage). Ordering note: dep-004 records that issue-007
+  and issue-006 share the poll-and-window-gated sole-reducer mid-path cause
+  (rel-005) but name distinct missing concepts with distinct mitigations
+  (capacity/overflow policy vs terminal-lifecycle operation), so this fix can
+  be decided and landed independently of issue-006's drain operation. Projected
+  action candidates are fix_before_release and accept_risk; accepting the risk
+  would leave an undetectable unbounded-growth mode in long-lived processes.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-007"
+  - "problem-framing.yaml#issue-007"
+  - "deliberation-resolution.yaml#issue-007"
+  - "finding-ledger.yaml#finding-007"
+  - "issue-stance-matrix.yaml#stances.issue-007.logic"
+  - "issue-stance-matrix.yaml#stances.issue-007.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-007.semantics"
+  - "issue-ledger.yaml#dep-004"
+  - "finding-relation-graph.yaml#rel-005"

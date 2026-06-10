@@ -1,0 +1,47 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-007"
+lens_id: "semantics"
+difference_explanation: >-
+  Severity only. Logic raises medium to high on two grounds from the live
+  exchange: matrix consistency (this issue duplicates its finding-002 /
+  issue-002, which logic rated high, via rel-004) and the necessary/necessary
+  status (the code does not merely omit the carry-over mechanism, it guarantees
+  the complementary property at the same program point). Semantics, the
+  originating lens, keeps medium on bounded-target reachability: no
+  declared-legal input to the current synchronous code exhibits the loss, and
+  activation requires a future async/re-entrant refactor. In the final
+  exchange logic conceded medium (one defect, one severity across
+  issue-002/005/007); the duplicate cluster converged.
+response_to_other_positions: >-
+  Semantics accepts logic's necessary/necessary strengthening as
+  root-confidence evidence — it proves implement-or-retract is the complete fix
+  space, matching the recorded proposed_action — and records it in the accepted
+  root hypothesis. It does not move severity: certainty of existence was never
+  the contested variable; severity prices impact over the declared input
+  domain, where vacuity-today is the reachability concession and
+  refactor-conditional activation defines the medium regression_risk band. On
+  convergence: agreed that duplicates must converge, but the convergence value
+  comes from the severity rubric, not from which duplicate was rated first;
+  across the duplicate cluster (issue-002/005/007) coverage and semantics grade
+  medium and logic high — 2-of-3 with logic's single position counted once.
+  Semantics asks resolution to decide the cluster in one severity decision.
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: >-
+  The documented preservation property has no implementing mechanism in the
+  code — converged with logic on the same direction-neutral root as issue-002,
+  since the recorded phrasing ("the comment encodes an intended-but-unbuilt
+  behavior") carries the mirror-image intent presumption to the clear()-side
+  one removed there — strengthened by logic's observation that the conflict is
+  necessary/necessary (pending.clear() guarantees the complementary property at
+  the same program point), so implement-or-retract is the complete fix space.
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-007"
+  - "round1/semantics.md#f2"
+  - "notification-batcher.ts:37-39"
+  - "notification-batcher.ts:34"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-007.semantics"

@@ -1,0 +1,320 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+issues:
+  - issue_id: issue-001
+    status: no-deliberation-needed
+    final_root_cause: >-
+      Time authority is split across the two mutating entry points — the window
+      anchor is sampled from ambient Date.now() at enqueue (line 20) while
+      window closure is computed from the caller-injected now at flush (line
+      30) — and no declared contract binds the two clocks, so the closure
+      rule's truth rests on an undeclared shared-clock necessary condition.
+    final_claim: >-
+      The window-closed predicate subtracts an internally Date.now()-sampled
+      anchor from a caller-supplied now, so contract C4 ('flushes when the
+      window has closed') is jointly satisfiable only under an undeclared
+      shared-clock condition and is violated for permitted inputs.
+    surface_finding_ids:
+      - finding-001
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances). All
+      three lenses support the issue, accept the single-clock-authority root
+      hypothesis, and keep high severity; the stance matrix shows no
+      conflicting claim and no remaining blocker, so no deliberation is needed.
+    required_follow_up_evidence: []
+  - issue_id: issue-002
+    status: no-deliberation-needed
+    final_root_cause: >-
+      No code path snapshots window membership at the close instant — the
+      close check (line 32) gates timing only while emission takes pending
+      content wholesale — so the promised carry-over has no mechanism that
+      could implement it.
+    final_claim: >-
+      The documented carry-over guarantee (lines 37-38) and the implemented
+      emit-all-then-clear behavior (lines 34-36, 39) are not jointly
+      satisfiable: the guaranteed interval is empty under synchronous
+      execution, and in the only materially reachable reading items are
+      emitted in the current digest and cleared, never carried over.
+    surface_finding_ids:
+      - finding-002
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances).
+      Unanimous support/accepts/keeps across logic, coverage, and semantics on
+      the carry-over-vs-clear contradiction and its no-snapshot-mechanism
+      root; the rel-004 duplication with issue-010 is recorded, not contested,
+      and no remaining blocker exists.
+    required_follow_up_evidence: []
+  - issue_id: issue-003
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The return-value protocol overloads [] across two distinct reachable
+      states (no window exists vs window still open) because the documented
+      rule was written without accounting for the windowStartedAt === null
+      state at line 31.
+    final_claim: >-
+      The documented rule 'an empty array means window still open' (line 28)
+      is false in the reachable no-window state (windowStartedAt === null),
+      where flush also returns [] although no window exists.
+    surface_finding_ids:
+      - finding-003
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: non_material_issue). Low
+      severity (material_issue: false) — the overloaded empty-return doc is
+      behaviorally benign for polling callers — and stances are unanimous
+      support/accepts/keeps, so the issue falls below the planned-deliberation
+      boundary with no remaining blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-004
+    status: no-deliberation-needed
+    final_root_cause: >-
+      Two recordings purport to denote the first-enqueue instant — the
+      caller-supplied enqueuedAt field (lines 8-9) and the internally sampled
+      windowStartedAt (line 20) — with no reconciliation rule, so the field's
+      documented definition holds only under the undeclared condition that
+      callers pass Date.now() at call time.
+    final_claim: >-
+      enqueuedAt is defined as 'Epoch ms when the notification entered the
+      batch' yet enqueue records the same instant independently via Date.now()
+      and never consults enqueuedAt, so the model permits states in which the
+      field's definition is false.
+    surface_finding_ids:
+      - finding-004
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: non_material_issue). Low
+      severity (material_issue: false) — a latent definitional inconsistency
+      with no current reader of enqueuedAt — below the material-severity
+      candidate boundary, with unanimous supporting stances and no remaining
+      blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-005
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The contract lacks any clock-authority concept: no clock parameter on
+      enqueue and no documented requirement on now's source (absence across
+      lines 18-32), so the two time authorities are free to diverge.
+    final_claim: >-
+      Window-closure decisions mix two undeclared time authorities — internal
+      Date.now() at enqueue and caller-supplied now at flush — with no
+      single-origin time-source authority concept anywhere in the file.
+    surface_finding_ids:
+      - finding-005
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances). All
+      lenses support the missing clock-authority concept, accept the root
+      hypothesis, and keep high severity; the shared-cause dependencies with
+      issue-001/issue-011 (dep-001, dep-003) are agreed dependency context,
+      not stance conflicts, leaving nothing to deliberate.
+    required_follow_up_evidence: []
+  - issue_id: issue-006
+    status: no-deliberation-needed
+    final_root_cause: >-
+      No terminal-lifecycle concept exists in the API — the exported surface
+      contains only enqueue, window-gated flush, and pendingUserCount, with no
+      drain/close/force-flush member — so no unconditional exit path exists
+      for pending items.
+    final_claim: >-
+      The pending-notification lifecycle covers enqueue and window-gated flush
+      but has no termination segment (drain/close/dispose); pending items are
+      unreachable at shutdown or poller stop and are silently lost.
+    surface_finding_ids:
+      - finding-006
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances).
+      Unanimous support/accepts/keeps on the missing terminal-lifecycle
+      operation and medium severity; all lenses agree the shared mid-path
+      cause with issue-007 (dep-004) is a distinct-root relation, raising no
+      conflict and no remaining blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-007
+    status: no-deliberation-needed
+    final_root_cause: >-
+      No capacity, overflow, or backpressure concept exists anywhere in the
+      contract or implementation (absence across lines 14-48): enqueue appends
+      unconditionally for any number of users and items.
+    final_claim: >-
+      The pending store grows without bound — no max-size, overflow policy, or
+      backpressure concept exists, while the only reducer (flush) is poll- and
+      window-gated.
+    surface_finding_ids:
+      - finding-007
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances). All
+      lenses support the missing capacity/overflow/backpressure concept,
+      accept the root hypothesis, and keep medium severity; no conflicting
+      position on root, action, or severity exists in the stance matrix.
+    required_follow_up_evidence: []
+  - issue_id: issue-008
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The temporal axis is declared on the input side (enqueuedAt) but has no
+      output or history counterpart — digests carry only bodies and flush
+      destroys state without persisting any record — so past batch state
+      cannot be reconstructed and the carry-over comment is unverifiable.
+    final_claim: >-
+      enqueuedAt is a documented contract field that is never read, and flush
+      leaves no record of what was delivered when, so past batch state cannot
+      be reconstructed and the carry-over comment cannot be checked against
+      evidence.
+    surface_finding_ids:
+      - finding-008
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: non_material_issue). Low
+      severity (material_issue: false) — a verifiability-scoped deficit
+      (unread enqueuedAt, no delivery record) — below the material boundary
+      and unanimously supported, with no remaining blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-009
+    status: no-deliberation-needed
+    final_root_cause: >-
+      Monitoring concept distribution is skewed toward the one dimension (user
+      breadth via pendingUserCount) that cannot detect the characteristic
+      poll-stall failure mode; without a pending-item count and an
+      oldest-pending-age metric, aging pending state is invisible to
+      operators.
+    final_claim: >-
+      Monitoring covers only the user-count dimension (pendingUserCount);
+      there is no pending-item count and no oldest-pending-age metric, so a
+      stalled poll loop — the failure mode the poll-driven contract makes
+      possible — is undetectable.
+    surface_finding_ids:
+      - finding-009
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: non_material_issue). Low
+      severity (material_issue: false) — the pendingUserCount observability
+      skew is an operability gap, not a correctness defect — non-material with
+      unanimous stances and no remaining blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-010
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The carry-over comment asserts a behavioral guarantee over a
+      hypothetical interleaving window between the close check (line 32) and
+      the reset (line 39) that the synchronous execution model makes
+      unreachable, while this.pending.clear() inverts the promised outcome if
+      it ever became reachable.
+    final_claim: >-
+      The comment 'Notifications enqueued between the window close check and
+      this reset are carried into the next window' (lines 37-38) does not
+      match this.pending.clear() (line 39), which would unconditionally
+      discard such notifications; the documented contract is false as written
+      and inverts the actual failure mode.
+    surface_finding_ids:
+      - finding-010
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances).
+      Unanimous support/accepts/keeps on the false carry-over comment vs
+      clear() inversion and medium severity; logic and coverage corroborate
+      semantics' own finding via rel-004 with no diverging claim and no
+      remaining blocker.
+    required_follow_up_evidence: []
+  - issue_id: issue-011
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The batcher owns no time fact: the window anchor, the closure input, and
+      the documented batch-entry timestamp are all sourced from ambient or
+      caller-chosen clocks that the batcher neither establishes nor validates;
+      the built-in refutation condition (clock unification alone leaving
+      finding-012 intact without the stamping change) is accepted by all
+      lenses.
+    final_claim: >-
+      windowStartedAt is written from the internal wall clock Date.now() (line
+      20) but compared against the caller-supplied now (lines 30-32) with no
+      contract binding the two clocks, and enqueuedAt's documented batch-entry
+      meaning (line 8) is delegated to callers pre-enqueue and never
+      established, validated, or read by the batcher — time ownership is
+      undesigned in the class, so neither WINDOW_MS nor enqueuedAt denotes
+      what its name and documentation assert.
+    surface_finding_ids:
+      - finding-011
+      - finding-012
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: consistent_stances). All
+      lenses accept the compound batcher-owns-no-time-fact root including its
+      built-in refutation condition, and keep medium severity; the rel-006
+      same-root pairing and dep-002/dep-003 shared causes are agreed, leaving
+      nothing to deliberate.
+    required_follow_up_evidence: []
+  - issue_id: issue-012
+    status: no-deliberation-needed
+    final_root_cause: >-
+      The flush name and its documentation claim stricter semantics than the
+      behavior provides — unconditional flush vs window-gated conditional
+      poll, a single documented meaning for [] vs two guard states, and
+      window-bounded digest membership vs poll-time membership.
+    final_claim: >-
+      flush conventionally means 'force out pending content' but the method is
+      a conditional poll that usually returns []; the empty-return doc is
+      inaccurate for the no-window state, and items enqueued after the window
+      elapsed but before the poll are absorbed into the closing digest,
+      loosening the documented window semantics.
+    surface_finding_ids:
+      - finding-013
+    accepted_by_lens_ids:
+      - logic
+      - coverage
+      - semantics
+    remaining_disagreement_lens_ids: []
+    reason: >-
+      Skipped from planned deliberation (reason_code: non_material_issue). Low
+      severity (material_issue: false) — the flush name/doc overpromise is a
+      maintainability fit issue with internally consistent behavior — below
+      the material boundary, with unanimous supporting stances and no
+      remaining blocker.
+    required_follow_up_evidence: []
+validation:
+  missing_issue_ids: []

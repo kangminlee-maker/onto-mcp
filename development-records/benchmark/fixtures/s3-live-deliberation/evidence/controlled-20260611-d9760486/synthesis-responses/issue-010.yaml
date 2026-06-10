@@ -1,0 +1,76 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+work_item_id: "synthesis:issue-010"
+issue_id: "issue-010"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-010"
+conclusion: >-
+  The inline comment at notification-batcher.ts lines 37-38 promises that
+  notifications enqueued between the window-close check (line 32) and the reset
+  (line 39) are carried into the next window, but this.pending.clear() at line
+  39 unconditionally discards every entry regardless of when it was enqueued.
+  The documented carry-over contract is false as written and inverts the actual
+  failure mode: the only conditions under which the promise would matter are
+  exactly the conditions under which clear() silently drops the items. The
+  comment and the mechanism must be aligned — either re-document the true
+  synchronous semantics or implement real carry-over.
+materiality_explanation: >-
+  This is material under the declared correctness, regression_risk, and
+  maintainability goals because the comment is the inline reset contract that
+  future maintainers will rely on, and it licenses an assumption of loss-free
+  carry-over that the code inverts. The guarantee is unexhibitable today
+  (synchronous flush makes the described interleaving unreachable) and inverted
+  (silent drop) under the only conditions where it would matter: a maintainer
+  trusting the documented carry-over, or a future async/re-entrant refactor
+  that makes the interleaving point reachable. That makes it a regression trap
+  inside the bounded target, not a cosmetic doc nit.
+root_cause_explanation: >-
+  The accepted root cause (finding-010.cause-002) is that the guarantee was
+  authored over an interleaving point that the synchronous execution model
+  makes unreachable — there is no await, callback, or iterator hand-off between
+  the close check at line 32 and the reset at line 39 — and with no
+  implementing mechanism behind it. This is the starting point of the problem
+  because the visible comment-vs-clear() mismatch is only the surface symptom:
+  a behavioral promise was written about a hypothetical execution window that
+  cannot occur today, so the promise is vacuous now and, since clear()
+  unconditionally discards, becomes an inverted promise under any future
+  reachability. Root confidence is high and all lenses accepted this
+  derivation.
+causal_path_explanation: >-
+  The causal path has two steps from the semantics lens (round1 finding-1).
+  Step finding-010.cause-001 records the observable defect: the carry-over
+  comment does not match this.pending.clear(), which discards every entry
+  unconditionally. Step finding-010.cause-002 explains why that mismatch
+  exists and is marked as the root step: the guarantee was written over an
+  unreachable interleaving point with no mechanism to implement it, so it is
+  vacuous today and inverted under any future reachability. cause-002 causes
+  cause-001 — a contract asserted over a non-existent execution point cannot be
+  matched by the reset mechanism, which produces exactly the false-as-written,
+  failure-mode-inverting comment stated in the issue. Logic's independent
+  finding-l2 (C7 and C8 jointly unsatisfiable for any item present at flush
+  time, duplication recorded by rel-004) and coverage's verifiability analysis
+  (no mechanism or persisted record could implement or evidence the promised
+  carry-over) converge on the same chain.
+action_explanation: >-
+  Deliberation was skipped as no-deliberation-needed (consistent_stances):
+  logic, coverage, and semantics unanimously support the claim, accept the root
+  hypothesis, and keep medium severity, with no remaining disagreement and no
+  follow-up evidence required. The required action offers two closure paths:
+  (a) make the comment state the true semantics — flush is synchronous, nothing
+  can interleave, and if flush ever becomes async, interleaved enqueues would
+  be dropped by clear() and must be preserved explicitly; or (b) implement real
+  carry-over by iterating a snapshot and deleting only flushed entries, making
+  the comment true. Framing is fix_now with must_close_in_target, so the fix
+  is local to the target and should land before the next change builds on the
+  false contract. Ordering note: rel-004 records this as a duplicate surface of
+  issue-002 without licensing a merge, so coordinate the fix so one
+  comment/mechanism alignment closes both surfaces consistently.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-010"
+  - "problem-framing.yaml#issue-010"
+  - "deliberation-resolution.yaml#issue-010"
+  - "finding-ledger.yaml#finding-010"
+  - "issue-stance-matrix.yaml#stances.issue-010.logic"
+  - "issue-stance-matrix.yaml#stances.issue-010.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-010.semantics"

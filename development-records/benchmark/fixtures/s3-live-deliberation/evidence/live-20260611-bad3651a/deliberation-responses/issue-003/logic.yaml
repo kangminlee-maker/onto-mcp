@@ -1,0 +1,20 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-003"
+lens_id: "logic"
+difference_explanation: "Both lenses support the issue and accept the recorded root; the disagreement is severity at the material boundary — logic holds medium, semantics lowers to low. The live exchange narrowed the disagreement to one calibration question: semantics' double-counting objection was conceded by logic (the persistent-misreading escalation belongs to issue-001), and logic answered semantics' open question by exhibiting a today-reachable harm path that does not route through the clock defect, re-grounding medium on standalone evidence."
+response_to_other_positions: "Logic concedes semantics' double-counting argument: the 'permanently misleading' escalation is conditional on the issue-001/-006 clock defect (rel-005, enables) and is already priced into issue-001's recorded impact ('the documented [] meaning becomes permanently misleading'), so it must not also raise this issue's severity. Logic's medium no longer leans on that escalation. Logic answers semantics' open question — is there a today-reachable harm path not routing through the clock defect? — affirmatively: calling flush(now) in the idle state (before any enqueue, or after any successful flush) returns [] with declared-legal inputs, and the documented meaning of that output ('window still open', line 28) is false at that moment. Unlike issue-002's vacuous antecedent, this contract falsity is exercised today on every idle poll: a monitor deriving 'is a window open?' from the documented meaning misclassifies idle as batching, and a test asserting '[] implies window open' passes wrongly in idle state, validating the wrong semantics. That is a present, in-target violation of the declared verifiability goal, which the review-target-profile's materiality rule keys on — so logic holds medium on standalone grounds. Semantics' counter-position (its own round-1 finding-013 graded the same homonym low; no behaviorally divergent reading exists today because both states imply 'keep polling') is acknowledged as the legitimate boundary-call counterargument. In its live clarification semantics itself constructed the strongest medium case — a test or monitor written against the documented [] meaning encodes wrong state semantics today in the idle state, no clock skew needed — but weighs it as definitional incompleteness, noting two in-target mitigations logic accepts as facts: a one-line doc widening fixes it, and pendingUserCount() already lets callers disambiguate idle (0) from batching (>0). Logic's reply: the mitigation's existence does not make the documented meaning true — the contract falsity remains exercised on every idle poll — so the severity question is a genuine calibration boundary, recorded identically on both seats for resolution."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "Recorded root accepted as-is: flush conflates two distinct states ('no window started' and 'window open, not yet closed') into a single [] output while the doc defines only one meaning for it, so the definition contradicts the producing rule in the reachable no-window state."
+remaining_blocker: "Severity calibration question for the resolution owner: does a documented-contract falsity that is exercised today with declared-legal inputs (idle-state flush returns [] whose documented meaning is false at that moment) but whose standalone harm is interpretive-only (monitor/test misclassification, no delivery failure) cross the material boundary? Logic: yes — medium, because verifiability is a declared review goal and the violation is present and in-target. Semantics: no — low, consistent with its round-1 finding-013 grading, because no behaviorally divergent caller reading exists today and the escalated harm belongs to issue-001."
+evidence_refs:
+  - "issue-ledger.yaml#issue-003"
+  - "round1/logic.md#finding-3"
+  - "round1/semantics.md#f5"
+  - "notification-batcher.ts:28"
+  - "notification-batcher.ts:31"
+  - "notification-batcher.ts:40"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-003.logic"

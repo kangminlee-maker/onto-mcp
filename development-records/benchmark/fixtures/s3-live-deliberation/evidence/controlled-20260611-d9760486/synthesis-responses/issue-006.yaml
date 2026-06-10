@@ -1,0 +1,73 @@
+schema_version: 1
+session_id: "20260611-d9760486"
+work_item_id: "synthesis:issue-006"
+issue_id: "issue-006"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-006"
+conclusion: >-
+  The pending-notification lifecycle has no termination segment: the exported
+  surface contains only enqueue, window-gated flush, and pendingUserCount, with
+  no drain/close/dispose member, so pending items are unreachable at shutdown,
+  poller stop, or decommission and are silently lost. All three lenses (logic,
+  coverage, semantics) accepted this root and kept medium severity with no
+  deliberation needed; closure requires adding a terminal operation plus a
+  documented caller shutdown obligation before the next stage relies on
+  loss-free delivery.
+materiality_explanation: >-
+  The declared review goals are correctness and regression_risk for loss-free
+  handling of pending notifications across the full lifecycle. At process
+  shutdown, poller failure, or batcher decommission with non-empty pending
+  state, the future poll that would release those items never happens, so
+  pending notifications are silently dropped with no contract surface
+  acknowledging or mitigating the loss. Silent data loss directly contradicts
+  the artifact's stated delivery purpose, which makes the issue material
+  against the declared goals rather than a stylistic gap.
+root_cause_explanation: >-
+  The chain starts at finding-006.cause-003: no terminal-lifecycle concept
+  exists in the API — the exported surface is exactly enqueue, window-gated
+  flush, and pendingUserCount, with no drain/close/force-flush member — so no
+  unconditional exit path exists for pending items. This is the root because
+  every downstream effect follows once it holds, and it carries a sound
+  refutation condition accepted by the logic lens: if silent loss persisted
+  even with a terminal operation that emits regardless of WINDOW_MS, the
+  hypothesis would be refuted. The semantics lens independently verified the
+  structural premise by inventorying the surface and finding no member whose
+  name or doc denotes termination, drain, or disposal. Root confidence is high.
+causal_path_explanation: >-
+  Because no terminal operation exists anywhere in the class body
+  (finding-006.cause-003), every pending item's only exit is a future external
+  poll of flush that must also satisfy the WINDOW_MS predicate at lines 28 and
+  32 (finding-006.cause-002); therefore, at process shutdown, poller failure,
+  or decommission, the poll that would flush pending items never happens and
+  they are silently dropped (finding-006.cause-001). This three-step causes
+  chain, evidenced throughout by round1/coverage.md#finding-2, leads exactly to
+  the observed issue: a lifecycle covering enqueue and window-gated flush but
+  lacking the termination segment the batching domain implies. Deliberation was
+  skipped (reason_code consistent_stances) with unanimous
+  support/accepts/keeps; nothing was narrowed and no disagreement remains, and
+  all lenses agree the shared mid-path cause with issue-007 (dep-004, rel-005)
+  is a distinct-root relation rather than the same root.
+action_explanation: >-
+  Add a terminal operation, e.g. drain(): Array<{ userId: string; digest:
+  string }>, that emits digests for all pending items regardless of WINDOW_MS
+  and resets state, and document that callers must invoke it on shutdown. This
+  is a contract-extension decision (closure_class needs_decision) and a
+  next_step_blocker that must close before any next stage relies on loss-free
+  delivery (must_close_before_next_stage). Ordering note: dep-004 records that
+  issue-006 and issue-007 share the poll-and-window-gated sole-reducer mid-path
+  cause (rel-005) but have distinct roots and distinct mitigations, so this
+  terminal operation can be decided and landed independently of issue-007's
+  capacity/overflow policy. Projected action candidates are fix_before_release
+  and accept_risk; accepting the risk would leave silent loss unacknowledged
+  against the artifact's stated delivery purpose.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-006"
+  - "problem-framing.yaml#issue-006"
+  - "deliberation-resolution.yaml#issue-006"
+  - "finding-ledger.yaml#finding-006"
+  - "issue-stance-matrix.yaml#stances.issue-006.logic"
+  - "issue-stance-matrix.yaml#stances.issue-006.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-006.semantics"
+  - "issue-ledger.yaml#dep-004"
+  - "finding-relation-graph.yaml#rel-005"

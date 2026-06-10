@@ -1,0 +1,75 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-004"
+lens_id: "coverage"
+difference_explanation: "Root-hypothesis scope: logic initially narrowed the
+  merged issue to the clock-split leg because the enqueuedAt leg yields no
+  derivable formal contradiction (its finding-4 recorded insufficient evidence
+  for a claim binding windowStartedAt to per-item entry time), while coverage
+  and semantics accepted the full undesignated-time-authority root spanning
+  both manifestations. In the live exchange logic moved from narrow to support
+  after coverage supplied target-internal unification evidence and logic
+  failed to defeat the falsifiability test. There was never a severity
+  conflict: all three lenses keep high via the clock-split manifestation. The
+  panel converged: support, full merged root, high."
+response_to_other_positions: "To logic (live exchange, answering its direct
+  question for target-internal shared-cause evidence beyond fix-coupling):
+  (a) same-event dual representation — windowStartedAt is stamped at the exact
+  program point of batch entry (line 20), the same event the enqueuedAt doc
+  (line 8) declares it records, so the file holds two representations of one
+  event-time meaning and never relates them (the rel-006 preserved cause);
+  (b) repeated in-file shape — the file's only two caller-supplied time inputs,
+  flush(now) (line 30) and enqueuedAt (lines 8-9), both lack a declared time
+  base and both coexist with the same internal Date.now() stamp, two instances
+  of one defect shape derivable purely from the target; (c) evidential
+  coupling logic itself uses — finding-001's failure condition leans on the
+  enqueuedAt epoch-ms precedent to make a divergent caller clock in-contract.
+  Logic's finding-4 ('no declared claim binds windowStartedAt to per-item entry
+  time') is the missing designation expressed as a missing formal claim, so it
+  corroborates rather than weakens the root. Logic accepted this in the
+  exchange and moved from narrow to support: it confirmed the same-event dual
+  representation and the repeated authority-undeclared caller-time shape as
+  target-internal unification evidence (not fix-coupling), reported it could
+  not defeat the falsifiability test (both fix branches dissolve both legs),
+  and adopted the finding-4 reframe (a manifestation of the missing
+  designation, not counter-evidence). Logic records its support with an
+  evidence-scope annotation: clock leg backed by formal contradiction,
+  enqueuedAt leg by coverage/semantics observational evidence. To semantics (live exchange): agreed — the enqueuedAt leg
+  needs no contradiction proof; absence/semantic assertion types carry it, and
+  dep-001/rel-006 preserves the shared-cause context with issue-008. Semantics
+  additionally confirmed coverage's falsifiability check in the exchange: no
+  semantic reading survives the single-clock fix (with the entry owner stamping
+  enqueuedAt, windowStartedAt becomes derivationally equal to the first item's
+  enqueuedAt — one meaning, one authority), and the only surviving
+  configuration (clock injected but enqueuedAt left caller-supplied and unread)
+  falls outside the hypothesis's 'owning every timestamp' condition. Semantics
+  also sharpened the shared-cause evidence: line 20 is the shared pivot — the
+  same undesignated Date.now() re-measurement is the divergent second authority
+  in both legs (vs caller now at lines 30-32, vs enqueuedAt at line 8)."
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: "The design never designates a single canonical time
+  authority for the batcher; the enqueue/flush clock split (internal Date.now()
+  vs caller-supplied now) and the inert, caller-trusted enqueuedAt field beside
+  the internally stamped windowStartedAt are two manifestations of that one
+  missing designation. Falsifiable: a fix that injects one clock owning every
+  timestamp in the file (including enqueuedAt stamping by the entry owner)
+  should dissolve both defects; if either survives such a fix, the common-root
+  claim is wrong."
+remaining_blocker: "None — the panel converged on the full merged root.
+  Synthesis should preserve the per-leg evidence-scope annotation all three
+  lenses now agree on: clock leg backed by formal contradiction
+  (finding-001), enqueuedAt leg by coverage/semantics observational evidence
+  (finding-007, finding-011; logic finding-4: insufficient evidence for a
+  formal claim on that leg)."
+evidence_refs:
+  - issue-ledger.yaml#issue-004
+  - round1/coverage.md#finding-1
+  - round1/coverage.md#finding-3
+  - notification-batcher.ts:20
+  - notification-batcher.ts:8-9
+  - rel-007
+  - rel-006
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-004.coverage"

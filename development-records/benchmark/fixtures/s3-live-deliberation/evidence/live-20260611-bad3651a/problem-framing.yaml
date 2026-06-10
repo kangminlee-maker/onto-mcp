@@ -1,0 +1,234 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Window start and window close are judged on two different
+      time authorities — enqueue binds windowStartedAt to the internal
+      Date.now() wall clock while flush evaluates closure against an arbitrary
+      caller-supplied now — with no declared same-clock precondition, so the
+      documented flush close obligation is violable over the full declared
+      input domain of flush(now).
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: All three lenses support with root accepted and high severity kept
+      (no-deliberation-needed, consistent_stances); the {C5, C6, R1, R3}
+      contradiction is established directly from observed code and doc claims,
+      so judgment_state is observed. Classified symptom rather than root_cause
+      because the resolved issue-004 root (single undesignated time authority)
+      was accepted by all lenses as generalizing this clock-split
+      manifestation; rel-005 additionally records that this defect enables
+      issue-003's persistent misreading. The failure path is occupiable with
+      declared-legal inputs today (the panel's high-severity calibration
+      anchor), so it is a current correctness blocker that must close in the
+      target via the single-time-authority fix.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: The documented check-to-reset preservation property has no
+      implementing mechanism — the guarantee is written at item granularity
+      while the only reset operates at window granularity (whole-map
+      pending.clear()), so the documented invariant is false today and loss
+      activation is refactor-conditional, with no target-internal evidence
+      locating the defect on the comment side versus the code side.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Resolved at medium with the direction-neutral root adopted by all
+      three lenses under the impact-reachability calibration. The
+      contract-vs-behavior falsity is directly observed (comment versus
+      unconditional clear() at the same program point), but the loss
+      antecedent is unoccupiable with declared-legal inputs in the bounded
+      synchronous target, so it blocks the async/re-entrant refactor stage
+      rather than current operation. Independent of the time-authority root;
+      duplicate cluster with issue-005/issue-007 (rel-003/rel-004) decided at
+      medium in one decision. Closure is gated by the implement-or-retract
+      decision the resolution explicitly preserved, because which side is
+      defective is unverifiable within the bounded target.
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: flush conflates two distinct states ("no window started"
+      and "window open, not yet closed") into a single [] output while the doc
+      defines only one meaning for it, so the documented meaning of [] is
+      false on every idle-state flush(now) call with declared-legal inputs — a
+      today-exercised, clock-independent contract falsity with
+      interpretive-only standalone harm.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Both participating lenses converged at medium after deliberation
+      adjudicated the medium-vs-low calibration — a today-exercised contract
+      falsity cannot grade below the refactor-conditional cluster held at
+      medium. The persistent-misreading escalation under clock skew is priced
+      in issue-001/issue-006, not here, so the issue stands as an independent
+      definitional defect. The homonym is directly observed from the doc and
+      the reachable no-window return path. Standalone harm is interpretive
+      (monitors misclassify idle as batching; tests written against the
+      documented meaning validate the wrong semantics), so it must close
+      before verification-stage work; either widening the documented meaning
+      or distinguishing the states in the signature closes it without a
+      product-intent decision.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: The design never designates a single canonical time
+      authority for the batcher; the enqueue/flush clock split (internal
+      Date.now() vs caller-supplied now) and the inert, caller-trusted
+      enqueuedAt field beside the internally stamped windowStartedAt are two
+      manifestations of that one missing designation, structurally unified at
+      the line-20 Date.now() re-measurement and falsifiable by one injected
+      clock owning every timestamp in the file.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Deliberation resolved this as the session's root issue — all three
+      lenses accepted the full merged undesignated-time-authority root
+      spanning the clock-split manifestation (issue-001/issue-006) and the
+      inert-enqueuedAt manifestation (issue-008), with logic's original
+      narrowing recorded as an evidence-scope annotation, not counter-evidence.
+      The root designation itself is an inference from the two observed
+      manifestations (falsifiable by one injected clock), hence inferred. High
+      severity holds via the input-reachable clock-split manifestation, which
+      can break window closure in both directions inside the bounded target,
+      so it is a current correctness blocker whose coupled
+      single-time-authority fix must close in target. The dep-001/rel-006
+      shared-cause context with issue-008 is preserved as dependency context,
+      not merge evidence.
+    related_surface_finding_ids:
+      - finding-005
+      - finding-007
+  - issue_id: issue-005
+    problem_definition: The reset mechanism was written at window granularity
+      while the documented carry-over guarantee is written at item
+      granularity; the item-granularity concept ("late-enqueued notification")
+      has no representation in the code, so the declared sub-behavior is
+      absent from the system.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Member of the rel-003/rel-004 duplicate cluster with
+      issue-002/issue-007; the cluster severity was fixed at medium in a
+      single decision under the impact-reachability calibration, with logic
+      withdrawing its raise to high. Coverage's absence framing is canonical
+      here — the declared item-granularity sub-behavior is unrepresented in
+      the system — hence impact_kind completeness. The absence is directly
+      observed against the whole-map clear(); harm activates only under the
+      async/concurrent refactor the comment itself invites, so it blocks that
+      next stage rather than current operation and closes through the same
+      implement-or-retract decision before that stage.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-006
+    problem_definition: Two distinct time concepts — internal wall-clock now and
+      caller-supplied now — share one name without a unifying contract; the
+      expression now - windowStartedAt subtracts an internally sourced
+      Date.now() value from a caller-supplied number whose time source is
+      never declared, so the window-duration semantics are unguaranteed over
+      the declared input domain and the file's caller-supplied epoch-ms
+      precedent (enqueuedAt) makes a divergent caller clock an in-contract
+      scenario.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Duplicate cluster with issue-001 via rel-002 — the semantics
+      statement of the same clock-split defect; all three lenses support with
+      root accepted and high severity kept (no-deliberation-needed). Classified
+      symptom of the issue-004 undesignated-time-authority root for the same
+      reason as issue-001. The cross-clock subtraction is directly observed at
+      lines 20 and 30-32 and the failure path is in-contract today (silent in
+      both directions — perpetual [] read as "window still open", or instant
+      close), so it is a current correctness blocker; the single-clock fix
+      that closes issue-001/issue-004 closes this in target.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: The documented check-to-reset preservation property has no
+      implementing mechanism — pending.clear() guarantees the complementary
+      property (pending becomes empty) at the same program point, so
+      implement-or-retract is the complete fix space — and the comment
+      describes a scenario the current synchronous code neither encounters nor
+      handles; a later async/re-entrant refactor relying on the documented
+      invariant inherits silent notification loss.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Third member of the rel-003/rel-004 duplicate cluster; medium per
+      the single cluster severity decision, with logic's raise withdrawn under
+      the impact-reachability calibration and the direction-neutral root
+      adopted for family coherence with issue-002 (both intent facts are
+      unverifiable in the bounded target). This issue's distinct emphasis is
+      the future maintainer inheriting silent loss from a false documented
+      invariant under an async/re-entrant refactor, hence
+      maintainability_evolvability. The contract falsity is directly observed;
+      activation is refactor-conditional, so it blocks the next refactor stage
+      and closes through the same implement-or-retract decision before that
+      stage.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: A derivable value (windowStartedAt) is modeled as an
+      independent input from a second clock while its source field
+      (enqueuedAt) is kept inert, leaving two un-unified authorities for the
+      one meaning "time the notification entered the batch"; the batcher never
+      reads enqueuedAt, so the interface advertises a timestamp contract with
+      no behavioral meaning while the window anchors to a divergent second
+      source.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Kept distinct from issue-004 (different affected purposes,
+      independently fixable defects) but classified symptom because the
+      resolved issue-004 root names the inert enqueuedAt field as the second
+      manifestation of the missing time-authority designation
+      (dep-001/rel-006 shared-cause context). The surface facts are directly
+      observed and logic-verified (field consumed by no rule, second
+      internally sampled timestamp); logic's surface_only /
+      insufficient_evidence position is explicit deference, and the applicable
+      lenses agree on root and medium severity. No current delivery failure —
+      the harm is a misleading interface contract and undetected-drift
+      enablement, with backfill/replay as the in-contract failure path — so
+      planned follow-up; closure needs the product-intent decision whether
+      enqueuedAt drives windowing or is payload-only metadata, and may close
+      alongside the coupled issue-004 single-authority fix during the next
+      stage.
+    related_surface_finding_ids:
+      - finding-011

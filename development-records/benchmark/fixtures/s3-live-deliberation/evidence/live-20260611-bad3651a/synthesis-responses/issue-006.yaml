@@ -1,0 +1,78 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+work_item_id: "synthesis:issue-006"
+issue_id: "issue-006"
+source_work_item_ref: "synthesis-work-items.yaml#synthesis:issue-006"
+conclusion: >-
+  Two distinct time concepts — internal wall-clock now and caller-supplied now
+  — share one name without a unifying contract: the closure expression now -
+  windowStartedAt subtracts an internally sourced Date.now() value (stamped in
+  enqueue at line 20) from a caller-supplied number whose time source is never
+  declared (flush, lines 30-32). Because the file already establishes
+  caller-supplied epoch-ms timestamps (enqueuedAt), a divergent caller clock
+  is an in-contract scenario, not a hypothetical. All three lenses support the
+  issue with the root accepted and high severity kept; deliberation was
+  skipped as no-deliberation-needed (consistent stances). It is a symptom of
+  the issue-004 undesignated-time-authority root and closes in target via the
+  same single-clock fix, now.
+materiality_explanation: >-
+  The declared correctness review goal is violated at the contract level: the
+  window-duration semantics of flush are not guaranteed over the declared
+  input domain, because the contract documents only the return-value meaning
+  and never the parameter's time source. The failure condition is in-contract
+  today — a caller supplying now from performance.now() (monotonic, origin
+  near process start) or an injected test clock — given the file's
+  caller-supplied epoch-ms precedent. The impact is silent in both directions:
+  with a monotonic now the subtraction is hugely negative so flush returns []
+  forever, which the doc defines as "window still open", and notifications are
+  never delivered; with a skewed or mocked clock the window can close
+  instantly. High severity was kept by all lenses (duplicate cluster with
+  issue-001 via rel-002).
+root_cause_explanation: >-
+  The accepted root, taken as recorded, is the split time authority introduced
+  at line 20 versus line 30: window start is bound to the internal Date.now()
+  authority inside enqueue() while window close is decided against an external
+  now with no declared authority. This is the starting point because every
+  observable consequence follows from that split — once the two ends of the
+  window lifecycle answer to different undeclared clocks, the cross-clock
+  subtraction is semantically meaningless regardless of any particular caller
+  behavior. Within the session, this issue is classified as a symptom: the
+  same split generalizes to the issue-004 undesignated-time-authority root,
+  for the same reason as issue-001.
+causal_path_explanation: >-
+  The path runs in three steps on semantics finding-009. First, window start
+  is bound to the Date.now() authority inside enqueue() while window close is
+  decided against an external now with no declared authority (lines 20,
+  30-32). Second — the enabling step — the contract documents only the
+  return-value meaning, not the parameter's time source, and the file
+  establishes caller-side epoch-ms clocks (enqueuedAt, line 8) as an
+  in-contract scenario, so a caller clock distinct from the internal clock is
+  declared-legal. Third, the cross-clock subtraction becomes semantically
+  meaningless: with a monotonic now flush returns [] forever (documented as
+  "window still open") and notifications are never delivered; with a skewed or
+  mocked clock the window can close instantly. Logic confirms this as the same
+  unsatisfiable claim set it proved in finding-001 (undeclared same-clock
+  premise), and coverage confirms it as the same missing-single-time-authority
+  deficit it raised as finding-005, so the semantic, formal, and coverage
+  statements all pick out one defect.
+action_explanation: >-
+  Establish a single time authority: drop the parameter and use Date.now()
+  inside flush, make both sides caller-supplied (enqueue(item, now) or use
+  item.enqueuedAt), or inject a clock dependency used by both methods; in all
+  cases document the required time source of now (for example "epoch ms from
+  the same clock that produced enqueuedAt"). The dependency that matters is
+  that this issue is a symptom of the issue-004 root, so it should not receive
+  an isolated patch: the single-clock fix that closes issue-001/issue-004
+  closes this in target, and the chosen authority must be the same one
+  designated there. Closure obligation is fix_now, must close in target,
+  because the failure path is reachable with declared-legal inputs today.
+unresolved_disagreement_note: null
+boundary_notes: []
+source_refs_used:
+  - "issue-ledger.yaml#issue-006"
+  - "problem-framing.yaml#issue-006"
+  - "deliberation-resolution.yaml#issue-006"
+  - "finding-ledger.yaml#finding-009"
+  - "issue-stance-matrix.yaml#stances.issue-006.logic"
+  - "issue-stance-matrix.yaml#stances.issue-006.coverage"
+  - "issue-stance-matrix.yaml#stances.issue-006.semantics"

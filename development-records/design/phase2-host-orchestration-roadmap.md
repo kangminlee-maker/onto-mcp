@@ -51,7 +51,7 @@ deliberation은 topology의 메시징 능력에서 **파생**된다(subagent=con
 
 S1 = PR #21(lens-slice) + PR #22(full pipeline). S2 = `feat/nested-workers-s2` (계약: `nesting-batch-worker-contract.md`, 4셀 동등성 게이트 포함) + **A downstream wide 3단계 nesting**(issue-stance·per-issue deliberation·per-issue synthesis; batch=attempt#1+flat retry fallback). live-LLM nested E2E는 후속.
 
-agent-teams + live 심의 = **S3** (claude 전용, 별도 평면).
+agent-teams + live 심의 = **S3** (claude 전용, 별도 평면). **S3 완료(flat+peer, PRELIMINARY)** — 계약 `live-deliberation-experiment-contract.md`(런타임 diff 0) + L2 bridge `scripts/review-host-round-cli.ts` + live 실증(`completed` ReviewRecord, 12 심의 seat 동일 validator 통과) + controlled 대조. 기록: `development-records/benchmark/20260611-s3-live-deliberation-record.md`. teamlead 변형은 미실증(2차 후보).
 
 ### 단계별 "done when"
 - **1단계**: 결정론적 reference host로 라운드 구동 → `completed` ReviewRecord; **A 경로 무회귀**; locus 누수 0; `host × {nested-workers, …}` 등 미지원 조합은 fail-closed.

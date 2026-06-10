@@ -1,6 +1,6 @@
 # S3 — Agent-teams live 심의 설계 (실험 carve-out)
 
-> 상태: 설계(승인 대기). 기준 코드: `main 120a4e3` (PR #25 4f rebase + PR #26 effort=high 머지 후).
+> 상태: **실행 완료** (L1~L5, flat+peer 실증 — PRELIMINARY; teamlead 변형 미실증). 결과: `development-records/benchmark/20260611-s3-live-deliberation-record.md`, 계약: `.onto/processes/review/live-deliberation-experiment-contract.md`. 기준 코드: `main 120a4e3`에서 설계, `feat/s3-live-deliberation`에서 실행.
 > 상위: `phase2-host-orchestration-roadmap.md` §4 Stage 3. claude 전용 실험 평면.
 > **비재오픈 경계(핵심)**: 31c25f7이 닫은 것은 "런타임이 agent-team 오케스트레이션(coordinator state machine·TeamCreate transport)을 소유"하는 모델이다. S3는 이를 재오픈하지 않는다 — **onto 런타임 변경 0**, live 심의는 기존 B 라운드 계약 위의 **host-side 실현**이다.
 

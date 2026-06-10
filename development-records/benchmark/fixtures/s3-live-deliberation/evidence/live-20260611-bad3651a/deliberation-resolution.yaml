@@ -1,0 +1,77 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issues:
+  - issue_id: issue-001
+    status: no-deliberation-needed
+    final_root_cause: "Recorded root accepted as-is: window-start and window-close use different time authorities (internal Date.now() vs caller-supplied now) with no declared same-clock precondition, so the flush close obligation is violable with declared-legal inputs."
+    final_claim: "Window start binds windowStartedAt to the internal Date.now() wall clock while flush evaluates closure against an arbitrary caller-supplied now, with no same-clock precondition declared; the documented flush close obligation is violable over the full declared input domain of flush(now). Severity high kept as recorded (presently occupiable failure path with declared-legal inputs — the panel's calibration anchor)."
+    surface_finding_ids: [finding-001]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Skipped by deliberation-plan (consistent_stances): all three lenses support with the recorded root accepted and high severity kept; no conflicting stance, root, or severity positions exist and no provided artifact shows a remaining blocker."
+    required_follow_up_evidence: []
+  - issue_id: issue-002
+    status: resolved
+    final_root_cause: "Direction-neutral restatement adopted by all three lenses: the documented check-to-reset preservation property has no implementing mechanism — the guarantee is written at item granularity while the only reset operates at window granularity (whole-map pending.clear()), and which side is defective (missing carve-out in the reset vs comment encoding unbuilt intent) is unverifiable within the bounded target, preserving the implement-or-retract action space."
+    final_claim: "The reset comment declares that notifications enqueued between the window-close check and the reset are carried into the next window, but pending.clear() guarantees the complementary property (pending becomes empty) at the same program point; today the documented invariant is false (verifiability/maintainability harm) and loss activation is refactor-conditional. Severity: medium, decided once for the duplicate cluster issue-002/issue-005/issue-007 under the impact-reachability calibration."
+    surface_finding_ids: [finding-002]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Panel converged in the live exchange: logic conceded severity (high -> medium), adopting the impact-reachability calibration — severity grades harm over reachable executions of the bounded target, and the check-to-reset antecedent is unoccupiable with declared-legal inputs in the synchronous target, unlike the input-reachable clock split anchoring high — and accepted the direction-neutral root as more faithful to the symmetric C7-vs-R5 result; coverage moved from the clear()-side-defective hypothesis to the same restatement. Semantics' remaining blocker (one severity decision across the duplicate cluster) is discharged here: issue-002, issue-005, and issue-007 are fixed at medium in this single decision."
+    required_follow_up_evidence: []
+  - issue_id: issue-003
+    status: resolved
+    final_root_cause: "Recorded root accepted as-is: flush conflates two distinct states (\"no window started\" and \"window open, not yet closed\") into a single [] output while the doc defines only one meaning for it, so the definition contradicts the producing rule in the reachable no-window state; the persistent-misreading escalation under clock skew is priced in issue-001/issue-006, not here."
+    final_claim: "The documented meaning of [] (\"window still open\") is false on every idle-state flush(now) call with declared-legal inputs — a today-exercised, clock-independent contract falsity whose standalone harm is interpretive-only (a monitor misclassifies idle as batching; tests asserting \"[] implies window open\" validate the wrong semantics), with no delivery failure. Severity: medium — material on the declared verifiability goal, capped below high by interpretive-only harm magnitude."
+    surface_finding_ids: [finding-003]
+    accepted_by_lens_ids: [logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Resolution adjudicates the deferred medium-vs-low materiality calibration at medium. Logic answered semantics' falsifying question with a today-reachable harm path that does not route through the clock defect (idle-state flush returns [] while its documented meaning is false at that moment) and conceded the double-counting point (the permanent-misreading escalation belongs to issue-001). Semantics then moved low -> medium on rubric consistency: a today-exercised contract falsity cannot grade below the refactor-conditional cluster (issue-002/005/007) this panel holds at medium. Both participating lenses' final positions are medium; severity grid: today-exercised delivery-level harm = high, today-exercised interpretive-level falsity = medium, refactor-conditional delivery-level harm = medium."
+    required_follow_up_evidence: []
+  - issue_id: issue-004
+    status: resolved
+    final_root_cause: "Full merged root accepted: the design never designates a single canonical time authority for the batcher; the enqueue/flush clock split (internal Date.now() vs caller-supplied now) and the inert, caller-trusted enqueuedAt field beside the internally stamped windowStartedAt are two manifestations of that one missing designation, structurally unified at the line-20 Date.now() re-measurement and falsifiable by one injected clock owning every timestamp in the file (including enqueuedAt stamping by the entry owner). Evidence-scope annotation agreed by all three lenses: the clock-split leg carries a formal logic contradiction (finding-001); the enqueuedAt leg stands on coverage/semantics observational evidence (finding-007, finding-011) — logic finding-4's insufficient-evidence note is a manifestation of the missing designation, not counter-evidence against the merge."
+    final_claim: "One undesignated-time-authority root with two surface manifestations whose fixes are coupled; the merged issue stands at high severity via the input-reachable clock-split manifestation (severity was never contested by any lens). The dep-001/rel-006 shared-cause context with issue-008 is preserved as cross-issue dependency context, not merge evidence."
+    surface_finding_ids: [finding-005, finding-007]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "The planned root-scope conflict dissolved in the live exchange: coverage and semantics supplied the target-internal unification evidence logic requested beyond fix-coupling (same-event dual representation at line 20 vs lines 8-9; the repeated authority-undeclared caller-time shape across flush(now) and enqueuedAt; the line-20 shared pivot as the divergent second authority in both legs), logic attempted and failed to defeat the falsifiability test, and logic moved from narrow to support. Per semantics' condition, logic's original narrowing is recorded as an evidence-scope (assertion-type reach) annotation, not a revision of the merged root."
+    required_follow_up_evidence: []
+  - issue_id: issue-005
+    status: resolved
+    final_root_cause: "Recorded root accepted as-is: the reset mechanism was written at window granularity while the documented guarantee is written at item granularity; the item-granularity concept (\"late-enqueued notification\") has no representation in the code — already direction-neutral and consistent with the issue-002 restatement (same defect family via rel-003/rel-004)."
+    final_claim: "The declared item-granularity carry-over guarantee has no realizing mechanism — the whole-map clear() removes every entry unconditionally — so the declared sub-behavior is absent from the system; the harm is latent in the current single-threaded synchronous runtime and activated by exactly the refactor the comment invites. Severity: medium, per the single cluster severity decision for issue-002/issue-005/issue-007."
+    surface_finding_ids: [finding-006]
+    accepted_by_lens_ids: [coverage, logic]
+    remaining_disagreement_lens_ids: []
+    reason: "Logic withdrew its raise to high in the live exchange, adopting coverage's impact-reachability calibration: certainty of the contradiction belongs to verdict confidence, not severity, and the loss antecedent is modification-conditional (unoccupiable with declared-legal inputs in the bounded synchronous target), unlike the input-reachable clock split. Coverage's family-coherence condition — that issue-007 also lands medium — is satisfied by this resolution deciding the duplicate cluster at medium in one decision."
+    required_follow_up_evidence: []
+  - issue_id: issue-006
+    status: no-deliberation-needed
+    final_root_cause: "Recorded root accepted as-is: split time authority introduced at line 20 versus line 30 — window start bound to the internal Date.now() authority while window close is decided against an external now with no declared authority, making the cross-clock subtraction semantically meaningless."
+    final_claim: "Two distinct time concepts — internal wall-clock now and caller-supplied now — share one name without a unifying contract: now - windowStartedAt subtracts an internally sourced Date.now() value from a caller-supplied number whose time source is never declared; with a monotonic caller clock flush returns [] forever (notifications never delivered), with a skewed or mocked clock the window can close instantly. Severity high kept as recorded (duplicate cluster with issue-001 via rel-002)."
+    surface_finding_ids: [finding-009]
+    accepted_by_lens_ids: [coverage, logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Skipped by deliberation-plan (consistent_stances): all three lenses support with root accepted and high severity kept; no conflicting positions exist and no provided artifact shows a remaining blocker."
+    required_follow_up_evidence: []
+  - issue_id: issue-007
+    status: resolved
+    final_root_cause: "Direction-neutral restatement adopted for family coherence with issue-002: the documented preservation property (check-to-reset enqueues carried into the next window) has no implementing mechanism — strengthened by logic's necessary/necessary observation that pending.clear() guarantees the complementary property at the same program point, so implement-or-retract is the complete fix space — with no target-internal evidence locating the defect on the comment side (unbuilt intent) versus the code side (missing carve-out in the reset)."
+    final_claim: "The comment describes a scenario the current synchronous code neither encounters nor handles, and a later async/re-entrant refactor relying on the documented carry-over invariant inherits silent notification loss. Severity: medium, per the single cluster severity decision for issue-002/issue-005/issue-007."
+    surface_finding_ids: [finding-010]
+    accepted_by_lens_ids: [logic, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Logic withdrew its raise to high under the impact-reachability calibration adopted across the family: the loss antecedent is modification-conditional and no declared-legal input to the current synchronous target reaches it. On the root, logic's symmetry note is adopted: the recorded intent-presuming phrasing carries the mirror image of the presumption the panel removed from issue-002's root, and both intent facts are unverifiable in the bounded target, so the direction-neutral form replaces it; semantics had already kept defect-side attribution neutral and accepted the necessary/necessary strengthening as root-confidence evidence. Semantics' remaining blocker (one cluster-wide severity decision) is discharged here."
+    required_follow_up_evidence: []
+  - issue_id: issue-008
+    status: no-deliberation-needed
+    final_root_cause: "Recorded root accepted as-is: a derivable value (windowStartedAt) is modeled as an independent input from a second clock while its source field (enqueuedAt) is kept inert, leaving two authorities for the one meaning \"time the notification entered the batch\"."
+    final_claim: "The meaning \"time the notification entered the batch\" exists twice — as the caller-supplied enqueuedAt field and as the internal Date.now() capture in enqueue() — and the two are never unified: the batcher never reads enqueuedAt, so the interface advertises a timestamp contract with no behavioral meaning while the window anchors to a divergent second source. Severity medium kept as recorded; the dep-001/rel-006 shared-cause context with issue-004 is preserved."
+    surface_finding_ids: [finding-011]
+    accepted_by_lens_ids: [coverage, semantics]
+    remaining_disagreement_lens_ids: []
+    reason: "Skipped by deliberation-plan (no_material_conflict): logic's surface_only / insufficient_evidence position is an explicit deference — it affirms the surface facts (enqueuedAt never read, second internally sampled timestamp) and defers root and severity adjudication to the semantics evidence — so it is not a competing claim; the applicable stances (coverage, semantics) agree on the root and on medium severity, and no provided artifact shows a remaining blocker."
+    required_follow_up_evidence: []
+validation:
+  missing_issue_ids: []

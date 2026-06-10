@@ -1,0 +1,54 @@
+schema_version: 1
+session_id: "20260611-bad3651a"
+issue_id: "issue-004"
+lens_id: "semantics"
+difference_explanation: >-
+  No lens opposes the issue and all three keep high severity; the conflict is
+  root scope. Logic narrows to the clock-split leg — the only leg where a
+  jointly unsatisfiable claim set is derivable (its finding-4 records the
+  enqueuedAt leg as insufficient evidence) — while coverage and semantics hold
+  the full undesignated-time-authority root spanning both manifestations with
+  coupled fixes. In the live exchange logic stated it narrows rather than
+  opposes and named its movability condition: target-internal evidence
+  unifying the two legs beyond fix-coupling. That condition was met in the
+  final exchange (the line-20 pivot from semantics, the same-event dual
+  representation from coverage) and logic moved from narrow to support,
+  recording an evidence-scope annotation on the enqueuedAt leg.
+response_to_other_positions: >-
+  To logic's movability condition, semantics supplied the line-20 pivot: the
+  same undesignated Date.now() re-measurement is simultaneously the divergent
+  second authority in both legs — against the caller-supplied now in the
+  closure subtraction (lines 30-32, leg 1) and against the declared entry-time
+  carrier enqueuedAt (line 8, leg 2: same meaning, never read, re-measured at
+  line 20). One program point manifesting both defects is structural
+  unification evidence, not mere fix-coupling; logic's own finding-4 phrasing
+  ("no declared claim binds windowStartedAt to per-item entry time") is the
+  missing designation observed from the logic assertion type. To coverage's
+  falsifiability check: no semantic reading survives the fix — one injected
+  clock owning every timestamp with entry-owner stamping of enqueuedAt makes
+  windowStartedAt derivationally equal to the first item's enqueuedAt, so
+  finding-011's dual representation collapses. The merged root therefore holds;
+  logic's narrowing should be recorded as an evidence-scope (assertion-type
+  reach) annotation, not a root revision.
+updated_stance: support
+changed: false
+change_reason: null
+accepted_root_hypothesis: >-
+  The design never designates a single canonical time authority for the
+  batcher; the enqueue/flush clock split and the inert, caller-trusted
+  enqueuedAt field beside the internally stamped windowStartedAt are two
+  manifestations of that one missing designation, structurally unified at the
+  line-20 Date.now() re-measurement, which is the divergent second authority in
+  both legs. Falsifiable as recorded: one injected clock owning every timestamp
+  in the file, including enqueuedAt stamping by the entry owner, dissolves both
+  defects.
+remaining_blocker: null
+evidence_refs:
+  - "issue-ledger.yaml#issue-004"
+  - "round1/semantics.md#f1"
+  - "round1/semantics.md#f3"
+  - "notification-batcher.ts:20"
+  - "notification-batcher.ts:30-32"
+  - "notification-batcher.ts:8-9"
+validation:
+  source_stance_ref: "issue-stance-matrix.yaml#stances.issue-004.semantics"

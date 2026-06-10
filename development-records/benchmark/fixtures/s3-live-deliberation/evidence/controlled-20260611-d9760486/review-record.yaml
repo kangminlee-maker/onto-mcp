@@ -1,0 +1,2195 @@
+review_record_id: 20260611-d9760486
+session_id: 20260611-d9760486
+entrypoint: review
+record_status: completed
+created_at: 2026-06-11T03:53:09+09:00
+updated_at: 2026-06-11T04:43:15+09:00
+request_text: Review this notification batcher for material issues. Focus on
+  contract-vs-behavior consistency and time-source semantics.
+review_target_scope_ref: .onto/review/20260611-d9760486/binding.yaml
+interpretation_ref: .onto/review/20260611-d9760486/interpretation.yaml
+binding_ref: .onto/review/20260611-d9760486/binding.yaml
+domain_final_selection_ref: .onto/review/20260611-d9760486/binding.yaml
+resolved_review_mode: core-axis
+resolved_execution_realization: direct-call
+resolved_host_runtime: openai
+resolved_artifact_generation_realization: live
+semantic_quality_evidence:
+  status: not_evaluated
+  applicability: real_semantic_path_only
+  reason: live semantic path output requires a separate semantic quality gate
+    before quality is claimed
+resolved_lens_ids:
+  - logic
+  - coverage
+  - semantics
+execution_result_ref: .onto/review/20260611-d9760486/execution-result.yaml
+session_metadata_ref: .onto/review/20260611-d9760486/session-metadata.yaml
+target_snapshot_ref: .onto/review/20260611-d9760486/execution-preparation/target-snapshot.md
+materialized_input_ref: .onto/review/20260611-d9760486/execution-preparation/materialized-input.md
+review_target_profile_ref: .onto/review/20260611-d9760486/execution-preparation/review-target-profile.yaml
+context_candidate_assembly_ref: .onto/review/20260611-d9760486/execution-preparation/context-candidate-assembly.yaml
+lens_result_refs:
+  logic: .onto/review/20260611-d9760486/round1/logic.md
+  coverage: .onto/review/20260611-d9760486/round1/coverage.md
+  semantics: .onto/review/20260611-d9760486/round1/semantics.md
+lens_output_schema_version: 2
+participating_lens_ids:
+  - logic
+  - coverage
+  - semantics
+excluded_lens_ids: []
+degraded_lens_ids: []
+degradation_notes_ref: null
+per_lens_provenance:
+  logic:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - "Single-threaded synchronous JavaScript execution model: no enqueue can
+        interleave between statements inside one flush() invocation."
+      - flush(now) callers may pass any numeric value; the type system imposes
+        no time-base restriction on the parameter.
+      - Callers interact with the batcher only through the exported API
+        (enqueue, flush, pendingUserCount).
+  coverage:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - "session_domain=none: review executed without a domain document under
+        the Domain-None Self-Contained Rule; no domain-specific rules were
+        applied."
+      - Assumed the batcher runs in a long-lived single-process JS/TS runtime
+        where flush is invoked by an external poll loop, as stated by the flush
+        doc comment (notification-batcher.ts:28).
+      - Assumed notification delivery is an operationally significant action for
+        which silent loss is unacceptable, based on the artifact's stated
+        purpose (notification-batcher.ts:1-4).
+  semantics:
+    domain_constraints_used: []
+    domain_context_assumptions:
+      - "Assumed a single-threaded synchronous JavaScript/TypeScript runtime: no
+        interleaving can occur between statements inside flush()."
+      - Assumed callers drive delivery by polling flush() periodically, as
+        stated in the flush doc comment.
+      - Assumed conventional software vocabulary for 'flush' (unconditional
+        force-out) and 'now' (current time of one shared clock) when judging
+        name-vs-behavior fit.
+finding_ledger_ref: .onto/review/20260611-d9760486/finding-ledger.yaml
+finding_relation_graph_ref: .onto/review/20260611-d9760486/finding-relation-graph.yaml
+issue_ledger_ref: .onto/review/20260611-d9760486/issue-ledger.yaml
+issue_stance_matrix_ref: .onto/review/20260611-d9760486/issue-stance-matrix.yaml
+deliberation_plan_ref: .onto/review/20260611-d9760486/deliberation-plan.yaml
+problem_framing_ref: .onto/review/20260611-d9760486/problem-framing.yaml
+issue_resolution_summary:
+  - issue_id: issue-001
+    problem_definition: Time authority is split across the batcher's two mutating
+      entry points — the window anchor is sampled from ambient Date.now() at
+      enqueue (line 20) while window closure is computed from the
+      caller-injected now at flush (line 30) — with no declared contract binding
+      the two clocks, so the window-closed predicate (contract C4) rests on an
+      undeclared shared-clock condition and is violated for permitted inputs.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: High-severity material candidate with unanimous support/accepts/keeps
+      stances and a no-deliberation-needed resolution. Classified symptom rather
+      than root_cause because the closure contradiction is the manifestation of
+      the absent inter-clock binding carried as shared cause by issue-005
+      (dep-001) and issue-011 (dep-002). The violation is a deductive derivation
+      over permitted inputs rather than a directly observed runtime failure
+      (inferred); it breaks the declared correctness goal on the core C4 flush
+      contract inside the requested time-source-semantics focus
+      (current_blocker), and binding both closure operands to one declared clock
+      authority is achievable within the single-file target (fix_now,
+      must_close_in_target).
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: "The documented carry-over guarantee has no implementing
+      mechanism: no code path snapshots window membership at the close instant,
+      so the guaranteed interval is empty under synchronous execution and the
+      only materially reachable behavior is emit-all-then-clear, contradicting
+      the written contract at lines 37-38."
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Medium-severity material candidate with unanimous stances, resolved
+      no-deliberation-needed. The joint unsatisfiability of C7 and C8 is a
+      formal derivation (inferred) over a doc-vs-behavior disagreement
+      (consistency). The root (no snapshot mechanism) is self-contained —
+      rel-004 records duplication with issue-010, not a shared root, and the
+      contract licenses merges only via same_root_candidate — so
+      independent_issue. Aligning comment and behavior is local to the target
+      (fix_now, must_close_in_target); the happy path still functions, so it
+      undermines trust in the documented contract rather than blocking current
+      execution (next_step_blocker).
+    related_surface_finding_ids:
+      - finding-002
+  - issue_id: issue-003
+    problem_definition: The flush return-value protocol overloads [] across two
+      distinct reachable states (no window exists vs window still open) while
+      the documentation at line 28 asserts a single meaning, making the
+      documented rule false in the reachable no-window state (windowStartedAt
+      === null).
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Low severity, non-material per the material-severity candidate
+      boundary; unanimous stances; skipped from deliberation as
+      non_material_issue. The doc rule's falsity in the windowStartedAt === null
+      state is directly traceable in the code path (observed) and is a
+      doc-protocol inconsistency that is behaviorally benign for pure polling
+      callers. No relation connects finding-003 to any other finding
+      (independent_issue). Narrowing the documentation to cover both
+      empty-return states closes it (document_only) and can ride along the
+      material doc corrections (planned_follow_up, may_close_during_next_stage).
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: Two recordings purport to denote the batch-entry instant —
+      the caller-supplied enqueuedAt field (lines 8-9) and the internally
+      sampled windowStartedAt (line 20) — with no reconciliation rule or
+      designated authority, so the field's documented definition holds only
+      under the undeclared convention that callers pass Date.now() at call time
+      and is latently false for permitted inputs.
+    issue_role: symptom
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Low severity, non-material, latent — no current reader of enqueuedAt
+      exists; unanimous stances; skipped as non_material_issue. The definitional
+      failure arises only under permitted-but-unexercised caller inputs
+      (inferred) and is a contract-field consistency defect. Classified symptom
+      because the recorded semantics stance states the deeper time-ownership
+      root is carried separately by issue-011, even though no graph relation
+      licenses a merge. The pick-one-authority action is a decision (make
+      enqueuedAt load-bearing vs remove it) that resolves naturally alongside
+      issue-011's authority designation (needs_decision, planned_follow_up,
+      may_close_during_next_stage).
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: The contract contains no clock-authority concept — no clock
+      parameter on enqueue and no documented requirement on the source of
+      flush's now (absence across lines 18-32) — so window-closure decisions mix
+      two undeclared, free-running time authorities that are free to diverge.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: High-severity material candidate, unanimous stances,
+      no-deliberation-needed. Classified root_cause because the absent
+      clock-authority concept is the shared cause (dep-001, dep-003) on which
+      issue-001's closure contradiction rests and which issue-011 reaches from
+      the naming side. The absence is directly verifiable across the file
+      (observed). A cross-clock subtraction can make the window close never,
+      early, or instantly, breaking the declared correctness goal under the
+      requested time-source-semantics focus (current_blocker, correctness);
+      designating a single time authority for anchoring and closure is in-target
+      work (fix_now, must_close_in_target).
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: "The pending-notification lifecycle has no termination
+      segment: the exported surface contains only enqueue, window-gated flush,
+      and pendingUserCount, so no unconditional exit path exists for pending
+      items and they are silently lost at shutdown, poller failure, or batcher
+      decommission."
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Medium-severity material candidate, unanimous stances,
+      no-deliberation-needed. The silent-loss conclusion is a valid inference
+      from the exported surface, not a contradiction of any declared claim
+      (inferred); the defect is a missing lifecycle termination segment
+      (completeness). dep-004 records a shared mid-path cause with issue-007
+      (poll-and-window-gated sole reducer) but the roots and mitigations are
+      distinct, so independent_issue. Closure requires choosing and adding a
+      terminal operation plus a documented caller shutdown obligation — a
+      contract-extension decision (needs_decision) that must land before any
+      next stage relies on loss-free delivery (next_step_blocker,
+      must_close_before_next_stage).
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-007
+    problem_definition: "No capacity, overflow, or backpressure concept exists
+      anywhere in the contract or implementation (absence across lines 14-48):
+      enqueue appends unconditionally while the sole reducer (flush) is poll-
+      and window-gated, so the pending store grows without bound whenever
+      polling stalls or slows while enqueues continue."
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Medium-severity material candidate, unanimous stances,
+      no-deliberation-needed. Unbounded growth follows necessarily from
+      unconditional append plus the poll-and-window-gated sole reducer
+      (inferred); the defect is an absent capacity/overflow/backpressure concept
+      (completeness). Distinct root and mitigation from issue-006 despite the
+      shared mid-path cause recorded by dep-004, so independent_issue. Closure
+      requires selecting a documented capacity bound and an explicit overflow
+      policy — reject, drop-oldest, or force-flush — and surfacing overflow to
+      the caller (needs_decision, next_step_blocker,
+      must_close_before_next_stage).
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: The temporal axis is declared on the input side (enqueuedAt)
+      but has no output or history counterpart — the field is never read,
+      digests carry only bodies, and flush destroys state without persisting any
+      record — so past batch state cannot be reconstructed and the carry-over
+      comment can never be checked against evidence.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: planned_follow_up
+    closure_class: needs_decision
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: Low severity, non-material; unanimous stances; skipped as
+      non_material_issue. Both premises — enqueuedAt is read by nothing and
+      flush persists nothing — are directly checkable in the target (observed).
+      The deficit is scoped to the declared verifiability goal, i.e.
+      reconstructability and auditability of delivered batches
+      (governance_value). No relation connects finding-008 to any other finding
+      (independent_issue). The remedy admits two distinct paths (remove the
+      contract field vs give it a consumer and report flush metadata), so
+      needs_decision, scheduled as planned_follow_up with planned_later
+      obligation under the bounded_partial closure level.
+    related_surface_finding_ids:
+      - finding-008
+  - issue_id: issue-009
+    problem_definition: Monitoring concept distribution is skewed to the one
+      dimension — user breadth via pendingUserCount — that is formally invariant
+      to pending-item volume and age, so the contract's characteristic
+      poll-stall failure mode (items aging indefinitely) is undetectable through
+      the provided monitoring surface.
+    issue_role: independent_issue
+    judgment_state: inferred
+    impact_kind: completeness
+    timing_class: planned_follow_up
+    closure_class: carry_forward
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: Low severity, non-material; unanimous stances; skipped as
+      non_material_issue. Undetectability is a valid inference from the metric's
+      type — for any fixed pendingUserCount there exist states with arbitrarily
+      many or arbitrarily old pending items (inferred). The gap is missing
+      monitoring dimensions (pending-item count, oldest-pending-age), an
+      operability gap rather than a correctness defect (completeness). No
+      relation connects finding-009 to any other finding (independent_issue).
+      Adding the accessors is concrete backlog work carried beyond this review
+      (carry_forward, planned_follow_up, planned_later).
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-010
+    problem_definition: The carry-over comment (lines 37-38) asserts a behavioral
+      guarantee over an interleaving window between the close check (line 32)
+      and the reset (line 39) that the synchronous execution model makes
+      unreachable, while this.pending.clear() would unconditionally discard such
+      items if the point ever became reachable — the documented contract is
+      false as written and inverts the actual failure mode.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Medium-severity material candidate, unanimous stances,
+      no-deliberation-needed. The comment-vs-clear() mismatch is directly
+      readable at lines 37-39 (observed) and is a documented-contract
+      consistency defect that licenses a false loss-free assumption — a
+      regression trap for maintainers and any future async refactor. rel-004
+      records it as a duplicate surface of issue-002 without licensing a merge
+      (relation is duplicates, not same_root_candidate), so independent_issue.
+      Aligning the comment with the mechanism (or vice versa) is local to the
+      target (fix_now, must_close_in_target); it endangers maintenance and
+      future change rather than current execution (next_step_blocker).
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-011
+    problem_definition: "The batcher owns no time fact: the window anchor, the
+      closure input, and the documented batch-entry timestamp are all sourced
+      from ambient or caller-chosen clocks that the batcher neither establishes
+      nor validates, so neither WINDOW_MS nor enqueuedAt denotes what its name
+      and documentation assert — time ownership is undesigned in the class."
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: needs_decision
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Medium-severity material candidate, unanimous stances,
+      no-deliberation-needed, with medium root confidence and an accepted
+      built-in refutation condition — clock unification alone leaving
+      finding-012 intact would refute the common root (inferred). Classified
+      root_cause because rel-006 pairs findings 011 and 012 under the compound
+      batcher-owns-no-time-fact root and dep-002/dep-003 record it as shared
+      cause with issue-001 and issue-005. Impact lands on the declared
+      correctness goal for the named 30-second window semantics. Closure
+      requires the single-time-authority designation plus the
+      stamp-enqueuedAt-or-redocument choice (needs_decision); that decision is
+      instantiated by the in-target fixes of issues 001/005
+      (must_close_in_target), while its own residual bite beyond those highs is
+      medium (next_step_blocker).
+    related_surface_finding_ids:
+      - finding-011
+      - finding-012
+  - issue_id: issue-012
+    problem_definition: The flush name and its documentation claim stricter
+      semantics than the behavior provides — unconditional force-out vs
+      window-gated conditional poll, a single documented meaning for [] vs two
+      guard states, and window-bounded digest membership vs poll-time membership
+      — inviting incorrect caller assumptions although the behavior is
+      internally consistent for polling use.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: Low severity, non-material; unanimous stances; skipped as
+      non_material_issue. The name/doc overpromise is directly readable from the
+      surface inventory (observed), and the behavior itself is internally
+      consistent for polling use, so the impact is name-vs-behavior fit of the
+      API surface (maintainability_evolvability). No relation connects
+      finding-013 to any other finding (independent_issue). Re-documenting the
+      conditional-poll semantics, the two empty-return guard states, and the
+      late-item absorption rule closes it without behavior change
+      (document_only) and can ride along the related doc corrections
+      (planned_follow_up, may_close_during_next_stage).
+    related_surface_finding_ids:
+      - finding-013
+result_classification_summary:
+  highest_severity: high
+  finding_count: 13
+  issue_count: 12
+  finding_severity_counts:
+    blocker: 0
+    high: 2
+    medium: 6
+    low: 5
+    info: 0
+  issue_severity_counts: &a1
+    blocker: 0
+    high: 2
+    medium: 5
+    low: 5
+    info: 0
+  severity_counts: *a1
+  material_issue_count: 7
+  non_material_finding_count: 5
+  material_issues:
+    - issue_id: issue-001
+      severity: high
+      material: true
+      affected_purpose: "Declared review goal `correctness` and the flush contract C4
+        ('flushes when the window has closed') under the requested
+        time-source-semantics focus. Source finding context: Review goal
+        `correctness` and contract C4 (flush on window close) in the declared
+        time-source-semantics focus area."
+      failure_condition: "Any permitted caller whose flush(now) value comes from a
+        clock other than Date.now() — test clock, monotonic clock, replayed or
+        skewed clock — since the signature flush(now: number) carries no
+        time-base constraint. Source finding context: Caller supplies flush(now)
+        from any clock other than the Date.now() epoch-ms timeline; the declared
+        contract permits any number."
+      impact: "With a smaller-magnitude (e.g. monotonic) now the window never closes
+        and flush returns [] forever; with a larger-epoch now it flushes
+        immediately, violating the 30s window rule — the core batching contract
+        cannot be trusted for permitted inputs. Source finding context: Window
+        closure becomes never, early, or instant; the declared 30s digest
+        behavior is unachievable for permitted inputs, breaking trust in the
+        primary batching contract."
+      evidence_refs:
+        - round1/logic.md#finding-l1
+      source_lens_ids:
+        - logic
+      action_candidates: &a2
+        - fix_now
+      rationale: "High-severity material candidate with unanimous
+        support/accepts/keeps stances and a no-deliberation-needed resolution.
+        Classified symptom rather than root_cause because the closure
+        contradiction is the manifestation of the absent inter-clock binding
+        carried as shared cause by issue-005 (dep-001) and issue-011 (dep-002).
+        The violation is a deductive derivation over permitted inputs rather
+        than a directly observed runtime failure (inferred); it breaks the
+        declared correctness goal on the core C4 flush contract inside the
+        requested time-source-semantics focus (current_blocker), and binding
+        both closure operands to one declared clock authority is achievable
+        within the single-file target (fix_now, must_close_in_target). Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:20, notification-batcher.ts:30-32 Source finding
+        context: The window-closed predicate compares a caller-supplied clock
+        (`now`) against an internally sampled ambient clock (`Date.now()`); the
+        rule set is jointly satisfiable only under an undeclared necessary
+        condition that both values come from the same epoch-ms clock, so C4
+        ('flushes when the window has closed') is violated for permitted inputs.
+        Source finding context: Logic lens found an inter-claim unsatisfiability
+        (verdict: fail) between C3 (windowStartedAt = Date.now() at enqueue) and
+        C4+C6 (closure computed from caller-supplied now at flush): a necessary
+        shared-clock constraint is treated as merely possible, directly hitting
+        the requested time-source-semantics focus and the correctness review
+        goal. Residual contradiction persists after semantic disambiguation of
+        `now`, so logic holds the primary finding. Source finding context: Use
+        one time authority for the whole window lifecycle: either thread the
+        caller clock through both entry points (enqueue(item, now) or use
+        item.enqueuedAt to start the window), or drop the now parameter and use
+        Date.now() inside flush (providing the test time-injection seam via an
+        injected clock). At minimum document that now must be epoch ms from the
+        same clock as Date.now(). Source finding context:
+        round1/logic.md#finding-l1 Source finding context: Review goal
+        `correctness` and contract C4 (flush on window close) in the declared
+        time-source-semantics focus area. Source finding context: Caller
+        supplies flush(now) from any clock other than the Date.now() epoch-ms
+        timeline; the declared contract permits any number. Source finding
+        context: Window closure becomes never, early, or instant; the declared
+        30s digest behavior is unachievable for permitted inputs, breaking trust
+        in the primary batching contract. Source finding context: The design
+        splits time authority across the two mutating entry points — window
+        start from the ambient clock at enqueue (line 20), window closure from
+        injected time at flush (line 30) — with no claim in the target declaring
+        or enforcing the required inter-clock identity. Source finding context:
+        flush's window-closed predicate (now - windowStartedAt >= WINDOW_MS)
+        subtracts an internally Date.now()-sampled anchor from a caller-supplied
+        now, so closure is wrong whenever the two values are not on one shared
+        epoch-ms clock. Source finding context: Time authority is split across
+        enqueue (ambient Date.now(), line 20) and flush (caller-injected now,
+        line 30) and no declared contract binds the two clocks, so the closure
+        rule's truth depends on an undeclared necessary condition."
+      problem_definition: Time authority is split across the batcher's two mutating
+        entry points — the window anchor is sampled from ambient Date.now() at
+        enqueue (line 20) while window closure is computed from the
+        caller-injected now at flush (line 30) — with no declared contract
+        binding the two clocks, so the window-closed predicate (contract C4)
+        rests on an undeclared shared-clock condition and is violated for
+        permitted inputs.
+      issue_statement: "The window-closed predicate subtracts an internally
+        Date.now()-sampled anchor from a caller-supplied now, so contract C4
+        ('flushes when the window has closed') is jointly satisfiable only under
+        an undeclared shared-clock condition and is violated for permitted
+        inputs. Source finding context: notification-batcher.ts Source finding
+        context: notification-batcher.ts:20, notification-batcher.ts:30-32
+        Source finding context: The window-closed predicate compares a
+        caller-supplied clock (`now`) against an internally sampled ambient
+        clock (`Date.now()`); the rule set is jointly satisfiable only under an
+        undeclared necessary condition that both values come from the same
+        epoch-ms clock, so C4 ('flushes when the window has closed') is violated
+        for permitted inputs. Source finding context: Logic lens found an
+        inter-claim unsatisfiability (verdict: fail) between C3 (windowStartedAt
+        = Date.now() at enqueue) and C4+C6 (closure computed from
+        caller-supplied now at flush): a necessary shared-clock constraint is
+        treated as merely possible, directly hitting the requested
+        time-source-semantics focus and the correctness review goal. Residual
+        contradiction persists after semantic disambiguation of `now`, so logic
+        holds the primary finding. Source finding context: Use one time
+        authority for the whole window lifecycle: either thread the caller clock
+        through both entry points (enqueue(item, now) or use item.enqueuedAt to
+        start the window), or drop the now parameter and use Date.now() inside
+        flush (providing the test time-injection seam via an injected clock). At
+        minimum document that now must be epoch ms from the same clock as
+        Date.now(). Source finding context: round1/logic.md#finding-l1 Source
+        finding context: Review goal `correctness` and contract C4 (flush on
+        window close) in the declared time-source-semantics focus area. Source
+        finding context: Caller supplies flush(now) from any clock other than
+        the Date.now() epoch-ms timeline; the declared contract permits any
+        number. Source finding context: Window closure becomes never, early, or
+        instant; the declared 30s digest behavior is unachievable for permitted
+        inputs, breaking trust in the primary batching contract. Source finding
+        context: The design splits time authority across the two mutating entry
+        points — window start from the ambient clock at enqueue (line 20),
+        window closure from injected time at flush (line 30) — with no claim in
+        the target declaring or enforcing the required inter-clock identity.
+        Source finding context: flush's window-closed predicate (now -
+        windowStartedAt >= WINDOW_MS) subtracts an internally Date.now()-sampled
+        anchor from a caller-supplied now, so closure is wrong whenever the two
+        values are not on one shared epoch-ms clock. Source finding context:
+        Time authority is split across enqueue (ambient Date.now(), line 20) and
+        flush (caller-injected now, line 30) and no declared contract binds the
+        two clocks, so the closure rule's truth depends on an undeclared
+        necessary condition."
+      issue_role: symptom
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: inferred
+    - issue_id: issue-005
+      severity: high
+      material: true
+      affected_purpose: "Declared review goal `correctness` for window-closure
+        decisions under the requested time-source-semantics focus. Source
+        finding context: Correctness of window-closure decisions; explicitly
+        in-scope time-source semantics."
+      failure_condition: "Whenever the caller's now comes from a different epoch or
+        skewed source than Date.now() (test clock, monotonic clock, mocked
+        scheduler time), the closure predicate becomes a cross-clock
+        subtraction. Source finding context: Caller-supplied now from a
+        different epoch or skewed source than the Date.now() anchor."
+      impact: "A cross-clock subtraction makes the window close never, early, or
+        instantly, violating the declared correctness goal inside the bounded
+        target. Source finding context: Window closes never, early, or instantly
+        — the core window contract fails under permitted caller behavior."
+      evidence_refs:
+        - round1/coverage.md#finding-1
+      source_lens_ids:
+        - coverage
+      action_candidates: &a3
+        - fix_now
+      rationale: "High-severity material candidate, unanimous stances,
+        no-deliberation-needed. Classified root_cause because the absent
+        clock-authority concept is the shared cause (dep-001, dep-003) on which
+        issue-001's closure contradiction rests and which issue-011 reaches from
+        the naming side. The absence is directly verifiable across the file
+        (observed). A cross-clock subtraction can make the window close never,
+        early, or instantly, breaking the declared correctness goal under the
+        requested time-source-semantics focus (current_blocker, correctness);
+        designating a single time authority for anchoring and closure is
+        in-target work (fix_now, must_close_in_target). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: Window-closure
+        decisions mix two undeclared time authorities (internal Date.now() at
+        enqueue vs caller-supplied now at flush) with no single time-source
+        authority concept. Source finding context: Coverage lens flagged a
+        dimensional deficit: one time-dependent value (window age) is
+        parallel-managed across two time sources with no single-origin authority
+        designation anywhere in the file; the request summary explicitly scopes
+        time-source semantics into this review. Source finding context:
+        Designate a single time authority; smallest in-target fix: stop calling
+        Date.now() in enqueue and anchor the window from the same
+        caller-supplied time source (enqueue(item, now) or an injected clock
+        used by both methods), and document on flush that now must come from
+        that same authority. Source finding context:
+        round1/coverage.md#finding-1 Source finding context: Correctness of
+        window-closure decisions; explicitly in-scope time-source semantics.
+        Source finding context: Caller-supplied now from a different epoch or
+        skewed source than the Date.now() anchor. Source finding context: Window
+        closes never, early, or instantly — the core window contract fails under
+        permitted caller behavior. Source finding context: The contract lacks
+        any clock-authority concept: no clock parameter on enqueue and no
+        documented requirement on now's source (absence across lines 18-32).
+        Source finding context: The window closes never, early, or instantly
+        whenever the caller's now diverges from the Date.now() timeline,
+        violating the declared correctness goal. Source finding context: The
+        closure predicate (line 32) is a cross-clock subtraction:
+        windowStartedAt is anchored to the internal wall clock (line 20) while
+        now is caller-supplied (line 30). Source finding context: No
+        clock-authority concept exists in the contract — nothing binds the
+        caller's time source to the internal anchor's source, so the two
+        authorities are free to diverge."
+      problem_definition: The contract contains no clock-authority concept — no clock
+        parameter on enqueue and no documented requirement on the source of
+        flush's now (absence across lines 18-32) — so window-closure decisions
+        mix two undeclared, free-running time authorities that are free to
+        diverge.
+      issue_statement: "Window-closure decisions mix two undeclared time authorities —
+        internal Date.now() at enqueue and caller-supplied now at flush — with
+        no single-origin time-source authority concept anywhere in the file.
+        Source finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: Window-closure
+        decisions mix two undeclared time authorities (internal Date.now() at
+        enqueue vs caller-supplied now at flush) with no single time-source
+        authority concept. Source finding context: Coverage lens flagged a
+        dimensional deficit: one time-dependent value (window age) is
+        parallel-managed across two time sources with no single-origin authority
+        designation anywhere in the file; the request summary explicitly scopes
+        time-source semantics into this review. Source finding context:
+        Designate a single time authority; smallest in-target fix: stop calling
+        Date.now() in enqueue and anchor the window from the same
+        caller-supplied time source (enqueue(item, now) or an injected clock
+        used by both methods), and document on flush that now must come from
+        that same authority. Source finding context:
+        round1/coverage.md#finding-1 Source finding context: Correctness of
+        window-closure decisions; explicitly in-scope time-source semantics.
+        Source finding context: Caller-supplied now from a different epoch or
+        skewed source than the Date.now() anchor. Source finding context: Window
+        closes never, early, or instantly — the core window contract fails under
+        permitted caller behavior. Source finding context: The contract lacks
+        any clock-authority concept: no clock parameter on enqueue and no
+        documented requirement on now's source (absence across lines 18-32).
+        Source finding context: The window closes never, early, or instantly
+        whenever the caller's now diverges from the Date.now() timeline,
+        violating the declared correctness goal. Source finding context: The
+        closure predicate (line 32) is a cross-clock subtraction:
+        windowStartedAt is anchored to the internal wall clock (line 20) while
+        now is caller-supplied (line 30). Source finding context: No
+        clock-authority concept exists in the contract — nothing binds the
+        caller's time source to the internal anchor's source, so the two
+        authorities are free to diverge."
+      issue_role: root_cause
+      timing_class: current_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-002
+      severity: medium
+      material: true
+      affected_purpose: "Review goals `correctness` and `regression_risk`: the
+        documented loss-safety (carry-over) contract of flush's reset step.
+        Source finding context: Correctness and regression risk of the
+        documented flush reset contract (carry-over guarantee)."
+      failure_condition: "Any item present in the pending map at flush time when the
+        window has closed — in particular items enqueued after the window-close
+        instant but before the caller polls flush. Source finding context: Items
+        enqueued after the window-close instant but before the flush poll; any
+        future async/re-entrant refactor of flush."
+      impact: "The documented carry-over guarantee has no implementing mechanism;
+        maintainers and callers relying on it assume loss-free behavior that the
+        code contradicts, weakening trust in the documented contract. Source
+        finding context: Documented guarantee is unsatisfiable as implemented —
+        items are emitted in the closing digest and wiped by clear(), so the
+        contract misleads maintainers about loss behavior."
+      evidence_refs:
+        - round1/logic.md#finding-l2
+      source_lens_ids:
+        - logic
+      action_candidates: &a4
+        - fix_before_release
+        - fix_now
+      rationale: "Medium-severity material candidate with unanimous stances, resolved
+        no-deliberation-needed. The joint unsatisfiability of C7 and C8 is a
+        formal derivation (inferred) over a doc-vs-behavior disagreement
+        (consistency). The root (no snapshot mechanism) is self-contained —
+        rel-004 records duplication with issue-010, not a shared root, and the
+        contract licenses merges only via same_root_candidate — so
+        independent_issue. Aligning comment and behavior is local to the target
+        (fix_now, must_close_in_target); the happy path still functions, so it
+        undermines trust in the documented contract rather than blocking current
+        execution (next_step_blocker). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-40, notification-batcher.ts:34-36 Source
+        finding context: The comment claims notifications enqueued between the
+        window-close check and the reset are carried into the next window, but
+        under synchronous execution that interval admits no enqueues (the claim
+        is vacuous), and under the only materially reachable reading (enqueued
+        after the window-close instant, before the flush poll) such items are
+        emitted in the current digest and cleared, never carried over. The
+        documented guarantee and the implemented behavior are not jointly
+        satisfiable. Source finding context: Logic lens found C7 (carry-over
+        guarantee, lines 37-38) and C8 (emit-all-then-clear, lines 34-36,39)
+        jointly unsatisfiable for any item present at flush time: an obligation
+        is asserted over an interval the execution model makes empty, masking a
+        false guarantee in the reachable interpretation — a contract-vs-behavior
+        contradiction under the correctness goal. Source finding context: Make
+        the code and the claim agree: either implement the guarantee by
+        filtering the digest loop to items with enqueuedAt < windowStartedAt +
+        WINDOW_MS and retaining later items in pending, or correct the comment
+        to state actual behavior (all pending notifications at flush time are
+        emitted in this digest; nothing carries over). Source finding context:
+        round1/logic.md#finding-l2 Source finding context: Correctness and
+        regression risk of the documented flush reset contract (carry-over
+        guarantee). Source finding context: Items enqueued after the
+        window-close instant but before the flush poll; any future
+        async/re-entrant refactor of flush. Source finding context: Documented
+        guarantee is unsatisfiable as implemented — items are emitted in the
+        closing digest and wiped by clear(), so the contract misleads
+        maintainers about loss behavior. Source finding context: No code path
+        snapshots window membership at the close instant: the close check (line
+        32) gates timing only while content is taken wholesale at emission time,
+        so the promised carry-over has no mechanism that could implement it.
+        Source finding context: The comment promises carry-over into the next
+        window, but the digest loop emits every pending entry with no timestamp
+        filter and clear() unconditionally removes everything, so nothing is
+        ever carried over. Source finding context: No mechanism snapshots window
+        membership at the close instant — timing and content are decoupled
+        (close check gates when, the loop takes whatever is present) — making
+        the obligated carry-over state unreachable."
+      problem_definition: "The documented carry-over guarantee has no implementing
+        mechanism: no code path snapshots window membership at the close
+        instant, so the guaranteed interval is empty under synchronous execution
+        and the only materially reachable behavior is emit-all-then-clear,
+        contradicting the written contract at lines 37-38."
+      issue_statement: "The documented carry-over guarantee (lines 37-38) and the
+        implemented emit-all-then-clear behavior (lines 34-36, 39) are not
+        jointly satisfiable: the guaranteed interval is empty under synchronous
+        execution, and in the only materially reachable reading items are
+        emitted in the current digest and cleared, never carried over. Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-40, notification-batcher.ts:34-36 Source
+        finding context: The comment claims notifications enqueued between the
+        window-close check and the reset are carried into the next window, but
+        under synchronous execution that interval admits no enqueues (the claim
+        is vacuous), and under the only materially reachable reading (enqueued
+        after the window-close instant, before the flush poll) such items are
+        emitted in the current digest and cleared, never carried over. The
+        documented guarantee and the implemented behavior are not jointly
+        satisfiable. Source finding context: Logic lens found C7 (carry-over
+        guarantee, lines 37-38) and C8 (emit-all-then-clear, lines 34-36,39)
+        jointly unsatisfiable for any item present at flush time: an obligation
+        is asserted over an interval the execution model makes empty, masking a
+        false guarantee in the reachable interpretation — a contract-vs-behavior
+        contradiction under the correctness goal. Source finding context: Make
+        the code and the claim agree: either implement the guarantee by
+        filtering the digest loop to items with enqueuedAt < windowStartedAt +
+        WINDOW_MS and retaining later items in pending, or correct the comment
+        to state actual behavior (all pending notifications at flush time are
+        emitted in this digest; nothing carries over). Source finding context:
+        round1/logic.md#finding-l2 Source finding context: Correctness and
+        regression risk of the documented flush reset contract (carry-over
+        guarantee). Source finding context: Items enqueued after the
+        window-close instant but before the flush poll; any future
+        async/re-entrant refactor of flush. Source finding context: Documented
+        guarantee is unsatisfiable as implemented — items are emitted in the
+        closing digest and wiped by clear(), so the contract misleads
+        maintainers about loss behavior. Source finding context: No code path
+        snapshots window membership at the close instant: the close check (line
+        32) gates timing only while content is taken wholesale at emission time,
+        so the promised carry-over has no mechanism that could implement it.
+        Source finding context: The comment promises carry-over into the next
+        window, but the digest loop emits every pending entry with no timestamp
+        filter and clear() unconditionally removes everything, so nothing is
+        ever carried over. Source finding context: No mechanism snapshots window
+        membership at the close instant — timing and content are decoupled
+        (close check gates when, the loop takes whatever is present) — making
+        the obligated carry-over state unreachable."
+      issue_role: independent_issue
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: inferred
+    - issue_id: issue-006
+      severity: medium
+      material: true
+      affected_purpose: "Review goals `correctness` and `regression_risk`: loss-free
+        handling of pending notifications across the full lifecycle. Source
+        finding context: Correctness and regression risk of notification
+        delivery at end-of-life (shutdown/decommission) paths."
+      failure_condition: "Process shutdown, poller failure, or batcher decommission
+        while items are pending — the future poll that would release them never
+        happens. Source finding context: Shutdown, poller stop, or decommission
+        with non-empty pending state."
+      impact: "Pending notifications are silently dropped with no contract
+        acknowledging it; silent loss is unacceptable per the artifact's stated
+        delivery purpose. Source finding context: Silent data loss of pending
+        notifications with no contract surface acknowledging or mitigating it."
+      evidence_refs:
+        - round1/coverage.md#finding-2
+      source_lens_ids:
+        - coverage
+      action_candidates: &a5
+        - fix_before_release
+        - accept_risk
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. The silent-loss conclusion is a valid inference
+        from the exported surface, not a contradiction of any declared claim
+        (inferred); the defect is a missing lifecycle termination segment
+        (completeness). dep-004 records a shared mid-path cause with issue-007
+        (poll-and-window-gated sole reducer) but the roots and mitigations are
+        distinct, so independent_issue. Closure requires choosing and adding a
+        terminal operation plus a documented caller shutdown obligation — a
+        contract-extension decision (needs_decision) that must land before any
+        next stage relies on loss-free delivery (next_step_blocker,
+        must_close_before_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:30-32,44-47 Source finding context: The
+        pending-notification lifecycle covers enqueue and window-gated flush but
+        has no termination segment (drain/close/dispose); pending items are
+        unreachable at shutdown or poller stop and are silently lost. Source
+        finding context: Coverage lens ghost-sub-area check: lifecycle
+        termination is implied by the batching domain but entirely absent — the
+        only exit path for pending items is a future poll that satisfies the
+        window predicate, a correctness and regression risk inside the declared
+        review goal. Source finding context: Add a terminal operation, e.g.
+        drain(): Array<{ userId: string; digest: string }> that emits digests
+        for all pending items regardless of WINDOW_MS and resets state; document
+        that callers must invoke it on shutdown. Source finding context:
+        round1/coverage.md#finding-2 Source finding context: Correctness and
+        regression risk of notification delivery at end-of-life
+        (shutdown/decommission) paths. Source finding context: Shutdown, poller
+        stop, or decommission with non-empty pending state. Source finding
+        context: Silent data loss of pending notifications with no contract
+        surface acknowledging or mitigating it. Source finding context: No
+        terminal-lifecycle concept exists in the API — the exported surface
+        contains only enqueue, window-gated flush, and pendingUserCount, with no
+        drain/close/force-flush member. Source finding context: At process
+        shutdown, poller failure, or decommission, pending notifications are
+        silently dropped because the poll that would flush them never happens.
+        Source finding context: Every pending item's only exit is a future
+        external poll of flush that also satisfies the WINDOW_MS predicate
+        (lines 28, 32). Source finding context: The API has no
+        terminal-lifecycle operation (drain/close/dispose) anywhere in the class
+        body, so no unconditional exit path exists."
+      problem_definition: "The pending-notification lifecycle has no termination
+        segment: the exported surface contains only enqueue, window-gated flush,
+        and pendingUserCount, so no unconditional exit path exists for pending
+        items and they are silently lost at shutdown, poller failure, or batcher
+        decommission."
+      issue_statement: "The pending-notification lifecycle covers enqueue and
+        window-gated flush but has no termination segment (drain/close/dispose);
+        pending items are unreachable at shutdown or poller stop and are
+        silently lost. Source finding context: notification-batcher.ts Source
+        finding context: notification-batcher.ts:30-32,44-47 Source finding
+        context: Coverage lens ghost-sub-area check: lifecycle termination is
+        implied by the batching domain but entirely absent — the only exit path
+        for pending items is a future poll that satisfies the window predicate,
+        a correctness and regression risk inside the declared review goal.
+        Source finding context: Add a terminal operation, e.g. drain(): Array<{
+        userId: string; digest: string }> that emits digests for all pending
+        items regardless of WINDOW_MS and resets state; document that callers
+        must invoke it on shutdown. Source finding context:
+        round1/coverage.md#finding-2 Source finding context: Correctness and
+        regression risk of notification delivery at end-of-life
+        (shutdown/decommission) paths. Source finding context: Shutdown, poller
+        stop, or decommission with non-empty pending state. Source finding
+        context: Silent data loss of pending notifications with no contract
+        surface acknowledging or mitigating it. Source finding context: No
+        terminal-lifecycle concept exists in the API — the exported surface
+        contains only enqueue, window-gated flush, and pendingUserCount, with no
+        drain/close/force-flush member. Source finding context: At process
+        shutdown, poller failure, or decommission, pending notifications are
+        silently dropped because the poll that would flush them never happens.
+        Source finding context: Every pending item's only exit is a future
+        external poll of flush that also satisfies the WINDOW_MS predicate
+        (lines 28, 32). Source finding context: The API has no
+        terminal-lifecycle operation (drain/close/dispose) anywhere in the class
+        body, so no unconditional exit path exists."
+      issue_role: independent_issue
+      timing_class: next_step_blocker
+      closure_class: needs_decision
+      closure_obligation: must_close_before_next_stage
+      judgment_state: inferred
+    - issue_id: issue-007
+      severity: medium
+      material: true
+      affected_purpose: "Review goals `correctness` and `regression_risk`: bounded
+        resource behavior of the pending store in a long-lived process. Source
+        finding context: Correctness and regression risk of resource behavior
+        under sustained enqueue with delayed or absent polling."
+      failure_condition: "A stalled or slow external poll loop while enqueues continue
+        — memory consumption is proportional to enqueue rate times the gap
+        between successful polls. Source finding context: Stalled or slow poller
+        combined with ongoing enqueues in a long-lived process."
+      impact: "Unbounded memory growth in a long-lived process, with no contract
+        surface to detect, reject, or shed load. Source finding context:
+        Unbounded pending growth — an operational failure mode with no detection
+        or overflow policy in the contract."
+      evidence_refs:
+        - round1/coverage.md#finding-3
+      source_lens_ids:
+        - coverage
+      action_candidates: &a6
+        - fix_before_release
+        - accept_risk
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. Unbounded growth follows necessarily from
+        unconditional append plus the poll-and-window-gated sole reducer
+        (inferred); the defect is an absent capacity/overflow/backpressure
+        concept (completeness). Distinct root and mitigation from issue-006
+        despite the shared mid-path cause recorded by dep-004, so
+        independent_issue. Closure requires selecting a documented capacity
+        bound and an explicit overflow policy — reject, drop-oldest, or
+        force-flush — and surfacing overflow to the caller (needs_decision,
+        next_step_blocker, must_close_before_next_stage). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:21-23,32 Source finding context: The pending
+        store grows without bound — no max-size, overflow policy, or
+        backpressure concept exists, while the only reducer (flush) is poll- and
+        window-gated. Source finding context: Coverage lens ghost-sub-area
+        check: the batching domain implies a capacity/overflow sub-area (bounded
+        buffers, drop/force-flush policies) that is entirely absent; combined
+        with the unguarded poll dependency this is a regression and correctness
+        risk within the declared review goal. Source finding context: Add a
+        documented capacity bound (per user and/or total) with an explicit
+        overflow policy — reject, drop-oldest, or force-flush on overflow — and
+        surface overflow occurrences to the caller. Source finding context:
+        round1/coverage.md#finding-3 Source finding context: Correctness and
+        regression risk of resource behavior under sustained enqueue with
+        delayed or absent polling. Source finding context: Stalled or slow
+        poller combined with ongoing enqueues in a long-lived process. Source
+        finding context: Unbounded pending growth — an operational failure mode
+        with no detection or overflow policy in the contract. Source finding
+        context: No capacity concept exists in the contract or implementation
+        (absence across lines 14-48): enqueue has no size check or rejection
+        path and nothing in the file mentions a bound. Source finding context:
+        Pending storage grows without bound when the poller stalls while
+        enqueues continue. Source finding context: The sole reducer of pending
+        is flush, which is conditional on window age (line 32) and on an
+        external caller polling (line 28). Source finding context: No capacity,
+        overflow, or backpressure concept exists anywhere in the contract or
+        implementation, so enqueue appends unconditionally for any number of
+        users and items."
+      problem_definition: "No capacity, overflow, or backpressure concept exists
+        anywhere in the contract or implementation (absence across lines 14-48):
+        enqueue appends unconditionally while the sole reducer (flush) is poll-
+        and window-gated, so the pending store grows without bound whenever
+        polling stalls or slows while enqueues continue."
+      issue_statement: "The pending store grows without bound — no max-size, overflow
+        policy, or backpressure concept exists, while the only reducer (flush)
+        is poll- and window-gated. Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:21-23,32 Source finding context: Coverage lens
+        ghost-sub-area check: the batching domain implies a capacity/overflow
+        sub-area (bounded buffers, drop/force-flush policies) that is entirely
+        absent; combined with the unguarded poll dependency this is a regression
+        and correctness risk within the declared review goal. Source finding
+        context: Add a documented capacity bound (per user and/or total) with an
+        explicit overflow policy — reject, drop-oldest, or force-flush on
+        overflow — and surface overflow occurrences to the caller. Source
+        finding context: round1/coverage.md#finding-3 Source finding context:
+        Correctness and regression risk of resource behavior under sustained
+        enqueue with delayed or absent polling. Source finding context: Stalled
+        or slow poller combined with ongoing enqueues in a long-lived process.
+        Source finding context: Unbounded pending growth — an operational
+        failure mode with no detection or overflow policy in the contract.
+        Source finding context: No capacity concept exists in the contract or
+        implementation (absence across lines 14-48): enqueue has no size check
+        or rejection path and nothing in the file mentions a bound. Source
+        finding context: Pending storage grows without bound when the poller
+        stalls while enqueues continue. Source finding context: The sole reducer
+        of pending is flush, which is conditional on window age (line 32) and on
+        an external caller polling (line 28). Source finding context: No
+        capacity, overflow, or backpressure concept exists anywhere in the
+        contract or implementation, so enqueue appends unconditionally for any
+        number of users and items."
+      issue_role: independent_issue
+      timing_class: next_step_blocker
+      closure_class: needs_decision
+      closure_obligation: must_close_before_next_stage
+      judgment_state: inferred
+    - issue_id: issue-010
+      severity: medium
+      material: true
+      affected_purpose: "Review goals `correctness`, `regression_risk`, and
+        `maintainability`: the truthfulness of the inline reset contract that
+        future maintainers will rely on. Source finding context: Correctness,
+        regression risk, and maintainability of the documented reset/carry-over
+        contract."
+      failure_condition: "A maintainer assumes loss-free carry-over per the comment;
+        or a future async/re-entrant refactor makes the interleaving point
+        reachable, where clear() silently drops the interleaved items. Source
+        finding context: Maintainer reliance on the carry-over guarantee, or any
+        future refactor that makes the described interleaving reachable."
+      impact: "The comment licenses an assumption of loss-free behavior that the code
+        inverts — a material regression trap inside the bounded target. Source
+        finding context: Documented guarantee is unexhibitable today and
+        inverted (silent drop) under the only conditions where it would matter."
+      evidence_refs:
+        - round1/semantics.md#finding-1
+      source_lens_ids:
+        - semantics
+      action_candidates: &a7
+        - fix_before_release
+        - fix_now
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. The comment-vs-clear() mismatch is directly
+        readable at lines 37-39 (observed) and is a documented-contract
+        consistency defect that licenses a false loss-free assumption — a
+        regression trap for maintainers and any future async refactor. rel-004
+        records it as a duplicate surface of issue-002 without licensing a merge
+        (relation is duplicates, not same_root_candidate), so independent_issue.
+        Aligning the comment with the mechanism (or vice versa) is local to the
+        target (fix_now, must_close_in_target); it endangers maintenance and
+        future change rather than current execution (next_step_blocker). Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-39 Source finding context: The comment
+        'Notifications enqueued between the window close check and this reset
+        are carried into the next window' (lines 37-38) does not match the
+        behavior of this.pending.clear() (line 39), which would unconditionally
+        discard such notifications; the documented contract is false as written
+        and inverts the actual failure mode. Source finding context: Semantics
+        lens found the documented contract false as written: the guarantee
+        describes an interleaving point that synchronous flush makes
+        unreachable, and under any future condition where it became reachable
+        clear() would silently drop — the opposite of the documented carry-over;
+        a regression trap under the declared correctness/regression_risk/
+        maintainability goals. Source finding context: Make the comment state
+        the true semantics (flush is synchronous; nothing can interleave; if it
+        ever becomes async, interleaved enqueues would be dropped by clear() —
+        preserve them explicitly), or implement real carry-over by iterating a
+        snapshot and deleting only flushed entries so the comment becomes true.
+        Source finding context: round1/semantics.md#finding-1 Source finding
+        context: Correctness, regression risk, and maintainability of the
+        documented reset/carry-over contract. Source finding context: Maintainer
+        reliance on the carry-over guarantee, or any future refactor that makes
+        the described interleaving reachable. Source finding context: Documented
+        guarantee is unexhibitable today and inverted (silent drop) under the
+        only conditions where it would matter. Source finding context: The
+        comment asserts a behavioral guarantee about a hypothetical interleaving
+        window between the close check (line 32) and the reset (line 39) that
+        the synchronous execution model makes unreachable, while clear() inverts
+        the promised outcome if it ever became reachable. Source finding
+        context: The carry-over comment does not match this.pending.clear(),
+        which unconditionally discards every entry regardless of when it was
+        enqueued. Source finding context: The guarantee was written over an
+        unreachable interleaving point (synchronous flush, no
+        await/callback/iterator hand-off between lines 32 and 39) with no
+        implementing mechanism, so it is vacuous today and inverted under any
+        future reachability."
+      problem_definition: The carry-over comment (lines 37-38) asserts a behavioral
+        guarantee over an interleaving window between the close check (line 32)
+        and the reset (line 39) that the synchronous execution model makes
+        unreachable, while this.pending.clear() would unconditionally discard
+        such items if the point ever became reachable — the documented contract
+        is false as written and inverts the actual failure mode.
+      issue_statement: "The comment 'Notifications enqueued between the window close
+        check and this reset are carried into the next window' (lines 37-38)
+        does not match this.pending.clear() (line 39), which would
+        unconditionally discard such notifications; the documented contract is
+        false as written and inverts the actual failure mode. Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-39 Source finding context: The comment
+        'Notifications enqueued between the window close check and this reset
+        are carried into the next window' (lines 37-38) does not match the
+        behavior of this.pending.clear() (line 39), which would unconditionally
+        discard such notifications; the documented contract is false as written
+        and inverts the actual failure mode. Source finding context: Semantics
+        lens found the documented contract false as written: the guarantee
+        describes an interleaving point that synchronous flush makes
+        unreachable, and under any future condition where it became reachable
+        clear() would silently drop — the opposite of the documented carry-over;
+        a regression trap under the declared correctness/regression_risk/
+        maintainability goals. Source finding context: Make the comment state
+        the true semantics (flush is synchronous; nothing can interleave; if it
+        ever becomes async, interleaved enqueues would be dropped by clear() —
+        preserve them explicitly), or implement real carry-over by iterating a
+        snapshot and deleting only flushed entries so the comment becomes true.
+        Source finding context: round1/semantics.md#finding-1 Source finding
+        context: Correctness, regression risk, and maintainability of the
+        documented reset/carry-over contract. Source finding context: Maintainer
+        reliance on the carry-over guarantee, or any future refactor that makes
+        the described interleaving reachable. Source finding context: Documented
+        guarantee is unexhibitable today and inverted (silent drop) under the
+        only conditions where it would matter. Source finding context: The
+        comment asserts a behavioral guarantee about a hypothetical interleaving
+        window between the close check (line 32) and the reset (line 39) that
+        the synchronous execution model makes unreachable, while clear() inverts
+        the promised outcome if it ever became reachable. Source finding
+        context: The carry-over comment does not match this.pending.clear(),
+        which unconditionally discards every entry regardless of when it was
+        enqueued. Source finding context: The guarantee was written over an
+        unreachable interleaving point (synchronous flush, no
+        await/callback/iterator hand-off between lines 32 and 39) with no
+        implementing mechanism, so it is vacuous today and inverted under any
+        future reachability."
+      issue_role: independent_issue
+      timing_class: next_step_blocker
+      closure_class: fix_now
+      closure_obligation: must_close_in_target
+      judgment_state: observed
+    - issue_id: issue-011
+      severity: medium
+      material: true
+      affected_purpose: "Review goals `correctness` and `maintainability` under the
+        requested time-source-semantics focus: the documented 30-second window
+        semantics (WINDOW_MS) and the documented meaning of the enqueuedAt
+        contract field. Source finding context: Correctness of the documented
+        30-second window semantics (WINDOW_MS) in the time-source-semantics
+        focus area. Source finding context: Correctness and maintainability of
+        the enqueuedAt field contract and downstream consumers that would trust
+        its documented meaning."
+      failure_condition: "A caller using injected, fake, or skewed time for flush's
+        now — the closure subtraction at line 32 becomes a cross-clock artifact
+        — and any consumer trusting enqueuedAt as actual batch-entry time
+        (metrics, ordering, expiry) while callers populate it pre-enqueue.
+        Source finding context: Caller time source differs from Date.now() —
+        injected/fake clocks or skewed clocks. Source finding context: Consumers
+        using enqueuedAt as actual batch-entry time (metrics, ordering, expiry)
+        while callers populate it pre-enqueue."
+      impact: "The window never closes, closes immediately, or stays open indefinitely
+        — the named 30-second contract is unkeepable across clocks — and the
+        only per-item time fact carries a documented meaning that no behavior
+        establishes or verifies. Source finding context: Window-close semantics
+        are undefined across clocks; the named 30-second contract is unkeepable.
+        Source finding context: Documented fact is establishable only by the
+        batcher, which never establishes or reads it — the contract is
+        unverified by any behavior."
+      evidence_refs:
+        - round1/semantics.md#finding-2
+        - round1/semantics.md#finding-3
+      source_lens_ids:
+        - semantics
+      action_candidates: &a8
+        - fix_before_release
+        - accept_risk
+        - fix_now
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed, with medium root confidence and an accepted
+        built-in refutation condition — clock unification alone leaving
+        finding-012 intact would refute the common root (inferred). Classified
+        root_cause because rel-006 pairs findings 011 and 012 under the compound
+        batcher-owns-no-time-fact root and dep-002/dep-003 record it as shared
+        cause with issue-001 and issue-005. Impact lands on the declared
+        correctness goal for the named 30-second window semantics. Closure
+        requires the single-time-authority designation plus the
+        stamp-enqueuedAt-or-redocument choice (needs_decision); that decision is
+        instantiated by the in-target fixes of issues 001/005
+        (must_close_in_target), while its own residual bite beyond those highs
+        is medium (next_step_blocker). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: windowStartedAt
+        is written from the internal wall clock Date.now() (line 20) but
+        compared against the caller-supplied now parameter (lines 30-32); the
+        name now implies the same timebase but no contract binds the two clocks,
+        so WINDOW_MS does not denote 30 seconds of any single clock. Source
+        finding context: Semantics lens found `now` is a homonym across two
+        unrelated clocks: the parameter name semantically asserts one shared
+        notion of now while the class holds no single time authority — directly
+        violating the request focus on time-source semantics and the correctness
+        goal. Source finding context: Pick one time authority: either accept now
+        everywhere (add a now or injected-clock argument to enqueue and set
+        windowStartedAt from it) or use Date.now() everywhere and drop the now
+        parameter from flush; if the parameter is kept, document the
+        precondition that now must come from the same epoch-ms clock as
+        Date.now(). Source finding context: round1/semantics.md#finding-2 Source
+        finding context: Correctness of the documented 30-second window
+        semantics (WINDOW_MS) in the time-source-semantics focus area. Source
+        finding context: Caller time source differs from Date.now() —
+        injected/fake clocks or skewed clocks. Source finding context:
+        Window-close semantics are undefined across clocks; the named 30-second
+        contract is unkeepable. Source finding context: The class holds no
+        single time authority: line 20 hardcodes Date.now() while line 30
+        delegates time to the caller, and no statement of the shared-clock
+        precondition exists on the interface. Source finding context: WINDOW_MS
+        does not denote 30 seconds of any single clock: the closure subtraction
+        mixes the internal wall-clock anchor with whatever value the caller
+        passes as now. Source finding context: No single time authority exists
+        in the class and the parameter name now falsely asserts a shared
+        timebase, so nothing binds the two operands of the closure subtraction
+        to one clock. Source finding context: notification-batcher.ts:8-9,19-24
+        Source finding context: enqueuedAt is documented as 'Epoch ms when the
+        notification entered the batch' (line 8), but enqueue (lines 19-24)
+        neither assigns nor validates it and no code in the target reads it; the
+        value is caller-supplied before the notification has entered any batch,
+        so the name/doc asserts a fact only the batcher could establish. Source
+        finding context: Semantics lens found the field's documented meaning
+        diverges from its actual provenance: batch-entry semantics are assigned
+        to a value constructed before enqueue, the per-item batch-entry time is
+        captured nowhere, and the documented meaning is verified by no behavior;
+        ontological note: PendingNotification is a phase-named sortal applied to
+        pre-enqueue (not yet pending) values. Source finding context: Make the
+        batcher own the timestamp: have enqueue accept {userId, body} and stamp
+        enqueuedAt itself from the single time authority chosen for finding-011,
+        storing the enriched record internally; or if caller-supplied time is
+        intentional, rename/re-document the field to its true provenance (e.g.
+        createdAt) and either use it or remove it from this contract. Source
+        finding context: round1/semantics.md#finding-3 Source finding context:
+        Correctness and maintainability of the enqueuedAt field contract and
+        downstream consumers that would trust its documented meaning. Source
+        finding context: Consumers using enqueuedAt as actual batch-entry time
+        (metrics, ordering, expiry) while callers populate it pre-enqueue.
+        Source finding context: Documented fact is establishable only by the
+        batcher, which never establishes or reads it — the contract is
+        unverified by any behavior. Source finding context: The field
+        documentation assigns batch-entry semantics to a value constructed by
+        the caller before enqueue is invoked; the only component that could
+        truthfully populate it (the batcher, at the enqueue site) does not.
+        Source finding context: enqueuedAt is documented as the batch-entry
+        instant but is never assigned, validated, or read by the batcher; the
+        only entry-time fact recorded is windowStartedAt, a different concept.
+        Source finding context: Batch-entry semantics were assigned to a
+        caller-constructed pre-enqueue value that the caller cannot truthfully
+        populate as documented, and the batcher never stamps it at the enqueue
+        site."
+      problem_definition: "The batcher owns no time fact: the window anchor, the
+        closure input, and the documented batch-entry timestamp are all sourced
+        from ambient or caller-chosen clocks that the batcher neither
+        establishes nor validates, so neither WINDOW_MS nor enqueuedAt denotes
+        what its name and documentation assert — time ownership is undesigned in
+        the class."
+      issue_statement: "windowStartedAt is written from the internal wall clock
+        Date.now() (line 20) but compared against the caller-supplied now (lines
+        30-32) with no contract binding the two clocks, and enqueuedAt's
+        documented batch-entry meaning (line 8) is delegated to callers
+        pre-enqueue and never established, validated, or read by the batcher —
+        time ownership is undesigned in the class, so neither WINDOW_MS nor
+        enqueuedAt denotes what its name and documentation assert. Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: windowStartedAt
+        is written from the internal wall clock Date.now() (line 20) but
+        compared against the caller-supplied now parameter (lines 30-32); the
+        name now implies the same timebase but no contract binds the two clocks,
+        so WINDOW_MS does not denote 30 seconds of any single clock. Source
+        finding context: Semantics lens found `now` is a homonym across two
+        unrelated clocks: the parameter name semantically asserts one shared
+        notion of now while the class holds no single time authority — directly
+        violating the request focus on time-source semantics and the correctness
+        goal. Source finding context: Pick one time authority: either accept now
+        everywhere (add a now or injected-clock argument to enqueue and set
+        windowStartedAt from it) or use Date.now() everywhere and drop the now
+        parameter from flush; if the parameter is kept, document the
+        precondition that now must come from the same epoch-ms clock as
+        Date.now(). Source finding context: round1/semantics.md#finding-2 Source
+        finding context: Correctness of the documented 30-second window
+        semantics (WINDOW_MS) in the time-source-semantics focus area. Source
+        finding context: Caller time source differs from Date.now() —
+        injected/fake clocks or skewed clocks. Source finding context:
+        Window-close semantics are undefined across clocks; the named 30-second
+        contract is unkeepable. Source finding context: The class holds no
+        single time authority: line 20 hardcodes Date.now() while line 30
+        delegates time to the caller, and no statement of the shared-clock
+        precondition exists on the interface. Source finding context: WINDOW_MS
+        does not denote 30 seconds of any single clock: the closure subtraction
+        mixes the internal wall-clock anchor with whatever value the caller
+        passes as now. Source finding context: No single time authority exists
+        in the class and the parameter name now falsely asserts a shared
+        timebase, so nothing binds the two operands of the closure subtraction
+        to one clock. Source finding context: notification-batcher.ts:8-9,19-24
+        Source finding context: enqueuedAt is documented as 'Epoch ms when the
+        notification entered the batch' (line 8), but enqueue (lines 19-24)
+        neither assigns nor validates it and no code in the target reads it; the
+        value is caller-supplied before the notification has entered any batch,
+        so the name/doc asserts a fact only the batcher could establish. Source
+        finding context: Semantics lens found the field's documented meaning
+        diverges from its actual provenance: batch-entry semantics are assigned
+        to a value constructed before enqueue, the per-item batch-entry time is
+        captured nowhere, and the documented meaning is verified by no behavior;
+        ontological note: PendingNotification is a phase-named sortal applied to
+        pre-enqueue (not yet pending) values. Source finding context: Make the
+        batcher own the timestamp: have enqueue accept {userId, body} and stamp
+        enqueuedAt itself from the single time authority chosen for finding-011,
+        storing the enriched record internally; or if caller-supplied time is
+        intentional, rename/re-document the field to its true provenance (e.g.
+        createdAt) and either use it or remove it from this contract. Source
+        finding context: round1/semantics.md#finding-3 Source finding context:
+        Correctness and maintainability of the enqueuedAt field contract and
+        downstream consumers that would trust its documented meaning. Source
+        finding context: Consumers using enqueuedAt as actual batch-entry time
+        (metrics, ordering, expiry) while callers populate it pre-enqueue.
+        Source finding context: Documented fact is establishable only by the
+        batcher, which never establishes or reads it — the contract is
+        unverified by any behavior. Source finding context: The field
+        documentation assigns batch-entry semantics to a value constructed by
+        the caller before enqueue is invoked; the only component that could
+        truthfully populate it (the batcher, at the enqueue site) does not.
+        Source finding context: enqueuedAt is documented as the batch-entry
+        instant but is never assigned, validated, or read by the batcher; the
+        only entry-time fact recorded is windowStartedAt, a different concept.
+        Source finding context: Batch-entry semantics were assigned to a
+        caller-constructed pre-enqueue value that the caller cannot truthfully
+        populate as documented, and the batcher never stamps it at the enqueue
+        site."
+      issue_role: root_cause
+      timing_class: next_step_blocker
+      closure_class: needs_decision
+      closure_obligation: must_close_in_target
+      judgment_state: inferred
+  non_material_findings:
+    - issue_id: issue-003
+      severity: low
+      material: false
+      affected_purpose: Verifiability and maintainability of the flush return-value
+        protocol documentation.
+      failure_condition: "The no-window state (windowStartedAt === null): nothing
+        enqueued yet, or immediately after a flush."
+      impact: A polling caller cannot distinguish 'still batching' from 'idle' via the
+        documented protocol; the stated rule is formally false in a reachable
+        state, though behaviorally benign for pure polling loops.
+      evidence_refs:
+        - round1/logic.md#finding-l3
+      source_lens_ids:
+        - logic
+      action_candidates: &a9
+        - follow_up
+      rationale: "Low severity, non-material per the material-severity candidate
+        boundary; unanimous stances; skipped from deliberation as
+        non_material_issue. The doc rule's falsity in the windowStartedAt ===
+        null state is directly traceable in the code path (observed) and is a
+        doc-protocol inconsistency that is behaviorally benign for pure polling
+        callers. No relation connects finding-003 to any other finding
+        (independent_issue). Narrowing the documentation to cover both
+        empty-return states closes it (document_only) and can ride along the
+        material doc corrections (planned_follow_up,
+        may_close_during_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:28, notification-batcher.ts:31 Source finding
+        context: The documented interpretation rule 'an empty array means window
+        still open' is contradicted by the no-window state: when windowStartedAt
+        is null (nothing enqueued, or just flushed), flush returns [] although
+        no window exists, so the conditional rule 'empty implies window still
+        open' is false in a reachable state. Source finding context: Logic lens
+        found the doc-level conditional C5 (empty return implies open window)
+        violated by the reachable no-window state at line 31 — a formal
+        contract-vs-behavior inconsistency in the return-value protocol, kept
+        surface-only per severity (behaviorally benign for pure polling loops).
+        Source finding context: Either narrow the doc ('an empty array means
+        there is nothing ready to flush — the window is still open or no
+        notifications are pending') or split the protocol (e.g. null for
+        no-window vs [] for window-open) if callers need to distinguish the
+        states. Source finding context: round1/logic.md#finding-l3"
+      problem_definition: The flush return-value protocol overloads [] across two
+        distinct reachable states (no window exists vs window still open) while
+        the documentation at line 28 asserts a single meaning, making the
+        documented rule false in the reachable no-window state (windowStartedAt
+        === null).
+      issue_statement: "The documented rule 'an empty array means window still open'
+        (line 28) is false in the reachable no-window state (windowStartedAt ===
+        null), where flush also returns [] although no window exists. Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:28, notification-batcher.ts:31 Source finding
+        context: The documented interpretation rule 'an empty array means window
+        still open' is contradicted by the no-window state: when windowStartedAt
+        is null (nothing enqueued, or just flushed), flush returns [] although
+        no window exists, so the conditional rule 'empty implies window still
+        open' is false in a reachable state. Source finding context: Logic lens
+        found the doc-level conditional C5 (empty return implies open window)
+        violated by the reachable no-window state at line 31 — a formal
+        contract-vs-behavior inconsistency in the return-value protocol, kept
+        surface-only per severity (behaviorally benign for pure polling loops).
+        Source finding context: Either narrow the doc ('an empty array means
+        there is nothing ready to flush — the window is still open or no
+        notifications are pending') or split the protocol (e.g. null for
+        no-window vs [] for window-open) if callers need to distinguish the
+        states. Source finding context: round1/logic.md#finding-l3"
+      issue_role: independent_issue
+      timing_class: planned_follow_up
+      closure_class: document_only
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+    - issue_id: issue-004
+      severity: low
+      material: false
+      affected_purpose: Correctness and maintainability of the PendingNotification
+        interface definition under the time-source-semantics focus.
+      failure_condition: Any caller that populates enqueuedAt with a value other than
+        Date.now() at the moment of the enqueue call — permitted by the declared
+        contract.
+      impact: Two definitions of one instant may silently diverge; the divergence is
+        latent (no current reader of enqueuedAt) but undermines the documented
+        meaning of the contract field.
+      evidence_refs:
+        - round1/logic.md#finding-l4
+      source_lens_ids:
+        - logic
+      action_candidates: &a10
+        - follow_up
+        - accept_risk
+      rationale: "Low severity, non-material, latent — no current reader of enqueuedAt
+        exists; unanimous stances; skipped as non_material_issue. The
+        definitional failure arises only under permitted-but-unexercised caller
+        inputs (inferred) and is a contract-field consistency defect. Classified
+        symptom because the recorded semantics stance states the deeper
+        time-ownership root is carried separately by issue-011, even though no
+        graph relation licenses a merge. The pick-one-authority action is a
+        decision (make enqueuedAt load-bearing vs remove it) that resolves
+        naturally alongside issue-011's authority designation (needs_decision,
+        planned_follow_up, may_close_during_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9, notification-batcher.ts:20 Source finding
+        context: C2 defines enqueuedAt as 'Epoch ms when the notification
+        entered the batch', yet enqueue records the same event instant
+        independently via Date.now() and never consults enqueuedAt anywhere; the
+        definition holds only under the undeclared necessary condition that
+        callers pass Date.now() at call time, so the model permits states in
+        which the field's definition is false. Source finding context: Logic
+        lens found two recordings purporting to denote the first-enqueue instant
+        (caller-supplied enqueuedAt vs internally sampled windowStartedAt) with
+        no reconciliation rule — a definitional inconsistency in time-source
+        semantics; latent rather than active since no behavior currently reads
+        the field, kept surface-only per severity. Source finding context: Pick
+        one authority for the batch-entry instant: use item.enqueuedAt to start
+        the window (making the field load-bearing, aligning with the finding-001
+        single-authority fix), or remove the field from the required interface
+        if the batcher is the time authority; document the chosen authority on
+        the interface. Source finding context: round1/logic.md#finding-l4"
+      problem_definition: Two recordings purport to denote the batch-entry instant —
+        the caller-supplied enqueuedAt field (lines 8-9) and the internally
+        sampled windowStartedAt (line 20) — with no reconciliation rule or
+        designated authority, so the field's documented definition holds only
+        under the undeclared convention that callers pass Date.now() at call
+        time and is latently false for permitted inputs.
+      issue_statement: "enqueuedAt is defined as 'Epoch ms when the notification
+        entered the batch' yet enqueue records the same instant independently
+        via Date.now() and never consults enqueuedAt, so the model permits
+        states in which the field's definition is false. Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9, notification-batcher.ts:20 Source finding
+        context: C2 defines enqueuedAt as 'Epoch ms when the notification
+        entered the batch', yet enqueue records the same event instant
+        independently via Date.now() and never consults enqueuedAt anywhere; the
+        definition holds only under the undeclared necessary condition that
+        callers pass Date.now() at call time, so the model permits states in
+        which the field's definition is false. Source finding context: Logic
+        lens found two recordings purporting to denote the first-enqueue instant
+        (caller-supplied enqueuedAt vs internally sampled windowStartedAt) with
+        no reconciliation rule — a definitional inconsistency in time-source
+        semantics; latent rather than active since no behavior currently reads
+        the field, kept surface-only per severity. Source finding context: Pick
+        one authority for the batch-entry instant: use item.enqueuedAt to start
+        the window (making the field load-bearing, aligning with the finding-001
+        single-authority fix), or remove the field from the required interface
+        if the batcher is the time authority; document the chosen authority on
+        the interface. Source finding context: round1/logic.md#finding-l4"
+      issue_role: symptom
+      timing_class: planned_follow_up
+      closure_class: needs_decision
+      closure_obligation: may_close_during_next_stage
+      judgment_state: inferred
+    - issue_id: issue-008
+      severity: low
+      material: false
+      affected_purpose: "Review goal `verifiability`: reconstructability of past batch
+        state and verifiability of the carry-over comment."
+      failure_condition: Any post-hoc attempt to verify what a flushed window
+        contained or when items were delivered — state is destroyed at flush
+        with nothing persisted.
+      impact: Past windows cannot be reconstructed and the documented carry-over
+        assertion can never be checked against evidence.
+      evidence_refs:
+        - round1/coverage.md#finding-4
+      source_lens_ids:
+        - coverage
+      action_candidates: &a11
+        - follow_up
+        - accept_risk
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. Both premises — enqueuedAt is read by nothing and
+        flush persists nothing — are directly checkable in the target
+        (observed). The deficit is scoped to the declared verifiability goal,
+        i.e. reconstructability and auditability of delivered batches
+        (governance_value). No relation connects finding-008 to any other
+        finding (independent_issue). The remedy admits two distinct paths
+        (remove the contract field vs give it a consumer and report flush
+        metadata), so needs_decision, scheduled as planned_follow_up with
+        planned_later obligation under the bounded_partial closure level. Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9,35,37-38 Source finding context: enqueuedAt
+        is a documented contract field but is never read; digests carry only
+        bodies and flush leaves no record of what was delivered when, so past
+        batch state cannot be reconstructed and the carry-over comment is
+        unverifiable. Source finding context: Coverage lens dimensional-deficit
+        check: the temporal axis is declared at input but absent on the
+        output/history side — declared temporality with no history/evidence
+        counterpart, bearing on the declared verifiability goal; kept
+        surface-level per severity. Source finding context: Either remove
+        enqueuedAt from the contract or use it (order digest lines by it,
+        include timestamps in the digest, or expose flushed-batch metadata); at
+        minimum have flush return or report enough metadata (window start, item
+        counts) that delivered batches are verifiable. Source finding context:
+        round1/coverage.md#finding-4"
+      problem_definition: The temporal axis is declared on the input side (enqueuedAt)
+        but has no output or history counterpart — the field is never read,
+        digests carry only bodies, and flush destroys state without persisting
+        any record — so past batch state cannot be reconstructed and the
+        carry-over comment can never be checked against evidence.
+      issue_statement: "enqueuedAt is a documented contract field that is never read,
+        and flush leaves no record of what was delivered when, so past batch
+        state cannot be reconstructed and the carry-over comment cannot be
+        checked against evidence. Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9,35,37-38 Source finding context: enqueuedAt
+        is a documented contract field but is never read; digests carry only
+        bodies and flush leaves no record of what was delivered when, so past
+        batch state cannot be reconstructed and the carry-over comment is
+        unverifiable. Source finding context: Coverage lens dimensional-deficit
+        check: the temporal axis is declared at input but absent on the
+        output/history side — declared temporality with no history/evidence
+        counterpart, bearing on the declared verifiability goal; kept
+        surface-level per severity. Source finding context: Either remove
+        enqueuedAt from the contract or use it (order digest lines by it,
+        include timestamps in the digest, or expose flushed-batch metadata); at
+        minimum have flush return or report enough metadata (window start, item
+        counts) that delivered batches are verifiable. Source finding context:
+        round1/coverage.md#finding-4"
+      issue_role: independent_issue
+      timing_class: planned_follow_up
+      closure_class: needs_decision
+      closure_obligation: planned_later
+      judgment_state: observed
+    - issue_id: issue-009
+      severity: low
+      material: false
+      affected_purpose: "Review goals `verifiability` and `regression_risk`:
+        operational detectability of the poll-stall failure mode."
+      failure_condition: Polling stops or slows while items age in pending — the
+        existing metric reports user breadth only and cannot reveal volume or
+        staleness.
+      impact: The system's characteristic failure mode (items aging indefinitely) is
+        invisible to operators through the provided monitoring surface.
+      evidence_refs:
+        - round1/coverage.md#finding-5
+      source_lens_ids:
+        - coverage
+      action_candidates: &a12
+        - follow_up
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. Undetectability is a valid inference from the
+        metric's type — for any fixed pendingUserCount there exist states with
+        arbitrarily many or arbitrarily old pending items (inferred). The gap is
+        missing monitoring dimensions (pending-item count, oldest-pending-age),
+        an operability gap rather than a correctness defect (completeness). No
+        relation connects finding-009 to any other finding (independent_issue).
+        Adding the accessors is concrete backlog work carried beyond this review
+        (carry_forward, planned_follow_up, planned_later). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:28,44-47 Source finding context: Monitoring
+        covers only the user-count dimension (pendingUserCount); there is no
+        pending-item count and no oldest-pending-age metric, so a stalled poll
+        loop — the failure mode the poll-driven contract makes possible — is
+        undetectable. Source finding context: Coverage lens
+        observability-dimension check: concept distribution in the monitoring
+        sub-area is skewed toward the one dimension (user breadth) that cannot
+        detect the characteristic poll-stall failure mode; kept surface-level
+        per severity. Source finding context: Add pendingItemCount() and an
+        oldest-age accessor (which would also give enqueuedAt a consumer, see
+        finding-008) so operators can alert on aging pending notifications.
+        Source finding context: round1/coverage.md#finding-5"
+      problem_definition: Monitoring concept distribution is skewed to the one
+        dimension — user breadth via pendingUserCount — that is formally
+        invariant to pending-item volume and age, so the contract's
+        characteristic poll-stall failure mode (items aging indefinitely) is
+        undetectable through the provided monitoring surface.
+      issue_statement: "Monitoring covers only the user-count dimension
+        (pendingUserCount); there is no pending-item count and no
+        oldest-pending-age metric, so a stalled poll loop — the failure mode the
+        poll-driven contract makes possible — is undetectable. Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:28,44-47 Source finding context: Coverage lens
+        observability-dimension check: concept distribution in the monitoring
+        sub-area is skewed toward the one dimension (user breadth) that cannot
+        detect the characteristic poll-stall failure mode; kept surface-level
+        per severity. Source finding context: Add pendingItemCount() and an
+        oldest-age accessor (which would also give enqueuedAt a consumer, see
+        finding-008) so operators can alert on aging pending notifications.
+        Source finding context: round1/coverage.md#finding-5"
+      issue_role: independent_issue
+      timing_class: planned_follow_up
+      closure_class: carry_forward
+      closure_obligation: planned_later
+      judgment_state: inferred
+    - issue_id: issue-012
+      severity: low
+      material: false
+      affected_purpose: "Review goal `maintainability`: name-vs-behavior fit of the
+        flush API surface and its return-value documentation."
+      failure_condition: Readers or callers relying on the conventional meaning of
+        flush, the documented single meaning of [], or strict window-bounded
+        digest membership.
+      impact: Names and docs overpromise relative to behavior, inviting incorrect
+        caller assumptions, though the behavior itself is consistent for polling
+        use.
+      evidence_refs:
+        - round1/semantics.md#finding-4
+      source_lens_ids:
+        - semantics
+      action_candidates: &a13
+        - follow_up
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. The name/doc overpromise is directly readable from
+        the surface inventory (observed), and the behavior itself is internally
+        consistent for polling use, so the impact is name-vs-behavior fit of the
+        API surface (maintainability_evolvability). No relation connects
+        finding-013 to any other finding (independent_issue). Re-documenting the
+        conditional-poll semantics, the two empty-return guard states, and the
+        late-item absorption rule closes it without behavior change
+        (document_only) and can ride along the related doc corrections
+        (planned_follow_up, may_close_during_next_stage). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:26-32 Source finding context: flush
+        conventionally means 'force out pending content', but this method is a
+        conditional poll that usually returns []; the doc 'an empty array means
+        window still open' (line 28) is also inaccurate because [] is equally
+        returned when no window exists at all (line 31), and items enqueued
+        after the window elapsed but before the poll are absorbed into the
+        closing digest, loosening the documented 'when the batch window closes'
+        semantics (lines 2-3). Source finding context: Semantics lens surface
+        naming/doc finding: the name and docs claim stricter semantics than the
+        behavior provides (unconditional flush vs conditional poll; single
+        meaning for [] vs two guard states; window-bounded membership vs
+        poll-time membership); kept surface-level per severity. Source finding
+        context: Rename to poll-style (pollDigests, flushIfWindowClosed) or
+        document the conditional behavior; correct the doc to 'an empty array
+        means no closed window is ready (no window started, or window still
+        open)'; either state that late items ride the closing digest or filter
+        membership by window if strict windowing is intended. Source finding
+        context: round1/semantics.md#finding-4"
+      problem_definition: The flush name and its documentation claim stricter
+        semantics than the behavior provides — unconditional force-out vs
+        window-gated conditional poll, a single documented meaning for [] vs two
+        guard states, and window-bounded digest membership vs poll-time
+        membership — inviting incorrect caller assumptions although the behavior
+        is internally consistent for polling use.
+      issue_statement: "flush conventionally means 'force out pending content' but the
+        method is a conditional poll that usually returns []; the empty-return
+        doc is inaccurate for the no-window state, and items enqueued after the
+        window elapsed but before the poll are absorbed into the closing digest,
+        loosening the documented window semantics. Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:26-32 Source finding context: flush
+        conventionally means 'force out pending content', but this method is a
+        conditional poll that usually returns []; the doc 'an empty array means
+        window still open' (line 28) is also inaccurate because [] is equally
+        returned when no window exists at all (line 31), and items enqueued
+        after the window elapsed but before the poll are absorbed into the
+        closing digest, loosening the documented 'when the batch window closes'
+        semantics (lines 2-3). Source finding context: Semantics lens surface
+        naming/doc finding: the name and docs claim stricter semantics than the
+        behavior provides (unconditional flush vs conditional poll; single
+        meaning for [] vs two guard states; window-bounded membership vs
+        poll-time membership); kept surface-level per severity. Source finding
+        context: Rename to poll-style (pollDigests, flushIfWindowClosed) or
+        document the conditional behavior; correct the doc to 'an empty array
+        means no closed window is ready (no window started, or window still
+        open)'; either state that late items ride the closing digest or filter
+        membership by window if strict windowing is intended. Source finding
+        context: round1/semantics.md#finding-4"
+      issue_role: independent_issue
+      timing_class: planned_follow_up
+      closure_class: document_only
+      closure_obligation: may_close_during_next_stage
+      judgment_state: observed
+  action_candidates:
+    - issue_id: issue-001
+      candidates: *a2
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "High-severity material candidate with unanimous
+        support/accepts/keeps stances and a no-deliberation-needed resolution.
+        Classified symptom rather than root_cause because the closure
+        contradiction is the manifestation of the absent inter-clock binding
+        carried as shared cause by issue-005 (dep-001) and issue-011 (dep-002).
+        The violation is a deductive derivation over permitted inputs rather
+        than a directly observed runtime failure (inferred); it breaks the
+        declared correctness goal on the core C4 flush contract inside the
+        requested time-source-semantics focus (current_blocker), and binding
+        both closure operands to one declared clock authority is achievable
+        within the single-file target (fix_now, must_close_in_target). Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:20, notification-batcher.ts:30-32 Source finding
+        context: The window-closed predicate compares a caller-supplied clock
+        (`now`) against an internally sampled ambient clock (`Date.now()`); the
+        rule set is jointly satisfiable only under an undeclared necessary
+        condition that both values come from the same epoch-ms clock, so C4
+        ('flushes when the window has closed') is violated for permitted inputs.
+        Source finding context: Logic lens found an inter-claim unsatisfiability
+        (verdict: fail) between C3 (windowStartedAt = Date.now() at enqueue) and
+        C4+C6 (closure computed from caller-supplied now at flush): a necessary
+        shared-clock constraint is treated as merely possible, directly hitting
+        the requested time-source-semantics focus and the correctness review
+        goal. Residual contradiction persists after semantic disambiguation of
+        `now`, so logic holds the primary finding. Source finding context: Use
+        one time authority for the whole window lifecycle: either thread the
+        caller clock through both entry points (enqueue(item, now) or use
+        item.enqueuedAt to start the window), or drop the now parameter and use
+        Date.now() inside flush (providing the test time-injection seam via an
+        injected clock). At minimum document that now must be epoch ms from the
+        same clock as Date.now(). Source finding context:
+        round1/logic.md#finding-l1 Source finding context: Review goal
+        `correctness` and contract C4 (flush on window close) in the declared
+        time-source-semantics focus area. Source finding context: Caller
+        supplies flush(now) from any clock other than the Date.now() epoch-ms
+        timeline; the declared contract permits any number. Source finding
+        context: Window closure becomes never, early, or instant; the declared
+        30s digest behavior is unachievable for permitted inputs, breaking trust
+        in the primary batching contract. Source finding context: The design
+        splits time authority across the two mutating entry points — window
+        start from the ambient clock at enqueue (line 20), window closure from
+        injected time at flush (line 30) — with no claim in the target declaring
+        or enforcing the required inter-clock identity. Source finding context:
+        flush's window-closed predicate (now - windowStartedAt >= WINDOW_MS)
+        subtracts an internally Date.now()-sampled anchor from a caller-supplied
+        now, so closure is wrong whenever the two values are not on one shared
+        epoch-ms clock. Source finding context: Time authority is split across
+        enqueue (ambient Date.now(), line 20) and flush (caller-injected now,
+        line 30) and no declared contract binds the two clocks, so the closure
+        rule's truth depends on an undeclared necessary condition."
+    - issue_id: issue-005
+      candidates: *a3
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "High-severity material candidate, unanimous stances,
+        no-deliberation-needed. Classified root_cause because the absent
+        clock-authority concept is the shared cause (dep-001, dep-003) on which
+        issue-001's closure contradiction rests and which issue-011 reaches from
+        the naming side. The absence is directly verifiable across the file
+        (observed). A cross-clock subtraction can make the window close never,
+        early, or instantly, breaking the declared correctness goal under the
+        requested time-source-semantics focus (current_blocker, correctness);
+        designating a single time authority for anchoring and closure is
+        in-target work (fix_now, must_close_in_target). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: Window-closure
+        decisions mix two undeclared time authorities (internal Date.now() at
+        enqueue vs caller-supplied now at flush) with no single time-source
+        authority concept. Source finding context: Coverage lens flagged a
+        dimensional deficit: one time-dependent value (window age) is
+        parallel-managed across two time sources with no single-origin authority
+        designation anywhere in the file; the request summary explicitly scopes
+        time-source semantics into this review. Source finding context:
+        Designate a single time authority; smallest in-target fix: stop calling
+        Date.now() in enqueue and anchor the window from the same
+        caller-supplied time source (enqueue(item, now) or an injected clock
+        used by both methods), and document on flush that now must come from
+        that same authority. Source finding context:
+        round1/coverage.md#finding-1 Source finding context: Correctness of
+        window-closure decisions; explicitly in-scope time-source semantics.
+        Source finding context: Caller-supplied now from a different epoch or
+        skewed source than the Date.now() anchor. Source finding context: Window
+        closes never, early, or instantly — the core window contract fails under
+        permitted caller behavior. Source finding context: The contract lacks
+        any clock-authority concept: no clock parameter on enqueue and no
+        documented requirement on now's source (absence across lines 18-32).
+        Source finding context: The window closes never, early, or instantly
+        whenever the caller's now diverges from the Date.now() timeline,
+        violating the declared correctness goal. Source finding context: The
+        closure predicate (line 32) is a cross-clock subtraction:
+        windowStartedAt is anchored to the internal wall clock (line 20) while
+        now is caller-supplied (line 30). Source finding context: No
+        clock-authority concept exists in the contract — nothing binds the
+        caller's time source to the internal anchor's source, so the two
+        authorities are free to diverge."
+    - issue_id: issue-002
+      candidates: *a4
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Medium-severity material candidate with unanimous stances, resolved
+        no-deliberation-needed. The joint unsatisfiability of C7 and C8 is a
+        formal derivation (inferred) over a doc-vs-behavior disagreement
+        (consistency). The root (no snapshot mechanism) is self-contained —
+        rel-004 records duplication with issue-010, not a shared root, and the
+        contract licenses merges only via same_root_candidate — so
+        independent_issue. Aligning comment and behavior is local to the target
+        (fix_now, must_close_in_target); the happy path still functions, so it
+        undermines trust in the documented contract rather than blocking current
+        execution (next_step_blocker). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-40, notification-batcher.ts:34-36 Source
+        finding context: The comment claims notifications enqueued between the
+        window-close check and the reset are carried into the next window, but
+        under synchronous execution that interval admits no enqueues (the claim
+        is vacuous), and under the only materially reachable reading (enqueued
+        after the window-close instant, before the flush poll) such items are
+        emitted in the current digest and cleared, never carried over. The
+        documented guarantee and the implemented behavior are not jointly
+        satisfiable. Source finding context: Logic lens found C7 (carry-over
+        guarantee, lines 37-38) and C8 (emit-all-then-clear, lines 34-36,39)
+        jointly unsatisfiable for any item present at flush time: an obligation
+        is asserted over an interval the execution model makes empty, masking a
+        false guarantee in the reachable interpretation — a contract-vs-behavior
+        contradiction under the correctness goal. Source finding context: Make
+        the code and the claim agree: either implement the guarantee by
+        filtering the digest loop to items with enqueuedAt < windowStartedAt +
+        WINDOW_MS and retaining later items in pending, or correct the comment
+        to state actual behavior (all pending notifications at flush time are
+        emitted in this digest; nothing carries over). Source finding context:
+        round1/logic.md#finding-l2 Source finding context: Correctness and
+        regression risk of the documented flush reset contract (carry-over
+        guarantee). Source finding context: Items enqueued after the
+        window-close instant but before the flush poll; any future
+        async/re-entrant refactor of flush. Source finding context: Documented
+        guarantee is unsatisfiable as implemented — items are emitted in the
+        closing digest and wiped by clear(), so the contract misleads
+        maintainers about loss behavior. Source finding context: No code path
+        snapshots window membership at the close instant: the close check (line
+        32) gates timing only while content is taken wholesale at emission time,
+        so the promised carry-over has no mechanism that could implement it.
+        Source finding context: The comment promises carry-over into the next
+        window, but the digest loop emits every pending entry with no timestamp
+        filter and clear() unconditionally removes everything, so nothing is
+        ever carried over. Source finding context: No mechanism snapshots window
+        membership at the close instant — timing and content are decoupled
+        (close check gates when, the loop takes whatever is present) — making
+        the obligated carry-over state unreachable."
+    - issue_id: issue-006
+      candidates: *a5
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. The silent-loss conclusion is a valid inference
+        from the exported surface, not a contradiction of any declared claim
+        (inferred); the defect is a missing lifecycle termination segment
+        (completeness). dep-004 records a shared mid-path cause with issue-007
+        (poll-and-window-gated sole reducer) but the roots and mitigations are
+        distinct, so independent_issue. Closure requires choosing and adding a
+        terminal operation plus a documented caller shutdown obligation — a
+        contract-extension decision (needs_decision) that must land before any
+        next stage relies on loss-free delivery (next_step_blocker,
+        must_close_before_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:30-32,44-47 Source finding context: The
+        pending-notification lifecycle covers enqueue and window-gated flush but
+        has no termination segment (drain/close/dispose); pending items are
+        unreachable at shutdown or poller stop and are silently lost. Source
+        finding context: Coverage lens ghost-sub-area check: lifecycle
+        termination is implied by the batching domain but entirely absent — the
+        only exit path for pending items is a future poll that satisfies the
+        window predicate, a correctness and regression risk inside the declared
+        review goal. Source finding context: Add a terminal operation, e.g.
+        drain(): Array<{ userId: string; digest: string }> that emits digests
+        for all pending items regardless of WINDOW_MS and resets state; document
+        that callers must invoke it on shutdown. Source finding context:
+        round1/coverage.md#finding-2 Source finding context: Correctness and
+        regression risk of notification delivery at end-of-life
+        (shutdown/decommission) paths. Source finding context: Shutdown, poller
+        stop, or decommission with non-empty pending state. Source finding
+        context: Silent data loss of pending notifications with no contract
+        surface acknowledging or mitigating it. Source finding context: No
+        terminal-lifecycle concept exists in the API — the exported surface
+        contains only enqueue, window-gated flush, and pendingUserCount, with no
+        drain/close/force-flush member. Source finding context: At process
+        shutdown, poller failure, or decommission, pending notifications are
+        silently dropped because the poll that would flush them never happens.
+        Source finding context: Every pending item's only exit is a future
+        external poll of flush that also satisfies the WINDOW_MS predicate
+        (lines 28, 32). Source finding context: The API has no
+        terminal-lifecycle operation (drain/close/dispose) anywhere in the class
+        body, so no unconditional exit path exists."
+    - issue_id: issue-007
+      candidates: *a6
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. Unbounded growth follows necessarily from
+        unconditional append plus the poll-and-window-gated sole reducer
+        (inferred); the defect is an absent capacity/overflow/backpressure
+        concept (completeness). Distinct root and mitigation from issue-006
+        despite the shared mid-path cause recorded by dep-004, so
+        independent_issue. Closure requires selecting a documented capacity
+        bound and an explicit overflow policy — reject, drop-oldest, or
+        force-flush — and surfacing overflow to the caller (needs_decision,
+        next_step_blocker, must_close_before_next_stage). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:21-23,32 Source finding context: The pending
+        store grows without bound — no max-size, overflow policy, or
+        backpressure concept exists, while the only reducer (flush) is poll- and
+        window-gated. Source finding context: Coverage lens ghost-sub-area
+        check: the batching domain implies a capacity/overflow sub-area (bounded
+        buffers, drop/force-flush policies) that is entirely absent; combined
+        with the unguarded poll dependency this is a regression and correctness
+        risk within the declared review goal. Source finding context: Add a
+        documented capacity bound (per user and/or total) with an explicit
+        overflow policy — reject, drop-oldest, or force-flush on overflow — and
+        surface overflow occurrences to the caller. Source finding context:
+        round1/coverage.md#finding-3 Source finding context: Correctness and
+        regression risk of resource behavior under sustained enqueue with
+        delayed or absent polling. Source finding context: Stalled or slow
+        poller combined with ongoing enqueues in a long-lived process. Source
+        finding context: Unbounded pending growth — an operational failure mode
+        with no detection or overflow policy in the contract. Source finding
+        context: No capacity concept exists in the contract or implementation
+        (absence across lines 14-48): enqueue has no size check or rejection
+        path and nothing in the file mentions a bound. Source finding context:
+        Pending storage grows without bound when the poller stalls while
+        enqueues continue. Source finding context: The sole reducer of pending
+        is flush, which is conditional on window age (line 32) and on an
+        external caller polling (line 28). Source finding context: No capacity,
+        overflow, or backpressure concept exists anywhere in the contract or
+        implementation, so enqueue appends unconditionally for any number of
+        users and items."
+    - issue_id: issue-010
+      candidates: *a7
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed. The comment-vs-clear() mismatch is directly
+        readable at lines 37-39 (observed) and is a documented-contract
+        consistency defect that licenses a false loss-free assumption — a
+        regression trap for maintainers and any future async refactor. rel-004
+        records it as a duplicate surface of issue-002 without licensing a merge
+        (relation is duplicates, not same_root_candidate), so independent_issue.
+        Aligning the comment with the mechanism (or vice versa) is local to the
+        target (fix_now, must_close_in_target); it endangers maintenance and
+        future change rather than current execution (next_step_blocker). Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:37-39 Source finding context: The comment
+        'Notifications enqueued between the window close check and this reset
+        are carried into the next window' (lines 37-38) does not match the
+        behavior of this.pending.clear() (line 39), which would unconditionally
+        discard such notifications; the documented contract is false as written
+        and inverts the actual failure mode. Source finding context: Semantics
+        lens found the documented contract false as written: the guarantee
+        describes an interleaving point that synchronous flush makes
+        unreachable, and under any future condition where it became reachable
+        clear() would silently drop — the opposite of the documented carry-over;
+        a regression trap under the declared correctness/regression_risk/
+        maintainability goals. Source finding context: Make the comment state
+        the true semantics (flush is synchronous; nothing can interleave; if it
+        ever becomes async, interleaved enqueues would be dropped by clear() —
+        preserve them explicitly), or implement real carry-over by iterating a
+        snapshot and deleting only flushed entries so the comment becomes true.
+        Source finding context: round1/semantics.md#finding-1 Source finding
+        context: Correctness, regression risk, and maintainability of the
+        documented reset/carry-over contract. Source finding context: Maintainer
+        reliance on the carry-over guarantee, or any future refactor that makes
+        the described interleaving reachable. Source finding context: Documented
+        guarantee is unexhibitable today and inverted (silent drop) under the
+        only conditions where it would matter. Source finding context: The
+        comment asserts a behavioral guarantee about a hypothetical interleaving
+        window between the close check (line 32) and the reset (line 39) that
+        the synchronous execution model makes unreachable, while clear() inverts
+        the promised outcome if it ever became reachable. Source finding
+        context: The carry-over comment does not match this.pending.clear(),
+        which unconditionally discards every entry regardless of when it was
+        enqueued. Source finding context: The guarantee was written over an
+        unreachable interleaving point (synchronous flush, no
+        await/callback/iterator hand-off between lines 32 and 39) with no
+        implementing mechanism, so it is vacuous today and inverted under any
+        future reachability."
+    - issue_id: issue-011
+      candidates: *a8
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Medium-severity material candidate, unanimous stances,
+        no-deliberation-needed, with medium root confidence and an accepted
+        built-in refutation condition — clock unification alone leaving
+        finding-012 intact would refute the common root (inferred). Classified
+        root_cause because rel-006 pairs findings 011 and 012 under the compound
+        batcher-owns-no-time-fact root and dep-002/dep-003 record it as shared
+        cause with issue-001 and issue-005. Impact lands on the declared
+        correctness goal for the named 30-second window semantics. Closure
+        requires the single-time-authority designation plus the
+        stamp-enqueuedAt-or-redocument choice (needs_decision); that decision is
+        instantiated by the in-target fixes of issues 001/005
+        (must_close_in_target), while its own residual bite beyond those highs
+        is medium (next_step_blocker). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:20,30-32 Source finding context: windowStartedAt
+        is written from the internal wall clock Date.now() (line 20) but
+        compared against the caller-supplied now parameter (lines 30-32); the
+        name now implies the same timebase but no contract binds the two clocks,
+        so WINDOW_MS does not denote 30 seconds of any single clock. Source
+        finding context: Semantics lens found `now` is a homonym across two
+        unrelated clocks: the parameter name semantically asserts one shared
+        notion of now while the class holds no single time authority — directly
+        violating the request focus on time-source semantics and the correctness
+        goal. Source finding context: Pick one time authority: either accept now
+        everywhere (add a now or injected-clock argument to enqueue and set
+        windowStartedAt from it) or use Date.now() everywhere and drop the now
+        parameter from flush; if the parameter is kept, document the
+        precondition that now must come from the same epoch-ms clock as
+        Date.now(). Source finding context: round1/semantics.md#finding-2 Source
+        finding context: Correctness of the documented 30-second window
+        semantics (WINDOW_MS) in the time-source-semantics focus area. Source
+        finding context: Caller time source differs from Date.now() —
+        injected/fake clocks or skewed clocks. Source finding context:
+        Window-close semantics are undefined across clocks; the named 30-second
+        contract is unkeepable. Source finding context: The class holds no
+        single time authority: line 20 hardcodes Date.now() while line 30
+        delegates time to the caller, and no statement of the shared-clock
+        precondition exists on the interface. Source finding context: WINDOW_MS
+        does not denote 30 seconds of any single clock: the closure subtraction
+        mixes the internal wall-clock anchor with whatever value the caller
+        passes as now. Source finding context: No single time authority exists
+        in the class and the parameter name now falsely asserts a shared
+        timebase, so nothing binds the two operands of the closure subtraction
+        to one clock. Source finding context: notification-batcher.ts:8-9,19-24
+        Source finding context: enqueuedAt is documented as 'Epoch ms when the
+        notification entered the batch' (line 8), but enqueue (lines 19-24)
+        neither assigns nor validates it and no code in the target reads it; the
+        value is caller-supplied before the notification has entered any batch,
+        so the name/doc asserts a fact only the batcher could establish. Source
+        finding context: Semantics lens found the field's documented meaning
+        diverges from its actual provenance: batch-entry semantics are assigned
+        to a value constructed before enqueue, the per-item batch-entry time is
+        captured nowhere, and the documented meaning is verified by no behavior;
+        ontological note: PendingNotification is a phase-named sortal applied to
+        pre-enqueue (not yet pending) values. Source finding context: Make the
+        batcher own the timestamp: have enqueue accept {userId, body} and stamp
+        enqueuedAt itself from the single time authority chosen for finding-011,
+        storing the enriched record internally; or if caller-supplied time is
+        intentional, rename/re-document the field to its true provenance (e.g.
+        createdAt) and either use it or remove it from this contract. Source
+        finding context: round1/semantics.md#finding-3 Source finding context:
+        Correctness and maintainability of the enqueuedAt field contract and
+        downstream consumers that would trust its documented meaning. Source
+        finding context: Consumers using enqueuedAt as actual batch-entry time
+        (metrics, ordering, expiry) while callers populate it pre-enqueue.
+        Source finding context: Documented fact is establishable only by the
+        batcher, which never establishes or reads it — the contract is
+        unverified by any behavior. Source finding context: The field
+        documentation assigns batch-entry semantics to a value constructed by
+        the caller before enqueue is invoked; the only component that could
+        truthfully populate it (the batcher, at the enqueue site) does not.
+        Source finding context: enqueuedAt is documented as the batch-entry
+        instant but is never assigned, validated, or read by the batcher; the
+        only entry-time fact recorded is windowStartedAt, a different concept.
+        Source finding context: Batch-entry semantics were assigned to a
+        caller-constructed pre-enqueue value that the caller cannot truthfully
+        populate as documented, and the batcher never stamps it at the enqueue
+        site."
+    - issue_id: issue-003
+      candidates: *a9
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Low severity, non-material per the material-severity candidate
+        boundary; unanimous stances; skipped from deliberation as
+        non_material_issue. The doc rule's falsity in the windowStartedAt ===
+        null state is directly traceable in the code path (observed) and is a
+        doc-protocol inconsistency that is behaviorally benign for pure polling
+        callers. No relation connects finding-003 to any other finding
+        (independent_issue). Narrowing the documentation to cover both
+        empty-return states closes it (document_only) and can ride along the
+        material doc corrections (planned_follow_up,
+        may_close_during_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:28, notification-batcher.ts:31 Source finding
+        context: The documented interpretation rule 'an empty array means window
+        still open' is contradicted by the no-window state: when windowStartedAt
+        is null (nothing enqueued, or just flushed), flush returns [] although
+        no window exists, so the conditional rule 'empty implies window still
+        open' is false in a reachable state. Source finding context: Logic lens
+        found the doc-level conditional C5 (empty return implies open window)
+        violated by the reachable no-window state at line 31 — a formal
+        contract-vs-behavior inconsistency in the return-value protocol, kept
+        surface-only per severity (behaviorally benign for pure polling loops).
+        Source finding context: Either narrow the doc ('an empty array means
+        there is nothing ready to flush — the window is still open or no
+        notifications are pending') or split the protocol (e.g. null for
+        no-window vs [] for window-open) if callers need to distinguish the
+        states. Source finding context: round1/logic.md#finding-l3"
+    - issue_id: issue-004
+      candidates: *a10
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Low severity, non-material, latent — no current reader of enqueuedAt
+        exists; unanimous stances; skipped as non_material_issue. The
+        definitional failure arises only under permitted-but-unexercised caller
+        inputs (inferred) and is a contract-field consistency defect. Classified
+        symptom because the recorded semantics stance states the deeper
+        time-ownership root is carried separately by issue-011, even though no
+        graph relation licenses a merge. The pick-one-authority action is a
+        decision (make enqueuedAt load-bearing vs remove it) that resolves
+        naturally alongside issue-011's authority designation (needs_decision,
+        planned_follow_up, may_close_during_next_stage). Source finding context:
+        notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9, notification-batcher.ts:20 Source finding
+        context: C2 defines enqueuedAt as 'Epoch ms when the notification
+        entered the batch', yet enqueue records the same event instant
+        independently via Date.now() and never consults enqueuedAt anywhere; the
+        definition holds only under the undeclared necessary condition that
+        callers pass Date.now() at call time, so the model permits states in
+        which the field's definition is false. Source finding context: Logic
+        lens found two recordings purporting to denote the first-enqueue instant
+        (caller-supplied enqueuedAt vs internally sampled windowStartedAt) with
+        no reconciliation rule — a definitional inconsistency in time-source
+        semantics; latent rather than active since no behavior currently reads
+        the field, kept surface-only per severity. Source finding context: Pick
+        one authority for the batch-entry instant: use item.enqueuedAt to start
+        the window (making the field load-bearing, aligning with the finding-001
+        single-authority fix), or remove the field from the required interface
+        if the batcher is the time authority; document the chosen authority on
+        the interface. Source finding context: round1/logic.md#finding-l4"
+    - issue_id: issue-008
+      candidates: *a11
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. Both premises — enqueuedAt is read by nothing and
+        flush persists nothing — are directly checkable in the target
+        (observed). The deficit is scoped to the declared verifiability goal,
+        i.e. reconstructability and auditability of delivered batches
+        (governance_value). No relation connects finding-008 to any other
+        finding (independent_issue). The remedy admits two distinct paths
+        (remove the contract field vs give it a consumer and report flush
+        metadata), so needs_decision, scheduled as planned_follow_up with
+        planned_later obligation under the bounded_partial closure level. Source
+        finding context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:8-9,35,37-38 Source finding context: enqueuedAt
+        is a documented contract field but is never read; digests carry only
+        bodies and flush leaves no record of what was delivered when, so past
+        batch state cannot be reconstructed and the carry-over comment is
+        unverifiable. Source finding context: Coverage lens dimensional-deficit
+        check: the temporal axis is declared at input but absent on the
+        output/history side — declared temporality with no history/evidence
+        counterpart, bearing on the declared verifiability goal; kept
+        surface-level per severity. Source finding context: Either remove
+        enqueuedAt from the contract or use it (order digest lines by it,
+        include timestamps in the digest, or expose flushed-batch metadata); at
+        minimum have flush return or report enough metadata (window start, item
+        counts) that delivered batches are verifiable. Source finding context:
+        round1/coverage.md#finding-4"
+    - issue_id: issue-009
+      candidates: *a12
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. Undetectability is a valid inference from the
+        metric's type — for any fixed pendingUserCount there exist states with
+        arbitrarily many or arbitrarily old pending items (inferred). The gap is
+        missing monitoring dimensions (pending-item count, oldest-pending-age),
+        an operability gap rather than a correctness defect (completeness). No
+        relation connects finding-009 to any other finding (independent_issue).
+        Adding the accessors is concrete backlog work carried beyond this review
+        (carry_forward, planned_follow_up, planned_later). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:28,44-47 Source finding context: Monitoring
+        covers only the user-count dimension (pendingUserCount); there is no
+        pending-item count and no oldest-pending-age metric, so a stalled poll
+        loop — the failure mode the poll-driven contract makes possible — is
+        undetectable. Source finding context: Coverage lens
+        observability-dimension check: concept distribution in the monitoring
+        sub-area is skewed toward the one dimension (user breadth) that cannot
+        detect the characteristic poll-stall failure mode; kept surface-level
+        per severity. Source finding context: Add pendingItemCount() and an
+        oldest-age accessor (which would also give enqueuedAt a consumer, see
+        finding-008) so operators can alert on aging pending notifications.
+        Source finding context: round1/coverage.md#finding-5"
+    - issue_id: issue-012
+      candidates: *a13
+      derivation_refs:
+        - issue-ledger.yaml
+        - problem-framing.yaml
+      rationale: "Low severity, non-material; unanimous stances; skipped as
+        non_material_issue. The name/doc overpromise is directly readable from
+        the surface inventory (observed), and the behavior itself is internally
+        consistent for polling use, so the impact is name-vs-behavior fit of the
+        API surface (maintainability_evolvability). No relation connects
+        finding-013 to any other finding (independent_issue). Re-documenting the
+        conditional-poll semantics, the two empty-return guard states, and the
+        late-item absorption rule closes it without behavior change
+        (document_only) and can ride along the related doc corrections
+        (planned_follow_up, may_close_during_next_stage). Source finding
+        context: notification-batcher.ts Source finding context:
+        notification-batcher.ts:26-32 Source finding context: flush
+        conventionally means 'force out pending content', but this method is a
+        conditional poll that usually returns []; the doc 'an empty array means
+        window still open' (line 28) is also inaccurate because [] is equally
+        returned when no window exists at all (line 31), and items enqueued
+        after the window elapsed but before the poll are absorbed into the
+        closing digest, loosening the documented 'when the batch window closes'
+        semantics (lines 2-3). Source finding context: Semantics lens surface
+        naming/doc finding: the name and docs claim stricter semantics than the
+        behavior provides (unconditional flush vs conditional poll; single
+        meaning for [] vs two guard states; window-bounded membership vs
+        poll-time membership); kept surface-level per severity. Source finding
+        context: Rename to poll-style (pollDigests, flushIfWindowClosed) or
+        document the conditional behavior; correct the doc to 'an empty array
+        means no closed window is ready (no window started, or window still
+        open)'; either state that late items ride the closing digest or filter
+        membership by window if strict windowing is intended. Source finding
+        context: round1/semantics.md#finding-4"
+synthesis_result_ref: .onto/review/20260611-d9760486/synthesis-ledger.yaml
+synthesis_result_sha256: 887777f6d3c108307f6b0a87b5bb6d0cbe0ed818c8f35e37360658a5a6c7441e
+synthesis_output_sha256: 0a811891644828d591a551e0394befdfadfc9199bf0de2c84c8a7ff43e62d176
+deliberation_status: performed
+deliberation_result_ref: .onto/review/20260611-d9760486/deliberation-resolution.yaml
+deliberation_result_sha256: 26b91d95905672826e0622a56cff1c184f4aa366eb1053c0ea4e7c00e3fea141
+final_output_ref: .onto/review/20260611-d9760486/final-output.md
+final_output_sha256: edf4192537ff1c962a11590c44ac851457c0a59576b891950d83c6be45c2131a
+shared_phenomenon_summary: []
