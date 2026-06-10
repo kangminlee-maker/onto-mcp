@@ -1,6 +1,6 @@
 # 4f — A(runtime) 루프의 frontier 엔진 rebase 설계
 
-> 상태: 설계(승인 대기). 기준 코드: `main 19c7f45` (PR #24 머지 후).
+> 상태: **구현 완료(2026-06-10)** — F1–F3 landed, F4/F5 재정의로 종결, F6 landed. 기준 코드: `main 19c7f45` (PR #24 머지 후).
 > 목적: A 경로(`executeReviewPromptExecution`)의 **단계 시퀀싱**(~1.3K행 인라인 오케스트레이션)을 B가 검증한 frontier 엔진(`review-execution-steps.ts`) 위로 동작 보존 strangler 이전. "단일 엔진, 두 운전자"를 코드 수준에서 완성한다.
 > 권위: rank-1 `ReviewOrchestrationOwner`("A·B는 유닛을 누가 실행하나만 다르다 — 단일 공유 구현") — 4f는 이 선언을 루프 차원에서 사실로 만든다.
 
@@ -53,7 +53,7 @@ A (rebase 후) = prepare 산출물 위에서:
 | **F3** | **post-lens 파이프라인을 frontier 루프로 교체**: PRE_DELIBERATION 루프+delib+framing+synthesis 시퀀싱 삭제 → §2 루프(lens 이후만). 취소/halt wrapper 보존 **[landed 9f4cefa — 정제: per-unit 엔진 루프 대신 "stage-routed frontier loop + absorb"(stage handler 본문 무접촉 → 골든 동일 달성). lens 결과를 engine-shape로 시드, absorb는 B와 동일 seat gate, 라우팅은 canonical 우선순위 1-stage/iteration, 미라우팅 stage는 사후 composition-parity 실행, canonical 재정렬, 수렴 가드 3종. mid-run ledger는 부기일 뿐 — 모든 halt/최종 경로가 A의 enriched artifact를 batch-write로 덮어씀]** | F1 골든 동일 + full vitest + conformance |
 | **F4** | **lens 단계 합류**: lens dispatch(flat pool/nested batch)+barrier를 루프의 첫 라운드로. `finalizeStageGate` 직결 **[재정의 — 합류 불채택]** lens는 정의상 stage 0(frontier에 순서 자유도 없음)이고 downstream handler 인자가 lens 구성 산출물(successfulLensDispatches 등)을 continuation에서도 요구 → 루프 합류는 행동 가치 0에 구성 곡예만 추가. barrier 의미론은 이미 Stage 1 4d에서 `computeLensCompletionBarrier` 공유 완료. lens 블록은 pre-loop stage 0으로 유지 | — |
 | **F5** | **continuation을 frontier로**: preserved 시드 주입 → `shouldRunUnit` threading 삭제 **[재정의 — F3가 본질 달성]** continuation의 **순서 결정**은 F3 루프가 frontier로 흡수(continuation 전 스위트 green). 잔존 `shouldRunUnit`/`previousResultsByUnitId`는 시퀀싱이 아니라 **preserved 메타데이터 구성**(이전 결과의 토큰·타이밍 보존) 메커니즘 — 삭제 대상이 아닌 올바른 역할 분리(ordering=frontier, composition=handlers) | continuation 테스트(F3 게이트로 충족) |
-| **F6** | **정리·명문화**: 사문 시퀀싱 삭제, lexicon `ReviewOrchestrationOwner` note 갱신("루프 구현 단일"), 계약 갱신, **live E2E flat+nested 재실행** | 전체 검증 + live `completed` |
+| **F6** | **정리·명문화**: 사문 시퀀싱 삭제, lexicon `ReviewOrchestrationOwner` note 갱신("루프 구현 단일"), 계약 갱신, **live E2E flat+nested 재실행** **[landed]** 사문 없음(F3가 고아 없이 변환), 계약 §1·lexicon v0.45.1 현행화(84a6ca3). live: flat 전체 통과 + nested 리뷰 본체 completed·4단계 nested batch ok — 상세·잠복 ledger 버그 발견/수정(ad48b79)·semantic gate 변동 후속항목은 `development-records/benchmark/20260610-4f-rebase-live-revalidation.md` | 전체 검증 + live `completed` |
 
 규율: 단계별 typecheck+full vitest+골든+정적 4종+커밋. 같은 제약 2회 loopback 시 사용자 범위 확인 (S1·S2와 동일).
 
