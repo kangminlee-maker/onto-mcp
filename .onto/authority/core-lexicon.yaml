@@ -1,4 +1,4 @@
-lexicon_version: "0.44.0"
+lexicon_version: "0.45.0"
 schema_version: "2"
 position: "Prototype-to-service ontology authority for the onto main repository."
 notes:
@@ -760,13 +760,13 @@ entities:
         loop_driver: "external_host"
         unit_dispatch: "host_spawns"
         authority_invariant: "onto_owns_artifact_truth"
-        settings_value: "review.execution.orchestration: host (topology=main-workers 필수)"
+        settings_value: "review.execution.orchestration: host (topology는 main-workers·nested-workers 모두 허용 — roadmap S2에서 host×nested 차단 해제)"
         entry_tools: "onto_prepare_review + onto_review_round / onto_review_advance"
-        notes: "opt-in 경로(B). runtime 세션에 round/advance를 호출하면 fail-closed 거부. Stage 1은 flat(main-workers)·controlled 심의만; nested·subagent·live 심의는 Stage 2/3."
+        notes: "opt-in 경로(B). runtime 세션에 round/advance를 호출하면 fail-closed 거부. flat은 unit별 실행, nested는 라운드 배치를 NestingBatchWorker에 위임. live 심의는 S3."
     distinction_from_route:
       orchestration_locus: "ReviewReasoningUnitExecutionRoute.orchestration_locus는 '한 unit이 어디서 실행되나'(runtime_main/external_worker/direct_runtime_call)를 규정하는 직교 축이다. ReviewOrchestrationOwner는 '리뷰 라운드 루프를 누가 구동하나'를 규정한다. 이름이 비슷하나 결합되지 않는다 — host 세션이라도 각 unit의 execution route(orchestration_locus)는 별개로 선택된다."
     execution_rules_ref:
-      settings_key: "src/core-runtime/discovery/settings-chain.ts (review.execution.orchestration; host ⇒ topology=main-workers superRefine)"
+      settings_key: "src/core-runtime/discovery/settings-chain.ts (review.execution.orchestration; 양 topology와 조합 가능)"
       durable_stamp: "src/core-runtime/review/materializers.ts (session-metadata + execution-plan에 불변 각인)"
       capability_surface_guards: "src/core-runtime/review/orchestration-owner.ts (assertHostOrchestratedSession / assertRuntimeOrchestratedSession)"
       runtime_round_engine: "src/core-runtime/review/review-execution-steps.ts (reviewRound / reviewAdvance + 공유 step 함수: computeReviewFrontier·ensureUnitPacket·validateUnitSeatToResult·mergeUnitResultIntoExecutionResult·finalizeStageGate)"
@@ -776,7 +776,51 @@ entities:
     notes:
       - "prepare가 settings의 orchestration을 세션에 각인하면 생애 불변 — 한 세션은 정확히 한 locus만 구동한다(이중 실행·누수 차단)."
       - "A·B는 '유닛을 누가 실행하나'만 다르다. packet 생성·seat 검증·결과 기록·stage gate·frontier·assemble은 단일 공유 구현(review-execution-steps.ts)을 쓴다."
-      - "Stage 1 범위: deliberation/synthesize 및 runtime-owned issue-artifact(stance-matrix collection, sidecar finding-ledger, issue-ledger completion)의 완전한 host 구동은 후속. reference host mock E2E는 lens→issue-artifact 단계 전진을 증명한다."
+      - "전체 파이프라인 host 구동(compound runtime unit map/reduce 포함)은 PR #22로 완성 — reference host mock E2E가 completed ReviewRecord 도달을 증명한다. nested 라운드 배치는 NestingBatchWorker(S2) 참조."
+
+  NestingBatchWorker:
+    canonical_label: "NestingBatchWorker"
+    korean_label: "네스팅 배치 워커"
+    definition: "nested-workers topology의 실행 계약: outer 워커 하나가 ready unit 배치를 받아 build-time에 전부 interpolate된 literal bash script를 실행해 unit-executor subprocess들을 병렬 fan-out하고, 각 unit의 canonical seat 기록을 보장한 뒤 UNIT_DISPATCH_SUMMARY 한 줄로 배치 요약을 보고한다. brand(codex/claude)와 ReviewOrchestrationOwner(A/B)에 중립."
+    core_value: "이 개념이 없으면 'nested가 flat과 같은 unit 계약을 실행하는가'가 brand별 구현에 암묵적으로 흩어진다. inner=unit-executor 불변식이 구조적 출력·검증·재시도 동등성을 코드 공유로 보장한다 — 과거 raw provider-CLI inner가 구조적 출력을 우회해 fail-closed된 원인을 제거한 단일 기준점."
+    attributes:
+      shared: []
+      local:
+        inner_invocation:
+          definition: "배치의 각 unit을 실행하는 주체"
+          values:
+            unit_executor_subprocess: "flat 경로가 spawn하는 것과 동일한 unit-executor CLI(구조적 출력·검증·재시도 코드 공유). raw provider-CLI inner는 계약 위반"
+        outer_role:
+          definition: "outer 워커의 유일한 역할"
+          values:
+            literal_script_executor: "생성된 literal bash script를 bash -s로 실행하고 stdout을 verbatim 표면화 — 추론·변수 치환·파일도구 사용 금지"
+        summary_authority:
+          definition: "배치 요약(UNIT_DISPATCH_SUMMARY)의 권위 수준"
+          values:
+            observational: "관찰 보조 신호. seat 진실성 판정은 onto(validateUnitSeatToResult)가 소유. 요약에 누락된 unit은 fail(보고 불이행) — silent drop은 구성상 불가"
+    instances:
+      codex_outer:
+        inner_invocation: "unit_executor_subprocess"
+        outer_role: "literal_script_executor"
+        summary_authority: "observational"
+        spawn: "codex exec --sandbox danger-full-access (outer가 subprocess를 spawn해야 함; inner unit executor는 자체 read-only sandbox 유지), prompt는 stdin"
+      claude_outer:
+        inner_invocation: "unit_executor_subprocess"
+        outer_role: "literal_script_executor"
+        summary_authority: "observational"
+        spawn: "claude -p <prompt positional> --allowedTools Bash --permission-mode bypassPermissions --strict-mcp-config (빈 MCP). service_tier 표면 없음(API 전용), effort→--effort"
+    execution_rules_ref:
+      batch_contract: "src/core-runtime/review/nesting-batch.ts (buildNestingBatchScript / buildNestingBatchWorkerPrompt / parseNestingBatchSummary / reconcileNestingBatchOutcomes)"
+      codex_realization: "src/core-runtime/cli/codex-nesting-batch-worker.ts (runCodexNestingBatchWorker)"
+      claude_realization: "src/core-runtime/cli/claude-nesting-batch-worker.ts (runClaudeNestingBatchWorker)"
+      a_path_bridge: "src/core-runtime/cli/nested-batch-dispatch.ts (executeReviewViaNestedBatch — units/inner argv는 호출자가 flat과 동일하게 구성: parity by construction)"
+      b_path_driver: "src/core-runtime/cli/host-orchestration-reference-driver.ts (executeBatch — 라운드 배치 위임)"
+      equivalence_gate: "src/core-runtime/cli/nesting-four-cell-equivalence.test.ts ({A,B}×{codex,claude} 4셀 seat/outcome 동등성)"
+      contract_ref: ".onto/processes/review/nesting-batch-worker-contract.md"
+    notes:
+      - "topology 값(main-workers|nested-workers)은 기존 ReviewExecutionMode 설정 축을 재사용 — 신규 settings 키 없음."
+      - "A에서는 lens 단계 + downstream wide 3단계(issue-stance per-lens·per-issue deliberation·per-issue synthesis)가 nested 배치로 실행된다 — 배치는 attempt #1이고 실패 유닛은 flat retry 루프로 잔여 예산을 소진(retry 의미론 불변), wave 폭은 flat pool cap과 동일(dispatch_width). 단일-유닛 체인 단계와 continuation/repair는 flat per-unit 루프(fan-out 부재; 동일 unit-executor·동일 seat 계약). B에서는 host가 라운드 단위로 배치를 위임할 수 있다."
+      - "outer 비순응(요약 누락·unit 누락·timeout)은 해당 unit fail로 수렴하고 seat 검증은 onto 소유 → fail-closed. nested에서 지원되지 않는 executor(direct_call)는 A 진입에서 nested_workers_executor_unsupported로 거부."
 
   # -------------------------------------------------------------------------
   # Framework v1.0 entities (§8.1, §8.6) — scope axis + Tier 1/2 types

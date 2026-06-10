@@ -111,7 +111,12 @@ import {
   REVIEW_PROGRESS_TOTAL_STEPS,
 } from "../review/review-progress-contract.js";
 import { printOntoReleaseChannelNotice } from "../release-channel/release-channel.js";
-import { executeReviewViaCodexNested } from "./codex-nested-dispatch.js";
+import {
+  dispatchNestedBatch,
+  executeReviewViaNestedBatch,
+  nestedOuterConfigFromLlmRef,
+  type NestedBatchBrand,
+} from "./nested-batch-dispatch.js";
 import {
   ReviewStructuredFailureError,
   writeAndThrowStructuredFailureRecord,
@@ -155,7 +160,7 @@ export interface ReviewUnitExecutorConfig {
   args: string[];
 }
 
-interface ExecutionDispatchResult {
+export interface ExecutionDispatchResult {
   unit_id: string;
   unit_kind: ReviewUnitKind;
   packet_path: string;
@@ -212,7 +217,7 @@ interface ReviewExecutorRunMetadata {
   semantic_quality_evidence?: ReviewSemanticQualityEvidence;
 }
 
-interface ExecutionOutcome {
+export interface ExecutionOutcome {
   dispatch: ExecutionDispatchResult;
   success: boolean;
   startedAtMs: number;
@@ -3392,6 +3397,12 @@ async function runSingleDispatchWithRetries(args: {
   retryInitialDelayMs: number;
   unitTimeoutMs?: number;
   reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  /**
+   * Explicit retry-budget override bypassing maxRetriesForDispatch — used
+   * by the nested first-attempt path to spend the remaining budget after
+   * the batch consumed one attempt (effective - 1).
+   */
+  maxRetriesOverride?: number;
 }): Promise<ExecutionOutcome> {
   const {
     projectRoot,
@@ -3425,11 +3436,13 @@ async function runSingleDispatchWithRetries(args: {
   const semanticQualityEvidence = semanticQualityEvidenceForArtifactGeneration(
     artifactGenerationRealization,
   );
-  const effectiveMaxRetries = maxRetriesForDispatch({
-    profile: reviewExecutionProfile,
-    dispatch,
-    fallback: maxRetries,
-  });
+  const effectiveMaxRetries =
+    args.maxRetriesOverride ??
+    maxRetriesForDispatch({
+      profile: reviewExecutionProfile,
+      dispatch,
+      fallback: maxRetries,
+    });
   const effectiveRetryInitialDelayMs = retryInitialDelayMsForDispatch({
     profile: reviewExecutionProfile,
     dispatch,
@@ -3534,6 +3547,226 @@ async function runSingleDispatchWithRetries(args: {
     startedAtMs,
     completedAtMs,
     attemptCount: attemptsUsed,
+    packetBytes,
+    outputBytes,
+    failure,
+    artifactGenerationRealization,
+    semanticQualityEvidence,
+  };
+}
+
+/**
+ * Brand for the downstream nested batch path — non-null only when the
+ * profile selects nested-workers with an executor that has an outer
+ * worker realization.
+ */
+function nestedStageBrandForProfile(
+  profile: ReviewExecutionProfile | undefined,
+): NestedBatchBrand | null {
+  if (profile?.mode !== "nested-workers") return null;
+  if (profile.worker_executor === "codex") return "codex";
+  if (profile.worker_executor === "claude_code") return "claude";
+  return null;
+}
+
+export interface NestedStageBatchAttempt {
+  /** Batch outcome per unit id (only units that were in the batch). */
+  byUnitId: Map<string, { ok: boolean; error?: string }>;
+  startedAtMs: number;
+  completedAtMs: number;
+}
+
+/**
+ * Downstream wide-stage nested first attempt: hand the stage's dispatches
+ * to ONE outer nesting batch worker (waves capped at the stage's flat
+ * worker-pool width). Returns undefined when the gate does not apply —
+ * not nested-workers, no outer brand, or fewer than two dispatches
+ * (batching a single unit buys no fan-out, only an extra outer LLM).
+ *
+ * This is attempt #1 of the unit's retry budget; failed units fall back
+ * to the flat per-unit retry loop via
+ * {@link unitOutcomeWithNestedFirstAttempt}.
+ */
+export async function runNestedStageFirstAttempt(args: {
+  stageLabel: string;
+  projectRoot: string;
+  sessionRoot: string;
+  executionPlan: ReviewExecutionPlan;
+  executorConfig: ReviewUnitExecutorConfig;
+  dispatches: ExecutionDispatchResult[];
+  dispatchWidth: number;
+  unitTimeoutMs?: number;
+  reviewExecutionProfile?: ReviewExecutionProfile | undefined;
+  dispatchImpl?: typeof dispatchNestedBatch;
+}): Promise<NestedStageBatchAttempt | undefined> {
+  const profile = args.reviewExecutionProfile;
+  const brand = nestedStageBrandForProfile(profile);
+  if (!brand || args.dispatches.length < 2) return undefined;
+  const firstDispatch = args.dispatches[0]!;
+  // Same effective unit-executor config the flat loop would spawn for this
+  // stage (all dispatches in one stage share a unit-settings id) — parity
+  // by construction.
+  const effectiveExecutorConfig = executorConfigWithUnitSettings({
+    executorConfig: args.executorConfig,
+    dispatch: firstDispatch,
+    profile,
+  });
+  const units = args.dispatches.map((dispatch) => ({
+    unit_id: dispatch.unit_id,
+    unit_kind: dispatch.unit_kind,
+    packet_path: dispatch.packet_path,
+    output_path: dispatch.output_path,
+    extra_args: [
+      ...(dispatch.output_format && dispatch.output_format !== "markdown"
+        ? ["--output-format", dispatch.output_format]
+        : []),
+      ...(dispatch.human_output_ref
+        ? ["--human-output-ref", dispatch.human_output_ref]
+        : []),
+    ],
+  }));
+  const width = Math.max(1, Math.min(args.dispatchWidth, args.dispatches.length));
+  // Outer timeout must cover every wave of inner units (the script has no
+  // per-unit kill switch) plus outer startup overhead.
+  const effectiveUnitTimeoutMs = timeoutMsForDispatch({
+    profile,
+    dispatch: firstDispatch,
+    fallback: args.unitTimeoutMs ?? DEFAULT_REVIEW_UNIT_TIMEOUT_MS,
+  });
+  const waveCount = Math.ceil(units.length / width);
+  const timeoutMs = effectiveUnitTimeoutMs * waveCount + 60_000;
+
+  console.log(
+    `[review runner] nested batch (${args.stageLabel}): ${units.length} units, width=${width}, brand=${brand}`,
+  );
+  await appendExecutionProgress(
+    args.executionPlan.error_log_path,
+    `runner nested batch dispatch: ${args.stageLabel}`,
+    [
+      `unit_count: ${units.length}`,
+      `dispatch_width: ${width}`,
+      `brand: ${brand}`,
+    ],
+  );
+
+  const startedAtMs = Date.now();
+  const run = await (args.dispatchImpl ?? dispatchNestedBatch)({
+    brand,
+    sessionRoot: args.sessionRoot,
+    projectRoot: args.projectRoot,
+    outer_config: nestedOuterConfigFromLlmRef(brand, profile?.teamlead?.llm) ?? {},
+    units,
+    inner_executor: effectiveExecutorConfig,
+    dispatch_width: width,
+    timeout_ms: timeoutMs,
+    stream_label: args.stageLabel,
+  });
+  const completedAtMs = Date.now();
+
+  const byUnitId = new Map(
+    run.outcomes.map((outcome) => [
+      outcome.unit_id,
+      {
+        ok: outcome.status === "ok",
+        ...(outcome.error ? { error: outcome.error } : {}),
+      },
+    ]),
+  );
+  const failedCount = run.outcomes.filter((o) => o.status !== "ok").length;
+  await appendExecutionProgress(
+    args.executionPlan.error_log_path,
+    `runner nested batch finished: ${args.stageLabel}`,
+    [
+      `ok: ${run.outcomes.length - failedCount}/${run.outcomes.length}`,
+      `summary_parsed: ${run.summary_parsed}`,
+      `outer_exit_code: ${run.outer_exit_code}`,
+    ],
+  );
+  return { byUnitId, startedAtMs, completedAtMs };
+}
+
+/**
+ * Per-unit outcome combinator for the nested first-attempt path:
+ *   - no batch / unit not in batch → flat dispatch with the full budget;
+ *   - batch ok → success outcome (attempt #1, batch window timings);
+ *   - batch fail + remaining budget → flat retries (effective - 1);
+ *   - batch fail + zero budget → finalize the failure (no extra attempt —
+ *     an explicit zero-retry policy means exactly one attempt).
+ */
+export async function unitOutcomeWithNestedFirstAttempt(args: {
+  batch: NestedStageBatchAttempt | undefined;
+  flat: Parameters<typeof runSingleDispatchWithRetries>[0];
+  runFlat?: typeof runSingleDispatchWithRetries;
+}): Promise<ExecutionOutcome> {
+  const runFlat = args.runFlat ?? runSingleDispatchWithRetries;
+  const batchOutcome = args.batch?.byUnitId.get(args.flat.dispatch.unit_id);
+  if (!args.batch || !batchOutcome) {
+    return runFlat(args.flat);
+  }
+  const { dispatch, executionPlan, reviewExecutionProfile } = args.flat;
+  const artifactGenerationRealization =
+    reviewExecutionProfile?.artifact_generation_realization ??
+    executionPlan.artifact_generation_realization;
+  const semanticQualityEvidence = semanticQualityEvidenceForArtifactGeneration(
+    artifactGenerationRealization,
+  );
+  if (batchOutcome.ok) {
+    console.log(
+      `[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id} (nested batch)`,
+    );
+    await appendExecutionProgress(
+      executionPlan.error_log_path,
+      `runner nested batch completed: ${dispatch.unit_id}`,
+      [
+        `unit_id: ${dispatch.unit_id}`,
+        `unit_kind: ${dispatch.unit_kind}`,
+        `output_path: ${dispatch.output_path}`,
+      ],
+    );
+    return {
+      dispatch,
+      success: true,
+      startedAtMs: args.batch.startedAtMs,
+      completedAtMs: args.batch.completedAtMs,
+      attemptCount: 1,
+      artifactGenerationRealization,
+      semanticQualityEvidence,
+      packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+      outputBytes: await fileSizeIfPresent(dispatch.output_path),
+    };
+  }
+  const effectiveMaxRetries = maxRetriesForDispatch({
+    profile: reviewExecutionProfile,
+    dispatch,
+    fallback: args.flat.maxRetries,
+  });
+  if (effectiveMaxRetries >= 1) {
+    // The batch consumed attempt #1 — spend the remaining budget flat.
+    return runFlat({ ...args.flat, maxRetriesOverride: effectiveMaxRetries - 1 });
+  }
+  const message = batchOutcome.error ?? "nested batch unit failed";
+  const failure: ExecutionFailure = {
+    unit_id: dispatch.unit_id,
+    unit_kind: dispatch.unit_kind,
+    packet_path: dispatch.packet_path,
+    output_path: dispatch.output_path,
+    message,
+    failure_kind: failureKindFromMessage(message),
+  };
+  const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+  const outputBytes = await fileSizeIfPresent(dispatch.output_path);
+  await removeFileIfExists(dispatch.output_path);
+  await appendExecutionFailure(
+    executionPlan.error_log_path,
+    failure,
+    executionPlan.effective_boundary_state,
+  );
+  return {
+    dispatch,
+    success: false,
+    startedAtMs: args.batch.startedAtMs,
+    completedAtMs: args.batch.completedAtMs,
+    attemptCount: 1,
     packetBytes,
     outputBytes,
     failure,
@@ -3670,6 +3903,21 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
     }),
   );
 
+  // nested-workers: attempt #1 for the whole stage goes through ONE outer
+  // nesting batch worker (waves capped at the flat pool width); failed
+  // units fall back to the flat per-unit retry loop below.
+  const stanceNestedBatch = await runNestedStageFirstAttempt({
+    stageLabel: "issue-stance",
+    projectRoot: args.projectRoot,
+    sessionRoot: args.sessionRoot,
+    executionPlan: args.executionPlan,
+    executorConfig: args.executorConfig,
+    dispatches,
+    dispatchWidth: maxConcurrentIssueStanceResponses,
+    unitTimeoutMs: args.unitTimeoutMs,
+    reviewExecutionProfile: args.reviewExecutionProfile,
+  });
+
   const outcomes: Array<ExecutionOutcome | undefined> = new Array(dispatches.length);
   let nextDispatchIndex = 0;
   async function runIssueStanceWorker(): Promise<void> {
@@ -3678,16 +3926,19 @@ async function runIssueStanceMatrixCollectionDispatch(args: {
       nextDispatchIndex += 1;
       if (dispatchIndex >= dispatches.length) return;
       const dispatch = dispatches[dispatchIndex]!;
-      const outcome = await runSingleDispatchWithRetries({
-        projectRoot: args.projectRoot,
-        sessionRoot: args.sessionRoot,
-        executionPlan: args.executionPlan,
-        executorConfig: args.executorConfig,
-        dispatch,
-        maxRetries: args.retryPolicy.issueArtifactMaxRetries,
-        retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
-        unitTimeoutMs: args.unitTimeoutMs,
-        reviewExecutionProfile: args.reviewExecutionProfile,
+      const outcome = await unitOutcomeWithNestedFirstAttempt({
+        batch: stanceNestedBatch,
+        flat: {
+          projectRoot: args.projectRoot,
+          sessionRoot: args.sessionRoot,
+          executionPlan: args.executionPlan,
+          executorConfig: args.executorConfig,
+          dispatch,
+          maxRetries: args.retryPolicy.issueArtifactMaxRetries,
+          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          unitTimeoutMs: args.unitTimeoutMs,
+          reviewExecutionProfile: args.reviewExecutionProfile,
+        },
       });
       if (!outcome.success) {
         outcomes[dispatchIndex] = outcome;
@@ -4308,6 +4559,22 @@ async function runControlledLensDeliberation(args: {
     });
   }
 
+  // nested-workers: batch attempt #1 over the runnable (non-preserved)
+  // deliberation units; failures fall back to flat per-unit retries.
+  const deliberationNestedBatch = await runNestedStageFirstAttempt({
+    stageLabel: "deliberation",
+    projectRoot,
+    sessionRoot,
+    executionPlan,
+    executorConfig: lensExecutorConfig,
+    dispatches: deliberationDispatches.filter((dispatch) =>
+      shouldRunUnit(dispatch.unit_id),
+    ),
+    dispatchWidth: maxConcurrentLenses,
+    unitTimeoutMs,
+    reviewExecutionProfile: args.reviewExecutionProfile,
+  });
+
   const deliberationOutcomes: Array<ExecutionOutcome | undefined> = new Array(
     deliberationDispatches.length,
   );
@@ -4324,16 +4591,19 @@ async function runControlledLensDeliberation(args: {
         deliberationOutcomes[currentIndex] = preservedOutcomeForDispatch(dispatch);
         continue;
       }
-      const outcome = await runSingleDispatchWithRetries({
-        projectRoot,
-        sessionRoot,
-        executionPlan,
-        executorConfig: lensExecutorConfig,
-        dispatch,
-        maxRetries: args.retryPolicy.deliberationMaxRetries,
-        retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
-        unitTimeoutMs,
-        reviewExecutionProfile: args.reviewExecutionProfile,
+      const outcome = await unitOutcomeWithNestedFirstAttempt({
+        batch: deliberationNestedBatch,
+        flat: {
+          projectRoot,
+          sessionRoot,
+          executionPlan,
+          executorConfig: lensExecutorConfig,
+          dispatch,
+          maxRetries: args.retryPolicy.deliberationMaxRetries,
+          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+          unitTimeoutMs,
+          reviewExecutionProfile: args.reviewExecutionProfile,
+        },
       });
       if (!outcome.success) {
         deliberationOutcomes[currentIndex] =
@@ -5150,6 +5420,20 @@ async function runSynthesisMapReduceDispatch(args: {
       }),
     );
 
+    // nested-workers: batch attempt #1 over the runnable synthesis units;
+    // failures fall back to flat per-unit retries.
+    const synthesisNestedBatch = await runNestedStageFirstAttempt({
+      stageLabel: "synthesis",
+      projectRoot: args.projectRoot,
+      sessionRoot: args.sessionRoot,
+      executionPlan: args.executionPlan,
+      executorConfig: args.executorConfig,
+      dispatches: dispatches.filter((dispatch) => shouldRunUnit(dispatch.unit_id)),
+      dispatchWidth: Math.max(1, args.maxConcurrentIssueSynthesis),
+      unitTimeoutMs: args.unitTimeoutMs,
+      reviewExecutionProfile: args.reviewExecutionProfile,
+    });
+
     const responses: IssueSynthesisResponseArtifact[] = [];
     let nextDispatchIndex = 0;
     const workerCount = Math.min(
@@ -5177,16 +5461,19 @@ async function runSynthesisMapReduceDispatch(args: {
           });
           continue;
         }
-        const outcome = await runSingleDispatchWithRetries({
-          projectRoot: args.projectRoot,
-          sessionRoot: args.sessionRoot,
-          executionPlan: args.executionPlan,
-          executorConfig: args.executorConfig,
-          dispatch,
-          maxRetries: args.retryPolicy.synthesisMaxRetries,
-          retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
-          unitTimeoutMs: args.unitTimeoutMs,
-          reviewExecutionProfile: args.reviewExecutionProfile,
+        const outcome = await unitOutcomeWithNestedFirstAttempt({
+          batch: synthesisNestedBatch,
+          flat: {
+            projectRoot: args.projectRoot,
+            sessionRoot: args.sessionRoot,
+            executionPlan: args.executionPlan,
+            executorConfig: args.executorConfig,
+            dispatch,
+            maxRetries: args.retryPolicy.synthesisMaxRetries,
+            retryInitialDelayMs: args.retryPolicy.retryInitialDelayMs,
+            unitTimeoutMs: args.unitTimeoutMs,
+            reviewExecutionProfile: args.reviewExecutionProfile,
+          },
         });
         if (!outcome.success) {
           const completed = await completeUnavailableSynthesisResponse(
@@ -5455,15 +5742,26 @@ export async function executeReviewPromptExecution(
     "runner parallel dispatch policy",
     [`max_concurrent_lenses: ${maxConcurrentLenses}`],
   );
-  if (params.reviewExecutionProfile?.mode === "nested-workers") {
+  // nested-workers is served by the NestingBatchWorker path below: inner
+  // invocations are the SAME unit executors the flat loop spawns, so the
+  // structured-output / read-only / bounded-dispatch guarantees that the
+  // retired raw-`codex exec` nested path lacked now hold by code sharing.
+  // The only remaining fail-closed case is an executor brand without an
+  // outer worker realization (direct_call), rejected at the dispatch
+  // branch.
+  if (
+    params.reviewExecutionProfile?.mode === "nested-workers" &&
+    params.reviewExecutionProfile.worker_executor !== "codex" &&
+    params.reviewExecutionProfile.worker_executor !== "claude_code"
+  ) {
     await writeAndThrowStructuredFailureRecord({
       sessionRoot,
       phase: "pre_dispatch.actor_route",
-      reasonCode: "nested_workers_structured_output_unavailable",
+      reasonCode: "nested_workers_executor_unsupported",
       humanMessage:
-        "Review execution profile nested-workers is unavailable because it does not enforce sidecar structured output, read-only lens execution, or bounded runtime dispatch.",
+        "Review execution profile nested-workers requires an external OAuth worker executor (codex or claude_code); direct_call has no outer worker seat.",
       requiredUserAction:
-        "Use review.execution.topology=main-workers until nested-workers is rebuilt on the structured output runner.",
+        "Set review.execution.executor to codex or claude_code, or use review.execution.topology=main-workers.",
       retrySafety: "safe_after_input_change",
       artifactTrust: "manifest_artifacts_trusted",
       dispatchState: "dispatch_blocked",
@@ -5755,13 +6053,22 @@ export async function executeReviewPromptExecution(
     }
   }
 
+  // Nested batch dispatch covers the initial lens phase only (A-path
+  // scope). Continuation/repair passes re-dispatch remaining units through
+  // the flat per-unit loop — same unit-executor invocation, same artifact
+  // contract, so the seat truth is identical either way.
   if (
     !continuationMode &&
     params.reviewExecutionProfile?.mode === "nested-workers" &&
-    params.reviewExecutionProfile.worker_executor === "codex"
+    (params.reviewExecutionProfile.worker_executor === "codex" ||
+      params.reviewExecutionProfile.worker_executor === "claude_code")
   ) {
+    const nestedBrand =
+      params.reviewExecutionProfile.worker_executor === "codex"
+        ? ("codex" as const)
+        : ("claude" as const);
     console.log(
-      "[review runner] mode=nested-workers worker_executor=codex",
+      `[review runner] mode=nested-workers worker_executor=${params.reviewExecutionProfile.worker_executor}`,
     );
     await appendExecutionProgress(
       executionPlan.error_log_path,
@@ -5774,10 +6081,40 @@ export async function executeReviewPromptExecution(
       ],
     );
     const nestedStartedAtMs = Date.now();
-    const nestedResult = await executeReviewViaCodexNested({
+    // Parity by construction: nested units reuse the SAME flat dispatch
+    // list (canonical seat paths, output-format, human ref) and the SAME
+    // effective unit-executor config (LLM overrides included) the flat
+    // loop would spawn — the nested worker only changes who fans out.
+    const firstLensDispatch = lensDispatches[0];
+    if (!firstLensDispatch) {
+      throw new Error("nested-workers dispatch requires at least one lens");
+    }
+    const nestedLensExecutorConfig = executorConfigWithUnitSettings({
+      executorConfig: defaultExecutorConfig,
+      dispatch: firstLensDispatch,
+      profile: params.reviewExecutionProfile,
+    });
+    const nestedUnits = lensDispatches.map((dispatch) => ({
+      unit_id: dispatch.unit_id,
+      unit_kind: dispatch.unit_kind,
+      packet_path: dispatch.packet_path,
+      output_path: dispatch.output_path,
+      extra_args: [
+        ...(dispatch.output_format && dispatch.output_format !== "markdown"
+          ? ["--output-format", dispatch.output_format]
+          : []),
+        ...(dispatch.human_output_ref
+          ? ["--human-output-ref", dispatch.human_output_ref]
+          : []),
+      ],
+    }));
+    const nestedResult = await executeReviewViaNestedBatch({
+      brand: nestedBrand,
       sessionRoot,
       projectRoot,
       ontoConfig: params.ontoConfig ?? {},
+      units: nestedUnits,
+      inner_executor: nestedLensExecutorConfig,
     });
     const nestedCompletedAtMs = Date.now();
     // Map nested-dispatch outcomes into executionOutcomes[] in lensDispatches order.
@@ -5785,12 +6122,19 @@ export async function executeReviewPromptExecution(
     // (orchestrator ok AND output file exists + non-empty). The parent runner
     // still applies its local output-contract validator before admitting a lens
     // as participating so every execution profile shares the same sink gate.
+    // Retry semantics mirror flat: the batch is attempt #1; a lens that
+    // failed in the batch (or failed local validation) spends the remaining
+    // budget through the flat per-unit loop (invokeExecutor validates
+    // internally, so retried successes are already contract-checked).
+    // Explicit zero-retry finalizes the batch failure without a second
+    // attempt.
     for (let i = 0; i < lensDispatches.length; i += 1) {
       const dispatch = lensDispatches[i]!;
       const reported = nestedResult.nested_raw.outcomes[i];
       const participating = nestedResult.participating_lens_ids.includes(
         dispatch.unit_id,
       );
+      let batchFailureMessage: string | undefined;
       if (participating) {
         try {
           await validateUnitOutputFile({
@@ -5799,87 +6143,98 @@ export async function executeReviewPromptExecution(
             executionPlan,
             reviewExecutionProfile: params.reviewExecutionProfile,
           });
-        } catch (error) {
-          const failure: ExecutionFailure = {
-            unit_id: dispatch.unit_id,
-            unit_kind: dispatch.unit_kind,
-            packet_path: dispatch.packet_path,
-            output_path: dispatch.output_path,
-            message: error instanceof Error ? error.message : String(error),
-            failure_kind: failureKindFromError(error),
-          };
-          const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
-          const outputBytes = await fileSizeIfPresent(dispatch.output_path);
-          await removeFileIfExists(dispatch.output_path);
-          await appendExecutionFailure(
+          console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
+          await appendExecutionProgress(
             executionPlan.error_log_path,
-            failure,
-            executionPlan.effective_boundary_state,
+            `runner nested dispatch completed: ${dispatch.unit_id}`,
+            [
+              `unit_id: ${dispatch.unit_id}`,
+              `unit_kind: ${dispatch.unit_kind}`,
+              `output_path: ${dispatch.output_path}`,
+            ],
           );
           executionOutcomes[i] = {
             dispatch,
-            success: false,
+            success: true,
             startedAtMs: nestedStartedAtMs,
             completedAtMs: nestedCompletedAtMs,
             attemptCount: 1,
-            packetBytes,
-            outputBytes,
-            failure,
+            packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+            outputBytes: await fileSizeIfPresent(dispatch.output_path),
           };
           continue;
+        } catch (error) {
+          batchFailureMessage =
+            error instanceof Error ? error.message : String(error);
         }
-        console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
-        await appendExecutionProgress(
-          executionPlan.error_log_path,
-          `runner nested dispatch completed: ${dispatch.unit_id}`,
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `unit_kind: ${dispatch.unit_kind}`,
-            `output_path: ${dispatch.output_path}`,
-          ],
-        );
-        executionOutcomes[i] = {
-          dispatch,
-          success: true,
-          startedAtMs: nestedStartedAtMs,
-          completedAtMs: nestedCompletedAtMs,
-          attemptCount: 1,
-          packetBytes: await fileSizeIfPresent(dispatch.packet_path),
-          outputBytes: await fileSizeIfPresent(dispatch.output_path),
-        };
       } else {
-        const message =
+        batchFailureMessage =
           reported?.status === "fail" && reported.error
             ? reported.error
             : nestedResult.halt_reason ??
               "nested worker dispatch failed (output missing or orchestrator rejected)";
-        const failure: ExecutionFailure = {
-          unit_id: dispatch.unit_id,
-          unit_kind: dispatch.unit_kind,
-          packet_path: dispatch.packet_path,
-          output_path: dispatch.output_path,
-          message,
-          failure_kind: failureKindFromMessage(message),
-        };
-        const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
-        const outputBytes = await fileSizeIfPresent(dispatch.output_path);
-        await removeFileIfExists(dispatch.output_path);
-        await appendExecutionFailure(
-          executionPlan.error_log_path,
-          failure,
-          executionPlan.effective_boundary_state,
-        );
-        executionOutcomes[i] = {
-          dispatch,
-          success: false,
-          startedAtMs: nestedStartedAtMs,
-          completedAtMs: nestedCompletedAtMs,
-          attemptCount: 1,
-          packetBytes,
-          outputBytes,
-          failure,
-        };
       }
+
+      const effectiveLensMaxRetries = maxRetriesForDispatch({
+        profile: params.reviewExecutionProfile,
+        dispatch,
+        fallback: maxRetries,
+      });
+      if (effectiveLensMaxRetries >= 1) {
+        // Batch consumed attempt #1 — clear the dead seat and spend the
+        // remaining budget through the flat loop (same executor config
+        // derivation as the flat lens path: invokeExecutor applies the
+        // per-unit settings itself).
+        await removeFileIfExists(dispatch.output_path);
+        await appendExecutionProgress(
+          executionPlan.error_log_path,
+          `runner nested dispatch retrying flat: ${dispatch.unit_id}`,
+          [
+            `batch_failure: ${batchFailureMessage}`,
+            `remaining_max_retries: ${effectiveLensMaxRetries - 1}`,
+          ],
+        );
+        executionOutcomes[i] = await runSingleDispatchWithRetries({
+          projectRoot,
+          sessionRoot,
+          executionPlan,
+          executorConfig: defaultExecutorConfig,
+          dispatch,
+          maxRetries,
+          retryInitialDelayMs,
+          unitTimeoutMs,
+          reviewExecutionProfile: params.reviewExecutionProfile,
+          maxRetriesOverride: effectiveLensMaxRetries - 1,
+        });
+        continue;
+      }
+
+      const failure: ExecutionFailure = {
+        unit_id: dispatch.unit_id,
+        unit_kind: dispatch.unit_kind,
+        packet_path: dispatch.packet_path,
+        output_path: dispatch.output_path,
+        message: batchFailureMessage ?? "nested worker dispatch failed",
+        failure_kind: failureKindFromMessage(batchFailureMessage ?? ""),
+      };
+      const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+      const outputBytes = await fileSizeIfPresent(dispatch.output_path);
+      await removeFileIfExists(dispatch.output_path);
+      await appendExecutionFailure(
+        executionPlan.error_log_path,
+        failure,
+        executionPlan.effective_boundary_state,
+      );
+      executionOutcomes[i] = {
+        dispatch,
+        success: false,
+        startedAtMs: nestedStartedAtMs,
+        completedAtMs: nestedCompletedAtMs,
+        attemptCount: 1,
+        packetBytes,
+        outputBytes,
+        failure,
+      };
     }
     // Capture outer teamlead halt_reason for the post-dispatch halt check
     // (synthesize may still run if enough lenses participated, matching the

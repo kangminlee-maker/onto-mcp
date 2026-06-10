@@ -46,8 +46,10 @@ deliberation은 topology의 메시징 능력에서 **파생**된다(subagent=con
 
 | | main-workers (flat) | nested-workers (nesting) |
 |---|---|---|
-| **A (mcp-driven)** | ✓ codex·claude·direct *(출시됨)* | codex ✓*(존재, #17 정합 필요)* · claude → **S2** |
-| **B (host-driven)** | **S1** codex·claude·direct | **S2** codex + claude |
+| **A (mcp-driven)** | ✓ codex·claude·direct *(출시됨)* | ✓ **S2 완료** codex·claude (NestingBatchWorker, inner=unit-executor로 #17 정합) |
+| **B (host-driven)** | ✓ **S1 완료** codex·claude·direct | ✓ **S2 완료** codex·claude (라운드 배치 위임) |
+
+S1 = PR #21(lens-slice) + PR #22(full pipeline). S2 = `feat/nested-workers-s2` (계약: `nesting-batch-worker-contract.md`, 4셀 동등성 게이트 포함) + **A downstream wide 3단계 nesting**(issue-stance·per-issue deliberation·per-issue synthesis; batch=attempt#1+flat retry fallback). live-LLM nested E2E는 후속.
 
 agent-teams + live 심의 = **S3** (claude 전용, 별도 평면).
 

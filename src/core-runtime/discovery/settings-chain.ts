@@ -175,14 +175,11 @@ const ReviewExecutionSettingsSchema = z
   .strict()
   .superRefine((value, ctx) => {
     const mode = value.mode ?? "main-workers";
-    if (value.orchestration === "host" && mode !== "main-workers") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["orchestration"],
-        message:
-          "review.execution.orchestration=host currently requires mode=main-workers.",
-      });
-    }
+    // orchestration=host composes with both modes (roadmap S2 lifted the
+    // Stage 1 host×nested fail-close): the host owns the round loop either
+    // way and may execute ready units per-unit (flat) or delegate them to
+    // one nesting batch worker (nested). Seat constraints below still
+    // apply per mode.
     const teamleadSeat = value.teamlead?.seat ?? "main";
     const lensSeat = value.lens?.seat ?? "worker";
     const synthesizeSeat = value.synthesize?.seat ?? "worker";
@@ -298,14 +295,11 @@ const V3ReviewExecutionSettingsSchema = z
   .strict()
   .superRefine((value, ctx) => {
     const topology = value.topology ?? "main-workers";
-    if (value.orchestration === "host" && topology !== "main-workers") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["orchestration"],
-        message:
-          "review.execution.orchestration=host currently requires topology=main-workers.",
-      });
-    }
+    // orchestration=host composes with both topologies (roadmap S2 lifted
+    // the Stage 1 host×nested fail-close): the host owns the round loop
+    // either way and may execute a round's ready units per-unit (flat) or
+    // delegate them to one nesting batch worker (nested). Seat constraints
+    // below still apply per topology.
     const teamleadSeat = value.actors?.teamlead?.seat ?? "main";
     const lensSeat = value.actors?.lens?.seat ?? "worker";
     const synthesizeSeat = value.actors?.synthesize?.seat ?? "worker";
