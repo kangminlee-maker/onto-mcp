@@ -73,7 +73,7 @@ export interface NestedOuterSpawnConfig {
   service_tier?: string;
 }
 
-export interface NestedBatchDispatchArgs {
+export interface DispatchNestedBatchArgs {
   /** Which outer worker realization fans the batch out. */
   brand: NestedBatchBrand;
   /** Absolute path to the review session directory. */
@@ -93,6 +93,12 @@ export interface NestedBatchDispatchArgs {
    */
   inner_executor: { bin: string; args: string[] };
   /**
+   * Maximum units launched concurrently inside the batch (wave chunking,
+   * see nesting-batch.ts). Mirrors the flat worker-pool cap. Absent → all
+   * parallel.
+   */
+  dispatch_width?: number;
+  /**
    * Per-invocation timeout for the outer worker (ms). Defaults to 10
    * minutes (worker-side default).
    */
@@ -103,7 +109,16 @@ export interface NestedBatchDispatchArgs {
    * binary.
    */
   outer_bin?: string;
+  /**
+   * Stage label scoping the outer stream/archive logs under sessionRoot
+   * (`nested-outer-<label>-stdout.log`). Absent → the legacy unlabeled
+   * lens-phase names (`nested-outer-stdout.log`).
+   */
+  stream_label?: string;
 }
+
+export interface NestedBatchDispatchArgs
+  extends Omit<DispatchNestedBatchArgs, "stream_label" | "dispatch_width"> {}
 
 /**
  * Brand worker implementations — injectable for tests.
@@ -169,11 +184,10 @@ const defaultInspector: OutputFileInspector = async (p) => {
  * mask the actual dispatch outcome. Best-effort.
  */
 async function archiveOuterStreamsIfMissing(
-  sessionRoot: string,
+  stdoutPath: string,
+  stderrPath: string,
   nestedResult: NestedBatchWorkerRunResult,
 ): Promise<void> {
-  const stdoutPath = path.join(sessionRoot, "nested-outer-stdout.log");
-  const stderrPath = path.join(sessionRoot, "nested-outer-stderr.log");
   await Promise.all([
     archiveWriteIfMissing(stdoutPath, nestedResult.outer_stdout ?? ""),
     archiveWriteIfMissing(stderrPath, nestedResult.outer_stderr ?? ""),
@@ -240,6 +254,81 @@ function outerConfigFromRef(
 // ---------------------------------------------------------------------------
 
 /**
+ * Transport core: dispatch one unit batch through the brand's nesting
+ * batch worker and return the per-unit outcomes plus the raw outer run.
+ * Stage-agnostic — the lens-phase wrapper and the downstream wide-stage
+ * helper both ride on this. Owns: outer (teamlead seat) brand settings,
+ * label-scoped stream/archive logs under sessionRoot, brand worker
+ * selection, batch descriptor assembly.
+ *
+ * Injection: `workers` replaces the brand realizations (tests).
+ */
+export async function dispatchNestedBatch(
+  args: DispatchNestedBatchArgs,
+  workers: NestedBatchWorkers = DEFAULT_WORKERS,
+): Promise<NestedBatchWorkerRunResult> {
+  const outerConfig = resolveNestedOuterSpawnConfig(args.brand, args.ontoConfig);
+
+  // Stream paths live under sessionRoot so the watcher pane can `tail -f`
+  // them from the moment the outer worker starts emitting. With streaming
+  // active, these files are the single authority — no post-dispatch
+  // overwrite (prevents dual-writer drift).
+  const streamInfix = args.stream_label ? `-${args.stream_label}` : "";
+  const streamStdoutPath = path.join(
+    args.sessionRoot,
+    `nested-outer${streamInfix}-stdout.log`,
+  );
+  const streamStderrPath = path.join(
+    args.sessionRoot,
+    `nested-outer${streamInfix}-stderr.log`,
+  );
+
+  const sharedInput = {
+    batch: {
+      units: args.units,
+      inner_executor_argv: [args.inner_executor.bin, ...args.inner_executor.args],
+      common_args: [
+        "--project-root",
+        args.projectRoot,
+        "--session-root",
+        args.sessionRoot,
+      ],
+      ...(args.dispatch_width !== undefined
+        ? { dispatch_width: args.dispatch_width }
+        : {}),
+    },
+    ...(outerConfig.model ? { teamlead_model: outerConfig.model } : {}),
+    ...(outerConfig.effort ? { teamlead_reasoning_effort: outerConfig.effort } : {}),
+    project_root: args.projectRoot,
+    ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
+    stream_stdout_path: streamStdoutPath,
+    stream_stderr_path: streamStderrPath,
+  };
+
+  const nestedResult: NestedBatchWorkerRunResult =
+    args.brand === "codex"
+      ? await workers.codex({
+          ...sharedInput,
+          ...(outerConfig.service_tier
+            ? { teamlead_service_tier: outerConfig.service_tier }
+            : {}),
+          ...(args.outer_bin ? { codex_bin: args.outer_bin } : {}),
+        })
+      : await workers.claude({
+          ...sharedInput,
+          ...(args.outer_bin ? { claude_bin: args.outer_bin } : {}),
+        });
+
+  // Archive step is a no-op when streaming already produced files.
+  await archiveOuterStreamsIfMissing(
+    streamStdoutPath,
+    streamStderrPath,
+    nestedResult,
+  );
+  return nestedResult;
+}
+
+/**
  * Execute the lens phase via the brand's nesting batch worker. Dispatches
  * the caller-built units through one outer worker plus one inner
  * unit-executor subprocess per unit, and classifies outcomes into
@@ -265,50 +354,7 @@ export async function executeReviewViaNestedBatch(
   // session artifact problem directly rather than a generic null check.
   const plan = await readYamlDocument<ReviewExecutionPlan>(executionPlanPath);
 
-  const outerConfig = resolveNestedOuterSpawnConfig(args.brand, args.ontoConfig);
-
-  // Stream paths live under sessionRoot so the watcher pane can `tail -f`
-  // them from the moment the outer worker starts emitting. With streaming
-  // active, these files are the single authority — no post-dispatch
-  // overwrite (prevents dual-writer drift).
-  const streamStdoutPath = path.join(args.sessionRoot, "nested-outer-stdout.log");
-  const streamStderrPath = path.join(args.sessionRoot, "nested-outer-stderr.log");
-
-  const sharedInput = {
-    batch: {
-      units: args.units,
-      inner_executor_argv: [args.inner_executor.bin, ...args.inner_executor.args],
-      common_args: [
-        "--project-root",
-        args.projectRoot,
-        "--session-root",
-        args.sessionRoot,
-      ],
-    },
-    ...(outerConfig.model ? { teamlead_model: outerConfig.model } : {}),
-    ...(outerConfig.effort ? { teamlead_reasoning_effort: outerConfig.effort } : {}),
-    project_root: args.projectRoot,
-    ...(typeof args.timeout_ms === "number" ? { timeout_ms: args.timeout_ms } : {}),
-    stream_stdout_path: streamStdoutPath,
-    stream_stderr_path: streamStderrPath,
-  };
-
-  const nestedResult: NestedBatchWorkerRunResult =
-    args.brand === "codex"
-      ? await workers.codex({
-          ...sharedInput,
-          ...(outerConfig.service_tier
-            ? { teamlead_service_tier: outerConfig.service_tier }
-            : {}),
-          ...(args.outer_bin ? { codex_bin: args.outer_bin } : {}),
-        })
-      : await workers.claude({
-          ...sharedInput,
-          ...(args.outer_bin ? { claude_bin: args.outer_bin } : {}),
-        });
-
-  // Archive step is a no-op when streaming already produced files.
-  await archiveOuterStreamsIfMissing(args.sessionRoot, nestedResult);
+  const nestedResult = await dispatchNestedBatch(args, workers);
 
   const participating: string[] = [];
   const degraded: string[] = [];

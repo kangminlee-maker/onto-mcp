@@ -9,6 +9,7 @@ import type {
   NestingBatchUnitOutcome,
 } from "../review/nesting-batch.js";
 import {
+  dispatchNestedBatch,
   executeReviewViaNestedBatch,
   resolveNestedOuterSpawnConfig,
   type NestedBatchBrand,
@@ -474,6 +475,73 @@ describe("executeReviewViaNestedBatch — result shape", () => {
       ],
     });
     expect(result.halt_reason).toBeUndefined();
+  });
+});
+
+describe("dispatchNestedBatch — transport core", () => {
+  let fixture: Fixture;
+  afterEach(async () => {
+    if (fixture) await fixture.cleanup();
+  });
+
+  it("scopes stream/archive logs by stage label and forwards dispatch_width", async () => {
+    fixture = await mkSession(buildPlan);
+    const units = lensUnits(fixture.sessionRoot);
+    const built = buildWorkers(okOutcomes(units), {
+      outer_stdout: "STAGE OUT",
+    });
+
+    const result = await dispatchNestedBatch(
+      {
+        brand: "codex",
+        sessionRoot: fixture.sessionRoot,
+        projectRoot: "/proj",
+        ontoConfig: {} as never,
+        units,
+        inner_executor: INNER_EXECUTOR,
+        dispatch_width: 2,
+        stream_label: "issue-stance",
+      },
+      built.workers,
+    );
+
+    expect(result.outcomes.every((o) => o.status === "ok")).toBe(true);
+    const call = built.codexCalls[0]!;
+    expect(call.batch.dispatch_width).toBe(2);
+    expect(call.stream_stdout_path).toBe(
+      path.join(fixture.sessionRoot, "nested-outer-issue-stance-stdout.log"),
+    );
+    expect(call.stream_stderr_path).toBe(
+      path.join(fixture.sessionRoot, "nested-outer-issue-stance-stderr.log"),
+    );
+    // Archive fallback wrote to the labeled path.
+    await expect(
+      fs.readFile(
+        path.join(fixture.sessionRoot, "nested-outer-issue-stance-stdout.log"),
+        "utf8",
+      ),
+    ).resolves.toBe("STAGE OUT");
+  });
+
+  it("keeps the legacy unlabeled log names when no label is given", async () => {
+    fixture = await mkSession(buildPlan);
+    const units = lensUnits(fixture.sessionRoot);
+    const built = buildWorkers(okOutcomes(units));
+    await dispatchNestedBatch(
+      {
+        brand: "claude",
+        sessionRoot: fixture.sessionRoot,
+        projectRoot: "/proj",
+        ontoConfig: {} as never,
+        units,
+        inner_executor: INNER_EXECUTOR,
+      },
+      built.workers,
+    );
+    expect(built.claudeCalls[0]!.stream_stdout_path).toBe(
+      path.join(fixture.sessionRoot, "nested-outer-stdout.log"),
+    );
+    expect(built.claudeCalls[0]!.batch.dispatch_width).toBeUndefined();
   });
 });
 
