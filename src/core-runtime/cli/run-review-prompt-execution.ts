@@ -6122,12 +6122,19 @@ export async function executeReviewPromptExecution(
     // (orchestrator ok AND output file exists + non-empty). The parent runner
     // still applies its local output-contract validator before admitting a lens
     // as participating so every execution profile shares the same sink gate.
+    // Retry semantics mirror flat: the batch is attempt #1; a lens that
+    // failed in the batch (or failed local validation) spends the remaining
+    // budget through the flat per-unit loop (invokeExecutor validates
+    // internally, so retried successes are already contract-checked).
+    // Explicit zero-retry finalizes the batch failure without a second
+    // attempt.
     for (let i = 0; i < lensDispatches.length; i += 1) {
       const dispatch = lensDispatches[i]!;
       const reported = nestedResult.nested_raw.outcomes[i];
       const participating = nestedResult.participating_lens_ids.includes(
         dispatch.unit_id,
       );
+      let batchFailureMessage: string | undefined;
       if (participating) {
         try {
           await validateUnitOutputFile({
@@ -6136,87 +6143,98 @@ export async function executeReviewPromptExecution(
             executionPlan,
             reviewExecutionProfile: params.reviewExecutionProfile,
           });
-        } catch (error) {
-          const failure: ExecutionFailure = {
-            unit_id: dispatch.unit_id,
-            unit_kind: dispatch.unit_kind,
-            packet_path: dispatch.packet_path,
-            output_path: dispatch.output_path,
-            message: error instanceof Error ? error.message : String(error),
-            failure_kind: failureKindFromError(error),
-          };
-          const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
-          const outputBytes = await fileSizeIfPresent(dispatch.output_path);
-          await removeFileIfExists(dispatch.output_path);
-          await appendExecutionFailure(
+          console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
+          await appendExecutionProgress(
             executionPlan.error_log_path,
-            failure,
-            executionPlan.effective_boundary_state,
+            `runner nested dispatch completed: ${dispatch.unit_id}`,
+            [
+              `unit_id: ${dispatch.unit_id}`,
+              `unit_kind: ${dispatch.unit_kind}`,
+              `output_path: ${dispatch.output_path}`,
+            ],
           );
           executionOutcomes[i] = {
             dispatch,
-            success: false,
+            success: true,
             startedAtMs: nestedStartedAtMs,
             completedAtMs: nestedCompletedAtMs,
             attemptCount: 1,
-            packetBytes,
-            outputBytes,
-            failure,
+            packetBytes: await fileSizeIfPresent(dispatch.packet_path),
+            outputBytes: await fileSizeIfPresent(dispatch.output_path),
           };
           continue;
+        } catch (error) {
+          batchFailureMessage =
+            error instanceof Error ? error.message : String(error);
         }
-        console.log(`[review runner] completed ${dispatch.unit_kind}: ${dispatch.unit_id}`);
-        await appendExecutionProgress(
-          executionPlan.error_log_path,
-          `runner nested dispatch completed: ${dispatch.unit_id}`,
-          [
-            `unit_id: ${dispatch.unit_id}`,
-            `unit_kind: ${dispatch.unit_kind}`,
-            `output_path: ${dispatch.output_path}`,
-          ],
-        );
-        executionOutcomes[i] = {
-          dispatch,
-          success: true,
-          startedAtMs: nestedStartedAtMs,
-          completedAtMs: nestedCompletedAtMs,
-          attemptCount: 1,
-          packetBytes: await fileSizeIfPresent(dispatch.packet_path),
-          outputBytes: await fileSizeIfPresent(dispatch.output_path),
-        };
       } else {
-        const message =
+        batchFailureMessage =
           reported?.status === "fail" && reported.error
             ? reported.error
             : nestedResult.halt_reason ??
               "nested worker dispatch failed (output missing or orchestrator rejected)";
-        const failure: ExecutionFailure = {
-          unit_id: dispatch.unit_id,
-          unit_kind: dispatch.unit_kind,
-          packet_path: dispatch.packet_path,
-          output_path: dispatch.output_path,
-          message,
-          failure_kind: failureKindFromMessage(message),
-        };
-        const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
-        const outputBytes = await fileSizeIfPresent(dispatch.output_path);
-        await removeFileIfExists(dispatch.output_path);
-        await appendExecutionFailure(
-          executionPlan.error_log_path,
-          failure,
-          executionPlan.effective_boundary_state,
-        );
-        executionOutcomes[i] = {
-          dispatch,
-          success: false,
-          startedAtMs: nestedStartedAtMs,
-          completedAtMs: nestedCompletedAtMs,
-          attemptCount: 1,
-          packetBytes,
-          outputBytes,
-          failure,
-        };
       }
+
+      const effectiveLensMaxRetries = maxRetriesForDispatch({
+        profile: params.reviewExecutionProfile,
+        dispatch,
+        fallback: maxRetries,
+      });
+      if (effectiveLensMaxRetries >= 1) {
+        // Batch consumed attempt #1 — clear the dead seat and spend the
+        // remaining budget through the flat loop (same executor config
+        // derivation as the flat lens path: invokeExecutor applies the
+        // per-unit settings itself).
+        await removeFileIfExists(dispatch.output_path);
+        await appendExecutionProgress(
+          executionPlan.error_log_path,
+          `runner nested dispatch retrying flat: ${dispatch.unit_id}`,
+          [
+            `batch_failure: ${batchFailureMessage}`,
+            `remaining_max_retries: ${effectiveLensMaxRetries - 1}`,
+          ],
+        );
+        executionOutcomes[i] = await runSingleDispatchWithRetries({
+          projectRoot,
+          sessionRoot,
+          executionPlan,
+          executorConfig: defaultExecutorConfig,
+          dispatch,
+          maxRetries,
+          retryInitialDelayMs,
+          unitTimeoutMs,
+          reviewExecutionProfile: params.reviewExecutionProfile,
+          maxRetriesOverride: effectiveLensMaxRetries - 1,
+        });
+        continue;
+      }
+
+      const failure: ExecutionFailure = {
+        unit_id: dispatch.unit_id,
+        unit_kind: dispatch.unit_kind,
+        packet_path: dispatch.packet_path,
+        output_path: dispatch.output_path,
+        message: batchFailureMessage ?? "nested worker dispatch failed",
+        failure_kind: failureKindFromMessage(batchFailureMessage ?? ""),
+      };
+      const packetBytes = await fileSizeIfPresent(dispatch.packet_path);
+      const outputBytes = await fileSizeIfPresent(dispatch.output_path);
+      await removeFileIfExists(dispatch.output_path);
+      await appendExecutionFailure(
+        executionPlan.error_log_path,
+        failure,
+        executionPlan.effective_boundary_state,
+      );
+      executionOutcomes[i] = {
+        dispatch,
+        success: false,
+        startedAtMs: nestedStartedAtMs,
+        completedAtMs: nestedCompletedAtMs,
+        attemptCount: 1,
+        packetBytes,
+        outputBytes,
+        failure,
+      };
     }
     // Capture outer teamlead halt_reason for the post-dispatch halt check
     // (synthesize may still run if enough lenses participated, matching the
