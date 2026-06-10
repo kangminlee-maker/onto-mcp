@@ -1,0 +1,195 @@
+schema_version: 1
+session_id: 20260611-b43f0db6
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Change effectivity is modeled as a current Part revision plus a
+      date rule rather than as an independent production-time authority that can
+      reconcile ECO status, effective date, and revision synchronization.
+    shared_cause: null
+    rationale: "Both findings point to the same ECO/Part.rev authority gap:
+      finding-001 focuses on the production risk when ECO.effective_date has
+      passed but Part.rev lags, while finding-009 focuses on the same coupling
+      as an evolution risk when effectivity needs to expand beyond a date rule."
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-009
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: The ontology conflates latest change references with
+      production-effective change authority.
+    shared_cause:
+      cause_claim: The model does not separate latest/current ECO pointers from
+        immutable production-effective effectivity records tied to status, date,
+        and revision selection.
+      from_cause_ref: finding-009.cause-003
+      to_cause_ref: finding-016.cause-004
+    rationale: Finding-009 says effectivity is coupled to ECO.effective_date and
+      delayed Part.rev, while finding-016 says current_eco mixes latest ECO with
+      production-effective ECO. The common cause is the absence of a separate
+      effectivity concept that decides what production should use.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-004
+    to_finding_id: finding-009
+    relation: same_root_candidate
+    root_hypothesis: Time-varying manufacturing truth is represented as current
+      scalar attributes and date notes rather than versioned/effective
+      production baselines.
+    shared_cause: null
+    rationale: Finding-004 identifies missing effective periods and history for
+      BOM/routing values; finding-009 identifies missing effectivity modeling
+      for ECO-to-revision application. Both would be falsified by explicit
+      immutable revision/effectivity records that production orders can
+      reference for the applicable point in time.
+    confidence: medium
+  - relation_id: rel-004
+    from_finding_id: finding-004
+    to_finding_id: finding-005
+    relation: enables
+    root_hypothesis: Without a production-order execution concept, the ontology has
+      no stable object on which to freeze the applicable BOM/routing/effectivity
+      baseline.
+    shared_cause: null
+    rationale: Finding-004 calls for reconstructing the BOM/routing values used at a
+      production time. Finding-005 shows that ProductionOrder or WorkOrder is
+      missing, which is the natural execution object that would carry a snapshot
+      or references to BOM/routing revisions. The execution coverage gap
+      therefore enables the historical reconstruction gap.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-002
+    to_finding_id: finding-008
+    relation: shared_cause_candidate
+    root_hypothesis: Operational quantity governance is outside the ontology, so
+      unit-sensitive values depend on local or manual practices.
+    shared_cause:
+      cause_claim: The ontology records UOM conversion as an unmanaged site practice
+        instead of a governed conversion master with precedence and
+        invalid-input behavior.
+      from_cause_ref: finding-002.cause-003
+      to_cause_ref: finding-008.cause-002
+    rationale: Finding-002 treats missing UOM conversion authority as part of
+      broader operational shadow data governance; finding-008 isolates the same
+      unmanaged conversion practice as the reason UOM evolution is brittle. The
+      referenced causes are substantively the same local-conversion gap.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: same_root_candidate
+    root_hypothesis: Manual and external-source operational data movements are
+      documented as accepted practices without modeling the governing control
+      event, authority, or reconciliation evidence.
+    shared_cause: null
+    rationale: Finding-002 focuses on missing canonical authority and validation for
+      copied/manual operational values; finding-006 focuses on missing
+      actor/time/basis evidence for approvals and manual copies. Both stem from
+      treating manual or external data movement as notes rather than governed
+      integration concepts.
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-003
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: WorkCenter.capacity_per_shift lacks an explicit unit or basis,
+      causing count and time capacity to share one numeric attribute.
+    shared_cause: null
+    rationale: "The two findings describe the same defect from axiology and
+      semantics lenses: capacity_per_shift is numeric while its unit varies by
+      work center, making operation-time and capacity comparisons unreliable.
+      Their proposed actions also converge on splitting value from unit/basis or
+      typed capacity records."
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-010
+    to_finding_id: finding-012
+    relation: same_root_candidate
+    root_hypothesis: AlternatePart directionality is not normalized into one
+      authoritative relationship contract.
+    shared_cause: null
+    rationale: Finding-010 frames the issue as evolution risk from exposing both a
+      shortcut relation and direction-bearing entity; finding-012 frames the
+      formal contradiction between symmetric definition and one_way enum. Both
+      arise because direction semantics are split across definition, enum, and
+      relation forms.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-012
+    to_finding_id: finding-013
+    relation: duplicates
+    root_hypothesis: AlternatePart simultaneously defines substitution as symmetric
+      and allows one-way direction values.
+    shared_cause: null
+    rationale: "The logic and semantics findings make the same substantive claim
+      against the same evidence: the definition says A substituting B implies B
+      substitutes A, while direction allows one_way with default one_way. The
+      difference is lens framing, not a distinct issue."
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-010
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: The shortcut Part-to-Part alternate relation loses the
+      authority and attributes carried by the AlternatePart relationship entity.
+    shared_cause:
+      cause_claim: The authoritative alternate relationship entity and the relations
+        graph shortcut are both present without a rule preserving direction and
+        condition attributes through the shortcut.
+      from_cause_ref: finding-010.cause-003
+      to_cause_ref: finding-017.cause-002
+    rationale: Finding-010 says the Part-to-Part shortcut cannot preserve
+      conditional/directional meaning for future evolution; finding-017 says the
+      same shortcut structurally disconnects AlternatePart.direction from the
+      relations graph. Both depend on the shortcut relation bypassing the
+      relationship entity.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-011
+    to_finding_id: finding-018
+    relation: same_root_candidate
+    root_hypothesis: The BOM graph contract is under-specified, mixing semantic
+      exceptions and relation/attribute projections without a single canonical
+      graph for validation.
+    shared_cause: null
+    rationale: Finding-011 exposes a direct conflict in BOM acyclicity when
+      self-inclusion is allowed; finding-018 shows the parent edge is not
+      explicitly closed between BomLine attributes and relations. Both affect
+      whether BOM traversal and cycle validation operate over a clear canonical
+      graph, though the immediate defects differ.
+    confidence: medium
+  - relation_id: rel-012
+    from_finding_id: finding-006
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Lifecycle and control transitions are represented mainly as
+      terminal status labels, without event/history concepts that explain how
+      and why those states change or end.
+    shared_cause: null
+    rationale: Finding-006 identifies missing audit/control events for approval,
+      release, and manual changes; finding-007 identifies missing end-of-life
+      and correction states after release/applied. Both concern insufficient
+      modeling of controlled transitions over master-data lifecycle, not just
+      individual attribute omissions.
+    confidence: low
+  - relation_id: rel-013
+    from_finding_id: finding-006
+    to_finding_id: finding-014
+    relation: shared_cause_candidate
+    root_hypothesis: Quality and control artifacts are compressed into adjacent
+      operational entities instead of being modeled as separately governed
+      evidence or criteria concepts.
+    shared_cause:
+      cause_claim: The ontology lacks a distinct evidence/criteria artifact layer for
+        externally sourced or human-controlled manufacturing controls.
+      from_cause_ref: finding-006.cause-003
+      to_cause_ref: finding-014.cause-003
+    rationale: Finding-006 notes missing actor/timestamp/basis evidence for
+      controlled values, including SOP-derived inspection criteria. Finding-014
+      says InspectionPlan, a criteria/plan artifact, is collapsed into
+      Operation. The shared cause is weak separation between execution entities
+      and governed control/criteria artifacts.
+    confidence: low
+singleton_findings: []

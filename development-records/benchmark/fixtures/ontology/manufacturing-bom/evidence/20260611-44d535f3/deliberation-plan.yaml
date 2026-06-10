@@ -1,0 +1,154 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+planned_issues:
+  - issue_id: issue-002
+    priority: 90
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-002.coverage
+      - issue-stance-matrix.yaml#stances.issue-002.evolution
+      - issue-stance-matrix.yaml#stances.issue-002.axiology
+      - issue-stance-matrix.yaml#stances.issue-002.logic
+      - issue-stance-matrix.yaml#stances.issue-002.semantics
+      - issue-stance-matrix.yaml#stances.issue-002.structure
+    conflict_summary: Most lenses accept the issue as a missing ProductionOrder or
+      ManufacturingOrder execution subdomain, while evolution narrows the root
+      to the absence of a release/effectivity snapshot that fixes selected BOM,
+      Routing, and Part revision at execution time.
+    resolution_question: Should the material root be stated as a broad
+      production-order subdomain omission, or narrowed to the missing execution
+      snapshot/release-basis concept that binds production orders to selected
+      effective master-data versions?
+  - issue_id: issue-004
+    priority: 80
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - coverage
+      - evolution
+      - axiology
+      - logic
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.coverage
+      - issue-stance-matrix.yaml#stances.issue-004.evolution
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+      - issue-stance-matrix.yaml#stances.issue-004.structure
+    conflict_summary: Most lenses support a combined unit-conversion and
+      capacity-basis master-data gap, while evolution narrows the issue toward
+      WorkCenter capacity unit/basis contracts and extensibility. This affects
+      whether the issue remains a broad shared basis gap or is split/clustered
+      with capacity-specific issues.
+    resolution_question: Should issue-004 cover both item unit conversion and
+      WorkCenter capacity basis as one material master-data gap, or should
+      deliberation narrow it to capacity basis and leave item unit conversion as
+      a separate or lower-scope concern?
+  - issue_id: issue-007
+    priority: 100
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - coverage
+      - axiology
+      - evolution
+      - semantics
+      - structure
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.logic
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+      - issue-stance-matrix.yaml#stances.issue-007.evolution
+      - issue-stance-matrix.yaml#stances.issue-007.semantics
+      - issue-stance-matrix.yaml#stances.issue-007.structure
+    conflict_summary: Logic frames the issue as a direct contradiction between
+      mandatory BOM acyclicity and allowed Assembly self-inclusion, while
+      coverage narrows the root to a missing recovery/rework input domain for
+      scrap reintroduction. The selected root changes whether the fix is
+      primarily rule-scope clarification or domain separation.
+    resolution_question: Is the material root the internal rule contradiction
+      itself, the missing separate recovery/rework input relation that causes
+      the contradiction, or both as a coupled logic-and-coverage issue?
+  - issue_id: issue-008
+    priority: 85
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - structure
+      - axiology
+      - evolution
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.structure
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+    conflict_summary: Semantics and several lenses frame the issue as inconsistent
+      direction meaning across AlternatePart definition, direction, and
+      alternate_of shortcut, while coverage narrows to missing
+      one_way/bidirectional conditions and structure narrows to the shortcut
+      hiding the AlternatePart relation object. This affects whether the issue
+      is a semantic contract problem, a structural relation-contract problem, or
+      a cluster with issue-013.
+    resolution_question: Should the material root be the inconsistent direction
+      semantics of AlternatePart, the structural shortcut that drops
+      direction-bearing relation objects, or a combined issue that must be
+      resolved together with issue-013?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All participating stances support the issue, accept the root hypothesis,
+      and keep the high severity; no runtime conflict signals require
+      deliberation.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: Logic narrows the framing to auditable action/evidence concepts rather
+      than internal contradiction, but all lenses support the issue, keep
+      severity, and converge on adding audit event evidence for actor,
+      timestamp, source, reason, and before/after values.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All stances support the issue, accept the root hypothesis, and keep
+      medium severity; no material disagreement is present.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: All stances support the capacity_per_shift unit/basis issue, accept the
+      root hypothesis, and keep medium severity; overlap with issue-004 does not
+      create a distinct stance conflict inside this issue.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All stances support separating Part item/design revision from drawing
+      revision, accept the root hypothesis, and keep medium severity.
+  - issue_id: issue-010
+    reason_code: no_material_conflict
+    reason: "Coverage narrows the issue to insufficient separation of inspection
+      plan/spec and inspection execution areas, but the narrowed framing still
+      leads to the same action supported by the other lenses: model
+      InspectionPlan separately from Operation or introduce a distinct
+      InspectionOperation."
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All stances support the BomLine.scrap_rate meaning-boundary issue,
+      accept the root hypothesis, and keep medium severity.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All stances support the capacity_per_shift semantic conflict between
+      throughput and time capacity, accept the root hypothesis, and keep medium
+      severity.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: All stances support the structural disconnection of AlternatePart from
+      the relation graph, accept the root hypothesis, and keep medium severity;
+      its shared cause with issue-008 can be considered during issue-008
+      deliberation without making issue-013 internally conflicted.

@@ -1,0 +1,196 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: 수동 보고용 risk_grade 조정이 원천 등급과 파생/조정 등급의 권위, 우선순위, 유효시점,
+      provenance를 분리하지 않아 공유 등급 기준을 흔든다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 여러 렌즈가 수동 조정의 권위 경계와 이력 기준 부재를 인정했고, resolution도 medium 권위 drift로
+      확정했다. 공유 기준으로 쓰기 전에는 원천 등급과 조정 등급의 권위 관계를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 등급 스케일, 매핑, 분류 어휘가 버전과 유효기간을 가진 권위 개념으로 관리되지 않아 현재 해석, 과거
+      재구성, 향후 taxonomy 변경이 모두 소비자별 규칙에 의존한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: high severity로 확정된 핵심 taxonomy authority 결함이다. 등급/분류 체계가 공유 온톨로지 내부에서
+      닫히지 않으면 리스크 엔진과 보고 시스템의 기준 자체가 분기된다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-004
+      - finding-008
+      - finding-009
+  - issue_id: issue-003
+    problem_definition: 한도 소진율과 RiskAppetite 판단에 쓰이는 집계 기준시각, 일중 반영 상태, FX 권위가 하나의
+      계산 계약 안에서 정합적으로 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: medium 이슈로 확정되었고, 시간 기준과 환율 권위가 닫히지 않을 때 같은 리스크 판단이 시스템·시점별로 달라진다. 계산
+      계약의 일관성 결함으로 분류한다.
+    related_surface_finding_ids:
+      - finding-003
+  - issue_id: issue-004
+    problem_definition: 등급, 한도, 환율의 복수 원천 값에 대해 단일 원본, 변환 버전, 충돌 우선순위를 표현하는 공통 권위 모델이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: high severity authority gap으로 확정되었다. 복수 원천과 소비자별 해석을 닫는 권위 개념이 없으면
+      온톨로지가 공유 기준이 아니라 시스템별 해석 목록이 된다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-005
+    problem_definition: 수동 입력과 수동 조정이 값 변경 이벤트로 모델링되지 않아 actor, 시각, 근거, 승인 증거가 남지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: coverage 중심 medium 이슈로 확정되었고 여러 렌즈가 event/provenance 모델링 필요성을 지지했다.
+      운영 통제와 감사 설명 가능성을 약화하는 원인 결함이다.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-006
+    problem_definition: 연체·부실 상태를 범위 밖으로 두면서도 공유 리스크 분류가 참조할 최소 외부 상태 경계 개념을 제공하지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 도메인 전체를 흡수할 필요는 없지만, 리스크 분류에 영향을 주는 외부 상태의 경계 참조는 필요하다는 점이 medium 이슈로
+      확정되었다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-007
+    problem_definition: 통화 변환이 system-local FX table에 위임되어 source, cut-off, version,
+      replay 계약이 공유 개념으로 남지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: maintainability_evolvability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: FX version/replay authority 문제로 확정된 medium 이슈다. FX 기준 변경 후에도 같은
+      utilization 개념을 재현하려면 versioned conversion authority가 필요하다.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: RiskAppetite의 violation/compliance status 규칙이 비교 대상 속성으로 직접
+      닫히지 않고 자기 상태를 재참조해 정의가 과소명세되어 있다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: planned_follow_up
+    closure_class: document_only
+    closure_obligation: planned_later
+    domain_axes: {}
+    rationale: low severity observation으로, material deliberation 대상이 아니었다. 더 큰
+      RiskAppetite assessment 분리 문제의 표면 증상으로 보되 현재 증거상 즉시 차단 이슈는 아니다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-009
+    problem_definition: ExposureAggregate.total_amount가 현재 전체 합계와 dated batch
+      snapshot 의미를 동시에 가져 invariant와 temporal state가 충돌한다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: logic finding 기반 medium 이슈로 확정되었다. 같은 필드가 현재 합계와 배치 스냅샷을 함께 의미하면 한도와
+      appetite 계산의 일관성이 깨진다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-010
+    problem_definition: 담보 기반 LTV가 Exposure.amount, Collateral.appraised_value,
+      secured_by 관계, 계산 basis, as_of, manual provenance와 분리되어 검증·재계산·이력 재현이 어렵다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: needs_evidence
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: deliberation에서 canonical root는 LTV derivation/provenance/history 결함으로
+      좁혀졌지만, semantics와 axiology는 Collateral-as-Exposure까지 포함한 broader
+      high-severity root를 계속 보존했다. 따라서 확정 범위는 조치 대상이나 남은 disagreement와 추가 증거
+      필요성이 있다.
+    related_surface_finding_ids:
+      - finding-013
+      - finding-015
+  - issue_id: issue-011
+    problem_definition: Borrower.internal_rating, RiskRating.grade,
+      Exposure.risk_grade의 의미 분리와 매핑 권위가 온톨로지 내부에 없어 세 등급 스케일의 변환·비교가 소비자별 해석에
+      남는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: broad high-severity semantic authority issue로 확정되었다. 등급 의미권과 매핑 권위가
+      공유 기준의 핵심이므로 target 안에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-014
+  - issue_id: issue-012
+    problem_definition: RiskAppetite가 정책 threshold와 compliance_status를 섞고 적용 대상 관계도
+      없어 위반 판단의 대상, 기준시각, 계산 결과가 닫히지 않는다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: semantics와 structure가 직접 지지한 medium 이슈로 확정되었다. 정책 기준과 특정 시점
+      assessment/result를 분리해야 위반 판단이 재계산·감사 가능해진다.
+    related_surface_finding_ids:
+      - finding-016
+      - finding-017
+  - issue_id: issue-013
+    problem_definition: Exposure.risk_grade가 RiskRating.grade에서 도출된다는 규칙에 대응하는 직접
+      관계나 mapping 엔티티가 없어 등급 계보를 그래프에서 추적할 수 없다.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: medium 구조 이슈로 확정되었지만, broader 등급 권위 문제(issue-011)와 수동 조정 권위
+      문제(issue-001)의 구조적 증상 성격도 강하다. 그래도 특정 관계 누락은 다음 단계 전 닫아야 할 추적성 결함이다.
+    related_surface_finding_ids:
+      - finding-018

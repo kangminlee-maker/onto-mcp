@@ -1,0 +1,82 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules[0]
+    evidence_anchor: 'Embedded Materialized Input, integrity_rules[0]: "BOM은 비순환이어야
+      한다. 단, 재생 원료 회수 공정(스크랩 재투입)은 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다."'
+    claim: BOM 비순환 필수 규칙과 자기 포함 모델링 허용 예외가 동일 규칙 안에서 충돌한다.
+    what: 동일한 integrity rule이 먼저 BOM의 비순환성을 필수 조건으로 선언한 뒤, 특정 공정에서는 Assembly가 자기 하위에
+      자신을 포함하는 순환 구조를 모델링한다고 허용합니다.
+    why: "`Assembly -> BomLine -> Part`와 `Assembly is_a Part` 구조에서는 Assembly가 자기 하위
+      Part로 자신을 포함하면 BOM 경로상 자기 순환이 됩니다. 따라서 'BOM은 비순환이어야 한다'는 necessary 제약과
+      'Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다'는 possible/required modeling 예외가 같은
+      대상 그래프에서 동시에 만족될 수 없습니다. PLM/MES 통합 기준 문서에서 이 모순은 BOM 검증기가 순환을 오류로 막아야
+      하는지, 스크랩 재투입을 정상 구조로 받아야 하는지 결정할 수 없게 만듭니다. conflict_pair:
+      [manufacturing-bom-ontology.yaml:integrity_rules[0],
+      manufacturing-bom-ontology.yaml:integrity_rules[0]]. satisfiability_note:
+      intra-claim; 단일 규칙 내부에서 전역 비순환 제약과 자기 포함 허용 예외가 충돌한다. modality_note:
+      mixed; necessary prohibition of cycles와 possible/exceptional allowance of
+      self-inclusion이 같은 BOM 구조에 적용된다. boundary_handoff_note: 구조적으로 스크랩 재투입을 별도
+      관계나 공정 투입으로 모델링할 대체 구조가 없다는 점은 structure lens 경계와 맞닿지만, 현재 finding은 명시 규칙
+      내부의 동시 만족 불가능성이므로 logic 소유이다."
+    how_to_fix: 비순환 규칙의 적용 범위를 일반 자재 BOM으로 한정하고, 스크랩 재투입은 BOM parent-child 자기참조가 아닌
+      별도 recovery/rework input 관계로 분리하거나, 허용되는 순환 유형과 검증 예외 조건을 명시하세요.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 BOM 및 공정 개념 기준 문서로서 BOM 검증/생산 투입 생성의 기준을 제공하는 목적.
+      failure_condition: 재생 원료 회수 공정이 포함된 Assembly BOM을 처리할 때, 동일 모델이 순환 금지 위반과 허용된 자기
+        포함 구조를 동시에 갖게 된다.
+      impact: 통합 검증, 생산 오더 생성, BOM 전개 로직이 같은 BOM을 오류와 정상으로 동시에 판정할 수 있어 운영 기준의 신뢰성과
+        자동화 가능성을 약화한다.
+      evidence_refs:
+        - "Embedded Materialized Input: Assembly is_a Part and
+          Assembly.bom_lines target BomLine"
+        - "Embedded Materialized Input: BomLine.parent_ref target Assembly;
+          BomLine.child_ref target Part"
+        - "Embedded Materialized Input: integrity_rules[0]"
+    causal_path:
+      root_cause_candidate: 스크랩 재투입이라는 공정상 재사용 흐름을 BOM의 parent-child 포함 관계에 자기참조 예외로 직접 얹었다.
+      root_cause_step_id: logic-candidate-001.cause-004
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: BOM 구조는 Assembly가 BomLine을 갖고, BomLine이 child_ref로 Part를 참조하며, Assembly도
+            Part의 일종이라고 선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "Embedded Materialized Input: Assembly.is_a Part"
+            - "Embedded Materialized Input: Assembly.attributes.bom_lines target
+              BomLine"
+            - "Embedded Materialized Input: BomLine.attributes.child_ref target
+              Part"
+        - cause_id: logic-candidate-001.cause-002
+          claim: integrity_rules[0]은 모든 BOM에 대해 비순환이어야 한다는 necessary 제약을 둔다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "Embedded Materialized Input: integrity_rules[0] first sentence"
+        - cause_id: logic-candidate-001.cause-003
+          claim: 같은 integrity_rules[0]은 스크랩 재투입을 Assembly가 자기 하위에 자신을 포함하는 형태로 모델링한다고 선언해
+            자기 순환을 허용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: integrity_rules[0] exception
+              sentence"
+        - cause_id: logic-candidate-001.cause-004
+          claim: 따라서 스크랩 재투입 Assembly BOM은 비순환이어야 하면서 동시에 자기 하위 포함 순환을 가져야 하므로 동시 만족이
+            불가능하다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "Embedded Materialized Input: integrity_rules[0]"
+            - "Embedded Materialized Input: Assembly/BomLine type declarations"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 제조 도메인별 외부 규칙은 사용하지 않고, 문서 내 명시 claim 집합의 형식적 양립
+    가능성만 판단했다.
+  - 제조 운영 위험의 물질성은 prompt의 review request 및 target profile에 명시된 PLM/MES 통합 기준 문서
+    목적 범위 안에서만 해석했다.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,297 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+lens_id: semantics
+human_output_ref: null
+findings:
+  - candidate_id: semantics-candidate-001
+    target: AlternatePart.definition / AlternatePart.direction / relations.alternate_of
+    evidence_anchor: .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:37,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:38,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:42,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:44,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:45,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:91
+    claim: AlternatePart는 대체 관계의 방향 의미를 서로 모순되게 정의한다.
+    what: 정의는 'A의 대체가 B이면 B의 대체도 A'라고 하여 대체 관계를 항상 대칭 관계로 설명하지만, 같은 엔티티의 direction
+      속성은 one_way와 bidirectional을 허용하고 기본값을 one_way로 둔다. 또한 Part-to-Part
+      alternate_of 단축 관계는 방향 의미를 드러내지 않는다.
+    why: 대체 가능 부품은 제조 실행에서 투입 가능 품목을 결정하는 개념이므로, 대칭 대체와 단방향 대체는 의미가 다르다. 현재 정의는 사용자가
+      관계를 대칭으로 해석하게 만들고, 속성은 단방향을 기본으로 하므로 같은 AlternatePart 인스턴스가 어느 방향으로 유효한지
+      개념 기준 문서만으로 일관되게 판단할 수 없다.
+    how_to_fix: AlternatePart 정의를 'primary_ref 품목을 alternate_ref 품목으로 대체할 수 있는 관계'처럼
+      방향성을 기본 의미로 고치고, bidirectional일 때만 역방향도 허용한다고 명시한다. 단축 관계 alternate_of도
+      directed_alternate_of와 mutual_alternate_of처럼 방향 의미가 보존되도록 분리하거나 direction을
+      필수 조건으로 참조하게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 대체 부품 사용 가능성을 일관되게 해석하게 하는 목적.
+      failure_condition: MES나 계획 시스템이 AlternatePart 정의의 대칭 문장을 따르거나 alternate_of 단축
+        표기를 사용하면서 one_way 기본 방향을 무시할 때, 역방향 대체가 허용되는지 잘못 판단될 수 있다.
+      impact: 대체 투입 가능성이 잘못 해석되면 승인되지 않은 부품 투입, 자재 가용성 판단 오류, BOM 대체 정책의 실행 불일치로 이어져
+        제조 운영 신뢰를 약화한다.
+      evidence_refs:
+        - materialized-input.md:37
+        - materialized-input.md:38
+        - materialized-input.md:42
+        - materialized-input.md:44
+        - materialized-input.md:45
+        - materialized-input.md:91
+    causal_path:
+      root_cause_candidate: 대체 관계의 기본 의미를 대칭 관계로 서술하면서 별도 속성에서는 단방향을 기본값으로 둔 의미 모델링 불일치.
+      root_cause_step_id: semantics-candidate-001.cause-003
+      steps:
+        - cause_id: semantics-candidate-001.cause-001
+          claim: AlternatePart 정의는 대체 관계를 항상 상호 대체 가능한 관계로 설명한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:37
+            - materialized-input.md:38
+        - cause_id: semantics-candidate-001.cause-002
+          claim: 같은 엔티티의 direction 속성은 one_way와 bidirectional을 구분하며 기본값을 one_way로 둔다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:42
+            - materialized-input.md:44
+            - materialized-input.md:45
+        - cause_id: semantics-candidate-001.cause-003
+          claim: Part-to-Part alternate_of 단축 관계는 AlternatePart를 통해 표현되는 관계라고만 하며 방향 의미를
+            표면화하지 않는다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:91
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-002
+    target: Part.rev / ECO effective revision semantics
+    evidence_anchor: .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:14,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:15,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:20,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:69,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:70,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:96
+    claim: Part.rev가 품목 리비전과 도면 리비전을 혼동한다.
+    what: Part는 구매 또는 제조되는 최소 관리 단위 품목으로 정의되어 있는데 rev 속성은 '도면 리비전'이라고 설명된다. 반면 ECO
+      규칙은 effective_date 이후 생산분이 신규 rev를 따른다고 하여 rev를 생산 적용 기준이 되는 품목/설계 리비전처럼
+      사용한다.
+    why: 도면 리비전은 문서 원본의 버전이고, 생산 적용 rev는 품목 또는 설계 변경의 유효 버전이다. 둘을 하나의 Part.rev로 합치면
+      PLM의 설계 변경 적용 기준과 MES의 생산 주문 기준이 같은 속성에 묶여, 도면 관리대장 동기화 지연이 생산 rev 의미까지
+      지연시키는 것처럼 해석된다.
+    how_to_fix: Part에는 생산과 변경관리 기준이 되는 item_rev 또는 design_rev를 별도 정의하고, 도면 문서의
+      revision은 drawing_rev 또는 drawing_ref.rev로 분리한다. ECO 규칙은 어떤 revision 개념을
+      갱신하고 MES가 어느 revision authority를 따라야 하는지 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목·BOM·라우팅·변경관리 개념을 PLM/MES 통합 기준으로 정합하게 정의하는 목적.
+      failure_condition: ECO effective_date 이후 MES 생산분의 rev 판단이 Part.rev를 참조하는데, 해당
+        속성이 도면 리비전이자 주간 배치 동기화 대상일 때 변경 유효성의 의미가 문서 동기화 상태와 혼동된다.
+      impact: 변경 적용 시점과 생산 기준 revision의 의미가 불명확해져, 신규 설계 적용 대상 생산분을 구분하는 통합 계약의 신뢰가
+        낮아진다.
+      evidence_refs:
+        - materialized-input.md:14
+        - materialized-input.md:15
+        - materialized-input.md:20
+        - materialized-input.md:69
+        - materialized-input.md:70
+        - materialized-input.md:96
+    causal_path:
+      root_cause_candidate: Part.rev라는 단일 속성에 도면 문서 리비전과 생산 적용 설계/품목 리비전의 의미를 함께 부여했다.
+      root_cause_step_id: semantics-candidate-002.cause-003
+      steps:
+        - cause_id: semantics-candidate-002.cause-001
+          claim: Part는 구매 또는 제조되는 최소 관리 단위 품목으로 정의된다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:14
+            - materialized-input.md:15
+        - cause_id: semantics-candidate-002.cause-002
+          claim: Part.rev는 도면 리비전이며 도면 관리대장이 원본이라고 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:20
+        - cause_id: semantics-candidate-002.cause-003
+          claim: ECO 규칙은 effective_date 이후 생산분이 신규 rev를 따른다고 하여 rev를 생산 적용 기준으로 사용한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:96
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-003
+    target: InspectionPlan.is_a Operation
+    evidence_anchor: .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:47,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:48,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:52,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:53,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:77,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:78,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:79,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:81,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:82
+    claim: InspectionPlan을 Operation의 하위 유형으로 둔 것은 계획/파라미터 문서와 공정 실행 단계를 혼동한다.
+    what: Operation은 라우팅의 한 공정 단계로 work_center와 std_time_min을 가진다. InspectionPlan은
+      검사 계획이며 Operation의 검사 파라미터 확장이라고 정의되어 sampling_rule과 acceptance_criteria를
+      가진다. 그러나 검사 계획 자체는 라우팅 단계가 아니라 검사 Operation에 적용되는 계획 또는 사양이다.
+    why: Operation의 인스턴스는 수행되는 단계여야 하지만 InspectionPlan의 인스턴스는 기준과 규칙을 담은 제도적/문서적
+      구성물에 가깝다. is_a 관계를 두면 모든 InspectionPlan이 Operation의 필수 속성과 실행 의미를 상속하게 되어,
+      검사 계획을 작업장과 표준시간이 있는 공정 단계로 오인할 수 있다.
+    how_to_fix: InspectionPlan을 Operation의 하위 유형이 아니라 InspectionOperation 또는
+      Operation에 연결되는 plan/spec 엔티티로 모델링한다. 검사 공정 단계가 필요하면 InspectionOperation
+      is_a Operation을 두고, InspectionOperation이 InspectionPlan을 참조하게 분리한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 라우팅과 검사 계획의 의미를 PLM/MES 통합에서 실행 가능한 개념 기준으로 구분하는 목적.
+      failure_condition: 라우팅 operations 목록 또는 Operation 상속 속성을 기준으로 InspectionPlan을 실행
+        공정 단계로 처리할 때, 검사 기준 문서가 작업 단계로 잘못 해석된다.
+      impact: 검사 계획과 검사 공정의 경계가 흐려져 MES 라우팅, 작업장 배정, 표준시간 산정, 품질 기준 적용의 의미 계약이 불안정해진다.
+      evidence_refs:
+        - materialized-input.md:47
+        - materialized-input.md:48
+        - materialized-input.md:52
+        - materialized-input.md:53
+        - materialized-input.md:77
+        - materialized-input.md:78
+        - materialized-input.md:79
+        - materialized-input.md:81
+        - materialized-input.md:82
+    causal_path:
+      root_cause_candidate: 검사 계획이라는 규칙/사양 개념을 검사 작업 단계와 동일한 존재론적 유형으로 모델링했다.
+      root_cause_step_id: semantics-candidate-003.cause-003
+      steps:
+        - cause_id: semantics-candidate-003.cause-001
+          claim: Operation은 라우팅의 한 공정 단계이며 작업장과 표준시간 속성을 가진다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:47
+            - materialized-input.md:48
+            - materialized-input.md:52
+            - materialized-input.md:53
+        - cause_id: semantics-candidate-003.cause-002
+          claim: InspectionPlan은 검사 계획 및 검사 파라미터 확장으로 정의되며 sampling_rule과
+            acceptance_criteria를 가진다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:77
+            - materialized-input.md:78
+            - materialized-input.md:81
+            - materialized-input.md:82
+        - cause_id: semantics-candidate-003.cause-003
+          claim: InspectionPlan이 Operation을 상속하도록 지정되어 계획 개념이 공정 단계 개념의 필수 의미를 갖게 된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:79
+      unresolved_beyond_evidence: null
+  - candidate_id: semantics-candidate-004
+    target: BomLine.scrap_rate
+    evidence_anchor: .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:29,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:30,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:34,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:35,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:47,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:48
+    claim: BomLine.scrap_rate는 BOM 구조 수량과 공정 불량률 의미를 섞어 독립 입력으로 둔다.
+    what: BomLine은 상위 품목이 하위 품목을 얼마나 쓰는지를 표현하며 qty_per를 가진다. 여기에 scrap_rate가 '공정 불량
+      감안 계수'로 추가되어 있고, 값은 생산계획팀 엑셀에서 복사한다고 되어 있다. 공정 불량은 Operation 또는 Routing 실행
+      조건의 의미에 가깝지만 BOM 한 줄의 구조 수량 속성으로 들어가 있다.
+    why: scrap_rate처럼 비율/율을 뜻하는 값은 원천 관측치나 공정 조건에서 파생되거나 특정 공정에 귀속되는 경우가 많다. 현재 모델은
+      원천 공정·측정 기준 없이 BOM 라인에 복사본을 보관하므로, 동일 부품의 구조 소요량(qty_per)과 공정 수율
+      보정값(scrap_rate)이 같은 수준의 독립 입력처럼 보인다.
+    how_to_fix: BOM 구조에는 qty_per와 적용 조건만 두고, scrap_rate는 Routing/Operation별 yield 또는
+      planning_factor로 분리한다. 반드시 BOM 라인에 노출해야 한다면 원천 공정, 기준 기간, authority, 계산식
+      또는 복사본 여부를 명시해 파생값임을 드러낸다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: BOM과 라우팅/공정 개념의 의미 경계를 통합 기준 문서에서 분명히 하는 목적.
+      failure_condition: PLM/MES 또는 생산계획 연동이 BomLine.scrap_rate를 BOM의 원천 구조 데이터로 취급하면,
+        공정 조건에서 온 불량 보정값과 제품 구조 수량이 동일 authority의 입력으로 혼동된다.
+      impact: 공정 불량 보정값의 출처와 적용 범위가 불명확해져 자재 소요량, 계획 수량, 원가 계산에서 원천 드리프트와 중복 보정 위험이
+        생긴다.
+      evidence_refs:
+        - materialized-input.md:29
+        - materialized-input.md:30
+        - materialized-input.md:34
+        - materialized-input.md:35
+        - materialized-input.md:47
+        - materialized-input.md:48
+    causal_path:
+      root_cause_candidate: 공정 불량을 반영하는 비율 개념을 원천 공정이나 계산 기준 없이 BOM 라인의 독립 속성으로 모델링했다.
+      root_cause_step_id: semantics-candidate-004.cause-004
+      steps:
+        - cause_id: semantics-candidate-004.cause-001
+          claim: BomLine은 BOM 한 줄로서 상위 품목이 하위 품목을 얼마나 쓰는지를 의미한다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:29
+            - materialized-input.md:30
+        - cause_id: semantics-candidate-004.cause-002
+          claim: BomLine에는 구조 수량 qty_per와 함께 scrap_rate가 독립 number 속성으로 존재한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:34
+            - materialized-input.md:35
+        - cause_id: semantics-candidate-004.cause-003
+          claim: scrap_rate는 공정 불량 감안 계수이며 생산계획팀 엑셀 값을 복사한다고 설명된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:35
+        - cause_id: semantics-candidate-004.cause-004
+          claim: Operation은 라우팅의 공정 단계로 별도 정의되어 있어 공정 불량 의미의 자연스러운 귀속 후보가 존재한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - materialized-input.md:47
+            - materialized-input.md:48
+      unresolved_beyond_evidence: 이 파일 안에는 scrap_rate의 계산식, 기준 기간, 적용 공정이 정의되어 있지 않으므로
+        실제 운영에서 이를 어떻게 보정하는지는 경계 밖이다.
+  - candidate_id: semantics-candidate-005
+    target: WorkCenter.capacity_per_shift
+    evidence_anchor: .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:63,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:64,
+      .onto/review/20260611-44d535f3/execution-preparation/materialized-input.md:67
+    claim: capacity_per_shift가 처리 개수와 시간이라는 서로 다른 의미를 한 속성에 담는다.
+    what: WorkCenter는 작업장/설비 그룹으로 정의되며 capacity_per_shift는 교대당 처리 능력이라고 설명된다. 그러나
+      note는 단위가 작업장마다 개수 또는 시간으로 다르다고 하여 같은 속성이 throughput quantity와 available
+      time capacity를 모두 나타낸다.
+    why: 개수 기준 처리능력과 시간 기준 가용능력은 같은 숫자라도 의미와 계산 방식이 다르다. 같은 capacity_per_shift 이름 아래
+      동음이의적 의미를 허용하면 라우팅 표준시간, 작업장 부하, 생산 가능 수량 계산에서 단위 변환 없이 비교될 수 있다.
+    how_to_fix: capacity_qty_per_shift와 available_time_min_per_shift처럼 의미별 속성을
+      분리하거나, capacity_per_shift를 값+단위+capacity_kind 구조로 바꾸어 count capacity와 time
+      capacity를 명시적으로 구분한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: MES 생산능력과 라우팅 작업장 의미를 정확히 연결하는 PLM/MES 통합 기준 문서의 목적.
+      failure_condition: 설비별 capacity_per_shift 값을 공통 수치로 집계하거나 Routing.std_time_min과
+        결합해 부하를 계산할 때, 개수와 시간이 같은 의미의 capacity처럼 처리될 수 있다.
+      impact: 작업장 부하와 생산 가능 수량 판단에서 단위 의미가 섞여 계획 신뢰도와 실행 가능성 판단이 약해진다.
+      evidence_refs:
+        - materialized-input.md:63
+        - materialized-input.md:64
+        - materialized-input.md:67
+    causal_path:
+      root_cause_candidate: 작업장 능력이라는 상위 용어 아래 처리량 capacity와 시간 capacity를 구분하지 않고 단일 속성으로 모델링했다.
+      root_cause_step_id: semantics-candidate-005.cause-003
+      steps:
+        - cause_id: semantics-candidate-005.cause-001
+          claim: WorkCenter는 공정이 수행되는 작업장/설비 그룹이다.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:63
+            - materialized-input.md:64
+        - cause_id: semantics-candidate-005.cause-002
+          claim: capacity_per_shift는 교대당 처리 능력으로 정의된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+        - cause_id: semantics-candidate-005.cause-003
+          claim: 같은 속성의 단위가 작업장마다 개수 또는 시간으로 다르다고 명시되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:67
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서는 사용하지 않았고, prompt packet에 포함된 자체 완결 입력과
+    일반적인 제조/PLM/MES 용어 의미만 사용했다.
+  - 외부 표준 매핑은 대상 파일에 명시되어 있지 않아 표준 적합성 판정은 수행하지 않았다.
+validation:
+  unaddressable_candidates: []

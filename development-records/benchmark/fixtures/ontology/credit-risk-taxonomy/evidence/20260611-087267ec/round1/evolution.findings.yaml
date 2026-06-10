@@ -1,0 +1,161 @@
+schema_version: 1
+session_id: 20260611-087267ec
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml 등급 체계와 변환 권위
+    evidence_anchor: .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:20-22,31-34,53-56,92-98
+    claim: 등급 스케일 변환이 온톨로지 안에서 버전 관리되지 않아 등급 체계 변경 시 과거 데이터와 규칙의 연속성이 깨질 수 있다.
+    what: Borrower.internal_rating, RiskRating.grade, Exposure.risk_grade가 각각 다른
+      스케일로 정의되어 있고, Exposure.risk_grade는 RiskRating.grade에서 도출된다고 하면서도 수동 조정이
+      가능하다. 정작 변환 기준은 '리스크팀 위키'와 '각 소비 시스템'에 맡겨져 있어 이 온톨로지 자체가 공유 기준 문서 역할을 닫지
+      못한다.
+    why: 리스크 엔진과 보고 시스템이 공유할 개념 권위 문서라면 등급 스케일 간 변환, 수동 조정의 우선순위, 적용 시점, 버전이 같은 권위면에
+      있어야 한다. 현재 구조에서는 R1~R5나 AAA~CCC 체계가 바뀌거나 매핑이 재보정될 때 각 소비 시스템의 구현과 외부 위키
+      상태에 따라 같은 익스포저가 다른 등급 이력을 갖게 될 수 있어 과거 보고 재현과 신규 등급 체계 도입이 취약하다.
+    how_to_fix: 온톨로지에 RatingScale과 RatingMapping 같은 버전된 개념을 추가해 source_scale,
+      target_scale, mapping_version, effective_from/effective_to,
+      override_authority, manual_adjustment_reason을 명시하고, Exposure.risk_grade 도출
+      규칙이 특정 매핑 버전과 조정 권위에 연결되도록 한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서
+      failure_condition: 등급 매핑, 수동 조정 정책, 또는 등급 스케일이 변경되는 경우
+      impact: 공유 온톨로지가 변환 권위를 제공하지 못해 엔진 산출값과 보고 등급의 이력 연속성, 재현성, 통합 기준이 시스템별로 갈라진다.
+      evidence_refs:
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:20-22
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:31-34
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:53-56
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-98
+    causal_path:
+      root_cause_candidate: 등급 변환과 수동 조정 권위가 온톨로지 내부의 버전된 개념으로 모델링되지 않고 외부 위키와 소비 시스템에 분산되어 있다.
+      root_cause_step_id: evolution-candidate-001.cause-004
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 세 개 등급 스케일이 병존하며 각 소비 시스템이 변환을 수행한다고 명시되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:97-98
+        - cause_id: evolution-candidate-001.cause-002
+          claim: RiskRating.grade와 Borrower.internal_rating의 매핑은 온톨로지 밖 리스크팀 위키를 참조한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:53-56
+        - cause_id: evolution-candidate-001.cause-003
+          claim: Exposure.risk_grade는 RiskRating.grade에서 도출되지만 보고서 팀 수동 조정도 허용된다.
+          relation_to_previous: enables
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:31-34
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-93
+        - cause_id: evolution-candidate-001.cause-004
+          claim: 따라서 등급 체계나 매핑이 변경될 때 기존 데이터와 보고 규칙을 어떤 버전으로 해석해야 하는지 온톨로지 안에서 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:53-56
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-98
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml 제품·담보·세그먼트 분류 확장 방식
+    evidence_anchor: .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19,30,44
+    claim: 핵심 분류가 닫힌 enum으로만 박혀 있어 새 여신상품, 담보유형, 차주 세그먼트 추가 시 기존 구조 수정이 필요하다.
+    what: Borrower.segment, Exposure.product_type, Collateral.collateral_type이 각각 고정
+      enum 값 목록으로 정의되어 있다. 값의 유효기간, 외부 코드 매핑, 폐기 상태, 상위/하위 분류 같은 확장 메타데이터는 없다.
+    why: 여신 리스크 분류체계는 상품과 담보 유형이 늘어나거나 세분화될 때 기존 데이터와 보고 기준을 유지하면서 새 값을 받아야 한다. 현재처럼
+      enum 목록이 곧 분류체계의 전부이면 새 상품이나 담보군을 추가할 때 스키마/권위 문서 자체를 수정해야 하고, 기존 보고 카테고리와
+      신규 세부 카테고리의 연결도 표현할 자리가 없다.
+    how_to_fix: 단순 enum을 ProductType, CollateralType, BorrowerSegment 같은 코드셋 개념으로
+      승격하고 code, parent_code, effective_from/effective_to, status,
+      reporting_bucket, engine_mapping을 둔다. enum은 현재 허용값 검증용 projection으로 유지하더라도
+      권위는 버전된 코드셋이 갖게 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 분류체계 변경에 견디는 공유 리스크 개념 기준
+      failure_condition: 신규 상품, 신규 담보 유형, 신규 차주 세그먼트가 도입되거나 기존 분류가 세분화되는 경우
+      impact: 새 범주 수용을 위해 권위 문서와 소비 시스템 enum을 동시에 변경해야 하며, 과거 범주와 신규 범주의 연속적인 집계 기준을
+        온톨로지에서 표현하기 어렵다.
+      evidence_refs:
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:30
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:44
+    causal_path:
+      root_cause_candidate: 변경 가능한 업무 분류가 버전된 코드셋이 아니라 고정 enum 값 목록으로 모델링되어 있다.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: 차주 세그먼트, 상품 유형, 담보 유형이 모두 고정 enum values로 선언되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:30
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:44
+        - cause_id: evolution-candidate-002.cause-002
+          claim: 해당 enum에는 유효기간, 계층, 상태, 외부 코드 매핑, 보고 버킷을 담는 속성이 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:30
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:44
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 그래서 새 범주 도입이나 분류 세분화가 기존 구조 수정과 소비자별 재해석을 요구한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:30
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:44
+      unresolved_beyond_evidence: 실제 소비 시스템이 enum 외 확장 코드를 별도로 허용하는지는 이 경계 안에서 확인되지 않는다.
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml Limit 소진율과 환율 기준
+    evidence_anchor: .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:67,69-76,92-95
+    claim: 통화 환산을 각 시스템의 당일 환율 테이블에 맡겨 외부 기준 변경 시 Limit 소진율의 시계열 연속성이 보장되지 않는다.
+    what: Limit은 currency만 갖고, ExposureAggregate는 월말 배치 total_amount와 as_of를 갖는다.
+      Limit 소진율 규칙은 통화가 다른 경우 각 시스템의 당일 환율 테이블을 사용한다고 정의한다.
+    why: 소진율은 리스크 엔진과 보고 시스템이 공유할 가능성이 높은 파생 지표인데, 환산 기준이 온톨로지 안의 버전된 환율 출처나 as_of
+      정책으로 고정되어 있지 않다. 환율 제공처, 테이블 보정, 당일 기준 시각이 바뀌면 과거 소진율 재계산과 보고 비교가 시스템별로
+      달라질 수 있다.
+    how_to_fix: CurrencyConversionPolicy 또는 FxRateSource 개념을 추가해 source_system,
+      rate_type, as_of_datetime, effective version, fallback rule을 명시하고, Limit
+      utilization 산식이 해당 정책과 ExposureAggregate.as_of를 참조하도록 한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템 간 공유 산식 및 시간 기준의 연속성
+      failure_condition: 다통화 한도/익스포저가 존재하고 환율 테이블, 환율 제공처, 기준시각, 또는 보정 정책이 변경되는 경우
+      impact: 같은 차주와 같은 as_of에 대한 Limit 소진율이 시스템별 환율 기준에 따라 달라질 수 있어 보고 재현성과 엔진-보고
+        정합성이 약해진다.
+      evidence_refs:
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:67
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:69-76
+        - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-95
+    causal_path:
+      root_cause_candidate: 공유 산식에 필요한 환율 권위와 시간 기준이 온톨로지 내부 개념으로 닫혀 있지 않고 각 시스템의 외부 테이블에 위임되어 있다.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Limit은 currency 속성만 정의하고 환산 정책이나 환율 출처 개념을 갖지 않는다.
+          relation_to_previous: null
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:59-67
+        - cause_id: evolution-candidate-003.cause-002
+          claim: ExposureAggregate는 월말 배치와 as_of를 갖지만, 소진율 산식의 환율 기준은 각 시스템의 당일 환율 테이블로
+            분산된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:69-76
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-95
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 따라서 환율 기준이 변경되거나 시스템별 테이블이 다를 때 과거 소진율과 현재 소진율의 연속적인 해석을 온톨로지가 보장하지 못한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-95
+      unresolved_beyond_evidence: 실제 환율 테이블의 운영 정책과 보정 이력은 경계 밖이므로 확인하지 않았다.
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 도메인 문서는 사용하지 않았다.
+  - 검토는 제공된 materialized input과 review target profile에 한정했다.
+  - 외부 role 파일은 현재 파일시스템 경계에서 직접 열리지 않았으며, prompt packet에 내장된 evolution role
+    definition을 사용했다.
+validation:
+  unaddressable_candidates: []

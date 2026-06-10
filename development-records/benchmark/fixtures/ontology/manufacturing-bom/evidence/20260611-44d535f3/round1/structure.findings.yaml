@@ -1,0 +1,83 @@
+schema_version: 1
+session_id: 20260611-44d535f3
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml entities.AlternatePart / relations
+    evidence_anchor: manufacturing-bom-ontology.yaml:32-40 defines AlternatePart
+      with primary_ref, alternate_ref, and direction;
+      manufacturing-bom-ontology.yaml:79-86 relation list contains Part -> Part
+      alternate_of only, with a note that it is a shortcut through
+      AlternatePart.
+    claim: AlternatePart is structurally disconnected from the relation graph that
+      claims to represent it.
+    what: The ontology defines AlternatePart as its own entity with two Part
+      references and a direction attribute, but the declared relations do not
+      connect AlternatePart to Part. Instead, the relation graph uses a direct
+      Part-to-Part alternate_of shortcut, leaving the entity-level
+      substitute-part record outside the explicit relation structure.
+    why: For a PLM/MES integration concept baseline, substitute-part data must be
+      traversable through the canonical structure that carries its properties.
+      Here, the only relation involving alternates bypasses AlternatePart, so
+      consumers following the relations list cannot reach primary_ref,
+      alternate_ref, or direction through the declared entity. This weakens the
+      structural completeness of the model for alternate-part integration even
+      though the entity is present.
+    how_to_fix: Replace or complement the shortcut with explicit relations such as
+      AlternatePart -> Part kind primary_part and AlternatePart -> Part kind
+      alternate_part, and optionally keep Part -> Part alternate_of only as a
+      derived/projection relation if needed.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Use this BOM/routing ontology as a PLM/MES integration concept
+        baseline covering item, BOM, routing, and change-management concepts.
+      failure_condition: When an integration consumer uses the declared relations
+        graph as the structural contract, alternate-part records cannot be
+        traversed as first-class records with their direction property.
+      impact: Alternate substitution is present in the ontology but not structurally
+        connected through its own entity, making the concept baseline less
+        actionable for systems that need to exchange or validate substitute-part
+        records.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:32-40
+        - manufacturing-bom-ontology.yaml:79-86
+    causal_path:
+      root_cause_candidate: The relations section models alternate substitution as a
+        direct Part-to-Part shortcut while omitting relations from the
+        AlternatePart entity to its referenced Part endpoints.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: AlternatePart is defined as an entity carrying primary_ref,
+            alternate_ref, and direction.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:32-40
+        - cause_id: structure-candidate-001.cause-002
+          claim: The relations list does not include AlternatePart as either from or to;
+            it declares only Part -> Part alternate_of for alternates.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:79-86
+        - cause_id: structure-candidate-001.cause-003
+          claim: Therefore the entity that carries alternate-part properties is
+            disconnected from the explicit relation graph used as the ontology's
+            structural contract.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:32-40
+            - manufacturing-bom-ontology.yaml:79-86
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no external domain structure specification was
+    used.
+  - The materialized manufacturing-bom-ontology.yaml content is treated as the
+    authoritative target input.
+  - The structure lens is limited to connection completeness and does not judge
+    domain correctness of relation direction except where it creates a
+    structural disconnection.
+validation:
+  unaddressable_candidates: []

@@ -1,0 +1,177 @@
+schema_version: 1
+session_id: 20260611-b43f0db6
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: manufacturing-bom-ontology.yaml > Part.uom and notes.uom conversion
+    evidence_anchor: 'Part.attributes.uom values [ea, kg, m]; notes: "uom 변환(kg↔ea
+      등)은 품목별 환산계수 마스터가 없고, 필요 시 현장에서 환산한다."'
+    claim: UOM 확장이 enum 수정과 현장 환산에 묶여 PLM/MES 통합 기준의 변경 내성이 낮다.
+    what: 품목 단위가 `ea`, `kg`, `m` 세 값으로 고정되어 있고, 단위 변환의 기준 마스터가 없다고 명시되어 있습니다. 새 단위,
+      품목별 환산, 구매 단위와 생산 단위의 분리 같은 변경이 생기면 기존 구조를 수정하거나 시스템 밖 수작업 규칙에 의존해야 합니다.
+    why: PLM/MES 통합 기준 문서는 품목 수량, BOM 소요량, 계획/실적 수량을 안정적으로 연결해야 합니다. 현재 구조에서는 단위 범주가
+      늘어나는 순간 enum 값 추가가 필요하고, 변환 기준은 온톨로지 밖 현장 판단에 남아 있어 기존 BOM 수량과 새 단위 데이터의
+      연속성이 약해집니다.
+    how_to_fix: "`Uom` 또는 `UnitConversion` 개념을 별도 기준 마스터로 분리하고, `Part`에는 기본 관리 단위와
+      필요 시 구매/생산/재고 단위를 참조하게 하십시오. `BomLine.qty_per`에도 수량 단위 또는 부모/자식 단위 변환 기준을
+      명시하십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목과 BOM 수량 의미를 일관되게 확장하는 목적
+      failure_condition: 새 단위 또는 품목별 환산이 필요한 품목이 추가될 때 enum 수정과 시스템 외 수작업 환산 없이는 기존
+        BOM/MES 수량을 같은 기준으로 해석할 수 없는 조건
+      impact: 단위 확장 시 기존 데이터의 의미 연속성이 깨지고, BOM 소요량·생산계획·실적 집계 간 수량 불일치가 통합 리스크가 됩니다.
+      evidence_refs:
+        - Part.attributes.uom values [ea, kg, m]
+        - "notes: uom conversion lacks item-specific conversion master and is
+          handled on site"
+    causal_path:
+      root_cause_candidate: 단위를 값 목록으로만 모델링하고, 단위 변환의 원본 권한을 온톨로지 안의 참조 가능한 기준 개념으로 두지 않은 것
+      root_cause_step_id: evolution-candidate-001.cause-003
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: 품목 단위는 `ea`, `kg`, `m` enum으로 고정되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - Part.attributes.uom values [ea, kg, m]
+        - cause_id: evolution-candidate-001.cause-002
+          claim: 품목별 환산계수 마스터가 없고 필요 시 현장에서 환산한다고 되어 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "notes: uom conversion lacks item-specific conversion master and
+              is handled on site"
+        - cause_id: evolution-candidate-001.cause-003
+          claim: 따라서 새 단위나 품목별 변환 규칙이 추가될 때 기존 구조의 enum과 외부 수작업 규칙을 함께 바꿔야 한다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.attributes.uom values [ea, kg, m]
+            - "notes: uom conversion lacks item-specific conversion master and
+              is handled on site"
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: manufacturing-bom-ontology.yaml > ECO / Part.rev effectivity model
+    evidence_anchor: 'Part.attributes.rev note: 도면 관리대장이 원본;
+      Part.attributes.current_eco note: ECO 시스템이 원본;
+      ECO.attributes.effective_date; integrity rule: "ECO.effective_date 이후 생산분은
+      신규 rev를 따른다. 단 Part.rev 갱신은 도면 관리대장 반영 후 주간 배치로 동기화한다."'
+    claim: 변경 적용 기준이 날짜와 지연 동기화된 Part.rev에만 의존해 effectivity 확장 시 연속성이 깨질 수 있다.
+    what: ECO는 `effective_date`만 제공하고, 적용 범위는 `affected_parts`와 `Part.rev` 갱신으로
+      연결됩니다. 동시에 `Part.rev`는 도면 관리대장이 원본이고 주간 배치로 동기화된다고 되어 있어, ECO 적용일과 실제
+      생산/라우팅/BOM 기준 rev 사이에 시간차가 생깁니다.
+    why: PLM/MES 통합에서는 변경이 특정 생산일, 오더, 로트, 일련번호, 사이트, BOM 라인 또는 라우팅에 따라 달리 적용될 수
+      있습니다. 현재 모델은 날짜 단일 기준과 현재 rev 포인터 중심이라 이런 적용 범위가 추가될 때 기존 ECO/Part 구조를 크게
+      바꾸거나 과거 생산분의 기준 rev를 재구성해야 합니다.
+    how_to_fix: "`Effectivity` 개념을 분리해 ECO가 날짜뿐 아니라 적용 대상, 적용 기준 유형, 유효 시작/종료 조건, 대상
+      BOM/라우팅/품목 rev를 참조하게 하십시오. `Part.current_eco`는 최신 포인터로만 제한하고, 생산 오더가 참조할
+      변경 기준은 불변 이력으로 남기십시오."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 변경관리 개념을 PLM/MES 생산 실행 기준으로 안정적으로 확장하는 목적
+      failure_condition: 날짜 외 기준으로 변경 적용 범위를 관리하거나, ECO 승인일과 Part.rev 동기화 사이에 생산 오더가 생성되는 조건
+      impact: 신규 rev 적용 판단이 시스템별 원본과 배치 지연에 따라 달라져 변경 이력의 연속성과 생산 실행 기준의 신뢰가 약해집니다.
+      evidence_refs:
+        - Part.rev note identifies drawing ledger as source
+        - Part.current_eco note identifies ECO system as source
+        - ECO.effective_date attribute
+        - integrity rule says production after ECO.effective_date follows new
+          rev, while Part.rev syncs weekly after drawing ledger update
+    causal_path:
+      root_cause_candidate: 변경 적용 범위를 독립된 effectivity 개념으로 모델링하지 않고
+        `ECO.effective_date`와 지연 동기화되는 `Part.rev` 현재값에 결합한 것
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: ECO 적용 기준은 `effective_date` 이후 생산분이 신규 rev를 따른다는 날짜 규칙으로 표현되어 있다.
+          relation_to_previous: null
+          evidence_refs:
+            - ECO.effective_date attribute
+            - "integrity rule: ECO.effective_date 이후 생산분은 신규 rev를 따른다"
+        - cause_id: evolution-candidate-002.cause-002
+          claim: "`Part.rev`는 도면 관리대장이 원본이며 주간 배치로 동기화된다고 되어 있어 ECO 적용일과 Part 현재 rev 갱신
+            사이에 지연이 존재한다."
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.rev note identifies drawing ledger as source
+            - "integrity rule: Part.rev syncs weekly after drawing ledger update"
+        - cause_id: evolution-candidate-002.cause-003
+          claim: 따라서 적용 기준이 날짜 외 조건으로 확장되거나 동기화 지연 중 생산이 발생하면 기존 현재값 중심 구조만으로는 변경 연속성을
+            보존하기 어렵다.
+          relation_to_previous: causes
+          evidence_refs:
+            - Part.current_eco note identifies ECO system as source
+            - ECO.effective_date attribute
+            - integrity rule on effective_date and weekly rev sync
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: manufacturing-bom-ontology.yaml > AlternatePart and alternate_of relation
+    evidence_anchor: 'AlternatePart.definition: "A의 대체가 B이면 B의 대체도 A다.";
+      AlternatePart.attributes.direction values [one_way, bidirectional] note:
+      기본은 one_way; relations includes Part to Part alternate_of as shortcut via
+      AlternatePart'
+    claim: 대체품 관계가 방향성/단축 관계를 동시에 노출해 조건부 대체 확장 시 기존 의미를 보존하기 어렵다.
+    what: "`AlternatePart` 정의는 대체 관계를 상호적이라고 설명하지만, 속성은 `one_way`와 `bidirectional`을
+      모두 허용하고 기본은 `one_way`입니다. 또한 `Part -> Part alternate_of` 단축 관계가 있어 대체품의
+      방향, 적용 조건, 유효 기간 같은 정보를 잃은 표현이 함께 존재합니다."
+    why: 향후 대체 가능성이 특정 공장, 고객, 승인 상태, ECO, 재고 상황, 수량비, 날짜에 따라 달라지면 단축 관계는 그 조건을 담을 수
+      없습니다. 기존 소비자가 `alternate_of`를 무조건 대칭 관계로 해석하면 새 조건부 대체 데이터가 추가될 때 같은 관계명이
+      다른 의미를 갖게 됩니다.
+    how_to_fix: 대체품의 권위 있는 표현을 `AlternatePart`로 단일화하고, `alternate_of`는 파생 뷰임을 명시하거나
+      제거하십시오. `AlternatePart`에는 방향, 적용 조건, effectivity, 승인 상태, 필요 시 대체 수량비를 확장
+      가능한 속성 또는 참조로 두십시오.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 품목 대체 관계를 PLM/MES 통합 기준에서 조건부로 확장 가능한 개념으로 유지하는 목적
+      failure_condition: 단방향 또는 조건부 대체품이 추가되고, 시스템 일부가 `alternate_of` 단축 관계를 조건 없는
+        Part-to-Part 관계로 소비하는 조건
+      impact: 대체품 추가 시 기존 관계 소비자와 신규 조건부 의미가 충돌해 잘못된 자재 대체 또는 승인되지 않은 대체 사용으로 이어질 수
+        있습니다.
+      evidence_refs:
+        - AlternatePart definition says if A's alternate is B then B's alternate
+          is A
+        - AlternatePart.direction enum includes one_way and bidirectional with
+          default one_way
+        - relations includes Part to Part alternate_of as shortcut via
+          AlternatePart
+    causal_path:
+      root_cause_candidate: 권위 있는 대체품 개념과 정보 손실이 있는 단축 관계가 함께 존재하고, 방향성 의미가 정의와 속성에서 다르게 표현된 것
+      root_cause_step_id: evolution-candidate-003.cause-004
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: "`AlternatePart` 정의는 대체 관계를 상호적이라고 설명한다."
+          relation_to_previous: null
+          evidence_refs:
+            - "AlternatePart.definition: A의 대체가 B이면 B의 대체도 A다"
+        - cause_id: evolution-candidate-003.cause-002
+          claim: 동일 엔티티의 `direction`은 `one_way`와 `bidirectional`을 허용하고 기본은 `one_way`라고 되어
+            있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "AlternatePart.attributes.direction values [one_way,
+              bidirectional] note: default one_way"
+        - cause_id: evolution-candidate-003.cause-003
+          claim: 별도 `Part -> Part alternate_of` 단축 관계는 `AlternatePart`를 통해 표현되는 관계라고만 되어
+            있어 방향과 조건 속성을 보존하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - relations includes Part to Part alternate_of with note that it is
+              shortcut via AlternatePart
+        - cause_id: evolution-candidate-003.cause-004
+          claim: 따라서 조건부·단방향 대체품을 확장할 때 기존 단축 관계 소비자와 신규 상세 관계 사이의 의미 충돌이 발생할 수 있다.
+          relation_to_previous: causes
+          evidence_refs:
+            - AlternatePart.direction enum includes one_way and bidirectional
+            - relations includes Part to Part alternate_of as shortcut via
+              AlternatePart
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - PLM/MES 통합 기준 문서는 품목, BOM 수량, 라우팅, 변경 적용 기준을 여러 시스템이 같은 의미로 소비할 수 있어야 한다고
+    보았다.
+  - evolution lens 범위에 맞춰 현재 내부 모순 자체보다 새 단위, 변경 기준, 조건부 대체품 추가 시 기존 구조의 수정 필요성과
+    의미 연속성 위험을 중심으로 판단했다.
+validation:
+  unaddressable_candidates: []

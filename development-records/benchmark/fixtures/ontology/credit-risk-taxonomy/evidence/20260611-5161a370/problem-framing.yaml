@@ -1,0 +1,171 @@
+schema_version: 1
+session_id: 20260611-5161a370
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: "`Exposure.risk_grade`가 원천 엔진 등급과 보고 조정 등급을 하나의 권위값으로 결합해
+      lineage와 precedence를 구분하지 못한다."
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 최종 deliberation은 거버넌스 전반이 아니라 단일 등급 필드의 권위·lineage·precedence 결손으로
+      root를 좁혔다. 이 결손은 엔진과 보고 시스템의 동일 등급 의미를 갈라 공유 개념 기준의 일관성을 직접 깨므로 target 안에서
+      닫아야 한다.
+    related_surface_finding_ids:
+      - finding-001
+  - issue_id: issue-002
+    problem_definition: 등급 스케일과 확장 분류값이 온톨로지 소유의 스케일, 매핑, 버전, 유효기간, lifecycle 계약으로 모델링되지 않았다.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: maintainability_evolvability
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 다수 렌즈와 resolution은 rating scale뿐 아니라 code-set authority와 lifecycle까지
+      high 범위로 유지했다. semantics의 범위 축소 이견이 남아 contested로 보존하지만, 확장·개정 시 시스템별 의미가
+      달라지는 근본 계약 결손이므로 target에서 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-008
+      - finding-010
+      - finding-014
+  - issue_id: issue-003
+    problem_definition: "`ExposureAggregate.total_amount`가 월말 배치 스냅샷임에도 현재 총익스포저처럼
+      명명·정의되어 freshness와 stale 처리 기준이 없다."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 관련 렌즈가 같은 root와 medium severity를 지지했다. 준수 판단 입력의 시간 기준이 닫히지 않으면 한도
+      초과나 RiskAppetite 위반 판단이 틀릴 수 있어 다음 운영 사용 전 해결해야 한다.
+    related_surface_finding_ids:
+      - finding-003
+      - finding-015
+  - issue_id: issue-004
+    problem_definition: 등급·점수·변환 결과가 시간 의존 assignment/history 개념이 아니라 현재 속성으로만 표현된다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: deliberation에서 충돌 없이 high issue로 유지되었다. 과거 시점의 등급과 변환 기준을 재구성할 수 없다는
+      것은 공유 권위 문서의 이력 완전성과 감사 가능성을 막는 target-level 모델링 결손이다.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-005
+    problem_definition: 수동 등급 조정이 별도 통제 행위와 증거 개념이 아니라 최종 등급 속성 변경 가능성으로만 남아 있다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 모든 applicable lens가 수동 조정을 별도 event/evidence concept으로 모델링해야 한다는 방향을
+      지지했다. 조정 행위자, 시각, 근거, 승인, 원천값이 없으면 보고 등급의 권위와 내부통제 추적성이 target 안에서 성립하지
+      않는다.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-006
+    problem_definition: 등급, 한도, 환율, 집계값 등 공유 지표 입력의 권위·우선순위·timestamp·version·계산 기준이
+      병행 시스템 실행에 분산되어 있다.
+    issue_role: root_cause
+    judgment_state: inferred
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 렌즈들이 같은 high root를 지지했고, 여러 입력 축의 분산 권위가 같은 계산 결과 차이를 정상 변형인지 오류인지
+      판정할 수 없게 만든다. 이는 엔진과 보고 시스템 간 계산 일관성의 핵심 blocker다.
+    related_surface_finding_ids:
+      - finding-006
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: 외부 소유 default/delinquency 상태를 공유 온톨로지에 연결하는 typed boundary
+      reference 계약이 없다.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: resolution은 DefaultStatus의 완전 내부화를 요구하지 않고
+      ExternalRiskStatusReference 경계 계약 부재로 root를 좁혔다. 외부 상태의 소유권, 참조키, 기준시점,
+      freshness가 없으면 리스크 분류와 보고의 상태 축 연결이 불완전하다.
+    related_surface_finding_ids:
+      - finding-007
+  - issue_id: issue-008
+    problem_definition: "`Collateral.is_a: Exposure`가 `Exposure secured_by
+      Collateral` 관계와 동시에 존재해 담보와 익스포저의 타입 계약을 모순시킨다."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: 이는 직접 관찰된 타입/관계 모순이며 모든 applicable lens가 제거 action을 지지했다. 소비자가
+      `is_a`를 상속으로 구현하면 담보가 익스포저 집계와 검증에 섞일 수 있으므로 target의 정확성 결함이다.
+    related_surface_finding_ids:
+      - finding-011
+  - issue_id: issue-009
+    problem_definition: "`Collateral.is_a: Exposure` 오류가 담보 자산을 익스포저 타입 계층에 넣어 담보와
+      신용 익스포저의 의미 해석을 혼동시킨다."
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: document_only
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: resolution은 issue-009를 별도 material root가 아니라 issue-008과 같은 root의
+      semantic/evolution facet으로 좁혔다. 따라서 별도 fix를 만들기보다 중복 facet으로 기록하되,
+      underlying target 오류는 issue-008과 함께 닫혀야 한다.
+    related_surface_finding_ids:
+      - finding-012
+  - issue_id: issue-010
+    problem_definition: "`ltv`가 Exposure 금액과 Collateral 감정가에서 파생되는 비율인데 산식, 기준시점, 원천
+      입력 연결 없이 독립 입력값으로 모델링된다."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 모든 관련 렌즈가 derived LTV의 formula, source-input, basis-time 결손을 medium
+      issue로 유지했다. 같은 `ltv`가 현재 비율인지 심사 당시 값인지 갈릴 수 있어 다음 운영 단계 전에 의미를 닫아야 한다.
+    related_surface_finding_ids:
+      - finding-013
+  - issue_id: issue-011
+    problem_definition: "`RiskAppetite` 준수 개념이 `ExposureAggregate`에 의해 정의되지만
+      relations에 계산·평가 경로를 닫는 edge가 없다."
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: 구조 finding과 모든 participating lens가 missing evaluation edge root를
+      지지했다. 준수 판단 경로가 그래프에서 순회되지 않으면 엔진과 보고 시스템이 다른 join 가정을 만들 수 있으므로 다음 단계 전에
+      관계 완전성을 보완해야 한다.
+    related_surface_finding_ids:
+      - finding-016

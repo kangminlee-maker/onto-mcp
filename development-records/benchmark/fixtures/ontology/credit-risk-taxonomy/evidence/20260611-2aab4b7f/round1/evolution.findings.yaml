@@ -1,0 +1,222 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+lens_id: evolution
+human_output_ref: null
+findings:
+  - candidate_id: evolution-candidate-001
+    target: credit-risk-ontology.yaml rating scale model and classification rules
+    evidence_anchor: credit-risk-ontology.yaml:15-17,
+      credit-risk-ontology.yaml:26-29, credit-risk-ontology.yaml:48-51,
+      credit-risk-ontology.yaml:87-93
+    claim: Rating-scale evolution is delegated to external consumers instead of
+      being versioned in the shared ontology.
+    what: "The ontology declares three coexisting grade concepts:
+      `Borrower.internal_rating` as a string with a 1-10 note,
+      `RiskRating.grade` as enum `R1`-`R5`, and `Exposure.risk_grade` as enum
+      `AAA`-`CCC`. The derivation rule says `Exposure.risk_grade` comes from
+      `RiskRating.grade` but can be manually adjusted, while the note says
+      transformations are performed by each consuming system and the mapping
+      table is in an external wiki."
+    why: Because the ontology is intended as the shared concept authority for a risk
+      engine and reporting system, grade-scale changes need a stable canonical
+      place for mappings, versions, effective dates, and override provenance.
+      With mappings outside the target and consumer-specific transforms, adding
+      a new grade, changing a cutoff, or preserving historical mapping semantics
+      requires coordinated changes in each consumer and can break continuity
+      between historical engine results and reports.
+    how_to_fix: Add an explicit canonical rating-scale/mapping model in the
+      ontology, such as `RatingScale`, `RatingGrade`, and `GradeMapping` with
+      source scale, target scale, valid_from/valid_to or version, derivation
+      rule, and manual_override provenance. Make consumers reference that
+      authority rather than maintaining independent transforms.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology's declared purpose as a shared concept authority
+        for the risk engine and reporting system.
+      failure_condition: When a grade scale, mapping, or manual-adjustment rule
+        changes, the target does not provide an authoritative versioned mapping
+        path for existing and future records.
+      impact: Historical and current grade interpretation can diverge across
+        consumers, weakening the ontology's ability to support stable
+        engine-report continuity under change.
+      evidence_refs:
+        - credit-risk-ontology.yaml:2-3
+        - credit-risk-ontology.yaml:15-17
+        - credit-risk-ontology.yaml:26-29
+        - credit-risk-ontology.yaml:48-51
+        - credit-risk-ontology.yaml:87-93
+    causal_path:
+      root_cause_candidate: The ontology models grade scales as separate local
+        attributes and places cross-scale mapping authority outside the
+        ontology.
+      root_cause_step_id: evolution-candidate-001.cause-004
+      steps:
+        - cause_id: evolution-candidate-001.cause-001
+          claim: The target contains three grade scales with different representations and
+            no internal mapping entity.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:15-17
+            - credit-risk-ontology.yaml:26-29
+            - credit-risk-ontology.yaml:48-51
+        - cause_id: evolution-candidate-001.cause-002
+          claim: The derivation and override rule depends on cross-scale conversion, but
+            does not define versioned mapping semantics in the target.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-88
+        - cause_id: evolution-candidate-001.cause-003
+          claim: The note assigns transformation responsibility to each consuming system
+            and references an external wiki for mapping.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:51
+            - credit-risk-ontology.yaml:92-93
+        - cause_id: evolution-candidate-001.cause-004
+          claim: Therefore grade-scale evolution requires consumer-local changes and can
+            break continuity between risk-engine and reporting interpretations.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:2-3
+            - credit-risk-ontology.yaml:87-93
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-002
+    target: credit-risk-ontology.yaml enum classifications for borrower, product,
+      collateral, and risk grade
+    evidence_anchor: credit-risk-ontology.yaml:14, credit-risk-ontology.yaml:25,
+      credit-risk-ontology.yaml:28, credit-risk-ontology.yaml:39
+    claim: Closed inline enums make classification expansion a schema change instead
+      of a versioned taxonomy update.
+    what: "Core classification axes are encoded as fixed inline enum lists: borrower
+      segment, product type, exposure risk grade, and collateral type. The
+      target does not show lifecycle metadata, aliases, effective dating,
+      retired values, or an extension point for new categories."
+    why: For a taxonomy expected to be shared by operational risk and reporting
+      systems, new products, collateral classes, segments, or grades are
+      ordinary evolution events. Encoding them only as inline enum values means
+      each new category modifies the ontology schema and likely requires
+      consumer parser/report updates, instead of allowing a controlled
+      dictionary/taxonomy update with compatibility metadata.
+    how_to_fix: Promote each externally visible enum into a governed classification
+      vocabulary with stable codes, labels, status, effective dates, aliases,
+      and parent/category grouping. Keep current enum values as initial
+      dictionary rows or controlled-code instances, and define how unknown,
+      pending, deprecated, and retired codes are handled.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology's role as a shared concept basis for
+        classification across risk engine and reporting.
+      failure_condition: When a new segment, product type, collateral type, or risk
+        grade is introduced, the only visible extension path is editing fixed
+        enum lists in the target.
+      impact: Routine taxonomy growth becomes a schema/version coordination event,
+        increasing the chance of integration lag or incompatible interpretations
+        across systems.
+      evidence_refs:
+        - credit-risk-ontology.yaml:2-3
+        - credit-risk-ontology.yaml:14
+        - credit-risk-ontology.yaml:25
+        - credit-risk-ontology.yaml:28
+        - credit-risk-ontology.yaml:39
+    causal_path:
+      root_cause_candidate: The taxonomy uses fixed inline enum lists for core
+        extensible business classifications without lifecycle or extension
+        metadata.
+      root_cause_step_id: evolution-candidate-002.cause-003
+      steps:
+        - cause_id: evolution-candidate-002.cause-001
+          claim: Borrower segment, product type, risk grade, and collateral type are
+            represented as fixed enum values.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:28
+            - credit-risk-ontology.yaml:39
+        - cause_id: evolution-candidate-002.cause-002
+          claim: No adjacent structure in the target defines versioning, aliases,
+            deprecation, or unknown/pending handling for those classification
+            values.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:28
+            - credit-risk-ontology.yaml:39
+        - cause_id: evolution-candidate-002.cause-003
+          claim: Adding new business categories therefore requires changing the ontology
+            surface rather than extending a governed classification vocabulary.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:2-3
+            - credit-risk-ontology.yaml:14
+            - credit-risk-ontology.yaml:25
+            - credit-risk-ontology.yaml:39
+      unresolved_beyond_evidence: null
+  - candidate_id: evolution-candidate-003
+    target: credit-risk-ontology.yaml Limit utilization currency-conversion rule
+    evidence_anchor: credit-risk-ontology.yaml:59-62, credit-risk-ontology.yaml:87-89
+    claim: Currency conversion is left to each system's daily FX table, so FX-source
+      changes can break cross-system continuity.
+    what: "`Limit.currency` is only a string, while the utilization rule divides
+      `ExposureAggregate.total_amount` by `Limit.approved_amount` and says
+      different currencies are converted using each system's same-day
+      exchange-rate table. The ontology does not define an authoritative FX rate
+      source, rate timestamp, version, or conversion result provenance."
+    why: When risk and reporting systems share a utilization concept, a change in FX
+      vendor, rate cut-off time, holiday handling, or table contents should
+      preserve reproducibility of prior calculations. Leaving conversion to each
+      system's own table makes future FX-source changes and cross-domain
+      integrations produce different utilization values for the same exposure
+      and limit data.
+    how_to_fix: Introduce an explicit `FxRate` or `CurrencyConversion` concept with
+      source, rate_date/time, base/quote currency, rate version, and calculation
+      provenance. Define `Limit` utilization as depending on that canonical
+      conversion input, including historical replay behavior for previously
+      reported periods.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The shared utilization rule used by risk and reporting consumers.
+      failure_condition: When currencies differ or FX tables/rules change, the target
+        provides no shared conversion authority or historical replay contract.
+      impact: The same limit utilization concept can produce non-reconciled values
+        across systems and lose continuity after FX-table changes.
+      evidence_refs:
+        - credit-risk-ontology.yaml:59-62
+        - credit-risk-ontology.yaml:87-89
+    causal_path:
+      root_cause_candidate: The ontology references system-local FX tables rather than
+        modeling currency conversion as an authoritative versioned concept.
+      root_cause_step_id: evolution-candidate-003.cause-003
+      steps:
+        - cause_id: evolution-candidate-003.cause-001
+          claim: Limit stores approved amount and a currency string, but no conversion
+            source or rate metadata.
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:59-62
+        - cause_id: evolution-candidate-003.cause-002
+          claim: The utilization rule explicitly delegates cross-currency conversion to
+            each system's daily FX table.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-89
+        - cause_id: evolution-candidate-003.cause-003
+          claim: System-local conversion authority enables divergent results and weakens
+            continuity when FX sources or cut-off rules change.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:87-89
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - Risk-engine and reporting consumers need stable interpretation of historical
+    records when classifications, mappings, or source tables change.
+  - New products, collateral categories, borrower segments, grade values, and FX
+    source changes are plausible ordinary evolution events for a credit-risk
+    taxonomy.
+validation:
+  unaddressable_candidates: []

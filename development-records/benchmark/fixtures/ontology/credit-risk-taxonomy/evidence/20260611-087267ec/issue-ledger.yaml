@@ -1,0 +1,422 @@
+schema_version: 1
+session_id: 20260611-087267ec
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: Mutable risk classification values are modeled as current
+      attributes, fixed enums, or external mappings instead of governed
+      versioned classification, assignment, and mapping concepts with explicit
+      scale, authority, effective time, and override rules.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-001
+      - finding-003
+      - finding-007
+      - finding-008
+      - finding-013
+    relation_refs:
+      - rel-003
+      - rel-004
+      - rel-005
+      - rel-011
+    raised_by_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+      - semantics
+    issue_statement: Rating scales and other business classifications lack versioned
+      ontology-level authority, so consumers can perform grade conversion,
+      override interpretation, and category evolution outside the shared concept
+      standard while still appearing compliant.
+    proposed_action: Promote ratings, mappings, assignments, and mutable code sets
+      into versioned authoritative concepts with effective periods, scale/source
+      authority, mapping versions, override authority, and current-value
+      projections only where needed.
+    affected_purpose: The ontology's declared purpose as the shared classification
+      concept authority for risk engine and reporting systems, including
+      historical reconstruction and classification evolution.
+    failure_condition: When rating scales, grade mappings, manual adjustment
+      policies, product/collateral/segment categories, or historical as-of
+      reporting requirements change, consumers can select different conversion
+      or category interpretations without a bounded ontology authority.
+    impact: The same borrower or exposure can receive different risk meanings,
+      historical reports can become non-reproducible, and classification changes
+      can force system-specific reinterpretation rather than shared governed
+      continuity.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:6-8
+      - review-value-alignment-criteria.yaml:6-11
+      - materialized-input.md:31-35
+      - materialized-input.md:48-56
+      - materialized-input.md:92-98
+      - .onto/review/20260611-087267ec/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:20-22
+      - materialized-input.md:31-37
+      - materialized-input.md:48-57
+      - materialized-input.md:93
+      - materialized-input.md:98
+      - .onto/review/20260611-087267ec/round1/evolution.findings.yaml#evolution-candidate-001
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:20-22
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:31-34
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:53-56
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-98
+      - .onto/review/20260611-087267ec/round1/evolution.findings.yaml#evolution-candidate-002
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:19
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:30
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:44
+      - .onto/review/20260611-087267ec/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:20-22
+      - materialized-input.md:31-34
+      - materialized-input.md:48-57
+      - materialized-input.md:92-98
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-002
+    root_cause_hypothesis: Utilization and appetite breach status lack an explicit
+      assessment context that binds aggregate value, threshold, valuation basis,
+      freshness, and as-of time into one authoritative calculation event.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-002
+      - finding-014
+    relation_refs:
+      - rel-014
+    raised_by_lens_ids:
+      - axiology
+      - semantics
+    issue_statement: Limit utilization and RiskAppetite compliance are modeled
+      without a canonical assessment context, mixing threshold definitions with
+      system-local valuation and time bases.
+    proposed_action: Define an assessment/calculation context for utilization and
+      appetite compliance that links aggregate value, threshold,
+      borrower/context, FX/source policy, inclusion cutoff, freshness status,
+      and as-of time.
+    affected_purpose: The ontology's shared operational control basis for risk
+      engine and reporting, especially temporality, valuation authority, limit
+      utilization, and appetite breach reporting.
+    failure_condition: When intraday exposures exist, currencies differ, or a
+      consumer evaluates RiskAppetite compliance for a specific borrower and
+      as-of time, the ontology does not provide one authoritative valuation and
+      assessment basis.
+    impact: Different systems or run times can produce different utilization or
+      breach conclusions while remaining consistent with the ontology text,
+      weakening reporting reproducibility and control actionability.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:6-8
+      - review-value-alignment-criteria.yaml:6-11
+      - materialized-input.md:69-76
+      - materialized-input.md:92-95
+      - .onto/review/20260611-087267ec/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:69-83
+      - materialized-input.md:92-94
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: Control-changing human actions are described as notes or
+      result values instead of being modeled as auditable events with actor,
+      time, reason, evidence, source value, adjusted value, and approval state.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-004
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Manual inputs, approvals, and reporting adjustments lack audit
+      evidence concepts even though they change risk classification and limit
+      values.
+    proposed_action: Model manual adjustment, approval, and assessment input as
+      control-action events referenced by the affected values, preserving actor,
+      time, reason, evidence, source value, adjusted value, and status.
+    affected_purpose: The shared concept standard for adjusted or approved risk
+      values used by the risk engine and reporting system.
+    failure_condition: When a reporting grade adjustment, examiner LTV input, or
+      approved limit amount must be explained or verified after the fact, only
+      the resulting value is modeled.
+    impact: Operational control and reporting trust are weakened because consumers
+      cannot distinguish automated, approved, or manually adjusted values with
+      accountable evidence.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:35-37
+      - materialized-input.md:64-66
+      - materialized-input.md:93
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: No same_root_candidate relation covers this finding;
+      shared_cause_candidate relations rel-007 and rel-012 are preserved through
+      endpoint issue assignment rather than merged.
+  - issue_id: issue-004
+    root_cause_hypothesis: The ontology omits a source-authority concept for values
+      distributed across systems, reference tables, and derived calculations.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: Parallel and derived values lack a single modeled source of
+      authority, allowing limits, FX conversion, and grade mapping to vary by
+      consuming system.
+    proposed_action: Introduce bounded authority metadata or an authority registry
+      for distributed values, including source system, priority, mapping/table
+      version, FX source, calculation as-of, and reconciliation rules.
+    affected_purpose: The ontology's declared role as a shared concept authority for
+      risk engine and reporting system use.
+    failure_condition: When utilization, converted amounts, approved limits, or
+      grade mappings are calculated from different system authorities or
+      reference tables.
+    impact: The ontology does not close the authority boundary it is meant to
+      provide, leaving system-specific interpretations as normal operation and
+      increasing reporting mismatch risk.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/coverage.findings.yaml#coverage-candidate-003
+      - materialized-input.md:6-8
+      - materialized-input.md:64-66
+      - materialized-input.md:94
+      - materialized-input.md:98
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: Related relation refs rel-001 and rel-002 are symptom_of, not
+      same_root_candidate, so this broader authority finding remains a singleton
+      issue under the merge contract.
+  - issue_id: issue-005
+    root_cause_hypothesis: Default and delinquency lifecycle states are excluded to
+      an external system without even a minimal boundary projection in the
+      shared ontology.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: The ontology omits overdue/default lifecycle status from the
+      shared credit-risk classification space.
+    proposed_action: Add a minimal external-source status projection for
+      default/delinquency lifecycle state with source, status, effective as-of,
+      and borrower/exposure linkage.
+    affected_purpose: The ontology's coverage of major credit-risk status and
+      lifecycle classifications.
+    failure_condition: When an exposure moves into overdue, default, recovery, or
+      write-off state and the risk engine or reporting system needs a common
+      classification.
+    impact: The shared standard becomes biased toward normal exposure and simple
+      compliance states, leaving a core credit-risk lifecycle area outside
+      common interpretation.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/coverage.findings.yaml#coverage-candidate-004
+      - materialized-input.md:78-83
+      - materialized-input.md:99
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: The relation graph lists finding-006 as a singleton with no
+      accepted semantic relation covering it.
+  - issue_id: issue-006
+    root_cause_hypothesis: Cross-currency utilization delegates FX source, version,
+      and rate timestamp to each system instead of modeling a canonical FX
+      conversion policy.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-009
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: Limit utilization cannot preserve time-series continuity when
+      currency conversion is based on each system's daily FX table.
+    proposed_action: Add a currency conversion policy or FX rate source concept with
+      source system, rate type, as-of datetime, effective version, and fallback
+      policy, and connect utilization rules to it.
+    affected_purpose: Shared calculation and time-basis continuity between the risk
+      engine and reporting systems.
+    failure_condition: When multi-currency limits or exposures exist and FX tables,
+      providers, cut-off times, or correction policies change.
+    impact: The same borrower and as-of time can produce different utilization
+      values by system, weakening report reproducibility and engine-report
+      consistency.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/evolution.findings.yaml#evolution-candidate-003
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:67
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:69-76
+      - .onto/review/20260611-087267ec/execution-preparation/materialized-input.md:92-95
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relation rel-008 is shared_cause_candidate with finding-002
+      and must be preserved as dependency context rather than used for merging.
+  - issue_id: issue-007
+    root_cause_hypothesis: ExposureAggregate.total_amount is assigned both
+      complete-current-sum and month-end-batch-snapshot meanings in one field
+      contract.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: ExposureAggregate.total_amount cannot simultaneously mean all
+      Exposure.amount and a stale month-end batch value during intraday lending
+      periods.
+    proposed_action: Split real-time total exposure from batch snapshot, or redefine
+      total_amount as an as-of snapshot with explicit inclusion cutoff and
+      freshness semantics, then bind utilization rules to the chosen value.
+    affected_purpose: The shared concept contract for total exposure and limit
+      utilization calculation.
+    failure_condition: After a month-end batch and before the next batch, when
+      intraday new lending exists and consumers use
+      ExposureAggregate.total_amount or utilization.
+    impact: Consumers can validly read the same field as either a complete sum or a
+      partial batch snapshot, producing incompatible utilization and reporting
+      values.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/logic.findings.yaml#logic-candidate-001
+      - credit-risk-ontology.yaml:64-70
+      - credit-risk-ontology.yaml:89
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relation rel-009 is shared_cause_candidate with finding-002
+      and must be preserved as dependency context rather than used for merging.
+  - issue_id: issue-008
+    root_cause_hypothesis: The ontology does not cleanly separate exposure,
+      collateral asset/valuation, and derived secured-lending metric concepts.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-011
+      - finding-012
+    relation_refs:
+      - rel-013
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: Collateral is treated as an Exposure subtype while LTV is
+      treated as an entered value despite depending on exposure amount and
+      collateral valuation.
+    proposed_action: Separate Collateral from Exposure as an independent secured
+      asset/valuation concept, model only the securing relation between them,
+      and distinguish calculated LTV from any manual override or collateral
+      recognition input.
+    affected_purpose: The shared exposure, collateral, and metric meaning authority
+      used by the risk engine and reporting systems.
+    failure_condition: When consumers aggregate exposures, interpret collateral
+      records, or compare calculated LTV with examiner-entered LTV-like values.
+    impact: Exposure, collateral, and derived metric authority blur together,
+      allowing systems to inherit the wrong economic meaning or choose different
+      basis values for secured-lending decisions.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:24-37
+      - materialized-input.md:39-46
+      - materialized-input.md:87
+      - .onto/review/20260611-087267ec/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:29
+      - materialized-input.md:35-37
+      - materialized-input.md:45
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-009
+    root_cause_hypothesis: The relation graph omits the edge needed to connect
+      RiskAppetite to the ExposureAggregate it evaluates.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-015
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: RiskAppetite is structurally orphaned even though its own
+      definition depends on ExposureAggregate breach evaluation.
+    proposed_action: Add a consistent graph relation or assessment intermediary
+      connecting ExposureAggregate and RiskAppetite for compliance evaluation.
+    affected_purpose: The shared concept authority for exposure, limits, and
+      compliance-state traversal and validation.
+    failure_condition: When a consumer tries to determine or report RiskAppetite
+      compliance from ExposureAggregate using the ontology graph.
+    impact: Consumers must implement incompatible ad hoc joins or may omit the
+      appetite check because the declared compliance concept is unreachable in
+      the graph.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/structure.findings.yaml#structure-candidate-001
+      - materialized-input.md:78-83
+      - materialized-input.md:85-90
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relation rel-010 is symptom_of, not same_root_candidate, so
+      this structural graph symptom is not merged with finding-014 under the
+      issue artifact contract.
+  - issue_id: issue-010
+    root_cause_hypothesis: The ontology declares a grade derivation dependency in
+      text but does not model a bounded graph relation or mapping path from
+      RiskRating to Exposure.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-016
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: The derivation path from RiskRating.grade to
+      Exposure.risk_grade is not structurally represented.
+    proposed_action: Add a bounded derivation relation or explicit grade-mapping
+      concept that links RiskRating output to Exposure reporting grade.
+    affected_purpose: The shared classification structure between the risk engine's
+      RiskRating output and the reporting Exposure risk grade.
+    failure_condition: When consumers need to trace or validate Exposure.risk_grade
+      against RiskRating.grade using graph-level ontology structure.
+    impact: Risk engine and reporting implementations can use different linkage
+      assumptions while both appear compliant with the same ontology.
+    evidence_refs:
+      - .onto/review/20260611-087267ec/round1/structure.findings.yaml#structure-candidate-002
+      - materialized-input.md:31-34
+      - materialized-input.md:48-57
+      - materialized-input.md:85-93
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: Relation rel-006 is symptom_of, not same_root_candidate, so
+      this structural derivation symptom is not merged with the rating-authority
+      issue under the merge contract.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-003
+    relation_refs:
+      - rel-007
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Exposure.risk_grade can be manually adjusted by the
+      reporting team, but the ontology does not model the adjustment as a
+      controlled event with actor, reason, provenance, source value, adjusted
+      value, and precedence.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-006
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Cross-currency limit utilization delegates
+      exchange-rate selection to each system's daily FX table instead of a
+      governed, versioned FX authority with rate timestamp and policy.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-002
+      - issue-007
+    relation_refs:
+      - rel-009
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (ExposureAggregate.total_amount is tied to all
+      Exposure.amount while also being persisted as a month-end batch value that
+      omits intraday lending until the next batch.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-008
+    relation_refs:
+      - rel-012
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Manual assessment input is allowed for LTV-like
+      values, but the ontology does not separate the entered value, its
+      actor/evidence, and any derived ratio authority.)."
+validation:
+  unclustered_finding_ids: []

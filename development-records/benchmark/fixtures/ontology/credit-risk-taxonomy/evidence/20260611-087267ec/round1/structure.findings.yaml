@@ -1,0 +1,134 @@
+schema_version: 1
+session_id: 20260611-087267ec
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml / entities.RiskAppetite and relations
+    evidence_anchor: materialized-input.md:78-83 defines RiskAppetite in terms of
+      ExposureAggregate; materialized-input.md:85-90 lists all relations and
+      contains no relation involving RiskAppetite.
+    claim: RiskAppetite is structurally orphaned despite depending on
+      ExposureAggregate.
+    what: RiskAppetite is declared as the threshold and compliance concept for
+      ExposureAggregate breaches, but it is not connected to ExposureAggregate
+      or any other entity in the relation graph.
+    why: The definition says ExposureAggregate exceeding RiskAppetite determines a
+      RiskAppetite breach, so the ontology's own design requires a connection
+      between those concepts. Because the relations list omits RiskAppetite
+      entirely, consumers cannot traverse or validate the compliance concept
+      from the aggregate exposure concept within the bounded ontology.
+    how_to_fix: "Add an explicit relation such as `{ from: ExposureAggregate, to:
+      RiskAppetite, kind: evaluated_against }` or `{ from: RiskAppetite, to:
+      ExposureAggregate, kind: applies_to }`, choosing one direction and naming
+      convention consistently with the ontology."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared concept authority for risk engines and reporting
+        systems over credit exposure, limits, and compliance state.
+      failure_condition: When a consumer tries to determine or report RiskAppetite
+        compliance from ExposureAggregate using the ontology graph, there is no
+        modeled path to the RiskAppetite concept.
+      impact: This weakens review trust because a declared compliance concept is
+        present but unreachable, so systems can implement incompatible ad hoc
+        joins or omit the risk appetite check entirely.
+      evidence_refs:
+        - materialized-input.md:78-83
+        - materialized-input.md:85-90
+    causal_path:
+      root_cause_candidate: The relation set does not include any edge whose `from` or
+        `to` is RiskAppetite.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite is defined as the concept that determines breach/compliance
+            when ExposureAggregate exceeds it.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:78-83
+        - cause_id: structure-candidate-001.cause-002
+          claim: The complete visible relation list connects Borrower, Exposure,
+            Collateral, RiskRating, Limit, and ExposureAggregate, but not
+            RiskAppetite.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:85-90
+        - cause_id: structure-candidate-001.cause-003
+          claim: Therefore RiskAppetite is a graph orphan relative to the ontology's own
+            stated compliance relationship.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:78-90
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml / Exposure.risk_grade derivation structure
+    evidence_anchor: materialized-input.md:31-34 declares Exposure.risk_grade;
+      materialized-input.md:48-57 declares RiskRating.grade;
+      materialized-input.md:92-93 says Exposure.risk_grade is derived from
+      RiskRating.grade; materialized-input.md:85-90 has no
+      Exposure-to-RiskRating or derivation relation.
+    claim: The derivation path from RiskRating.grade to Exposure.risk_grade is not
+      structurally represented.
+    what: A classification rule states that Exposure.risk_grade is derived from
+      RiskRating.grade, but the relation graph only connects Borrower to
+      Exposure and Borrower to RiskRating; it does not model the derivation or
+      dependency between the grade-bearing concepts.
+    why: The ontology is meant to be a shared concept basis, and the derivation rule
+      is a declared structural dependency between two attributes/entities.
+      Without an explicit relation, consumers can see both grade concepts but
+      cannot distinguish an intended derivation dependency from merely
+      coexisting borrower-linked records.
+    how_to_fix: "Add a bounded derivation relation or relation metadata, for example
+      `{ from: RiskRating, to: Exposure, kind: derives_risk_grade }`, or model
+      an explicit grade-mapping concept if derivation needs an auditable
+      intermediary."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: Shared classification structure between the risk engine's
+        RiskRating output and the reporting team's Exposure risk grade.
+      failure_condition: When consumers need to trace or validate Exposure.risk_grade
+        against RiskRating.grade, the ontology gives only a textual rule and no
+        graph-level dependency.
+      impact: This can lead risk engine and reporting implementations to use different
+        linkage assumptions while both appear compliant with the same ontology.
+      evidence_refs:
+        - materialized-input.md:31-34
+        - materialized-input.md:48-57
+        - materialized-input.md:85-93
+    causal_path:
+      root_cause_candidate: The relation graph omits the declared grade-derivation
+        dependency between RiskRating and Exposure.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: Exposure.risk_grade and RiskRating.grade are separate grade-bearing
+            fields.
+          relation_to_previous: null
+          evidence_refs:
+            - materialized-input.md:31-34
+            - materialized-input.md:53-56
+        - cause_id: structure-candidate-002.cause-002
+          claim: The classification rule declares Exposure.risk_grade as derived from
+            RiskRating.grade.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:92-93
+        - cause_id: structure-candidate-002.cause-003
+          claim: The relation list does not include an edge directly representing this
+            derivation dependency.
+          relation_to_previous: causes
+          evidence_refs:
+            - materialized-input.md:85-90
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so no domain-specific structure document was used.
+  - The review treats the embedded materialized input as the authoritative
+    target and does not rely on external banking-domain rules.
+  - A textual classification rule that declares one ontology concept as derived
+    from another is treated as evidence that a structural connection is expected
+    within this lens.
+validation:
+  unaddressable_candidates: []

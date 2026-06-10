@@ -1,0 +1,187 @@
+schema_version: 1
+session_id: 20260611-087267ec
+classification_context:
+  common_spine_version: 1
+  session_domain: none
+  domain_profile_ref: ""
+  domain_profile_doc_type: custom:problem_framing_profile
+  domain_profile_status: not_requested
+classifications:
+  - issue_id: issue-001
+    problem_definition: Mutable ratings, mappings, overrides, and code sets lack
+      governed versioned authority, leaving shared classification meaning to
+      consumer-specific interpretation.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Multiple lenses and deliberation converge that this is the broad
+      classification-authority root. Because the ontology is meant to be the
+      shared concept standard for risk engine and reporting use, unversioned
+      current attributes and external mappings directly undermine consistent
+      as-of interpretation and historical reconstruction.
+    related_surface_finding_ids:
+      - finding-001
+      - finding-003
+      - finding-007
+      - finding-008
+      - finding-013
+  - issue_id: issue-002
+    problem_definition: Utilization and RiskAppetite breach conclusions lack a
+      canonical assessment context binding values, thresholds, valuation basis,
+      freshness, and as-of time.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The issue is supported without material disagreement and names the
+      missing calculation/assessment context that makes breach and utilization
+      results vary by system or run time. It is a root modeling gap for a shared
+      operational-control concept, though narrower than the global authority
+      issues.
+    related_surface_finding_ids:
+      - finding-002
+      - finding-014
+  - issue_id: issue-003
+    problem_definition: Control-changing human actions are represented only as notes
+      or result values rather than auditable events tied to affected risk or
+      limit values.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: governance_value
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation resolved that full control-action events, not only
+      temporal provenance fields, are required. The problem is a root
+      auditability and accountability gap because manual inputs, approvals, and
+      adjustments change authoritative values.
+    related_surface_finding_ids:
+      - finding-004
+  - issue_id: issue-004
+    problem_definition: Distributed values that affect shared risk and reporting
+      interpretation lack bounded source authority, priority, version, as-of,
+      and reconciliation rules.
+    issue_role: root_cause
+    judgment_state: contested
+    impact_kind: governance_value
+    timing_class: current_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_in_target
+    domain_axes: {}
+    rationale: Most lenses support a broad authority-boundary model, while logic
+      preserves a narrower calculation-determinacy scope. The final resolution
+      narrows the registry to shared risk/reporting authority, so the issue
+      remains material but carries an explicit scope disagreement.
+    related_surface_finding_ids:
+      - finding-005
+  - issue_id: issue-005
+    problem_definition: Default and delinquency lifecycle states are excluded from
+      the shared ontology without even a minimal external-source boundary
+      projection.
+    issue_role: independent_issue
+    judgment_state: observed
+    impact_kind: completeness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Applicable lenses consistently treat this as a distinct coverage
+      omission for core credit-risk lifecycle classification. It is independent
+      because no accepted relation merges it with another root, but it
+      materially weakens coverage of distressed exposure states.
+    related_surface_finding_ids:
+      - finding-006
+  - issue_id: issue-006
+    problem_definition: Cross-currency utilization delegates FX source, version,
+      timestamp, and fallback policy to each consuming system.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: The accepted resolution treats canonical FX conversion policy as
+      necessary for reproducible utilization. It is a root cause for
+      cross-system and time-series inconsistency, with shared-cause dependency
+      to the assessment-context issue but not merged into it.
+    related_surface_finding_ids:
+      - finding-009
+  - issue_id: issue-007
+    problem_definition: ExposureAggregate.total_amount carries incompatible
+      complete-current-sum and stale month-end-batch-snapshot meanings in one
+      field contract.
+    issue_role: conflicting_interpretation
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: This is a direct logical and semantic conflict in a single field
+      meaning. The happy path remains possible only if consumers pick an
+      interpretation, so the issue is best framed as a conflicting
+      interpretation that can produce incorrect utilization and reporting
+      values.
+    related_surface_finding_ids:
+      - finding-010
+  - issue_id: issue-008
+    problem_definition: Exposure, collateral asset or valuation, and derived
+      secured-lending metric authority are blurred, including
+      collateral-as-exposure and LTV authority sub-concerns.
+    issue_role: root_cause
+    judgment_state: observed
+    impact_kind: correctness
+    timing_class: next_step_blocker
+    closure_class: fix_now
+    closure_obligation: must_close_before_next_stage
+    domain_axes: {}
+    rationale: Deliberation keeps this as one combined secured-lending
+      meaning-authority issue with two explicit sub-concerns. The root is a
+      concept-boundary failure that can make systems inherit the wrong economic
+      meaning or choose different metric authorities.
+    related_surface_finding_ids:
+      - finding-011
+      - finding-012
+  - issue_id: issue-009
+    problem_definition: RiskAppetite is unreachable from ExposureAggregate because
+      the ontology lacks a modeled compliance assessment or evaluation path.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: usability
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The structural orphaning is an independently actionable graph symptom
+      of the broader assessment-context need. The final resolution favors an
+      assessment/evaluation intermediary or equivalent relation pattern, so it
+      should be carried forward with issue-002 rather than treated as a separate
+      conceptual root.
+    related_surface_finding_ids:
+      - finding-015
+  - issue_id: issue-010
+    problem_definition: The declared derivation from RiskRating.grade to
+      Exposure.risk_grade lacks a bounded graph relation or explicit semantic
+      mapping path.
+    issue_role: symptom
+    judgment_state: observed
+    impact_kind: consistency
+    timing_class: next_step_blocker
+    closure_class: carry_forward
+    closure_obligation: may_close_during_next_stage
+    domain_axes: {}
+    rationale: The issue is separately tracked because the concrete traversal and
+      validation failure is actionable, but deliberation identifies it as a
+      graph-level manifestation of the broader rating and mapping authority
+      concern in issue-001.
+    related_surface_finding_ids:
+      - finding-016

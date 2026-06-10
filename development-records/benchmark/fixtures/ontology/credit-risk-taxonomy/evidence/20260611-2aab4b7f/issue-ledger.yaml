@@ -1,0 +1,445 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+issues:
+  - issue_id: issue-001
+    root_cause_hypothesis: 공유 권위 문서 안에서 원천 엔진 등급과 보고용 파생 등급의 권위 경계를 닫지 않은 채 수동 조정을 허용한다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-001
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 보고서 팀의 수동 risk_grade 조정 권한이 조정 권위, 원천 등급 우선순위, 이력 기준 없이 정의되어 공유
+      등급 기준을 소비 시스템별로 분기시킨다.
+    proposed_action: "`RiskRating.grade`를 원천 등급으로 두고 `Exposure.risk_grade`의 파생/보고용
+      의미를 분리하며, 수동 조정에는 조정 등급, 사유, 권위, 유효시점, 원천 등급 이력을 보존하는 필드나 규칙을 둔다."
+    affected_purpose: 리스크 엔진과 보고서 시스템이 공유할 개념 권위 기준 제공.
+    failure_condition: 보고서 팀이 시장 상황을 이유로 `Exposure.risk_grade`를 수동 조정하지만 조정 권위, 원천
+      등급과의 우선순위, 이력 기준이 온톨로지 내부에 없을 때.
+    impact: 공유 기준 문서가 소비 시스템별 등급 차이를 정당화하는 문서가 되어 엔진 결과와 보고 결과의 대사, 감사, 리스크 의사결정 신뢰가
+      약해진다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/axiology.findings.yaml#axiology-candidate-001
+      - materialized-input.md:6-8
+      - materialized-input.md:31-34
+      - materialized-input.md:48-56
+      - materialized-input.md:92-93
+      - review-value-alignment-criteria.yaml:criteria[user-request-intent]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-001은 shared_cause_candidate relations(rel-007,
+      rel-008)만 가지며, 같은 issue로 병합할 same_root_candidate relation이 없다.
+  - issue_id: issue-002
+    root_cause_hypothesis: 등급 값, 등급 스케일, 분류 어휘를 유효기간과 버전이 있는 권위 개념으로 분리하지 않고 속성/enum
+      및 소비자별 변환에 맡겨 과거 재현성과 향후 taxonomy 진화가 함께 깨진다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-002
+      - finding-004
+      - finding-008
+      - finding-009
+    relation_refs:
+      - rel-004
+      - rel-005
+      - rel-009
+    raised_by_lens_ids:
+      - axiology
+      - coverage
+      - evolution
+    issue_statement: 세 등급 스케일과 확장 가능한 분류값이 온톨로지 내부의 versioned mapping/taxonomy
+      authority로 닫히지 않아 현재 의미 대응, 과거 등급 재구성, 향후 분류체계 변경의 연속성이 모두 약해진다.
+    proposed_action: "`RatingScale`, `RatingGrade`, `GradeMapping` 또는 governed
+      classification vocabulary를 추가하고 source/target scale, stable code, version,
+      valid_from/valid_to, owner, alias/deprecation/unknown handling, override
+      provenance를 온톨로지 안에서 관리한다."
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 분류체계, 신용등급 기준, 보고 재현성, taxonomy 진화 기준 제공.
+    failure_condition: 등급 스케일·매핑·수동 조정 규칙이 변경되거나, 과거 기준일 등급을 재구성해야 하거나, 새
+      segment/product/collateral/risk grade가 도입되는데 온톨로지가 권위 있는 버전/유효기간/어휘 수명주기
+      경로를 제공하지 않을 때.
+    impact: 소비 시스템별 변환과 고정 enum 변경이 공유 기준을 대체하여 같은 차주·익스포저의 등급 해석과 정책 적용이 시스템 또는
+      시점별로 달라지고, 운영 변경이 schema coordination 문제로 전이된다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/axiology.findings.yaml#axiology-candidate-002
+      - materialized-input.md:20-22
+      - materialized-input.md:53-56
+      - materialized-input.md:97-98
+      - review-value-alignment-criteria.yaml:criteria[user-request-intent]
+      - .onto/review/20260611-2aab4b7f/round1/coverage.findings.yaml#coverage-candidate-001
+      - materialized-input.md:7-8
+      - materialized-input.md:31-37
+      - materialized-input.md:48-57
+      - materialized-input.md:92-93
+      - .onto/review/20260611-2aab4b7f/round1/evolution.findings.yaml#evolution-candidate-001
+      - credit-risk-ontology.yaml:2-3
+      - credit-risk-ontology.yaml:15-17
+      - credit-risk-ontology.yaml:26-29
+      - credit-risk-ontology.yaml:48-51
+      - credit-risk-ontology.yaml:87-93
+      - .onto/review/20260611-2aab4b7f/round1/evolution.findings.yaml#evolution-candidate-002
+      - credit-risk-ontology.yaml:14
+      - credit-risk-ontology.yaml:25
+      - credit-risk-ontology.yaml:28
+      - credit-risk-ontology.yaml:39
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-003
+    root_cause_hypothesis: 시간 민감 리스크 판단에 필요한 공통 기준시각과 환율 권위를 온톨로지 내부에서 닫지 않는다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-003
+    relation_refs: []
+    raised_by_lens_ids:
+      - axiology
+    issue_statement: 월말 배치 집계, 일중 미반영 상태, 당일 환율, 시스템별 환율 권위가 한 계산 계약 안에 섞여 한도 소진율과
+      RiskAppetite 판단의 시간 일관성이 약해진다.
+    proposed_action: 집계값과 비율 계산에 동일한 `as_of`/`effective_at` 기준을 강제하고
+      stale/provisional/final 상태와 `fx_rate_source` 및 적용 시각을 명시한다.
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 시간 일관적 리스크/한도 판단 기준 제공.
+    failure_condition: 월말 배치 집계값, 일중 신규 여신 미반영, 각 시스템 당일 환율을 함께 사용해 한도 소진율이나
+      RiskAppetite 준수 상태를 계산할 때.
+    impact: 동일 차주라도 계산 시점과 시스템별 환율 소스에 따라 한도 위반 또는 준수 상태가 달라져 운영 보고와 엔진 판단의 신뢰가 약화된다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/axiology.findings.yaml#axiology-candidate-003
+      - materialized-input.md:69-76
+      - materialized-input.md:78-83
+      - materialized-input.md:92-95
+      - review-value-alignment-criteria.yaml:criteria[user-request-intent]
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-003은 shared_cause_candidate 및 enables relation만 가지며,
+      같은 issue로 병합할 same_root_candidate relation이 없다.
+  - issue_id: issue-004
+    root_cause_hypothesis: 병행 관리 값을 인정하면서도 단일 원본, 변환 버전, 충돌 우선순위를 나타내는 권위 개념을 모델링하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-005
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 등급, 한도, 환율 값의 복수 원천과 소비자별 해석을 온톨로지 안에서 닫는 단일 권위 개념이 없다.
+    proposed_action: "`RatingScale`, `RatingMappingVersion`, `CanonicalRiskGrade`,
+      `FxRateTableSource`, `LimitBook`, `LimitAvailabilityAuthority` 같은 공유 권위
+      개념을 추가하고 source_system, authority_rank, effective_date/version,
+      conflict_resolution_rule을 부여한다."
+    affected_purpose: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 및 분류·환산 기준.
+    failure_condition: 등급 변환, 한도 소진율 산출, 통화 환산을 둘 이상의 소비 시스템이 독립 수행하거나 장부 값이 충돌하는 경우.
+    impact: 온톨로지가 공유 기준이 아니라 시스템별 해석의 느슨한 목록이 되어, 같은 차주·익스포저에 대해 보고값과 엔진값이 달라질 운영
+      위험이 생긴다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/coverage.findings.yaml#coverage-candidate-002
+      - materialized-input.md:7-8
+      - materialized-input.md:56
+      - materialized-input.md:64-66
+      - materialized-input.md:92-98
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-005는 symptom_of relations만 가지며, 같은 issue로 병합할
+      same_root_candidate relation이 없다.
+  - issue_id: issue-005
+    root_cause_hypothesis: 수동 행위를 값 변경 이벤트가 아니라 값 속성의 주석으로만 표현했다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-006
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 수동 입력과 수동 조정 행위에 행위자, 시각, 근거, 승인 증거 개념이 없어 운영 통제와 사후 설명 가능성이 부족하다.
+    proposed_action: "`ManualRiskGradeAdjustment`와 `LtvInputEvidence` 같은 감사 엔티티를
+      추가하고 target_ref, previous_value, new_value, actor_id, acted_at,
+      reason_code, evidence_ref, approval_status, approver_id, approved_at,
+      source_system을 연결한다."
+    affected_purpose: 리스크 분류값의 운영 통제, 보고 조정 설명 가능성, 감사 추적성.
+    failure_condition: 보고서 팀의 risk_grade 조정 또는 심사역의 ltv 입력이 분류·소진율·담보위험 판단에 영향을 준 뒤
+      근거를 확인해야 하는 경우.
+    impact: 값은 남지만 통제 행위의 원인과 책임이 남지 않아 수동 개입을 검증하거나 오류 조정을 역추적하기 어렵다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/coverage.findings.yaml#coverage-candidate-003
+      - materialized-input.md:35-37
+      - materialized-input.md:92-93
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-006은 shared_cause_candidate relations(rel-007,
+      rel-014)만 가지며, 같은 issue로 병합할 same_root_candidate relation이 없다.
+  - issue_id: issue-006
+    root_cause_hypothesis: 범위 밖 도메인에 대한 최소 참조/경계 개념 없이 단순 제외 메모만 두었다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-007
+    relation_refs: []
+    raised_by_lens_ids:
+      - coverage
+    issue_statement: 연체·부실 상태가 범위 밖으로 선언되어 있지만 공유 리스크 분류 기준에서 참조할 경계 개념이 없다.
+    proposed_action: 연체관리 시스템 전체를 흡수하지 않더라도 `CreditStatusReference` 또는
+      `DefaultStatusSnapshot` 경계 엔티티를 두고 borrower_ref/exposure_ref, status,
+      source_system, external_status_id, as_of/effective_from, effective_to를
+      명시한다.
+    affected_purpose: 여신 리스크 분류 온톨로지의 도메인 포괄성과 리스크 엔진·보고 시스템 공유 기준.
+    failure_condition: 리스크 보고 또는 엔진 입력이 익스포저 등급과 연체/부실 상태를 함께 사용해야 하는 경우.
+    impact: 부실 상태가 외부에 있다는 사실만 있고 연결 개념이 없어, 공유 온톨로지가 주요 상태 축을 기준일에 맞춰 결합하는 방법을 제공하지
+      못한다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/coverage.findings.yaml#coverage-candidate-004
+      - materialized-input.md:6-8
+      - materialized-input.md:97-99
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: relation graph가 finding-007에 대해 accepted semantic relation을
+      제공하지 않은 singleton finding으로 표시한다.
+  - issue_id: issue-007
+    root_cause_hypothesis: 온톨로지가 system-local FX table을 참조할 뿐 통화 변환을 권위 있는 versioned
+      concept으로 모델링하지 않는다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-010
+    relation_refs: []
+    raised_by_lens_ids:
+      - evolution
+    issue_statement: 통화 변환이 각 시스템의 일일 FX 테이블에 맡겨져 FX source, cut-off, version 변경 시
+      cross-system continuity와 historical replay가 깨질 수 있다.
+    proposed_action: "`FxRate` 또는 `CurrencyConversion` 개념을 추가하고 source,
+      rate_date/time, base/quote currency, rate version, calculation provenance,
+      historical replay behavior를 `Limit` utilization 계산에 연결한다."
+    affected_purpose: The shared utilization rule used by risk and reporting consumers.
+    failure_condition: When currencies differ or FX tables/rules change, the target
+      provides no shared conversion authority or historical replay contract.
+    impact: The same limit utilization concept can produce non-reconciled values
+      across systems and lose continuity after FX-table changes.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/evolution.findings.yaml#evolution-candidate-003
+      - credit-risk-ontology.yaml:59-62
+      - credit-risk-ontology.yaml:87-89
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-010은 symptom_of 및 shared_cause_candidate relation만
+      가지며, 같은 issue로 병합할 same_root_candidate relation이 없다.
+  - issue_id: issue-008
+    root_cause_hypothesis: RiskAppetite 준수 상태 규칙이 비교 대상 속성으로 직접 닫히지 않고 자신이 정의해야 할 상태를 정의문 안에서 재참조한다.
+    root_confidence: low
+    surface_finding_ids:
+      - finding-011
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: RiskAppetite definition contains a circular or under-specified
+      rule for violation/compliance status.
+    proposed_action: Define the rule directly against declared attributes, for
+      example `compliance_status = breached if ExposureAggregate.total_amount >
+      RiskAppetite.threshold, otherwise compliant`, and specify
+      borrower/product/time scope.
+    affected_purpose: declared review purpose.
+    failure_condition: no material failure condition is shown by the current bounded
+      lens evidence.
+    impact: Within the logic lens and domain-none boundary, the statement is not
+      strictly unsatisfiable, but the shared concept criterion is
+      under-specified because the status it should determine is referenced as
+      part of its own definition.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/logic.findings.yaml#logic-candidate-001
+    severity: low
+    domain_threshold_used: null
+    singleton_reason: finding-011에는 relation graph의 semantic relation이 없고 bounded
+      evidence도 low-severity observation에 머문다.
+  - issue_id: issue-009
+    root_cause_hypothesis: 온톨로지가 하나의 `total_amount` 개념을 정확한 현재 aggregate와 dated
+      batch snapshot 양쪽에 재사용하면서 snapshot modality를 명시하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-012
+    relation_refs: []
+    raised_by_lens_ids:
+      - logic
+    issue_statement: ExposureAggregate.total_amount가 모든 Exposure.amount의 합이라고 선언되면서도
+      일중 신규 여신을 다음 배치까지 누락할 수 있어 동일 필드의 invariant와 temporal state가 충돌한다.
+    proposed_action: "`current_total_amount = sum(all current Exposure.amount)`와
+      `batch_total_amount/as_of`를 분리하거나, 정의를 `as_of` 기준 배치 산출 총익스포저로 바꾸고
+      limit/appetite 평가 시 `as_of` 사용을 요구한다."
+    affected_purpose: The ontology is intended as a shared concept authority for
+      risk engines and reporting systems.
+    failure_condition: When intraday new exposures exist after the stored month-end
+      batch value, `ExposureAggregate.total_amount` cannot simultaneously be the
+      sum of all exposures and omit those new exposures until the next batch.
+    impact: Consumers can make incompatible limit/appetite calculations from the
+      same field because the field's declared invariant and permitted temporal
+      state conflict.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/logic.findings.yaml#logic-candidate-002
+      - Embedded Materialized Input, ExposureAggregate.definition
+      - Embedded Materialized Input,
+        ExposureAggregate.attributes.total_amount.note
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-012는 enables relation만 가지며, 같은 issue로 병합할
+      same_root_candidate relation이 없다.
+  - issue_id: issue-010
+    root_cause_hypothesis: Exposure와 Collateral의 역할 경계 및 관계 의미가 충분히 분리되지 않아 담보 기반 파생
+      리스크 값의 의미가 불안정해진다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-013
+      - finding-015
+    relation_refs:
+      - rel-015
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: Collateral을 Exposure 하위 유형으로 두는 타입 오류와 LTV를 원천 담보/익스포저 값에서 독립된
+      입력값으로 두는 모델링이 결합되어 담보 기반 리스크 의미가 불안정하다.
+    proposed_action: "`Collateral.is_a: Exposure`를 제거하고 `Exposure secured_by
+      Collateral` 관계를 권위 관계로 사용하며, `ltv`는 원천값에서 계산되는 파생 속성 또는 별도
+      manual_ltv/source/as_of 개념으로 분리한다."
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 익스포저·담보 개념 기준 및 담보 기반 리스크 분류와 보고 기준의 의미 일관성.
+    failure_condition: 시스템이 Collateral을 Exposure의 일종으로 해석하거나, Exposure.amount 또는
+      Collateral.appraised_value 변경 후 LTV의 원천 담보 선택·계산식·산정시점을 검증해야 하는 경우.
+    impact: 담보 평가 단위가 신용 익스포저로 오분류되거나 같은 익스포저의 담보 비율이 원천값과 불일치해 총익스포저, 위험등급, 상품유형 보고
+      및 담보위험 판단의 신뢰가 깨진다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/semantics.findings.yaml#semantics-candidate-001
+      - materialized-input.md:24-37
+      - materialized-input.md:39-47
+      - materialized-input.md:85-88
+      - .onto/review/20260611-2aab4b7f/round1/semantics.findings.yaml#semantics-candidate-003
+      - materialized-input.md:29
+      - materialized-input.md:35-37
+      - materialized-input.md:39-46
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-011
+    root_cause_hypothesis: 온톨로지 내부에 병존 등급 스케일의 의미 분리와 매핑 권위가 정의되어 있지 않다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-014
+    relation_refs: []
+    raised_by_lens_ids:
+      - semantics
+    issue_statement: Borrower.internal_rating, RiskRating.grade,
+      Exposure.risk_grade가 같은 등급 의미권을 공유하지만 의미 매핑과 원천 권위가 문서 밖 또는 소비 시스템별 변환으로
+      남아 있다.
+    proposed_action: 세 등급의 의미를 `BorrowerInternalRating`, `EngineBorrowerRating`,
+      `ReportExposureRiskGrade`처럼 구분하고, R1~R5에서 AAA~CCC로 가는 매핑, override 사유,
+      override authority, as_of를 모델링한다.
+    affected_purpose: 리스크 엔진과 보고 시스템이 공유할 신용등급 분류 기준.
+    failure_condition: 엔진 산출 등급, 차주 내부 등급, 보고용 익스포저 등급을 서로 변환하거나 비교해야 하는 보고·심사·한도 판단 경로.
+    impact: 등급 의미와 권위가 시스템별로 갈라져 같은 차주/익스포저의 위험 수준이 서로 다른 기준으로 보고되거나 조정될 수 있다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/semantics.findings.yaml#semantics-candidate-002
+      - materialized-input.md:20-22
+      - materialized-input.md:31-34
+      - materialized-input.md:48-57
+      - materialized-input.md:92-98
+    severity: high
+    domain_threshold_used: null
+    singleton_reason: finding-014는 duplicate/symptom_of relations(rel-001, rel-006)만
+      가지며, task는 multi-finding issue 병합을 same_root_candidate relation으로 제한한다.
+  - issue_id: issue-012
+    root_cause_hypothesis: RiskAppetite 준수 판정을 별도 assessment 관계/엔티티로 모델링하지 않아 정책 기준,
+      계산 결과, 적용 대상이 모두 닫히지 않는다.
+    root_confidence: high
+    surface_finding_ids:
+      - finding-016
+      - finding-017
+    relation_refs:
+      - rel-012
+    raised_by_lens_ids:
+      - semantics
+      - structure
+    issue_statement: RiskAppetite가 정책 threshold와 compliance_status를 한 개념에 섞고 관계
+      그래프에서도 적용 대상과 연결되지 않아 위반 판단의 대상, 시점, 계산 결과가 구조적으로 닫히지 않는다.
+    proposed_action: "`RiskAppetite`를 정책/threshold 개념으로 좁히고 `RiskAppetiteAssessment`
+      또는 `AppetiteBreachStatus` 같은 파생 결과를 추가해 borrower/exposure aggregate
+      reference, as_of, used_threshold, calculation basis와 적용 관계를 포함한다."
+    affected_purpose: 리스크 성향 한도와 위반 보고의 공유 개념 기준 및 리스크 엔진과 보고 시스템이 공유할 여신 리스크 개념 기준.
+    failure_condition: 보고 시스템이 특정 시점의 위반 여부를 저장하거나 리스크 엔진이 threshold 변경과 상태 변경을 구분해야
+      하며, 그래프에서 RiskAppetite가 적용되는 ExposureAggregate 또는 차주 범위를 찾아야 하는 경우.
+    impact: 정책 기준과 산출 상태가 같은 개념에 섞이고 핵심 위반 판단 개념이 고아로 남아 시간별 준수 여부, 재계산, 감사 추적,
+      엔진-보고 조인의 의미가 불명확해진다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/semantics.findings.yaml#semantics-candidate-004
+      - materialized-input.md:69-83
+      - materialized-input.md:92-94
+      - .onto/review/20260611-2aab4b7f/round1/structure.findings.yaml#structure-candidate-001
+      - credit-risk-ontology.yaml:73-78
+      - credit-risk-ontology.yaml:80-85
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: null
+  - issue_id: issue-013
+    root_cause_hypothesis: 도출 규칙은 선언했지만 Exposure와 RiskRating 사이의 필수 관계를 relations에 모델링하지 않았다.
+    root_confidence: medium
+    surface_finding_ids:
+      - finding-018
+    relation_refs: []
+    raised_by_lens_ids:
+      - structure
+    issue_statement: Exposure.risk_grade가 RiskRating.grade에서 도출된다는 규칙에 대응하는 직접 구조
+      관계가 없어 등급 계보가 그래프 안에서 완결되지 않는다.
+    proposed_action: "`Exposure -> RiskRating`의 `risk_grade_derived_from` 관계를 명시하거나
+      별도 `RatingMapping`/`GradeMapping` 엔티티를 두고 Exposure, RiskRating, 조정 주체를
+      연결한다."
+    affected_purpose: 리스크 엔진 산출 등급과 보고 시스템 사용 등급 사이의 공유 개념 기준.
+    failure_condition: 하나의 차주에 여러 Exposure 또는 시간별 RiskRating이 있을 때 특정
+      Exposure.risk_grade의 근거 RiskRating을 그래프에서 식별해야 하는 경우.
+    impact: 도출 관계가 관계 그래프에 없어서 엔진 등급과 보고 등급의 계보 추적, 검증, 변경 영향 분석이 소비 시스템별 암묵 규칙에
+      의존하게 된다.
+    evidence_refs:
+      - .onto/review/20260611-2aab4b7f/round1/structure.findings.yaml#structure-candidate-002
+      - credit-risk-ontology.yaml:26-29
+      - credit-risk-ontology.yaml:43-52
+      - credit-risk-ontology.yaml:80-88
+    severity: medium
+    domain_threshold_used: null
+    singleton_reason: finding-018은 symptom_of relation만 가지며, 같은 issue로 병합할
+      same_root_candidate relation이 없다.
+issue_dependencies:
+  - dependency_id: dep-001
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-005
+    relation_refs:
+      - rel-007
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (보고서 팀 risk_grade 조정과 심사역 ltv 입력 같은 수동 행위를 값 변경 이벤트가
+      아니라 속성 값 또는 주석 수준으로 둔다.)."
+  - dependency_id: dep-002
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-001
+      - issue-002
+    relation_refs:
+      - rel-008
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Exposure.risk_grade가 RiskRating.grade에서 도출되고 수동 조정될 수
+      있으나 조정 권위, 이력, 유효시점이 모델 안에 없다.)."
+  - dependency_id: dep-003
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-007
+    relation_refs:
+      - rel-010
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (통화가 다른 경우 Limit 소진율 계산을 각 시스템의 당일 환율 테이블에 맡기며 적용
+      시각·소스·버전 권위가 없다.)."
+  - dependency_id: dep-004
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-003
+      - issue-012
+    relation_refs:
+      - rel-013
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (RiskAppetite 준수 여부가 ExposureAggregate 초과 여부로 정의되지만
+      aggregate는 월말/as_of 배치 산출값이어서 평가 시점과 계산 basis가 별도 결과로 닫혀야 한다.)."
+  - dependency_id: dep-005
+    dependency_kind: shared_cause_candidate
+    issue_ids:
+      - issue-005
+      - issue-010
+    relation_refs:
+      - rel-014
+    rationale: "Runtime projection: these distinct issues share preserved relation
+      graph cause context (Exposure.ltv는 비율 성격의 값인데 심사역 수동 입력으로 정의되며 계산식, 산정 시점,
+      근거 이벤트가 모델에 없다.)."
+validation:
+  unclustered_finding_ids: []

@@ -1,0 +1,227 @@
+schema_version: 1
+session_id: 20260611-b43f0db6
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: manufacturing-bom-ontology.yaml change-management authority model
+    evidence_anchor: manufacturing-bom-ontology.yaml:15-16,64-70,91
+    claim: ECO effective-date control is value-misaligned with the PLM/MES
+      integration purpose because production-facing revision truth can lag
+      behind the declared change rule.
+    what: The ontology says post-effective-date production follows the new revision,
+      but Part.rev remains sourced from the drawing ledger and is only
+      synchronized weekly after that ledger is updated. current_eco is sourced
+      from the ECO system, so the model splits the authority needed for a
+      production-time revision decision across systems with an explicit delay.
+    why: "The target declares itself a PLM/MES integration concept baseline, and the
+      request focuses on part, BOM, routing, and change-management consistency
+      plus manufacturing operations risk. Under that purpose, a weekly lag
+      between ECO effectivity and Part.rev weakens the model's ability to serve
+      as a safe production-order reference: MES could see a released/effective
+      ECO while the Part revision still reflects the prior drawing-ledger batch
+      state."
+    how_to_fix: "Model effectivity as a production-decision authority instead of a
+      delayed attribute copy: add explicit revision/effectivity records tied to
+      ECO status and effective_date, define which state MES must use at order
+      creation, and add a rule that production release is blocked or resolved
+      deterministically when ECO effectivity and Part.rev synchronization
+      disagree."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline for part, BOM, routing,
+        and change-management decisions.
+      failure_condition: When ECO.effective_date has passed but Part.rev has not yet
+        been updated by the weekly drawing-ledger batch, the ontology gives
+        production-facing consumers a stale or ambiguous revision state.
+      impact: This changes review trust because change effectivity is a manufacturing
+        execution gate; stale revision authority can cause MES orders after the
+        effective date to be planned or executed against the wrong design
+        revision.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:2
+        - manufacturing-bom-ontology.yaml:15-16
+        - manufacturing-bom-ontology.yaml:64-70
+        - manufacturing-bom-ontology.yaml:91
+        - .onto/review/20260611-b43f0db6/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    causal_path:
+      root_cause_candidate: Revision and ECO truth are represented as separate
+        externally sourced attributes without an in-target precedence or
+        reconciliation rule for production-time decisions.
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: Part.rev is sourced from the drawing ledger, while current_eco is sourced
+            from the ECO system.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:15-16
+        - cause_id: axiology-candidate-001.cause-002
+          claim: The integrity rule requires post-effective-date production to follow the
+            new revision but permits Part.rev to update only after
+            drawing-ledger reflection and weekly synchronization.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:91
+        - cause_id: axiology-candidate-001.cause-003
+          claim: The ontology therefore leaves a bounded period where the production
+            revision required by ECO effectivity and the visible Part.rev can
+            diverge.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:15-16
+            - manufacturing-bom-ontology.yaml:91
+      unresolved_beyond_evidence: The file does not state whether MES reads
+        current_eco directly or only Part.rev, so the exact consuming-system
+        failure path is inferred from the declared PLM/MES integration purpose.
+  - candidate_id: axiology-candidate-002
+    target: manufacturing-bom-ontology.yaml operational master-data authority
+      boundaries
+    evidence_anchor: manufacturing-bom-ontology.yaml:30,93-95
+    claim: The ontology accepts local manual data copies and field conversions in
+      places that should be governed integration concepts, weakening its stated
+      role as a PLM/MES baseline.
+    what: scrap_rate is copied from a production-planning Excel sheet, cumulative
+      std_time also exists as a manual field in the standard-cost system, and
+      uom conversion lacks an item-level conversion master and is performed on
+      site as needed.
+    why: "For a PLM/MES concept baseline, these are not harmless notes: scrap,
+      standard time, and unit conversion directly affect planning, costing, and
+      execution quantities. Treating them as copied/manual/local practices
+      without canonical authority, precedence, validation, or invalid-input
+      behavior makes the concept model normalize shadow data paths instead of
+      defining the integration contract."
+    how_to_fix: For each operational value, define the canonical source, allowed
+      projection/copy, refresh cadence, reconciliation owner, and failure
+      behavior. At minimum, add an item-level UOM conversion master or declare
+      unsupported conversions invalid; make scrap_rate and standard-time cost
+      projections derived or explicitly governed rather than free copied fields.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES integration concept baseline with review focus on
+        manufacturing operations risk and invalid-input behavior.
+      failure_condition: When scrap rates, standard-time totals, or UOM conversions
+        differ across Excel, MES, cost system, and shop-floor practice, the
+        ontology provides no authoritative precedence or rejection rule.
+      impact: This reduces actionability because downstream planning, costing, and
+        execution can each use different quantities or times while still
+        appearing compliant with the concept document.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:2
+        - manufacturing-bom-ontology.yaml:30
+        - manufacturing-bom-ontology.yaml:93-95
+        - .onto/review/20260611-b43f0db6/execution-preparation/review-target-profile.yaml:review_goal
+        - .onto/review/20260611-b43f0db6/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    causal_path:
+      root_cause_candidate: The file records operational shadow-authority practices as
+        accepted ontology notes without elevating them into source-of-truth,
+        precedence, or validation concepts.
+      root_cause_step_id: axiology-candidate-002.cause-004
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: scrap_rate is an ontology attribute but its value is copied from a
+            separately managed production-planning Excel source.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:30
+        - cause_id: axiology-candidate-002.cause-002
+          claim: Cumulative standard time is calculated from Routing by MES but also
+            manually entered in the standard-cost system and reconciled
+            quarterly.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:93-94
+        - cause_id: axiology-candidate-002.cause-003
+          claim: UOM conversion has no item conversion master and is done on site as
+            needed.
+          relation_to_previous: enables
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:95
+        - cause_id: axiology-candidate-002.cause-004
+          claim: Together these choices leave production and costing consumers without a
+            shared precedence or invalid-input rule for operationally material
+            quantities and times.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:30
+            - manufacturing-bom-ontology.yaml:93-95
+      unresolved_beyond_evidence: The target does not include actual integration
+        flows, so the finding is limited to the concept-document contract
+        exposed in the bounded file.
+  - candidate_id: axiology-candidate-003
+    target: manufacturing-bom-ontology.yaml WorkCenter capacity semantics
+    evidence_anchor: manufacturing-bom-ontology.yaml:58-62
+    claim: WorkCenter capacity trades local convenience for cross-routing
+      comparability without justification, drifting from the PLM/MES integration
+      purpose.
+    what: capacity_per_shift is modeled as a number whose unit varies by work
+      center, sometimes count and sometimes time. The attribute lacks a unit
+      field, basis, conversion rule, or compatibility rule with
+      Operation.std_time_min.
+    why: A PLM/MES baseline should allow routing and capacity concepts to be
+      interpreted consistently across work centers. A unitless capacity number
+      that changes meaning per work center makes scheduling and capacity
+      comparison depend on local knowledge outside the ontology, which
+      undermines the declared integration role.
+    how_to_fix: Split capacity into explicit quantity and unit/basis fields, such as
+      capacity_value, capacity_uom, capacity_basis, and valid operation unit
+      compatibility rules. If mixed capacity types are required, model them as
+      typed capacity records rather than a single unitless number.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES routing and manufacturing operation concept baseline.
+      failure_condition: When two work centers use different implicit capacity units,
+        consumers cannot compare or schedule operations consistently from the
+        ontology alone.
+      impact: This weakens review trust because capacity is a production-planning
+        decision input; unclear units can produce invalid schedules or
+        misleading bottleneck analysis while satisfying the current schema.
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:2
+        - manufacturing-bom-ontology.yaml:48
+        - manufacturing-bom-ontology.yaml:58-62
+        - .onto/review/20260611-b43f0db6/execution-preparation/review-value-alignment-criteria.yaml:criteria[0].statement
+    causal_path:
+      root_cause_candidate: Capacity is represented as a single numeric attribute
+        while its measurement basis is allowed to vary by work center.
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: Operation.std_time_min is explicitly in minutes, giving routing time a
+            defined unit.
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:48
+        - cause_id: axiology-candidate-003.cause-002
+          claim: WorkCenter.capacity_per_shift is numeric but its unit varies by work
+            center between count and time.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:62
+        - cause_id: axiology-candidate-003.cause-003
+          claim: The ontology lacks an explicit compatibility or conversion rule
+            connecting operation time to work-center capacity basis.
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:48
+            - manufacturing-bom-ontology.yaml:58-62
+      unresolved_beyond_evidence: The file does not state the scheduling algorithm, so
+        the impact is bounded to concept-baseline ambiguity rather than a proven
+        runtime scheduling failure.
+domain_constraints_used: []
+domain_context_assumptions:
+  - No separate domain document was used because session_domain is none.
+  - "The declared title and invocation criterion are treated as the value
+    authority for purpose: this file is intended to be a PLM/MES integration
+    concept baseline focused on item, BOM, routing, change-management
+    consistency, and manufacturing operation risk."
+  - Because the runtime output schema does not expose axiology-specific
+    value_authority_anchor/value_type/alignment_direction fields, authority
+    evidence is preserved inside evidence_anchor, why,
+    materiality_basis.evidence_refs, and domain_context_assumptions. No extra
+    schema fields were added.
+validation:
+  unaddressable_candidates: []

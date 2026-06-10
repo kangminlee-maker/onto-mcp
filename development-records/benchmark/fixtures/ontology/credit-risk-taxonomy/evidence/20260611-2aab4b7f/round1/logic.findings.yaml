@@ -1,0 +1,109 @@
+schema_version: 1
+session_id: 20260611-2aab4b7f
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / RiskAppetite.definition
+    evidence_anchor: 'Embedded Materialized Input, RiskAppetite.definition:
+      "ExposureAggregate가 RiskAppetite를 초과하면 RiskAppetite 위반이며, 위반 여부는
+      RiskAppetite 준수 상태로 정의된다."'
+    claim: RiskAppetite definition contains a circular rule for violation/compliance
+      status.
+    what: The definition makes violation depend on exceeding RiskAppetite, then
+      defines violation 여부 as RiskAppetite compliance status. This leaves the
+      rule without an independent predicate for deciding `compliance_status`.
+    why: "Within the logic lens and domain-none boundary, the statement is not
+      strictly unsatisfiable because `threshold` and `compliance_status` can
+      still be assigned values. However, as a shared concept criterion for a
+      risk engine and reporting system, the rule is logically
+      under-specified/circular: the boolean/status it should determine is
+      referenced as part of its own definition rather than being defined by an
+      explicit comparison such as `ExposureAggregate.total_amount >
+      RiskAppetite.threshold`."
+    how_to_fix: "Define the rule directly against declared attributes, for example:
+      `compliance_status = breached if ExposureAggregate.total_amount >
+      RiskAppetite.threshold, otherwise compliant`, and specify the
+      borrower/product/time scope needed to match an aggregate to an appetite
+      threshold."
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: logic-candidate-002
+    target: credit-risk-ontology.yaml / ExposureAggregate.definition and
+      attributes.total_amount.note
+    evidence_anchor: 'Embedded Materialized Input, ExposureAggregate.definition: "차주
+      단위 총익스포저. 모든 Exposure.amount의 합."; total_amount.note: "월말 배치로 계산해 저장. 일중
+      신규 여신은 다음 배치까지 미반영."'
+    claim: ExposureAggregate declares `total_amount` as the sum of all exposures
+      while also allowing stored values that omit intraday new exposures.
+    what: The ontology simultaneously states an exact aggregate over all
+      `Exposure.amount` and a batch-stored value that is stale until the next
+      month-end run. For any state with an intraday new exposure after the
+      batch, both claims cannot describe the same `total_amount` at the same
+      observation time.
+    why: "This is an inter-claim temporal satisfiability conflict: the definition
+      uses a necessary universal aggregation over all Exposure amounts, while
+      the attribute note permits a later operational state where some valid
+      Exposure amounts are excluded. The conflict matters because engines and
+      reports using `total_amount` can disagree on whether the field is
+      canonical current exposure or a dated batch snapshot."
+    how_to_fix: "Split the concepts or qualify the invariant: define
+      `current_total_amount = sum(all current Exposure.amount)` separately from
+      `batch_total_amount/as_of`, or change the definition to `as_of 기준 배치 산출
+      총익스포저` and require consumers to use `as_of` when evaluating limits or
+      appetite."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: The ontology is intended as a shared concept authority for
+        risk engines and reporting systems.
+      failure_condition: When intraday new exposures exist after the stored month-end
+        batch value, `ExposureAggregate.total_amount` cannot simultaneously be
+        the sum of all exposures and omit those new exposures until the next
+        batch.
+      impact: Consumers can make incompatible limit/appetite calculations from the
+        same field because the field's declared invariant and permitted temporal
+        state conflict.
+      evidence_refs:
+        - Embedded Materialized Input, ExposureAggregate.definition
+        - Embedded Materialized Input,
+          ExposureAggregate.attributes.total_amount.note
+    causal_path:
+      root_cause_candidate: The ontology reuses one `total_amount` concept for both an
+        exact current aggregate and a batch snapshot without making the snapshot
+        modality explicit.
+      root_cause_step_id: logic-candidate-002.cause-003
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: "`ExposureAggregate.definition` declares borrower-level total exposure as
+            the sum of all `Exposure.amount`."
+          relation_to_previous: null
+          evidence_refs:
+            - Embedded Materialized Input, ExposureAggregate.definition
+        - cause_id: logic-candidate-002.cause-002
+          claim: "`total_amount.note` permits stored values that exclude intraday new
+            loans until the next batch."
+          relation_to_previous: causes
+          evidence_refs:
+            - Embedded Materialized Input,
+              ExposureAggregate.attributes.total_amount.note
+        - cause_id: logic-candidate-002.cause-003
+          claim: A post-batch state with a new Exposure makes the exact-sum claim and
+            stale-storage claim impossible to satisfy for one unqualified
+            `total_amount` value at the same observation time.
+          relation_to_previous: causes
+          evidence_refs:
+            - Embedded Materialized Input, ExposureAggregate.definition
+            - Embedded Materialized Input,
+              ExposureAggregate.attributes.total_amount.note
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain is none, so only generic formal consistency checks were
+    applied; no banking-domain rule document was used.
+  - The embedded materialized input is treated as the authoritative target input
+    per the prompt packet.
+validation:
+  unaddressable_candidates: []

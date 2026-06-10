@@ -1,0 +1,235 @@
+schema_version: 1
+session_id: 20260611-33248d6d
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-014
+    relation: same_root_candidate
+    root_hypothesis: 도면 원본 리비전과 ECO 효과일자 기반 생산 적용 리비전을 Part.rev/current ECO 구조로만
+      표현해, effective_date 이후 생산 기준을 Part.rev 동기화 상태와 독립적으로 결정할 수 없다.
+    shared_cause: null
+    rationale: finding-001은 ECO effective_date 이후에도 Part.rev 주간 동기화 지연과 Routing
+      release 차단 규칙 부재 때문에 생산 기준이 닫히지 않는다고 보고, finding-014는 같은 증거에서 도면 리비전과 생산
+      적용 리비전이 Part.rev 하나로 혼재된다고 본다. 둘은 가치 평가와 의미론 평가로 초점은 다르지만 동일한
+      revision/effectivity 권위 분리 실패를 공통 근본 원인으로 가진다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-001
+    to_finding_id: finding-007
+    relation: same_root_candidate
+    root_hypothesis: Revision/effectivity가 versioned artifact 개념이 아니라 current
+      Part.rev와 date-only ECO 속성으로 모델링되어 PLM/MES가 과거·현재·미래 생산 상태를 동시에 보존할 수 없다.
+    shared_cause: null
+    rationale: finding-001의 causal path는 Part.rev 동기화 지연과 ECO effective_date 이후 생산
+      기준의 미폐쇄를 지적하고, finding-007은 Part.rev/current_eco와 date-only ECO가
+      versioned/effective BOM/Routing 구조를 제공하지 못한다고 지적한다. 둘 다 변경 적용 기준을 current
+      attribute와 단일 날짜 속성에 맡긴 설계에서 발생한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-014
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: Part revision authority와 ECO effectivity scope가 별도
+      version/effectivity 개념으로 분해되어 있지 않으면 revision 의미 혼재와 미래 변경 시나리오 취약성이 함께
+      발생한다.
+    shared_cause:
+      cause_claim: Revision and effectivity are represented as current/simple fields
+        rather than explicit versioned/effective artifacts.
+      from_cause_ref: finding-014.cause-003
+      to_cause_ref: finding-007.cause-004
+    rationale: finding-014는 Part.rev가 도면 리비전과 생산 적용 리비전을 동시에 떠안는 의미 혼재를 설명하고,
+      finding-007은 같은 current-state 모델이 phased cut-in, plant/lot/serial
+      effectivity, historical/as-built traceability를 확장 불가능하게 만든다고 설명한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-001
+    to_finding_id: finding-019
+    relation: enables
+    root_hypothesis: Part.current_eco가 공식 relations 그래프에서 닫히지 않으면 품목 기준 ECO 추적 경로가
+      약해져 ECO effectivity와 Part revision 권위 불일치를 생산 실행 규칙에서 해소하기 더 어렵다.
+    shared_cause: null
+    rationale: finding-019의 구조 누락은 Part에서 최신 ECO로 가는 공식 관계 경로 부재이다. finding-001은 ECO
+      적용일 이후 Part.rev 동기화 지연을 통합 계약으로 닫지 못한 문제다. current_eco 관계 누락 자체가 전체 원인은
+      아니지만, ECO와 Part revision 사이의 검증 가능한 연결을 약화해 finding-001의 변경관리 기준 미폐쇄를 가능하게
+      한다.
+    confidence: medium
+  - relation_id: rel-005
+    from_finding_id: finding-004
+    to_finding_id: finding-007
+    relation: shared_cause_candidate
+    root_hypothesis: ECO/Routing lifecycle과 effectivity가 release/applied 같은 현재 진행 상태
+      중심으로만 모델링되어 종료, 정정, 대체, 과거 기준 보존을 별도 사건 또는 versioned state로 표현하지 못한다.
+    shared_cause:
+      cause_claim: Lifecycle/effectivity is modeled as terminal-looking current
+        status/date fields rather than explicit state history, correction, and
+        supersession concepts.
+      from_cause_ref: finding-004.cause-003
+      to_cause_ref: finding-007.cause-004
+    rationale: finding-004는 Routing.status와 ECO.status가 종료·폐기·정정 구간을 커버하지 않는다고 보고,
+      finding-007은 ECO와 revision/effectivity가 current-state oriented라 미래 변경과
+      historical traceability를 보존하지 못한다고 본다. 두 결함 모두 상태 이력과 version/effectivity
+      사건의 부재에서 나온다.
+    confidence: medium
+  - relation_id: rel-006
+    from_finding_id: finding-002
+    to_finding_id: finding-006
+    relation: shared_cause_candidate
+    root_hypothesis: 운영 핵심값의 authority, 단위, precedence, invalid input behavior가
+      canonical concept로 닫히지 않으면 UOM·capacity·planning 값이 로컬 해석과 수기 보정에 의존한다.
+    shared_cause:
+      cause_claim: 운영 핵심값의 authority, precedence, invalid input behavior를 대상 파일 안에서
+        canonical 개념으로 닫지 않은 것.
+      from_cause_ref: finding-002.cause-005
+      to_cause_ref: finding-006.cause-003
+    rationale: finding-002는 scrap_rate, capacity, std_time, UOM 전반이 복사·수기·현장 환산에 맡겨진
+      broad issue이고, finding-006은 그중 공정 능력과 UOM 환산의 단위/환산 마스터 누락을 구체화한다. 둘 다
+      운영값을 통합 권위 개념으로 승격하지 않은 설계에서 발생한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-006
+    to_finding_id: finding-008
+    relation: duplicates
+    root_hypothesis: UOM identity and item-specific conversion are missing as
+      canonical authority concepts, leaving quantity integration to fixed enums
+      and field/manual conversion.
+    shared_cause: null
+    rationale: finding-006과 finding-008은 모두 Part.uom의 제한된 단위 표현과 품목별 환산계수 마스터 부재를
+      근거로 PLM/MES quantity integration이 현장 환산에 의존한다고 판단한다. finding-006은
+      WorkCenter capacity까지 포함하지만 UOM/conversion 부분은 finding-008과 실질적으로 같은 결함이다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-006
+    to_finding_id: finding-010
+    relation: shared_cause_candidate
+    root_hypothesis: Capacity measurement value, unit, and basis are not separated
+      into explicit data, so work-center capacity cannot be compared or extended
+      deterministically.
+    shared_cause:
+      cause_claim: WorkCenter capacity unit and basis are omitted from the modeled
+        capacity concept.
+      from_cause_ref: finding-006.cause-003
+      to_cause_ref: finding-010.cause-003
+    rationale: finding-006은 capacity_per_shift 단위가 작업장마다 다른데 구조적 단위 기준이 없다고 하며,
+      finding-010은 같은 bare number 설계가 new capacity types를 흡수하지 못한다고 한다. 둘은
+      capacity value와 unit/basis 분리 부재를 공유한다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-010
+    to_finding_id: finding-015
+    relation: duplicates
+    root_hypothesis: WorkCenter.capacity_per_shift is a single numeric property
+      whose unit/basis can vary between count and time, making capacity
+      semantics non-deterministic.
+    shared_cause: null
+    rationale: finding-010은 evolution 관점에서 bare number와 variable local units가 확장성을
+      해친다고 보고, finding-015는 semantics 관점에서 개수와 시간이라는 서로 다른 차원을 같은 속성명으로 담는다고 본다.
+      증거와 결론이 거의 동일하며 관점만 다르다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-002
+    to_finding_id: finding-003
+    relation: shared_cause_candidate
+    root_hypothesis: scrap_rate를 외부 planning Excel에서 복사한 단순 BomLine 속성으로 두면
+      authoritative source, validity period, and historical reconstruction이 닫히지
+      않는다.
+    shared_cause:
+      cause_claim: scrap_rate is copied from an external planning Excel value and
+        lacks canonical authority/effectivity handling inside the ontology.
+      from_cause_ref: finding-002.cause-001
+      to_cause_ref: finding-003.cause-003
+    rationale: finding-002는 운영값이 로컬 원천과 복사값에 의존하는 broad issue로 scrap_rate를 포함하고,
+      finding-003은 scrap_rate의 유효기간·이력 개념 누락을 지적한다. 둘 다 scrap_rate가
+      canonical/versioned concept가 아니라 외부 복사 속성으로 남은 데서 출발한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-003
+    to_finding_id: finding-016
+    relation: shared_cause_candidate
+    root_hypothesis: 공정 scrap/yield 의미를 BomLine의 단순 속성으로 붙이면 BOM 구조 소요량과 제조 실행 파라미터가
+      섞이고, 그 값의 authority/effectivity/history도 독립적으로 관리할 수 없다.
+    shared_cause:
+      cause_claim: scrap_rate is modeled as a simple BomLine attribute rather than a
+        separate process/yield/effective value concept.
+      from_cause_ref: finding-003.cause-003
+      to_cause_ref: finding-016.cause-003
+    rationale: finding-003은 BomLine.scrap_rate가 시점 의존 제조 계수인데 history/effectivity가
+      없다고 보고, finding-016은 같은 속성이 BOM 사용량과 공정 불량률 의미를 혼합한다고 본다. 둘은 scrap/yield를
+      별도 process/effectivity concept로 분리하지 않은 공통 원인을 가진다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-002
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: 외부 원천에서 복사·참조되는 운영값과 통제 상태가 audit evidence/event 개념 없이 상태값이나
+      메모로만 남아 authority, basis, actor/time을 재구성할 수 없다.
+    shared_cause:
+      cause_claim: 운영·통제 값을 canonical event/evidence concept로 닫지 않고 속성 메모 또는 결과 상태로만 표현했다.
+      from_cause_ref: finding-002.cause-005
+      to_cause_ref: finding-005.cause-003
+    rationale: finding-002는 운영값의 precedence와 invalid input behavior가 닫히지 않았다고 보고,
+      finding-005는 승인·적용·외부값 복사의 actor/time/basis 감사 증거가 없다고 본다. 특히 외부값 복사와 수기값
+      신뢰성은 canonical source와 audit evidence 부재라는 같은 설계 결손을 공유한다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-009
+    to_finding_id: finding-011
+    relation: duplicates
+    root_hypothesis: Scrap reinput is encoded as a self-child exception in the BOM
+      parent-child graph, contradicting or weakening the declared acyclic BOM
+      invariant.
+    shared_cause: null
+    rationale: finding-009는 evolution 관점에서 self-child Assembly exception이 future
+      recycle/rework flows와 acyclic BOM rule을 충돌시킨다고 보고, finding-011은 logic 관점에서
+      BOM 비순환 필수 규칙과 자기 하위 포함 예외가 동일 규칙 안에서 양립 불가능하다고 본다. 두 finding은 같은
+      evidence와 same defect를 다룬다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-012
+    to_finding_id: finding-018
+    relation: shared_cause_candidate
+    root_hypothesis: AlternatePart의 canonical relation record와 derived Part-to-Part
+      shortcut이 분리되지 않아 direction semantics and structural referential integrity
+      are both lost.
+    shared_cause:
+      cause_claim: AlternatePart를 direction을 가진 엔티티로 정의하면서 relations에는 Part 간
+        shortcut만 두어 canonical relation authority가 불명확하다.
+      from_cause_ref: finding-012.cause-003
+      to_cause_ref: finding-018.cause-004
+    rationale: finding-012는 AlternatePart의 정의, direction 기본값, alternate_of shortcut
+      사이에서 방향 의미가 보존되지 않는다고 보고, finding-018은 AlternatePart 엔티티가 relations에 직접
+      연결되지 않아 direction을 포함한 구조 검증이 약하다고 본다. 둘은 shortcut relation이 canonical
+      AlternatePart record를 대체하면서 의미와 구조를 동시에 잃는 문제다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-013
+    to_finding_id: finding-005
+    relation: shared_cause_candidate
+    root_hypothesis: Inspection-related control artifacts are modeled as operational
+      state/operation structures rather than separate evidence/plan documents
+      linked to execution, obscuring basis and responsibility for quality
+      criteria.
+    shared_cause:
+      cause_claim: 검사 기준/통제 근거를 별도 plan/evidence artifact로 모델링하지 않고 실행 단계 또는 속성 메모에 결합했다.
+      from_cause_ref: finding-013.cause-003
+      to_cause_ref: finding-005.cause-002
+    rationale: finding-013은 InspectionPlan을 Operation 하위 타입으로 두어 검사 계획/기준 문서와 실행 공정
+      단계를 혼동한다고 보고, finding-005는 acceptance_criteria 같은 외부 품질 SOP 참조에
+      actor/time/basis 감사 증거가 없다고 본다. 둘 다 품질 기준의 문서/근거 성격을 실행 구조나 메모로 충분히 분리하지
+      않은 데서 연결된다.
+    confidence: medium
+  - relation_id: rel-016
+    from_finding_id: finding-017
+    to_finding_id: finding-009
+    relation: conflicts_with
+    root_hypothesis: BOM relation graph should either model parent-child product
+      structure strictly and completely, or carry process recovery exceptions
+      elsewhere; leaving parent_ref projection incomplete while also allowing
+      self-child exceptions produces incompatible graph-validation assumptions.
+    shared_cause: null
+    rationale: finding-017은 BomLine.parent_ref를 relations에 추가하거나 역관계로 명시해 BOM parent
+      linkage를 관계 그래프에 닫으라고 한다. finding-009는 self-child scrap reinput을 BOM
+      parent-child graph 밖의 process/yield relation으로 분리하라고 한다. 두 권고는 직접 모순은
+      아니지만, parent-child graph를 공식화할수록 self-cycle exception 처리 방식이 더 중요해져 현재 모델의
+      그래프 해석 방향이 충돌한다.
+    confidence: low
+singleton_findings: []

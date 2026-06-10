@@ -1,0 +1,166 @@
+schema_version: 1
+session_id: 20260611-33248d6d
+planned_issues:
+  - issue_id: issue-001
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - semantics
+      - evolution
+      - structure
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-001.axiology
+      - issue-stance-matrix.yaml#stances.issue-001.semantics
+      - issue-stance-matrix.yaml#stances.issue-001.evolution
+      - issue-stance-matrix.yaml#stances.issue-001.structure
+      - issue-stance-matrix.yaml#stances.issue-001.coverage
+    conflict_summary: Axiology, semantics, evolution, and coverage accept the broad
+      root that revision/effectivity authority is not separated from current
+      Part.rev, while structure narrows the root to a missing official relation
+      path for Part.current_eco. This affects whether the issue is resolved by a
+      structural relation fix or by promoting revision/effectivity into separate
+      versioned/effective artifacts.
+    resolution_question: Should issue-001 remain a broad revision/effectivity
+      authority failure requiring versioned/effective artifact modeling, or be
+      narrowed to the structural omission of Part.current_eco/ECO relation
+      authority?
+  - issue_id: issue-008
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - logic
+      - axiology
+      - coverage
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-008.evolution
+      - issue-stance-matrix.yaml#stances.issue-008.logic
+      - issue-stance-matrix.yaml#stances.issue-008.axiology
+      - issue-stance-matrix.yaml#stances.issue-008.coverage
+      - issue-stance-matrix.yaml#stances.issue-008.semantics
+    conflict_summary: Most lenses frame scrap reinput self-child as a process
+      recovery modeling and future extensibility problem at medium severity,
+      while logic narrows it to a present formal contradiction with the acyclic
+      BOM rule and raises severity. The deliberation must decide whether the
+      controlling issue is semantic/process separation or a correctness-level
+      rule contradiction.
+    resolution_question: Is issue-008 primarily a medium process-recovery modeling
+      problem, or should it be elevated because the self-child exception
+      currently contradicts the mandatory acyclic BOM invariant?
+  - issue_id: issue-010
+    priority: 9
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - coverage
+      - evolution
+      - axiology
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-010.logic
+      - issue-stance-matrix.yaml#stances.issue-010.coverage
+      - issue-stance-matrix.yaml#stances.issue-010.evolution
+      - issue-stance-matrix.yaml#stances.issue-010.axiology
+      - issue-stance-matrix.yaml#stances.issue-010.semantics
+    conflict_summary: Logic, axiology, and semantics keep high severity for a direct
+      contradiction between the acyclic BOM rule and self-reference exception.
+      Evolution supports the root but lowers severity, while coverage narrows
+      the root to missing process/yield/recovery coverage. This changes both
+      severity and the exact remediation emphasis.
+    resolution_question: Should issue-010 be retained as a high-severity logical
+      contradiction in BOM validation rules, or reduced/narrowed to a process
+      recovery coverage and evolution problem?
+  - issue_id: issue-011
+    priority: 8
+    conflict_type: partial_overlap_or_cluster_scope
+    participating_lens_ids:
+      - semantics
+      - coverage
+      - logic
+      - structure
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-011.semantics
+      - issue-stance-matrix.yaml#stances.issue-011.coverage
+      - issue-stance-matrix.yaml#stances.issue-011.logic
+      - issue-stance-matrix.yaml#stances.issue-011.structure
+      - issue-stance-matrix.yaml#stances.issue-011.axiology
+      - issue-stance-matrix.yaml#stances.issue-011.evolution
+    conflict_summary: Semantics, axiology, and evolution treat AlternatePart
+      direction as a high-severity canonical relation authority problem.
+      Coverage only recognizes the surface symptom, logic narrows the issue to
+      mutual substitution versus one_way default, and structure narrows it to
+      the missing direction-bearing relation record projection. The conflict is
+      whether these are one material issue or overlapping semantic and
+      structural issues.
+    resolution_question: Should issue-011 be resolved as one broad high-severity
+      AlternatePart direction-authority failure, or split/narrowed into semantic
+      direction contradiction and structural shortcut/projection issues?
+skipped_issues:
+  - issue_id: issue-002
+    reason_code: no_material_conflict
+    reason: All applicable lenses support the material issue and keep medium
+      severity; evolution and semantics narrow only by lens scope without
+      changing the required canonical authority/precedence remediation.
+  - issue_id: issue-003
+    reason_code: no_material_conflict
+    reason: The only disagreement is semantics narrowing the root to value meaning
+      and application criteria; all applicable lenses support the issue, accept
+      the core scrap_rate effectivity/history gap, and keep severity.
+  - issue_id: issue-004
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; all applicable lenses
+      support the lifecycle coverage issue and keep medium severity.
+  - issue_id: issue-005
+    reason_code: no_material_conflict
+    reason: Evolution narrows the root to change history and reconstructability, but
+      all applicable lenses support adding audit evidence/event concepts and
+      keep medium severity.
+  - issue_id: issue-006
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; all applicable lenses
+      support the UOM/conversion and capacity unit gap and keep medium severity.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; all applicable lenses
+      support the fixed UOM enum and manual conversion issue and keep medium
+      severity.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; all applicable lenses
+      support the bare WorkCenter capacity number issue and keep medium
+      severity.
+  - issue_id: issue-012
+    reason_code: no_material_conflict
+    reason: Evolution narrows the root to lifecycle and extension separation, but
+      all applicable lenses support separating InspectionPlan from execution
+      Operation and keep medium severity.
+  - issue_id: issue-013
+    reason_code: no_material_conflict
+    reason: Logic narrows the issue to verification instability from mixed
+      dimensions, while all applicable lenses support the capacity dimension
+      ambiguity and keep medium severity.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: Runtime projection marks no conflict signals; all applicable lenses
+      support separating BOM quantity from process scrap/yield semantics and
+      keep medium severity.
+  - issue_id: issue-015
+    reason_code: no_material_conflict
+    reason: Coverage is surface-only and evolution/semantics narrow by lens scope,
+      but all applicable stances preserve the structure finding, root direction,
+      and medium severity.
+  - issue_id: issue-016
+    reason_code: no_material_conflict
+    reason: Coverage treats the problem as surface-only, but structure, semantics,
+      evolution, and axiology support the AlternatePart relation authority issue
+      with the same medium severity and compatible action.
+  - issue_id: issue-017
+    reason_code: no_material_conflict
+    reason: Coverage is surface-only and evolution/semantics narrow to
+      projection/current meaning concerns, but no stance materially disputes the
+      structural relation omission or proposed relation/derived-view resolution.

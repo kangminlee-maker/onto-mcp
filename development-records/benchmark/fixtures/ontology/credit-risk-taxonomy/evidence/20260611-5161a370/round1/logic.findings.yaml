@@ -1,0 +1,80 @@
+schema_version: 1
+session_id: 20260611-5161a370
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: credit-risk-ontology.yaml / entities.Collateral
+    evidence_anchor: 'credit-risk-ontology.yaml:35-42 (`Collateral.definition`:
+      "익스포저를 담보하는 자산. 담보 평가의 기본 단위." and `Collateral.is_a: Exposure`);
+      credit-risk-ontology.yaml:63 (`Exposure -> Collateral`, `kind:
+      secured_by`)'
+    claim: "`Collateral` is declared both as an `Exposure` subtype and as an asset
+      that secures an `Exposure`, creating an intra-model type contradiction."
+    what: "The ontology defines collateral as a securing asset, but also declares
+      `Collateral.is_a: Exposure`. At the same time, the relation model says an
+      `Exposure` is `secured_by` a `Collateral`. These claims require the same
+      entity class to be both the credit exposure and the asset securing that
+      exposure."
+    why: "The contradiction is visible from the declared claims themselves: if
+      `Collateral` is a subtype of `Exposure`, every collateral instance is an
+      exposure; but the definition and relation require collateral to be the
+      asset on the other side of a secured-by relation from exposure. A risk
+      engine or reporting system using subclass inheritance would inherit
+      exposure attributes onto collateral assets and allow collateral records
+      where exposure records are expected, while the relation asserts they are
+      distinct roles. This weakens the ontology's declared purpose as a shared
+      concept authority."
+    how_to_fix: "Remove `is_a: Exposure` from `Collateral` and model collateral as a
+      separate entity related to `Exposure` through `secured_by`; if a shared
+      parent is needed, introduce a neutral parent only when it has properties
+      genuinely common to both concepts."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: The ontology is intended as the shared concept authority for
+        risk engines and reporting systems.
+      failure_condition: When consumers implement `is_a` as subtype inheritance or
+        type membership, collateral assets become valid exposures while the
+        relation model still treats them as separate securing assets.
+      impact: This can corrupt type checks, inherited attributes, aggregation
+        eligibility, and report joins across exposure and collateral concepts,
+        making the shared taxonomy unsafe as an operational contract.
+      evidence_refs:
+        - credit-risk-ontology.yaml:1-3
+        - credit-risk-ontology.yaml:35-42
+        - credit-risk-ontology.yaml:63
+    causal_path:
+      root_cause_candidate: The model uses subtype inheritance (`is_a`) to represent a
+        security relationship that is already separately declared as `Exposure
+        secured_by Collateral`.
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: "`Collateral` is defined as an asset that secures an exposure, not as a
+            credit exposure itself."
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml:36
+        - cause_id: logic-candidate-001.cause-002
+          claim: "The entity declaration nevertheless states `Collateral.is_a: Exposure`,
+            making collateral a subtype/member of exposure."
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:37
+        - cause_id: logic-candidate-001.cause-003
+          claim: The relation declaration also models `Collateral` as the target of
+            `Exposure secured_by Collateral`, which requires collateral to play
+            the secured asset role opposite exposure.
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml:63
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "`is_a` is interpreted in the ordinary ontology/configuration sense of
+    subtype or class inclusion."
+  - "`secured_by` is interpreted as a binary relation whose source and target
+    denote different conceptual roles unless explicitly documented otherwise."
+validation:
+  unaddressable_candidates: []

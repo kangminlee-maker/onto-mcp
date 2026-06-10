@@ -1,0 +1,122 @@
+schema_version: 1
+session_id: 20260611-b43f0db6
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: manufacturing-bom-ontology.yaml / entities.AlternatePart and
+      relations.alternate_of
+    evidence_anchor: 'materialized-input.md: AlternatePart entity defines
+      primary_ref, alternate_ref, and direction; relations list instead declares
+      `{ from: Part, to: Part, kind: alternate_of, note: "AlternatePart를 통해 표현되는
+      관계의 단축 표기" }`.'
+    claim: AlternatePart 관계 엔티티가 relations 그래프에 직접 연결되지 않아 대체 방향 속성이 관계 구조에서 끊긴다.
+    what: 대체 부품은 별도 엔티티 `AlternatePart`로 정의되어 있고 `direction` 속성까지 갖지만,
+      `relations`에서는 `AlternatePart`를 경유하지 않고 `Part -> Part alternate_of` 단축 관계만
+      선언한다. 그 결과 구조 그래프를 기준으로 보면 `AlternatePart.direction`이 실제 대체 관계와 연결되지 않는다.
+    why: "`AlternatePart`는 대체 관계의 속성 보유 지점인데, relation 그래프의 대체 연결은 `Part -> Part`로만
+      존재한다. PLM/MES 통합 기준 문서에서 관계 그래프를 기준으로 매핑하거나 검증하면 one-way/bidirectional 같은
+      제조 대체 허용 범위가 누락되어 잘못된 자재 대체가 허용될 수 있다."
+    how_to_fix: "대체 관계의 정식 구조를 `Part -> AlternatePart -> Part`로 명시하고, `alternate_of`
+      단축 표기는 파생 관계로 표시하거나 제거한다. 예: `Part has_many AlternatePart`, `AlternatePart
+      references_primary Part`, `AlternatePart references_alternate Part`를
+      relations에 추가하고 `direction`이 이 관계 엔티티의 필수 속성임을 둔다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 품목 대체 관계를 일관되게 매핑하고 검증하는 목적.
+      failure_condition: 통합 구현이나 검증이 `relations` 그래프를 기준으로 대체 부품 관계를 해석할 때,
+        `AlternatePart.direction`이 대체 연결과 결합되지 않는 경우.
+      impact: 대체 가능 여부와 방향이 구조적으로 보존되지 않아 MES 자재 투입, 구매 대체, 변경 영향 분석에서 허용되지 않은 대체를 정상
+        관계로 오인할 수 있다.
+      evidence_refs:
+        - "materialized-input.md: entities.AlternatePart.attributes.direction"
+        - 'materialized-input.md: relations entry `{ from: Part, to: Part, kind:
+          alternate_of, note: "AlternatePart를 통해 표현되는 관계의 단축 표기" }`'
+    causal_path:
+      root_cause_candidate: 관계 속성을 보유하는 `AlternatePart` 엔티티와 실제 relations 그래프의 `Part
+        -> Part alternate_of` 단축 관계가 같은 구조로 닫히지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: "`AlternatePart`는 `primary_ref`, `alternate_ref`, `direction`을 가진 관계 엔티티로
+            정의되어 있다."
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: entities.AlternatePart"
+        - cause_id: structure-candidate-001.cause-002
+          claim: relations 목록의 대체 관계는 `AlternatePart`를 경유하지 않고 `Part`에서 `Part`로 직접 연결된다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: relations entry `Part -> Part
+              alternate_of`"
+        - cause_id: structure-candidate-001.cause-003
+          claim: 따라서 direction 속성은 relations 그래프의 대체 연결에 구조적으로 결합되지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md:
+              entities.AlternatePart.attributes.direction"
+            - "materialized-input.md: relations entry `Part -> Part
+              alternate_of`"
+      unresolved_beyond_evidence: null
+  - candidate_id: structure-candidate-002
+    target: manufacturing-bom-ontology.yaml / entities.BomLine and relations
+    evidence_anchor: "materialized-input.md: BomLine has `parent_ref: target
+      Assembly` and `child_ref: target Part`; relations list has `Assembly ->
+      BomLine has_many` and `BomLine -> Part references_child`, but no relation
+      naming `BomLine.parent_ref` or parent-side reference semantics."
+    claim: BomLine의 parent_ref가 relations 구조에서 명시적으로 닫히지 않는다.
+    what: BOM 라인은 상위 품목과 하위 품목을 모두 포함하는 연결 엔티티인데, relations에는 하위 품목 참조(`BomLine ->
+      Part references_child`)만 명시되어 있고 `BomLine.parent_ref -> Assembly`에 대응하는
+      관계명은 없다. `Assembly -> BomLine has_many`는 존재하지만 `BomLine.parent_ref` 속성과
+      동일한 권위 관계인지 구조적으로 선언되어 있지 않다.
+    why: BOM 구조는 parent-child 연결의 양쪽이 모두 닫혀야 경로 탐색, 순환 검증, 변경 영향 분석에서 같은 그래프를 사용할 수
+      있다. 현재 구조에서는 상위 연결이 속성에는 있고 relations에는 다른 방향의 일반 포함 관계로만 있어, 구현자가
+      `parent_ref`와 `Assembly.bom_lines`/`has_many`의 동등성 또는 우선순위를 추론해야 한다.
+    how_to_fix: relations에 `BomLine -> Assembly references_parent` 또는 `Assembly ->
+      BomLine has_bom_line via parent_ref`처럼 `parent_ref`와 연결되는 관계를 명시한다. 동시에
+      `Assembly.bom_lines`와 `BomLine.parent_ref` 중 어느 쪽이 원본 연결인지 정한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 기준에서 BOM 상하위 경로, 순환 검증, 변경 영향 범위를 안정적으로 계산하는 목적.
+      failure_condition: relations 목록을 canonical graph로 사용하는 검증기나 통합 매핑이
+        `BomLine.parent_ref`를 별도 관계로 인식하지 못하거나 `Assembly -> BomLine has_many`와의
+        동등성을 다르게 해석하는 경우.
+      impact: BOM parent 경로가 구현별로 달라져 상위 조립품 추적, 순환 검사, ECO 영향 분석이 불완전해질 수 있다.
+      evidence_refs:
+        - "materialized-input.md: entities.BomLine.attributes.parent_ref"
+        - "materialized-input.md: relations entries `Assembly -> BomLine
+          has_many` and `BomLine -> Part references_child`"
+    causal_path:
+      root_cause_candidate: BOM 라인의 상위 연결이 attribute ref와 relation 그래프 사이에서 같은 관계로 명시적으로 매핑되지 않았다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: "`BomLine`은 `parent_ref`로 상위 `Assembly`를 참조한다고 선언한다."
+          relation_to_previous: null
+          evidence_refs:
+            - "materialized-input.md: entities.BomLine.attributes.parent_ref"
+        - cause_id: structure-candidate-002.cause-002
+          claim: relations 목록은 `BomLine -> Part references_child`만 하위 참조로 명명하고,
+            parent_ref에 대응하는 `BomLine -> Assembly` 관계를 명명하지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: relations"
+        - cause_id: structure-candidate-002.cause-003
+          claim: "`Assembly -> BomLine has_many`가 존재하지만 이것이 `BomLine.parent_ref`의 역관계이자 동일
+            권위라는 연결 규칙은 선언되어 있지 않다."
+          relation_to_previous: causes
+          evidence_refs:
+            - "materialized-input.md: entities.Assembly.attributes.bom_lines"
+            - "materialized-input.md: entities.BomLine.attributes.parent_ref"
+            - "materialized-input.md: relations entry `Assembly -> BomLine
+              has_many`"
+      unresolved_beyond_evidence: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain이 none이므로 별도 도메인 문서 없이 prompt packet의 materialized input과
+    review target profile만 사용했다.
+  - 구조 lens 범위에 맞춰 도메인 의미의 적합성보다 relations 그래프와 엔티티/속성 참조의 연결 완결성만 판단했다.
+validation:
+  unaddressable_candidates: []
