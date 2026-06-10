@@ -236,6 +236,43 @@ function validCausalPath(value: unknown): boolean {
     );
 }
 
+/**
+ * Whether two findings inside one issue are connected through
+ * same_root_candidate relations cited in that issue's relation_refs — the
+ * only merge evidence the review contract accepts. Shared-cause-only merges
+ * have no such path and must keep failing dependency preservation.
+ */
+function sameRootConnectedWithinIssue(
+  issue: Record<string, unknown> | undefined,
+  relationById: Map<string, Record<string, unknown>>,
+  fromFindingId: string,
+  toFindingId: string,
+): boolean {
+  if (!issue) return false;
+  const adjacency = new Map<string, string[]>();
+  for (const relationId of strings(issue.relation_refs)) {
+    const relation = relationById.get(relationId);
+    if (!relation || relation.relation !== "same_root_candidate") continue;
+    const from = typeof relation.from_finding_id === "string" ? relation.from_finding_id : "";
+    const to = typeof relation.to_finding_id === "string" ? relation.to_finding_id : "";
+    if (!from || !to) continue;
+    adjacency.set(from, [...(adjacency.get(from) ?? []), to]);
+    adjacency.set(to, [...(adjacency.get(to) ?? []), from]);
+  }
+  const queue = [fromFindingId];
+  const visited = new Set(queue);
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (current === toFindingId) return true;
+    for (const next of adjacency.get(current) ?? []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      queue.push(next);
+    }
+  }
+  return false;
+}
+
 function issueArtifactChecks(
   artifacts: ReviewPipelineIssueArtifactsLike | undefined,
   declaredNonMaterialFindingCount: number,
@@ -331,10 +368,18 @@ function issueArtifactChecks(
     dependencyRows.flatMap((dependency) => strings(dependency.relation_refs)),
   );
   const findingIssueIds = new Map<string, string>();
+  const issuesById = new Map<string, Record<string, unknown>>();
   for (const issue of issueRows) {
     if (typeof issue.issue_id !== "string") continue;
+    issuesById.set(issue.issue_id, issue);
     for (const findingId of strings(issue.surface_finding_ids)) {
       findingIssueIds.set(findingId, issue.issue_id);
+    }
+  }
+  const relationById = new Map<string, Record<string, unknown>>();
+  for (const relation of relationRows) {
+    if (typeof relation.relation_id === "string") {
+      relationById.set(relation.relation_id, relation);
     }
   }
 
@@ -435,12 +480,20 @@ function issueArtifactChecks(
           ? findingIssueIds.get(relation.to_finding_id)
           : undefined;
       if (!fromIssueId || !toIssueId) return false;
-      // Endpoints co-located in one issue by independent merge evidence
-      // (runtime enforces same_root_candidate connectivity; shared_cause as
-      // merge evidence is already rejected above): the shared-cause context
-      // lives inside that issue, so a cross-issue dependency is impossible
-      // by construction and co-location counts as preserved.
-      if (fromIssueId === toIssueId) return true;
+      // Endpoints co-located in one issue by independent merge evidence:
+      // the shared-cause context lives inside that issue, so a cross-issue
+      // dependency is impossible by construction and co-location counts as
+      // preserved. The gate verifies the same_root_candidate connectivity
+      // itself (not only the runtime validator) so hand-persisted artifacts
+      // cannot smuggle a shared-cause-only merge past this check.
+      if (fromIssueId === toIssueId) {
+        return sameRootConnectedWithinIssue(
+          issuesById.get(fromIssueId),
+          relationById,
+          relation.from_finding_id as string,
+          relation.to_finding_id as string,
+        );
+      }
       return dependencyRows.some((dependency) => {
         if (dependency.dependency_kind !== "shared_cause_candidate") return false;
         if (!strings(dependency.relation_refs).includes(relationId)) return false;
@@ -521,6 +574,13 @@ export function evaluateReviewPipelineSemanticQualityGate(args: {
   issueArtifacts?: ReviewPipelineIssueArtifactsLike;
 }): SemanticQualityGateResult {
   const fixture = args.expectations ?? semanticFixture(args.fixtureId);
+  if (fixture.materialTerms.length === 0) {
+    // textContainsAll over an empty list is vacuously true, so the material
+    // recall checks would prove nothing — fail loud instead.
+    throw new Error(
+      "SemanticQualityExpectations.materialTerms must not be empty",
+    );
+  }
   const summary = args.reviewRecord.result_classification_summary ?? null;
   const materialIssues = records(summary?.material_issues);
   const nonMaterialFindings = records(summary?.non_material_findings);

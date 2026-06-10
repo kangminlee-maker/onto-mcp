@@ -52,9 +52,14 @@ async function loadExpectations(fixtureId: string) {
   const raw = (await readYaml(
     path.join(FIXTURES_ROOT, fixtureId, "semantic-expectations.yaml"),
   )) as Record<string, unknown>;
+  const materialTerms = requireStrings(raw.material_terms, "material_terms");
+  if (materialTerms.length === 0) {
+    // 빈 리스트면 recall 체크가 공허 통과한다 — boundary decoy 리스트와 달리 비허용.
+    throw new Error("semantic-expectations.material_terms must not be empty");
+  }
   return {
     fixtureId: requireString(raw.fixture_id, "fixture_id"),
-    materialTerms: requireStrings(raw.material_terms, "material_terms"),
+    materialTerms,
     expectedMaterialTruth: requireString(
       raw.expected_material_truth,
       "expected_material_truth",
@@ -81,11 +86,22 @@ async function loadExpectations(fixtureId: string) {
 }
 
 async function latestEvidenceDir(fixtureId: string): Promise<string> {
+  // 세션 id는 YYYYMMDD-<random hex>라 이름 정렬은 동일 날짜 재실행 순서를
+  // 보장하지 않는다 — mtime으로 최신 run을 고른다.
   const evidenceRoot = path.join(FIXTURES_ROOT, fixtureId, "evidence");
-  const sessions = (await fs.readdir(evidenceRoot)).sort();
-  const latest = sessions.at(-1);
+  let latest: string | null = null;
+  let latestMtimeMs = -1;
+  for (const session of await fs.readdir(evidenceRoot)) {
+    const sessionDir = path.join(evidenceRoot, session);
+    const stat = await fs.stat(sessionDir);
+    if (!stat.isDirectory()) continue;
+    if (stat.mtimeMs > latestMtimeMs) {
+      latestMtimeMs = stat.mtimeMs;
+      latest = sessionDir;
+    }
+  }
   if (!latest) throw new Error(`no persisted evidence for fixture: ${fixtureId}`);
-  return path.join(evidenceRoot, latest);
+  return latest;
 }
 
 async function main(): Promise<void> {

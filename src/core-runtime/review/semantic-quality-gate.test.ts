@@ -769,6 +769,51 @@ describe("evaluateReviewPipelineSemanticQualityGate", () => {
     ).toBe("passed");
   });
 
+  it("fails co-located shared-cause endpoints without cited same-root merge evidence", () => {
+    const artifacts = passingIssueArtifacts();
+    // Both endpoints land in one issue but no same_root_candidate relation is
+    // cited — the exact shared-cause-only merge the contract forbids.
+    artifacts.issueLedger.issues = [
+      {
+        issue_id: "issue-001",
+        surface_finding_ids: ["finding-001", "finding-003"],
+        relation_refs: [],
+      },
+    ];
+    artifacts.issueLedger.issue_dependencies = [];
+    const record = passingReviewRecord();
+    record.result_classification_summary.material_issues = [
+      record.result_classification_summary.material_issues[0]!,
+    ];
+    record.result_classification_summary.material_issue_count = 1;
+
+    const result = evaluateReviewPipelineSemanticQualityGate({
+      executorRealization: "codex",
+      reviewRecord: record,
+      finalOutputText: PASSING_FINAL_OUTPUT,
+      issueArtifacts: artifacts,
+    });
+
+    expect(
+      result.checks.find(
+        (check) => check.check_id === "issue_dependency_preservation",
+      )?.status,
+    ).toBe("failed");
+  });
+
+  it("rejects injected expectations with empty material terms", () => {
+    const expectations = ontologyExpectations();
+    expectations.materialTerms = [];
+
+    expect(() =>
+      evaluateReviewPipelineSemanticQualityGate({
+        expectations,
+        reviewRecord: ontologyReviewRecord(),
+        finalOutputText: ONTOLOGY_FINAL_OUTPUT,
+      }),
+    ).toThrowError(/materialTerms must not be empty/);
+  });
+
   it("fails when shared-cause dependency rows do not match relation endpoints", () => {
     const artifacts = passingIssueArtifacts();
     artifacts.issueLedger.issue_dependencies = [
