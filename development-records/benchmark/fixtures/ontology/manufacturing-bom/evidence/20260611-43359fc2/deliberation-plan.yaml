@@ -1,0 +1,348 @@
+schema_version: 1
+session_id: 20260611-43359fc2
+planned_issues:
+  - issue_id: issue-027
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-027.logic
+      - issue-stance-matrix.yaml#stances.issue-027.coverage
+    conflict_summary: logic locates the root cause in the unreconciled dual time
+      axes of integrity_rules[2] (authority copy with sync lag vs obligation
+      written against the authoritative source), while coverage narrows the root
+      cause upstream to the total absence of an effectivity/history dimension
+      (finding-007, rel-012), arguing the intra-rule conflict could not arise if
+      a time axis existed. Both keep severity high, but the competing root
+      hypotheses imply different primary remediations (rule-level effectivity
+      adjudication vs introducing a first-class time dimension).
+    resolution_question: Is the root cause of the integrity_rules[2] temporal
+      conflict the unsealed dual time axes within the rule itself, or the
+      upstream absence of an effectivity/history concept dimension — and which
+      proposed remediation (ECO-derived effectivity adjudication rule vs
+      first-class effectivity modeling) should be canonical?
+  - issue_id: issue-003
+    priority: 9
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+    conflict_summary: axiology's root hypothesis frames the effective-date violation
+      window as an undefined ownership of effectivity-adjudication authority
+      (rev authority left in the drawing register with the ontology as lagging
+      copy), while coverage narrows the root cause to the complete absence of a
+      temporal (effectivity/history) concept dimension, asserting that with a
+      time-axis concept the gap would not become undecidable. The narrowing
+      changes which corrective action (authority declaration vs time-dimension
+      introduction) addresses the root.
+    resolution_question: Should the root cause of the up-to-one-week effective-date
+      violation window be recorded as undefined authority over effectivity
+      semantics, or be narrowed to the missing temporal/effectivity concept
+      dimension as the upstream cause — and how should the canonical
+      proposed_action be ordered between authority declaration and time-axis
+      modeling?
+  - issue_id: issue-026
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-026.logic
+      - issue-stance-matrix.yaml#stances.issue-026.axiology
+      - issue-stance-matrix.yaml#stances.issue-026.evolution
+    conflict_summary: logic keeps high severity for the AlternatePart
+      definition-vs-direction formal contradiction (a reference document
+      licensing divergent conformant implementations with physical quality
+      risk), while axiology and evolution both lower to medium, arguing the
+      failure requires a multi-step condition path (one_way instances plus
+      divergent system implementations) and the defect is closed by a one-line
+      definition fix.
+    resolution_question: Does a formal intra-entity contradiction in a reference
+      document warrant high severity on its own (because no implementation can
+      be judged non-conformant), or is medium appropriate given the conditional
+      failure path and low remediation cost — what single severity should
+      issue-026 carry?
+  - issue_id: issue-030
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-030.semantics
+      - issue-stance-matrix.yaml#stances.issue-030.axiology
+      - issue-stance-matrix.yaml#stances.issue-030.evolution
+    conflict_summary: semantics (issue owner) and logic hold high severity for the
+      AlternatePart name/definition-vs-model contradiction because the embedded
+      contradiction destroys the document's semantic adjudication authority,
+      while axiology and evolution lower to medium citing the conditional
+      failure path and the locality of the fix. Same severity question as
+      issue-026/issue-004/issue-022 viewed from the semantics framing.
+    resolution_question: Should the AlternatePart definition-attribute contradiction
+      family (issues 004/022/026/030) be resolved to a single severity, and is
+      that severity high (loss of adjudication authority plus quality-incident
+      path) or medium (conditional, locally fixable defect)?
+  - issue_id: issue-004
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-004.axiology
+      - issue-stance-matrix.yaml#stances.issue-004.logic
+      - issue-stance-matrix.yaml#stances.issue-004.semantics
+    conflict_summary: "axiology (issue owner) rates the AlternatePart
+      definition-vs-default contradiction medium, while logic and semantics both
+      raise to high: logic because the contradiction is formal, survives
+      disambiguation, and enables divergent implementations; semantics because
+      reverse-direction substitution is a direct quality-incident path and an
+      embedded contradiction voids the document's adjudication authority."
+    resolution_question: Should issue-004 be raised from medium to high in line with
+      the logic/semantics formal-contradiction assessment, or kept at medium per
+      axiology's conditional-failure-path reasoning — consistently with the
+      resolution of issues 022/026/030?
+  - issue_id: issue-022
+    priority: 5
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-022.evolution
+      - issue-stance-matrix.yaml#stances.issue-022.logic
+      - issue-stance-matrix.yaml#stances.issue-022.semantics
+    conflict_summary: evolution (issue owner) keeps medium for the same
+      AlternatePart definition-attribute contradiction, while logic and
+      semantics raise to high on the grounds that a formal contradiction in a
+      reference document licenses divergent conformant implementations and
+      removes semantic adjudication authority, with reverse substitution as a
+      physical quality risk.
+    resolution_question: Is medium or high the correct severity for issue-022, and
+      should its resolution be bound to the unified verdict for the duplicate
+      AlternatePart contradiction family (issues 004/026/030)?
+  - issue_id: issue-031
+    priority: 4
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - evolution
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-031.semantics
+      - issue-stance-matrix.yaml#stances.issue-031.evolution
+    conflict_summary: semantics (issue owner) rates the scrap_rate uncontracted-copy
+      defect high because the value feeds material requirements calculation
+      directly and the document normalizes the copy pattern into integration
+      design, while evolution lowers to medium, scoping the impact to a single
+      requirements coefficient that is worse-managed than rev but narrower in
+      blast radius.
+    resolution_question: Does the scrap_rate authority/copy defect warrant high
+      severity (single source of truth for MRP inputs is broken and the pattern
+      is institutionalized) or medium (impact bounded to one coefficient) —
+      reconciled with the severity decision on the duplicate issue-019?
+  - issue_id: issue-019
+    priority: 3
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.evolution
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: evolution (issue owner) keeps medium for the scrap_rate
+      unmanaged-Excel-copy defect, while semantics raises to high because
+      scrap_rate multiplies directly into MRP requirements and the document's
+      normalization of the copy pattern propagates the risk uncorrected into
+      integration design. Mirror of the issue-031 disagreement with owners
+      reversed.
+    resolution_question: Should issues 019 and 031 (the same scrap_rate copy defect
+      raised by evolution and semantics respectively) converge on a single
+      severity, and is that severity medium or high?
+  - issue_id: issue-021
+    priority: 2
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - evolution
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-021.evolution
+      - issue-stance-matrix.yaml#stances.issue-021.axiology
+    conflict_summary: evolution (issue owner) keeps medium for the unit-ambiguous
+      capacity_per_shift field, citing silent cross-dimension arithmetic errors
+      and model-external interpretation rules accumulating per work center,
+      while axiology lowers to low, judging it a surface defect cheaply
+      corrected by adding a unit attribute. The disagreement crosses the
+      material/non-material boundary (medium vs low).
+    resolution_question: Is the capacity_per_shift unit-dimension defect material
+      (medium — undetectable silent-error path in integration) or non-material
+      (low — easily corrected surface defect), and should the verdict apply
+      uniformly across the duplicate cluster issues 006/014/034?
+  - issue_id: issue-034
+    priority: 1
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-034.semantics
+      - issue-stance-matrix.yaml#stances.issue-034.axiology
+    conflict_summary: semantics (issue owner) keeps medium for the homonymous
+      capacity_per_shift attribute because the missing unit discriminator makes
+      the error undetectable from data alone, while axiology lowers to low as an
+      easily corrected surface defect. Same defect and same boundary-crossing
+      disagreement as issue-021 with owners reversed.
+    resolution_question: Should the capacity_per_shift unit-ambiguity cluster
+      (issues 006/014/021/034) be adjudicated to a single severity, and is that
+      severity medium (silent-error materiality) or low (surface defect)?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All six lenses support the authority-boundary issue, accept the root
+      hypothesis, and keep high severity; no conflict signals.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All lenses support, accept the root hypothesis, and keep high severity
+      for the self-containment/acyclicity defect; no conflict signals.
+  - issue_id: issue-005
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the uncontrolled
+      unit-conversion premise; no conflict signals.
+  - issue_id: issue-006
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; the severity disagreements
+      (evolution/semantics raise) are adjudicated via the material duplicates
+      issue-021 and issue-034 of the same capacity_per_shift cluster.
+  - issue_id: issue-007
+    reason_code: consistent_stances
+    reason: All lenses support, accept the missing-effectivity root hypothesis, and
+      keep high severity; no conflict signals.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the missing EBOM/MBOM view
+      dimension; no conflict signals.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the narrow ECO
+      impact/evidence/terminal-state model; no conflict signals.
+  - issue_id: issue-010
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for missing single-authority
+      and precedence rules over parallel-managed values; no conflict signals.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the shared-root
+      units/conversion issue; no conflict signals.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the missing terminal
+      lifecycle states; no conflict signals.
+  - issue_id: issue-013
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false, and all stances are consistent;
+      below the material-severity candidate boundary.
+  - issue_id: issue-014
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; the severity disagreements duplicate
+      the capacity_per_shift cluster adjudicated through material issues 021 and
+      034.
+  - issue_id: issue-015
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; the only signal is a logic
+      surface_only stance on an expressiveness gap, which does not constitute a
+      material conflict.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the acyclicity-exception
+      integration collision; no conflict signals.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for missing BomLine
+      effectivity; no conflict signals.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the weekly-batch sync gap
+      window; no conflict signals.
+  - issue_id: issue-020
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the current_eco
+      single-reference/duplication defect; no conflict signals.
+  - issue_id: issue-023
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; axiology/logic surface_only stances
+      reflect agreed surface framing rather than a material conflict.
+  - issue_id: issue-024
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; coverage's narrowing into issue-012
+      is a consolidation suggestion on a non-material issue, not a material
+      conflict.
+  - issue_id: issue-025
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the intra-claim
+      contradiction in integrity_rules[0]; no conflict signals.
+  - issue_id: issue-028
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the missing
+      approval-gate conjunction in integrity_rules[2]; no conflict signals.
+  - issue_id: issue-029
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; surface_only stances from
+      axiology/semantics agree with logic's own insufficient-evidence framing
+      rather than contesting it.
+  - issue_id: issue-032
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the BomLine homonym
+      institutionalization; no conflict signals.
+  - issue_id: issue-033
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the rev name-meaning
+      mismatch; no conflict signals.
+  - issue_id: issue-035
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the InspectionPlan type
+      mismatch; no conflict signals.
+  - issue_id: issue-036
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the manufactured_by
+      domain over-declaration; no conflict signals.
+  - issue_id: issue-037
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the cumulative std_time
+      dual-input authority gap; no conflict signals.
+  - issue_id: issue-038
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; logic/structure surface_only stances
+      concur with the surface framing, no material conflict.
+  - issue_id: issue-039
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; the type/occurrence ambiguity is
+      agreed to be undecidable from the document alone.
+  - issue_id: issue-040
+    reason_code: consistent_stances
+    reason: All lenses support and keep high severity for the missing
+      ECO-to-BomLine/Routing propagation path; no conflict signals.
+  - issue_id: issue-041
+    reason_code: consistent_stances
+    reason: All lenses support and keep medium severity for the orphaned
+      AlternatePart reification; no conflict signals.
+  - issue_id: issue-042
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; surface_only stances agree with the
+      bookkeeping-defect framing.
+  - issue_id: issue-043
+    reason_code: non_material_issue
+    reason: Low severity, material_issue false; all lenses agree the dual-storage
+      risk is removed by a derived-projection declaration.
+  - issue_id: issue-044
+    reason_code: non_material_issue
+    reason: Info-level observation, material_issue false; all six lenses uniformly
+      mark it surface_only with no failure condition in bounded evidence.

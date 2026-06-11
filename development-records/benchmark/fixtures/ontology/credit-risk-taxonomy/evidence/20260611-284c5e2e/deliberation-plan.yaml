@@ -1,0 +1,238 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+planned_issues:
+  - issue_id: issue-019
+    priority: 10
+    conflict_type: root_hypothesis
+    participating_lens_ids:
+      - logic
+      - axiology
+      - structure
+      - coverage
+      - evolution
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-019.logic
+      - issue-stance-matrix.yaml#stances.issue-019.axiology
+      - issue-stance-matrix.yaml#stances.issue-019.structure
+      - issue-stance-matrix.yaml#stances.issue-019.coverage
+      - issue-stance-matrix.yaml#stances.issue-019.evolution
+      - issue-stance-matrix.yaml#stances.issue-019.semantics
+    conflict_summary: "Two material disagreements coexist on the FX-delegation
+      functionality defect in classification_rules[1]. (1) Root scope: structure
+      narrows the root hypothesis, arguing the rule's non-determinism is not
+      caused by FX-authority delegation alone but by operand under-formalization
+      (missing join path, aggregation-unit mismatch, missing currency dimension
+      — finding-042/finding-016), so fixing a canonical FX source would still
+      leave the rule unevaluable; the other five lenses accept the FX-delegation
+      root as stated. (2) Severity: axiology raises medium to high because
+      limit-breach adjudication depending on system choice is a standing (every
+      business day with divergent FX tables) trust failure of the limit-control
+      purpose, while logic and the remaining lenses keep medium."
+    resolution_question: Should issue-019's root hypothesis be broadened to include
+      operand formalization (join path, aggregation units, currency dimension)
+      as a co-equal cause rather than 'FX authority delegation' alone — and
+      given the failure condition occurs on every business day with
+      multi-currency exposure, should severity be raised from medium to high to
+      align with axiology's finding-003 assessment?
+  - issue_id: issue-025
+    priority: 8
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - semantics
+      - logic
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-025.semantics
+      - issue-stance-matrix.yaml#stances.issue-025.logic
+    conflict_summary: logic raises severity from medium to high and recommends
+      merging issue-025 into issue-018, because the same defect (circular
+      RiskAppetite violation definition plus derived compliance_status stored as
+      an independent attribute, rel-023 duplicates) is already adjudicated as
+      high in issue-018; having the identical control-critical defect carry two
+      different severities across two open issues is internally inconsistent.
+      semantics (issue owner) and the other lenses keep medium on the grounds
+      that the formal-modality weight sits in issue-018.
+    resolution_question: Should issue-025 be merged into issue-018 (or its severity
+      aligned to high) so that the single circular-definition/stored-derivation
+      defect on RiskAppetite carries one severity, or is keeping issue-025 as a
+      separate medium-severity semantics-framed issue justified?
+  - issue_id: issue-007
+    priority: 7
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - coverage
+      - axiology
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-007.coverage
+      - issue-stance-matrix.yaml#stances.issue-007.axiology
+    conflict_summary: "All lenses accept the root hypothesis (system ownership
+      mistaken for concept boundary on the default/delinquency exclusion), but
+      coverage keeps high severity — both consuming systems must classify and
+      report defaulted borrowers and the ontology cannot adjudicate any of those
+      flows — while axiology lowers to medium on proportionality grounds: the
+      defect is closed by a low-cost boundary-reference-concept declaration, so
+      the value-impact does not warrant high. The same defect is simultaneously
+      rated medium in axiology-owned issue-003, so the severity decision must be
+      consistent across both issues."
+    resolution_question: "For the default-subdomain exclusion defect (notes[1]), is
+      the correct severity high (coverage: an entire supported data segment —
+      defaulted borrowers/exposures — cannot achieve the declared shared-meaning
+      purpose) or medium (axiology: trust weakened but remediable by a cheap
+      boundary-concept addition), and should issue-003 and issue-007 adopt one
+      aligned severity?"
+  - issue_id: issue-003
+    priority: 6
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - axiology
+      - coverage
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-003.axiology
+      - issue-stance-matrix.yaml#stances.issue-003.coverage
+    conflict_summary: "Mirror of the issue-007 severity conflict on the same
+      default-exclusion boundary decision: axiology (issue owner) keeps medium,
+      coverage raises to high citing its independent finding-010 — both
+      consuming systems must classify and report defaulted borrowers and the
+      ontology provides no shared meaning in that segment. Because issue-003
+      (medium) and issue-007 (high) describe the same defect from two lens
+      framings, the divergent severities must be reconciled into a single
+      ruling."
+    resolution_question: Should issue-003's severity be raised to high to match
+      coverage's assessment of the same default-exclusion defect, kept at medium
+      per axiology's proportionality argument, and how should issue-003 and
+      issue-007 be reconciled (single aligned severity or explicit cluster
+      ruling) so the final material-issue set does not carry two severities for
+      one defect?
+  - issue_id: issue-020
+    priority: 5
+    conflict_type: action_or_severity
+    participating_lens_ids:
+      - logic
+      - semantics
+    source_stance_refs:
+      - issue-stance-matrix.yaml#stances.issue-020.logic
+      - issue-stance-matrix.yaml#stances.issue-020.semantics
+    conflict_summary: "semantics raises severity from medium to high: its
+      finding-033 (duplicates rel-031 with this issue's finding-030, and owned
+      by high-severity issue-023) holds that ltv is a shared consumed ratio
+      whose drift is predicted by model-internal evidence alone, making the
+      distortion systematic rather than conditional. logic (issue owner) and the
+      other lenses keep medium based on the bounded failure condition (every
+      Exposure with at least one reappraisal). The decision also affects
+      consistency with issue-023, where the same defect is already rated high."
+    resolution_question: Is the ltv one-shot-input vs obligatory-reappraisal
+      contradiction medium (failure bounded to reappraised exposures, per logic)
+      or high (systematic, model-predicted distortion of a shared consumed
+      ratio, per semantics) — and should issue-020 and issue-023 be merged or
+      severity-aligned given their findings are graph-confirmed duplicates?
+skipped_issues:
+  - issue_id: issue-001
+    reason_code: consistent_stances
+    reason: All six lenses support, accept the shared root hypothesis, and keep
+      severity; no runtime conflict signals.
+  - issue_id: issue-002
+    reason_code: consistent_stances
+    reason: All six lenses support, accept the definition-implementation
+      modality-mismatch root, and keep severity; no conflict signals.
+  - issue_id: issue-004
+    reason_code: non_material_issue
+    reason: Low severity with no material failure condition shown; all stances
+      consistent.
+  - issue_id: issue-005
+    reason_code: non_material_issue
+    reason: Low severity (axiology's narrow tradeoff-cost frame); semantics notes
+      the semantic core is carried at high in issue-023, but no lens contests
+      this issue's own classification.
+  - issue_id: issue-006
+    reason_code: non_material_issue
+    reason: Info-level execution-boundary observation, not a defect claim; semantics
+      not_applicable stance does not contest the record.
+  - issue_id: issue-008
+    reason_code: consistent_stances
+    reason: All lenses support GradeOverride promotion root and keep high severity;
+      no conflict signals.
+  - issue_id: issue-009
+    reason_code: consistent_stances
+    reason: All lenses accept the partial-currency-dimension root and keep medium;
+      no conflict signals.
+  - issue_id: issue-010
+    reason_code: non_material_issue
+    reason: Low severity improvement opportunity (guarantee concept gap,
+      parameter-family intent unconfirmed); stances consistent.
+  - issue_id: issue-011
+    reason_code: consistent_stances
+    reason: All lenses support and keep high; logic's merge recommendation with
+      issue-016/022/028 is a cluster-bookkeeping note, not a stance or severity
+      conflict — all four issues share the same accepted root and identical
+      proposed fix.
+  - issue_id: issue-012
+    reason_code: consistent_stances
+    reason: All lenses accept the closed-enum/compatibility-convention root and keep
+      medium; no conflict signals.
+  - issue_id: issue-013
+    reason_code: consistent_stances
+    reason: All lenses accept the global-temporality-convention root and keep high;
+      no conflict signals.
+  - issue_id: issue-014
+    reason_code: consistent_stances
+    reason: All lenses accept the local-resource-delegation evolution root and keep
+      medium; no conflict signals.
+  - issue_id: issue-015
+    reason_code: non_material_issue
+    reason: Low severity forward-looking evolution vulnerability with no current
+      material failure condition; stances consistent.
+  - issue_id: issue-016
+    reason_code: consistent_stances
+    reason: All lenses support the satisfiability-fail verdict and keep high; merge
+      recommendation with the other Collateral is_a issues carries no
+      stance/severity disagreement.
+  - issue_id: issue-017
+    reason_code: consistent_stances
+    reason: All lenses accept the dual-authority rule-design root and keep high; no
+      conflict signals.
+  - issue_id: issue-018
+    reason_code: consistent_stances
+    reason: All lenses accept the circular-definition/type-error/temporal-conflict
+      diagnosis and keep high; the severity alignment question is carried by
+      planned issue-025.
+  - issue_id: issue-021
+    reason_code: non_material_issue
+    reason: Low-severity weak-typing defect with no material failure condition;
+      stances consistent.
+  - issue_id: issue-022
+    reason_code: consistent_stances
+    reason: All lenses support the OntoClean rigidity framing of the same is_a
+      defect and keep high; merge recommendation is bookkeeping, not a conflict.
+  - issue_id: issue-023
+    reason_code: consistent_stances
+    reason: All lenses accept the derived-value-as-manual-input root and keep high
+      on this issue itself; the cross-issue severity alignment with issue-020 is
+      deliberated under planned issue-020.
+  - issue_id: issue-024
+    reason_code: consistent_stances
+    reason: All lenses accept the externalized-mapping-authority root and keep high;
+      no conflict signals.
+  - issue_id: issue-026
+    reason_code: non_material_issue
+    reason: Low-severity note-level semantic-mapping defect; stances consistent.
+  - issue_id: issue-027
+    reason_code: consistent_stances
+    reason: All lenses accept the orphan-entity under-modeling root and keep high;
+      no conflict signals.
+  - issue_id: issue-028
+    reason_code: consistent_stances
+    reason: All lenses support the shared is_a root and keep high; merge
+      recommendation with issue-011/016/022 involves no stance or severity
+      disagreement.
+  - issue_id: issue-029
+    reason_code: consistent_stances
+    reason: All lenses accept the prose-only derivation-path root and keep medium;
+      no conflict signals.
+  - issue_id: issue-030
+    reason_code: consistent_stances
+    reason: All lenses accept the join-path/unit-mismatch root and keep medium; no
+      conflict signals.
+  - issue_id: issue-031
+    reason_code: non_material_issue
+    reason: Low-severity broken-external-reference surface defect with no material
+      failure condition; stances consistent.

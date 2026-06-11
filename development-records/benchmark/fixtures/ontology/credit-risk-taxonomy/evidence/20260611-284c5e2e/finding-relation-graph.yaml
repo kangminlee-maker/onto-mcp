@@ -1,0 +1,391 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-001
+    to_finding_id: finding-034
+    relation: duplicates
+    root_hypothesis: 두 finding은 동일 결함 — 3개 등급 스케일 병존과 변환 권위의 외부(위키·각 소비 시스템) 위임 — 을
+      각각 axiology(목적 이탈)와 semantics(의미 권위 부재) 프레임으로 보고한 것이며, 하나의 수정(온톨로지 내
+      canonical 스케일/매핑 편입)으로 둘 다 해소된다.
+    shared_cause: null
+    rationale: 양쪽 모두 notes[0]과 RiskRating.grade.note(위키 참조)를 핵심 증거로 삼고,
+      root_cause_candidate가 '변환/매핑 권위를 온톨로지 밖에 둔 결정'으로 사실상 동일하며,
+      proposed_action도 매핑을 온톨로지 내 엔티티/관계로 편입하고 위키를 강등하는 같은 방향이다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-019
+    to_finding_id: finding-001
+    relation: same_root_candidate
+    root_hypothesis: 등급 매핑 권위를 위키·소비 시스템에 분산시킨 동일한 설계 결정이, 정적으로는 공유 개념 권위
+      누수(finding-001)를, 시간 축에서는 스케일 개정 시 데이터 연속성 단절(finding-019)을 만든다. 매핑을 버전 있는
+      온톨로지 1급 개념으로 편입하면 두 finding이 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-019.cause-001과 finding-001.cause-001이 동일 증거(notes[0])를 인용하고
+      root_cause_candidate가 둘 다 '매핑 권위의 외부 위임'이다. finding-019는 같은 뿌리에서 evolution
+      고유 결과(버전 분리, 과거 데이터 재해석 불가)를 추가로 도출하므로 중복이 아닌 동근 후보로 분류한다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-013
+    to_finding_id: finding-001
+    relation: same_root_candidate
+    root_hypothesis: "'값의 단일 원본 지정을 온톨로지 책임으로 보지 않는 설계 입장'(finding-013.cause-003)이
+      등급 매핑 위임(finding-001)을 포함한 세 지점(한도·환율·등급매핑)의 권위 분산을 모두 만들었다. 온톨로지에
+      authority 지정 차원을 도입하면 finding-001이 finding-013의 한 사례로 함께 해소되어야 한다."
+    shared_cause: null
+    rationale: finding-013은 notes[0](등급 매핑)을 세 증거 중 하나로 직접 포함하므로 finding-001이 다루는
+      지점을 상위 패턴의 부분 사례로 포괄한다. 두 finding 모두 '각 시스템이 수행/관리'라는 동일 패턴을 권위 누수의 증거로
+      삼는다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-026
+    to_finding_id: finding-034
+    relation: shared_cause_candidate
+    root_hypothesis: R1~R5↔AAA~CCC 매핑이 문서 내에 없다는 동일 사실이, semantics에서는 등급 의미 단일 기준
+      부재로, logic에서는 도출 규칙의 문서 내 판정 불가능성으로 나타난다.
+    shared_cause:
+      cause_claim: 등급 스케일 간 변환 매핑이 온톨로지 외부(리스크팀 위키·각 소비 시스템)에 위임되어 문서 내 claim만으로는 등급
+        동치·도출을 판정할 수 없다.
+      from_cause_ref: finding-026.cause-003
+      to_cause_ref: finding-034.cause-002
+    rationale: finding-026.cause-003(disjoint enum 간 매핑이 문서 외부)과
+      finding-034.cause-002(매핑이 위키·시스템에 위임)는 동일 증거(RiskRating.grade.note,
+      notes[0])를 가리킨다. 다만 finding-026은 override 우선순위 모순이라는 별도 결함을 함께 포함하므로 전체
+      중복은 아니다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-041
+    to_finding_id: finding-034
+    relation: shared_cause_candidate
+    root_hypothesis: 매핑의 외부 위임이라는 공통 원인이 structure에서는 도출 경로의 문서 내 단절로, semantics에서는
+      등급 의미 권위 부재로 발현된다.
+    shared_cause:
+      cause_claim: 스케일 변환 매핑이 온톨로지 외부 위키에만 존재하여 risk_grade 도출 경로가 문서 내부에서 닫히지 않는다.
+      from_cause_ref: finding-041.cause-003
+      to_cause_ref: finding-034.cause-002
+    rationale: finding-041.cause-003은 finding-034.cause-002와 동일한 외부 매핑 사실을 인용한다.
+      finding-041의 1차 결함(Exposure↔RiskRating 관계 부재)은 구조 고유이므로 동근이 아닌 공유 원인 후보로
+      제한한다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-019
+    to_finding_id: finding-021
+    relation: shared_cause_candidate
+    root_hypothesis: 온톨로지에 버전 번호만 있고 변경 전파·호환 규약이 없다는 공통 원인이, 매핑에서는 버전 비관리
+      분기(finding-019)로, enum에서는 파괴적 동시 배포 강제(finding-021)로 나타난다.
+    shared_cause:
+      cause_claim: 온톨로지가 버전 간 호환성·변경 전파 규약(매핑 유효기간, enum 확장 규칙)을 정의하지 않아 모든 어휘 변경이 비관리
+        분기 또는 파괴적 변경이 된다.
+      from_cause_ref: finding-019.cause-002
+      to_cause_ref: finding-021.cause-002
+    rationale: finding-019.cause-002(매핑이 온톨로지 버전과 분리되어 버전 관리되지 않음)와
+      finding-021.cause-002(호환 규약 부재로 enum 추가가 파괴적 변경)는 모두 변경 거버넌스 차원의 부재라는 동일
+      결손을 서로 다른 어휘 표면에서 짚는다.
+    confidence: medium
+  - relation_id: rel-007
+    from_finding_id: finding-002
+    to_finding_id: finding-035
+    relation: same_root_candidate
+    root_hypothesis: classification_rules[0]이 도출 권위와 보고팀 조정 권위를 단일 risk_grade 필드에
+      무조건적으로 겹쳐 둔 동일 결정이, axiology에서는 공유 기준 훼손으로, semantics에서는 이름-의미 동음이의 혼재로
+      나타난다. 도출값/조정값 분리(또는 출처 표지)라는 하나의 수정으로 둘 다 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 classification_rules[0]과 Exposure.risk_grade를 핵심 증거로 삼고,
+      proposed_action이 GradeOverride 분리 vs derived/reported 분리로 실질적으로 동일한 개입을
+      가리킨다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-002
+    to_finding_id: finding-026
+    relation: same_root_candidate
+    root_hypothesis: 도출(obligatory)과 수동 조정(possible)을 우선순위 규칙 없이 한 문장에 결합한
+      classification_rules[0] 설계가 공통 뿌리다. 조건부 우선순위·기록 규칙을 명시하면 finding-002의 이중
+      권위 문제와 finding-026의 override 모순 부분이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-026의 (b) 부분(도출 의무 vs 조정 허용의 무우선순위 공존)은 finding-002의 claim과 동일
+      결함의 형식 논리 버전이다. finding-026은 매핑 부재라는 추가 결함을 포함하므로 duplicates 대신 동근 후보로 둔다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-002
+    to_finding_id: finding-012
+    relation: shared_cause_candidate
+    root_hypothesis: 수동 조정을 조건·기록·우선순위 개념 없이 규칙 산문으로만 허용한 공통 원인이, axiology에서는 이중 권위
+      충돌로, coverage에서는 감사 증거 개념 부재로 발현된다.
+    shared_cause:
+      cause_claim: classification_rules[0]의 수동 조정 허용이 조정의 조건·행위자·기록·우선순위를 담을 개념 없이
+        도입되어 조정 행위가 모델에서 추적·중재 불가능하다.
+      from_cause_ref: finding-002.cause-002
+      to_cause_ref: finding-012.cause-002
+    rationale: finding-002.cause-002(조정의 조건·기록·우선순위 부재)와 finding-012.cause-002(조정
+      행위의 기록 장소가 개념적으로 없음)는 동일 결손을 가리키며, 양쪽 proposed_action 모두 GradeOverride류 개념
+      신설로 수렴한다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-012
+    to_finding_id: finding-022
+    relation: shared_cause_candidate
+    root_hypothesis: 조정 행위를 일급 개념으로 승격하지 않은 공통 원인이, coverage에서는 감사 추적 불능으로,
+      evolution에서는 방법론 개정 시 조정 이력의 흔적 없는 소실로 발현된다.
+    shared_cause:
+      cause_claim: 수동 조정이 대응 엔터티·출처 표지 없이 규칙 문장으로만 존재하여 도출값과 조정값이 동일 필드에서 구분 불가능하다.
+      from_cause_ref: finding-012.cause-002
+      to_cause_ref: finding-022.cause-002
+    rationale: finding-022.cause-002는 finding-012.cause-002와 동일하게
+      classification_rules[0]의 조정 기록 개념 부재를 인용한다. finding-022는
+      시간성(methodology_version, 유효기간) 결손이라는 별도 축을 함께 다루므로 공유 원인 후보로 제한한다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-025
+    to_finding_id: finding-040
+    relation: duplicates
+    root_hypothesis: "Collateral.is_a: Exposure가 정의(:35)·secured_by(:82)와 모순된다는 동일
+      결함을 logic(만족 불가능성 판정)과 structure(그래프 내부 불일치)가 각각 보고했다. is_a 한 줄 제거라는 동일
+      수정으로 둘 다 닫힌다."
+    shared_cause: null
+    rationale: 두 finding은 동일 증거 집합(Collateral.is_a, definition, secured_by,
+      ExposureAggregate.definition)과 동일 proposed_action(is_a 제거, secured_by 유지)을
+      가진다. 차이는 lens 어휘뿐이다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-032
+    to_finding_id: finding-040
+    relation: duplicates
+    root_hypothesis: semantics(OntoClean rigidity 위반)와 structure(계층-관계 모순)는 같은 is_a
+      오분류 결함의 두 서술이며, 동일한 단일 수정(is_a 제거, 독립 엔티티화)으로 함께 해소된다.
+    shared_cause: null
+    rationale: 증거 anchor와 proposed_action이 finding-040과 사실상 동일하다. finding-032의
+      OntoClean 논거는 같은 결함에 대한 추가 정당화이지 별도 결함이 아니다.
+    confidence: high
+  - relation_id: rel-013
+    from_finding_id: finding-020
+    to_finding_id: finding-040
+    relation: duplicates
+    root_hypothesis: evolution lens의 finding-020은 동일한 is_a 오분류 결함을 확장 시나리오(공동담보·담보
+      풀) 비용 관점에서 재서술한 것이며, is_a 제거라는 동일 수정으로 해소된다.
+    shared_cause: null
+    rationale: root_cause_candidate('담보를 익스포저 부속 데이터로 본 구현 관점의 is_a 오분류')와
+      proposed_action(is_a 제거, secured_by 유지)이 finding-040과 일치한다. 확장 비용 논거는 동일
+      결함의 영향 분석이다.
+    confidence: high
+  - relation_id: rel-014
+    from_finding_id: finding-005
+    to_finding_id: finding-040
+    relation: same_root_candidate
+    root_hypothesis: Collateral is_a 오분류라는 동일 구조 결함이 뿌리이며, finding-005는 그 결함이 리스크 측정
+      가치 경계(증가 요인 vs 경감 요인)를 위반한다는 axiology 고유의 결과 평가를 추가한다. is_a 제거 시
+      finding-005도 함께 해소되어야 한다.
+    shared_cause: null
+    rationale: finding-005는 스스로 '형식 분류 오류의 1차 탐지는 structure/logic 관할'이라 밝히며 동일
+      대상(Collateral.is_a + ExposureAggregate.definition)을 가치 관점에서 재평가한다. 결함 동일성은
+      높으나 주장 축이 달라 동근 후보로 분류한다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-003
+    to_finding_id: finding-029
+    relation: duplicates
+    root_hypothesis: classification_rules[1]의 '각 시스템 당일 환율 테이블' 위임이 한도 위반 판정의 시스템 간
+      분기를 규칙상 합법화한다는 동일 결함을 axiology와 logic이 각각 보고했다. canonical 환율 소스 지정이라는 동일
+      수정으로 닫힌다.
+    shared_cause: null
+    rationale: 두 finding의 핵심 증거(classification_rules[1]), failure_condition(두 시스템 환율
+      테이블이 다른 경우), proposed_action(단일 환율 권위 고정)이 일치한다. finding-029의 함수성 모순 논증은
+      같은 결함의 형식화다.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-037
+    to_finding_id: finding-003
+    relation: same_root_candidate
+    root_hypothesis: 환산 권위·기준 시점을 개념의 일부로 포함하지 않고 시스템 구현에 위임한 동일 결정이 뿌리다. 단,
+      finding-037은 분자(total_amount)의 월말 배치 지연이라는 두 번째 원인을 결합하므로 환율 단일화만으로는 완전
+      해소되지 않는다.
+    shared_cause: null
+    rationale: finding-037.cause-001은 finding-003.cause-001과 동일하게
+      classification_rules[1]의 시스템별 환율 위임을 인용하지만, finding-037.cause-002는 배치
+      지연(finding-027 계열)을 추가 원인으로 포함해 부분 중첩이다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-003
+    to_finding_id: finding-023
+    relation: shared_cause_candidate
+    root_hypothesis: 환산 소스를 시스템별 로컬 자원에 위임한 공통 원인이, axiology에서는 한도 판정 모순의 합법화로,
+      evolution에서는 새 통화·새 시스템 추가 시 분기 누적으로 발현된다.
+    shared_cause:
+      cause_claim: classification_rules[1]이 통화 환산 소스를 '각 시스템의 당일 환율 테이블'로 명시해 단일 환산
+        기준이 규칙 수준에서 부재하다.
+      from_cause_ref: finding-003.cause-001
+      to_cause_ref: finding-023.cause-001
+    rationale: 두 finding의 cause-001이 동일 문구를 인용한다. finding-023은 CRM available_limit
+      결합(cause-002)이라는 별도 원인을 추가로 포함하므로 중복이 아닌 공유 원인 후보다.
+    confidence: high
+  - relation_id: rel-018
+    from_finding_id: finding-003
+    to_finding_id: finding-013
+    relation: same_root_candidate
+    root_hypothesis: 단일 원본 권위 지정을 온톨로지 책임으로 보지 않은 설계 입장이 공통 뿌리이며, finding-003의 환율
+      지점은 finding-013이 열거한 세 권위 분산 지점(한도·환율·등급매핑) 중 하나다.
+    shared_cause: null
+    rationale: finding-013은 classification_rules[1]을 직접 증거로 포함해 finding-003의 대상을 상위
+      패턴의 부분 사례로 포괄한다. finding-013.cause-002가 '각 시스템이' 패턴의 반복성을 명시적으로 동근 증거로 든다.
+    confidence: high
+  - relation_id: rel-019
+    from_finding_id: finding-016
+    to_finding_id: finding-029
+    relation: enables
+    root_hypothesis: Exposure.amount에 통화 차원이 없어 '통화가 다른 경우' 조건 자체가 문서 내에서 판정 불가능해지고,
+      이것이 finding-029의 소진율 비결정성을 더 깊은 수준에서 가능하게 한다. 통화 속성을 추가하면 finding-029의
+      cause-003 단계가 제거된다.
+    shared_cause: null
+    rationale: finding-029.cause-003이 '분자에 통화 속성이 없어 조건 성립 여부조차 판정 불가'라고 명시하며
+      finding-016의 결함(Exposure.amount 통화 부재)을 자신의 활성화 조건으로 직접 인용한다.
+    confidence: high
+  - relation_id: rel-020
+    from_finding_id: finding-042
+    to_finding_id: finding-029
+    relation: shared_cause_candidate
+    root_hypothesis: Limit 소진율 규칙이 피연산자 구조(조인 경로·집계 단위·통화)를 모델에 형식화하지 않은 채 산문으로 추가된
+      공통 원인이, structure에서는 분자-분모 조인 불능으로, logic에서는 규칙 내 정의-절차 충돌로 발현된다.
+    shared_cause:
+      cause_claim: classification_rules[1]의 피연산자(ExposureAggregate, Limit)가 관계
+        그래프·단위·통화 차원으로 형식화되지 않아 규칙이 문서 내부에서 평가 불가능하다.
+      from_cause_ref: finding-042.cause-002
+      to_cause_ref: finding-029.cause-003
+    rationale: finding-042.cause-002(조인 관계 부재·단위 불일치)와 finding-029.cause-003(통화 속성
+      부재로 조건 판정 불가)는 모두 같은 규칙의 피연산자 구조 결손을 가리키되 서로 다른 결손 면을 짚는다.
+    confidence: medium
+  - relation_id: rel-021
+    from_finding_id: finding-004
+    to_finding_id: finding-027
+    relation: same_root_candidate
+    root_hypothesis: 집계를 시점 한정 없는 정의로 두면서 산출은 월말 배치로 한 동일한 정의-구현 불일치가 뿌리이며, 정의에
+      as_of 한정과 신선도 계약을 명시하는 단일 수정으로 finding-027의 형식 모순과 finding-004의 통제 격하 문제가
+      함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding 모두 ExposureAggregate.total_amount note(:70)와 RiskAppetite
+      정의를 핵심 증거로 삼는다. finding-027은 모순의 형식 판정, finding-004는 같은 사실의 통제 목적 대비 가치
+      평가로, 동일 뿌리의 두 lens 서술이다.
+    confidence: high
+  - relation_id: rel-022
+    from_finding_id: finding-027
+    to_finding_id: finding-028
+    relation: enables
+    root_hypothesis: total_amount의 월배치 지연(finding-027의 대상 사실)이 없다면 finding-028의 (c)
+      'compliant 기록과 실제 초과의 동시 참' 구간은 발생하지 않는다. 집계 신선도 계약을 명시하면 finding-028의 시간
+      전개 모순 부분이 제거된다.
+    shared_cause: null
+    rationale: finding-028.cause-003이 ':70의 월배치 지연과 결합하면 기록된 상태와 실제 상태가 모순되는 구간이
+      필연적으로 발생한다'고 명시하여, finding-027이 다루는 지연 사실을 자신의 활성화 조건으로 직접 인용한다.
+      finding-028의 순환 정의·타입 오류 부분은 독립 결함이므로 enables로 제한한다.
+    confidence: high
+  - relation_id: rel-023
+    from_finding_id: finding-028
+    to_finding_id: finding-036
+    relation: duplicates
+    root_hypothesis: RiskAppetite 위반 정의의 순환성과 compliance_status의 파생값-저장값 혼재라는 동일 결함을
+      logic과 semantics가 각각 보고했으며, 비순환 산식 + 파생 투영 선언이라는 동일 수정으로 닫힌다.
+    shared_cause: null
+    rationale: 두 finding 모두 RiskAppetite.definition의 순환 구조, compliance_status의 독립
+      저장, total_amount 배치 지연과의 결합을 동일하게 지적하고 proposed_action이 동일 방향(비순환 산식 + 파생값
+      선언 + 기준 시점 명시)이다. finding-028의 타입 오류 지적은 같은 정의문에 대한 추가 논거다.
+    confidence: high
+  - relation_id: rel-024
+    from_finding_id: finding-039
+    to_finding_id: finding-028
+    relation: shared_cause_candidate
+    root_hypothesis: RiskAppetite 위반 의미가 관계 그래프·산식으로 형식화되지 않고 산문 정의에만 존재하는 공통 원인이,
+      structure에서는 고아 엔터티(비교 피연산자 연결 부재)로, logic에서는 순환·타입 오류로 발현된다.
+    shared_cause:
+      cause_claim: RiskAppetite 위반 판정의 피연산자(어느 ExposureAggregate와, 어떤 수치를, 어느 시점 기준으로
+        비교하는가)가 형식화되지 않고 산문 정의에만 존재한다.
+      from_cause_ref: finding-039.cause-002
+      to_cause_ref: finding-028.cause-002
+    rationale: finding-039.cause-002(비교 피연산자 연결의 구조적 부재)와 finding-028.cause-002(비교식의
+      타입·기준 시점 비형식화)는 동일한 정의문(:74)의 형식화 결손을 구조와 논리 양면에서 짚는다.
+    confidence: medium
+  - relation_id: rel-025
+    from_finding_id: finding-017
+    to_finding_id: finding-039
+    relation: same_root_candidate
+    root_hypothesis: 리스크 성향을 단일 임계값 레코드로 축약하고 적용 범위·관계·거버넌스 구조를 생략한 동일한 과소 모델링이
+      뿌리이며, scope 관계와 차원 추가라는 같은 계열의 수정으로 두 finding이 함께 해소된다.
+    shared_cause: null
+    rationale: finding-017(범위·기간·위반 사건 차원 부재)과 finding-039(관계 그래프 무연결·적용 범위 미정)는 모두
+      RiskAppetite attributes의 빈약함(appetite_id, threshold, compliance_status만
+      존재)을 증거로 삼고, proposed_action이 scope 관계 추가로 수렴한다.
+    confidence: high
+  - relation_id: rel-026
+    from_finding_id: finding-006
+    to_finding_id: finding-010
+    relation: duplicates
+    root_hypothesis: default 상태를 시스템 소유권(연체관리 시스템 존재)을 근거로 범위 제외하면서 경계 참조 개념을 두지 않은
+      동일 결함을 axiology와 coverage가 각각 보고했으며, 외부 권위 참조 개념(DefaultStatus) 선언이라는 동일
+      수정으로 닫힌다.
+    shared_cause: null
+    rationale: 두 finding 모두 notes[1]을 핵심 증거로 삼고, root_cause_candidate가 '시스템 경계(운영
+      책임)를 개념 경계(의미 정의)와 동일시'로 동일하며, proposed_action도 외부 권위 참조 개념 + 등급과의 관계 정의로
+      일치한다.
+    confidence: high
+  - relation_id: rel-027
+    from_finding_id: finding-011
+    to_finding_id: finding-022
+    relation: same_root_candidate
+    root_hypothesis: 엔터티를 현재 상태 스냅샷으로만 모델링하고 시간 유효성을 설계 차원으로 도입하지 않은 동일 결정이 뿌리이며,
+      RiskRating 등에 유효기간·기준 시점을 추가하는 단일 수정 계열로 finding-011의 재구성 불능과 finding-022의
+      개정 연속성 단절이 함께 해소된다.
+    shared_cause: null
+    rationale: 두 finding의 root_cause_candidate가 거의 동일 문구('현재 상태 스냅샷/스냅숏으로만 모델링')이고
+      대상(RiskRating, risk_grade, ltv의 시간 속성 부재)과
+      proposed_action(valid_from/rated_at 추가)이 겹친다. finding-022는
+      methodology_version과 출처 구분을 추가로 요구해 완전 중복은 아니다.
+    confidence: high
+  - relation_id: rel-028
+    from_finding_id: finding-014
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 엔터티를 정적 현재 상태 레코드로 모델링한 동일한 설계 차원 결손이, 값 축에서는 시점 의존 값의 이력
+      부재(finding-011)로, 객체 축에서는 생애주기 상태 부재(finding-014)로 발현된다. 시간·상태 차원을 전역 규약으로
+      도입하면 두 finding이 같은 개입 계열로 해소된다.
+    shared_cause: null
+    rationale: finding-014의 root('정적 레코드로 모델링하고 생애주기 상태를 제외')와 finding-011의 root('현재
+      상태 스냅샷으로만 모델링')는 동일한 상위 결손(시간/상태 차원 부재)의 두 단면이다. 다만 수정 대상 속성 집합이 달라(이력 vs
+      status/유효기간) 중복은 아니다.
+    confidence: medium
+  - relation_id: rel-029
+    from_finding_id: finding-015
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 시점 의존 값을 이력 없는 현재값 속성으로 흡수한 동일 모델링 패턴이, 등급 계열에서는 finding-011로,
+      담보 평가에서는 finding-015(Appraisal 사건 미분리)로 발현된다. 사건/이력 개념 도입이라는 같은 계열의 수정으로
+      함께 해소된다.
+    shared_cause: null
+    rationale: finding-011.cause-002가 시간 차원이 담보평가(appraised_at)에 산발적으로만 존재한다고 짚으며
+      finding-015의 대상을 같은 결손 패턴의 사례로 직접 언급한다. 평가 덮어쓰기로 인한 이력 소실은 finding-011의 과거
+      재구성 불능과 동일 메커니즘이다.
+    confidence: medium
+  - relation_id: rel-030
+    from_finding_id: finding-015
+    to_finding_id: finding-030
+    relation: shared_cause_candidate
+    root_hypothesis: 평가를 사건 개념으로 분리하지 않고 결과를 현재값 속성으로 흡수한 공통 원인이, coverage에서는 재평가
+      규칙의 검증 불능으로, logic에서는 재평가 시 저장 ltv와 담보 가치의 모순 상태 허용으로 발현된다.
+    shared_cause:
+      cause_claim: 담보 평가가 사건(Appraisal)으로 분리되지 않고 단일 현재값 속성으로 흡수되어, 재평가가 발생해도 그 결과를
+        담거나 파생값(ltv)에 전파할 개념 경로가 없다.
+      from_cause_ref: finding-015.cause-002
+      to_cause_ref: finding-030.cause-001
+    rationale: finding-030의 모순(ltv 1회 입력 vs 재평가 의무)은 finding-015가 짚은 평가-자산 미분리 위에서
+      성립한다. 두 finding 모두 classification_rules[2]와 Collateral의 단일
+      appraised_value를 증거로 공유한다.
+    confidence: medium
+  - relation_id: rel-031
+    from_finding_id: finding-033
+    to_finding_id: finding-030
+    relation: duplicates
+    root_hypothesis: ltv를 산식 파생값이 아닌 심사 시점 1회 수동 입력으로 모델링하여 원천(amount,
+      appraised_value) 갱신 시 불일치가 예견된다는 동일 결함을 semantics와 logic이 각각 보고했으며, ltv의
+      파생 속성 재정의(또는 시점 한정 명명)라는 동일 수정으로 닫힌다.
+    shared_cause: null
+    rationale: 두 finding 모두 Exposure.ltv.note('심사 시점에 심사역이 입력')와
+      classification_rules[2](재평가 의무)의 결합을 핵심 증거로 삼고, proposed_action이 동일
+      선택지(파생값 재정의 또는 origination LTV로 의미 한정)로 수렴한다.
+    confidence: high
+singleton_findings: []

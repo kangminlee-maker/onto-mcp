@@ -1,0 +1,370 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+lens_id: coverage
+human_output_ref: null
+findings:
+  - candidate_id: coverage-candidate-001
+    target: credit-risk-ontology.yaml notes (연체/부실 범위 제외 선언)
+    evidence_anchor: 'credit-risk-ontology.yaml notes: "연체/부실(default) 상태는 별도
+      시스템(연체관리)에서 다루므로 이 온톨로지의 범위 밖이다."'
+    claim: 여신 리스크 분류 온톨로지에서 연체/부실(default) 하위 영역이 통째로 제외되어, 리스크 등급 개념 공간이 정상 여신 구간만
+      커버한다.
+    what: "엔터티와 등급 체계(internal_rating, RiskRating.grade R1~R5, Exposure.risk_grade
+      AAA~CCC)가 모두 정상 상태의 등급만 표현하고, 연체·부실·채무불이행 상태, 부실 전이, 회수/상각 같은 신용 리스크의 핵심
+      하위 영역이 어떤 개념으로도 표현되지 않는다. 범위 밖 선언은 있으나 외부 시스템의 default 상태와 이 온톨로지의 등급·익스포저
+      개념을 잇는 경계 개념(예: default_flag, 부실 전이 사건)이 전무하다."
+    why: 이 문서는 '리스크 엔진과 보고서 시스템이 공유하는 개념 권위'를 지향한다고 선언한다. 신용 리스크 보고와 등급 산출은 부실 여부에
+      의해 의미가 갈리는데(부실 차주의 R등급/AAA등급은 무의미하거나 다른 의미), 부실 개념이 없으면 두 시스템이 부실 익스포저를 각자
+      다른 방식으로 처리하게 되어 공유 기준이라는 목적이 핵심 구간에서 실패한다.
+    how_to_fix: "범위 밖 선언을 유지하더라도 경계 개념을 추가한다: Borrower 또는 Exposure에 default/연체 상태
+      참조(외부 연체관리 시스템을 권위로 명시)와 부실 시 각 등급 필드의 의미 규칙(동결/무효/별도 등급)을 정의한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 신용 리스크 개념 권위 (파일 헤더 주석)
+      failure_condition: 부실 또는 연체 상태에 진입한 차주/익스포저를 두 소비 시스템이 분류·보고해야 하는 모든 경우
+      impact: 부실 구간에서 등급·익스포저 분류의 공유 의미가 정의되지 않아 엔진과 보고서가 서로 다른 수치를 산출해도 온톨로지로는 어느 쪽도
+        틀렸다고 말할 수 없다
+      evidence_refs:
+        - credit-risk-ontology.yaml notes[1] (default 범위 밖 선언)
+        - credit-risk-ontology.yaml 헤더 주석 (공유 개념 권위 지향)
+        - Exposure.risk_grade / RiskRating.grade enum (부실 상태 값 부재)
+    causal_path:
+      root_cause_candidate: 연체/부실을 '별도 시스템 소관'으로 선언하면서, 시스템 분리(운영 책임)와 개념 분리(의미 정의)를
+        동일시해 경계 개념 설계를 생략함
+      root_cause_step_id: coverage-candidate-001.cause-003
+      steps:
+        - cause_id: coverage-candidate-001.cause-001
+          claim: 등급 enum과 엔터티 어디에도 부실/연체 상태나 그 참조가 없다
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure.risk_grade values
+            - RiskRating.grade values
+            - Borrower attributes
+        - cause_id: coverage-candidate-001.cause-002
+          claim: notes에서 default를 범위 밖으로 선언하며 대체 경계 개념을 제공하지 않았다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[1]
+        - cause_id: coverage-candidate-001.cause-003
+          claim: 운영 시스템이 분리되어 있다는 사실로부터 개념도 정의할 필요가 없다고 판단한 것이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - notes[1]의 '별도 시스템에서 다루므로' 논리 구조
+      unresolved_beyond_evidence: 연체관리 시스템 측에 이미 양 시스템이 합의한 부실 개념 정의가 존재하는지는 경계 내 증거로 확인 불가
+  - candidate_id: coverage-candidate-002
+    target: RiskRating, Borrower.internal_rating, Exposure.risk_grade, Exposure.ltv
+      (시점 의존 값 전반)
+    evidence_anchor: RiskRating attributes (rating_id, borrower_ref, grade, score만
+      존재); Exposure.ltv note "심사 시점에 심사역이 입력한다"
+    claim: 시점 의존 값(등급, 점수, LTV)에 유효기간·이력 차원이 전혀 없어 과거 시점의 리스크 상태를 재구성할 수 없다.
+    what: RiskRating에는 산출 시각·유효기간·대체(supersede) 개념이 없고, internal_rating과 risk_grade는
+      단일 현재값 속성이며, ltv는 심사 시점 입력값으로 고정된 뒤 갱신·이력 개념이 없다. 온톨로지 전체에서 시간 속성은
+      Collateral.appraised_at과 ExposureAggregate.as_of 두 곳뿐이다.
+    why: 리스크 보고는 본질적으로 '특정 기준일의 등급/익스포저' 진술이다. 등급에 as-of 차원이 없으면 월말 보고 후 등급이 바뀌었을 때
+      보고서 재현이 불가능하고, 엔진 재산출 값과 보고서 저장 값이 어긋나도 어느 시점 값이 맞는지 판정할 개념 기반이 없다. 등급 추이
+      분석·전이행렬 같은 표준 리스크 산출물도 표현 불가능하다.
+    how_to_fix: RiskRating에 effective_from/effective_to(또는 rated_at +
+      superseded_by)를 추가하고, internal_rating·risk_grade·ltv를 단일 속성 대신 이력 보유 개념(또는
+      최신값 projection임을 명시)으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 보고 시스템이 의존할 수 있는 기준일 기반 리스크 상태 정의
+      failure_condition: 등급·LTV가 변경된 이후 과거 기준일 보고를 재구성하거나 감사 대응해야 하는 모든 경우
+      impact: 과거 시점 재구성이 개념적으로 불가능해 보고 재현성과 엔진-보고서 간 수치 대사가 성립하지 않는다
+      evidence_refs:
+        - RiskRating attributes (시간 속성 부재)
+        - Borrower.internal_rating (단일 문자열)
+        - Exposure.ltv note
+        - ExposureAggregate.as_of (집계에만 시점 존재)
+    causal_path:
+      root_cause_candidate: 온톨로지가 엔터티를 '현재 상태 스냅샷'으로만 모델링하고 시점 의존 값과 시점 독립 값을 구분하는 설계 차원을 도입하지 않음
+      root_cause_step_id: coverage-candidate-002.cause-003
+      steps:
+        - cause_id: coverage-candidate-002.cause-001
+          claim: 등급·점수·LTV가 유효기간 없는 단일 현재값으로 정의되어 있다
+          relation_to_previous: null
+          evidence_refs:
+            - RiskRating attributes
+            - Exposure.ltv
+            - Borrower.internal_rating
+        - cause_id: coverage-candidate-002.cause-002
+          claim: 시간 차원이 집계(as_of)와 담보평가(appraised_at)에만 산발적으로 존재하고 등급 계열에는 누락되었다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - ExposureAggregate.as_of
+            - Collateral.appraised_at
+        - cause_id: coverage-candidate-002.cause-003
+          claim: 시점 의존성을 모델링 차원으로 다루는 전역 규약이 없는 것이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - 온톨로지 전체에 temporal validity 규약·패턴 부재
+      unresolved_beyond_evidence: 소비 시스템들이 자체 DB에서 이력을 보관하는지는 경계 내 증거로 확인 불가하나, 그 경우에도 공유 개념 기준에는 이력 의미가 없다
+  - candidate_id: coverage-candidate-003
+    target: classification_rules[0] (risk_grade 수동 조정)
+    evidence_anchor: 'classification_rules: "Exposure.risk_grade는 RiskRating.grade에서
+      도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수 있다."'
+    claim: 수동 조정(override)이라는 통제 필요 행위가 허용되어 있으나 행위자·시각·근거를 추적할 증거 개념이 없다.
+    what: risk_grade 수동 조정을 규칙으로 허용하면서, 조정 사건을 표현할 엔터티(조정자, 조정 시각, 사유, 원래 도출값)가
+      온톨로지에 없다. 조정된 값과 엔진 도출값을 구분할 표지조차 없어, risk_grade만 보고는 도출값인지 수동값인지 알 수 없다.
+    why: 등급 수동 조정은 신용 리스크 통제에서 대표적인 감사 대상 행위다. 증거 개념이 없으면 조정이 데이터 위에서 흔적 없이 일어나고,
+      엔진(도출 권위)과 보고서 팀(조정 권위)의 권위 충돌이 발생했을 때 어떤 값이 왜 우세한지 재구성할 수 없다. 공유 개념 기준으로서
+      도출 규칙의 신뢰가 무너진다.
+    how_to_fix: GradeOverride(또는 RatingAdjustment) 개념을 추가해 actor, adjusted_at,
+      rationale, original_grade, adjusted_grade를 정의하고, risk_grade에
+      derived/overridden 출처 표지를 둔다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: risk_grade 도출 규칙(classification_rules[0])의 신뢰성과 감사 가능성
+      failure_condition: 보고서 팀이 수동 조정을 수행한 모든 익스포저에 대해 감사·검증·원인 추적이 필요한 경우
+      impact: 조정 행위가 추적 불가능해 도출 규칙 위반과 정당한 조정을 구분할 수 없고, 등급 데이터의 출처 신뢰가 익스포저 단위로 불확정해진다
+      evidence_refs:
+        - classification_rules[0]
+        - entities 목록 (조정/override 관련 개념 부재)
+    causal_path:
+      root_cause_candidate: 수동 조정을 규칙 문장(프로세스 서술)으로만 도입하고 그 행위를 일급 개념(사건 엔터티)으로 승격하지 않음
+      root_cause_step_id: coverage-candidate-003.cause-003
+      steps:
+        - cause_id: coverage-candidate-003.cause-001
+          claim: risk_grade 값만으로는 도출값과 수동 조정값을 구분할 수 없다
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure.risk_grade 정의 (출처 표지 부재)
+        - cause_id: coverage-candidate-003.cause-002
+          claim: 조정 행위가 규칙 텍스트로만 존재하고 대응 엔터티가 없어 행위 기록 장소가 개념적으로 없다
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules[0]
+            - entities 목록
+        - cause_id: coverage-candidate-003.cause-003
+          claim: 통제 행위를 개념화하지 않고 규칙 문장에 둔 설계 선택이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - classification_rules 섹션의 서술형 구조
+      unresolved_beyond_evidence: 보고 시스템이 자체적으로 조정 로그를 남기는지는 경계 밖이나, 공유 개념 기준에는 그 의무가 표현되어 있지 않다
+  - candidate_id: coverage-candidate-004
+    target: Limit.approved_amount, classification_rules[1] (환율), notes[0] (3중 등급 스케일)
+    evidence_anchor: 'Limit.approved_amount note: "영업점 CRM의 available_limit과 합산 관리";
+      classification_rules[1]: "환산은 각 시스템의 당일 환율 테이블을 사용"; notes[0]: "변환은 각 소비
+      시스템이 수행한다"'
+    claim: 복수 시스템에 걸쳐 병행 관리된다고 서술된 값(한도, 환율, 등급 매핑)에 단일 원본(권위) 지정이 일관되게 부재하다.
+    what: "세 곳에서 병행 관리가 명시되지만 권위 지정이 없다: (1) 한도가 승인 시스템과 영업점 CRM에 걸쳐 '합산 관리'되는데 어느
+      쪽이 원본인지 미지정, (2) 한도 소진율 환산이 '각 시스템의 당일 환율 테이블'을 사용해 시스템마다 다른 환율로 같은 소진율을
+      계산, (3) 3개 등급 스케일 간 변환을 '각 소비 시스템이 수행'하고 매핑 권위는 온톨로지 밖 위키에 있다."
+    why: 공유 개념 권위 문서의 존재 이유가 '같은 값에 대한 단일 의미와 단일 원본'인데, 정작 시스템 간 분기가 실제로 발생하는 세 지점
+      모두에서 권위를 소비자에게 위임한다. 같은 차주의 한도 소진율이 시스템마다 다른 값으로 산출되어도 정합성 위반으로 판정할 기준이
+      없으며, 이는 한도 통제라는 운영 목적의 직접 실패 경로다.
+    how_to_fix: "각 병행 값에 권위를 명시한다: approved_amount의 원본 시스템 지정과 available_limit의 파생
+      관계 정의, 한도 소진율 계산용 단일 환율 출처 지정, 등급 매핑 테이블을 위키 참조 대신 온톨로지 내
+      개념(RatingScaleMapping)으로 편입."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 한도 통제(classification_rules[1] 소진율)와 등급 일관성이라는 공유 기준 목적
+      failure_condition: 다통화 익스포저의 소진율 계산, 또는 CRM과 승인 시스템의 한도가 불일치하는 모든 경우
+      impact: 두 시스템이 같은 차주에 대해 다른 소진율·다른 등급을 산출해도 어느 값이 권위인지 판정 불가하여, 한도 초과가 시스템 선택에
+        따라 보였다 안 보였다 한다
+      evidence_refs:
+        - Limit.approved_amount note
+        - classification_rules[1]
+        - notes[0]
+    causal_path:
+      root_cause_candidate: 온톨로지가 개념 정의는 중앙화했지만 값의 원본 권위 지정을 설계 차원으로 포함하지 않아, 권위가 암묵적으로 각 소비 시스템에 분산됨
+      root_cause_step_id: coverage-candidate-004.cause-003
+      steps:
+        - cause_id: coverage-candidate-004.cause-001
+          claim: 한도·환율·등급매핑 세 지점에서 시스템별로 다른 값이 산출될 수 있다
+          relation_to_previous: null
+          evidence_refs:
+            - Limit.approved_amount note
+            - classification_rules[1]
+            - notes[0]
+        - cause_id: coverage-candidate-004.cause-002
+          claim: 세 지점 모두 '각 시스템이 관리/수행'이라는 동일 패턴으로 권위를 위임한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - classification_rules[1]의 '각 시스템의' 표현
+            - notes[0]의 '각 소비 시스템이 수행'
+        - cause_id: coverage-candidate-004.cause-003
+          claim: 단일 원본 지정을 온톨로지의 책임으로 보지 않은 설계 입장이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - 온톨로지 전체에 authority/source-of-truth 지정 필드 부재
+      unresolved_beyond_evidence: 실제 운영에서 시스템 간 대사 절차가 존재하는지는 경계 내 증거로 확인 불가
+  - candidate_id: coverage-candidate-005
+    target: Exposure, Limit, Collateral (lifecycle 차원)
+    evidence_anchor: Exposure/Limit/Collateral attributes (상태·기간·종료 개념 부재);
+      RiskAppetite.compliance_status (유일한 상태 enum)
+    claim: 상태를 갖는 핵심 엔터티들의 lifecycle이 전혀 모델링되지 않아 도입~종료 구간이 개념적으로 비어 있다.
+    what: Exposure에는 실행/상환/만기/조기종결/재구조화 상태가 없고, Limit에는 유효기간·만기·갱신·취소가 없으며,
+      Collateral에는 설정/해지/실행(처분) 상태가 없다. 온톨로지 전체에서 상태 개념은
+      RiskAppetite.compliance_status 하나뿐이다. 종결 이후의 정정 사건(상환 후 금액 정정 등)을 수용할 개념도
+      없다.
+    why: 종료 개념이 없으면 ExposureAggregate('모든 Exposure.amount의 합')가 상환 완료된 익스포저를 포함하는지
+      여부가 미정의되어 총익스포저 자체가 흔들리고, 만기 지난 Limit으로 소진율을 계산하는 것을 막을 개념도 없다. 보고서의 '현재
+      익스포저'와 엔진의 계산 모집단이 달라질 수 있다.
+    how_to_fix: Exposure.status(active/repaid/written_off 등), Limit의
+      effective_from/expires_at, Collateral.status(active/released/enforced)를
+      추가하고 ExposureAggregate 정의를 'active Exposure의 합'으로 정밀화한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: ExposureAggregate 정의와 Limit 소진율 계산의 모집단 결정성
+      failure_condition: 상환 완료·만기 도래·담보 해지가 발생한 엔터티가 집계와 소진율 계산에 포함되는지 판단해야 하는 모든 경우
+      impact: 집계 모집단이 미정의되어 두 소비 시스템이 서로 다른 총익스포저를 정당하게 산출할 수 있다
+      evidence_refs:
+        - ExposureAggregate.definition ('모든 Exposure.amount의 합')
+        - Exposure attributes (status 부재)
+        - Limit attributes (유효기간 부재)
+    causal_path:
+      root_cause_candidate: 엔터티를 정적 레코드로 모델링하고 생애주기 상태를 모델링 차원에서 제외함
+      root_cause_step_id: coverage-candidate-005.cause-002
+      steps:
+        - cause_id: coverage-candidate-005.cause-001
+          claim: 핵심 엔터티에 상태·기간 속성이 없어 종결된 객체와 활성 객체가 개념적으로 구분되지 않는다
+          relation_to_previous: null
+          evidence_refs:
+            - Exposure/Limit/Collateral attributes
+        - cause_id: coverage-candidate-005.cause-002
+          claim: 그 결과 '모든 Exposure의 합'이라는 집계 정의의 모집단이 미정의가 된다
+          relation_to_previous: causes
+          evidence_refs:
+            - ExposureAggregate.definition
+      unresolved_beyond_evidence: 소비 시스템들이 자체 status 컬럼으로 보완 중인지는 확인 불가
+  - candidate_id: coverage-candidate-006
+    target: Collateral.appraised_value / classification_rules[2] (재평가)
+    evidence_anchor: 'classification_rules[2]: "appraised_value가 1년 이상 경과하면 재평가 대상";
+      Collateral attributes (단일 appraised_value/appraised_at)'
+    claim: 재평가 규칙은 있으나 재평가 이력·재평가 상태를 표현할 개념이 없어 규칙의 실행 결과를 담을 곳이 없다.
+    what: 담보는 단일 appraised_value와 appraised_at만 가지므로 재평가가 일어나면 이전 평가가 덮어써져 사라진다.
+      '재평가 대상' 상태, 재평가 수행 여부, 평가 주체, 연속 평가 이력이 모두 개념적으로 부재하다.
+    why: 재평가 의무를 규칙으로 선언하면서 그 이행을 표현·검증할 개념이 없으면 규칙은 검사 불가능한 선언에 머문다. LTV가 담보 가치에
+      의존하므로 평가 이력 부재는 과거 LTV 재구성 불능으로 이어진다.
+    how_to_fix: Appraisal을 별도 사건 개념(appraised_value, appraised_at, appraiser)으로 분리해
+      Collateral이 평가 이력을 갖게 하고, '재평가 대상' 판정을 최신 Appraisal 기준 projection으로 정의한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: classification_rules[2]의 담보 재평가 통제와 담보 기반 LTV의 신뢰성
+      failure_condition: 재평가 수행 여부를 점검하거나 과거 시점 담보가치를 재구성해야 하는 경우
+      impact: 재평가 규칙 준수를 데이터로 검증할 수 없고 평가 덮어쓰기로 이력이 소실된다
+      evidence_refs:
+        - classification_rules[2]
+        - Collateral.appraised_value/appraised_at (단일 값)
+    causal_path:
+      root_cause_candidate: 평가(사건)와 담보(자산)를 분리하지 않고 평가 결과를 자산의 현재값 속성으로 흡수한 모델링
+      root_cause_step_id: coverage-candidate-006.cause-002
+      steps:
+        - cause_id: coverage-candidate-006.cause-001
+          claim: 담보당 평가값이 하나뿐이라 재평가 시 이전 값이 소실된다
+          relation_to_previous: null
+          evidence_refs:
+            - Collateral attributes
+        - cause_id: coverage-candidate-006.cause-002
+          claim: 평가를 사건 개념으로 분리하지 않은 것이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - entities 목록 (Appraisal 개념 부재)
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-007
+    target: Exposure.amount (통화 차원)
+    evidence_anchor: Exposure.amount (currency 속성 없음) vs Limit.currency (존재);
+      classification_rules[1] (통화가 다른 경우의 환산 규칙 존재)
+    claim: Limit에는 currency가 있고 환산 규칙도 다통화를 전제하는데, 정작 Exposure.amount에는 통화 차원이 없다.
+    what: 한도 소진율 계산 규칙이 '통화가 다른 경우'를 명시적으로 다루므로 익스포저가 다통화임을 전제하는데, Exposure.amount와
+      ExposureAggregate.total_amount에는 통화 속성이 없어 어떤 통화의 금액인지 미정의다.
+    why: 다통화 전제와 통화 무표기 금액이 공존하면 합산(ExposureAggregate)의 의미 자체가 성립하지 않는다. 서로 다른 통화
+      금액을 단위 없이 합산하는 정의가 되어 소진율 규칙의 입력이 깨진다.
+    how_to_fix: Exposure에 currency 속성을 추가하고 ExposureAggregate.total_amount의 표시 통화(또는
+      환산 기준)를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: ExposureAggregate 합산과 Limit 소진율 계산의 수치 정합성
+      failure_condition: 외화 익스포저가 존재하는 차주의 총익스포저·소진율을 계산하는 모든 경우
+      impact: 통화 미정의 금액의 합산은 수치적으로 무의미해 한도 통제 결과가 비결정적이 된다
+      evidence_refs:
+        - Exposure.amount
+        - ExposureAggregate.total_amount
+        - Limit.currency
+        - classification_rules[1]
+    causal_path:
+      root_cause_candidate: 통화 차원을 Limit에만 부분 도입하고 금액 속성 전반의 공통 차원으로 적용하지 않음
+      root_cause_step_id: coverage-candidate-007.cause-002
+      steps:
+        - cause_id: coverage-candidate-007.cause-001
+          claim: 환산 규칙은 다통화를 전제하나 Exposure 금액에는 통화가 없다
+          relation_to_previous: null
+          evidence_refs:
+            - classification_rules[1]
+            - Exposure.amount
+        - cause_id: coverage-candidate-007.cause-002
+          claim: 통화를 엔터티별 임의 속성으로 취급해 일부 엔터티에만 추가한 것이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - Limit.currency만 존재하는 비대칭
+      unresolved_beyond_evidence: null
+  - candidate_id: coverage-candidate-008
+    target: RiskAppetite (범위·기간·위반 사건 차원)
+    evidence_anchor: RiskAppetite attributes (appetite_id, threshold, compliance_status만 존재)
+    claim: RiskAppetite에 적용 범위(세그먼트/상품/차주), 유효기간, 위반 사건·해소 추적 개념이 없어 단일 숫자 임계값 이상의
+      리스크 성향 구조를 표현할 수 없다.
+    what: threshold가 무엇에 대한 한도인지(전행/세그먼트별/상품별) 지정하는 차원이 없고, 성향 한도의 승인·개정 시점이나 유효기간도
+      없으며, compliance_status는 현재값 하나로 위반 발생·통보·해소의 사건 흐름을 담지 못한다.
+      ExposureAggregate와의 비교 관계도 relations에 선언되어 있지 않다.
+    why: 리스크 성향 프레임워크는 통상 차원별 한도 체계와 위반 시 거버넌스 절차(보고·승인·해소)를 포함한다. 현재 모델로는 '누구의 어떤
+      익스포저가 어느 기간의 어떤 한도를 위반했는가'를 표현할 수 없어, 보고 시스템이 성향 위반 보고를 이 온톨로지 위에서 구성할 수
+      없다.
+    how_to_fix: "RiskAppetite에 적용 차원(scope: segment/product/전사)과 effective 기간을 추가하고,
+      위반을 상태 enum 대신 사건 개념(breach: detected_at, notified_to, resolved_at)으로
+      분리한다. ExposureAggregate와의 비교 관계를 relations에 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: RiskAppetite 정의가 선언한 위반 판정과 그 보고 활용
+      failure_condition: 세그먼트별·기간별 성향 한도 위반을 보고하거나 위반 해소를 추적해야 하는 경우
+      impact: 위반 판정의 대상·기간이 미정의여서 compliance_status 값의 의미가 결정 불가능하다
+      evidence_refs:
+        - RiskAppetite attributes
+        - RiskAppetite.definition
+        - relations 목록 (RiskAppetite 관계 부재)
+    causal_path:
+      root_cause_candidate: 리스크 성향을 단일 임계값 레코드로 축약하고 차원·기간·사건 구조를 생략한 모델링
+      root_cause_step_id: coverage-candidate-008.cause-002
+      steps:
+        - cause_id: coverage-candidate-008.cause-001
+          claim: threshold의 적용 대상과 기간이 미정의이고 위반이 현재 상태값 하나로만 표현된다
+          relation_to_previous: null
+          evidence_refs:
+            - RiskAppetite attributes
+        - cause_id: coverage-candidate-008.cause-002
+          claim: 성향 한도를 거버넌스 구조가 아닌 단순 수치로 개념화한 것이 출발 원인
+          relation_to_previous: causes
+          evidence_refs:
+            - RiskAppetite.definition의 순환적·단순 임계값 서술
+      unresolved_beyond_evidence: 성향 한도 거버넌스가 별도 정책 문서로 존재하는지는 경계 내 증거로 확인 불가
+  - candidate_id: coverage-candidate-009
+    target: entities 전반 (리스크 파라미터·경감 수단 하위 영역)
+    evidence_anchor: entities 목록 (PD/LGD/EAD/충당금/보증인 개념 부재); Exposure.product_type에 guarantee 존재
+    claim: product_type에 guarantee가 있으나 보증인·보증 한도 등 신용 경감 개념이 담보(Collateral) 외에는 없고,
+      기대손실 계열 파라미터(PD/LGD/EAD/충당금) 범주도 전무하다.
+    what: 신용 경감 수단 중 담보만 모델링되고 보증(guarantor, 보증 비율·한도)은 상품 유형 enum 값으로만 존재한다. 또한 신용
+      리스크 표준 프레임워크가 다루는 부도율·손실률·익스포저 파라미터와 충당금 범주가 개념 공간에 없다.
+    why: 리스크 엔진이 산출하는 것이 등급(score 포함)뿐이라면 현재 범위가 의도일 수 있으나, guarantee 상품을 도입해 놓고 보증
+      관계를 표현하지 못하는 것은 명백한 하위 세분화 부족이다. 파라미터 계열 부재는 의도된 범위 축소일 수 있어 확인이 필요하다.
+    how_to_fix: 최소한 Guarantor/Guarantee 개념(보증인 참조, 보증 한도)을 추가하고, PD/LGD/EAD·충당금이 의도적
+      범위 밖이라면 notes에 범위 제외와 담당 시스템을 명시한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - "신용 리스크 도메인의 일반 관행(기준일 기반 보고, 등급 전이 분석, 담보 평가 이력, 리스크 성향 거버넌스, 보증 등 신용 경감
+    수단)을 참조 기준으로 사용했다. 웹 리서치가 거부되어 외부 표준(예: 바젤 프레임워크)의 구체 조항은 인용하지 않고 일반 지식
+    수준에서만 적용했다."
+  - "'리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서'라는 파일 헤더 선언을 이 온톨로지의 목적 계약으로 간주했다."
+validation:
+  unaddressable_candidates: []

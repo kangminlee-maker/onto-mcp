@@ -1,0 +1,244 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+lens_id: structure
+human_output_ref: null
+findings:
+  - candidate_id: structure-candidate-001
+    target: credit-risk-ontology.yaml entities.RiskAppetite + relations
+    evidence_anchor: "credit-risk-ontology.yaml: entities.RiskAppetite (definition,
+      attributes) and the relations list (5 entries, none involving
+      RiskAppetite)"
+    claim: RiskAppetite는 관계 그래프에 전혀 연결되지 않은 고아 엔터티이며, 자신의 정의가 의존하는
+      ExposureAggregate와의 비교 관계도 구조적으로 존재하지 않는다.
+    what: "RiskAppetite는 relations 목록의 어떤 항목에도 등장하지 않고, 속성에도 borrower_ref나 다른 엔터티를
+      가리키는 ref가 하나도 없다. 정의문은 'ExposureAggregate가 RiskAppetite를 초과하면 위반'이라고
+      서술하지만, 그 비교를 가능하게 하는 관계(예: applies_to, constrains)나 적용 범위
+      속성(차주/세그먼트/포트폴리오)이 없다. threshold가 무엇의 합계와 비교되는지 구조적으로 결정할 수 없다."
+    why: 이 온톨로지는 리스크 엔진과 보고 시스템이 공유하는 개념 권위를 지향한다. RiskAppetite 위반 판정은 리스크 관리의 핵심
+      산출물인데, 위반 판정에 필요한 피연산자 연결(어떤 ExposureAggregate와 비교하는가)이 그래프에 없으므로 두 소비
+      시스템이 각자 임의의 적용 범위를 가정해 서로 다른 위반 판정을 내릴 수 있다. 정의문 안의 산문 서술은 관계 그래프를 대체하지
+      못한다.
+    how_to_fix: "RiskAppetite에 적용 범위를 명시하는 관계를 추가한다. 최소 수정: relations에 { from:
+      RiskAppetite, to: ExposureAggregate, kind: constrains } (또는
+      Borrower/segment 수준 적용이면 해당 대상)을 추가하고, RiskAppetite에 scope를 식별하는 ref 속성을
+      둔다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유하는 개념 권위 문서로서 RiskAppetite 위반 판정 기준을 단일하게 정의하는 것
+      failure_condition: 두 소비 시스템이 RiskAppetite.threshold를 서로 다른 집계 범위(전사/세그먼트/차주)와
+        비교하도록 구현하는 순간, 동일 데이터에 대해 compliance_status 판정이 갈린다.
+      impact: 위반 판정은 한도 통제·보고의 게이트 역할을 하므로, 판정 불일치는 보고서 오류 또는 한도 초과 미탐지로 직결된다. 온톨로지가
+        권위 역할을 수행하지 못한다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml: entities.RiskAppetite.definition"
+        - "credit-risk-ontology.yaml: relations (RiskAppetite 부재)"
+    causal_path:
+      root_cause_candidate: RiskAppetite가 산문 정의만으로 추가되고 관계 그래프와 적용 범위 속성으로 형식화되지 않았다.
+      root_cause_step_id: structure-candidate-001.cause-003
+      steps:
+        - cause_id: structure-candidate-001.cause-001
+          claim: RiskAppetite는 relations 목록과 ref 속성 어디에도 연결되지 않은 고아 엔터티다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml: relations"
+            - "credit-risk-ontology.yaml: entities.RiskAppetite.attributes"
+        - cause_id: structure-candidate-001.cause-002
+          claim: 정의문이 요구하는 'ExposureAggregate 초과' 비교의 피연산자 연결이 구조적으로 존재하지 않아 위반 판정이 그래프에서
+            도출 불가능하다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml: entities.RiskAppetite.definition"
+        - cause_id: structure-candidate-001.cause-003
+          claim: 위반 판정 의미가 산문에만 존재하므로 각 소비 시스템이 적용 범위를 독자 해석하게 되어 판정 분기가 가능해진다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml: 헤더 주석(리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를
+              지향)"
+      unresolved_beyond_evidence: 실제 소비 시스템들이 현재 어떤 적용 범위를 가정해 구현했는지는 이 파일 범위 밖이다.
+  - candidate_id: structure-candidate-002
+    target: credit-risk-ontology.yaml entities.Collateral.is_a
+    evidence_anchor: "credit-risk-ontology.yaml: entities.Collateral (is_a:
+      Exposure) vs relations { from: Exposure, to: Collateral, kind: secured_by
+      }"
+    claim: "Collateral의 is_a: Exposure 계층 선언이 같은 파일의 secured_by 관계 및 Collateral의
+      정의('익스포저를 담보하는 자산')와 구조적으로 모순된다."
+    what: "Collateral은 정의상 익스포저를 담보하는 자산이고 relations에서도
+      Exposure-secured_by->Collateral로 별개 엔터티로 연결되는데, is_a: Exposure로 선언되어
+      Exposure의 하위 타입이 된다. 이 경우 Collateral은 borrower_ref, amount, product_type,
+      risk_grade, ltv를 모두 상속하며, '담보가 곧 신용 익스포저'라는 의도하지 않은 분류가 성립한다. 자기 자신(의 상위
+      타입)과 secured_by로 연결되는 순환적 구조도 만들어진다."
+    why: "is_a는 분류 계층의 권위 선언이므로, 이를 그대로 소비하는 시스템(예: 모든 Exposure를 집계하는
+      ExposureAggregate 로직)은 Collateral 인스턴스를 익스포저 합계에 포함하거나 risk_grade를 요구하는 등
+      오동작할 수 있다. 정의·관계·계층 세 곳 중 두 곳(정의, secured_by)은 별개 엔터티를 말하고 한 곳(is_a)만 하위
+      타입을 말하므로 명백한 내부 불일치다."
+    how_to_fix: "is_a: Exposure 한 줄을 제거한다. Collateral은 독립 엔터티로 두고 기존 secured_by 관계가
+      연결을 담당하게 한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 공유 개념 모델의 분류 계층이 두 소비 시스템에 동일한 엔터티 분류를 제공하는 것
+      failure_condition: 소비 시스템이 is_a 계층을 신뢰해 Collateral을 Exposure 집합에 포함(집계, 등급 부여,
+        한도 소진 계산)하는 경우.
+      impact: ExposureAggregate 정의('모든 Exposure.amount의 합')에 담보 평가액 단위가 섞여 총익스포저가 과대
+        계상될 수 있고, 보고서와 엔진이 계층 해석을 달리하면 수치가 갈린다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml: entities.Collateral.is_a"
+        - "credit-risk-ontology.yaml: entities.Collateral.definition"
+        - "credit-risk-ontology.yaml: relations(secured_by)"
+        - "credit-risk-ontology.yaml: entities.ExposureAggregate.definition"
+    causal_path:
+      root_cause_candidate: 담보-익스포저 연결을 표현하면서 관계(secured_by)와 타입 계층(is_a)을 혼동해 둘 다 선언했다.
+      root_cause_step_id: structure-candidate-002.cause-003
+      steps:
+        - cause_id: structure-candidate-002.cause-001
+          claim: "Collateral에 is_a: Exposure가 선언되어 있어 Collateral이 Exposure의 하위 타입으로 분류된다."
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml: entities.Collateral.is_a"
+        - cause_id: structure-candidate-002.cause-002
+          claim: 같은 파일의 정의문과 secured_by 관계는 Collateral을 Exposure와 구별되는 담보 자산으로 모델링하므로 계층
+            선언과 충돌한다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml: entities.Collateral.definition"
+            - "credit-risk-ontology.yaml: relations(secured_by)"
+        - cause_id: structure-candidate-002.cause-003
+          claim: 계층을 신뢰하는 소비 로직(모든 Exposure.amount 합산 등)이 Collateral을 익스포저로 취급하는 오류를 가능하게
+            한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml: entities.ExposureAggregate.definition"
+      unresolved_beyond_evidence: 소비 시스템이 is_a를 실제로 어떻게 해석하는지는 파일 범위 밖이지만, 파일 내부 모순 자체는 닫힌 증거다.
+  - candidate_id: structure-candidate-003
+    target: credit-risk-ontology.yaml classification_rules[0] + relations
+    evidence_anchor: "credit-risk-ontology.yaml: classification_rules[0]
+      ('Exposure.risk_grade는 RiskRating.grade에서 도출') vs
+      relations(Exposure–RiskRating 관계 부재) 및 RiskRating.grade.note('매핑 테이블은 리스크팀
+      위키 참조')"
+    claim: Exposure.risk_grade의 도출 규칙이 요구하는 Exposure↔RiskRating 연결 관계가 그래프에 없고, 등급
+      스케일 간 변환 매핑도 온톨로지 외부(위키)에 있어 도출 경로가 문서 내부에서 끊겨 있다.
+    what: classification_rules[0]은 Exposure.risk_grade(AAA~CCC)를
+      RiskRating.grade(R1~R5)에서 도출한다고 선언하지만, relations에는 Exposure와 RiskRating을
+      잇는 관계가 없다. 둘은 Borrower를 경유해서만 연결되는데, 차주에 복수의 RiskRating이 있을 수 있는
+      구조(rated_by has-many 형태)에서 어떤 rating이 도출 근거인지 선택하는 관계가 없다. 또한 R1~R5에서
+      AAA~CCC로 가는 변환 규칙은 온톨로지 밖 위키에만 존재한다고 명시되어 있다.
+    why: 개념 권위 문서를 지향하는 산출물에서 핵심 파생 속성(보고서 팀이 사용하는 risk_grade)의 도출 경로가 그래프에 표현되지
+      않으면, 규칙은 검증 불가능한 산문으로 남는다. 도출 관계 부재 + 외부 매핑 의존이 결합되어 엔진과 보고서가 동일 차주의 익스포저에
+      다른 등급을 부여해도 온톨로지 수준에서는 오류로 판정할 수 없다.
+    how_to_fix: "relations에 { from: Exposure, to: RiskRating, kind: graded_from }(또는
+      derived_from)을 추가해 도출 근거 rating을 명시하고, R1~R5→AAA~CCC 매핑을 온톨로지 내
+      classification_rules 또는 별도 매핑 섹션으로 끌어들인다(최소한 매핑 문서를 버전 고정된 참조로 선언)."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 보고서 팀이 사용하는 Exposure.risk_grade가 엔진 산출 RiskRating.grade와 일관되게 연결된다는 도출 계약
+      failure_condition: 한 차주에 복수/갱신된 RiskRating이 존재하거나 위키 매핑이 변경될 때, 어떤 rating·어떤 매핑
+        버전으로 risk_grade를 도출했는지 온톨로지가 결정하지 못하는 경우.
+      impact: 보고서 등급과 엔진 등급의 추적 가능성이 끊겨, 등급 불일치 발생 시 어느 쪽이 권위인지 이 문서로 판정할 수 없다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml: classification_rules[0]"
+        - "credit-risk-ontology.yaml: relations"
+        - "credit-risk-ontology.yaml: entities.RiskRating.attributes.grade.note"
+    causal_path:
+      root_cause_candidate: 도출 의존성을 classification_rules 산문으로만 기술하고 관계 그래프와 매핑 정의로 형식화하지 않았다.
+      root_cause_step_id: structure-candidate-003.cause-003
+      steps:
+        - cause_id: structure-candidate-003.cause-001
+          claim: classification_rules[0]은 Exposure.risk_grade가 RiskRating.grade에서 도출된다고
+            선언한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml: classification_rules[0]"
+        - cause_id: structure-candidate-003.cause-002
+          claim: relations에 Exposure와 RiskRating을 잇는 관계가 없어 도출 근거 rating을 구조적으로 식별할 수 없다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml: relations"
+        - cause_id: structure-candidate-003.cause-003
+          claim: 스케일 변환 매핑이 온톨로지 외부 위키에만 존재해, 도출 경로 전체가 문서 내부에서 닫히지 않는다.
+          relation_to_previous: causes
+          evidence_refs:
+            - "credit-risk-ontology.yaml:
+              entities.RiskRating.attributes.grade.note"
+            - "credit-risk-ontology.yaml: notes[0]"
+      unresolved_beyond_evidence: 위키 매핑 테이블의 실제 내용과 버전 관리 상태는 허용 범위 밖이다.
+  - candidate_id: structure-candidate-004
+    target: credit-risk-ontology.yaml classification_rules[1] + entities.Limit /
+      entities.ExposureAggregate
+    evidence_anchor: "credit-risk-ontology.yaml: classification_rules[1] (Limit 소진율
+      = ExposureAggregate.total_amount / Limit.approved_amount) vs
+      Limit.definition('차주/상품별 여신 한도')와 relations(ExposureAggregate–Limit 관계
+      부재)"
+    claim: Limit 소진율 규칙이 요구하는 ExposureAggregate와 Limit 간의 조인 경로가 관계 그래프에 없고, 두 엔터티의
+      집계 단위(차주 단위 총액 vs 차주/상품별 한도)가 어긋나 규칙이 구조적으로 평가 불가능하다.
+    what: 소진율 규칙은 ExposureAggregate.total_amount를 Limit.approved_amount로 나누지만,
+      relations에는 ExposureAggregate와 Limit을 잇는 관계가 없다(둘 다 Borrower에만 연결). 게다가
+      Limit은 '차주/상품별'로 정의되어 한 차주에 복수 Limit이 존재할 수 있는 반면 ExposureAggregate는 차주 단위
+      단일 총액이므로, 상품별 Limit에 대해 분자를 무엇으로 잡을지(상품별 부분합)가 모델에 존재하지 않는다.
+    why: 소진율은 한도 통제의 핵심 지표인데, 분자·분모를 잇는 관계와 단위 정합성이 그래프에 없으면 각 시스템이 임의의 조인(차주 총액 /
+      상품별 한도 등)을 구현하게 되어 소진율 수치가 시스템 간에 갈린다. 규칙이 참조하는 경로가 모델 안에서 끊겨 있다는 점에서 구조
+      결함이다.
+    how_to_fix: "최소 수정: relations에 { from: Limit, to: ExposureAggregate, kind:
+      utilization_measured_against }를 추가하고, 상품별 한도를 유지할 경우 ExposureAggregate에
+      product 차원(또는 상품별 부분합 개념)을 추가하거나 규칙을 차주 단위 Limit으로 한정한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 동일한 Limit 소진율을 계산한다는 공유 계약
+      failure_condition: 한 차주가 복수 상품 Limit을 보유한 경우, 차주 단위 total_amount를 어느 Limit과
+        대응시킬지 시스템별로 다르게 구현되는 경우.
+      impact: 소진율 산출이 시스템 간 불일치하거나 상품별 한도 초과를 탐지하지 못해 한도 통제 목적이 약화된다.
+      evidence_refs:
+        - "credit-risk-ontology.yaml: classification_rules[1]"
+        - "credit-risk-ontology.yaml: entities.Limit.definition"
+        - "credit-risk-ontology.yaml: entities.ExposureAggregate.definition"
+        - "credit-risk-ontology.yaml: relations"
+    causal_path:
+      root_cause_candidate: 소진율 규칙을 추가하면서 분자(ExposureAggregate)와 분모(Limit)의 집계 단위 차이와
+        조인 관계를 모델에 반영하지 않았다.
+      root_cause_step_id: structure-candidate-004.cause-003
+      steps:
+        - cause_id: structure-candidate-004.cause-001
+          claim: classification_rules[1]은 ExposureAggregate.total_amount와
+            Limit.approved_amount의 비율을 정의한다.
+          relation_to_previous: null
+          evidence_refs:
+            - "credit-risk-ontology.yaml: classification_rules[1]"
+        - cause_id: structure-candidate-004.cause-002
+          claim: relations에 두 엔터티를 직접 잇는 관계가 없고, Limit은 차주/상품별·ExposureAggregate는 차주 단위로
+            정의되어 단위가 어긋난다.
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - "credit-risk-ontology.yaml: relations"
+            - "credit-risk-ontology.yaml: entities.Limit.definition"
+            - "credit-risk-ontology.yaml: entities.ExposureAggregate.definition"
+        - cause_id: structure-candidate-004.cause-003
+          claim: 조인과 단위가 미정의이므로 각 소비 시스템이 독자적 대응 규칙을 구현하게 되어 소진율 불일치를 가능하게 한다.
+          relation_to_previous: enables
+          evidence_refs:
+            - "credit-risk-ontology.yaml: 헤더 주석(공유 개념 권위 문서 지향)"
+      unresolved_beyond_evidence: 실제 운영에서 차주당 Limit이 단수인지 복수인지는 파일 범위 밖이나, 정의문 자체가 '차주/상품별'을 명시한다.
+  - candidate_id: structure-candidate-005
+    target: credit-risk-ontology.yaml entities.Limit.attributes.approved_amount.note
+    evidence_anchor: "credit-risk-ontology.yaml: Limit.approved_amount.note ('영업점
+      CRM의 available_limit과 합산 관리')"
+    claim: approved_amount의 의미가 온톨로지에 존재하지 않는 외부 개념(CRM의 available_limit)과의 합산에
+      의존한다고 선언되어, 참조 대상 없는 끊어진 의존이 남아 있다.
+    what: note가 승인 한도를 영업점 CRM의 available_limit과 '합산 관리'한다고 기술하지만, available_limit은
+      이 온톨로지의 엔터티·속성·관계 어디에도 정의되어 있지 않다.
+    why: 개념 권위 문서 안에서 한도의 실효 의미가 미정의 외부 개념에 걸려 있으면, 소비 시스템은 한도의 진짜 값(승인분만인지 합산분인지)을
+      이 문서로 결정할 수 없다. 다만 note 수준 서술이고 핵심 규칙이 직접 참조하지는 않으므로 표면 결함으로 분류한다.
+    how_to_fix: available_limit을 온톨로지의 속성/엔터티로 명시적으로 도입하거나, 합산 관리 언급을 note에서 제거하고 범위
+      밖 선언(notes 섹션)으로 옮긴다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - 여신 도메인에서 한 차주가 시점에 따라 복수의 RiskRating과 복수의 상품별 Limit을 가질 수 있다는 일반적 운영 가정을
+    사용했다.
+  - ExposureAggregate 같은 집계 엔터티는 소비 시스템이 분류 계층(is_a)을 신뢰해 멤버십을 판단한다고 가정했다.
+validation:
+  unaddressable_candidates: []

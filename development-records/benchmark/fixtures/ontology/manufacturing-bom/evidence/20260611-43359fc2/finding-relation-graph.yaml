@@ -1,0 +1,315 @@
+schema_version: 1
+session_id: 20260611-43359fc2
+relations:
+  - relation_id: rel-001
+    from_finding_id: finding-016
+    to_finding_id: finding-002
+    relation: duplicates
+    root_hypothesis: 두 finding은 integrity_rules[0]의 스크랩 재투입 자기포함 예외라는 동일 결함을 각각
+      가치(axiology)와 변경내성(evolution) 관점에서 보고한 것이다.
+    shared_cause: null
+    rationale: 양쪽 모두 동일 anchor(integrity_rules[0])를 대상으로 하며, 동일한 실패 조건(DAG 전제 시스템의
+      BOM 전개 시 무한루프/임의 예외 처리)과 동일한 제안 조치(재투입을 별도 관계로 분리하고 비순환 규칙을 예외 없이 유지)를
+      제시한다. 렌즈 프레이밍만 다른 동일 이슈다.
+    confidence: high
+  - relation_id: rel-002
+    from_finding_id: finding-026
+    to_finding_id: finding-002
+    relation: duplicates
+    root_hypothesis: finding-026의 형식 모순(비순환 선언 vs 자기포함 처방의 동시 만족 불가)은 finding-002가
+      트레이드오프 비정렬로 보고한 것과 동일한 integrity_rules[0] 결함이다.
+    shared_cause: null
+    rationale: 동일 대상(integrity_rules[0])과 동일 근본 원인 후보(스크랩 재투입 전용 개념 부재로 BomLine 구조를
+      우회 사용)를 공유하며, 제안 조치도 동일하다(단서 조항 삭제 + 별도 회수 관계 도입). logic 렌즈는 모순의 형식성을,
+      axiology 렌즈는 트레이드오프 수용의 부당성을 강조할 뿐 결함 자체는 하나다.
+    confidence: high
+  - relation_id: rel-003
+    from_finding_id: finding-033
+    to_finding_id: finding-002
+    relation: duplicates
+    root_hypothesis: finding-033의 동음이의 전용(BomLine을 구성 관계와 재투입 흐름 두 의미로 겸용) 진단은
+      finding-002와 동일한 integrity_rules[0] 자기포함 예외 결함의 semantics 렌즈 표현이다.
+    shared_cause: null
+    rationale: 동일 anchor(integrity_rules[0]), 동일 근본 원인(부산물/회수 개념 부재), 동일 실패 경로(BOM
+      전개 무한루프 또는 구현별 임의 처리), 동일 제안 조치(별도 개념 분리 + 비순환 규칙 무예외 유지)를 공유한다.
+    confidence: high
+  - relation_id: rel-004
+    from_finding_id: finding-023
+    to_finding_id: finding-004
+    relation: duplicates
+    root_hypothesis: 두 finding은 AlternatePart.definition(무조건 대칭)과 direction
+      기본값(one_way)의 동일한 정의-속성 모순을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(AlternatePart.definition vs direction), 동일 실패 조건(통합 시스템들이
+      정의와 속성 중 다른 쪽을 권위로 채택), 동일 제안 조치(정의를 direction 조건부로 수정)를 공유한다. 두 finding
+      모두 정의 문장이 direction 속성 추가 시 갱신 누락된 잔존물일 가능성을 근본 원인 후보로 지목한다.
+    confidence: high
+  - relation_id: rel-005
+    from_finding_id: finding-027
+    to_finding_id: finding-004
+    relation: duplicates
+    root_hypothesis: finding-027의 modality 충돌(necessary 대칭 선언 vs possible 비대칭 속성)
+      분석은 finding-004와 동일한 AlternatePart 정의-속성 모순이다.
+    shared_cause: null
+    rationale: 동일 대상(AlternatePart definition:33 vs direction:37-40)과 동일 영향(역방향 대체
+      투입으로 인한 품질 위험, 기준 문서의 판정 권위 상실)을 다루며, 제안 조치도 동일하게 정의의 조건부 격하 또는 속성 제거
+      양자택일이다.
+    confidence: high
+  - relation_id: rel-006
+    from_finding_id: finding-031
+    to_finding_id: finding-004
+    relation: duplicates
+    root_hypothesis: finding-031은 finding-004와 동일한 AlternatePart 정의-속성 모순을 semantics
+      렌즈(이름·정의와 모델 의미의 불일치)로 보고한 것이다.
+    shared_cause: null
+    rationale: 동일 anchor(definition '대칭 단언' vs direction 기본 one_way, relations
+      alternate_of note 포함), 동일 실패 조건과 영향(시스템 간 대체 허용 범위 불일치, 역방향 투입 품질 사고), 동일
+      제안 조치를 공유한다.
+    confidence: high
+  - relation_id: rel-007
+    from_finding_id: finding-042
+    to_finding_id: finding-027
+    relation: shared_cause_candidate
+    root_hypothesis: AlternatePart 고아 구조(042)와 정의-속성 모순(027)은 모두 direction 속성 도입 시
+      기존 표현(정의 문장, alternate_of 단축 관계)을 함께 갱신하지 않은 미완 개정에서 비롯되었다.
+    shared_cause:
+      cause_claim: direction 속성이 도입된 후에도 기존 표현 계층(무조건 대칭 정의 문장과 Part→Part 직접 관계
+        alternate_of)이 방향 의미를 반영하도록 갱신되지 않아, 방향 정보가 모델 일부에서 도달 불가능하거나 모순되는 상태로
+        남았다.
+      from_cause_ref: finding-042.cause-003
+      to_cause_ref: finding-027.cause-002
+    rationale: 042는 단축 표기에 direction을 투영할 자리가 없는 구조적 결과를, 027은 정의 문장이 조건부로 재서술되지 않은
+      논리적 결과를 각각 보고하지만, 두 인과 경로 모두 '방향성 속성 추가가 모델 전반에 정합화되지 않음'이라는 같은 출발 원인을
+      가리킨다. 다만 042는 정의-속성 모순이 해소되어도 relations 그래프 미연결로 독립 잔존하므로 duplicates가 아닌
+      공유 원인 관계다.
+    confidence: high
+  - relation_id: rel-008
+    from_finding_id: finding-018
+    to_finding_id: finding-003
+    relation: duplicates
+    root_hypothesis: 두 finding은 integrity_rules[2]의 발효일 즉시 적용 조항과 주간 배치 동기화 단서가 만드는
+      최대 1주의 구 리비전 생산 창이라는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(integrity_rules[2], Part.rev note), 동일 실패
+      조건(effective_date와 주간 배치 사이 기간의 생산 오더), 동일 영향(구 리비전 생산이 규칙상 정상으로 통과)을
+      공유한다. evolution 렌즈는 외부 원본 변경의 연속성 단절로, axiology 렌즈는 비정렬 트레이드오프로 프레이밍할 뿐이다.
+    confidence: high
+  - relation_id: rel-009
+    from_finding_id: finding-028
+    to_finding_id: finding-003
+    relation: duplicates
+    root_hypothesis: finding-028의 시간 전개 충돌(의무 조항과 동기화 조항의 동시 만족 불가) 분석은 finding-003과
+      동일한 integrity_rules[2] 결함의 형식화다.
+    shared_cause: null
+    rationale: 동일 규칙 문장(integrity_rules[2]:91)의 동일 충돌을 다루며, 제안 조치 방향도 동일하다(발효 판정 권위를
+      ECO로 이전하고 Part.rev를 캐시로 격하, 또는 발효 시점을 동기화 완료와 결합). logic 렌즈가 모순의 구조를 더
+      정밀하게 기술하지만 결함은 하나다.
+    confidence: high
+  - relation_id: rel-010
+    from_finding_id: finding-034
+    to_finding_id: finding-003
+    relation: duplicates
+    root_hypothesis: finding-034의 이름-의미 불일치('현행 rev'라는 이름 vs '최대 1주 지연 복사본'이라는 실제)
+      진단은 finding-003과 동일한 integrity_rules[2] 갭 창 결함이다.
+    shared_cause: null
+    rationale: 동일 anchor(Part.rev note, current_eco note, integrity_rules[2]), 동일 실패
+      조건(갭 기간 중 MES의 Part.rev 신뢰 생산), 동일 영향(구 리비전 생산의 규칙상 정상 통과)을 공유하며, 제안 조치도
+      유효 rev를 ECO 파생으로 재정의하는 동일 방향이다.
+    confidence: high
+  - relation_id: rel-011
+    from_finding_id: finding-029
+    to_finding_id: finding-028
+    relation: shared_cause_candidate
+    root_hypothesis: status 게이트 누락(029)과 지연 스냅숏 의존(028)은 모두 integrity_rules[2]의 의무
+      발효 조건이 effective_date 단독으로 작성되고 필요한 결합 조건이 설계되지 않은 데서 비롯되었다.
+    shared_cause:
+      cause_claim: integrity_rules[2]가 의무 발효에 필요한 결합 조건(승인 상태 게이트, 생산 시점 유효 rev 도출 수단)
+        없이 effective_date 단독 시간 조건으로 작성되었다.
+      from_cause_ref: finding-029.cause-001
+      to_cause_ref: finding-028.cause-001
+    rationale: 두 finding 모두 같은 규칙 문장의 발효 조건 설계 부실을 원인으로 갖지만 충돌 상대가 다르다 — 028은
+      Part.rev의 지연 동기화와, 029는 ECO.status의 미승인 상태와 충돌한다. 한쪽을 고쳐도 다른 쪽이 남으므로
+      duplicates가 아닌 공유 원인 후보다.
+    confidence: high
+  - relation_id: rel-012
+    from_finding_id: finding-007
+    to_finding_id: finding-028
+    relation: causes
+    root_hypothesis: effectivity/이력 차원의 전면 누락(007)이 integrity_rules[2]의 의무 판정을 지연 복제
+      스냅숏(Part.rev)에 의존하게 만들어 시간 전개 충돌(028)을 발생시켰다.
+    shared_cause: null
+    rationale: finding-028의 인과 경로가 명시적으로 '생산 시점 유효 rev를 도출하는 effectivity 개념이 없어 의무
+      규칙이 지연 복제 스냅숏에 직접 의존하게 된 것이 출발 원인'(finding-028.cause-003)이라고 진술하며, 이는
+      finding-007이 보고한 시간 차원 결손 그 자체다. 시간 축 개념이 존재했다면 갭 기간에도 유효 rev 판정이 가능해 028의
+      충돌이 성립하지 않는다.
+    confidence: medium
+  - relation_id: rel-013
+    from_finding_id: finding-003
+    to_finding_id: finding-001
+    relation: symptom_of
+    root_hypothesis: 변경관리 발효-동기화 충돌(003)은 권위 경계 미설계(001)라는 문서 전반 패턴이 rev/ECO 영역에서 발현된 사례다.
+    shared_cause: null
+    rationale: finding-003의 근본 원인 후보는 'rev의 권위를 도면 관리대장에 두고 온톨로지를 지연 복사본으로 설계하면서 발효일
+      판정 권위를 정의하지 않음'으로, finding-001이 보고한 '권위 경계를 설계하지 않고 현행 관행을 전사한 작성 방식'의 구체
+      인스턴스다. 001의 evidence anchor가 Part.rev/current_eco note를 직접 포함한다.
+    confidence: medium
+  - relation_id: rel-014
+    from_finding_id: finding-010
+    to_finding_id: finding-001
+    relation: duplicates
+    root_hypothesis: 두 finding은 병행 관리 값(rev, scrap_rate, std_time)의 단일 권위 미지정과 동기화
+      계약 부재라는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 evidence 집합(Part.rev note, BomLine.scrap_rate note, notes[0])과 동일
+      근본 원인(운영 현황을 권위 재설계 없이 전사하여 현황 기술과 기준 규범이 분리되지 않음), 동일 제안 조치(authority·동기화
+      방향·우선 규칙의 명시적 선언)를 공유한다. coverage 렌즈는 차원 결손으로, axiology 렌즈는 목적 이탈로 프레이밍할
+      뿐이다.
+    confidence: high
+  - relation_id: rel-015
+    from_finding_id: finding-019
+    to_finding_id: finding-001
+    relation: symptom_of
+    root_hypothesis: scrap_rate 비관리 사본(019)은 권위 경계 미설계(001)라는 문서 전반 공통 원인의 단일 속성 발현이다.
+    shared_cause: null
+    rationale: finding-019의 인과 경로가 '원본-사본 권위 정책의 부재가 문서 전반(rev, current_eco,
+      acceptance_criteria, std_time)에 반복되는 공통 원인'(finding-019.cause-003)이라고 스스로
+      일반화하며, 그 일반 패턴이 정확히 finding-001의 claim이다. 019는 그 패턴의 scrap_rate 한정 인스턴스다.
+    confidence: high
+  - relation_id: rel-016
+    from_finding_id: finding-032
+    to_finding_id: finding-019
+    relation: duplicates
+    root_hypothesis: 두 finding은 BomLine.scrap_rate가 생산계획팀 엑셀 원본의 동기화 계약 없는 복사본이라는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(BomLine.scrap_rate note), 동일 실패 조건(엑셀 원본 갱신 후 사본 미갱신 상태의
+      MRP 소비), 동일 영향(소요량 왜곡과 판정 권위 부재)을 공유한다. semantics 렌즈가 파생값-입력 불일치 프레이밍을
+      추가하지만 제안 조치(원천 권위 선언 또는 ref/derived 전환)는 동일 결함을 향한다.
+    confidence: high
+  - relation_id: rel-017
+    from_finding_id: finding-038
+    to_finding_id: finding-001
+    relation: symptom_of
+    root_hypothesis: 누적 std_time 이중 입력의 권위 미선언(038)은 권위 경계 미설계(001)라는 문서 전반 패턴의 notes[0] 발현이다.
+    shared_cause: null
+    rationale: finding-001의 evidence anchor가 notes[0](표준원가 시스템 수기 입력 분기 대사)을 직접
+      포함하며, finding-038의 근본 원인 후보('이중 입력 관행을 기준 문서에 현상 그대로 기술')는 001의 근본 원인('현행
+      관행 전사, 권위 미설계')과 동일한 메커니즘의 std_time 한정 사례다.
+    confidence: medium
+  - relation_id: rel-018
+    from_finding_id: finding-017
+    to_finding_id: finding-007
+    relation: duplicates
+    root_hypothesis: 두 finding은 BomLine 및 시점 의존 값에 effectivity/이력 차원이 없어 시점별 BOM
+      재구성과 ECO 규칙 집행이 불가능하다는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(BomLine.attributes, integrity_rules[2], Part.rev), 동일 근본
+      원인(현재 스냅샷 단일 값 모델링, 시간 축 누락), 거의 동일한 제안 조치(BomLine effective_from/to 또는
+      eco_in/out 추가, rev 이력 승격)를 공유한다.
+    confidence: high
+  - relation_id: rel-019
+    from_finding_id: finding-041
+    to_finding_id: finding-017
+    relation: shared_cause_candidate
+    root_hypothesis: ECO→BomLine/Routing 경로 부재(041)와 BomLine effectivity 부재(017)는 모두
+      변경의 효과 단위를 Part 입자로만 잡은 ECO 모델링에서 비롯되었다.
+    shared_cause:
+      cause_claim: ECO의 영향 범위가 affected_parts(Part 목록)로만 정의되어, 변경이 실제로 바꾸는 구조물(BomLine
+        구성, Routing)과의 연결이 모델에 존재하지 않는다.
+      from_cause_ref: finding-041.cause-002
+      to_cause_ref: finding-017.cause-002
+    rationale: 두 finding의 인과 경로가 동일한 사실(ECO.affected_parts가 Part만 참조, relations에
+      ECO→Part changes만 존재)을 중간 원인으로 공유한다. 다만 041은 관계 그래프의 경로 부재를, 017은 BomLine
+      자체의 시간 속성 부재를 결함으로 보고하므로 해소 수단이 부분적으로 다르다(관계 추가 vs 속성 추가).
+    confidence: high
+  - relation_id: rel-020
+    from_finding_id: finding-009
+    to_finding_id: finding-041
+    relation: shared_cause_candidate
+    root_hypothesis: ECO의 변경 범위 협소(009)와 ECO→BOM/공정 경로 부재(041)는 변경관리가 '도면 리비전 변경' 단일
+      사용 사례 기준으로 협소하게 개념화된 동일 원인에서 비롯되었다.
+    shared_cause:
+      cause_claim: ECO의 영향 표현이 affected_parts(Part 목록)뿐이어서 BomLine/Routing 수준의 변경 대상을
+        가리킬 수 없다.
+      from_cause_ref: finding-009.cause-001
+      to_cause_ref: finding-041.cause-002
+    rationale: 두 finding 모두 ECO.attributes.affected_parts와 relations의 ECO→Part 단일
+      경로를 1차 증거로 삼고 같은 표면 사실에서 출발한다. 다만 009는 거기에 더해 승인 증거(approved_by/at)와 부결·취소
+      종결 상태 부재라는 통제 증거 차원 결손을 포함하므로 041의 superset이며, duplicates가 아닌 공유 원인 관계가
+      정확하다.
+    confidence: high
+  - relation_id: rel-021
+    from_finding_id: finding-011
+    to_finding_id: finding-005
+    relation: duplicates
+    root_hypothesis: 두 finding은 notes[1]의 품목별 환산계수 마스터 부재와 현장 임의 환산 위임이라는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(notes[1], Part.uom enum, BomLine.qty_per), 동일 실패 조건(이종 단위
+      품목 간 수량 결정 시점), 동일 제안 조치(UomConversion 개념 추가 또는 공백의 명시적 위험 선언)를 공유한다.
+      coverage 렌즈는 빈 범주로, axiology 렌즈는 위험의 전제화로 프레이밍할 뿐이다.
+    confidence: high
+  - relation_id: rel-022
+    from_finding_id: finding-020
+    to_finding_id: finding-011
+    relation: same_root_candidate
+    root_hypothesis: 폐쇄형 uom enum과 환산계수 부재(020)는 finding-011과 같은 뿌리 — 단위·환산을 1급 개념으로
+      승격하지 않은 설계 결정 — 에서 나온 결함이다.
+    shared_cause: null
+    rationale: finding-020의 환산계수 부재 절반은 finding-011과 동일 anchor(notes[1])를 공유하지만,
+      020은 추가로 enum 폐쇄로 인한 새 단위 수용 불가(확장성 결함)를 포함하므로 완전 중복이 아니다. 두 finding의 근본
+      원인 후보가 모두 '단위를 고정 어휘로, 환산을 모델 외부 행위로 간주한 개념화'를 가리키므로 공통 뿌리 후보가 정확하다.
+    confidence: high
+  - relation_id: rel-023
+    from_finding_id: finding-035
+    to_finding_id: finding-022
+    relation: duplicates
+    root_hypothesis: 두 finding은 capacity_per_shift가 작업장마다 개수/시간으로 의미가 갈리는데 단위 식별 표지가
+      없다는 동일 결함을 보고한다.
+    shared_cause: null
+    rationale: 동일 anchor(WorkCenter.capacity_per_shift note), 동일 실패 조건(단위 가정이 틀린 채
+      std_time_min 기반 부하와 비교), 동일 제안 조치(capacity_uom/capacity_kind 속성 추가 또는 시간
+      기준 정규화)를 공유한다.
+    confidence: high
+  - relation_id: rel-024
+    from_finding_id: finding-022
+    to_finding_id: finding-020
+    relation: shared_cause_candidate
+    root_hypothesis: capacity 단위 다의성(022)과 uom 환산 부재(020)는 단위·차원을 1급 개념으로 다루지 않는 문서
+      전반의 설계 패턴이라는 공통 원인을 갖는다.
+    shared_cause:
+      cause_claim: 단위·차원을 1급 개념(속성 또는 마스터)으로 승격하지 않고 현장별 관행이나 모델 외부 행위로 처리하는 패턴이 문서
+        전반에 반복된다.
+      from_cause_ref: finding-022.cause-003
+      to_cause_ref: finding-020.cause-003
+    rationale: finding-022의 인과 경로가 명시적으로 'uom 환산계수 부재(notes[1])와 동일하게 단위·차원을 1급 개념으로
+      다루지 않는 문서 전반의 패턴이 출발 원인'(finding-022.cause-003, notes[1]을 증거로 인용)이라고 진술하여
+      020의 근본 원인과 직접 연결된다. 대상 속성이 달라(capacity vs qty_per) duplicates는 아니다.
+    confidence: medium
+  - relation_id: rel-025
+    from_finding_id: finding-021
+    to_finding_id: finding-034
+    relation: shared_cause_candidate
+    root_hypothesis: current_eco 단일 참조 중복(021)과 rev 이름-의미 불일치(034)는 모두 ECO로부터 파생 가능한
+      값을 원천 관계의 프로젝션이 아닌 독립 복사 속성으로 승격한 동일한 모델링 선택에서 비롯되었다.
+    shared_cause:
+      cause_claim: ECO(affected_parts, effective_date, status)로부터 도출 가능한 파생 값(최신 ECO,
+        유효 rev)을 프로젝션으로 두지 않고 Part의 독립 복사 속성(current_eco, rev)으로 승격하여, 원본과 사본의
+        정합이 구조적으로 보장되지 않는다.
+      from_cause_ref: finding-021.cause-003
+      to_cause_ref: finding-034.cause-003
+    rationale: 두 finding의 근본 원인 후보가 같은 문장 구조('파생 값을 독립 속성/입력 복사본으로 둔 선택')로 수렴하며, 둘 다
+      Part 엔티티의 ECO 파생 필드(rev, current_eco)를 대상으로 한다. 다만 021은 병행 ECO 표현 불가라는
+      카디널리티 결함을, 034는 동기화 지연으로 인한 의미 불일치를 각각 고유하게 보고하므로 duplicates가 아니다.
+    confidence: medium
+singleton_findings:
+  - finding_id: finding-008
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-012
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-036
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."
+  - finding_id: finding-037
+    reason: "Runtime projection: no accepted semantic relation covered this
+      causal-analysis finding."

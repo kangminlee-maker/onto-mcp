@@ -1,0 +1,269 @@
+schema_version: 1
+session_id: 20260611-43359fc2
+lens_id: logic
+human_output_ref: null
+findings:
+  - candidate_id: logic-candidate-001
+    target: manufacturing-bom-ontology.yaml integrity_rules[0] (BOM 비순환 규칙)
+    evidence_anchor: manufacturing-bom-ontology.yaml:89
+    claim: "단일 규칙 내에서 'BOM은 비순환이어야 한다'(necessary 제약)와 '스크랩 재투입은 Assembly가 자기 하위에 자신을
+      포함하는 형태로 모델링한다'(자기순환 구조의 처방)가 동시 만족 불가능하다. [conflict_pair:
+      integrity_rules[0]:89 ↔ integrity_rules[0]:89 / satisfiability_note:
+      intra-claim — 동일 문장의 본문과 단서 조항이 직접 모순 / modality_note: necessary — 필수 불변식에
+      대해 그 불변식을 위반하는 구조를 처방(modality 구분 오류: 예외를 '허용(possible)'이 아니라 '모델링
+      방식(obligatory)'으로 선언) / boundary_handoff_note: 없음]"
+    what: BOM 그래프에 대한 비순환 불변식을 선언하면서, 같은 문장에서 재생 원료 회수 공정을 자기 자신을 하위로 포함하는
+      BomLine(길이 1의 순환)으로 모델링하라고 지시한다. 자기 포함은 정의상 순환이므로, 처방된 모델링 패턴을 사용하는 모든 BOM
+      인스턴스는 비순환 규칙을 필연적으로 위반한다.
+    why: 이 모순은 모호성 제거로 해소되지 않는 형식 모순이다. '비순환'의 표준 정의(BomLine parent→child 그래프에 사이클
+      부재) 하에서 self-loop는 사이클이며, 규칙의 단서 조항이 그 사이클 생성을 의무화한다. PLM/MES 통합 기준 문서로서 이
+      규칙을 그대로 구현하면 (a) BOM 검증기가 처방된 정상 데이터를 위반으로 거부하거나, (b) 예외를 묵인하면 MRP 전개·원가
+      누적 같은 재귀 알고리즘이 self-loop에서 무한 전개되���나 임의의 비표준 종료 조건을 각 시스템이 제각각 구현하게 된다.
+    how_to_fix: "비순환 규칙을 예외 없이 BomLine 그래프 전체에 적용하고, 스크랩 재투입은 BOM 구조 밖의 별도 개념(예:
+      by-product/recovery flow 관계 또는 음수 산출 라인으로 BOM 전개에서 제외되는 명시 타입)으로 분리 모델링한다.
+      가장 작은 수정은 integrity_rules[0]의 단서 조항을 삭제하고 '스크랩 재투입은 BomLine이 아닌 별도 관계로
+      표현하며 BOM 전개 대상에서 제외한다'는 규칙으로 대체하는 것이다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합의 개념 기준 문서로서 BOM 구조 불변식을 통합 대상 시스템에 일관되게 제공하는 것 (파일
+        헤더 2행의 선언 목적)
+      failure_condition: 재생 원료 회수(스크랩 재투입)를 포함하는 품목이 하나라도 존재하는 순간, 처방된 모델링과 선언된 불변식이 동시에 성립할 수 없다
+      impact: 통합 시스템들이 비순환 검증과 self-loop 허용 중 어느 쪽을 따를지 각자 선택하게 되어 기준 문서의 권위가 무력화되고,
+        MRP 전개/원가 롤업의 종료 조건이 시스템별로 갈라진다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:89
+        - manufacturing-bom-ontology.yaml:24-30
+        - manufacturing-bom-ontology.yaml:2
+    causal_path:
+      root_cause_candidate: 물질 흐름 현상(스크랩 재투입)을 별도 개념으로 분리하지 않고 BOM 구조 사이클로 표현하기로 한 모델링
+        결정이, 그 사이클을 금지하는 불변식과 같은 규칙 문장 안에 단서 조항으로 병합됨
+      root_cause_step_id: logic-candidate-001.cause-003
+      steps:
+        - cause_id: logic-candidate-001.cause-001
+          claim: integrity_rules[0]은 비순환을 필수로 선언하면서 동시에 자기 포함(self-loop) 구조를 처방한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:89
+        - cause_id: logic-candidate-001.cause-002
+          claim: self-loop는 비순환 정의를 필연적으로 위반하므로 두 부분 claim은 동시 만족 불가능하다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:89
+        - cause_id: logic-candidate-001.cause-003
+          claim: 스크랩 재투입이라는 도메인 현상에 대한 전용 개념(회수 흐름/부산물 관계)이 엔티티·관계 목록에 부재하여, 기존 BomLine
+            구조를 우회 사용하도록 단서가 추가된 것이 출발 원인이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:7-77
+            - manufacturing-bom-ontology.yaml:79-86
+      unresolved_beyond_evidence: 실제 현장에서 스크랩 재투입을 BOM에 어떻게 기록하고 있는지(이미 self-loop 데이터가
+        존재하는지)는 본 문서 범위 밖이다. 전용 개념 부재 자체는 structure lens의 1차 소유 범위이며, 본 finding은
+        명시 claim 간 직접 모순으로 logic이 소유한다.
+  - candidate_id: logic-candidate-002
+    target: manufacturing-bom-ontology.yaml AlternatePart 엔티티 (정의 vs direction 속성)
+    evidence_anchor: manufacturing-bom-ontology.yaml:33 vs manufacturing-bom-ontology.yaml:37-40
+    claim: "AlternatePart 정의는 대체 관계의 대칭성을 무조건적(necessary)으로 선언하는데('A의 대체가 B이면 B의 대체도
+      A다'), direction 속성은 one_way를 허용하고 기본값으로 삼아 비대칭 인스턴스를 기본 상태로 만든다. 두 claim은
+      one_way 인스턴스에 대해 동시 만족 불가능하다. [conflict_pair: AlternatePart.definition:33
+      ↔ AlternatePart.direction:37-40 / satisfiability_note: inter-claim — 동일
+      엔티티 내 정의 claim과 속성 스키마 claim의 충돌이며, 관계 단축 표기(relations:86)도 방향성 표기를 따라 충돌에
+      연루된다 / modality_note: mixed — 정의는 necessary(보편 함의)로 진술되었으나 속성은 이를
+      possible(인스턴스별 선택)로 격하; modality 구분 오류가 충돌의 직접 원인 / boundary_handoff_note:
+      정의 문장이 '의도된 기본 동작 설명'인지 '불변식'인지의 자연어 모호가 남아 있어 semantics lens 검토 대상이기도 하나,
+      어느 해석을 취해도 one_way 기본값과 보편 대칭 선언 중 하나는 수정이 필요하므로 형식 모순은 모호 제거 후에도 잔존한다 —
+      logic 소유 유지]"
+    what: 같은 엔티티 안에서 정의 텍스트는 대칭성을 예외 없는 성질로 선언하고, 속성 스키마는 비대칭(one_way)을 기본값으로 선언한다.
+      direction=one_way인 인스턴스는 정의를 위반하고, 정의를 따르면 one_way 값은 결코 유효하게 사용될 수 없는 죽은
+      enum 값이 된다.
+    why: "MES의 자재 대체 로직이 어느 claim을 따르느냐에 따라 실제 투입 가능 판정이 달라진다. 정의를 따르는 구현은 one_way
+      레코드를 양방향으로 전개하여 의도하지 않은 역방향 대체(예: 상위 사양 부품 자리에 하위 사양 부품 투입)를 허용하고, 속성을 따르는
+      구현은 정의 기반으로 작성된 다른 시스템과 대체 가능 집합이 불일치한다. 개념 기준 문서의 핵심 목적인 시스템 간 동일 해석이
+      깨진다."
+    how_to_fix: 정의 문장을 'direction=bidirectional인 경우 대칭이며, one_way는 primary→alternate
+      방향만 허용한다'로 수정하여 대칭성을 조건부(possible)로 격하하는 것이 최소 수정이다. 대안으로 보편 대칭이 실제 의도라면
+      direction 속성과 one_way 값을 제거한다. relations 목록의 alternate_of 단축 표기(86행)에도 선택한
+      방향 의미를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: PLM/MES 통합 시 대체 부품 판정 로직의 단일 기준 제공 (문서 목적 선언 2행, AlternatePart 32-40행)
+      failure_condition: direction=one_way인 AlternatePart 인스턴스가 존재하고 둘 이상의 소비 시스템이 각각
+        정의와 속성 중 다른 쪽을 기준으로 구현한 경우
+      impact: 역방향 대체 투입은 제조 현장에서 품질 부적합·사양 위반으로 직결될 수 있는 운영 위험이며, 어느 구현도 문서 위반이 아니라는
+        점에서 기준 문서가 위험을 만들어내는 형태가 된다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:33
+        - manufacturing-bom-ontology.yaml:37-40
+        - manufacturing-bom-ontology.yaml:86
+    causal_path:
+      root_cause_candidate: v2.0 작성 시 대칭 관계로 출발한 정의 텍스트와 이후 추가된 방향성 속성(one_way 기본) 사이의
+        modality 정합화가 수행되지 않음 — 정의는 necessary 진술로 남고 속성은 그것을 부정하는 기본값을 도입
+      root_cause_step_id: logic-candidate-002.cause-002
+      steps:
+        - cause_id: logic-candidate-002.cause-001
+          claim: AlternatePart.definition(33행)은 무조건 대칭을, direction 기본값(40행)은 비대칭을 기본 상태로
+            선언하여 one_way 인스턴스에서 두 claim이 충돌한다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:33
+            - manufacturing-bom-ontology.yaml:37-40
+        - cause_id: logic-candidate-002.cause-002
+          claim: 정의 문장이 direction 속성 도입 후에도 무조건 보편 양화 형태로 유지된 것이 충돌의 직접 원인이다(조건부 재서술 누락)
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:33
+            - manufacturing-bom-ontology.yaml:40
+      unresolved_beyond_evidence: 어느 쪽이 실제 업무 의도인지(보편 대칭 vs 방향별 통제)는 본 문서만으로 판정할 수 없으며 도면/자재 담당의 확인이 필요하다.
+  - candidate_id: logic-candidate-003
+    target: manufacturing-bom-ontology.yaml integrity_rules[2] (rev 유효일 규칙 vs 주간 배치
+      동기화)
+    evidence_anchor: "manufacturing-bom-ontology.yaml:91 (참조: 15행 Part.rev note)"
+    claim: "'ECO.effective_date 이후 생산분은 신규 rev를 따른다'는 obligatory 규칙이, 같은 문장이 인정하는
+      'Part.rev는 주간 배치로만 갱신된다'는 상태 전개 claim과 시간 전개 경로 위에서 충돌한다. effective_date부터
+      차주 배치 사이의 구간에서는 모델이 보유한 Part.rev로 이 의무를 만족시키는 것이 불가능하다. [conflict_pair:
+      integrity_rules[2] 전반부:91 ↔ integrity_rules[2] 후반부:91 (보조: Part.rev:15) /
+      satisfiability_note: intra-claim — 동일 규칙 문장의 의무 조항과 동기화 조항이 충돌하며, 신규 rev의
+      실제 보유처(도면 관리대장)가 온톨로지 외부라는 점이 충돌을 비켜갈 수 없게 만든다 / modality_note: obligatory
+      — 의무 규칙의 판정 조건이 지연 동기화되는 가역적 스냅숏 상태(Part.rev)에 의존하는 시간 전개 충돌 /
+      boundary_handoff_note: Part.rev의 원본 권위가 외부 도면 관리대장에 있다는 의존 방향 문제는
+      dependency lens 범위이나, 본 finding은 규칙 문장 내부의 형식 충돌로 logic이 소유한다]"
+    what: 규칙이 effective_date 시점부터 신규 rev 준수를 의무화하면서, 그 의무 판정의 유일한 모델 내 근거인 Part.rev는
+      최대 1주 지연 갱신됨을 같은 문장에서 선언한다. 지연 구간 동안 모델 상태(구 rev)와 의무(신 rev)가 양립 불가능하며, 신규
+      rev 값 자체가 동기화 전에는 온톨로지 안에 존재하지 않는다.
+    why: 이 온톨로지를 기준으로 MES가 생산 시점 rev 준수를 검증한다면, 지연 구간의 생산분은 규칙상 신규 rev를 따라야 하지만 시스템이
+      아는 rev는 구 버전뿐이므로 (a) 구 rev로 생산을 통과시켜 규칙을 위반하거나 (b) 존재하지 않는 신 rev를 요구하며 생산을
+      막는 것 중 하나가 강제된다. 설계변경 유효일 직후 생산분의 rev 추적성 단절은 리콜·품질 이력 관리에서 실질 위험이 되는
+      구간이다.
+    how_to_fix: 의무 규칙의 판정 근거를 Part.rev 스냅숏에서 분리한다. 최소 수정은 '생산 시점 유효 rev는 Part.rev가
+      아니라 ECO(affected_parts, effective_date, status)로부터 도출한다'는 유효성(effectivity)
+      해석 규칙을 명시하고, Part.rev를 캐시/투영 값으로 격하하는 것이다. 그렇지 않다면 의무 발효 시점을
+      'effective_date와 rev 동기화 완료 중 늦은 시점'으로 재정의해 규칙과 상태 전개를 일치시킨다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 변경관리(ECO)와 생산 실행 간 rev 정합성 보장 — 요청 요지의 '변경관리 개념의 정합성과 제조 운영 위험' 핵심 축
+      failure_condition: effective_date가 주간 배치 동기화보다 앞서는 모든 ECO에서 최대 1주의 지연 구간이 구조적으로
+        발생한다 (예외가 아니라 규칙 자체가 보장하는 정상 경로)
+      impact: 지연 구간 생산분의 rev 추적 기록이 규칙과 모순되거나 부재하게 되어, PLM/MES 통합의 변경관리 계약 자체를 이 문서가
+        보증할 수 없다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:91
+        - manufacturing-bom-ontology.yaml:15
+        - manufacturing-bom-ontology.yaml:64-70
+    causal_path:
+      root_cause_candidate: rev의 권위 원본(도면 관리대장)과 온톨로지 내 표현(Part.rev)의 비동기 복제를 사실로 수용한
+        채, 의무 규칙은 권위 원본 시점 기준으로 작성되어 두 시간 축이 한 규칙 안에서 봉합되지 않음
+      root_cause_step_id: logic-candidate-003.cause-003
+      steps:
+        - cause_id: logic-candidate-003.cause-001
+          claim: integrity_rules[2]의 의무 조항(신규 rev 준수)과 동기화 조항(주간 배치 갱신)이 effective_date~배치
+            사이 구간에서 동시 만족 불가능하다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:91
+        - cause_id: logic-candidate-003.cause-002
+          claim: Part.rev가 외부 도면 관리대장의 지연 복제본으로 정의되어 있어(15행), 의무 판정 시점에 모델이 신규 rev를 표현할
+            수단이 없다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:15
+            - manufacturing-bom-ontology.yaml:91
+        - cause_id: logic-candidate-003.cause-003
+          claim: 온톨로지에 '생산 시점 유효 rev'를 도출하는 effectivity 개념이 없어, 의무 규칙이 지연 복제
+            스냅숏(Part.rev)에 직접 의존하게 된 것이 출발 원인이다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:9-16
+            - manufacturing-bom-ontology.yaml:64-70
+      unresolved_beyond_evidence: 주간 배치의 실제 주기·실패 시 재시도 정책, 도면 관리대장의 반영 소요 시간은 문서 범위
+        밖이라 지연 구간의 실제 길이는 확정할 수 없다(규칙 문면상 상한은 약 1주 + 관리대장 반영 시간).
+  - candidate_id: logic-candidate-004
+    target: manufacturing-bom-ontology.yaml integrity_rules[2] vs ECO.status (open
+      ECO의 유효일 경과)
+    evidence_anchor: manufacturing-bom-ontology.yaml:91 vs manufacturing-bom-ontology.yaml:70
+    claim: "integrity_rules[2]는 신규 rev 준수 의무를 ECO.effective_date 단독으로 발효시키고
+      ECO.status를 조건으로 삼지 않는다. status enum이 open(미승인)을 허용하므로, effective_date가
+      경과한 open ECO는 '승인되지 않은 변경'이면서 동시에 '생산이 따라야 할 변경'이 되어 status 개념의 의미와 의무 규칙이
+      충돌한다. [conflict_pair: integrity_rules[2]:91 ↔ ECO.status:70 /
+      satisfiability_note: inter-claim — 의무 규칙과 상태 enum 정의 간 충돌. status가
+      open→approved→applied로 전이하는 동안 effective_date는 독립적으로 경과할 수 있어 상태 전개 경로 위에서
+      충돌이 실현된다 / modality_note: obligatory — 의무 발효에 필요한 조건(승인 상태)이 규칙에서 누락된
+      modality 구분 오류(승인 전 변경은 possible 후보일 뿐인데 규칙은 obligatory로 취급) /
+      boundary_handoff_note: open/approved/applied 각 상태의 정확한 업무 의미가 문서에 정의되어 있지
+      않은 점은 semantics lens 범위이나, status 무조건 의무 발효라는 형식 구조는 어떤 합리적 상태 의미 해석에서도
+      미승인 상태와 충돌하므로 logic 소유를 유지한다]"
+    what: 의무 규칙이 ECO의 승인 여부와 무관하게 effective_date만으로 발효된다. open 상태로 effective_date가
+      지나간 ECO에 대해, 모델은 '이 변경은 아직 승인되지 않았다'와 '이날 이후 생산은 이 변경의 rev를 따라야 한다'를 동시에
+      주장하게 된다.
+    why: ECO가 반려되거나 지연 승인되는 경로는 status enum(open 존재)이 명시적으로 허용하는 정상 전개다. 그 경로 위에서
+      규칙을 문면대로 적용하면 미승인 설계변경이 생산 기준이 되는 결과가 되고, 적용하지 않으면 규칙 위반이다. 변경관리 개념의 핵심인
+      '승인이 발효의 전제'라는 게이트가 규칙에 형식적으로 빠져 있다.
+    how_to_fix: "integrity_rules[2]에 발효 조건을 추가한다: 'ECO.status가 approved 또는 applied이고
+      effective_date가 경과한 경우에만 신규 rev 준수 의무가 발효된다'. 함께 effective_date 경과 후에도
+      open인 ECO의 처리(유효일 재설정 또는 자동 보류)를 규칙으로 명시한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: ECO 변경관리에서 승인 게이트가 생산 발효를 통제한다는 계약 (ECO.status 정의 70행과 규칙 91행이
+        함께 구성해야 할 계약)
+      failure_condition: effective_date가 경과했으나 status=open인 ECO가 존재하는 시점 — 승인 지연·반려는
+        status enum이 허용하는 정상 경로이므로 발생 가능성이 구조적으로 열려 있다
+      impact: 미승인 변경의 생산 발효 또는 규칙 위반의 양자택일을 통합 시스템에 강제하여, 변경관리 게이트로서의 status 개념을 무력화한다
+      evidence_refs:
+        - manufacturing-bom-ontology.yaml:91
+        - manufacturing-bom-ontology.yaml:70
+        - manufacturing-bom-ontology.yaml:69
+    causal_path:
+      root_cause_candidate: 의무 규칙이 시간 조건(effective_date)만으로 작성되고, 같은 엔티티가 보유한 상태
+        게이트(status)와의 결합 규칙이 정의되지 않음
+      root_cause_step_id: logic-candidate-004.cause-002
+      steps:
+        - cause_id: logic-candidate-004.cause-001
+          claim: integrity_rules[2]는 effective_date 단독 조건으로 의무를 발효시키며 status를 참조하지 않는다
+          relation_to_previous: null
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:91
+        - cause_id: logic-candidate-004.cause-002
+          claim: status enum이 open(미승인) 상태를 허용하므로, 유효일 경과 + 미승인이라는 상태 조합이 모델상 유효하고 그 조합에서
+            규칙과 상태 의미가 충돌한다
+          relation_to_previous: causes
+          evidence_refs:
+            - manufacturing-bom-ontology.yaml:70
+            - manufacturing-bom-ontology.yaml:91
+      unresolved_beyond_evidence: 실제 ECO 운영에서 effective_date를 항상 승인 후에만 설정하는 절차 통제가
+        존재할 수 있으나, 그러한 절차 규칙은 본 문서에 선언되어 있지 않아 모델 단독으로는 충돌이 열려 있다.
+  - candidate_id: logic-candidate-005
+    target: manufacturing-bom-ontology.yaml Routing.status와 ECO 적용 간 상태 전이 부재
+    evidence_anchor: manufacturing-bom-ontology.yaml:56, 90 vs 64-70
+    claim: "Routing.status enum(draft/released)에는 released 이후의 후속 상태(개정중/폐기)가 없어,
+      ECO applied로 품목이 변경된 뒤에도 released 라우팅이 생산 오더 생성 게이트(integrity_rules[1])를
+      계속 통과한다. 이는 '종결 판정이 가역 상태(품목의 설계 유효성)에 의존하면서 후속 사건(ECO 적용)을 허용'하는 패턴이나, 현재
+      명시된 claim만으로는 직접 모순을 형성하지 못한다 — 라우팅과 rev/ECO를 연결하는 규칙 자체가 부재하기 때문이다.
+      [satisfiability_note: 구조 부재로 인한 잠재 충돌 / modality_note: possible —
+      released의 영속성이 명시 claim이 아니라 enum 값 부재에서 유도됨 / boundary_handoff_note: '필수
+      전이 규칙이 적용될 상태 값 자체의 누락'이므로 Logic ↔ Structure 라우팅 기준에 따라 structure lens가
+      primary. logic 판정으로는 present claims만으로 모순 형성 불가]"
+    what: ECO가 품목을 변경(85행 changes 관계, applied 상태)해도 해당 품목의 released 라우팅을 재검토 상태로
+      되돌리는 규칙이나 상태 값이 없다. 생산 오더 게이트(90행)는 Routing.status만 보므로, 구 설계 기준 라우팅으로 신
+      rev 품목의 생산 오더가 계속 생성될 수 있다.
+    why: 명시 규칙 간 직접적인 동시 만족 불가능은 성립하지 않으므로 logic verdict로는 insufficient evidence(구조
+      부재 기인)이며, structure lens의 1차 검토 대상으로 인계한다. 다만 integrity_rules[1]과 [2]를 함께
+      만족시키려는 소비 시스템은 라우팅-rev 연결 규칙의 부재 지점에서 자체 규칙을 발명하게 되므로 표면 기록을 남긴다.
+    how_to_fix: structure lens 검토와 함께, ECO applied 시 affected_parts의 released
+      Routing 처리 규칙(자동 draft 회귀, 또는 rev별 Routing 버전 분리)을 추가하고 Routing.status에
+      superseded 류의 후속 상태를 도입하는 방안을 평가한다.
+    upstream_evidence_required: true
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - BOM 전개(MRP/원가 롤업)는 BomLine의 parent→child 참조 그래프를 재귀 순회한다는 표준 제조 IT 관행을 가정함 —
+    self-loop가 재귀 전개에서 문제를 일으킨다는 판단의 전제
+  - "'비순환(acyclic)'을 그래프 이론의 표준 정의(자기 자신으로의 간선 포함 일체의 사이클 부재)로 해석함"
+  - ECO status 값 open/approved/applied를 통상적 변경관리 의미(미승인/승인/반영완료)로 해석함 — 문서 내 상태별
+    정의 부재로 인한 가정
+  - 주간 배치 동기화는 0이 아닌 지연 구간을 발생시킨다고 가정함(91행 문면이 지연의 존재를 직접 인정)
+validation:
+  unaddressable_candidates: []

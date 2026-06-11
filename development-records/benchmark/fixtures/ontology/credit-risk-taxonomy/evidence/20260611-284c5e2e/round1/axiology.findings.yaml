@@ -1,0 +1,376 @@
+schema_version: 1
+session_id: 20260611-284c5e2e
+lens_id: axiology
+human_output_ref: null
+findings:
+  - candidate_id: axiology-candidate-001
+    target: credit-risk-ontology.yaml — notes[0] (3-scale 병존) +
+      Borrower.internal_rating + RiskRating.grade note + Exposure.risk_grade
+    evidence_anchor: 'credit-risk-ontology.yaml notes[0]: "차주 등급...3개 스케일은 역사적 이유로
+      병존한다. 변환은 각 소비 시스템이 수행한다"; RiskRating.grade note: "매핑 테이블은 리스크팀 위키 참조";
+      value_authority_anchor: {source: credit-risk-ontology.yaml, anchor: header
+      comment lines 1-3, excerpt: "리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향한다"} +
+      {source:
+      .onto/review/20260611-284c5e2e/execution-preparation/review-value-alignment-criteria.yaml,
+      anchor: criterion user-request-intent, excerpt: "리스크 엔진과 보고 시스템이 공유할 개념
+      기준으로 적절한지...분류체계·권위 관점"}'
+    claim: 세 개의 등급 스케일을 병존시키고 변환 권위를 각 소비 시스템과 외부 위키로 위임한 것은 이 문서가 선언한 '공유 개념 권위'
+      목적에서 직접 이탈한다 (value_type=purpose, alignment_direction=misaligned).
+    what: 차주 신용도라는 단일 개념이 internal_rating(1~10), RiskRating.grade(R1~R5),
+      Exposure.risk_grade(AAA~CCC)의 세 어휘로 분산되어 있고, 스케일 간 변환 규칙은 온톨로지 밖(각 소비 시스템
+      + 리스크팀 위키)에 있다.
+    why: 문서의 선언된 목적은 리스크 엔진과 보고 시스템이 공유하는 개념 권위가 되는 것인데, 등급이라는 핵심 개념의 동치 관계(변환)를
+      온톨로지가 소유하지 않으면 두 시스템은 같은 차주에 대해 서로 다른 등급 해석을 가질 수 있고, 권위는 사실상 위키와 각 시스템
+      코드로 누수된다. '역사적 이유'는 기술된 사실일 뿐 목적 대비 정당화가 아니어서, 정당화 없이 수용된 트레이드오프에 해당한다.
+    how_to_fix: 세 스케일 중 canonical 스케일 하나를 온톨로지가 지정하고, 나머지 두 스케일은 명시적 매핑 테이블(또는
+      derivation rule)을 온톨로지 본문에 엔티티/관계로 수용한다. 위키 참조는 제거하거나 비권위적 참고로 강등한다.
+    upstream_evidence_required: true
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: "헤더 선언 목적: 리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서"
+      failure_condition: 두 소비 시스템이 동일 차주의 등급을 각자의 변환 규칙(위키 버전 차이 포함)으로 해석하는 모든 경우
+      impact: 공유 개념 기준이라는 목적의 핵심 deliverable(등급 개념의 단일 의미)이 문서 밖에 존재하게 되어, 이 온톨로지를
+        채택해도 시스템 간 등급 불일치를 막지 못한다
+      evidence_refs:
+        - credit-risk-ontology.yaml notes[0]
+        - credit-risk-ontology.yaml RiskRating.grade note
+        - credit-risk-ontology.yaml header comment
+    causal_path:
+      root_cause_candidate: 레거시 등급 체계 통합 비용을 회피하기 위해 변환 권위를 소비 시스템에 위임한 설계 결정이 정당화 없이 온톨로지에 그대로 기록됨
+      root_cause_step_id: axiology-candidate-001.cause-003
+      steps:
+        - cause_id: axiology-candidate-001.cause-001
+          claim: 동일 개념(차주 신용도)에 3개 등급 어휘가 병존하고 변환은 각 소비 시스템이 수행한다고 선언되어 있다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[0]
+        - cause_id: axiology-candidate-001.cause-002
+          claim: 변환 규칙의 실체는 온톨로지 외부(리스크팀 위키)에 있어 개념 권위가 문서 밖으로 누수된다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskRating.grade note
+        - cause_id: axiology-candidate-001.cause-003
+          claim: "'역사적 이유로 병존'이라는 서술은 통합 비용 회피 결정을 목적 대비 검토 없이 수용한 것으로, 선언 목적(공유 개념 권위)과의
+            충돌이 명시적으로 다뤄지지 않았다"
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[0]
+            - credit-risk-ontology.yaml header comment
+      unresolved_beyond_evidence: canonical authority chain(core-lexicon, principles)이
+        경계 내에 없어, 조직 차원의 개념 단일화 원칙을 직접 인용한 검증은 불가; 본 판단은 대상 문서 자신의 선언 목적과 확정된 리뷰
+        의도 기준에만 근거한다
+  - candidate_id: axiology-candidate-002
+    target: credit-risk-ontology.yaml — classification_rules[0] + Exposure.risk_grade
+    evidence_anchor: 'classification_rules[0]: "Exposure.risk_grade는
+      RiskRating.grade에서 도출하되, 보고서 팀이 시장 상황에 따라 수동 조정할 수 있다";
+      value_authority_anchor: {source: credit-risk-ontology.yaml, anchor: header
+      comment lines 1-3, excerpt: "리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향한다"} +
+      {source: review-value-alignment-criteria.yaml, anchor:
+      user-request-intent, excerpt: "권위 관점의 개념 결함과 운영 위험을 중심으로"}'
+    claim: risk_grade에 대해 엔진 도출과 보고팀 수동 조정이라는 이중 권위를 허용한 것은, 조정 조건·기록·우선순위 없이 수용된
+      숨겨진 트레이드오프이며 공유 기준 목적을 훼손한다 (value_type=tradeoff,
+      alignment_direction=misaligned).
+    what: risk_grade의 권위가 '엔진 도출'과 '보고팀 수동 조정' 둘로 분기되는데, 조정의 발동 조건('시장 상황'), 기록 의무,
+      원본 등급과의 관계, 충돌 시 우선순위가 전혀 정의되지 않았다.
+    why: 리스크 엔진과 보고 시스템이 공유할 기준을 만든다는 목적 하에서, 두 소비자 중 한쪽(보고팀)에게 무조건적 override 권한을 주면
+      동일 익스포저의 등급이 시스템별로 합법적으로 달라진다. 이는 보고 편의라는 국소 최적화가 '공유된 단일 의미'라는 전체 목적을 직접
+      훼손하는 패턴이고, 트레이드오프의 정당화와 한계가 명시되지 않았다.
+    how_to_fix: "수동 조정을 별도 개념(예: GradeOverride — 사유, 조정자, 유효기간, 원본 grade 보존)으로 분리하고,
+      도출값과 조정값의 우선순위 및 두 소비 시스템이 어느 값을 읽는지를 규칙으로 명시한다."
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 동일 익스포저에 대해 같은 등급 의미를 공유한다는 선언 목적
+      failure_condition: 보고팀이 수동 조정을 수행한 익스포저에 대해 엔진 경로와 보고 경로가 서로 다른 risk_grade를 사용하는 경우
+      impact: 등급이라는 핵심 분류 개념의 단일 진실 위치가 사라져, 이 온톨로지 기반의 리스크 보고와 엔진 산출이 감사 시 상호 검증
+        불가능해진다
+      evidence_refs:
+        - credit-risk-ontology.yaml classification_rules[0]
+        - credit-risk-ontology.yaml Exposure.risk_grade note
+    causal_path:
+      root_cause_candidate: 보고 유연성 요구를 개념 모델 수준에서 무제한 override 권한으로 수용하면서, 도출 권위와 조정
+        권위의 관계를 정의하지 않은 규칙 설계
+      root_cause_step_id: axiology-candidate-002.cause-003
+      steps:
+        - cause_id: axiology-candidate-002.cause-001
+          claim: classification_rules[0]이 동일 속성에 대해 '엔진 도출'과 '수동 조정' 두 권위 경로를 동시에 허용한다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[0]
+        - cause_id: axiology-candidate-002.cause-002
+          claim: 조정의 조건·기록·우선순위가 부재하여 두 경로의 충돌이 해소 불가능한 상태로 남는다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[0]
+            - credit-risk-ontology.yaml Exposure.risk_grade note
+        - cause_id: axiology-candidate-002.cause-003
+          claim: 보고 편의라는 국소 요구를 정당화 절차 없이 개념 규칙에 직접 삽입한 결정이 공유 권위 목적과의 충돌을 만든다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml header comment
+            - credit-risk-ontology.yaml classification_rules[0]
+      unresolved_beyond_evidence: 수동 조정의 실제 빈도·통제 절차는 경계 밖 운영 증거가 필요하다
+  - candidate_id: axiology-candidate-003
+    target: credit-risk-ontology.yaml — classification_rules[1] (Limit 소진율 환율 규칙)
+    evidence_anchor: 'classification_rules[1]: "통화가 다른 경우 환산은 각 시스템의 당일 환율 테이블을
+      사용한다"; value_authority_anchor: {source: credit-risk-ontology.yaml, anchor:
+      header comment lines 1-3, excerpt: "리스크 엔진과 보고서 시스템이 공유하는 개념 권위 문서를 지향한다"}
+      + {source: review-value-alignment-criteria.yaml, anchor:
+      user-request-intent, excerpt: "권위...관점의 개념 결함과 운영 위험"}'
+    claim: 한도 소진율 환산 권위를 '각 시스템의 당일 환율 테이블'로 위임한 것은, 한도 위반 판정이라는 가치-결정적 계산을 시스템별로
+      갈라지게 허용하는 정당화 없는 트레이드오프다 (value_type=tradeoff,
+      alignment_direction=misaligned).
+    what: 동일한 소진율 공식이 시스템마다 다른 환율 소스로 계산되도록 규칙 자체가 허용하고 있어, 같은 차주의 한도 소진율이 리스크 엔진과
+      보고 시스템에서 다른 값이 될 수 있다.
+    why: 한도 소진율은 한도 위반(여신 중단/승인 거절) 판단의 입력이므로 가치 충돌이 실제 의사결정 차이로 직결된다. 공유 개념 기준을
+      표방하는 문서가 계산 규칙의 결정적 입력(환율 소스)을 의도적으로 비단일화한 것은 국소 편의(각 시스템 기존 테이블 재사용)가 전체
+      목적(판정의 일관성)을 훼손하는 사례이며, 그 트레이드오프가 명시적으로 정당화되지 않았다.
+    how_to_fix: 환산에 사용할 canonical 환율 소스(또는 기준 시점·기준 테이블)를 온톨로지가 지정하고, 시스템별 테이블 사용은
+      허용 오차와 함께 예외로만 명시한다.
+    upstream_evidence_required: false
+    severity_hint: high
+    materiality_basis:
+      affected_purpose: 두 시스템이 동일한 한도 소진율·위반 판정 기준을 공유한다는 선언 목적
+      failure_condition: 다통화 익스포저에서 두 시스템의 당일 환율 테이블이 다른 값을 가질 때 (상시 발생 가능)
+      impact: 한쪽 시스템은 한도 위반, 다른 쪽은 준수로 판정하는 모순이 규칙상 합법이 되어, 한도 통제라는 운영 목적의 신뢰가 깨진다
+      evidence_refs:
+        - credit-risk-ontology.yaml classification_rules[1]
+    causal_path:
+      root_cause_candidate: 각 시스템의 기존 환율 인프라를 그대로 두려는 통합 비용 회피 결정을 공유 규칙 본문에 그대로 성문화함
+      root_cause_step_id: axiology-candidate-003.cause-003
+      steps:
+        - cause_id: axiology-candidate-003.cause-001
+          claim: 소진율 규칙이 환산 소스를 '각 시스템의 당일 환율 테이블'로 명시해 시스템별 상이한 결과를 규칙 수준에서 허용한다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[1]
+        - cause_id: axiology-candidate-003.cause-002
+          claim: 환율 소스 비단일화는 한도 위반 판정의 시스템 간 불일치를 가능하게 한다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml classification_rules[1]
+            - credit-risk-ontology.yaml RiskAppetite.compliance_status
+        - cause_id: axiology-candidate-003.cause-003
+          claim: 통합 비용 회피라는 국소 최적화가 정당화 서술 없이 공유 기준 문서에 수용되었다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml header comment
+            - credit-risk-ontology.yaml classification_rules[1]
+      unresolved_beyond_evidence: 두 시스템의 환율 테이블이 실제로 얼마나 자주 다른지는 경계 밖 운영 데이터가 필요하다
+  - candidate_id: axiology-candidate-004
+    target: credit-risk-ontology.yaml — ExposureAggregate.total_amount note +
+      RiskAppetite 정의
+    evidence_anchor: 'ExposureAggregate.total_amount note: "월말 배치로 계산해 저장. 일중 신규 여신은
+      다음 배치까지 미반영"; RiskAppetite.definition: "ExposureAggregate가 RiskAppetite를
+      초과하면 RiskAppetite 위반"; value_authority_anchor: {source:
+      review-value-alignment-criteria.yaml, anchor: user-request-intent,
+      excerpt: "시간성 관점의 개념 결함과 운영 위험을 중심으로"} + {source:
+      credit-risk-ontology.yaml, anchor: header comment lines 1-3, excerpt:
+      "여신(대출) 리스크 관리의 개념 모델"}'
+    claim: 리스크 성향 위반 판정을 월말 배치 기반 집계 위에 정의한 것은, 배치 단순성이라는 국소 최적화가 리스크 통제라는 시스템 목적을
+      훼손하는 시간성 트레이드오프다 (value_type=tradeoff, alignment_direction=misaligned).
+    what: RiskAppetite 위반은 ExposureAggregate 초과로 정의되는데, ExposureAggregate는 월말 배치값이라
+      일중·월중 신규 여신이 반영되지 않는다. 따라서 실제 총익스포저가 appetite를 초과해도 다음 배치까지
+      compliance_status는 compliant로 남을 수 있다.
+    why: 리스크 성향 한도는 리스크 관리 개념 모델의 존재 이유에 해당하는 통제 장치인데, 그 판정 기준을 알려진 지연을 가진 파생값에 묶으면
+      통제가 사후 보고로 격하된다. 이 지연은 note로 인지되어 있으면서도 위반 정의와의 충돌이 다뤄지지 않아, 당연시된 전제(배치
+      집계로 충분)가 목적과 정렬되지 않은 채 수용된 사례다.
+    how_to_fix: "RiskAppetite 위반 정의에 판정 시점 의미(as_of 기준 사후 점검인지, 실시간 통제인지)를 명시하고, 실시간
+      통제가 목적이면 집계 갱신 주기를 분리된 개념(예: 일중 잠정 집계)으로 도입한다."
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 여신 리스크 관리 개념 모델로서 리스크 성향 한도 통제의 유효성
+      failure_condition: 월중 신규 여신으로 실제 총익스포저가 threshold를 초과했으나 다음 월말 배치 전인 기간
+      impact: compliance_status가 사실과 다른 값을 가지는 기간이 구조적으로 존재하여, 이 온톨로지를 기준으로 삼는 엔진·보고
+        양쪽이 위반을 최대 한 달 늦게 인지한다
+      evidence_refs:
+        - credit-risk-ontology.yaml ExposureAggregate.total_amount note
+        - credit-risk-ontology.yaml RiskAppetite.definition
+    causal_path:
+      root_cause_candidate: 집계 계산 비용 절감(월말 배치)이라는 구현 편의를 통제 개념의 판정 의미와 분리하지 않고 그대로 개념 정의에 결합한 설계
+      root_cause_step_id: axiology-candidate-004.cause-003
+      steps:
+        - cause_id: axiology-candidate-004.cause-001
+          claim: RiskAppetite 위반이 월말 배치값인 ExposureAggregate 초과로 정의되어 있다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskAppetite.definition
+        - cause_id: axiology-candidate-004.cause-002
+          claim: 배치 지연이 note로 명시되어 있어 위반 판정의 시차가 설계상 알려진 상태로 수용되었다
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml ExposureAggregate.total_amount note
+        - cause_id: axiology-candidate-004.cause-003
+          claim: 판정 시점 의미(실시간 통제 vs 사후 보고)를 정의하지 않은 것이 통제 목적과 구현 편의의 충돌을 은폐한다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskAppetite.definition
+            - credit-risk-ontology.yaml ExposureAggregate.total_amount note
+      unresolved_beyond_evidence: RiskAppetite가 실시간 통제 용도인지 사후 보고 용도인지는 경계 내 문서에 명시되지 않아 확정 불가
+  - candidate_id: axiology-candidate-005
+    target: "credit-risk-ontology.yaml — Collateral.is_a: Exposure +
+      ExposureAggregate 정의"
+    evidence_anchor: 'Collateral: "is_a: Exposure" + ExposureAggregate.definition:
+      "모든 Exposure.amount의 합"; value_authority_anchor: {source:
+      credit-risk-ontology.yaml, anchor: header comment lines 1-3, excerpt:
+      "익스포저, 등급, 한도, 담보를 정의하며...공유하는 개념 권위 문서를 지향한다"} + {source:
+      review-value-alignment-criteria.yaml, anchor: user-request-intent,
+      excerpt: "분류체계...관점의 개념 결함"}'
+    claim: 담보를 익스포저의 하위 타입으로 분류한 것은 깔끔해 보이는 분류가 시스템의 의도된 용도(익스포저 집계·리스크 측정)와 가치 경계를
+      위반하는 사례다 (value_type=boundary, alignment_direction=misaligned).
+    what: Collateral(리스크를 경감하는 자산)이 Exposure(리스크 그 자체)의 is_a 하위로 선언되어 있고, 동시에
+      ExposureAggregate는 '모든 Exposure.amount의 합'으로 정의되어 있어, 분류를 곧이곧대로 따르면 담보가
+      총익스포저 집계의 잠재 포함 대상이 된다.
+    why: 형식 분류 오류 자체의 1차 탐지는 structure/logic 관할이나, axiology 관점에서 이 분류는 '리스크 측정'이라는
+      시스템 목적의 가치 경계(리스크 증가 요인 vs 경감 요인은 반대 부호의 개념)를 위반한다. 두 소비 시스템이 이 권위 문서를 그대로
+      구현하면 리스크 과대/과소 산정이라는 목적 훼손으로 직결된다.
+    how_to_fix: is_a를 제거하고 Collateral을 독립 엔티티로 두며, 기존 secured_by 관계만으로 Exposure와
+      연결한다. ExposureAggregate 정의에 포함 대상 엔티티를 명시한다.
+    upstream_evidence_required: false
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 익스포저 집계와 리스크 측정의 개념적 올바름 (리스크 요인과 경감 요인의 분리)
+      failure_condition: 소비 시스템이 is_a 계층을 따라 Collateral을 Exposure 집합에 포함해 집계·등급 로직을 적용하는 경우
+      impact: 권위 문서를 충실히 따를수록 총익스포저와 리스크 측정이 왜곡되는 역설이 생겨, 개념 권위로서의 신뢰가 무너진다
+      evidence_refs:
+        - credit-risk-ontology.yaml Collateral.is_a
+        - credit-risk-ontology.yaml ExposureAggregate.definition
+        - credit-risk-ontology.yaml relations secured_by
+    causal_path:
+      root_cause_candidate: 공통 속성 재사용 또는 표기 편의를 위해 의미적 반대 개념(리스크 vs 경감)을 상속 계층으로 묶은 분류 결정
+      root_cause_step_id: axiology-candidate-005.cause-003
+      steps:
+        - cause_id: axiology-candidate-005.cause-001
+          claim: "Collateral이 is_a: Exposure로 선언되어 담보가 익스포저의 부분집합이 된다"
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml Collateral.is_a
+        - cause_id: axiology-candidate-005.cause-002
+          claim: ExposureAggregate가 '모든 Exposure.amount의 합'으로 정의되어 있어 분류 위반이 집계 의미 오류로 전파될
+            수 있다
+          relation_to_previous: enables
+          evidence_refs:
+            - credit-risk-ontology.yaml ExposureAggregate.definition
+        - cause_id: axiology-candidate-005.cause-003
+          claim: 동시에 secured_by 관계가 존재해 담보의 올바른 의미(별개 자산)와 is_a 선언이 문서 내부에서 충돌하며, 이는 분류
+            편의가 목적 검토 없이 수용되었음을 시사한다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml relations secured_by
+            - credit-risk-ontology.yaml Collateral.definition
+      unresolved_beyond_evidence: 소비 시스템이 실제로 is_a 계층을 집계에 반영하는지는 경계 밖 구현 증거가 필요하다
+  - candidate_id: axiology-candidate-006
+    target: credit-risk-ontology.yaml — notes[1] (default 범위 제외)
+    evidence_anchor: 'notes[1]: "연체/부실(default) 상태는 별도 시스템(연체관리)에서 다루므로 이 온톨로지의 범위
+      밖이다"; value_authority_anchor: {source: credit-risk-ontology.yaml, anchor:
+      header comment lines 1-3, excerpt: "여신(대출) 리스크 관리의 개념 모델"} + {source:
+      review-value-alignment-criteria.yaml, anchor: user-request-intent,
+      excerpt: "리스크 엔진과 보고 시스템이 공유할 개념 기준으로 적절한지"}'
+    claim: 신용 리스크 분류 온톨로지에서 default 상태를 시스템 소유권을 이유로 범위 제외한 것은, 조직 경계를 개념 경계로 오인한
+      정당화되지 않은 boundary 결정이다 (value_type=boundary,
+      alignment_direction=misaligned).
+    what: 여신 리스크 관리의 개념 모델을 표방하면서, 신용 리스크의 정의적 사건인 연체/부실 상태를 '별도 시스템이 다룬다'는 이유로 개념
+      범위에서 제외했다. 등급(RiskRating, risk_grade) 개념들이 default와 가지는 관계가 무정의로 남는다.
+    why: 범위 제외의 근거가 개념적 판단이 아니라 시스템 소유권(연체관리 시스템 존재)이다. 그러나 리스크 엔진의 등급 산출과 보고 시스템의
+      부실 보고는 모두 default 개념을 소비하므로, 공유 개념 기준이라는 목적상 default는 최소한 참조 개념으로라도 정의되어야
+      한다. 당연시된 전제(시스템 경계 = 개념 경계)가 목적과 무관한데도 범위 결정을 지배하고 있다.
+    how_to_fix: "default 상태의 전체 모델링은 범위 밖으로 두되, DefaultStatus를 외부 권위 참조 개념(소유: 연체관리
+      시스템)으로 선언하고 RiskRating·Exposure와의 관계만 이 온톨로지에 정의한다."
+    upstream_evidence_required: true
+    severity_hint: medium
+    materiality_basis:
+      affected_purpose: 리스크 엔진과 보고 시스템이 공유할 여신 리스크 개념 기준으로서의 완결성
+      failure_condition: 엔진의 등급 산출 또는 보고 시스템의 부실 보고가 default 개념을 참조해야 하는 모든 흐름
+      impact: 두 시스템이 default와 등급의 관계를 각자 정의하게 되어, 범위 제외가 오히려 새로운 개념 분기(이 온톨로지가 막으려는
+        것)를 만든다
+      evidence_refs:
+        - credit-risk-ontology.yaml notes[1]
+        - credit-risk-ontology.yaml header comment
+    causal_path:
+      root_cause_candidate: 기존 시스템 소유권 구도를 개념 모델의 범위 결정 기준으로 그대로 차용한 boundary 설계
+      root_cause_step_id: axiology-candidate-006.cause-003
+      steps:
+        - cause_id: axiology-candidate-006.cause-001
+          claim: default 상태가 '별도 시스템에서 다룬다'는 소유권 근거만으로 범위 제외되었다
+          relation_to_previous: null
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[1]
+        - cause_id: axiology-candidate-006.cause-002
+          claim: 등급 개념들과 default의 관계가 무정의로 남아 소비 시스템별 자체 정의를 유발한다
+          relation_to_previous: causes
+          evidence_refs:
+            - credit-risk-ontology.yaml RiskRating.definition
+            - credit-risk-ontology.yaml Exposure.risk_grade
+        - cause_id: axiology-candidate-006.cause-003
+          claim: 시스템 경계를 개념 경계로 당연시한 전제가 공유 기준 목적과 무관하게 범위를 지배했다
+          relation_to_previous: symptom_of
+          evidence_refs:
+            - credit-risk-ontology.yaml notes[1]
+            - credit-risk-ontology.yaml header comment
+      unresolved_beyond_evidence: 연체관리 시스템이 별도의 공유 개념 정의를 이미 제공하는지는 경계 밖 증거가 필요하다
+  - candidate_id: axiology-candidate-007
+    target: credit-risk-ontology.yaml — Limit.approved_amount note
+    evidence_anchor: 'Limit.approved_amount note: "영업점 CRM의 available_limit과 합산 관리";
+      value_authority_anchor: {source: credit-risk-ontology.yaml, anchor: header
+      comment lines 1-3, excerpt: "공유하는 개념 권위 문서를 지향한다"}'
+    claim: 한도 개념의 일부 권위(available_limit)가 온톨로지 밖 영업점 CRM에 있고 '합산 관리'의 의미가 무정의여서,
+      한도라는 개념의 권위 경계가 불완전하다 (value_type=commitment,
+      alignment_direction=misaligned).
+    what: Limit 엔티티가 한도 개념을 소유한다고 보이지만, note는 실제 한도 관리가 모델 밖 CRM 필드와의 합산으로 이뤄진다고
+      기술하며 그 합산 규칙은 정의되지 않았다.
+    why: 공유 권위를 표방하는 문서가 핵심 개념의 절반을 외부 시스템에 무규정으로 남기면, 소비 시스템은 결국 CRM 구현을 직접 참조해야
+      하므로 권위 약속이 부분적으로 공허해진다.
+    how_to_fix: available_limit을 참조 개념으로 선언하고 합산 규칙을 classification_rules에 명시하거나, 해당
+      note를 제거하고 범위 제외임을 명확히 한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: axiology-candidate-008
+    target: credit-risk-ontology.yaml — Exposure.ltv note
+    evidence_anchor: 'Exposure.ltv note: "담보인정비율. 심사 시점에 심사역이 입력한다";
+      value_authority_anchor: {source: review-value-alignment-criteria.yaml,
+      anchor: user-request-intent, excerpt: "권위·시간성 관점의 개념 결함과 운영 위험"}'
+    claim: 파생 가능한 비율(LTV)을 심사 시점의 수동 입력값으로 권위화한 것은 담보 재평가 규칙과 시간적으로 정렬되지 않은 조용한
+      트레이드오프다 (value_type=tradeoff, alignment_direction=misaligned).
+    what: ltv는 익스포저 금액과 담보 평가액에서 도출 가능한 값인데 심사 시점 수동 입력으로 고정되며,
+      classification_rules[2]는 담보 재평가(1년 경과)를 요구하면서 재평가 후 ltv 갱신은 규정하지 않는다.
+    why: 담보 가치가 갱신되어도 ltv가 심사 시점 값으로 남으면, 보고·엔진 양쪽이 오래된 비율을 권위값으로 소비한다. 도출값을 수동 권위로
+      두는 결정의 비용(시간성 불일치)이 명시되지 않았다.
+    how_to_fix: ltv를 amount와 appraised_value의 파생 projection으로 정의하거나, 수동 입력을 유지한다면 갱신
+      트리거(재평가 시 재산정)를 규칙에 추가한다.
+    upstream_evidence_required: false
+    severity_hint: low
+    materiality_basis: null
+    causal_path: null
+  - candidate_id: axiology-candidate-009
+    target: axiology 실행 경계 — canonical authority chain 부재
+    evidence_anchor: Glob .onto/authority/**, .onto/principles/** within allowed
+      root '.' → no files; role contract §Authoritative alignment input (순위 1~3
+      항상 바인딩)
+    claim: role이 요구하는 canonical authority 파일(core-lexicon.yaml, principles/*)이 허용 경계
+      내에 존재하지 않아, 본 lens의 모든 판단은 대상 문서의 자체 선언 목적과 확정된 리뷰 의도
+      기준(review-value-alignment-criteria.yaml)에만 근거했다 (value_type=principle,
+      alignment_direction=indeterminate).
+    what: 순위 1~2 authority 소스가 경계 내 파일시스템에 미존재하여 바인딩되지 않았다. 경계 내 가용 권위는 순위 3에 해당하는
+      리뷰 실행 기준뿐이다.
+    why: role 계약상 authority 미존재 시 해당 판단은 insufficient evidence로 표시하고 개인 가치관 판단을 금지해야
+      한다. 조직 수준 원칙(개념 단일화, OaC 등)을 인용해야 강해지는 finding들은
+      upstream_evidence_required=true로 표시했다.
+    how_to_fix: execution preparation이 canonical authority 파일을 경계 내로 materialize하거나
+      allowed_read_refs에 포함시킨 뒤 axiology를 재실행한다.
+    upstream_evidence_required: true
+    severity_hint: info
+    materiality_basis: null
+    causal_path: null
+domain_constraints_used: []
+domain_context_assumptions:
+  - session_domain은 none이며 순위 4 domain 바인딩은 적용되지 않았다.
+  - "canonical authority chain(순위 1~2: core-lexicon.yaml, principles/*)이 허용 경계
+    내에 미존재하여, 가치 판단의 anchor는 대상 문서의 자체 선언 목적(header comment)과
+    review-value-alignment-criteria.yaml의 확정된 user-request-intent 기준으로 한정했다."
+  - 여신 도메인의 일반 관행(담보는 리스크 경감 요인, 한도 위반은 통제 의사결정 입력)은 대상 문서 자체의 정의 문장에서 도출 가능한
+    범위에서만 사용했다.
+validation:
+  unaddressable_candidates: []
